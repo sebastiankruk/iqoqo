@@ -6,3 +6,4 @@ python-dotenv
 gunicorn
 flask-sqlalchemy
 flask-migrate
+pytest
