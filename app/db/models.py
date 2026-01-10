@@ -1,5 +1,4 @@
 from . import db
-from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 
 class Work(db.Model):
@@ -12,7 +11,7 @@ class Work(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     # Flexible metadata (e.g., original_language, first_performance_date)
-    meta = db.Column(JSONB, default={})
+    meta = db.Column(db.JSON, default={})
 
     # Relationships
     expressions = db.relationship('Expression', backref='work', lazy=True)
@@ -28,7 +27,7 @@ class Expression(db.Model):
     work_id = db.Column(db.Integer, db.ForeignKey('works.id'), nullable=False)
     content_type = db.Column(db.String(50)) # e.g., 'text', 'sound', 'notated_music'
     language = db.Column(db.String(10))     # e.g., 'en', 'pl'
-    meta = db.Column(JSONB, default={})
+    meta = db.Column(db.JSON, default={})
 
     # Relationships
     manifestations = db.relationship('Manifestation', backref='expression', lazy=True)
@@ -50,7 +49,7 @@ class Manifestation(db.Model):
 
     publisher = db.Column(db.String(255))
     publication_date = db.Column(db.Date)
-    meta = db.Column(JSONB, default={}) # Stores cover images, page count, dimensions
+    meta = db.Column(db.JSON, default={}) # Stores cover images, page count, dimensions
 
     # Relationships
     items = db.relationship('Item', backref='manifestation', lazy=True)
@@ -71,4 +70,4 @@ class Item(db.Model):
     condition = db.Column(db.String(50))
 
     added_at = db.Column(db.DateTime, default=datetime.utcnow)
-    meta = db.Column(JSONB, default={}) # Custom tags, notes, location on shelf
+    meta = db.Column(db.JSON, default={}) # Custom tags, notes, location on shelf
