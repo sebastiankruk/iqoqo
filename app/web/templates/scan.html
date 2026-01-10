@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Scan a barcode</h1>
+    <div id="scanner-container"></div>
+    <script src="{{ url_for('web.static', filename='js/scanner.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>iqoqo</h1>
+    <form action="/search">
+        <input type="search" name="q" placeholder="Search your collection...">
+        <button type="submit">Search</button>
+    </form>
+    <h2>Recent Items</h2>
+    <p>No items yet.</p>
+{% endblock %}

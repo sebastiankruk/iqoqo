@@ -1,0 +1,8 @@
+Flask==3.0.*
+psycopg2-binary==2.9.*
+rdflib==7.*
+requests==2.*
+python-dotenv
+gunicorn
+flask-sqlalchemy
+flask-migrate

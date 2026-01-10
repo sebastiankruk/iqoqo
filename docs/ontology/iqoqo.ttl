@@ -1,0 +1,5 @@
+# iqoqo custom ontology
+@prefix : <https://iqoqo.org/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+: a owl:Ontology .
