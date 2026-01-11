@@ -1,3 +1,4 @@
+"""This module provides services for creating FRBR-compliant objects."""
 from app.db.models import db, Work, Expression, Manifestation, Item
 
 def create_work(title, meta={}):

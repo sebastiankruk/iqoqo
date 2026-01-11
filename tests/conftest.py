@@ -1,3 +1,4 @@
+"""Defines pytest fixtures for the test suite."""
 import pytest
 from app import create_app
 from app.db import db

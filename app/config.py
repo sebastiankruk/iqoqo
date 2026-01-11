@@ -1,3 +1,4 @@
+"""Defines the configuration for the Flask application."""
 import os
 from dotenv import load_dotenv
 

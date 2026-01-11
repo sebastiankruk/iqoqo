@@ -1,3 +1,4 @@
+"""Defines the API endpoints for the application."""
 from flask import jsonify
 from app.db.models import Item
 from . import api_bp

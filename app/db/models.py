@@ -1,5 +1,5 @@
-from . import db
 from datetime import datetime
+from . import db
 
 class Work(db.Model):
     """

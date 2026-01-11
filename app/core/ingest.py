@@ -1,5 +1,5 @@
-import requests
-from .frbr_service import create_work, create_expression, create_manifestation, create_item
+"""Handles data ingestion from external sources."""
+from .frbr_service import create_work
 
 def ingest_isbn(isbn):
     """
