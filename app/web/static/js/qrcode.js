@@ -1,7 +1,7 @@
 /**
  * Handling successfull scanning result
- * @param {String} decodedText 
- * @param {Object} decodedResult 
+ * @param {String} decodedText
+ * @param {Object} decodedResult
  */
 function onScanSuccess(decodedText, decodedResult) {
   // handle the scanned code as you like, for example:
@@ -14,29 +14,28 @@ function onScanFailure(error) {
   // console.warn(`Code scan error = ${error}`);
 }
 
-const html5QrCode = new Html5Qrcode("reader");
+const html5QrCode = new Html5Qrcode('reader');
 
 function onScanStart() {
   const formatsToSupport = [
     Html5QrcodeSupportedFormats.EAN_13,
     Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
-  ]
-  
-  const scanOptions = { 
-    fps: 10, 
-    qrbox: 150, 
-    aspectRatio: 0.5, //($(window).height() > $(window).width()) ? 2 : 0.5, 
-    formatsToSupport: formatsToSupport 
-  }
-  
+    Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+  ];
+
+  const scanOptions = {
+    fps: 10,
+    qrbox: 150,
+    aspectRatio: 0.5, //($(window).height() > $(window).width()) ? 2 : 0.5,
+    formatsToSupport: formatsToSupport,
+  };
+
   $('button.start').hide();
   $('button.stop').show();
   $('#reader').show();
 
+  html5QrCode.start({ facingMode: 'environment' }, scanOptions, onScanSuccess);
 
-  html5QrCode.start({ facingMode: "environment" }, scanOptions, onScanSuccess);
-    
   registerBeep();
 }
 

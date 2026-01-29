@@ -1,5 +1,3 @@
-
-
 /**
  * Will check given ISBN and fill in title/authors if found
  */

@@ -1,5 +1,7 @@
 """Handles data ingestion from external sources."""
+
 from .frbr_service import create_work
+
 
 def ingest_isbn(isbn):
     """
@@ -9,7 +11,7 @@ def ingest_isbn(isbn):
     # Placeholder for fetching data from a service like Open Library or Google Books
     # response = requests.get(f"https://openlibrary.org/isbn/{isbn}.json")
     # data = response.json()
-    
+
     # Placeholder data
     data = {
         "title": "The Hobbit",
@@ -20,7 +22,7 @@ def ingest_isbn(isbn):
     # This is a simplified example. A real implementation would need to handle
     # existing works, expressions, and manifestations.
 
-    work = create_work(title=data['title'])
+    work = create_work(title=data["title"])
     # ... and so on
-    
+
     return work
