@@ -1,0 +1,23 @@
+<ul id="lastISBN" class="list-group mb-3">
+  <li class="list-group-item d-flex justify-content-between lh-sm isbn">
+    <div class="form-floating meta-value">
+      <input type="number" min="999999999" max="9999999999999" class="form-control" id="fiIsbnValue" placeholder="0000000000000" />
+      <label for="fiIsbnValue">ISBN</label>
+    </div>
+    <button type="button" class="btn btn-outline-info btn-sm clear">CLEAR</button>
+    <button type="button" class="btn btn-outline-info btn-sm check">CHECK</button>
+  </li>
+  <li class="list-group-item d-flex justify-content-between lh-sm title">
+    <div class="form-floating meta-value">
+      <input type="text" class="form-control" id="fiTitleValue" placeholder="" />
+      <label for="fiTitleValue">Title</label>
+    </div>
+  </li>
+  <li class="list-group-item d-flex justify-content-between lh-sm authors">
+    <div class="form-floating meta-value">
+      <input type="text" class="form-control" id="fiAuthorsValue" placeholder="" />
+      <label for="fiAuthorsValue">Authors</label>
+    </div>
+  </li>
+</ul>
+<script src="{{ url_for('web.static', filename='js/metaform.js') }}"></script>

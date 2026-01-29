@@ -1,8 +1,8 @@
-{% extends 'base.html' %}
-
-{% block content %}
-    <h1>{{ item.manifestation.expression.work.title }}</h1>
-    <h2>{{ item.manifestation.expression.content_type }}</h2>
-    <h3>{{ item.manifestation.publisher }}</h3>
-    <p>Status: {{ item.status }}</p>
+{% extends "_includes/base.html" %}
+{% block body %}
+<div class="container">
+  <h2>Item Details</h2>
+  <p>ID: {{ item.id }}</p>
+  <p>Owner: {{ item.owner_id }}</p>
+</div>
 {% endblock %}

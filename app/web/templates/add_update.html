@@ -1,0 +1,7 @@
+{% extends "_includes/base.html" %}
+{% block body %}
+{% include '_includes/metaform.html' %}
+{% include '_includes/update_buttons.html' %}
+
+<script src="{{ url_for('web.static', filename='js/add_update.js') }}"></script>
+{% endblock %}

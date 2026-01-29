@@ -1,0 +1,93 @@
+#reader {
+  padding: 0px;
+}
+#reader > div > span:first-child {
+  visibility: hidden;
+}
+
+#lastISBN {
+  padding: 5px 2px;
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#lastISBN.notfound {
+  background-color: chocolate;
+}
+
+#lastISBN.found {
+  background-color: darkgreen;
+}
+
+#lastISBN.notfound + #reader {
+  border: solid 2px chocolate;
+}
+#lastISBN.found + #reader {
+  border: solid 2px darkgreen;
+}
+
+#lastISBN div {
+  padding-left: 5px;
+}
+
+#navigation-buttons button.add,
+#navigation-buttons button.update {
+  display: none;
+}
+
+#navigation-buttons.can-add button.add,
+#navigation-buttons.can-update button.update {
+  display: block;
+}
+
+button.stop {
+  display: none;
+}
+
+.meta-value {
+  padding-left: 0px;
+  left: -14px;
+  position: relative;
+  width: calc(100vw - 20px);
+}
+
+.meta-value label { 
+  left: 4px;
+}
+
+.meta-value input {
+  width: 100%;
+  border: none;
+  margin: none;
+  padding: none;
+}
+
+#lastISBN.notfound .meta-value input,
+body.page-add #lastISBN .meta-value input,
+body.page-update #lastISBN .meta-value input {
+  pointer-events: initial;
+}
+
+body.page-add #lastISBN,
+body.page-update #lastISBN {
+  display: block;
+}
+body.page-scan button.check,
+body.page-add button.check,
+body.page-update button.check {
+  display: none;
+}
+body.page-add button.check.can-check {
+  display: block;
+}
+
+body.page-add button.clear,
+body.page-update button.clear {
+  display: none;
+  margin-right: 0.5em;
+}
+
+body.page-scan button.clear.can-clear,
+body.page-add button.clear.can-clear {
+  display: block;
+}

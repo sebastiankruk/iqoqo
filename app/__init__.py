@@ -10,8 +10,13 @@ def create_app(config_class=Config, config_override=None):
     if config_override:
         app.config.from_mapping(config_override)
 
+    # Add session configuration
+    app.config['SESSION_TYPE'] = 'filesystem'
+    if 'SECRET_KEY' not in app.config:
+        app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+
     db.init_app(app)
-    migrate = Migrate(app, db)
+    _ = Migrate(app, db)  # Initialize migrations
 
     from app.api import api_bp
     app.register_blueprint(api_bp)
