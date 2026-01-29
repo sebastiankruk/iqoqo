@@ -2,9 +2,12 @@ from flask import Flask
 from .config import Config
 from .db import db
 from flask_migrate import Migrate
+import os
 
 def create_app(config_class=Config, config_override=None):
-    app = Flask(__name__)
+    # Set static folder to web blueprint's static folder
+    static_folder = os.path.join(os.path.dirname(__file__), 'web', 'static')
+    app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
     app.config.from_object(config_class)
 
     if config_override:
