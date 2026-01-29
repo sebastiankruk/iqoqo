@@ -22,6 +22,70 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 
 ## 📖 Documentation
 
-- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions
+- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
+
+## 📦 Data Management
+
+iqoqo provides comprehensive tools for data import, export, and migration:
+
+### Quick Start with Seed Data
+
+```bash
+# Initialize database with example books
+python scripts/init_db.py --seed-file data/seed_example.json
+```
+
+### Export Your Library
+
+```bash
+# Via API
+curl -o my_library.json http://localhost:5000/api/admin/export
+
+# Or via Python
+python -c "from app import create_app; from app.core.data_manager import DataManager; \
+app = create_app(); \
+with app.app_context(): DataManager.export_to_file('my_library.json')"
+```
+
+### Import Data
+
+```bash
+# Via API
+curl -X POST -F "file=@my_library.json" http://localhost:5000/api/admin/import
+
+# Via script
+python scripts/init_db.py --seed-file my_library.json
+```
+
+### Migrate from Legacy iqoqo-prototype
+
+If you're migrating from the original iqoqo-prototype:
+
+```bash
+# 1. Convert SQL dump to JSON
+python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
+
+# 2. Migrate to FRBR format
+python scripts/migrate_legacy.py legacy_data.json --clear
+```
+
+See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed documentation.
+
+## 🎯 Roadmap
+
+- [ ] Admin web UI for data management
+- [ ] Multi-user authentication and authorization
+- [ ] Federation protocol for cross-instance discovery
+- [ ] Mobile apps (iOS & Android)
+- [ ] Advanced search with SPARQL queries
+- [ ] Collection sharing and social features
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+Built on the shoulders of giants: FRBR, Linked Data, and the Semantic Web community.

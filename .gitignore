@@ -30,6 +30,10 @@ node_modules/
 *.db
 *.log
 
+# Data - exclude personal data exports but keep seed examples
+data/*.json
+!data/seed_example.json
+
 # Virtual Env
 .venv*
 

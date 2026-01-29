@@ -1,8 +1,12 @@
 """Defines the API endpoints for the application."""
 
-import requests
-from flask import jsonify, request, session
+import json
+from io import BytesIO
 
+import requests
+from flask import jsonify, request, send_file, session
+
+from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
 
 from . import api_bp
@@ -151,3 +155,89 @@ def add_item(isbn: str):
     db.session.commit()
 
     return jsonify({"item_id": item.id})
+
+
+# =============================================================================
+# Admin API Endpoints
+# =============================================================================
+
+
+@api_bp.route("/admin/stats", methods=["GET"])
+def get_stats():
+    """Get database statistics."""
+    stats = DataManager.get_stats()
+    return jsonify(stats)
+
+
+@api_bp.route("/admin/export", methods=["GET"])
+def export_data():
+    """
+    Export all database content as JSON.
+
+    Returns:
+        JSON file download containing all database content.
+    """
+    try:
+        data = DataManager.export_all()
+
+        # Create an in-memory file
+        output = BytesIO()
+        output.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=f'iqoqo_export_{data["exported_at"]}.json',
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/admin/import", methods=["POST"])
+def import_data():
+    """
+    Import data from JSON.
+
+    Expects:
+        JSON body containing the data structure or multipart/form-data with file.
+        Optional query parameter: clear_existing=true
+
+    Returns:
+        JSON with import statistics.
+    """
+    try:
+        clear_existing = request.args.get("clear_existing", "false").lower() == "true"
+
+        # Check if data is in the request body or as a file upload
+        if request.is_json:
+            data = request.get_json()
+        elif "file" in request.files:
+            file = request.files["file"]
+            data = json.load(file)
+        else:
+            return jsonify({"error": "No data provided"}), 400
+
+        counts = DataManager.import_data(data, clear_existing=clear_existing)
+        return jsonify({"status": "success", "imported": counts})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/admin/clear", methods=["DELETE"])
+def clear_data():
+    """
+    Clear all data from the database. Use with extreme caution!
+
+    Requires confirmation in the request body: {"confirm": true}
+    """
+    data = request.get_json()
+    if not data or not data.get("confirm"):
+        return jsonify({"error": 'Confirmation required. Send {"confirm": true} to proceed.'}), 400
+
+    try:
+        DataManager.clear_all_data()
+        return jsonify({"status": "success", "message": "All data cleared"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

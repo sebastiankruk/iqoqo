@@ -1,4 +1,4 @@
-.PHONY: help lint lint-python lint-format lint-js lint-css lint-markdown format format-python format-js test clean
+.PHONY: help lint lint-python lint-format lint-js lint-css lint-markdown format format-python format-js test clean db-init db-seed db-export db-stats
 
 help:
 	@echo "Available targets:"
@@ -13,6 +13,12 @@ help:
 	@echo "  format-js     - Format JavaScript code (prettier)"
 	@echo "  test          - Run tests"
 	@echo "  clean         - Remove build artifacts"
+	@echo ""
+	@echo "Database targets:"
+	@echo "  db-init       - Initialize database with seed data"
+	@echo "  db-seed       - Load seed data into existing database"
+	@echo "  db-export     - Export database to data/backup.json"
+	@echo "  db-stats      - Show database statistics"
 
 # Linting targets
 lint-python:
@@ -67,3 +73,31 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
+
+# Database targets
+db-init:
+	@echo "Initializing database with seed data..."
+	python scripts/init_db.py --seed-file data/seed_example.json
+
+db-seed:
+	@echo "Loading seed data..."
+	python scripts/init_db.py --seed-file data/seed_example.json
+
+db-export:
+	@echo "Exporting database to data/backup.json..."
+	@python -c "from app import create_app; from app.core.data_manager import DataManager; \
+		app = create_app(); \
+		with app.app_context(): DataManager.export_to_file('data/backup.json')"
+	@echo "Export complete: data/backup.json"
+
+db-stats:
+	@echo "Database statistics:"
+	@python -c "from app import create_app; from app.core.data_manager import DataManager; \
+		app = create_app(); \
+		with app.app_context(): \
+			stats = DataManager.get_stats(); \
+			print(f\"  Works: {stats['works']}\"); \
+			print(f\"  Expressions: {stats['expressions']}\"); \
+			print(f\"  Manifestations: {stats['manifestations']}\"); \
+			print(f\"  Items: {stats['items']}\"); \
+			print(f\"  Total: {sum(stats.values())}\")"

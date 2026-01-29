@@ -93,6 +93,184 @@ This project uses PostgreSQL as its database. The easiest way to get a PostgreSQ
     flask db upgrade
     ```
 
+3. **Initialize with seed data (optional):**
+
+    If you have a JSON export file from a previous iqoqo instance or want to import data:
+
+    ```bash
+    python scripts/init_db.py --seed-file path/to/data.json
+    ```
+
+    This will only import data if the database is empty.
+
+### Data Import/Export
+
+iqoqo provides comprehensive data management capabilities through both CLI scripts and API endpoints.
+
+#### Export Data Format
+
+The iqoqo export format is a JSON file with the following structure:
+
+```json
+{
+  "version": "1.0",
+  "exported_at": "2026-01-29T10:30:00.000000",
+  "works": [
+    {
+      "id": 1,
+      "title": "The Hobbit",
+      "meta": {
+        "authors": ["J.R.R. Tolkien"],
+        "categories": ["Fantasy", "Adventure"]
+      }
+    }
+  ],
+  "expressions": [
+    {
+      "id": 1,
+      "work_id": 1,
+      "content_type": "text",
+      "language": "en",
+      "meta": {
+        "description": "A fantasy adventure novel..."
+      }
+    }
+  ],
+  "manifestations": [
+    {
+      "id": 1,
+      "expression_id": 1,
+      "isbn13": "9780048230706",
+      "upc": null,
+      "ean": null,
+      "publisher": "Allen & Unwin",
+      "publication_date": "1937-09-21",
+      "meta": {
+        "imageLinks": {},
+        "pageCount": 310
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": 1,
+      "manifestation_id": 1,
+      "owner_id": "user123",
+      "status": "available",
+      "condition": "good",
+      "added_at": "2026-01-15T14:22:00.000000",
+      "meta": {
+        "location": "Shelf A",
+        "notes": "First edition"
+      }
+    }
+  ]
+}
+```
+
+#### Exporting Data
+
+**Via API:**
+
+```bash
+# Export all data
+curl -o iqoqo_export.json http://localhost:5000/api/admin/export
+
+# Get database statistics
+curl http://localhost:5000/api/admin/stats
+```
+
+**Via Python:**
+
+```python
+from app import create_app
+from app.core.data_manager import DataManager
+
+app = create_app()
+with app.app_context():
+    # Export to file
+    DataManager.export_to_file('backup.json')
+
+    # Or get as dictionary
+    data = DataManager.export_all()
+```
+
+#### Importing Data
+
+**Via API:**
+
+```bash
+# Import data (merge with existing)
+curl -X POST -H "Content-Type: application/json" \
+     -d @iqoqo_export.json \
+     http://localhost:5000/api/admin/import
+
+# Import and clear existing data first
+curl -X POST -H "Content-Type: application/json" \
+     -d @iqoqo_export.json \
+     "http://localhost:5000/api/admin/import?clear_existing=true"
+
+# Import via file upload
+curl -X POST -F "file=@iqoqo_export.json" \
+     http://localhost:5000/api/admin/import
+```
+
+**Via Python:**
+
+```python
+from app import create_app
+from app.core.data_manager import DataManager
+
+app = create_app()
+with app.app_context():
+    # Import from file
+    counts = DataManager.import_from_file('backup.json')
+    print(f"Imported: {counts}")
+
+    # Import from dictionary
+    data = {...}
+    counts = DataManager.import_data(data, clear_existing=False)
+```
+
+#### Migrating from Legacy iqoqo-prototype
+
+If you're migrating from the original iqoqo-prototype, follow these steps:
+
+1. **Export data from your legacy database:**
+
+   If you have a SQL dump file:
+
+   ```bash
+   python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
+   ```
+
+2. **Migrate the data to FRBR format:**
+
+   ```bash
+   python scripts/migrate_legacy.py legacy_data.json --clear
+   ```
+
+   The `--clear` flag will remove any existing data before migration.
+
+The migration script automatically:
+- Creates Works from book titles (deduplicating by title)
+- Creates Expressions for each language/content type
+- Converts Manifestations to the new schema
+- Maps Items to their new Manifestations
+- Preserves all metadata in the `meta` JSON fields
+
+#### Admin API Endpoints
+
+The following endpoints are available for data management:
+
+- `GET /api/admin/stats` - Get database statistics
+- `GET /api/admin/export` - Download full database export as JSON
+- `POST /api/admin/import` - Import data from JSON (body or file upload)
+  - Query param: `clear_existing=true` to clear before import
+- `DELETE /api/admin/clear` - Clear all data (requires `{"confirm": true}` in body)
+
+**Security Note:** In a production environment, these admin endpoints should be protected with authentication and authorization. Consider implementing API keys or OAuth for access control.
+
 ### Troubleshooting
 
 - **`FATAL: role "user" does not exist`**: This error usually means your application is connecting to a different PostgreSQL instance than the one running in Docker.

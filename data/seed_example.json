@@ -1,0 +1,100 @@
+{
+  "version": "1.0",
+  "exported_at": "2026-01-29T10:00:00.000000",
+  "works": [
+    {
+      "id": 1,
+      "title": "The Hobbit",
+      "meta": {
+        "authors": ["J.R.R. Tolkien"],
+        "categories": ["Fantasy", "Adventure"],
+        "original_language": "en"
+      }
+    },
+    {
+      "id": 2,
+      "title": "1984",
+      "meta": {
+        "authors": ["George Orwell"],
+        "categories": ["Dystopian", "Political Fiction"],
+        "original_language": "en"
+      }
+    }
+  ],
+  "expressions": [
+    {
+      "id": 1,
+      "work_id": 1,
+      "content_type": "text",
+      "language": "en",
+      "meta": {
+        "description": "A fantasy adventure novel about a hobbit's journey to help dwarves reclaim their mountain home from a dragon."
+      }
+    },
+    {
+      "id": 2,
+      "work_id": 2,
+      "content_type": "text",
+      "language": "en",
+      "meta": {
+        "description": "A dystopian social science fiction novel and cautionary tale about the dangers of totalitarianism."
+      }
+    }
+  ],
+  "manifestations": [
+    {
+      "id": 1,
+      "expression_id": 1,
+      "isbn13": "9780048230706",
+      "upc": null,
+      "ean": null,
+      "publisher": "Allen & Unwin",
+      "publication_date": "1937-09-21",
+      "meta": {
+        "pageCount": 310,
+        "dimensions": "198 x 129 mm",
+        "format": "Hardcover"
+      }
+    },
+    {
+      "id": 2,
+      "expression_id": 2,
+      "isbn13": "9780451524935",
+      "upc": null,
+      "ean": null,
+      "publisher": "Signet Classic",
+      "publication_date": "1950-06-08",
+      "meta": {
+        "pageCount": 328,
+        "format": "Mass Market Paperback"
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": 1,
+      "manifestation_id": 1,
+      "owner_id": "demo_user",
+      "status": "available",
+      "condition": "good",
+      "added_at": "2026-01-15T14:22:00.000000",
+      "meta": {
+        "location": "Living Room Shelf",
+        "notes": "Birthday gift from 2020",
+        "purchased_from": "Local bookstore"
+      }
+    },
+    {
+      "id": 2,
+      "manifestation_id": 2,
+      "owner_id": "demo_user",
+      "status": "available",
+      "condition": "fair",
+      "added_at": "2026-01-10T09:15:00.000000",
+      "meta": {
+        "location": "Bedroom",
+        "notes": "Some wear on cover"
+      }
+    }
+  ]
+}
