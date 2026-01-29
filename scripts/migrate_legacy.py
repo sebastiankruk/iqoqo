@@ -22,6 +22,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Add the parent directory to the path so we can import app
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -62,7 +63,7 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
     manif_map = {}
 
     # Track works by title to avoid duplicates
-    work_cache = {}
+    work_cache: dict[str, Any] = {}
 
     # Process legacy manifestations
     legacy_manifs = legacy_data.get("manifestations", [])
@@ -157,12 +158,16 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
 
     for old_item in legacy_items:
         old_manif_id = old_item.get("manifestation_id")
-        manifestation = manif_map.get(old_manif_id)
+        mani = manif_map.get(old_manif_id)
 
-        if not manifestation:
+        if mani is None:
             print(f"Warning: Item {old_item.get('id')} references unknown manifestation {old_manif_id}")
             stats["skipped"] += 1
             continue
+        manifestation = mani
+
+        # At this point, manifestation is guaranteed to be not None
+        assert manifestation is not None
 
         added_at = None
         added_at_str = old_item.get("added_at")

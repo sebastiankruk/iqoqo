@@ -13,6 +13,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def parse_sql_dump(sql_content: str) -> dict:
@@ -25,7 +26,7 @@ def parse_sql_dump(sql_content: str) -> dict:
     Returns:
         Dictionary containing clients, manifestations, and items.
     """
-    data = {
+    data: dict[str, list] = {
         "clients": [],
         "manifestations": [],
         "items": [],
@@ -97,7 +98,7 @@ def parse_sql_dump(sql_content: str) -> dict:
                 )
             elif table_name == "manifestation" and len(cleaned_values) >= 4:
                 # Parse meta JSON if present
-                meta = {}
+                meta: dict[str, Any] = {}
                 if len(cleaned_values) > 3:
                     try:
                         meta = json.loads(cleaned_values[3]) if cleaned_values[3] else {}

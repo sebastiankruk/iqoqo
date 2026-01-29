@@ -7,7 +7,7 @@ Supports both full database dumps and selective exports.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.db import db
 from app.db.models import Expression, Item, Manifestation, Work
@@ -17,14 +17,14 @@ class DataManager:
     """Manages import and export of iqoqo database content."""
 
     @staticmethod
-    def export_all() -> Dict[str, Any]:
+    def export_all() -> dict[str, Any]:
         """
         Export all data from the database in JSON format.
 
         Returns:
             Dict containing all works, expressions, manifestations, and items.
         """
-        data = {
+        data: dict[str, Any] = {
             "version": "1.0",
             "exported_at": datetime.utcnow().isoformat(),
             "works": [],
@@ -99,7 +99,7 @@ class DataManager:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     @staticmethod
-    def import_data(data: Dict[str, Any], clear_existing: bool = False) -> Dict[str, int]:
+    def import_data(data: dict[str, Any], clear_existing: bool = False) -> dict[str, int]:
         """
         Import data from a JSON structure.
 
@@ -114,9 +114,9 @@ class DataManager:
             DataManager.clear_all_data()
 
         # Track ID mappings (old_id -> new_id)
-        work_id_map: Dict[int, int] = {}
-        expr_id_map: Dict[int, int] = {}
-        manif_id_map: Dict[int, int] = {}
+        work_id_map: dict[int, int] = {}
+        expr_id_map: dict[int, int] = {}
+        manif_id_map: dict[int, int] = {}
 
         counts = {
             "works": 0,
@@ -205,7 +205,7 @@ class DataManager:
         return counts
 
     @staticmethod
-    def import_from_file(filepath: str, clear_existing: bool = False) -> Dict[str, int]:
+    def import_from_file(filepath: str, clear_existing: bool = False) -> dict[str, int]:
         """
         Import data from a JSON file.
 
@@ -230,7 +230,7 @@ class DataManager:
         db.session.commit()
 
     @staticmethod
-    def get_stats() -> Dict[str, int]:
+    def get_stats() -> dict[str, int]:
         """
         Get database statistics.
 

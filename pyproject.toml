@@ -107,3 +107,15 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
+
+[tool.pylint]
+max-line-length = 140
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name
+    "R0903",  # too-few-public-methods
+]
+ignore-paths = [
+    "migrations",
+    ".venv",
+]

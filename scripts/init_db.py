@@ -11,15 +11,15 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add the parent directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from app import create_app
 from app.core.data_manager import DataManager
 from app.db import db
 
+# Add the parent directory to the path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def init_database(seed_file: Path = None):
+
+def init_database(seed_file: Path | None = None):
     """
     Initialize the database.
 
@@ -37,7 +37,7 @@ def init_database(seed_file: Path = None):
         stats = DataManager.get_stats()
         total_records = sum(stats.values())
 
-        print(f"Current database statistics:")
+        print("Current database statistics:")
         print(f"  Works: {stats['works']}")
         print(f"  Expressions: {stats['expressions']}")
         print(f"  Manifestations: {stats['manifestations']}")
@@ -57,7 +57,7 @@ def init_database(seed_file: Path = None):
                 print(f"  Expressions: {counts['expressions']}")
                 print(f"  Manifestations: {counts['manifestations']}")
                 print(f"  Items: {counts['items']}")
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 print(f"Error importing seed data: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
