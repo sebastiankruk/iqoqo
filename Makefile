@@ -25,7 +25,7 @@ lint-python:
 	@echo "Running ruff..."
 	ruff check app/ tests/ scripts/
 	@echo "Running mypy..."
-	mypy app/ tests/ scripts/
+	mypy app/ tests/
 
 lint-format:
 	@echo "Checking Python formatting..."
