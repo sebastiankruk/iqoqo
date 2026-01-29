@@ -1,13 +1,16 @@
-# Installation and Testing
+# Installation Guide
 
-This document provides instructions on how to set up the project for development and testing.
+This document provides comprehensive instructions for setting up iqoqo for development and production use.
 
 ## Prerequisites
 
-- Python 3.11+
-- [pip](https://pip.pypa.io/en/stable/installation/)
-- [virtualenv](https://virtualenv.pypa.io/en/latest/installation.html)
-- [Docker](https://www.docker.com/)
+### Required Software
+
+- **Python 3.11+** - [Download](https://www.python.org/downloads/)
+- **Node.js 18+** and **npm** - [Download](https://nodejs.org/)
+- **PostgreSQL 15+** - Can be run via Docker (recommended) or installed locally
+- **Docker & Docker Compose** - For containerized deployment
+- **Git** - For version control
 
 ## Docker Installation
 
@@ -40,13 +43,23 @@ After installation, make sure the Docker daemon is running.
     source .venv/bin/activate
     ```
 
-3. **Install the dependencies:**
+3. **Install Python dependencies:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-4. **Set up environment variables:**
+    This installs both runtime dependencies and development tools (black, ruff, isort, mypy, pytest).
+
+4. **Install JavaScript/CSS quality tools:**
+
+    ```bash
+    npm install
+    ```
+
+    This installs ESLint, Prettier, stylelint, and markdownlint for code quality checks.
+
+5. **Set up environment variables:**
 
     Create a `.env` file by copying the example file:
 
@@ -92,11 +105,67 @@ This project uses PostgreSQL as its database. The easiest way to get a PostgreSQ
 
 ## Running the Application
 
-To run the Flask development server, use the following command:
+### Development Mode
+
+To run the Flask development server:
+
+```bash
+./run_dev.sh
+```
+
+Or manually:
 
 ```bash
 flask run
 ```
+
+The application will be available at `http://localhost:5000`.
+
+### Production Mode with Docker
+
+To run the full stack (app + database) in production mode:
+
+```bash
+docker-compose up
+```
+
+This starts both the PostgreSQL database and the Flask application behind Nginx.
+
+## Code Quality Checks
+
+Before committing code, ensure quality standards are met:
+
+```bash
+# Run all linters
+make lint
+
+# Auto-format code
+make format
+
+# Run tests
+make test
+```
+
+### Individual Quality Checks
+
+```bash
+# Python
+make lint-python    # Ruff + mypy
+make format-python  # Black + isort
+
+# JavaScript/CSS
+make lint-js        # ESLint
+make lint-css       # stylelint
+
+# Markdown
+make lint-markdown  # markdownlint
+```
+
+## Next Steps
+
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
+- Read the [API documentation](../README.md#api-documentation) for API usage
+- Check [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl) for the FRBR ontology structure
 
 The application will be available at `http://127.0.0.1:5000`.
 

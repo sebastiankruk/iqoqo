@@ -6,4 +6,12 @@ python-dotenv
 gunicorn
 flask-sqlalchemy
 flask-migrate
+
+# Testing
 pytest
+
+# Code Quality & Development Tools
+black
+ruff
+isort
+mypy

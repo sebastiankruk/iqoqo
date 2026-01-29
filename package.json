@@ -1,0 +1,34 @@
+{
+  "name": "iqoqo",
+  "version": "0.1.0",
+  "description": "The Library of Everything - A distributed, semantic, and federated library system",
+  "private": true,
+  "scripts": {
+    "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
+    "lint:js": "eslint 'app/web/static/js/**/*.js'",
+    "lint:css": "stylelint 'app/web/static/css/**/*.css'",
+    "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'",
+    "format": "prettier --write 'app/web/static/**/*.{js,css}'",
+    "format:check": "prettier --check 'app/web/static/**/*.{js,css}'"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "markdownlint-cli2": "^0.12.1",
+    "prettier": "^3.2.4",
+    "stylelint": "^16.2.0",
+    "stylelint-config-standard": "^36.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sebastiankruk/iqoqo.git"
+  },
+  "keywords": [
+    "library",
+    "catalog",
+    "frbr",
+    "semantic-web",
+    "linked-data"
+  ],
+  "author": "Sebastian Kruk",
+  "license": "MIT"
+}

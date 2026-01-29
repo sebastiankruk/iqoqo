@@ -19,3 +19,9 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 - **Database:** PostgreSQL (with Full-Text Search and JSONB)
 - **Ontology:** RDFLib / FRBRoo
 - **Deployment:** Docker & Docker Compose
+
+## 📖 Documentation
+
+- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
+- **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
