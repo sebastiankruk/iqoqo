@@ -1,4 +1,5 @@
 """Tests for the admin API endpoints."""
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import json
 from io import BytesIO
