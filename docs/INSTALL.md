@@ -253,6 +253,7 @@ If you're migrating from the original iqoqo-prototype, follow these steps:
    The `--clear` flag will remove any existing data before migration.
 
 The migration script automatically:
+
 - Creates Works from book titles (deduplicating by title)
 - Creates Expressions for each language/content type
 - Converts Manifestations to the new schema

@@ -96,12 +96,13 @@ def parse_sql_dump(sql_content: str) -> dict:
                         "added": cleaned_values[3],
                     }
                 )
-            elif table_name == "manifestation" and len(cleaned_values) >= 4:
+            elif table_name == "manifestation" and len(cleaned_values) >= 6:
+                # Manifestation table has: id, isbn, title, authors, meta (JSON), added
                 # Parse meta JSON if present
                 meta: dict[str, Any] = {}
-                if len(cleaned_values) > 3:
+                if len(cleaned_values) > 4:
                     try:
-                        meta = json.loads(cleaned_values[3]) if cleaned_values[3] else {}
+                        meta = json.loads(cleaned_values[4]) if cleaned_values[4] else {}
                     except json.JSONDecodeError:
                         pass
 
@@ -109,8 +110,10 @@ def parse_sql_dump(sql_content: str) -> dict:
                     {
                         "id": cleaned_values[0],
                         "isbn": cleaned_values[1] if len(cleaned_values) > 1 else None,
-                        "added": cleaned_values[2] if len(cleaned_values) > 2 else None,
+                        "title": cleaned_values[2] if len(cleaned_values) > 2 else None,
+                        "authors": cleaned_values[3] if len(cleaned_values) > 3 else None,
                         "meta": meta,
+                        "added": cleaned_values[5] if len(cleaned_values) > 5 else None,
                     }
                 )
             elif table_name == "item" and len(cleaned_values) >= 5:

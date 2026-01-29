@@ -12,7 +12,7 @@ class Work(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "works"
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
+    title = db.Column(db.String(1000), nullable=False)  # Increased from 255 to handle long titles
     # Flexible metadata (e.g., original_language, first_performance_date)
     meta = db.Column(db.JSON, default={})
 
@@ -54,7 +54,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     upc = db.Column(db.String(12), index=True)
     ean = db.Column(db.String(13), index=True)
 
-    publisher = db.Column(db.String(255))
+    publisher = db.Column(db.String(500))  # Increased from 255 for long publisher names
     publication_date = db.Column(db.Date)
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
 

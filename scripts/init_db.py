@@ -11,12 +11,12 @@ import argparse
 import sys
 from pathlib import Path
 
+# Add the parent directory to the path
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
+
 from app import create_app
 from app.core.data_manager import DataManager
 from app.db import db
-
-# Add the parent directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def init_database(seed_file: Path | None = None):

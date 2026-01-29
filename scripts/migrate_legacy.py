@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Add the parent directory to the path so we can import app
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from app import create_app
 from app.db import db
@@ -73,8 +73,22 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
         old_id = old_manif.get("id")
         meta = old_manif.get("meta", {})
 
-        # Extract work-level information (title)
-        title = meta.get("title") or meta.get("volumeInfo", {}).get("title", "Unknown")
+        # Get title from multiple possible sources
+        # 1. Direct field from SQL export (new format)
+        # 2. Meta JSON with "Title" key (legacy format)
+        # 3. Meta JSON with "volumeInfo.title" key (Google Books API format)
+        title = old_manif.get("title") or meta.get("Title") or meta.get("volumeInfo", {}).get("title") or "Unknown"
+
+        # Get authors from multiple possible sources
+        # 1. Direct field from SQL export (new format) - could be comma-separated string
+        # 2. Meta JSON with "Authors" key (legacy format) - list
+        # 3. Meta JSON with "volumeInfo.authors" key (Google Books API format) - list
+        authors_field = old_manif.get("authors")
+        if authors_field:
+            # Parse comma-separated authors or single author
+            authors = [a.strip() for a in authors_field.split(",")] if authors_field else []
+        else:
+            authors = meta.get("Authors") or meta.get("volumeInfo", {}).get("authors") or []
 
         # Check if we already have this work
         work = work_cache.get(title)
@@ -82,8 +96,8 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
             work = Work(
                 title=title,
                 meta={
-                    "authors": meta.get("volumeInfo", {}).get("authors", []),
-                    "categories": meta.get("volumeInfo", {}).get("categories", []),
+                    "authors": authors,
+                    "categories": meta.get("categories") or meta.get("volumeInfo", {}).get("categories", []),
                 },
             )
             db.session.add(work)
@@ -92,13 +106,14 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
             stats["works_created"] += 1
 
         # Create expression (one per language/content_type)
-        language = meta.get("volumeInfo", {}).get("language", "en")
+        # Get language from multiple sources
+        language = meta.get("Language") or meta.get("volumeInfo", {}).get("language") or "en"
         expression = Expression(
             work_id=work.id,
             content_type="text",  # Assuming books from legacy
             language=language,
             meta={
-                "description": meta.get("volumeInfo", {}).get("description"),
+                "description": meta.get("description") or meta.get("volumeInfo", {}).get("description"),
             },
         )
         db.session.add(expression)
@@ -124,27 +139,44 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
                 check_digit = (10 - (check % 10)) % 10
                 isbn13 += str(check_digit)
 
+        # Check if this ISBN already exists (handle duplicates)
+        existing_manifestation = None
+        if isbn13:
+            existing_manifestation = Manifestation.query.filter_by(isbn13=isbn13).first()
+
+        if existing_manifestation:
+            # Use existing manifestation for this old_id
+            manifestation = existing_manifestation
+            manif_map[old_id] = manifestation
+            print(f"  Skipping duplicate ISBN: {isbn13} (manifestation {old_id})")
+            stats["skipped"] += 1
+            continue
+
         pub_date = None
-        pub_date_str = meta.get("volumeInfo", {}).get("publishedDate")
+        pub_date_str = meta.get("Year") or meta.get("volumeInfo", {}).get("publishedDate")
         if pub_date_str:
             try:
                 # Try to parse year-only or full date
-                if len(pub_date_str) == 4:  # Year only
+                if len(str(pub_date_str)) == 4:  # Year only
                     pub_date = datetime(int(pub_date_str), 1, 1).date()
                 else:
                     pub_date = datetime.fromisoformat(pub_date_str).date()
             except (ValueError, TypeError):
                 pass
 
+        # Get publisher from multiple sources
+        publisher = meta.get("Publisher") or meta.get("volumeInfo", {}).get("publisher")
+
         manifestation = Manifestation(
             expression_id=expression.id,
             isbn13=isbn13,
-            publisher=meta.get("volumeInfo", {}).get("publisher"),
+            publisher=publisher,
             publication_date=pub_date,
             meta={
-                "imageLinks": meta.get("volumeInfo", {}).get("imageLinks", {}),
-                "pageCount": meta.get("volumeInfo", {}).get("pageCount"),
-                "industryIdentifiers": meta.get("volumeInfo", {}).get("industryIdentifiers", []),
+                "imageLinks": meta.get("imageLinks") or meta.get("volumeInfo", {}).get("imageLinks", {}),
+                "pageCount": meta.get("pageCount") or meta.get("volumeInfo", {}).get("pageCount"),
+                "industryIdentifiers": meta.get("industryIdentifiers")
+                or meta.get("volumeInfo", {}).get("industryIdentifiers", []),
             },
         )
         db.session.add(manifestation)
