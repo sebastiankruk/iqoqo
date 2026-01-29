@@ -18,12 +18,12 @@ def index():
         total_books
         - db.session.query(Manifestation.id)
         .join(Item, Manifestation.id == Item.manifestation_id, isouter=True)
-        .filter(Item.id == None)
+        .filter(Item.id.is_(None))
         .count()
     )
     incomplete = (
         db.session.query(Manifestation)
-        .filter((Manifestation.meta["Title"] == None) | (Manifestation.meta["Authors"] == None))
+        .filter((Manifestation.meta["Title"].is_(None)) | (Manifestation.meta["Authors"].is_(None)))
         .count()
     )
 
@@ -60,9 +60,9 @@ def list_query(query_name: str):
     query = db.session.query(Manifestation)
 
     if query_name == "incomplete":
-        query = query.filter((Manifestation.meta["Title"] == None) | (Manifestation.meta["Authors"] == None))
+        query = query.filter((Manifestation.meta["Title"].is_(None)) | (Manifestation.meta["Authors"].is_(None)))
     elif query_name == "not-added":
-        query = query.outerjoin(Item).filter(Item.id == None)
+        query = query.outerjoin(Item).filter(Item.id.is_(None))
 
     count = query.count()
     books = query.order_by(Manifestation.id).offset(offset).limit(page_size).all()

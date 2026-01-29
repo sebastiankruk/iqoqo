@@ -1,25 +1,24 @@
 {
   "extends": "stylelint-config-standard",
+  "ignoreFiles": [
+    "**/*.min.css",
+    "**/bootstrap*.css",
+    "**/node_modules/**",
+    "**/iqoqo-prototype/**"
+  ],
   "rules": {
-    "indentation": 2,
-    "string-quotes": "single",
     "no-duplicate-selectors": true,
-    "color-hex-case": "lower",
-    "color-hex-length": "short",
     "selector-pseudo-element-colon-notation": "double",
-    "selector-max-id": 1,
-    "declaration-block-trailing-semicolon": "always",
-    "declaration-colon-space-after": "always",
-    "number-leading-zero": "always",
     "function-url-quotes": "always",
     "font-family-name-quotes": "always-where-recommended",
     "comment-whitespace-inside": "always",
-    "rule-empty-line-before": [
-      "always",
-      {
-        "except": ["first-nested"],
-        "ignore": ["after-comment"]
-      }
-    ]
+    "rule-empty-line-before": null,
+    "at-rule-empty-line-before": null,
+    "color-function-notation": null,
+    "alpha-value-notation": null,
+    "property-no-vendor-prefix": null,
+    "media-feature-range-notation": null,
+    "length-zero-no-unit": null,
+    "selector-id-pattern": null
   }
 }

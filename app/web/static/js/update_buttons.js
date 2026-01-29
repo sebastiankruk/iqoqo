@@ -3,34 +3,34 @@
  * @param {bool} isAdd
  */
 function _onBookPost(isAdd) {
-  let isbn = $('#lastISBN .isbn .meta-value input').val();
-  isbn = xfixIsbn10(isbn);
+    let isbn = $("#lastISBN .isbn .meta-value input").val();
+    isbn = xfixIsbn10(isbn);
 
-  let metadata =
-    $('#lastISBN').hasClass('notfound') || !isAdd
-      ? {
-          Title: $('#lastISBN .title .meta-value input').val(),
-          Authors: $('#lastISBN .authors .meta-value input')
-            .val()
-            .split(',')
-            .map(t => t.trim()),
+    const metadata =
+    $("#lastISBN").hasClass("notfound") || !isAdd
+        ? {
+            Title: $("#lastISBN .title .meta-value input").val(),
+            Authors: $("#lastISBN .authors .meta-value input")
+                .val()
+                .split(",")
+                .map(t => t.trim())
         }
-      : {};
-  let action = isAdd ? 'item' : 'isbn';
-  $.ajax({
-    url: `${action}/${isbn}`,
-    contentType: 'application/json',
-    data: JSON.stringify(metadata),
-    type: 'POST',
-    async: false,
-    dataType: 'json',
-  }).done(function (data) {
-    $('#navigation-buttons').removeClass('noitem');
-    setButtonPrimary(false);
-    let message = isAdd ? `Successfully added ${isbn} item` : `Successfully updated ${isbn} manifestation`;
-    showToast(message);
-    console.log(message, data);
-  });
+        : {};
+    const action = isAdd ? "item" : "isbn";
+    $.ajax({
+        url: `${action}/${isbn}`,
+        contentType: "application/json",
+        data: JSON.stringify(metadata),
+        type: "POST",
+        async: false,
+        dataType: "json"
+    }).done(function (data) {
+        $("#navigation-buttons").removeClass("noitem");
+        setButtonPrimary(false);
+        const message = isAdd ? `Successfully added ${isbn} item` : `Successfully updated ${isbn} manifestation`;
+        showToast(message);
+        console.log(message, data);
+    });
 }
 
 /**
@@ -38,15 +38,15 @@ function _onBookPost(isAdd) {
  * If title or authors are set - manifest can be updated before making an item
  */
 function onBookAdd() {
-  _onBookPost(true);
+    _onBookPost(true);
 }
 
 /**
  * Call to send an update to book meta
  */
 function onBookUpdate() {
-  _onBookPost(false);
+    _onBookPost(false);
 }
 
-$('button.add').on('click', onBookAdd);
-$('button.update').on('click', onBookUpdate);
+$("button.add").on("click", onBookAdd);
+$("button.update").on("click", onBookUpdate);

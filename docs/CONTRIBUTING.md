@@ -170,6 +170,7 @@ flask db upgrade
 ```
 
 **Important**: Always follow FRBR principles:
+
 - Don't create "flat" tables mixing Work/Expression/Manifestation concerns
 - Use proper foreign keys to link FRBR entities
 - Add JSONB columns for flexible metadata, not endless varchar columns
@@ -178,7 +179,7 @@ flask db upgrade
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
+```text
 feat: add barcode scanning for board games
 fix: resolve ISBN lookup timeout issue
 docs: update FRBR model diagram
@@ -227,6 +228,7 @@ Then open a PR on GitHub with:
 ### 5. Merge
 
 Once approved:
+
 - Squash commits if requested
 - Ensure CI passes (GitHub Actions will run all quality checks)
 - A maintainer will merge your PR
@@ -274,6 +276,7 @@ When adding features, always ask:
 ### Bug Reports
 
 Include:
+
 - Steps to reproduce
 - Expected behavior
 - Actual behavior
@@ -283,6 +286,7 @@ Include:
 ### Feature Requests
 
 Include:
+
 - Use case - what problem does this solve?
 - How it fits the FRBR model
 - Whether it affects privacy/federation concerns

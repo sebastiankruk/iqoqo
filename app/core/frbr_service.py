@@ -1,11 +1,11 @@
 """This module provides services for creating FRBR-compliant objects."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.db.models import Expression, Item, Manifestation, Work, db
 
 
-def create_work(title: str, meta: Optional[Dict[str, Any]] = None) -> Work:
+def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
     """
     Creates a new Work.
 
@@ -25,7 +25,7 @@ def create_work(title: str, meta: Optional[Dict[str, Any]] = None) -> Work:
 
 
 def create_expression(
-    work_id: int, content_type: str = "text", language: str = "en", meta: Optional[Dict[str, Any]] = None
+    work_id: int, content_type: str = "text", language: str = "en", meta: dict[str, Any] | None = None
 ) -> Expression:
     """
     Creates a new Expression for a Work.
@@ -49,12 +49,12 @@ def create_expression(
 
 def create_manifestation(
     expression_id: int,
-    isbn13: Optional[str] = None,
-    upc: Optional[str] = None,
-    ean: Optional[str] = None,
-    publisher: Optional[str] = None,
-    publication_date: Optional[Any] = None,
-    meta: Optional[Dict[str, Any]] = None,
+    isbn13: str | None = None,
+    upc: str | None = None,
+    ean: str | None = None,
+    publisher: str | None = None,
+    publication_date: Any | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> Manifestation:
     """
     Creates a new Manifestation for an Expression.
@@ -91,8 +91,8 @@ def create_item(
     manifestation_id: int,
     owner_id: str,
     status: str = "available",
-    condition: Optional[str] = None,
-    meta: Optional[Dict[str, Any]] = None,
+    condition: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> Item:
     """
     Creates a new Item for a Manifestation.
@@ -116,7 +116,7 @@ def create_item(
 
 
 def get_or_create_book_manifestation(
-    isbn: str, title: str, authors: Optional[list] = None, publisher: Optional[str] = None
+    isbn: str, title: str, authors: list | None = None, publisher: str | None = None
 ) -> Manifestation:
     """
     Get or create a complete FRBR hierarchy for a book.
@@ -146,15 +146,15 @@ def get_or_create_book_manifestation(
             if authors:
                 manifestation.meta["Authors"] = authors
             db.session.commit()
-        return manifestation
+        return manifestation  # type: ignore[no-any-return]
 
     # Create the full FRBR hierarchy
     work = create_work(title=title, meta={"original_language": "en"})
     expression = create_expression(work_id=work.id, content_type="text", language="en")
 
-    metadata = {"Title": title}
+    metadata: dict[str, Any] = {"Title": title}
     if authors:
-        metadata["Authors"] = authors
+        metadata["Authors"] = authors if isinstance(authors, list) else [authors]
 
     manifestation = create_manifestation(expression_id=expression.id, isbn13=isbn, publisher=publisher, meta=metadata)
 

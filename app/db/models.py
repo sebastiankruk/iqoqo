@@ -3,7 +3,7 @@ from datetime import datetime
 from . import db
 
 
-class Work(db.Model):
+class Work(db.Model):  # type: ignore[name-defined]
     """
     FRBR Group 1: Work
     A distinct intellectual or artistic creation.
@@ -20,7 +20,7 @@ class Work(db.Model):
     expressions = db.relationship("Expression", backref="work", lazy=True)
 
 
-class Expression(db.Model):
+class Expression(db.Model):  # type: ignore[name-defined]
     """
     FRBR Group 1: Expression
     The intellectual realization of a work.
@@ -38,7 +38,7 @@ class Expression(db.Model):
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True)
 
 
-class Manifestation(db.Model):
+class Manifestation(db.Model):  # type: ignore[name-defined]
     """
     FRBR Group 1: Manifestation
     The physical or digital embodiment of an expression.
@@ -62,7 +62,7 @@ class Manifestation(db.Model):
     items = db.relationship("Item", backref="manifestation", lazy=True)
 
 
-class Item(db.Model):
+class Item(db.Model):  # type: ignore[name-defined]
     """
     FRBR Group 1: Item
     A single exemplar of a manifestation.
