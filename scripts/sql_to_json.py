@@ -32,8 +32,9 @@ def parse_sql_dump(sql_content: str) -> dict:
         "items": [],
     }
 
-    # Extract INSERT statements
-    insert_pattern = r"INSERT INTO \"iqoqo\"\.\"(\w+)\" \([^)]+\) VALUES\s*(.*?);"
+    # Extract INSERT statements - handle multiple INSERT statements
+    # Pattern to match INSERT INTO...VALUES and capture everything until the next INSERT or end
+    insert_pattern = r"INSERT INTO \"iqoqo\"\.\"(\w+)\" \([^)]+\) VALUES\s*(.*?)(?=INSERT INTO|ALTER TABLE|\Z)"
 
     matches = re.finditer(insert_pattern, sql_content, re.DOTALL)
 
@@ -42,9 +43,37 @@ def parse_sql_dump(sql_content: str) -> dict:
         values_str = match.group(2)
 
         # Parse individual value tuples
-        # This regex finds content within parentheses
-        tuple_pattern = r"\(([^)]+)\)"
-        tuples = re.findall(tuple_pattern, values_str)
+        # Need to handle nested structures and quotes properly
+        # Find tuples by balancing parentheses while tracking quote state
+        tuples = []
+        depth = 0
+        current_tuple = []
+        i = 0
+        in_quote = False
+        while i < len(values_str):
+            char = values_str[i]
+
+            # Handle single quotes (string delimiters in SQL)
+            if char == "'" and (i == 0 or values_str[i - 1] != "\\"):
+                in_quote = not in_quote
+                if depth > 0:
+                    current_tuple.append(char)
+            elif char == "(" and not in_quote and depth == 0:
+                depth = 1
+                current_tuple = []
+            elif char == "(" and not in_quote:
+                depth += 1
+                current_tuple.append(char)
+            elif char == ")" and not in_quote and depth == 1:
+                depth = 0
+                tuples.append("".join(current_tuple))
+                current_tuple = []
+            elif char == ")" and not in_quote:
+                depth -= 1
+                current_tuple.append(char)
+            elif depth > 0:
+                current_tuple.append(char)
+            i += 1
 
         for tuple_str in tuples:
             # Split by comma, but respect quotes
