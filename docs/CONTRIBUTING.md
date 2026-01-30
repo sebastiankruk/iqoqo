@@ -58,7 +58,9 @@ git checkout -b feature/your-feature-name
 
 1. **Check existing issues** - See if your feature/bug is already being worked on
 2. **Open an issue** - Discuss your proposed changes before implementing
-3. **Read the architecture docs** - Understand the FRBR model in [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)
+3. **Read the architecture docs**:
+   - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete FRBR hierarchy guide with examples
+   - [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl) - Formal ontology specification
 
 ### While You Code
 

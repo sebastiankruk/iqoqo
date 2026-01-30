@@ -23,6 +23,7 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 ## 📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
 

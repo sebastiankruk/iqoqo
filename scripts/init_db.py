@@ -7,6 +7,7 @@ This script checks if the database is empty and optionally loads initial data.
 Usage:
     python scripts/init_db.py [--seed-file path/to/data.json]
 """
+
 import argparse
 import sys
 from pathlib import Path

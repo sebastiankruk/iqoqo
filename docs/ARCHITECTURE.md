@@ -1,0 +1,360 @@
+# iqoqo Architecture Guide
+
+## 🏛️ Core Philosophy: FRBR-First Design
+
+iqoqo is built on the **Functional Requirements for Bibliographic Records (FRBR)** model, specifically the FRBRoo (object-oriented) variant. This architecture ensures that bibliographic data is properly structured, deduplicated, and semantically meaningful.
+
+## 📚 The FRBR Hierarchy
+
+Every item in iqoqo exists within a strict four-tier hierarchy:
+
+```text
+Work (Concept)
+  └── Expression (Version)
+      └── Manifestation (Edition)
+          └── Item (Physical/Digital Copy)
+```
+
+### 1. Work - The Abstract Concept
+
+**Database**: `works` table
+
+A Work represents the **abstract intellectual or artistic creation** - the story, the composition, the idea itself, independent of any particular realization.
+
+**Example**: "The Hobbit" as a story concept
+
+**Attributes**:
+
+- `title` - The work's title
+- `meta` - JSON containing:
+  - `authors` - List of author names
+  - `categories` - Subject classifications
+  - `original_language` - Language of original creation
+
+**Key Principle**: Multiple editions/translations of the same intellectual work share **one** Work entity.
+
+```python
+# One Work for all editions and translations
+work = Work(
+    title="The Hobbit",
+    meta={
+        "authors": ["J.R.R. Tolkien"],
+        "categories": ["Fantasy", "Adventure"],
+        "original_language": "en"
+    }
+)
+```
+
+### 2. Expression - The Specific Version
+
+**Database**: `expressions` table
+
+An Expression represents a **specific intellectual realization** of a Work - a particular text, translation, adaptation, or performance.
+
+**Examples**:
+
+- The English text of "The Hobbit"
+- The German translation "Der Hobbit"
+- The audiobook narration by Rob Inglis
+
+**Attributes**:
+
+- `work_id` - Foreign key to Work
+- `content_type` - Type of content: 'text', 'audio', 'video', etc.
+- `language` - ISO language code (e.g., 'en', 'de', 'pl')
+- `meta` - JSON for additional expression-level data
+
+**Key Principle**: Each language/format combination gets its own Expression, but they all point to the same Work.
+
+```python
+# English text expression
+expression_en = Expression(
+    work_id=work.id,
+    content_type="text",
+    language="en"
+)
+
+# German translation expression
+expression_de = Expression(
+    work_id=work.id,
+    content_type="text",
+    language="de"
+)
+```
+
+### 3. Manifestation - The Physical/Digital Edition
+
+**Database**: `manifestations` table
+
+A Manifestation represents a **physical or digital embodiment** of an Expression - a specific published edition with its own ISBN, publisher, publication date, and physical characteristics.
+
+**Examples**:
+
+- 1937 Allen & Unwin hardcover first edition (ISBN: 9780048230706)
+- 2012 Del Rey mass market paperback (ISBN: 9780345534835)
+- 2020 Mariner Books illustrated edition (ISBN: 9780358653035)
+
+**Attributes**:
+
+- `expression_id` - Foreign key to Expression
+- `isbn13` - ISBN-13 identifier (unique)
+- `upc` - Universal Product Code
+- `ean` - European Article Number
+- `publisher` - Publisher name
+- `publication_date` - Date of publication
+- `meta` - JSON containing:
+  - `imageLinks` - Cover image URLs
+  - `pageCount` - Number of pages
+  - `dimensions` - Physical size
+  - `industryIdentifiers` - Other IDs
+
+**Key Principle**: Each distinct ISBN represents a separate Manifestation, even if it's the "same book."
+
+```python
+# 1937 first edition
+manifestation_1937 = Manifestation(
+    expression_id=expression_en.id,
+    isbn13="9780048230706",
+    publisher="Allen & Unwin",
+    publication_date=date(1937, 9, 21),
+    meta={
+        "pageCount": 310,
+        "imageLinks": {"thumbnail": "..."}
+    }
+)
+
+# 2012 paperback reprint
+manifestation_2012 = Manifestation(
+    expression_id=expression_en.id,
+    isbn13="9780345534835",
+    publisher="Del Rey",
+    publication_date=date(2012, 1, 1)
+)
+```
+
+### 4. Item - The Specific Copy
+
+**Database**: `items` table
+
+An Item represents **your specific copy** - the physical book on your shelf or the digital file you own, with its unique characteristics like condition, notes, and location.
+
+**Examples**:
+
+- The copy on your bookshelf with a coffee stain on page 47
+- Your signed first edition
+- Your Kindle version with highlights
+
+**Attributes**:
+
+- `manifestation_id` - Foreign key to Manifestation
+- `owner_id` - User who owns this copy
+- `status` - 'available', 'lent', 'lost', 'wish_list'
+- `condition` - 'new', 'like_new', 'good', 'fair', 'poor'
+- `added_at` - When added to collection
+- `meta` - JSON for user-specific data:
+  - `notes` - Personal notes
+  - `tags` - Custom tags
+  - `location` - Shelf location
+  - `purchase_date` - When acquired
+  - `purchase_price` - What you paid
+
+**Key Principle**: Multiple users can own the same Manifestation, but each has their own Item record.
+
+```python
+# Your specific copy
+item = Item(
+    manifestation_id=manifestation_2012.id,
+    owner_id="user123",
+    status="available",
+    condition="good",
+    meta={
+        "notes": "Gift from Mom, 2023",
+        "location": "Living room bookshelf, 3rd shelf",
+        "tags": ["favorites", "fantasy"]
+    }
+)
+```
+
+## 🔄 Data Flow and Relationships
+
+### Querying Down the Hierarchy
+
+To display a book in your collection, traverse from Item to Work:
+
+```python
+# Get all books in user's collection with full details
+items = (
+    db.session.query(Item)
+    .join(Manifestation)
+    .join(Expression)
+    .join(Work)
+    .filter(Item.owner_id == current_user.id)
+    .all()
+)
+
+for item in items:
+    # Access the full hierarchy
+    title = item.manifestation.expression.work.title
+    authors = item.manifestation.expression.work.meta.get("authors", [])
+    isbn = item.manifestation.isbn13
+    language = item.manifestation.expression.language
+    condition = item.condition
+```
+
+### Creating New Entries: Work Deduplication
+
+When adding a book, **always check if the Work already exists** to avoid duplicates:
+
+```python
+def add_book(isbn: str, metadata: dict) -> Item:
+    """Add a book to collection, respecting FRBR hierarchy."""
+
+    # 1. Check if Manifestation exists (by ISBN)
+    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+
+    if not manifestation:
+        # 2. Check if Work exists (by title)
+        title = metadata["title"]
+        authors = metadata["authors"]
+
+        work = Work.query.filter_by(title=title).first()
+        if not work:
+            # 3. Create new Work
+            work = Work(
+                title=title,
+                meta={"authors": authors}
+            )
+            db.session.add(work)
+            db.session.flush()
+
+        # 4. Create Expression for this language
+        expression = Expression(
+            work_id=work.id,
+            content_type="text",
+            language=metadata.get("language", "en")
+        )
+        db.session.add(expression)
+        db.session.flush()
+
+        # 5. Create Manifestation for this edition
+        manifestation = Manifestation(
+            expression_id=expression.id,
+            isbn13=isbn,
+            publisher=metadata.get("publisher"),
+            publication_date=metadata.get("publication_date"),
+            meta=metadata.get("extra_info", {})
+        )
+        db.session.add(manifestation)
+        db.session.flush()
+
+    # 6. Create Item (user's copy)
+    item = Item(
+        manifestation_id=manifestation.id,
+        owner_id=current_user.id,
+        status="available"
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    return item
+```
+
+## 🛠️ Implementation Guidelines
+
+### DO: Respect the Hierarchy
+
+✅ **Correct**: Query through relationships
+
+```python
+# Get title from Work through the hierarchy
+title = item.manifestation.expression.work.title
+```
+
+❌ **Incorrect**: Store denormalized data
+
+```python
+# DON'T duplicate title in Item or Manifestation
+item.title = "The Hobbit"  # Wrong!
+```
+
+### DO: Check for Existing Works
+
+✅ **Correct**: Deduplicate by title
+
+```python
+work = Work.query.filter_by(title=title).first()
+if not work:
+    work = Work(title=title, meta={"authors": authors})
+```
+
+❌ **Incorrect**: Create duplicate Works
+
+```python
+# DON'T create a new Work for every book
+work = Work(title=title, meta={"authors": authors})  # Might duplicate!
+```
+
+### DO: Use Proper Foreign Keys
+
+✅ **Correct**: Link through IDs
+
+```python
+expression = Expression(work_id=work.id, ...)
+manifestation = Manifestation(expression_id=expression.id, ...)
+item = Item(manifestation_id=manifestation.id, ...)
+```
+
+### DO: Store Data at the Right Level
+
+- **Work level**: Title, authors, subject matter, original language
+- **Expression level**: Specific language, content type (text/audio/video)
+- **Manifestation level**: ISBN, publisher, publication date, page count, cover images
+- **Item level**: Ownership, condition, personal notes, shelf location
+
+## 🧪 Testing FRBR Implementation
+
+Every feature that touches the data model must have tests that verify FRBR compliance:
+
+```python
+def test_frbr_hierarchy():
+    """Verify proper FRBR hierarchy is maintained."""
+    # Create hierarchy
+    work = Work(title="Test Book", meta={"authors": ["Test Author"]})
+    db.session.add(work)
+    db.session.flush()
+
+    expression = Expression(work_id=work.id, content_type="text", language="en")
+    db.session.add(expression)
+    db.session.flush()
+
+    manifestation = Manifestation(expression_id=expression.id, isbn13="9781234567890")
+    db.session.add(manifestation)
+    db.session.flush()
+
+    item = Item(manifestation_id=manifestation.id, owner_id="user123")
+    db.session.add(item)
+    db.session.commit()
+
+    # Verify relationships
+    assert item.manifestation.expression.work.title == "Test Book"
+    assert item.manifestation.expression.work.meta["authors"] == ["Test Author"]
+```
+
+See [tests/test_web.py](../tests/test_web.py) for comprehensive FRBR hierarchy tests.
+
+## 📖 Further Reading
+
+- **FRBRoo Specification**: [https://www.ifla.org/publications/node/11240](https://www.ifla.org/publications/node/11240)
+- **FRBR Family**: [https://www.ifla.org/frbr](https://www.ifla.org/frbr)
+- **iqoqo Ontology**: [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)
+
+## 🤝 Questions?
+
+If you're unsure about where data should live in the FRBR hierarchy:
+
+1. Ask: "Is this about the **concept** (Work), the **version** (Expression), the **edition** (Manifestation), or **my copy** (Item)?"
+2. Check the [models.py](../app/db/models.py) documentation
+3. Look at existing tests in [tests/test_web.py](../tests/test_web.py)
+4. Open an issue for discussion
+
+Remember: **When in doubt, follow the hierarchy!**
