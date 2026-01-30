@@ -4,7 +4,7 @@ from math import ceil, floor
 
 from flask import render_template, request
 
-from app.db.models import Item, Manifestation, db
+from app.db.models import Expression, Item, Manifestation, Work, db
 
 from . import web_bp
 
@@ -21,9 +21,12 @@ def index():
         .filter(Item.id.is_(None))
         .count()
     )
+    # Query incomplete works (missing title or authors) by joining with Expression and Work
     incomplete = (
         db.session.query(Manifestation)
-        .filter((Manifestation.meta["Title"].is_(None)) | (Manifestation.meta["Authors"].is_(None)))
+        .join(Expression)
+        .join(Work)
+        .filter((Work.title.is_(None)) | (Work.meta["authors"].is_(None)))
         .count()
     )
 
@@ -56,13 +59,13 @@ def list_query(query_name: str):
     offset = int(request.args.get("offset", 0))
     page_size = 10
 
-    # Build query based on query_name
-    query = db.session.query(Manifestation)
+    # Build query based on query_name - join with Expression and Work to get title/authors
+    query = db.session.query(Manifestation).join(Expression).join(Work)
 
     if query_name == "incomplete":
-        query = query.filter((Manifestation.meta["Title"].is_(None)) | (Manifestation.meta["Authors"].is_(None)))
+        query = query.filter((Work.title.is_(None)) | (Work.meta["authors"].is_(None)))
     elif query_name == "not-added":
-        query = query.outerjoin(Item).filter(Item.id.is_(None))
+        query = query.outerjoin(Item, Manifestation.id == Item.manifestation_id).filter(Item.id.is_(None))
 
     count = query.count()
     books = query.order_by(Manifestation.id).offset(offset).limit(page_size).all()
@@ -73,12 +76,22 @@ def list_query(query_name: str):
     # Format books for template
     book_list = []
     for book in books:
+        # Get title from the related Work
+        title = book.expression.work.title if book.expression and book.expression.work else ""
+        # Get authors from Work metadata
+        authors_list = (
+            book.expression.work.meta.get("authors", [])
+            if book.expression and book.expression.work and book.expression.work.meta
+            else []
+        )
+        authors = ", ".join(authors_list) if authors_list else ""
+
         book_list.append(
             {
                 "id": book.id,
                 "isbn": book.isbn13,
-                "title": book.meta.get("Title", "") if book.meta else "",
-                "authors": ", ".join(book.meta.get("Authors", [])) if book.meta and book.meta.get("Authors") else "",
+                "title": title,
+                "authors": authors,
             }
         )
 
