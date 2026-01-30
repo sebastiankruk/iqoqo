@@ -29,6 +29,7 @@ node_modules/
 *.sqlite3
 *.db
 *.log
+.DS_Store
 
 # Data - exclude personal data exports but keep seed examples
 data/*.json
@@ -37,6 +38,6 @@ data/*.json
 # Virtual Env
 .venv*
 
-# Gemini AI
-.gemini/instructions.md
-.gemini/context/*
+# AI
+.github/context/*
+.github/copilot-instructions.md
