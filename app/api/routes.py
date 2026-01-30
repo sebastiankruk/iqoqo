@@ -29,9 +29,30 @@ def lookup_isbn(isbn: str):
     # First check if we have it locally
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
+    # If we have manifestation with metadata in meta field, return it
     if manifestation and manifestation.meta and manifestation.meta.get("Title"):
-        # Return cached data
         return jsonify(**manifestation.meta)
+
+    # If we have manifestation with Work/Expression data, build metadata from there
+    if manifestation and manifestation.expression and manifestation.expression.work:
+        work = manifestation.expression.work
+        metadata = {
+            "Title": work.title or "",
+            "Authors": work.meta.get("authors", []) if work.meta else [],
+        }
+        # Only return if we have at least a title
+        if metadata["Title"]:
+            # Update manifestation.meta for future use
+            if not manifestation.meta:
+                manifestation.meta = {}
+            manifestation.meta.update(metadata)
+            try:
+                db.session.commit()
+            except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+                db.session.rollback()
+                # Continue anyway, we can still return the data
+                print(f"Warning: Failed to update manifestation.meta: {e}")
+            return jsonify(**metadata)
 
     # Try to fetch from Open Library API
     try:
@@ -70,6 +91,12 @@ def lookup_isbn(isbn: str):
         else:
             # Update existing manifestation
             manifestation.meta = metadata
+            # Also update the Work if it has a title
+            if manifestation.expression and manifestation.expression.work:
+                manifestation.expression.work.title = metadata["Title"]
+                if not manifestation.expression.work.meta:
+                    manifestation.expression.work.meta = {}
+                manifestation.expression.work.meta["authors"] = metadata["Authors"]
             db.session.commit()
 
         return jsonify(**metadata)
@@ -93,11 +120,21 @@ def update_manifestation(isbn: str):
         # Update the manifestation's metadata
         if not manifestation.meta:
             manifestation.meta = {}
-        manifestation.meta.update(metadata)
+        # Need to update the mutable dict properly for SQLAlchemy to detect changes
+        updated_meta = dict(manifestation.meta)
+        updated_meta.update(metadata)
+        manifestation.meta = updated_meta
 
-        # Also update the work title if provided
-        if "Title" in metadata and manifestation.expression and manifestation.expression.work:
-            manifestation.expression.work.title = metadata["Title"]
+        # Also update the work title and authors if provided
+        if manifestation.expression and manifestation.expression.work:
+            if "Title" in metadata:
+                manifestation.expression.work.title = metadata["Title"]
+            if "Authors" in metadata:
+                if not manifestation.expression.work.meta:
+                    manifestation.expression.work.meta = {}
+                work_meta = dict(manifestation.expression.work.meta)
+                work_meta["authors"] = metadata["Authors"]
+                manifestation.expression.work.meta = work_meta
 
         db.session.commit()
         return jsonify({"status": "ok"})
@@ -129,7 +166,7 @@ def add_item(isbn: str):
     if not manifestation:
         # If manifestation doesn't exist, try to fetch it first
         lookup_response = lookup_isbn(isbn)
-        if lookup_response[1] != 200:  # Check if lookup failed
+        if lookup_response.status_code != 200:  # Check if lookup failed
             return jsonify({"error": "Manifestation not found"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
@@ -191,7 +228,7 @@ def export_data():
             as_attachment=True,
             download_name=f'iqoqo_export_{data["exported_at"]}.json',
         )
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         return jsonify({"error": str(e)}), 500
 
 
@@ -221,7 +258,7 @@ def import_data():
 
         counts = DataManager.import_data(data, clear_existing=clear_existing)
         return jsonify({"status": "success", "imported": counts})
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, db.exc.SQLAlchemyError) as e:
         return jsonify({"error": str(e)}), 500
 
 
@@ -239,5 +276,5 @@ def clear_data():
     try:
         DataManager.clear_all_data()
         return jsonify({"status": "success", "message": "All data cleared"})
-    except Exception as e:
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         return jsonify({"error": str(e)}), 500

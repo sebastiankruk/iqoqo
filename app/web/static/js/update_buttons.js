@@ -18,7 +18,7 @@ function _onBookPost(isAdd) {
         : {};
     const action = isAdd ? "item" : "isbn";
     $.ajax({
-        url: `${action}/${isbn}`,
+        url: `/api/${action}/${isbn}`,
         contentType: "application/json",
         data: JSON.stringify(metadata),
         type: "POST",

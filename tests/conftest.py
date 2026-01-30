@@ -1,5 +1,7 @@
 """Defines pytest fixtures for the test suite."""
 
+# pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
+
 import pytest
 
 from app import create_app

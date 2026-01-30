@@ -45,7 +45,7 @@ function updateLabel(sisbn, data) {
 
     setButtonPrimary(true);
 
-    $.get(`item/${sisbn}`, function (item_ids) {
+    $.get(`/api/item/${sisbn}`, function (item_ids) {
         console.log(`Book with ISBN = ${sisbn} already added`, item_ids);
         setButtonPrimary(false);
         checkingIsbn = false;
@@ -96,7 +96,7 @@ function retrieveIsbnData(isbn) {
 
     $.ajax({
         type: "GET",
-        url: `isbn/${isbn}`,
+        url: `/api/isbn/${isbn}`,
         success: function (data) {
             // ISBN was correct and book was found
             return updateLabel(isbn, data);

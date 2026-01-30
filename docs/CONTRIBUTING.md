@@ -136,6 +136,8 @@ const scanBarcode = async (isbn) => {
 
 All new features require tests. We use pytest with Flask's test client.
 
+**Note**: Running `pytest` automatically includes linting checks (ruff, mypy, black, isort). The test suite ensures code quality by failing if any linting issues are detected.
+
 ```python
 # tests/test_api.py
 def test_isbn_lookup_success(client):
@@ -150,10 +152,11 @@ def test_isbn_lookup_success(client):
 Run tests:
 
 ```bash
-pytest                    # Run all tests
+pytest                    # Run all tests (includes linting checks)
 pytest tests/test_api.py  # Run specific test file
 pytest -v                 # Verbose output
 pytest -k "isbn"          # Run tests matching "isbn"
+pytest tests/test_linting.py  # Run only linting checks
 ```
 
 ### Database Changes

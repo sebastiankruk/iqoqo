@@ -1,5 +1,8 @@
 """Tests for the web interface routes and static files."""
 
+# pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
+# pylint: disable=unused-argument  # fixtures used for setup, not always referenced
+
 import os
 
 from app.db import db
@@ -474,3 +477,33 @@ def test_frbr_hierarchy_pagination(app, client):
     content = response.data.decode()
     assert "Book 10" in content
     assert "Book 14" in content
+
+
+# ============================================================================
+# JavaScript API Path Tests
+# ============================================================================
+
+
+def test_javascript_metaform_has_api_paths(app):
+    """Test that metaform.js uses correct /api/* paths."""
+    static_folder = os.path.join(app.root_path, "web", "static")
+    metaform_path = os.path.join(static_folder, "js", "metaform.js")
+
+    with open(metaform_path, encoding="utf-8") as f:
+        content = f.read()
+
+    # Check for correct API paths
+    assert "/api/item/${sisbn}" in content or "`/api/item/${sisbn}`" in content
+    assert "/api/isbn/${isbn}" in content or "`/api/isbn/${isbn}`" in content
+
+
+def test_javascript_update_buttons_has_api_paths(app):
+    """Test that update_buttons.js uses correct /api/* paths."""
+    static_folder = os.path.join(app.root_path, "web", "static")
+    update_buttons_path = os.path.join(static_folder, "js", "update_buttons.js")
+
+    with open(update_buttons_path, encoding="utf-8") as f:
+        content = f.read()
+
+    # Check for correct API path with dynamic action
+    assert "/api/${action}/${isbn}" in content or "`/api/${action}/${isbn}`" in content
