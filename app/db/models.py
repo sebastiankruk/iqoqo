@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from . import db
 
@@ -78,5 +78,5 @@ class Item(db.Model):  # type: ignore[name-defined]
     status = db.Column(db.String(50), default="available")  # available, lent, lost, wish_list
     condition = db.Column(db.String(50))
 
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default={})  # Custom tags, notes, location on shelf

@@ -6,7 +6,7 @@ Supports both full database dumps and selective exports.
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.db import db
@@ -26,7 +26,7 @@ class DataManager:
         """
         data: dict[str, Any] = {
             "version": "1.0",
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "works": [],
             "expressions": [],
             "manifestations": [],
