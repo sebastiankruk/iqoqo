@@ -25,7 +25,7 @@ def get_items():
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])
 def lookup_isbn(isbn: str):
-    """Look up book metadata by ISBN from Open Library or local DB."""
+    """Look up book metadata by ISBN from multiple sources or local DB."""
     # First check if we have it locally
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
@@ -54,30 +54,74 @@ def lookup_isbn(isbn: str):
                 print(f"Warning: Failed to update manifestation.meta: {e}")
             return jsonify(**metadata)
 
-    # Try to fetch from Open Library API
+    # Try to fetch using isbnlib (aggregates multiple sources: Google Books, WorldCat, etc.)
     try:
-        # Try ISBN 13 first
-        response = requests.get(
-            f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data", timeout=10
-        )
-        data = response.json()
+        import isbnlib
+        from isbnlib.exceptions import ISBNNotConsistentError
 
-        if not data:
-            # If not found, return 404
-            return jsonify({}), 404
+        # Canonicalize the ISBN
+        canonical_isbn = isbnlib.canonical(isbn)
+        if not canonical_isbn:
+            return jsonify({"error": "Invalid ISBN"}), 400
 
-        book_data = list(data.values())[0]
+        # Try to get metadata from multiple sources
+        book_data = None
+        try:
+            book_data = isbnlib.meta(canonical_isbn)
+        except ISBNNotConsistentError as e:
+            # Handle ISBN redirects (when ISBN-10/13 mismatch)
+            import re
 
-        # Extract metadata
-        metadata = {
-            "Title": book_data.get("title", ""),
-            "Authors": [author.get("name", "") for author in book_data.get("authors", [])],
-        }
+            m_isbn_redirect = re.match(r"isbn request != isbn response \(\S+ not in (\[[^\]]+\])\)", str(e))
+            if m_isbn_redirect:
+                a_isbn_redirect = eval(m_isbn_redirect.group(1))
+                m_isbn_redirect = {v["type"]: v["identifier"] for v in a_isbn_redirect}
+                re_isbn = m_isbn_redirect.get("ISBN_13", None) or m_isbn_redirect.get("ISBN_10", None)
+
+                if re_isbn:
+                    # Try again with redirected ISBN
+                    try:
+                        book_data = isbnlib.meta(re_isbn)
+                        canonical_isbn = re_isbn
+                    except Exception:
+                        # If redirect also fails, continue to fallback
+                        pass
+        except Exception as e:
+            # If isbnlib fails (e.g., rate limiting, network errors), log and continue to fallback
+            print(f"isbnlib lookup failed for {isbn}: {e}")
+            pass
+
+        if book_data:
+            # isbnlib returns dict with 'Title', 'Authors', 'Publisher', 'Year', 'ISBN-13', 'Language'
+            metadata = {
+                "Title": book_data.get("Title", ""),
+                "Authors": book_data.get("Authors", []),
+            }
+        else:
+            # Fall back to Open Library if isbnlib returns nothing
+            try:
+                response = requests.get(
+                    f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data", timeout=10
+                )
+                data = response.json()
+
+                if not data:
+                    return jsonify({}), 404
+
+                book_data = list(data.values())[0]
+                metadata = {
+                    "Title": book_data.get("title", ""),
+                    "Authors": [author.get("name", "") for author in book_data.get("authors", [])],
+                }
+            except (requests.RequestException, KeyError, ValueError) as e:
+                # Both isbnlib and Open Library failed
+                print(f"Open Library lookup also failed for {isbn}: {e}")
+                return jsonify({}), 404
 
         # Store in database if not exists
         if not manifestation:
             # We need to create Work -> Expression -> Manifestation
-            work = Work(title=metadata["Title"], meta={})
+            work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
             db.session.add(work)
             db.session.flush()
 
@@ -85,7 +129,7 @@ def lookup_isbn(isbn: str):
             db.session.add(expression)
             db.session.flush()
 
-            manifestation = Manifestation(expression_id=expression.id, isbn13=isbn, meta=metadata)
+            manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
             db.session.add(manifestation)
             db.session.commit()
         else:
@@ -101,9 +145,10 @@ def lookup_isbn(isbn: str):
 
         return jsonify(**metadata)
 
-    except (requests.RequestException, KeyError, ValueError) as e:
-        # If API call fails, return 400
-        return jsonify({"error": str(e)}), 400
+    except (ImportError, AttributeError) as e:
+        # If isbnlib import fails, return 404 with empty dict
+        print(f"ISBN lookup failed for {isbn}: {e}")
+        return jsonify({}), 404
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])

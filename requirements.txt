@@ -6,6 +6,8 @@ python-dotenv
 gunicorn
 flask-sqlalchemy
 flask-migrate
+isbnlib==3.10.*
+setuptools
 
 # Testing
 pytest
