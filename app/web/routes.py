@@ -22,12 +22,15 @@ def index():
         .count()
     )
     # Query incomplete works (missing title or authors) by joining with Expression and Work
-    incomplete = (
-        db.session.query(Manifestation)
-        .join(Expression)
-        .join(Work)
-        .filter((Work.title.is_(None)) | (Work.meta["authors"].is_(None)))
-        .count()
+    # Note: We'll do a simpler query and filter in Python for cross-database compatibility
+    all_manifestations = db.session.query(Manifestation).join(Expression).join(Work).all()
+    incomplete = sum(
+        1
+        for m in all_manifestations
+        if not m.expression.work.title
+        or not m.expression.work.meta
+        or not m.expression.work.meta.get("authors")
+        or len(m.expression.work.meta.get("authors", [])) == 0
     )
 
     counts = {"books": total_books, "not added": not_added, "incomplete": incomplete}
@@ -63,12 +66,27 @@ def list_query(query_name: str):
     query = db.session.query(Manifestation).join(Expression).join(Work)
 
     if query_name == "incomplete":
-        query = query.filter((Work.title.is_(None)) | (Work.meta["authors"].is_(None)))
+        # For incomplete, we need to check authors in meta which is JSON
+        # Fetch all and filter in Python for database compatibility
+        all_books = query.all()
+        books_filtered = [
+            book
+            for book in all_books
+            if not book.expression.work.title
+            or not book.expression.work.meta
+            or not book.expression.work.meta.get("authors")
+            or len(book.expression.work.meta.get("authors", [])) == 0
+        ]
+        count = len(books_filtered)
+        books = books_filtered[offset : offset + page_size]
     elif query_name == "not-added":
         query = query.outerjoin(Item, Manifestation.id == Item.manifestation_id).filter(Item.id.is_(None))
-
-    count = query.count()
-    books = query.order_by(Manifestation.id).offset(offset).limit(page_size).all()
+        count = query.count()
+        books = query.order_by(Manifestation.id).offset(offset).limit(page_size).all()
+    else:
+        # Default: all books
+        count = query.count()
+        books = query.order_by(Manifestation.id).offset(offset).limit(page_size).all()
 
     pages = ceil(count / page_size)
     current_page = floor(offset / page_size)

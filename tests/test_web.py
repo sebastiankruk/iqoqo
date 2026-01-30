@@ -2,6 +2,9 @@
 
 import os
 
+from app.db import db
+from app.db.models import Expression, Item, Manifestation, Work
+
 
 def test_index_page(client):
     """Test that the index page loads."""
@@ -219,3 +222,255 @@ def test_static_files_exist_on_filesystem(app):
     # Check audio files
     assert os.path.exists(os.path.join(static_folder, "audio", "ding.mp3"))
     assert os.path.exists(os.path.join(static_folder, "audio", "error2.mp3"))
+
+
+# ============================================================================
+# FRBR Hierarchy Tests
+# ============================================================================
+
+
+def test_frbr_hierarchy_books_list(app, client):
+    """Test that the books list properly traverses the FRBR hierarchy."""
+    with app.app_context():
+        # Create a complete FRBR hierarchy: Work -> Expression -> Manifestation
+        work = Work(title="The Hobbit", meta={"authors": ["J.R.R. Tolkien"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(
+            expression_id=expression.id,
+            isbn13="9780048230706",
+            publisher="Allen & Unwin",
+            meta={},
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+    # Test that the list endpoint returns the book with title and authors
+    response = client.get("/list/query/books")
+    assert response.status_code == 200
+    assert b"The Hobbit" in response.data
+    assert b"J.R.R. Tolkien" in response.data
+    assert b"9780048230706" in response.data
+
+
+def test_frbr_hierarchy_multiple_books(app, client):
+    """Test that multiple books with proper FRBR hierarchy are displayed."""
+    with app.app_context():
+        # Create first book
+        work1 = Work(title="1984", meta={"authors": ["George Orwell"]})
+        db.session.add(work1)
+        db.session.flush()
+
+        expr1 = Expression(work_id=work1.id, content_type="text", language="en")
+        db.session.add(expr1)
+        db.session.flush()
+
+        manif1 = Manifestation(expression_id=expr1.id, isbn13="9780451524935")
+        db.session.add(manif1)
+
+        # Create second book
+        work2 = Work(title="Animal Farm", meta={"authors": ["George Orwell"]})
+        db.session.add(work2)
+        db.session.flush()
+
+        expr2 = Expression(work_id=work2.id, content_type="text", language="en")
+        db.session.add(expr2)
+        db.session.flush()
+
+        manif2 = Manifestation(expression_id=expr2.id, isbn13="9780452284244")
+        db.session.add(manif2)
+
+        db.session.commit()
+
+    response = client.get("/list/query/books")
+    assert response.status_code == 200
+    assert b"1984" in response.data
+    assert b"Animal Farm" in response.data
+    assert b"George Orwell" in response.data
+    assert b"9780451524935" in response.data
+    assert b"9780452284244" in response.data
+
+
+def test_frbr_hierarchy_multiple_authors(app, client):
+    """Test books with multiple authors are displayed correctly."""
+    with app.app_context():
+        work = Work(title="Good Omens", meta={"authors": ["Terry Pratchett", "Neil Gaiman"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, isbn13="9780060853983")
+        db.session.add(manifestation)
+        db.session.commit()
+
+    response = client.get("/list/query/books")
+    assert response.status_code == 200
+    assert b"Good Omens" in response.data
+    assert b"Terry Pratchett, Neil Gaiman" in response.data
+
+
+def test_frbr_hierarchy_incomplete_books_query(app, client):
+    """Test that incomplete books (missing title or authors) are filtered correctly."""
+    with app.app_context():
+        # Create complete book
+        work1 = Work(title="Complete Book", meta={"authors": ["Author Name"]})
+        db.session.add(work1)
+        db.session.flush()
+        expr1 = Expression(work_id=work1.id, content_type="text", language="en")
+        db.session.add(expr1)
+        db.session.flush()
+        manif1 = Manifestation(expression_id=expr1.id, isbn13="1111111111111")
+        db.session.add(manif1)
+
+        # Create book with missing authors
+        work2 = Work(title="No Authors Book", meta={})
+        db.session.add(work2)
+        db.session.flush()
+        expr2 = Expression(work_id=work2.id, content_type="text", language="en")
+        db.session.add(expr2)
+        db.session.flush()
+        manif2 = Manifestation(expression_id=expr2.id, isbn13="2222222222222")
+        db.session.add(manif2)
+
+        db.session.commit()
+
+    # The incomplete query should show the book missing authors
+    response = client.get("/list/query/incomplete")
+    assert response.status_code == 200
+    assert b"No Authors Book" in response.data
+    assert b"Complete Book" not in response.data
+
+
+def test_frbr_hierarchy_not_added_books_query(app, client):
+    """Test that books not in user's collection (no Item) are filtered correctly."""
+    with app.app_context():
+        # Create book without item (not in collection)
+        work1 = Work(title="Not Owned", meta={"authors": ["Author One"]})
+        db.session.add(work1)
+        db.session.flush()
+        expr1 = Expression(work_id=work1.id, content_type="text", language="en")
+        db.session.add(expr1)
+        db.session.flush()
+        manif1 = Manifestation(expression_id=expr1.id, isbn13="3333333333333")
+        db.session.add(manif1)
+
+        # Create book with item (in collection)
+        work2 = Work(title="Owned Book", meta={"authors": ["Author Two"]})
+        db.session.add(work2)
+        db.session.flush()
+        expr2 = Expression(work_id=work2.id, content_type="text", language="en")
+        db.session.add(expr2)
+        db.session.flush()
+        manif2 = Manifestation(expression_id=expr2.id, isbn13="4444444444444")
+        db.session.add(manif2)
+        db.session.flush()
+
+        item = Item(manifestation_id=manif2.id, owner_id="test_user", status="available")
+        db.session.add(item)
+
+        db.session.commit()
+
+    # The not-added query should show only the book without an item
+    response = client.get("/list/query/not-added")
+    assert response.status_code == 200
+    assert b"Not Owned" in response.data
+    assert b"Owned Book" not in response.data
+
+
+def test_frbr_hierarchy_index_statistics(app, client):
+    """Test that index page statistics correctly count books across FRBR hierarchy."""
+    with app.app_context():
+        # Create 3 complete books
+        for i in range(3):
+            work = Work(title=f"Book {i}", meta={"authors": [f"Author {i}"]})
+            db.session.add(work)
+            db.session.flush()
+            expr = Expression(work_id=work.id, content_type="text", language="en")
+            db.session.add(expr)
+            db.session.flush()
+            manif = Manifestation(expression_id=expr.id, isbn13=f"555555555555{i}")
+            db.session.add(manif)
+
+        # Create 1 incomplete book (missing authors)
+        work_inc = Work(title="Incomplete", meta={})
+        db.session.add(work_inc)
+        db.session.flush()
+        expr_inc = Expression(work_id=work_inc.id, content_type="text", language="en")
+        db.session.add(expr_inc)
+        db.session.flush()
+        manif_inc = Manifestation(expression_id=expr_inc.id, isbn13="6666666666666")
+        db.session.add(manif_inc)
+
+        # Add item for first book only
+        db.session.flush()
+        manifestations = Manifestation.query.all()
+        item = Item(manifestation_id=manifestations[0].id, owner_id="test_user")
+        db.session.add(item)
+
+        db.session.commit()
+
+    response = client.get("/")
+    assert response.status_code == 200
+    # Should show 4 total books
+    assert b"4" in response.data
+
+
+def test_frbr_hierarchy_empty_metadata(app, client):
+    """Test that books with empty/null metadata don't crash the view."""
+    with app.app_context():
+        work = Work(title="Minimal Book", meta=None)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta=None)
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, isbn13="7777777777777", meta=None)
+        db.session.add(manifestation)
+        db.session.commit()
+
+    response = client.get("/list/query/books")
+    assert response.status_code == 200
+    assert b"Minimal Book" in response.data
+    assert b"7777777777777" in response.data
+
+
+def test_frbr_hierarchy_pagination(app, client):
+    """Test that pagination works correctly with FRBR hierarchy."""
+    with app.app_context():
+        # Create 15 books to test pagination (default page size is 10)
+        for i in range(15):
+            work = Work(title=f"Book {i:02d}", meta={"authors": [f"Author {i}"]})
+            db.session.add(work)
+            db.session.flush()
+            expr = Expression(work_id=work.id, content_type="text", language="en")
+            db.session.add(expr)
+            db.session.flush()
+            manif = Manifestation(expression_id=expr.id, isbn13=f"888888888{i:04d}")
+            db.session.add(manif)
+        db.session.commit()
+
+    # First page should have 10 books
+    response = client.get("/list/query/books?offset=0")
+    assert response.status_code == 200
+    content = response.data.decode()
+
+    # Check that we have some books from the first page
+    assert "Book 00" in content
+    assert "Book 09" in content
+
+    # Second page should have 5 books
+    response = client.get("/list/query/books?offset=10")
+    assert response.status_code == 200
+    content = response.data.decode()
+    assert "Book 10" in content
+    assert "Book 14" in content

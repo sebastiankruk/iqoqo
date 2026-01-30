@@ -134,7 +134,7 @@ def test_import_from_file(app, sample_data, tmp_path):
     with app.app_context():
         # Write sample data to a file
         filepath = tmp_path / "import.json"
-        with open(filepath, encoding="utf-8") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(sample_data, f)
 
         result = DataManager.import_from_file(str(filepath), clear_existing=False)
