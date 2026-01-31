@@ -18,3 +18,4 @@ ruff
 isort
 mypy
 pylint
+types-requests  # Type stubs for mypy
