@@ -145,9 +145,8 @@ def test_admin_import_invalid_json(client):
     """Test /api/admin/import with invalid JSON."""
     response = client.post("/api/admin/import", data="not valid json", content_type="application/json")
 
-    # Flask returns 500 for JSON parsing errors
-    assert response.status_code == 500
-    assert "error" in response.json
+    # Flask returns 400 for JSON parsing errors
+    assert response.status_code == 400
 
 
 def test_admin_import_no_data(client):

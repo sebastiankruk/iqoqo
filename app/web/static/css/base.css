@@ -58,8 +58,8 @@ button.stop {
 .meta-value input {
   width: 100%;
   border: none;
-  margin: none;
-  padding: none;
+  margin: 0;
+  padding: 0;
 }
 
 #lastISBN.notfound .meta-value input,

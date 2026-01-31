@@ -344,11 +344,3 @@ def clear_data():
         return jsonify({"status": "success", "message": "All data cleared"})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         return jsonify({"error": str(e)}), 500
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-        return jsonify({"error": str(e)}), 500
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-        return jsonify({"error": str(e)}), 500
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-        return jsonify({"error": str(e)}), 500
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-        return jsonify({"error": str(e)}), 500

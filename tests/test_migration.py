@@ -3,11 +3,14 @@
 # pylint: disable=redefined-outer-name,import-error,import-outside-toplevel,unused-import,unused-argument
 
 import json
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
+# Add project root to path to import scripts
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.sql_to_json import parse_sql_dump
 
 
