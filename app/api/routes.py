@@ -1,7 +1,10 @@
 """Defines the API endpoints for the application."""
 
+# cSpell:ignore isbnlib
+
 import json
 from io import BytesIO
+from typing import Any
 
 import requests
 from flask import jsonify, request, send_file, session
@@ -36,28 +39,30 @@ def lookup_isbn(isbn: str):
     # If we have manifestation with Work/Expression data, build metadata from there
     if manifestation and manifestation.expression and manifestation.expression.work:
         work = manifestation.expression.work
-        metadata = {
+        work_metadata = {
             "Title": work.title or "",
             "Authors": work.meta.get("authors", []) if work.meta else [],
         }
         # Only return if we have at least a title
-        if metadata["Title"]:
+        if work_metadata["Title"]:
             # Update manifestation.meta for future use
             if not manifestation.meta:
                 manifestation.meta = {}
-            manifestation.meta.update(metadata)
+            manifestation.meta.update(work_metadata)
             try:
                 db.session.commit()
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
                 db.session.rollback()
                 # Continue anyway, we can still return the data
                 print(f"Warning: Failed to update manifestation.meta: {e}")
-            return jsonify(**metadata)
+            return jsonify(**work_metadata)
 
     # Try to fetch using isbnlib (aggregates multiple sources: Google Books, WorldCat, etc.)
+    metadata: dict[str, Any] = {}
+    canonical_isbn = isbn  # Default to input ISBN
+
     try:
-        import isbnlib
-        from isbnlib.exceptions import ISBNNotConsistentError
+        import isbnlib  # pylint: disable=import-outside-toplevel
 
         # Canonicalize the ISBN
         canonical_isbn = isbnlib.canonical(isbn)
@@ -68,28 +73,27 @@ def lookup_isbn(isbn: str):
         book_data = None
         try:
             book_data = isbnlib.meta(canonical_isbn)
-        except ISBNNotConsistentError as e:
-            # Handle ISBN redirects (when ISBN-10/13 mismatch)
-            import re
+        except Exception as e:  # pylint: disable=broad-except
+            # Check if this is an ISBN redirect error (ISBNNotConsistentError)
+            if "isbn request != isbn response" in str(e):
+                # Handle ISBN redirects (when ISBN-10/13 mismatch)
+                import ast  # pylint: disable=import-outside-toplevel
+                import re  # pylint: disable=import-outside-toplevel
 
-            m_isbn_redirect = re.match(r"isbn request != isbn response \(\S+ not in (\[[^\]]+\])\)", str(e))
-            if m_isbn_redirect:
-                a_isbn_redirect = eval(m_isbn_redirect.group(1))
-                m_isbn_redirect = {v["type"]: v["identifier"] for v in a_isbn_redirect}
-                re_isbn = m_isbn_redirect.get("ISBN_13", None) or m_isbn_redirect.get("ISBN_10", None)
+                m_isbn_redirect = re.match(r"isbn request != isbn response \(\S+ not in (\[[^\]]+\])\)", str(e))
+                if m_isbn_redirect:
+                    a_isbn_redirect = ast.literal_eval(m_isbn_redirect.group(1))  # type: ignore[arg-type]
+                    isbn_redirect_dict = {v["type"]: v["identifier"] for v in a_isbn_redirect}
+                    re_isbn = isbn_redirect_dict.get("ISBN_13", None) or isbn_redirect_dict.get("ISBN_10", None)
 
-                if re_isbn:
-                    # Try again with redirected ISBN
-                    try:
-                        book_data = isbnlib.meta(re_isbn)
-                        canonical_isbn = re_isbn
-                    except Exception:
-                        # If redirect also fails, continue to fallback
-                        pass
-        except Exception as e:
-            # If isbnlib fails (e.g., rate limiting, network errors), log and continue to fallback
-            print(f"isbnlib lookup failed for {isbn}: {e}")
-            pass
+                    if re_isbn:
+                        # Try again with redirected ISBN
+                        try:
+                            book_data = isbnlib.meta(re_isbn)
+                            canonical_isbn = re_isbn
+                        except Exception:  # pylint: disable=broad-except
+                            # If redirect also fails, continue to fallback
+                            pass
 
         if book_data:
             # isbnlib returns dict with 'Title', 'Authors', 'Publisher', 'Year', 'ISBN-13', 'Language'
@@ -97,58 +101,58 @@ def lookup_isbn(isbn: str):
                 "Title": book_data.get("Title", ""),
                 "Authors": book_data.get("Authors", []),
             }
-        else:
-            # Fall back to Open Library if isbnlib returns nothing
-            try:
-                response = requests.get(
-                    f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data", timeout=10
-                )
-                data = response.json()
+    except (ImportError, AttributeError) as e:
+        # If isbnlib import fails, log and continue to Open Library fallback
+        print(f"isbnlib not available for {isbn}: {e}")
 
-                if not data:
-                    return jsonify({}), 404
+    # Fall back to Open Library if isbnlib is not available or returned nothing
+    if not metadata:
+        try:
+            response = requests.get(
+                f"https://openlibrary.org/api/books?bibkeys=ISBN:{canonical_isbn}&format=json&jscmd=data",
+                timeout=10,
+            )
+            data = response.json()
 
-                book_data = list(data.values())[0]
-                metadata = {
-                    "Title": book_data.get("title", ""),
-                    "Authors": [author.get("name", "") for author in book_data.get("authors", [])],
-                }
-            except (requests.RequestException, KeyError, ValueError) as e:
-                # Both isbnlib and Open Library failed
-                print(f"Open Library lookup also failed for {isbn}: {e}")
+            if not data:
                 return jsonify({}), 404
 
-        # Store in database if not exists
-        if not manifestation:
-            # We need to create Work -> Expression -> Manifestation
-            work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
-            db.session.add(work)
-            db.session.flush()
+            book_data = list(data.values())[0]
+            metadata = {
+                "Title": book_data.get("title", ""),
+                "Authors": [author.get("name", "") for author in book_data.get("authors", [])],
+            }
+        except (requests.RequestException, KeyError, ValueError) as e:
+            # Both isbnlib and Open Library failed
+            print(f"Open Library lookup also failed for {isbn}: {e}")
+            return jsonify({}), 404
 
-            expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
-            db.session.add(expression)
-            db.session.flush()
+    # Store in database if not exists
+    if not manifestation:
+        # We need to create Work -> Expression -> Manifestation
+        work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
+        db.session.add(work)
+        db.session.flush()
 
-            manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
-            db.session.add(manifestation)
-            db.session.commit()
-        else:
-            # Update existing manifestation
-            manifestation.meta = metadata
-            # Also update the Work if it has a title
-            if manifestation.expression and manifestation.expression.work:
-                manifestation.expression.work.title = metadata["Title"]
-                if not manifestation.expression.work.meta:
-                    manifestation.expression.work.meta = {}
-                manifestation.expression.work.meta["authors"] = metadata["Authors"]
-            db.session.commit()
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
 
-        return jsonify(**metadata)
+        manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
+        db.session.add(manifestation)
+        db.session.commit()
+    else:
+        # Update existing manifestation
+        manifestation.meta = metadata
+        # Also update the Work if it has a title
+        if manifestation.expression and manifestation.expression.work:
+            manifestation.expression.work.title = metadata["Title"]
+            if not manifestation.expression.work.meta:
+                manifestation.expression.work.meta = {}
+            manifestation.expression.work.meta["authors"] = metadata["Authors"]
+        db.session.commit()
 
-    except (ImportError, AttributeError) as e:
-        # If isbnlib import fails, return 404 with empty dict
-        print(f"ISBN lookup failed for {isbn}: {e}")
-        return jsonify({}), 404
+    return jsonify(**metadata)
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
@@ -160,6 +164,10 @@ def update_manifestation(isbn: str):
         return jsonify({"error": "Manifestation not found"}), 404
 
     metadata = request.get_json()
+
+    # Check if metadata is None or empty dict
+    if metadata is None:
+        return jsonify({"error": "No metadata provided"}), 400
 
     if metadata:
         # Update the manifestation's metadata
@@ -211,8 +219,11 @@ def add_item(isbn: str):
     if not manifestation:
         # If manifestation doesn't exist, try to fetch it first
         lookup_response = lookup_isbn(isbn)
-        if lookup_response.status_code != 200:  # Check if lookup failed
-            return jsonify({"error": "Manifestation not found"}), 404
+        # lookup_isbn returns a tuple (response, status_code) on error
+        if isinstance(lookup_response, tuple):
+            status_code = lookup_response[1] if len(lookup_response) > 1 else 404
+            if status_code != 200:
+                return jsonify({"error": "Manifestation not found"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     metadata = request.get_json()
@@ -221,11 +232,21 @@ def add_item(isbn: str):
     if metadata:
         if not manifestation.meta:
             manifestation.meta = {}
-        manifestation.meta.update(metadata)
+        # Need to update the mutable dict properly for SQLAlchemy to detect changes
+        updated_meta = dict(manifestation.meta)
+        updated_meta.update(metadata)
+        manifestation.meta = updated_meta
 
-        # Also update the work title if provided
-        if "Title" in metadata and manifestation.expression and manifestation.expression.work:
-            manifestation.expression.work.title = metadata["Title"]
+        # Also update the work title and authors if provided
+        if manifestation.expression and manifestation.expression.work:
+            if "Title" in metadata:
+                manifestation.expression.work.title = metadata["Title"]
+            if "Authors" in metadata:
+                if not manifestation.expression.work.meta:
+                    manifestation.expression.work.meta = {}
+                work_meta = dict(manifestation.expression.work.meta)
+                work_meta["authors"] = metadata["Authors"]
+                manifestation.expression.work.meta = work_meta
 
     # Get or create client ID (simplified - you may want to use proper authentication)
     client_id = session.get("client_id", "default_user")
@@ -321,5 +342,13 @@ def clear_data():
     try:
         DataManager.clear_all_data()
         return jsonify({"status": "success", "message": "All data cleared"})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"error": str(e)}), 500
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"error": str(e)}), 500
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"error": str(e)}), 500
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"error": str(e)}), 500
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         return jsonify({"error": str(e)}), 500
