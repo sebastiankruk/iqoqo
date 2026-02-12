@@ -37,10 +37,8 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 ## 📂 Context & Legacy References
 
 - **Research:** Refer to `.github/context/feasibility_study.md` for the original vision.
-- **Legacy Code:** See `.github/context/legacy_prototype.txt`.
 - Key logic to port: Barcode scanning, ISBN metadata fetching.
 - Key change: Move from the old "flat" item table to the 4-tier FRBR structure.
-- **Migration:** Use the SQL schema in `.github/context/legacy_db.sql` to map existing book data into the new FRBR model.
 
 ## 📜 Coding Principles
 
@@ -50,3 +48,11 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 - **Code quality:** Use all linting tests as defined in Makefile
 - **Testing:** Write unit tests for all new features. Use `pytest`.
 - **Documentation:** Update docstrings, API docs, and any related documentation with every change.
+
+## 📓 Private Development Notes
+
+- **Location:** `.github/context/private-notes/` (symlinked Obsidian vault, git-ignored)
+- **Purpose:** Detailed planning, research, and development notes
+- **Usage:** Check here for context on design decisions, future plans, and implementation details
+- **Legacy Code:** See `.github/context/legacy_prototype.txt`.
+- **Migration:** Use the SQL schema in `.github/context/legacy_db.sql` to map existing book data into the new FRBR model.
