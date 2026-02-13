@@ -1,3 +1,18 @@
+# iqoqo Docker Compose Configuration
+#
+# This file defines services for running iqoqo in production mode.
+# Configure ports and credentials in the .env file.
+#
+# Usage:
+#   docker-compose build          # Build the application image
+#   docker-compose up -d          # Start all services in background
+#   docker-compose logs -f web    # View application logs
+#   docker-compose down           # Stop all services
+#
+# For systems requiring sudo:
+#   sudo docker compose build
+#   sudo docker compose up -d
+
 services:
   web:
     build:
@@ -5,21 +20,29 @@ services:
       dockerfile: deploy/Dockerfile
     command: gunicorn --bind 0.0.0.0:5000 run:app
     ports:
+      # External:Internal port mapping
+      # Configure WEB_PORT in .env (default: 5000)
       - "${WEB_PORT:-5000}:5000"
     env_file:
       - .env
     depends_on:
       - db
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     ports:
+      # External:Internal port mapping
+      # Configure DB_PORT in .env (default: 5432)
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      # These are read from .env file
+      - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+    restart: unless-stopped
 
 volumes:
   postgres_data:
