@@ -34,6 +34,21 @@
         }
     ],
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    // Markdown linting
+    "markdownlint.config": {
+        "MD041": false,
+        "MD033": false,
+        "MD022": false,
+        "MD028": false
+    },
+    // Markdown extensions
+    "markdown.extension.toc.updateOnSave": true,
+    "markdown.extension.toc.unorderedList.marker": "-",
+    "markdown.extension.toc.levels": "2..6",
+    "markdown.extension.toc.orderedList": false,
+    "markdown.extension.toc.slugifyMode": "github",
+    "markdown.extension.list.indentationSize": "inherit",
+    "markdown.extension.tableFormatter.normalizeIndentation": true,
     "terminal.integrated.env.osx": {
         "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
     },
@@ -71,8 +86,11 @@
     },
     // Markdown
     "[markdown]": {
+        "editor.defaultFormatter": "yzhang.markdown-all-in-one",
         "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.detectIndentation": false,
+        "editor.indentSize": "tabSize",
+        "editor.tabSize": 2,
         "editor.wordWrap": "on"
     },
     // HTML/Jinja2

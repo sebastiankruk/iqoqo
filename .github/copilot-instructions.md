@@ -48,6 +48,10 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 - **Code quality:** Use all linting tests as defined in Makefile
 - **Testing:** Write unit tests for all new features. Use `pytest`.
 - **Documentation:** Update docstrings, API docs, and any related documentation with every change.
+- **Linting:** Use `black` for formatting, `ruff` and `pylint` for linting, and `mypy` for type checking, `markdownlint` for markdown files, and `stylelint` for CSS files. All must pass before merging. Any code generated must also pass these checks, see configuration files for each tool in the project root.
+  - for Markdown, especially:
+    - Don't use emphasis instead of a heading (MD036)
+    - Lists should be surrounded by blank lines (MD032)
 
 ## 📓 Private Development Notes
 
@@ -56,3 +60,4 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 - **Usage:** Check here for context on design decisions, future plans, and implementation details
 - **Legacy Code:** See `.github/context/legacy_prototype.txt`.
 - **Migration:** Use the SQL schema in `.github/context/legacy_db.sql` to map existing book data into the new FRBR model.
+- **UI/UX Design:** Refer to `.github/context/private-designs` for the original UI/UX vision and wireframes.
