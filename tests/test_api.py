@@ -69,7 +69,9 @@ def test_health_check(client):
     """Test the health check endpoint."""
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json == {"status": "ok"}
+    data = response.json
+    assert data["status"] == "ok"
+    assert data["service"] == "iqoqo-api"
 
 
 def test_lookup_isbn_with_meta_field(client, sample_book):
@@ -102,9 +104,15 @@ def test_lookup_isbn_not_found(mock_get, client):
     assert response.status_code == 404
 
 
+@patch("isbnlib.meta")
+@patch("isbnlib.canonical")
 @patch("app.api.routes.requests.get")
-def test_lookup_isbn_from_open_library(mock_get, client):
+def test_lookup_isbn_from_open_library(mock_get, mock_canonical, mock_meta, client):
     """Test ISBN lookup fetches from Open Library API when not in DB."""
+    # Mock isbnlib to return None (not available) so it falls back to Open Library
+    mock_meta.return_value = None
+    mock_canonical.return_value = "9780451524935"
+
     # Mock Open Library API response
     mock_response = MagicMock()
     mock_response.json.return_value = {"ISBN:9780451524935": {"title": "1984", "authors": [{"name": "George Orwell"}]}}
