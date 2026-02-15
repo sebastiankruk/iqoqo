@@ -17,13 +17,147 @@ from . import api_bp
 
 @api_bp.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "ok"})
+    """Health check endpoint for monitoring."""
+    return jsonify({"status": "ok", "service": "iqoqo-api"})
+
+
+@api_bp.route("/stats", methods=["GET"])
+def get_dashboard_stats():
+    """Get dashboard statistics for the frontend."""
+    stats = DataManager.get_stats()
+    return jsonify({"success": True, "data": stats, "error": None})
 
 
 @api_bp.route("/items", methods=["GET"])
 def get_items():
-    items = Item.query.all()
-    return jsonify([{"id": item.id, "owner_id": item.owner_id} for item in items])
+    """Get all items with pagination support."""
+    # Get pagination parameters
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    offset = (page - 1) * limit
+
+    # Get all items with pagination
+    query = Item.query
+    total = query.count()
+    items = query.offset(offset).limit(limit).all()
+
+    items_data = []
+    for item in items:
+        manifestation = item.manifestation
+        work_title = ""
+        authors = []
+        if manifestation and manifestation.expression and manifestation.expression.work:
+            work = manifestation.expression.work
+            work_title = work.title or ""
+            authors = work.meta.get("authors", []) if work.meta else []
+
+        items_data.append(
+            {
+                "id": item.id,
+                "owner_id": item.owner_id,
+                "status": item.status,
+                "manifestation_id": item.manifestation_id,
+                "isbn": manifestation.isbn13 if manifestation else None,
+                "title": work_title,
+                "authors": authors,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "data": items_data,
+            "meta": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit,
+            },
+            "error": None,
+        }
+    )
+
+
+@api_bp.route("/items/<int:item_id>", methods=["GET"])
+def get_item_detail(item_id: int):
+    """Get detailed information about a specific item."""
+    item = Item.query.get(item_id)
+
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    manifestation = item.manifestation
+    item_data = {
+        "id": item.id,
+        "owner_id": item.owner_id,
+        "status": item.status,
+        "manifestation_id": item.manifestation_id,
+        "meta": item.meta,
+    }
+
+    if manifestation:
+        item_data["isbn"] = manifestation.isbn13
+        item_data["manifestation_meta"] = manifestation.meta
+
+        if manifestation.expression:
+            expression = manifestation.expression
+            item_data["expression"] = {
+                "id": expression.id,
+                "content_type": expression.content_type,
+                "language": expression.language,
+            }
+
+            if expression.work:
+                work = expression.work
+                item_data["work"] = {
+                    "id": work.id,
+                    "title": work.title,
+                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "meta": work.meta,
+                }
+
+    return jsonify({"success": True, "data": item_data, "error": None})
+
+
+@api_bp.route("/items/<int:item_id>", methods=["PUT"])
+def update_item(item_id: int):
+    """Update an item's status or metadata."""
+    item = Item.query.get(item_id)
+
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    data = request.get_json()
+
+    if data.get("status"):
+        item.status = data["status"]
+
+    if data.get("meta"):
+        item.meta = data["meta"]
+
+    try:
+        db.session.commit()
+        return jsonify({"success": True, "data": {"id": item.id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500
+
+
+@api_bp.route("/items/<int:item_id>", methods=["DELETE"])
+def delete_item(item_id: int):
+    """Delete an item."""
+    item = Item.query.get(item_id)
+
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    try:
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"id": item_id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])

@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask
+from flask_cors import CORS
 from flask_migrate import Migrate
 
 from .config import Config
@@ -21,8 +22,26 @@ def create_app(config_class=Config, config_override=None):
     if "SECRET_KEY" not in app.config:
         app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
 
+    # Initialize database and migrations
     db.init_app(app)
     _ = Migrate(app, db)  # Initialize migrations
+
+    # Configure CORS for frontend development
+    # Allow requests from localhost:3000 (Next.js default dev server)
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": [
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                ],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True,
+            }
+        },
+    )
 
     from app.api import api_bp
 

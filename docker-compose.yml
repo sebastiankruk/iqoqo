@@ -10,6 +10,22 @@ services:
       - .env
     depends_on:
       - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://web:5000
+    depends_on:
+      - web
+
   db:
     image: postgres:16-alpine
     ports:
