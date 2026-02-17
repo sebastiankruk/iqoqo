@@ -117,13 +117,6 @@ def test_lookup_isbn_from_open_library(mock_get, mock_canonical, mock_meta, clie
     mock_meta.return_value = None
     mock_canonical.return_value = "9780451524935"
 
-
-@patch("app.api.routes.requests.get")
-def test_lookup_isbn_from_open_library2(mock_get, mock_isbnlib_meta, client):
-    """Test ISBN lookup fetches from Open Library API when not in DB."""
-    # Mock isbnlib to return None so it falls back to Open Library
-    mock_isbnlib_meta.return_value = None
-
     # Mock Open Library API response
     mock_response = MagicMock()
     mock_response.json.return_value = {"ISBN:9780451524935": {"title": "1984", "authors": [{"name": "George Orwell"}]}}

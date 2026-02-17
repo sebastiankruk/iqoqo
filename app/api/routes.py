@@ -81,7 +81,7 @@ def get_items():
 @api_bp.route("/items/<int:item_id>", methods=["GET"])
 def get_item_detail(item_id: int):
     """Get detailed information about a specific item."""
-    item = Item.query.get(item_id)
+    item = db.session.get(Item, item_id)
 
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
@@ -122,7 +122,7 @@ def get_item_detail(item_id: int):
 @api_bp.route("/items/<int:item_id>", methods=["PUT"])
 def update_item(item_id: int):
     """Update an item's status or metadata."""
-    item = Item.query.get(item_id)
+    item = db.session.get(Item, item_id)
 
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
@@ -146,7 +146,7 @@ def update_item(item_id: int):
 @api_bp.route("/items/<int:item_id>", methods=["DELETE"])
 def delete_item(item_id: int):
     """Delete an item."""
-    item = Item.query.get(item_id)
+    item = db.session.get(Item, item_id)
 
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404

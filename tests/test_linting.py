@@ -46,16 +46,6 @@ def test_mypy_type_checking():
     assert result.returncode == 0, f"Mypy type checking failed:\n{result.stdout}\n{result.stderr}"
 
 
-@pytest.mark.skip(reason="Pylint not used in GitHub CI - use ruff instead")
-def test_pylint_linting():
-    """Test that pylint linting passes.
-
-    Note: Pylint is not run in GitHub CI. Only ruff, black, isort, and mypy are used.
-    Pylint often has false positives with virtual environments and is overly strict.
-    This test is skipped to match CI behavior.
-    """
-
-
 def test_black_formatting():
     """Test that black formatting check passes."""
     result = subprocess.run(
