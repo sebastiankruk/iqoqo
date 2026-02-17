@@ -16,13 +16,23 @@ If you discover a security vulnerability in this project, please email the maint
 
 #### Python Dependencies
 
-| Package    | Version | CVE(s)                                      | Severity | Status         |
-| ---------- | ------- | ------------------------------------------- | -------- | -------------- |
-| flask-cors | 4.0.2   | CVE-2024-6866, CVE-2024-6844, CVE-2024-6839 | High     | Removed        |
-| gunicorn   | 21.2.0  | CVE-2024-1135, CVE-2024-6827                | High     | Fixed (22.0.0) |
+| Package                | Version  | CVE(s)                                      | Severity | Status          |
+| ---------------------- | -------- | ------------------------------------------- | -------- | --------------- |
+| opencv-python-headless | 4.8.1.78 | Multiple CVEs (see below)                   | High     | Fixed (4.13.0+) |
+| flask-cors             | 4.0.2    | CVE-2024-6866, CVE-2024-6844, CVE-2024-6839 | High     | Removed         |
+| gunicorn               | 21.2.0   | CVE-2024-1135, CVE-2024-6827                | High     | Fixed (22.0.0)  |
+
+**OpenCV Vulnerabilities Fixed:**
+
+- CVE-2023-4863: Bundled libwebp binaries vulnerability (High)
+- Multiple Out-of-bounds Write vulnerabilities (High)
+- Multiple Out-of-bounds Read vulnerabilities (High/Moderate)
+- NULL Pointer Dereference (High)
+- Divide By Zero (Moderate)
 
 **Actions Taken:**
 
+- Updated `opencv-python-headless` from 4.8.1 to 4.13.0
 - Removed `flask-cors` (not used in codebase)
 - Updated `gunicorn` from version 21.2 to 22.0
 
