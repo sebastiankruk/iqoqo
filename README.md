@@ -20,7 +20,31 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 - **Ontology:** RDFLib / FRBRoo
 - **Deployment:** Docker & Docker Compose
 
-## 📖 Documentation
+## � Quick Start
+
+Get iqoqo running in minutes with Docker:
+
+```bash
+# Clone the repository
+git clone https://github.com/sebastiankruk/iqoqo.git
+cd iqoqo
+
+# Configure environment (edit .env after copying)
+cp .env.example .env
+
+# Start with Docker Compose
+docker-compose build
+docker-compose up -d
+
+# Initialize database
+docker-compose exec web flask db upgrade
+
+# Access at http://localhost:5000
+```
+
+For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](docs/INSTALL.md).
+
+## �📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples

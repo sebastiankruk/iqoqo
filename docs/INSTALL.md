@@ -2,6 +2,35 @@
 
 This document provides comprehensive instructions for setting up iqoqo for development and production use.
 
+## Quick Start (Docker)
+
+For the fastest setup, use Docker Compose:
+
+```bash
+# 1. Clone and navigate to the repository
+git clone https://github.com/sebastiankruk/iqoqo.git
+cd iqoqo
+
+# 2. Create and configure environment file
+cp .env.example .env
+# Edit .env: Set DATABASE_URL to use 'db' hostname, configure ports, set strong passwords
+
+# 3. Build and start services
+docker-compose build
+docker-compose up -d
+
+# 4. Initialize database
+docker-compose exec web flask db upgrade
+
+# 5. (Optional) Load sample data
+docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+
+# 6. Access the application
+# http://localhost:5000 (or your configured WEB_PORT)
+```
+
+For detailed configuration and development setup, continue reading below.
+
 ## Prerequisites
 
 ### Required Software
@@ -18,10 +47,10 @@ Docker is required to run the PostgreSQL database in a container.
 
 - **macOS**: You can install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/), but be aware of its licensing terms. For a free and open-source alternative, we recommend [Colima](https://github.com/abiosoft/colima). You can install it using [Homebrew](https://brew.sh/):
 
-    ```bash
-    brew install colima docker docker-compose
-    colima start
-    ```
+  ```bash
+  brew install colima docker docker-compose
+  colima start
+  ```
 
 - **Ubuntu**: Follow the instructions to install [Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) and the [Docker Compose plugin](https://docs.docker.com/compose/install/linux/).
 
@@ -31,77 +60,213 @@ After installation, make sure the Docker daemon is running.
 
 1. **Clone the repository:**
 
-    ```bash
-    git clone https://github.com/your-username/iqoqo.git
-    cd iqoqo
-    ```
+   ```bash
+   git clone https://github.com/your-username/iqoqo.git
+   cd iqoqo
+   ```
 
 2. **Create and activate a virtual environment:**
 
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
 
 3. **Install Python dependencies:**
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-    This installs both runtime dependencies and development tools (black, ruff, isort, mypy, pytest).
+   This installs both runtime dependencies and development tools (black, ruff, isort, mypy, pytest).
 
 4. **Install JavaScript/CSS quality tools:**
 
-    ```bash
-    npm install
-    ```
+   ```bash
+   npm install
+   ```
 
-    This installs ESLint, Prettier, stylelint, and markdownlint for code quality checks.
+   This installs ESLint, Prettier, stylelint, and markdownlint for code quality checks.
 
 5. **Set up environment variables:**
 
-    Create a `.env` file by copying the example file:
+   Create a `.env` file by copying the example file:
 
-    ```bash
-    cp .env.example .env
-    ```
+   ```bash
+   cp .env.example .env
+   ```
 
-    You can edit the `.env` file to match your local configuration, for example, your database credentials.
+   **Important:** Edit the `.env` file to configure your deployment:
+   - **For Docker deployment:** Set `DATABASE_URL` to use `db` as the hostname:
 
-    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
+     ```text
+     DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+     ```
+
+   - **For local development:** Set `DATABASE_URL` to use `localhost`:
+
+     ```text
+     DATABASE_URL="postgresql://iqoqo:your_password@localhost:5432/iqoqo"
+     ```
+
+   - **Port configuration:** If you have other services running (like other Flask apps or Home Assistant), change the ports to avoid conflicts:
+
+     ```text
+     WEB_PORT=8000    # External port for web access (default: 5000)
+     DB_PORT=5433     # External port for database access (default: 5432)
+     ```
+
+   - **Security:** Generate strong credentials for production:
+
+     ```bash
+     # Generate a strong secret key
+     python -c "import secrets; print(secrets.token_hex(32))"
+
+     # Use a strong database password
+     # Update POSTGRES_PASSWORD and DATABASE_URL with the same password
+     ```
+
+   > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
 ## Database Setup
 
-This project uses PostgreSQL as its database. The easiest way to get a PostgreSQL database running is by using Docker Compose.
+This project uses PostgreSQL as its database. You have two options:
+
+### Option A: Local Development (Database Only in Docker)
+
+Use this option if you want to run the Flask application on your host machine but use a containerized PostgreSQL database.
 
 1. **Start the database service:**
 
-    ```bash
-    docker-compose up -d db
-    ```
+   ```bash
+   docker-compose up -d db
+   ```
 
-   This is necessary for the `flask db` commands, which run on the host, to connect to the database. The default credentials are set in the `docker-compose.yml` file and should match the ones in your `.env` file.
+   This starts only the PostgreSQL container. Make sure your `.env` file has:
+
+   ```text
+   DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
+   ```
 
 2. **Initialize the database:**
 
-    Once the application is set up, you can initialize the database schema using Flask-Migrate:
+   Once the application is set up, you can initialize the database schema using Flask-Migrate:
 
-    ```bash
-    flask db init
-    flask db migrate -m "Initial migration."
-    flask db upgrade
-    ```
+   ```bash
+   flask db upgrade
+   ```
 
 3. **Initialize with seed data (optional):**
 
-    If you have a JSON export file from a previous iqoqo instance or want to import data:
+   If you have a JSON export file from a previous iqoqo instance or want to import data:
 
-    ```bash
-    python scripts/init_db.py --seed-file path/to/data.json
-    ```
+   ```bash
+   python scripts/init_db.py --seed-file path/to/data.json
+   ```
 
-    This will only import data if the database is empty.
+   This will only import data if the database is empty.
+
+### Option B: Full Docker Deployment (Production)
+
+Use this option to run both the Flask application and PostgreSQL database in containers. This is the recommended approach for production deployments.
+
+1. **Configure environment variables:**
+
+   Make sure your `.env` file is configured for Docker:
+
+   ```bash
+   # Use 'db' as hostname for container-to-container communication
+   DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+
+   # Set external ports (change if you have other services running)
+   WEB_PORT=8000    # or 5000 if available
+   DB_PORT=5433     # or 5432 if available
+
+   # Use production settings
+   FLASK_ENV=production
+   ```
+
+2. **Build and start all services:**
+
+   ```bash
+   # Build the application image
+   docker-compose build
+
+   # Start all services (web + database)
+   docker-compose up -d
+   ```
+
+   If you need to use `sudo` with Docker:
+
+   ```bash
+   sudo docker compose build
+   sudo docker compose up -d
+   ```
+
+3. **Initialize the database:**
+
+   Run migrations inside the web container:
+
+   ```bash
+   docker-compose exec web flask db upgrade
+   ```
+
+   Or with sudo:
+
+   ```bash
+   sudo docker compose exec web flask db upgrade
+   ```
+
+4. **Initialize with seed data (optional):**
+
+   ```bash
+   docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+   ```
+
+5. **Verify deployment:**
+
+   ```bash
+   # Check container status
+   docker-compose ps
+
+   # View logs
+   docker-compose logs -f web
+
+   # Test the application
+   curl http://localhost:8000/  # Use your WEB_PORT
+   ```
+
+The application will be available at `http://localhost:8000` (or whatever port you configured as `WEB_PORT`).
+
+#### Docker Management Commands
+
+```bash
+# View logs
+docker-compose logs -f web    # Follow web application logs
+docker-compose logs -f db     # Follow database logs
+
+# Restart services
+docker-compose restart web
+docker-compose restart db
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (⚠️ this deletes all database data!)
+docker-compose down -v
+
+# Rebuild after code changes
+docker-compose build
+docker-compose up -d
+
+# Execute commands in containers
+docker-compose exec web flask db upgrade
+docker-compose exec db psql -U iqoqo -d iqoqo
+
+# View running containers and resource usage
+docker-compose ps
+docker stats --no-stream
+```
 
 ### Data Import/Export
 
@@ -274,58 +439,78 @@ The following endpoints are available for data management:
 
 ### Troubleshooting
 
+#### Database Connection Issues
+
 - **`FATAL: role "user" does not exist`**: This error usually means your application is connecting to a different PostgreSQL instance than the one running in Docker.
   - Make sure you have started the Docker container with `docker-compose up -d db`.
-  - Check if you have another PostgreSQL server running on your machine on port `5432`. If so, stop it and try again. Here are some common ways to do that:
-    - **To check what's using the port:** `sudo lsof -i :5432`
-    - **On macOS with Homebrew:** `brew services stop postgresql`
-    - **On Ubuntu/Debian with systemd:** `sudo systemctl stop postgresql`
-  - Verify that your `.env` file contains the correct `DATABASE_URL` that points to the Dockerized database (`postgresql://user:password@localhost:5432/iqoqo`).
+  - Check if you have another PostgreSQL server running on your machine. If so, either:
+    - Stop the local PostgreSQL: `brew services stop postgresql` (macOS) or `sudo systemctl stop postgresql` (Linux)
+    - Change the `DB_PORT` in your `.env` file to use a different port (e.g., 5433)
+  - Verify that your `.env` file contains the correct `DATABASE_URL`:
+    - For local development: `postgresql://iqoqo:password@localhost:5432/iqoqo`
+    - For Docker deployment: `postgresql://iqoqo:password@db:5432/iqoqo`
+
+- **Port conflicts**: If you see "port already in use" errors:
+  - Check what's using the port: `sudo lsof -i :5432` or `sudo lsof -i :5000`
+  - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
+  - Restart the services: `docker-compose down && docker-compose up -d`
+
+#### Docker Issues
+
+- **Permission denied errors**: If you need to use `sudo` with Docker commands, prefix all `docker` and `docker-compose` commands with `sudo`:
+
+  ```bash
+  sudo docker compose up -d
+  sudo docker compose exec web flask db upgrade
+  ```
+
+- **Container won't start**: Check the logs for errors:
+
+  ```bash
+  docker-compose logs web
+  docker-compose logs db
+  ```
+
+- **Database initialization fails**: Make sure the database container is fully started before running migrations:
+
+  ```bash
+  # Wait for database to be ready
+  docker-compose up -d db
+  sleep 5
+  docker-compose exec web flask db upgrade
+  ```
 
 ## Running the Application
 
-### Development Mode
+### Development Mode (Local)
 
-**Recommended - Use Make commands:**
-
-```bash
-# Start everything (Colima, PostgreSQL, Flask)
-make start
-
-# Stop everything cleanly
-make stop
-```
-
-**Alternative - Use startup script directly:**
+To run the Flask development server:
 
 ```bash
+# Make sure the database is running
+docker-compose up -d db
+
+# Run the development server
 ./run_dev.sh
 ```
 
 **Manual start:**
 
 ```bash
-# Ensure Colima and database are running
-colima start
-docker-compose up -d db
-
-# Start Flask
-export FLASK_APP=run.py
-export FLASK_DEBUG=1
 flask run
 ```
 
 The application will be available at `http://localhost:5000`.
 
-### Production Mode with Docker
+### Production Mode (Docker)
 
-To run the full stack (app + database) in production mode:
+For production deployments, use Docker Compose to run the full stack. See [Option B: Full Docker Deployment](#option-b-full-docker-deployment-production) above for complete instructions.
 
 ```bash
-docker-compose up
+docker-compose up -d
 ```
 
-This starts both the PostgreSQL database and the Flask application behind Nginx.
+Access the application at `http://localhost:{WEB_PORT}` (default: 5000, or 8000 if you changed it in `.env`).
 
 ## Code Quality Checks
 

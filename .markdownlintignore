@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+frontend/node_modules/
+frontend/node_modules/**
+build/
+dist/
+migrations/
+*.egg-info/
+__pycache__/

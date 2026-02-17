@@ -175,8 +175,7 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
             meta={
                 "imageLinks": meta.get("imageLinks") or meta.get("volumeInfo", {}).get("imageLinks", {}),
                 "pageCount": meta.get("pageCount") or meta.get("volumeInfo", {}).get("pageCount"),
-                "industryIdentifiers": meta.get("industryIdentifiers")
-                or meta.get("volumeInfo", {}).get("industryIdentifiers", []),
+                "industryIdentifiers": meta.get("industryIdentifiers") or meta.get("volumeInfo", {}).get("industryIdentifiers", []),
             },
         )
         db.session.add(manifestation)

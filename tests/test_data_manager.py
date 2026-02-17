@@ -29,9 +29,7 @@ def sample_data():
                 "year": 1937,
             }
         ],
-        "items": [
-            {"id": 1, "manifestation_id": 1, "condition": "good", "location": "shelf-a", "notes": "First edition copy"}
-        ],
+        "items": [{"id": 1, "manifestation_id": 1, "condition": "good", "location": "shelf-a", "notes": "First edition copy"}],
     }
 
 

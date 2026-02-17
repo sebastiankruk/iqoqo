@@ -26,6 +26,7 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 **CRITICAL:** This project uses a Python virtual environment located at `.venv/` in the project root.
 
 **Always use the virtual environment when:**
+
 - Running Python scripts: `source .venv/bin/activate && python script.py` OR `.venv/bin/python script.py`
 - Running tests: `source .venv/bin/activate && pytest` OR `.venv/bin/pytest`
 - Running linting tools: `source .venv/bin/activate && make lint` OR use `.venv/bin/` prefix
@@ -40,7 +41,56 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 - Key logic to port: Barcode scanning, ISBN metadata fetching.
 - Key change: Move from the old "flat" item table to the 4-tier FRBR structure.
 
-## 📜 Coding Principles
+## � Code Style (MANDATORY)
+
+Code style is **non-negotiable**. Every change must pass the full lint suite before it is considered complete.
+
+### Python
+
+| Tool     | Config file      | Key rules                                                     |
+| -------- | ---------------- | ------------------------------------------------------------- |
+| `black`  | `pyproject.toml` | `line-length = 140`, auto-format                              |
+| `ruff`   | `pyproject.toml` | Python linting, `line-length = 140`                           |
+| `mypy`   | `pyproject.toml` | Type checking, lenient on untyped defs                        |
+| `pylint` | `.pylintrc`      | Code quality checks, `max-line-length = 140`, `max-args = 10` |
+
+- All source files should follow PEP 8 with a line length of 140 characters.
+- Use descriptive variable names and add docstrings for public functions and classes.
+- Test files are exempt from missing-docstring rules.
+
+### Markdown
+
+| Tool           | Config file          | Rules                                                |
+| -------------- | -------------------- | ---------------------------------------------------- |
+| `markdownlint` | `.markdownlint.json` | Standard markdown linting rules for documentation    |
+
+**When generating or editing markdown files:**
+
+- Use **ATX-style headers** (`#`, `##`, `###`) consistently
+- Ensure proper spacing: blank line before and after headers, lists, code blocks
+- Use **fenced code blocks** with language identifiers (` ```python`, ` ```bash`, etc.)
+- Keep lines under 140 characters where possible (exception: long URLs, code blocks)
+- Use consistent list markers (`-` for unordered, `1.` for ordered)
+- No trailing spaces at end of lines
+- Single blank line at end of file
+
+### Running linters
+
+```bash
+# All linters (same as CI)
+make lint
+
+# Individual targets
+make lint-python      # ruff, mypy, pylint
+make lint-format      # black --check, isort --check
+make lint-js          # eslint
+make lint-css         # stylelint
+make lint-markdown    # markdownlint
+```
+
+**Before committing, always run `make lint` and fix every issue.**
+
+## �📜 Coding Principles
 
 - **No "Flat" Data:** Always ask "Is this a Work, Expression, or Manifestation?" before creating a table.
 - **Content Negotiation:** Endpoints should support `Accept: application/ld+json`.

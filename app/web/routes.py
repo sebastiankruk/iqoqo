@@ -98,9 +98,7 @@ def list_query(query_name: str):
         title = book.expression.work.title if book.expression and book.expression.work else ""
         # Get authors from Work metadata
         authors_list = (
-            book.expression.work.meta.get("authors", [])
-            if book.expression and book.expression.work and book.expression.work.meta
-            else []
+            book.expression.work.meta.get("authors", []) if book.expression and book.expression.work and book.expression.work.meta else []
         )
         authors = ", ".join(authors_list) if authors_list else ""
 
@@ -113,6 +111,4 @@ def list_query(query_name: str):
             }
         )
 
-    return render_template(
-        "list.html", books=book_list, count=count, offset=offset, pages=pages, current_page=current_page, page="list"
-    )
+    return render_template("list.html", books=book_list, count=count, offset=offset, pages=pages, current_page=current_page, page="list")

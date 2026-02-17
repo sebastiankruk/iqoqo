@@ -1,9 +1,9 @@
 Flask==3.0.0
 Flask-CORS==4.0.*
-gunicorn==21.2.*
+gunicorn==22.0.*
 psycopg2-binary==2.9.*
 pyzbar==0.1.9
-opencv-python-headless==4.8.1.*
+opencv-python-headless==4.13.*
 isbnlib==3.10.*
 isbntools==4.3.*
 requests

@@ -41,16 +41,16 @@ stop:
 # Linting targets
 lint-python:
 	@echo "Running ruff..."
-	ruff check app/ tests/ scripts/
+	.venv/bin/ruff check app/ tests/ scripts/
 	@echo "Running mypy..."
-	mypy app/ tests/
+	.venv/bin/mypy app/ tests/
 	@echo "Running pylint..."
-	pylint app/ tests/ scripts/
+	.venv/bin/pylint app/ tests/ scripts/
 
 lint-format:
 	@echo "Checking Python formatting..."
-	black --check app/ tests/ scripts/
-	isort --check-only app/ tests/ scripts/
+	.venv/bin/black --check app/ tests/ scripts/
+	.venv/bin/isort --check-only app/ tests/ scripts/
 
 lint-js:
 	@echo "Running eslint..."
@@ -62,7 +62,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "!node_modules" "!.venv"
+	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-css lint-markdown
@@ -71,8 +71,8 @@ lint: lint-python lint-format lint-js lint-css lint-markdown
 # Formatting targets
 format-python:
 	@echo "Formatting Python code..."
-	black app/ tests/ scripts/
-	isort app/ tests/ scripts/
+	.venv/bin/black app/ tests/ scripts/
+	.venv/bin/isort app/ tests/ scripts/
 
 format-js:
 	@echo "Formatting JavaScript and CSS..."
@@ -84,7 +84,7 @@ format: format-python format-js
 
 # Testing
 test:
-	pytest tests/
+	.venv/bin/pytest tests/
 
 # Clean
 clean:
@@ -97,22 +97,22 @@ clean:
 # Database targets
 db-init:
 	@echo "Initializing database with seed data..."
-	python scripts/init_db.py --seed-file data/seed_example.json
+	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
 
 db-seed:
 	@echo "Loading seed data..."
-	python scripts/init_db.py --seed-file data/seed_example.json
+	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
 
 db-export:
 	@echo "Exporting database to data/backup.json..."
-	@python -c "from app import create_app; from app.core.data_manager import DataManager; \
+	@.venv/bin/python -c "from app import create_app; from app.core.data_manager import DataManager; \
 		app = create_app(); \
 		with app.app_context(): DataManager.export_to_file('data/backup.json')"
 	@echo "Export complete: data/backup.json"
 
 db-stats:
 	@echo "Database statistics:"
-	@python -c "from app import create_app; from app.core.data_manager import DataManager; \
+	@.venv/bin/python -c "from app import create_app; from app.core.data_manager import DataManager; \
 		app = create_app(); \
 		with app.app_context(): \
 			stats = DataManager.get_stats(); \

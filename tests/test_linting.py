@@ -7,14 +7,27 @@ import pathlib
 import py_compile
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+# Get the virtual environment path
+VENV_BIN = Path(__file__).parent.parent / ".venv" / "bin"
+
+
+def get_tool_path(tool_name):
+    """Get the path to a tool, preferring venv but falling back to global."""
+    venv_tool = VENV_BIN / tool_name
+    if venv_tool.exists():
+        return str(venv_tool)
+    # Fall back to global command (for CI environments)
+    return tool_name
 
 
 def test_ruff_linting():
     """Test that ruff linting passes."""
     result = subprocess.run(
-        ["ruff", "check", "app/", "tests/", "scripts/"],
+        [get_tool_path("ruff"), "check", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
@@ -25,7 +38,7 @@ def test_ruff_linting():
 def test_mypy_type_checking():
     """Test that mypy type checking passes."""
     result = subprocess.run(
-        ["mypy", "app/", "tests/"],
+        [get_tool_path("mypy"), "app/", "tests/"],
         capture_output=True,
         text=True,
         check=False,
@@ -46,7 +59,7 @@ def test_pylint_linting():
 def test_black_formatting():
     """Test that black formatting check passes."""
     result = subprocess.run(
-        ["black", "--check", "app/", "tests/", "scripts/"],
+        [get_tool_path("black"), "--check", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
@@ -57,7 +70,7 @@ def test_black_formatting():
 def test_isort_imports():
     """Test that isort import ordering check passes."""
     result = subprocess.run(
-        ["isort", "--check-only", "app/", "tests/", "scripts/"],
+        [get_tool_path("isort"), "--check-only", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
