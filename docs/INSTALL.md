@@ -286,15 +286,32 @@ The following endpoints are available for data management:
 
 ### Development Mode
 
-To run the Flask development server:
+**Recommended - Use Make commands:**
+
+```bash
+# Start everything (Colima, PostgreSQL, Flask)
+make start
+
+# Stop everything cleanly
+make stop
+```
+
+**Alternative - Use startup script directly:**
 
 ```bash
 ./run_dev.sh
 ```
 
-Or manually:
+**Manual start:**
 
 ```bash
+# Ensure Colima and database are running
+colima start
+docker-compose up -d db
+
+# Start Flask
+export FLASK_APP=run.py
+export FLASK_DEBUG=1
 flask run
 ```
 

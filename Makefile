@@ -1,7 +1,13 @@
-.PHONY: help lint lint-python lint-format lint-js lint-css lint-markdown format format-python format-js test clean db-init db-seed db-export db-stats
+.PHONY: help start stop lint lint-python lint-format lint-js lint-css lint-markdown format format-python format-js test clean db-init db-seed db-export db-stats
 
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Development:"
+	@echo "  start         - Start development environment (Colima, PostgreSQL, Flask)"
+	@echo "  stop          - Stop development environment"
+	@echo ""
+	@echo "Code quality:"
 	@echo "  lint          - Run all linting checks"
 	@echo "  lint-python   - Run Python linters (ruff, mypy)"
 	@echo "  lint-format   - Check Python code formatting (black)"
@@ -19,6 +25,18 @@ help:
 	@echo "  db-seed       - Load seed data into existing database"
 	@echo "  db-export     - Export database to data/backup.json"
 	@echo "  db-stats      - Show database statistics"
+
+# Development targets
+start:
+	@echo "Starting development environment..."
+	@./run_dev.sh
+
+stop:
+	@echo "Stopping Flask server..."
+	@pkill -f "flask run" || true
+	@echo "Stopping database..."
+	@docker-compose down
+	@echo "Development environment stopped."
 
 # Linting targets
 lint-python:
