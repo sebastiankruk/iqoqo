@@ -47,10 +47,10 @@ Docker is required to run the PostgreSQL database in a container.
 
 - **macOS**: You can install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/), but be aware of its licensing terms. For a free and open-source alternative, we recommend [Colima](https://github.com/abiosoft/colima). You can install it using [Homebrew](https://brew.sh/):
 
-    ```bash
-    brew install colima docker docker-compose
-    colima start
-    ```
+  ```bash
+  brew install colima docker docker-compose
+  colima start
+  ```
 
 - **Ubuntu**: Follow the instructions to install [Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) and the [Docker Compose plugin](https://docs.docker.com/compose/install/linux/).
 
@@ -60,70 +60,73 @@ After installation, make sure the Docker daemon is running.
 
 1. **Clone the repository:**
 
-    ```bash
-    git clone https://github.com/your-username/iqoqo.git
-    cd iqoqo
-    ```
+   ```bash
+   git clone https://github.com/your-username/iqoqo.git
+   cd iqoqo
+   ```
 
 2. **Create and activate a virtual environment:**
 
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
 
 3. **Install Python dependencies:**
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-    This installs both runtime dependencies and development tools (black, ruff, isort, mypy, pytest).
+   This installs both runtime dependencies and development tools (black, ruff, isort, mypy, pytest).
 
 4. **Install JavaScript/CSS quality tools:**
 
-    ```bash
-    npm install
-    ```
+   ```bash
+   npm install
+   ```
 
-    This installs ESLint, Prettier, stylelint, and markdownlint for code quality checks.
+   This installs ESLint, Prettier, stylelint, and markdownlint for code quality checks.
 
 5. **Set up environment variables:**
 
-    Create a `.env` file by copying the example file:
+   Create a `.env` file by copying the example file:
 
-    ```bash
-    cp .env.example .env
-    ```
+   ```bash
+   cp .env.example .env
+   ```
 
-    **Important:** Edit the `.env` file to configure your deployment:
+   **Important:** Edit the `.env` file to configure your deployment:
+   - **For Docker deployment:** Set `DATABASE_URL` to use `db` as the hostname:
 
-    - **For Docker deployment:** Set `DATABASE_URL` to use `db` as the hostname:
-      ```
-      DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
-      ```
+     ```text
+     DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+     ```
 
-    - **For local development:** Set `DATABASE_URL` to use `localhost`:
-      ```
-      DATABASE_URL="postgresql://iqoqo:your_password@localhost:5432/iqoqo"
-      ```
+   - **For local development:** Set `DATABASE_URL` to use `localhost`:
 
-    - **Port configuration:** If you have other services running (like other Flask apps or Home Assistant), change the ports to avoid conflicts:
-      ```
-      WEB_PORT=8000    # External port for web access (default: 5000)
-      DB_PORT=5433     # External port for database access (default: 5432)
-      ```
+     ```text
+     DATABASE_URL="postgresql://iqoqo:your_password@localhost:5432/iqoqo"
+     ```
 
-    - **Security:** Generate strong credentials for production:
-      ```bash
-      # Generate a strong secret key
-      python -c "import secrets; print(secrets.token_hex(32))"
+   - **Port configuration:** If you have other services running (like other Flask apps or Home Assistant), change the ports to avoid conflicts:
 
-      # Use a strong database password
-      # Update POSTGRES_PASSWORD and DATABASE_URL with the same password
-      ```
+     ```text
+     WEB_PORT=8000    # External port for web access (default: 5000)
+     DB_PORT=5433     # External port for database access (default: 5432)
+     ```
 
-    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
+   - **Security:** Generate strong credentials for production:
+
+     ```bash
+     # Generate a strong secret key
+     python -c "import secrets; print(secrets.token_hex(32))"
+
+     # Use a strong database password
+     # Update POSTGRES_PASSWORD and DATABASE_URL with the same password
+     ```
+
+   > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
 ## Database Setup
 
@@ -135,32 +138,33 @@ Use this option if you want to run the Flask application on your host machine bu
 
 1. **Start the database service:**
 
-    ```bash
-    docker-compose up -d db
-    ```
+   ```bash
+   docker-compose up -d db
+   ```
 
    This starts only the PostgreSQL container. Make sure your `.env` file has:
-   ```
+
+   ```text
    DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
    ```
 
 2. **Initialize the database:**
 
-    Once the application is set up, you can initialize the database schema using Flask-Migrate:
+   Once the application is set up, you can initialize the database schema using Flask-Migrate:
 
-    ```bash
-    flask db upgrade
-    ```
+   ```bash
+   flask db upgrade
+   ```
 
 3. **Initialize with seed data (optional):**
 
-    If you have a JSON export file from a previous iqoqo instance or want to import data:
+   If you have a JSON export file from a previous iqoqo instance or want to import data:
 
-    ```bash
-    python scripts/init_db.py --seed-file path/to/data.json
-    ```
+   ```bash
+   python scripts/init_db.py --seed-file path/to/data.json
+   ```
 
-    This will only import data if the database is empty.
+   This will only import data if the database is empty.
 
 ### Option B: Full Docker Deployment (Production)
 
@@ -168,67 +172,69 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
 1. **Configure environment variables:**
 
-    Make sure your `.env` file is configured for Docker:
+   Make sure your `.env` file is configured for Docker:
 
-    ```bash
-    # Use 'db' as hostname for container-to-container communication
-    DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+   ```bash
+   # Use 'db' as hostname for container-to-container communication
+   DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
 
-    # Set external ports (change if you have other services running)
-    WEB_PORT=8000    # or 5000 if available
-    DB_PORT=5433     # or 5432 if available
+   # Set external ports (change if you have other services running)
+   WEB_PORT=8000    # or 5000 if available
+   DB_PORT=5433     # or 5432 if available
 
-    # Use production settings
-    FLASK_ENV=production
-    ```
+   # Use production settings
+   FLASK_ENV=production
+   ```
 
 2. **Build and start all services:**
 
-    ```bash
-    # Build the application image
-    docker-compose build
+   ```bash
+   # Build the application image
+   docker-compose build
 
-    # Start all services (web + database)
-    docker-compose up -d
-    ```
+   # Start all services (web + database)
+   docker-compose up -d
+   ```
 
-    If you need to use `sudo` with Docker:
-    ```bash
-    sudo docker compose build
-    sudo docker compose up -d
-    ```
+   If you need to use `sudo` with Docker:
+
+   ```bash
+   sudo docker compose build
+   sudo docker compose up -d
+   ```
 
 3. **Initialize the database:**
 
-    Run migrations inside the web container:
+   Run migrations inside the web container:
 
-    ```bash
-    docker-compose exec web flask db upgrade
-    ```
+   ```bash
+   docker-compose exec web flask db upgrade
+   ```
 
-    Or with sudo:
-    ```bash
-    sudo docker compose exec web flask db upgrade
-    ```
+   Or with sudo:
+
+   ```bash
+   sudo docker compose exec web flask db upgrade
+   ```
 
 4. **Initialize with seed data (optional):**
 
-    ```bash
-    docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
-    ```
+   ```bash
+   docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+   ```
 
 5. **Verify deployment:**
 
-    ```bash
-    # Check container status
-    docker-compose ps
+   ```bash
+   # Check container status
+   docker-compose ps
 
-    # View logs
-    docker-compose logs -f web
+   # View logs
+   docker-compose logs -f web
 
-    # Test the application
-    curl http://localhost:8000/  # Use your WEB_PORT
-    ```
+   # Test the application
+   curl http://localhost:8000/  # Use your WEB_PORT
+   ```
 
 The application will be available at `http://localhost:8000` (or whatever port you configured as `WEB_PORT`).
 
@@ -452,18 +458,21 @@ The following endpoints are available for data management:
 #### Docker Issues
 
 - **Permission denied errors**: If you need to use `sudo` with Docker commands, prefix all `docker` and `docker-compose` commands with `sudo`:
+
   ```bash
   sudo docker compose up -d
   sudo docker compose exec web flask db upgrade
   ```
 
 - **Container won't start**: Check the logs for errors:
+
   ```bash
   docker-compose logs web
   docker-compose logs db
   ```
 
 - **Database initialization fails**: Make sure the database container is fully started before running migrations:
+
   ```bash
   # Wait for database to be ready
   docker-compose up -d db

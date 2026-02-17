@@ -32,7 +32,7 @@ dev = [
 packages = ["app"]
 
 [tool.black]
-line-length = 120
+line-length = 140
 target-version = ['py311']
 include = '\.pyi?$'
 exclude = '''
@@ -54,12 +54,12 @@ exclude = '''
 
 [tool.isort]
 profile = "black"
-line_length = 120
+line_length = 140
 skip = [".venv", "migrations"]
 
 [tool.ruff]
 target-version = "py311"
-line-length = 120
+line-length = 140
 exclude = [
     ".git",
     ".venv",
@@ -111,15 +111,3 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
-
-[tool.pylint]
-max-line-length = 140
-disable = [
-    "C0111",  # missing-docstring
-    "C0103",  # invalid-name
-    "R0903",  # too-few-public-methods
-]
-ignore-paths = [
-    "migrations",
-    ".venv",
-]

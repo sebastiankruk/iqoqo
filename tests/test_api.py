@@ -189,9 +189,7 @@ def test_add_item_creates_manifestation_if_not_exists(mock_get, client):
     """Test adding item creates manifestation from Open Library if it doesn't exist."""
     # Mock Open Library API response
     mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "ISBN:9780307277671": {"title": "The Road", "authors": [{"name": "Cormac McCarthy"}]}
-    }
+    mock_response.json.return_value = {"ISBN:9780307277671": {"title": "The Road", "authors": [{"name": "Cormac McCarthy"}]}}
     mock_get.return_value = mock_response
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}

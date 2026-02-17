@@ -24,9 +24,7 @@ def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
     return work
 
 
-def create_expression(
-    work_id: int, content_type: str = "text", language: str = "en", meta: dict[str, Any] | None = None
-) -> Expression:
+def create_expression(work_id: int, content_type: str = "text", language: str = "en", meta: dict[str, Any] | None = None) -> Expression:
     """
     Creates a new Expression for a Work.
 
@@ -115,9 +113,7 @@ def create_item(
     return item
 
 
-def get_or_create_book_manifestation(
-    isbn: str, title: str, authors: list | None = None, publisher: str | None = None
-) -> Manifestation:
+def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None = None, publisher: str | None = None) -> Manifestation:
     """
     Get or create a complete FRBR hierarchy for a book.
 

@@ -63,90 +63,70 @@ def test_static_js_jquery(client):
     """Test that jQuery file is accessible."""
     response = client.get("/static/js/jquery-3.6.0.min.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_bootstrap(client):
     """Test that Bootstrap JS file is accessible."""
     response = client.get("/static/js/bootstrap.bundle.min.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_html5_qrcode(client):
     """Test that html5-qrcode library is accessible."""
     response = client.get("/static/js/html5-qrcode.min.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_isbn(client):
     """Test that custom ISBN JS file is accessible."""
     response = client.get("/static/js/isbn.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_beep(client):
     """Test that custom beep JS file is accessible."""
     response = client.get("/static/js/beep.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_toast(client):
     """Test that custom toast JS file is accessible."""
     response = client.get("/static/js/toast.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_metaform(client):
     """Test that custom metaform JS file is accessible."""
     response = client.get("/static/js/metaform.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_update_buttons(client):
     """Test that custom update_buttons JS file is accessible."""
     response = client.get("/static/js/update_buttons.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_qrcode(client):
     """Test that custom qrcode JS file is accessible."""
     response = client.get("/static/js/qrcode.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_js_custom_add_update(client):
     """Test that custom add_update JS file is accessible."""
     response = client.get("/static/js/add_update.js")
     assert response.status_code == 200
-    assert response.content_type.startswith("application/javascript") or response.content_type.startswith(
-        "text/javascript"
-    )
+    assert response.content_type.startswith("application/javascript") or response.content_type.startswith("text/javascript")
 
 
 def test_static_audio_ding(client):

@@ -118,9 +118,7 @@ class TestISBNScanning:
         """Test scanning a new ISBN fetches from Open Library and creates FRBR structure."""
         # Mock Open Library API response
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ISBN:9780060850524": {"title": "Brave New World", "authors": [{"name": "Aldous Huxley"}]}
-        }
+        mock_response.json.return_value = {"ISBN:9780060850524": {"title": "Brave New World", "authors": [{"name": "Aldous Huxley"}]}}
         mock_get.return_value = mock_response
 
         response = client.get("/api/isbn/9780060850524")
@@ -224,9 +222,7 @@ class TestISBNScanning:
     def test_scan_creates_proper_frbr_hierarchy(self, mock_get, client):
         """Test that scanning creates proper Work -> Expression -> Manifestation hierarchy."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ISBN:9780141439518": {"title": "Pride and Prejudice", "authors": [{"name": "Jane Austen"}]}
-        }
+        mock_response.json.return_value = {"ISBN:9780141439518": {"title": "Pride and Prejudice", "authors": [{"name": "Jane Austen"}]}}
         mock_get.return_value = mock_response
 
         response = client.get("/api/isbn/9780141439518")
@@ -619,9 +615,7 @@ class TestBookOperationsIntegration:
         """Test complete workflow: scan new book, add item, then update metadata."""
         # Step 1: Scan new ISBN (creates FRBR structure)
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ISBN:9780547928227": {"title": "The Hobbit", "authors": [{"name": "J.R.R. Tolkien"}]}
-        }
+        mock_response.json.return_value = {"ISBN:9780547928227": {"title": "The Hobbit", "authors": [{"name": "J.R.R. Tolkien"}]}}
         mock_get.return_value = mock_response
 
         scan_response = client.get("/api/isbn/9780547928227")
@@ -653,9 +647,7 @@ class TestBookOperationsIntegration:
         """Test scanning the same ISBN twice doesn't create duplicates."""
         with patch("app.api.routes.requests.get") as mock_get:
             mock_response = MagicMock()
-            mock_response.json.return_value = {
-                "ISBN:9780439708180": {"title": "Harry Potter", "authors": [{"name": "J.K. Rowling"}]}
-            }
+            mock_response.json.return_value = {"ISBN:9780439708180": {"title": "Harry Potter", "authors": [{"name": "J.K. Rowling"}]}}
             mock_get.return_value = mock_response
 
             # First scan
@@ -696,9 +688,7 @@ class TestBookOperationsIntegration:
     def test_frbr_structure_integrity(self, mock_get, client):
         """Test that FRBR structure maintains referential integrity."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ISBN:9780141182605": {"title": "Animal Farm", "authors": [{"name": "George Orwell"}]}
-        }
+        mock_response.json.return_value = {"ISBN:9780141182605": {"title": "Animal Farm", "authors": [{"name": "George Orwell"}]}}
         mock_get.return_value = mock_response
 
         # Create structure through API
