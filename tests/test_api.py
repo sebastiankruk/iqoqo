@@ -90,9 +90,13 @@ def test_lookup_isbn_from_work_data(client, book_without_meta):
     assert data["Authors"] == ["Della Summers"]
 
 
+@patch("isbnlib.meta")
 @patch("app.api.routes.requests.get")
-def test_lookup_isbn_not_found(mock_get, client):
+def test_lookup_isbn_not_found(mock_get, mock_isbnlib_meta, client):
     """Test ISBN lookup for non-existent ISBN returns 404."""
+    # Mock isbnlib to return None
+    mock_isbnlib_meta.return_value = None
+
     # Mock Open Library API to return empty result
     mock_response = MagicMock()
     mock_response.json.return_value = {}
@@ -102,9 +106,13 @@ def test_lookup_isbn_not_found(mock_get, client):
     assert response.status_code == 404
 
 
+@patch("isbnlib.meta")
 @patch("app.api.routes.requests.get")
-def test_lookup_isbn_from_open_library(mock_get, client):
+def test_lookup_isbn_from_open_library(mock_get, mock_isbnlib_meta, client):
     """Test ISBN lookup fetches from Open Library API when not in DB."""
+    # Mock isbnlib to return None so it falls back to Open Library
+    mock_isbnlib_meta.return_value = None
+
     # Mock Open Library API response
     mock_response = MagicMock()
     mock_response.json.return_value = {"ISBN:9780451524935": {"title": "1984", "authors": [{"name": "George Orwell"}]}}

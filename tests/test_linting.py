@@ -7,14 +7,18 @@ import pathlib
 import py_compile
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+# Get the virtual environment path
+VENV_BIN = Path(__file__).parent.parent / ".venv" / "bin"
 
 
 def test_ruff_linting():
     """Test that ruff linting passes."""
     result = subprocess.run(
-        ["ruff", "check", "app/", "tests/", "scripts/"],
+        [str(VENV_BIN / "ruff"), "check", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
@@ -25,7 +29,7 @@ def test_ruff_linting():
 def test_mypy_type_checking():
     """Test that mypy type checking passes."""
     result = subprocess.run(
-        ["mypy", "app/", "tests/"],
+        [str(VENV_BIN / "mypy"), "app/", "tests/"],
         capture_output=True,
         text=True,
         check=False,
@@ -46,7 +50,7 @@ def test_pylint_linting():
 def test_black_formatting():
     """Test that black formatting check passes."""
     result = subprocess.run(
-        ["black", "--check", "app/", "tests/", "scripts/"],
+        [str(VENV_BIN / "black"), "--check", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
@@ -57,7 +61,7 @@ def test_black_formatting():
 def test_isort_imports():
     """Test that isort import ordering check passes."""
     result = subprocess.run(
-        ["isort", "--check-only", "app/", "tests/", "scripts/"],
+        [str(VENV_BIN / "isort"), "--check-only", "app/", "tests/", "scripts/"],
         capture_output=True,
         text=True,
         check=False,
