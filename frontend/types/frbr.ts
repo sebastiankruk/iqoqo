@@ -42,7 +42,8 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-export type ItemStatus = "available" | "reading" | "lent" | "lost" | "shelf";
+/** Item status values as stored in the database. */
+export type ItemStatus = "available" | "lent" | "lost" | "wish_list";
 
 /** Standardised API envelope returned by every Flask endpoint. */
 export interface ApiResponse<T> {
@@ -59,12 +60,15 @@ export interface ApiResponse<T> {
 
 /** Dashboard statistics returned by GET /api/stats */
 export interface DashboardStats {
+  // FRBR entity counts
+  works: number;
+  expressions: number;
+  manifestations: number;
+  items: number;
+  // UI-friendly aliases
   total_items: number;
-  total_manifestations: number;
-  total_works: number;
   lent_items: number;
   to_read: number;
-  formats?: Record<string, number>;
 }
 
 /** ISBN lookup response */

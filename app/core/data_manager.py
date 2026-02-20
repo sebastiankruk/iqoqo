@@ -235,11 +235,21 @@ class DataManager:
         Get database statistics.
 
         Returns:
-            Dictionary with counts of each entity type.
+            Dictionary with counts for each FRBR entity type plus UI-friendly
+            derived fields (``total_items``, ``lent_items``, ``to_read``) used
+            by the React dashboard.
         """
+        total = Item.query.count()
+        lent = Item.query.filter_by(status="lent").count()
+        wish = Item.query.filter_by(status="wish_list").count()
         return {
+            # FRBR entity counts
             "works": Work.query.count(),
             "expressions": Expression.query.count(),
             "manifestations": Manifestation.query.count(),
-            "items": Item.query.count(),
+            "items": total,
+            # UI-friendly aliases expected by the React dashboard
+            "total_items": total,
+            "lent_items": lent,
+            "to_read": wish,
         }

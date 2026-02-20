@@ -5,17 +5,15 @@ import { BookOpen } from "lucide-react";
 import type { Item, ItemStatus } from "@/types/frbr";
 
 const statusDotColor: Record<string, string> = {
-  shelf: "bg-chart-3",
   available: "bg-chart-3",
-  reading: "bg-primary",
+  wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
 };
 
 const statusDotTitle: Record<string, string> = {
-  shelf: "On Shelf",
   available: "On Shelf",
-  reading: "Currently Reading",
+  wish_list: "To Read",
   lent: "Lent Out",
   lost: "Lost",
 };

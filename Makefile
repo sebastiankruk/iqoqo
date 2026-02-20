@@ -1,23 +1,26 @@
-.PHONY: help start stop lint lint-python lint-format lint-js lint-css lint-markdown format format-python format-js test clean db-init db-seed db-export db-stats
+.PHONY: help start stop lint lint-python lint-format lint-js lint-css lint-markdown lint-frontend format format-python format-js test test-phase2 clean db-init db-seed db-export db-stats build-frontend
 
 help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Development:"
-	@echo "  start         - Start development environment (Colima, PostgreSQL, Flask)"
-	@echo "  stop          - Stop development environment"
+	@echo "  start         - Start development environment (DB, Flask API, Next.js frontend)"
+	@echo "  stop          - Stop all development servers and containers"
 	@echo ""
 	@echo "Code quality:"
 	@echo "  lint          - Run all linting checks"
-	@echo "  lint-python   - Run Python linters (ruff, mypy)"
+	@echo "  lint-python   - Run Python linters (ruff, mypy, pylint)"
 	@echo "  lint-format   - Check Python code formatting (black)"
-	@echo "  lint-js       - Run JavaScript linter (eslint)"
+	@echo "  lint-js       - Run legacy JavaScript linter (eslint)"
+	@echo "  lint-frontend - Run Next.js / TypeScript linter"
 	@echo "  lint-css      - Run CSS linter (stylelint)"
 	@echo "  lint-markdown - Run Markdown linter"
 	@echo "  format        - Format all code"
 	@echo "  format-python - Format Python code (black, isort)"
 	@echo "  format-js     - Format JavaScript code (prettier)"
-	@echo "  test          - Run tests"
+	@echo "  test          - Run all backend tests"
+	@echo "  test-phase2   - Run Phase 2 API integration tests"
+	@echo "  build-frontend - Build Next.js production bundle"
 	@echo "  clean         - Remove build artifacts"
 	@echo ""
 	@echo "Database targets:"
@@ -45,6 +48,19 @@ stop:
 	else \
 		echo "No Flask PID file found (.flask.pid); skipping Flask stop."; \
 	fi
+	@echo "Stopping Next.js frontend..."
+	@if [ -f .frontend.pid ]; then \
+		FRONTEND_PID=$$(cat .frontend.pid); \
+		if kill -0 $$FRONTEND_PID 2>/dev/null; then \
+			kill $$FRONTEND_PID; \
+			echo "Sent SIGTERM to Next.js (PID $$FRONTEND_PID)."; \
+		else \
+			echo "Frontend PID $$FRONTEND_PID is not running."; \
+		fi; \
+		rm -f .frontend.pid; \
+	else \
+		echo "No frontend PID file found (.frontend.pid); skipping frontend stop."; \
+	fi
 	@echo "Stopping database containers..."
 	@docker-compose stop
 	@echo "Development environment stopped."
@@ -64,8 +80,16 @@ lint-format:
 	.venv/bin/isort --check-only app/ tests/ scripts/
 
 lint-js:
-	@echo "Running eslint..."
+	@echo "Running eslint (legacy JS)..."
 	npx eslint app/web/static/js/**/*.js
+
+lint-frontend:
+	@echo "Running Next.js / TypeScript lint..."
+	@cd frontend && npm run lint
+
+build-frontend:
+	@echo "Building Next.js production bundle..."
+	@cd frontend && npm run build
 
 lint-css:
 	@echo "Running stylelint..."
@@ -96,6 +120,9 @@ format: format-python format-js
 # Testing
 test:
 	.venv/bin/pytest tests/
+
+test-phase2:
+	.venv/bin/pytest tests/test_phase2_frontend.py -v
 
 # Clean
 clean:

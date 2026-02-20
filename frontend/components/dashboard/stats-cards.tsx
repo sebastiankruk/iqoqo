@@ -5,7 +5,7 @@ import { useStats } from "@/lib/api/hooks";
 
 /** Three top-row stat cards pulled from the Flask /api/stats endpoint. */
 export function StatsCards() {
-  const { data: stats, isLoading } = useStats();
+  const { data: stats, isLoading, isError } = useStats();
 
   const cards = [
     {
@@ -53,6 +53,8 @@ export function StatsCards() {
                 <p className="mt-1 font-serif text-3xl font-bold tracking-tight text-card-foreground">
                   {isLoading ? (
                     <span className="inline-block h-9 w-16 animate-pulse rounded bg-muted" />
+                  ) : isError ? (
+                    <span className="text-muted-foreground">—</span>
                   ) : (
                     stat.value.toLocaleString()
                   )}

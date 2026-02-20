@@ -342,6 +342,113 @@ def test_frbr_hierarchy():
 
 See [tests/test_web.py](../tests/test_web.py) for comprehensive FRBR hierarchy tests.
 
+## 🌐 Frontend Architecture (Phase 2)
+
+iqoqo uses a **decoupled** architecture where the Flask application serves only JSON
+via `app/api/` and the React/Next.js frontend is a fully independent application living
+in `frontend/`.
+
+### Technology Stack
+
+| Layer | Technology | Notes |
+| ----- | ---------- | ----- |
+| Framework | Next.js 16 (App Router) | SSR + RSC hybrid |
+| Language | TypeScript 5 | Strict mode |
+| Styling | Tailwind CSS v4 | CSS-based `@theme` config |
+| Server state | TanStack React Query v5 | Caching, retries |
+| HTTP client | Axios | Wraps `NEXT_PUBLIC_API_URL` |
+| Toasts | Sonner | Rich toast notifications |
+| Scanner | html5-qrcode | ISBN barcode via device camera |
+| Fonts | Merriweather (serif) + Inter (sans) | Google Fonts |
+
+### Design System – "Modern Athenaeum"
+
+All design tokens live in `frontend/app/globals.css` as CSS custom properties mapped
+into Tailwind v4 via `@theme inline`.
+
+| Token | Value | Usage |
+| ----- | ----- | ----- |
+| `--color-primary` | Deep Indigo `hsl(210 29% 24%)` | Nav, headings, CTA |
+| `--color-accent` | Library Clay `hsl(24 100% 41%)` | Accent, badges |
+| `--color-background` | Warm Paper `hsl(43 50% 98%)` | Page background |
+| `--font-serif` | Merriweather | Display text, headings |
+| `--font-sans` | Inter | Body, labels |
+
+### Directory Structure
+
+```text
+frontend/
+├── app/                   # Next.js App Router
+│   ├── globals.css        # Design system tokens (Tailwind v4 @theme)
+│   ├── layout.tsx         # Root layout + Providers
+│   ├── page.tsx           # Dashboard (/)
+│   ├── collection/
+│   │   └── page.tsx       # Collection browser
+│   ├── item/[id]/
+│   │   └── page.tsx       # Item detail
+│   └── scan/
+│       └── page.tsx       # Barcode scanner
+├── components/
+│   ├── dashboard/         # Navbar, StatsCards, CurrentContext, FreshArrivals
+│   ├── collection/        # ItemCard, FilterBar, SidebarFilters, CollectionGrid
+│   ├── item/              # HeroBanner, ItemHeader, ItemSidebar, ItemTabs
+│   └── scanner/           # TopBar, Viewfinder, BottomSheet, SuccessCard
+├── lib/
+│   ├── utils.ts           # cn() class merging helper
+│   └── api/
+│       ├── client.ts      # Axios instance + apiFetch() helper
+│       └── hooks.ts       # React Query hooks for all endpoints
+└── types/
+    └── frbr.ts            # TypeScript types mirroring the FRBR data model
+```
+
+### API Integration Pattern
+
+The frontend communicates with Flask via a standardised JSON envelope:
+
+```jsonc
+// Every endpoint returns this shape
+{
+  "success": true,
+  "data": { /* entity or list */ },
+  "error": null,           // string when success=false
+  "meta": {               // present on paginated endpoints only
+    "page": 1,
+    "limit": 20,
+    "total": 1562,
+    "pages": 79
+  }
+}
+```
+
+The `apiFetch<T>()` helper in `lib/api/client.ts` unwraps this envelope and throws
+a typed error when `success` is `false`.
+
+### Item Status Values
+
+The `Item.status` column accepts exactly these values (enforced in `types/frbr.ts`):
+
+| Status | Meaning |
+| ------ | ------- |
+| `available` | On your shelf |
+| `lent` | Lent to a friend |
+| `lost` | Cannot be located |
+| `wish_list` | Want to acquire / to read |
+
+### Local Development
+
+```bash
+# Start everything in one command:
+./run_dev.sh
+
+# Or separately:
+docker-compose up -d db                 # PostgreSQL
+flask --app run run                      # API on :5000
+cd frontend && npm run dev              # React on :3000
+```
+
+See [docs/INSTALL.md](INSTALL.md) for full setup instructions.
+
 ## 📖 Further Reading
 
 - **FRBRoo Specification**: [https://www.ifla.org/publications/node/11240](https://www.ifla.org/publications/node/11240)

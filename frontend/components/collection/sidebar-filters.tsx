@@ -12,7 +12,7 @@ interface SidebarFiltersProps {
 
 const statusOptions: { value: string; label: string; dot: string }[] = [
   { value: "available", label: "On Shelf", dot: "bg-chart-3" },
-  { value: "reading", label: "Reading", dot: "bg-primary" },
+  { value: "wish_list", label: "To Read", dot: "bg-primary" },
   { value: "lent", label: "Lent Out", dot: "bg-accent" },
   { value: "lost", label: "Lost", dot: "bg-destructive" },
 ];

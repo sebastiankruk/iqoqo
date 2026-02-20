@@ -5,20 +5,20 @@ import { useItems } from "@/lib/api/hooks";
 import Link from "next/link";
 
 /**
- * "Current Context" section – shows items with status "reading".
- * Falls back to a placeholder card if no active items found.
+ * "Current Context" section – shows items on the wish list ("To Read").
+ * Falls back to a placeholder card if none exist.
  */
 export function CurrentContext() {
   const { data, isLoading } = useItems(1, 10);
 
   const readingItems =
-    data?.data?.filter((item) => item.status === "reading") ?? [];
+    data?.data?.filter((item) => item.status === "wish_list") ?? [];
 
   if (isLoading) {
     return (
       <section aria-label="Currently active items">
         <h2 className="mb-5 font-serif text-xl font-bold text-foreground">
-          Current Context
+          To Read
         </h2>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {[0, 1].map((i) => (
@@ -37,16 +37,16 @@ export function CurrentContext() {
       <section aria-label="Currently active items">
         <div className="mb-5 flex items-center gap-2">
           <h2 className="font-serif text-xl font-bold text-foreground">
-            Current Context
+            To Read
           </h2>
         </div>
         <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            No items currently in progress.{" "}
+            Your "To Read" list is empty.{" "}
             <Link href="/collection" className="text-accent underline-offset-2 hover:underline">
               Browse your collection
             </Link>{" "}
-            to start reading.
+            to add items.
           </p>
         </div>
       </section>
@@ -57,7 +57,7 @@ export function CurrentContext() {
     <section aria-label="Currently active items">
       <div className="mb-5 flex items-center gap-2">
         <h2 className="font-serif text-xl font-bold text-foreground">
-          Current Context
+          To Read
         </h2>
         <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent">
           {readingItems.length} active

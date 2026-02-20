@@ -57,8 +57,50 @@ else
     source .venv/bin/activate
 fi
 
-# 3. Run Flask Application
+# 3. Install frontend dependencies if needed
+if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    (cd frontend && npm install)
+fi
+
+# 4. Run Flask API (background) + Next.js frontend
 export FLASK_APP=run.py
 export FLASK_DEBUG=1
-echo "Starting Flask server at http://127.0.0.1:5000 ..."
-flask run
+
+echo "Starting Flask API at http://127.0.0.1:5000 ..."
+flask run --port 5000 &
+FLASK_PID=$!
+echo $FLASK_PID > .flask.pid
+
+if [ -d "frontend" ]; then
+    echo "Starting Next.js frontend at http://localhost:3000 ..."
+    (cd frontend && npm run dev) &
+    FRONTEND_PID=$!
+    echo $FRONTEND_PID > .frontend.pid
+fi
+
+echo ""
+echo "════════════════════════════════════════════════"
+echo "  iqoqo development servers running"
+echo "  Flask API  → http://127.0.0.1:5000"
+if [ -d "frontend" ]; then
+    echo "  Frontend   → http://localhost:3000"
+fi
+echo "  Press Ctrl+C to stop all servers"
+echo "════════════════════════════════════════════════"
+
+# Wait for Ctrl-C and clean up
+cleanup() {
+    echo ""
+    echo "Stopping servers..."
+    kill "$FLASK_PID" 2>/dev/null
+    if [ -d "frontend" ] && [ -n "$FRONTEND_PID" ]; then
+        kill "$FRONTEND_PID" 2>/dev/null
+    fi
+    rm -f .flask.pid .frontend.pid
+    echo "Stopped."
+    exit 0
+}
+
+trap cleanup INT TERM
+wait

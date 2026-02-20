@@ -6,9 +6,18 @@ import { useItems } from "@/lib/api/hooks";
 
 /** Horizontally scrollable "Fresh Arrivals" strip using live API data. */
 export function FreshArrivals() {
-  const { data, isLoading } = useItems(1, 12);
+  const { data, isLoading, isError } = useItems(1, 12);
 
   const items = data?.data ?? [];
+
+  if (isError) {
+    return (
+      <section aria-label="Recently added items">
+        <h2 className="mb-3 font-serif text-xl font-bold text-foreground">Fresh Arrivals</h2>
+        <p className="text-sm text-muted-foreground">Could not load items — the API may be unavailable.</p>
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Recently added items">
