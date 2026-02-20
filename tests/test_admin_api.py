@@ -191,6 +191,29 @@ def test_admin_clear_with_false_confirmation(client):
     assert "error" in response.json
 
 
+@pytest.mark.parametrize(
+    ("payload", "content_type"),
+    [
+        ('{"confirm": true', "application/json"),  # malformed JSON
+        (None, "application/json"),  # missing JSON body
+    ],
+)
+def test_admin_clear_invalid_or_missing_json_payload(client, payload, content_type):
+    """Test /api/admin/clear returns standardized 400 for invalid or missing JSON payload."""
+    request_kwargs = {"content_type": content_type}
+    if payload is not None:
+        request_kwargs["data"] = payload
+
+    response = client.delete("/api/admin/clear", **request_kwargs)
+
+    assert response.status_code == 400
+    assert response.json == {
+        "success": False,
+        "data": None,
+        "error": "Invalid or missing JSON payload",
+    }
+
+
 def test_full_export_import_cycle(app, client, sample_export_data):
     """Test complete export-import-export cycle."""
     # 1. Import initial data

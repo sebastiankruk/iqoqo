@@ -33,9 +33,20 @@ start:
 
 stop:
 	@echo "Stopping Flask server..."
-	@pkill -f "flask run" || true
-	@echo "Stopping database..."
-	@docker-compose down
+	@if [ -f .flask.pid ]; then \
+		FLASK_PID=$$(cat .flask.pid); \
+		if kill -0 $$FLASK_PID 2>/dev/null; then \
+			kill $$FLASK_PID; \
+			echo "Sent SIGTERM to Flask (PID $$FLASK_PID)."; \
+		else \
+			echo "Flask PID $$FLASK_PID is not running."; \
+		fi; \
+		rm -f .flask.pid; \
+	else \
+		echo "No Flask PID file found (.flask.pid); skipping Flask stop."; \
+	fi
+	@echo "Stopping database containers..."
+	@docker-compose stop
 	@echo "Development environment stopped."
 
 # Linting targets

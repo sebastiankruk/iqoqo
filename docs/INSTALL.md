@@ -13,7 +13,7 @@ cd iqoqo
 
 # 2. Create and configure environment file
 cp .env.example .env
-# Edit .env: Set DATABASE_URL to use 'db' hostname, configure ports, set strong passwords
+# Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed
 
 # 3. Build and start services
 docker-compose build
@@ -126,6 +126,16 @@ After installation, make sure the Docker daemon is running.
      # Update POSTGRES_PASSWORD and DATABASE_URL with the same password
      ```
 
+   - **CORS (for separate frontend origin):** Keep CORS disabled unless needed. If your frontend is served from a different origin, configure explicit origins:
+
+     ```text
+     CORS_ENABLED=true
+     CORS_ORIGINS="https://app.example.com,https://admin.example.com"
+     CORS_SUPPORTS_CREDENTIALS=false
+     ```
+
+     Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
+
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
 ## Database Setup
@@ -174,16 +184,21 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
    Make sure your `.env` file is configured for Docker:
 
-   ```bash
-   # Use 'db' as hostname for container-to-container communication
-   DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+    ```text
+    # Use 'db' as hostname for container-to-container communication
+    DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
 
-   # Set external ports (change if you have other services running)
-   WEB_PORT=8000    # or 5000 if available
-   DB_PORT=5433     # or 5432 if available
+    # Set external ports (change if you have other services running)
+    WEB_PORT=8000    # or 5000 if available
+    DB_PORT=5433     # or 5432 if available
 
-   # Use production settings
-   FLASK_ENV=production
+    # Use production settings
+    FLASK_ENV=production
+
+    # Configure CORS explicitly when frontend and API use different origins
+    CORS_ENABLED=true
+    CORS_ORIGINS="https://app[.]example.com"
+    CORS_SUPPORTS_CREDENTIALS=false
    ```
 
 2. **Build and start all services:**
@@ -483,6 +498,25 @@ The following endpoints are available for data management:
 ## Running the Application
 
 ### Development Mode (Local)
+
+To run the Flask development server:
+
+```bash
+# Make sure the database is running
+docker-compose up -d db
+
+# Run the development server using the project's virtual environment
+.venv/bin/flask run
+```
+
+**Alternative:** Activate the virtual environment first, then run Flask:
+
+```bash
+source .venv/bin/activate
+flask run
+```
+
+The application will be available at `http://localhost:5000`.
 
 To run the Flask development server:
 

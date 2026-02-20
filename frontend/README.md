@@ -6,7 +6,7 @@ Modern React/Next.js frontend for the iqoqo Library of Everything application.
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS 3.x
+- **Styling**: Tailwind CSS 4.x
 - **UI Components**: shadcn/ui (planned)
 - **State Management**: TanStack Query + Zustand (planned)
 - **Forms**: React Hook Form + Zod (planned)
@@ -83,7 +83,7 @@ The frontend communicates with the Flask backend API. Key endpoints:
 - `GET /api/stats` - Dashboard statistics
 - `GET /api/items` - List items (with pagination)
 - `GET /api/items/:id` - Get item details
-- `POST /api/items/:id` - Update item
+- `PUT /api/items/:id` - Update item
 - `DELETE /api/items/:id` - Delete item
 - `GET /api/isbn/:isbn` - ISBN lookup
 - `POST /api/isbn/:isbn` - Update manifestation

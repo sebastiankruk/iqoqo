@@ -8,11 +8,17 @@ from typing import Any
 
 import requests
 from flask import jsonify, request, send_file, session
+from sqlalchemy.orm import selectinload
 
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
 
 from . import api_bp
+
+
+def _invalid_json_payload_response():
+    """Return a standardized 400 response for absent/invalid JSON payloads."""
+    return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -32,12 +38,38 @@ def get_dashboard_stats():
 def get_items():
     """Get all items with pagination support."""
     # Get pagination parameters
-    page = int(request.args.get("page", 1))
-    limit = int(request.args.get("limit", 20))
+    page_param = request.args.get("page", "1")
+    limit_param = request.args.get("limit", "20")
+    try:
+        page = int(page_param)
+        limit = int(limit_param)
+    except (TypeError, ValueError):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": "Invalid pagination parameters: 'page' and 'limit' must be integers.",
+                }
+            ),
+            400,
+        )
+
+    if page < 1 or limit < 1:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": "Invalid pagination parameters: 'page' and 'limit' must be positive integers.",
+                }
+            ),
+            400,
+        )
     offset = (page - 1) * limit
 
     # Get all items with pagination
-    query = Item.query
+    query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     total = query.count()
     items = query.offset(offset).limit(limit).all()
 
@@ -127,7 +159,9 @@ def update_item(item_id: int):
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _invalid_json_payload_response()
 
     if data.get("status"):
         item.status = data["status"]
@@ -297,11 +331,9 @@ def update_manifestation(isbn: str):
     if not manifestation:
         return jsonify({"error": "Manifestation not found"}), 404
 
-    metadata = request.get_json()
-
-    # Check if metadata is None or empty dict
-    if metadata is None:
-        return jsonify({"error": "No metadata provided"}), 400
+    metadata = request.get_json(silent=True)
+    if not isinstance(metadata, dict):
+        return _invalid_json_payload_response()
 
     if metadata:
         # Update the manifestation's metadata
@@ -449,7 +481,9 @@ def import_data():
 
         # Check if data is in the request body or as a file upload
         if request.is_json:
-            data = request.get_json()
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return _invalid_json_payload_response()
         elif "file" in request.files:
             file = request.files["file"]
             data = json.load(file)
@@ -469,8 +503,11 @@ def clear_data():
 
     Requires confirmation in the request body: {"confirm": true}
     """
-    data = request.get_json()
-    if not data or not data.get("confirm"):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _invalid_json_payload_response()
+
+    if not data.get("confirm"):
         return jsonify({"error": 'Confirmation required. Send {"confirm": true} to proceed.'}), 400
 
     try:

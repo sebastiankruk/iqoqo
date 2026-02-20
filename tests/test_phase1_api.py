@@ -2,6 +2,7 @@
 
 import pytest
 
+from app import create_app
 from app.db.models import Expression, Item, Manifestation, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
@@ -42,30 +43,51 @@ def sample_work(app):
         yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item}
 
 
+@pytest.fixture
+def cors_client():
+    """Create test client with CORS explicitly enabled."""
+    app = create_app(
+        config_override={
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "CORS_ENABLED": True,
+            "CORS_ORIGINS": ["http://localhost:3000", "http://127.0.0.1:3000"],
+            "CORS_METHODS": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "CORS_ALLOW_HEADERS": ["Content-Type", "Authorization"],
+            "CORS_SUPPORTS_CREDENTIALS": True,
+        }
+    )
+
+    with app.app_context():
+        db.create_all()
+        yield app.test_client()
+        db.drop_all()
+
+
 # =============================================================================
 # CORS Tests
 # =============================================================================
 
 
-def test_cors_headers_on_api_request(client):
+def test_cors_headers_on_api_request(cors_client):
     """Test that CORS headers are present on API requests from allowed origin."""
-    response = client.get("/api/health", headers={"Origin": "http://localhost:3000"})
+    response = cors_client.get("/api/health", headers={"Origin": "http://localhost:3000"})
     assert response.status_code == 200
     assert "Access-Control-Allow-Origin" in response.headers
     assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
     assert response.headers.get("Access-Control-Allow-Credentials") == "true"
 
 
-def test_cors_headers_allow_127_origin(client):
+def test_cors_headers_allow_127_origin(cors_client):
     """Test that CORS headers work with 127.0.0.1 origin."""
-    response = client.get("/api/health", headers={"Origin": "http://127.0.0.1:3000"})
+    response = cors_client.get("/api/health", headers={"Origin": "http://127.0.0.1:3000"})
     assert response.status_code == 200
     assert response.headers["Access-Control-Allow-Origin"] == "http://127.0.0.1:3000"
 
 
-def test_cors_preflight_options_request(client):
+def test_cors_preflight_options_request(cors_client):
     """Test that CORS preflight OPTIONS requests are handled correctly."""
-    response = client.options(
+    response = cors_client.options(
         "/api/health",
         headers={
             "Origin": "http://localhost:3000",
@@ -137,9 +159,9 @@ def test_get_stats_with_data(client, sample_work):
     assert stats["items"] == 1
 
 
-def test_stats_cors_headers(client):
+def test_stats_cors_headers(cors_client):
     """Test that stats endpoint returns CORS headers."""
-    response = client.get("/api/stats", headers={"Origin": "http://localhost:3000"})
+    response = cors_client.get("/api/stats", headers={"Origin": "http://localhost:3000"})
     assert response.status_code == 200
     assert "Access-Control-Allow-Origin" in response.headers
 
@@ -298,6 +320,31 @@ def test_update_item_not_found(client):
     assert response.status_code == 404
     data = response.json
     assert data["success"] is False
+
+
+@pytest.mark.parametrize(
+    ("payload", "content_type"),
+    [
+        ('{"status": "checked_out"', "application/json"),  # malformed JSON
+        (None, "application/json"),  # missing JSON body
+    ],
+)
+def test_update_item_invalid_or_missing_json_payload(client, sample_work, payload, content_type):
+    """Test update_item returns standardized 400 for invalid or missing JSON payload."""
+    item_id = sample_work["item"].id
+
+    request_kwargs = {"content_type": content_type}
+    if payload is not None:
+        request_kwargs["data"] = payload
+
+    response = client.put(f"/api/items/{item_id}", **request_kwargs)
+
+    assert response.status_code == 400
+    assert response.json == {
+        "success": False,
+        "data": None,
+        "error": "Invalid or missing JSON payload",
+    }
 
 
 # =============================================================================

@@ -155,6 +155,29 @@ def test_update_manifestation_not_found(client):
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize(
+    ("payload", "content_type"),
+    [
+        ('{"Title": "Updated Title"', "application/json"),  # malformed JSON
+        (None, "application/json"),  # missing JSON body
+    ],
+)
+def test_update_manifestation_invalid_or_missing_json_payload(client, sample_book, payload, content_type):
+    """Test update_manifestation returns standardized 400 for invalid or missing JSON payload."""
+    request_kwargs = {"content_type": content_type}
+    if payload is not None:
+        request_kwargs["data"] = payload
+
+    response = client.post("/api/isbn/9780345391803", **request_kwargs)
+
+    assert response.status_code == 400
+    assert response.json == {
+        "success": False,
+        "data": None,
+        "error": "Invalid or missing JSON payload",
+    }
+
+
 def test_get_items_by_isbn(client, sample_book):
     """Test getting items for a given ISBN."""
     # First add an item
