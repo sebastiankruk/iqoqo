@@ -456,19 +456,46 @@ The following endpoints are available for data management:
 
 #### Database Connection Issues
 
-- **`FATAL: role "user" does not exist`**: This error usually means your application is connecting to a different PostgreSQL instance than the one running in Docker.
-  - Make sure you have started the Docker container with `docker-compose up -d db`.
-  - Check if you have another PostgreSQL server running on your machine. If so, either:
-    - Stop the local PostgreSQL: `brew services stop postgresql` (macOS) or `sudo systemctl stop postgresql` (Linux)
-    - Change the `DB_PORT` in your `.env` file to use a different port (e.g., 5433)
-  - Verify that your `.env` file contains the correct `DATABASE_URL`:
-    - For local development: `postgresql://iqoqo:password@localhost:5432/iqoqo`
-    - For Docker deployment: `postgresql://iqoqo:password@db:5432/iqoqo`
+- **`FATAL: role "iqoqo" does not exist`** (stale Docker volume): PostgreSQL only runs its
+  initialisation scripts when the data directory is **empty**. If your Docker volume was
+  previously created with a different `POSTGRES_USER` value, the `iqoqo` role is never
+  created on subsequent starts. Running `./run_dev.sh` handles this automatically via
+  `scripts/setup_db.sh`. To run the fix manually:
+
+  ```bash
+  bash scripts/setup_db.sh
+  # or, to just inspect without changing anything:
+  bash scripts/setup_db.sh --check
+  ```
+
+  The script detects the actual superuser in the volume, creates the `iqoqo` role (if
+  missing), and grants all necessary privileges, without touching existing data.
+
+- **`DATABASE_URL` host `db` not resolvable outside Docker**: The hostname `db` is a
+  Docker Compose internal service name — it only resolves inside the container network.
+  For local development (Flask running directly on the host), use `localhost`:
+
+  ```bash
+  # In .env — correct for local dev:
+  DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
+
+  # In docker-compose.yml or when running inside a container:
+  DATABASE_URL="postgresql://iqoqo:password@db:5432/iqoqo"
+  ```
 
 - **Port conflicts**: If you see "port already in use" errors:
-  - Check what's using the port: `sudo lsof -i :5432` or `sudo lsof -i :5000`
+  - Check what's using the port: `sudo lsof -i :5432` or `sudo lsof -i :5001`
   - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
+  - `./run_dev.sh` automatically kills stale processes on `WEB_PORT` and `3000` at startup
   - Restart the services: `docker-compose down && docker-compose up -d`
+
+- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds
+  to port 5000 on macOS Monterey and later. Set `WEB_PORT=5001` (or any free port) in
+  your `.env` to move Flask off port 5000:
+
+  ```bash
+  echo "WEB_PORT=5001" >> .env
+  ```
 
 #### Docker Issues
 
@@ -487,6 +514,34 @@ The following endpoints are available for data management:
   ```
 
 - **Database initialization fails**: Make sure the database container is fully started before running migrations:
+
+#### Frontend Issues
+
+- **`Unable to acquire lock at frontend/.next/dev/lock`**: This happens when a previous
+  Next.js dev process crashed or was killed without cleaning up its lock file.
+  `./run_dev.sh` removes this file automatically at startup. To fix manually:
+
+  ```bash
+  rm -f frontend/.next/dev/lock
+  # Then restart:
+  ./run_dev.sh
+  ```
+
+- **CORS errors (`Origin ... is not allowed`)**: The Flask CORS configuration must
+  list the exact origin of the Next.js dev server. Check your `.env`:
+
+  ```bash
+  CORS_ENABLED=true
+  CORS_ORIGINS="http://localhost:3000"
+  ```
+
+  Also verify `frontend/.env.local` points to the actual Flask port:
+
+  ```bash
+  NEXT_PUBLIC_API_URL=http://localhost:5001   # match WEB_PORT in .env
+  ```
+
+  After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run_dev.sh`
 
   ```bash
   # Wait for database to be ready

@@ -6,12 +6,13 @@ const API_URL =
 
 /**
  * Preconfigured axios instance pointing at the Flask backend.
- * Requests include cookies so Flask session-based auth works seamlessly.
+ * withCredentials is intentionally omitted: no session-based auth is
+ * implemented yet. Re-add it alongside CORS_SUPPORTS_CREDENTIALS=true
+ * in .env when cookie/session auth is introduced.
  */
 export const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { "Content-Type": "application/json" },
-  withCredentials: true,
 });
 
 /** Unwrap the standard `{ success, data, error }` envelope. */

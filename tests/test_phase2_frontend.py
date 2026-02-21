@@ -221,9 +221,7 @@ class TestItemsListEndpoint:
         response = client.get("/api/items?limit=100")
         items = response.get_json()["data"]
         for item in items:
-            assert item["status"] in valid_statuses, (
-                f"Unexpected status '{item['status']}' for item {item['id']}"
-            )
+            assert item["status"] in valid_statuses, f"Unexpected status '{item['status']}' for item {item['id']}"
 
     def test_respects_limit_parameter(self, client, populated_library):
         """?limit= must cap the number of returned items."""

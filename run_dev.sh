@@ -47,6 +47,45 @@ else
     echo "Warning: docker-compose not found. Please ensure your PostgreSQL database is running."
 fi
 
+# 1b. Load environment variables from .env (single source of truth for ports etc.)
+if [ -f ".env" ]; then
+    # shellcheck disable=SC1091
+    set -o allexport
+    source .env
+    set +o allexport
+fi
+# WEB_PORT defaults to 5000 if not set in .env
+WEB_PORT=${WEB_PORT:-5000}
+
+# 1c. Kill stale processes and remove lock files to allow clean restart
+echo "Cleaning up stale processes and locks..."
+
+# Kill anything occupying the Flask API port
+if lsof -ti :"${WEB_PORT}" &>/dev/null; then
+    echo "  Port ${WEB_PORT} in use — terminating stale process..."
+    kill -9 "$(lsof -ti :"${WEB_PORT}")" 2>/dev/null || true
+fi
+
+# Kill anything occupying the Next.js port (3000)
+NEXT_PORT=${NEXT_PORT:-3000}
+if lsof -ti :"${NEXT_PORT}" &>/dev/null; then
+    echo "  Port ${NEXT_PORT} in use — terminating stale Next.js process..."
+    kill -9 "$(lsof -ti :"${NEXT_PORT}")" 2>/dev/null || true
+fi
+
+# Remove stale Next.js dev lock file ("Unable to acquire lock" error)
+if [ -f "frontend/.next/dev/lock" ]; then
+    echo "  Removing stale Next.js lock file..."
+    rm -f "frontend/.next/dev/lock"
+fi
+
+sleep 1
+
+# 1d. Ensure the database role exists (handles stale Docker volumes)
+if [ -f "scripts/setup_db.sh" ]; then
+    bash scripts/setup_db.sh
+fi
+
 # 2. Activate Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "Virtual environment not found. Creating one..."
@@ -67,14 +106,16 @@ fi
 export FLASK_APP=run.py
 export FLASK_DEBUG=1
 
-echo "Starting Flask API at http://127.0.0.1:5000 ..."
-flask run --port 5000 &
+echo "Starting Flask API at http://127.0.0.1:${WEB_PORT} ..."
+flask run --port "${WEB_PORT}" &
 FLASK_PID=$!
 echo $FLASK_PID > .flask.pid
 
 if [ -d "frontend" ]; then
     echo "Starting Next.js frontend at http://localhost:3000 ..."
-    (cd frontend && npm run dev) &
+    # Pass the API URL derived from WEB_PORT so Next.js picks it up even when
+    # frontend/.env.local has a different fallback value.
+    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}" npm run dev) &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > .frontend.pid
 fi
@@ -82,7 +123,7 @@ fi
 echo ""
 echo "════════════════════════════════════════════════"
 echo "  iqoqo development servers running"
-echo "  Flask API  → http://127.0.0.1:5000"
+echo "  Flask API  → http://127.0.0.1:${WEB_PORT}"
 if [ -d "frontend" ]; then
     echo "  Frontend   → http://localhost:3000"
 fi
