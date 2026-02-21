@@ -40,7 +40,6 @@ data/*.json
 
 # AI
 .github/context/*
-.github/copilot-instructions.md
 
 # Process IDs
 .flask.pid

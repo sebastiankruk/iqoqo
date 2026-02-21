@@ -108,6 +108,6 @@ make lint-markdown    # markdownlint
 - **Location:** `.github/context/private-notes/` (symlinked Obsidian vault, git-ignored)
 - **Purpose:** Detailed planning, research, and development notes
 - **Usage:** Check here for context on design decisions, future plans, and implementation details
-- **Legacy Code:** See `.github/context/legacy_prototype.txt`.
-- **Migration:** Use the SQL schema in `.github/context/legacy_db.sql` to map existing book data into the new FRBR model.
+- **Legacy Code:** See [iqoqo-prototype](https://github.com/sebastiankruk/iqoqo-prototype).
+- **Migration:** The migration plan is outlined in `.github/context/migration/`
 - **UI/UX Design:** Refer to `.github/context/private-designs` for the original UI/UX vision and wireframes.
