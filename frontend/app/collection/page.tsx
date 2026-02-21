@@ -17,7 +17,7 @@ export default function CollectionPage() {
   const limit = 40;
   const { data, isLoading } = useItems(page, limit);
 
-  const allItems: Item[] = data?.data ?? [];
+  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
   const total = data?.meta?.total ?? 0;
   const pages = data?.meta?.pages ?? 1;
 

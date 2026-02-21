@@ -75,7 +75,7 @@ export function BottomSheet({ onFound }: BottomSheetProps) {
       const { apiClient } = await import("@/lib/api/client");
       const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
       onFound(isbn, res.data);
-    } catch (e) {
+    } catch {
       setError("Could not find this ISBN. Try entering it manually.");
     } finally {
       setIsSearching(false);
