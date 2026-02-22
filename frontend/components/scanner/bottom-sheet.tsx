@@ -11,76 +11,137 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/** Minimal type shim for BarcodeDetector (not yet in lib.dom.d.ts). */
+interface BarcodeDetectorResult {
+  rawValue: string;
+}
+interface BarcodeDetectorLike {
+  detect(source: HTMLVideoElement): Promise<BarcodeDetectorResult[]>;
+}
+declare global {
+  interface Window {
+    BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
+  }
+}
+
 interface BottomSheetProps {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
 }
 
 /** Bottom-sheet panel with barcode scanner and manual ISBN entry. */
-export function BottomSheet({ onFound }: BottomSheetProps) {
+export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
   const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<{ clear: () => Promise<void> } | null>(null);
-  const qrBoxId = "html5qr-code-full-region";
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
 
-  /* ── Real barcode scanning via html5-qrcode ── */
+  /* ── Stop everything ── */
+  const stopScanner = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = null;
+    }
+    setScannerActive(false);
+  }, [videoRef]);
+
+  /* ── ISBN API lookup ── */
+  const lookupIsbn = useCallback(
+    async (isbn: string) => {
+      if (!isbn) return;
+      setIsSearching(true);
+      setError(null);
+      try {
+        const { apiClient } = await import("@/lib/api/client");
+        const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
+        onFound(isbn, res.data);
+      } catch {
+        setError("Could not find this ISBN. Try entering it manually.");
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [onFound],
+  );
+
+  /* ── Start camera + BarcodeDetector scan loop ── */
   const startScanner = useCallback(async () => {
     setError(null);
+    const video = videoRef.current;
+    if (!video) return;
+
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(qrBoxId);
-
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        async (decodedText) => {
-          // decodedText is the raw barcode value (usually an ISBN)
-          await scanner.stop();
-          setScannerActive(false);
-          await lookupIsbn(decodedText.replace(/[^0-9Xx]/g, ""));
+      /* getUserMedia – Safari requires { ideal } not { exact } for facingMode */
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
-        () => { /* Frame scan failure – ignored */ }
-      );
+        audio: false,
+      });
 
-      scannerRef.current = { clear: () => scanner.stop() };
+      streamRef.current = stream;
+      video.srcObject = stream;
+      /* play() on a React-owned element with playsInline+muted works in Safari */
+      await video.play();
       setScannerActive(true);
+
+      if (!window.BarcodeDetector) {
+        setError("Barcode detection is not supported in this browser. Please use manual ISBN entry.");
+        return;
+      }
+
+      const detector = new window.BarcodeDetector({
+        /* ISBN barcodes are EAN-13; include UPC variants as fallback */
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
+      });
+
+      const scan = async () => {
+        if (!streamRef.current || !video) return;
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            const raw = barcodes[0].rawValue;
+            stopScanner();
+            await lookupIsbn(raw.replace(/[^0-9Xx]/g, ""));
+            return;
+          }
+        } catch {
+          /* Frame not ready yet – keep looping */
+        }
+        rafRef.current = requestAnimationFrame(scan);
+      };
+
+      rafRef.current = requestAnimationFrame(scan);
     } catch (e) {
       setError((e as Error).message ?? "Camera unavailable");
+      stopScanner();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [videoRef, lookupIsbn, stopScanner]);
 
   /* Stop scanner when switching away from barcode tab */
   useEffect(() => {
-    if (activeTab !== "barcode" && scannerRef.current) {
-      scannerRef.current.clear().catch(() => {});
-      scannerRef.current = null;
-      setScannerActive(false);
-    }
-  }, [activeTab]);
+    if (activeTab !== "barcode") stopScanner();
+  }, [activeTab, stopScanner]);
 
   /* Cleanup on unmount */
   useEffect(() => {
     return () => {
-      scannerRef.current?.clear().catch(() => {});
+      stopScanner();
     };
-  }, []);
-
-  const lookupIsbn = async (isbn: string) => {
-    if (!isbn) return;
-    setIsSearching(true);
-    setError(null);
-    try {
-      const { apiClient } = await import("@/lib/api/client");
-      const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
-      onFound(isbn, res.data);
-    } catch {
-      setError("Could not find this ISBN. Try entering it manually.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
+  }, [stopScanner]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,12 +182,6 @@ export function BottomSheet({ onFound }: BottomSheetProps) {
 
         {activeTab === "barcode" && (
           <>
-            {/* Hidden div used by html5-qrcode – positioned off-screen */}
-            <div
-              id={qrBoxId}
-              className="absolute -left-[9999px] h-px w-px overflow-hidden"
-            />
-
             {/* Capture button */}
             <button
               onClick={scannerActive ? undefined : startScanner}
