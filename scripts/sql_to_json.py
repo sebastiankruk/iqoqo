@@ -16,9 +16,64 @@ from pathlib import Path
 from typing import Any
 
 
+def _parse_sql_values(values_str: str) -> list[str | None]:
+    """
+    Parse a comma-separated PostgreSQL VALUES string into a list of Python values.
+
+    Handles SQL single-quoted strings (with ``''`` as escaped single quote) and
+    unquoted NULL literals.
+
+    Args:
+        values_str: The raw content between the outer parentheses of VALUES (...).
+
+    Returns:
+        List of string values (or None for SQL NULL).
+    """
+    result: list[str | None] = []
+    current: list[str] = []
+    in_quote = False
+    i = 0
+
+    while i < len(values_str):
+        ch = values_str[i]
+        if in_quote:
+            if ch == "'" and i + 1 < len(values_str) and values_str[i + 1] == "'":
+                # SQL-escaped single quote: '' → '
+                current.append("'")
+                i += 2
+                continue
+
+            if ch == "'":
+                # End of quoted string
+                in_quote = False
+            else:
+                current.append(ch)
+        else:
+            if ch == "'":
+                in_quote = True
+            elif ch == ",":
+                token = "".join(current).strip()
+                result.append(None if token == "NULL" else token)
+                current = []
+                i += 1
+                continue
+            else:
+                current.append(ch)
+        i += 1
+
+    # Append the last value
+    token = "".join(current).strip()
+    result.append(None if token == "NULL" else token)
+
+    return result
+
+
 def parse_sql_dump(sql_content: str) -> dict:
     """
     Parse a legacy SQL dump and extract data.
+
+    Supports both quoted (``"iqoqo"."table"``) and unquoted (``iqoqo.table``)
+    schema-qualified table names as produced by different pg_dump versions.
 
     Args:
         sql_content: Content of the SQL dump file.
@@ -32,137 +87,65 @@ def parse_sql_dump(sql_content: str) -> dict:
         "items": [],
     }
 
-    # Extract INSERT statements - handle multiple INSERT statements
-    # Pattern to match INSERT INTO...VALUES and capture everything until the next INSERT or end
-    insert_pattern = r"INSERT INTO \"iqoqo\"\.\"(\w+)\" \([^)]+\) VALUES\s*(.*?)(?=INSERT INTO|ALTER TABLE|\Z)"
+    # Match both `INSERT INTO iqoqo.table VALUES (...);`
+    # and `INSERT INTO "iqoqo"."table" VALUES (...);`
+    # The greedy (.*) before \);$ correctly captures everything inside the VALUES
+    # parens, because the regex engine backtracks to the last ); at end-of-line.
+    insert_re = re.compile(r'INSERT INTO (?:"iqoqo"\.|iqoqo\.)(\w+) VALUES \((.*)\);$')
 
-    matches = re.finditer(insert_pattern, sql_content, re.DOTALL)
+    for line in sql_content.splitlines():
+        line = line.strip()
+        m = insert_re.match(line)
+        if not m:
+            continue
 
-    for match in matches:
-        table_name = match.group(1)
-        values_str = match.group(2)
+        table_name = m.group(1)
+        values = _parse_sql_values(m.group(2))
 
-        # Parse individual value tuples
-        # Need to handle nested structures and quotes properly
-        # Find tuples by balancing parentheses while tracking quote state
-        tuples = []
-        depth = 0
-        current_tuple = []
-        i = 0
-        in_quote = False
-        while i < len(values_str):
-            char = values_str[i]
+        if table_name == "client" and len(values) >= 4:
+            data["clients"].append(
+                {
+                    "id": values[0],
+                    "address": values[1],
+                    "user": values[2],
+                    "added": values[3],
+                }
+            )
+        elif table_name == "manifestation" and len(values) >= 5:
+            # Columns: id, isbn, title, authors, meta (JSON), added
+            meta: dict[str, Any] = {}
+            try:
+                meta = json.loads(values[4]) if values[4] else {}
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-            # Handle single quotes (string delimiters in SQL)
-            if char == "'" and (i == 0 or values_str[i - 1] != "\\"):
-                in_quote = not in_quote
-                if depth > 0:
-                    current_tuple.append(char)
-            elif char == "(" and not in_quote and depth == 0:
-                depth = 1
-                current_tuple = []
-            elif char == "(" and not in_quote:
-                depth += 1
-                current_tuple.append(char)
-            elif char == ")" and not in_quote and depth == 1:
-                depth = 0
-                tuples.append("".join(current_tuple))
-                current_tuple = []
-            elif char == ")" and not in_quote:
-                depth -= 1
-                current_tuple.append(char)
-            elif depth > 0:
-                current_tuple.append(char)
-            i += 1
+            data["manifestations"].append(
+                {
+                    "id": values[0],
+                    "isbn": values[1],
+                    "title": values[2],
+                    "authors": values[3],
+                    "meta": meta,
+                    "added": values[5] if len(values) > 5 else None,
+                }
+            )
+        elif table_name == "item" and len(values) >= 4:
+            # Columns: id, manifestation_id, added_by, added_at, meta (JSON)
+            meta = {}
+            try:
+                meta = json.loads(values[4]) if len(values) > 4 and values[4] else {}
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        for tuple_str in tuples:
-            # Split by comma, but respect quotes
-            values = []
-            current = []
-            in_quotes = False
-            escape_next = False
-
-            for char in tuple_str + ",":
-                if escape_next:
-                    current.append(char)
-                    escape_next = False
-                    continue
-
-                if char == "\\":
-                    escape_next = True
-                    continue
-
-                if char == "'" and not in_quotes:
-                    in_quotes = True
-                    continue
-
-                if char == "'" and in_quotes:
-                    in_quotes = False
-                    continue
-
-                if char == "," and not in_quotes:
-                    values.append("".join(current).strip())
-                    current = []
-                    continue
-
-                current.append(char)
-
-            # Clean up values
-            cleaned_values = []
-            for v in values:
-                v = v.strip()
-                if v.startswith("'") and v.endswith("'"):
-                    v = v[1:-1]
-                cleaned_values.append(v)
-
-            # Map to appropriate table
-            if table_name == "client" and len(cleaned_values) >= 4:
-                data["clients"].append(
-                    {
-                        "id": cleaned_values[0],
-                        "address": cleaned_values[1],
-                        "user": cleaned_values[2],
-                        "added": cleaned_values[3],
-                    }
-                )
-            elif table_name == "manifestation" and len(cleaned_values) >= 6:
-                # Manifestation table has: id, isbn, title, authors, meta (JSON), added
-                # Parse meta JSON if present
-                meta: dict[str, Any] = {}
-                if len(cleaned_values) > 4:
-                    try:
-                        meta = json.loads(cleaned_values[4]) if cleaned_values[4] else {}
-                    except json.JSONDecodeError:
-                        pass
-
-                data["manifestations"].append(
-                    {
-                        "id": cleaned_values[0],
-                        "isbn": cleaned_values[1] if len(cleaned_values) > 1 else None,
-                        "title": cleaned_values[2] if len(cleaned_values) > 2 else None,
-                        "authors": cleaned_values[3] if len(cleaned_values) > 3 else None,
-                        "meta": meta,
-                        "added": cleaned_values[5] if len(cleaned_values) > 5 else None,
-                    }
-                )
-            elif table_name == "item" and len(cleaned_values) >= 5:
-                # Parse meta JSON if present
-                meta = {}
-                if len(cleaned_values) > 4:
-                    try:
-                        meta = json.loads(cleaned_values[4]) if cleaned_values[4] else {}
-                    except json.JSONDecodeError:
-                        pass
-
-                data["items"].append(
-                    {
-                        "id": cleaned_values[0],
-                        "manifestation_id": cleaned_values[1],
-                        "added_by": cleaned_values[2],
-                        "added_at": cleaned_values[3],
-                        "meta": meta,
-                    }
-                )
+            data["items"].append(
+                {
+                    "id": values[0],
+                    "manifestation_id": values[1],
+                    "added_by": values[2],
+                    "added_at": values[3],
+                    "meta": meta,
+                }
+            )
 
     return data
 

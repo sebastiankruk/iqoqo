@@ -47,6 +47,87 @@ else
     echo "Warning: docker-compose not found. Please ensure your PostgreSQL database is running."
 fi
 
+# 1b. Load environment variables from .env (single source of truth for ports etc.)
+if [ -f ".env" ]; then
+    # shellcheck disable=SC1091
+    set -o allexport
+    source .env
+    set +o allexport
+fi
+# WEB_PORT defaults to 5000 if not set in .env
+WEB_PORT=${WEB_PORT:-5000}
+
+# Directory for PID files of processes started by this script
+PID_DIR=".pids"
+
+# Create PID directory if it doesn't exist
+mkdir -p "${PID_DIR}"
+
+# Gracefully terminate a process referenced by a PID file, with SIGKILL fallback.
+terminate_from_pidfile() {
+    pidfile="$1"
+    desc="$2"
+
+    if [ ! -f "${pidfile}" ]; then
+        return 0
+    fi
+
+    pid="$(cat "${pidfile}" 2>/dev/null || true)"
+    if [ -z "${pid}" ]; then
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    if ! kill -0 "${pid}" 2>/dev/null; then
+        # Process is already gone; clean up stale pidfile.
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    echo "  Terminating ${desc} (PID ${pid})..."
+    # First try graceful shutdown (SIGTERM).
+    kill "${pid}" 2>/dev/null || true
+
+    # Wait up to 5 seconds for the process to exit.
+    for _ in 1 2 3 4 5; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    # If still running, escalate to SIGKILL.
+    if kill -0 "${pid}" 2>/dev/null; then
+        echo "  ${desc} did not exit gracefully; sending SIGKILL..."
+        kill -9 "${pid}" 2>/dev/null || true
+    fi
+
+    rm -f "${pidfile}"
+}
+
+# 1c. Kill stale processes and remove lock files to allow clean restart
+echo "Cleaning up stale processes and locks..."
+
+# Terminate Flask API process started by this script (if PID file exists)
+terminate_from_pidfile "${PID_DIR}/web_server.pid" "Flask API server"
+
+# Terminate Next.js dev server started by this script (if PID file exists)
+NEXT_PORT=${NEXT_PORT:-3000}
+terminate_from_pidfile "${PID_DIR}/next_dev.pid" "Next.js dev server"
+
+# Remove stale Next.js dev lock file ("Unable to acquire lock" error)
+if [ -f "frontend/.next/lock" ]; then
+    echo "  Removing stale Next.js lock file..."
+    rm -f "frontend/.next/lock"
+fi
+
+sleep 1
+
+# 1d. Ensure the database role exists (handles stale Docker volumes)
+if [ -f "scripts/setup_db.sh" ]; then
+    bash scripts/setup_db.sh
+fi
+
 # 2. Activate Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "Virtual environment not found. Creating one..."
@@ -67,14 +148,16 @@ fi
 export FLASK_APP=run.py
 export FLASK_DEBUG=1
 
-echo "Starting Flask API at http://127.0.0.1:5000 ..."
-flask run --port 5000 &
+echo "Starting Flask API at http://127.0.0.1:${WEB_PORT} ..."
+flask run --port "${WEB_PORT}" &
 FLASK_PID=$!
 echo $FLASK_PID > .flask.pid
 
 if [ -d "frontend" ]; then
     echo "Starting Next.js frontend at http://localhost:3000 ..."
-    (cd frontend && npm run dev) &
+    # Pass the API URL derived from WEB_PORT so Next.js picks it up even when
+    # frontend/.env.local has a different fallback value.
+    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}" npm run dev) &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > .frontend.pid
 fi
@@ -82,7 +165,7 @@ fi
 echo ""
 echo "════════════════════════════════════════════════"
 echo "  iqoqo development servers running"
-echo "  Flask API  → http://127.0.0.1:5000"
+echo "  Flask API  → http://127.0.0.1:${WEB_PORT}"
 if [ -d "frontend" ]; then
     echo "  Frontend   → http://localhost:3000"
 fi

@@ -42,7 +42,7 @@ export function CurrentContext() {
         </div>
         <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            Your "To Read" list is empty.{" "}
+            Your &ldquo;To Read&rdquo; list is empty.{" "}
             <Link href="/collection" className="text-accent underline-offset-2 hover:underline">
               Browse your collection
             </Link>{" "}

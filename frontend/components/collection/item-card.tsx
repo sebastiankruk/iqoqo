@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { BookOpen } from "lucide-react";
-import type { Item, ItemStatus } from "@/types/frbr";
+import type { Item } from "@/types/frbr";
 
 const statusDotColor: Record<string, string> = {
   available: "bg-chart-3",
@@ -32,11 +33,13 @@ export function ItemCard({ item }: { item: Item }) {
         {/* Cover */}
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
           {coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={coverUrl}
               alt={`Cover of ${item.title}`}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              unoptimized
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
             <div className="flex h-full items-center justify-center">

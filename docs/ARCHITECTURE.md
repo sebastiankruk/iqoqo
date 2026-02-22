@@ -350,29 +350,29 @@ in `frontend/`.
 
 ### Technology Stack
 
-| Layer | Technology | Notes |
-| ----- | ---------- | ----- |
-| Framework | Next.js 16 (App Router) | SSR + RSC hybrid |
-| Language | TypeScript 5 | Strict mode |
-| Styling | Tailwind CSS v4 | CSS-based `@theme` config |
-| Server state | TanStack React Query v5 | Caching, retries |
-| HTTP client | Axios | Wraps `NEXT_PUBLIC_API_URL` |
-| Toasts | Sonner | Rich toast notifications |
-| Scanner | html5-qrcode | ISBN barcode via device camera |
-| Fonts | Merriweather (serif) + Inter (sans) | Google Fonts |
+| Layer        | Technology                          | Notes                          |
+| ------------ | ----------------------------------- | ------------------------------ |
+| Framework    | Next.js 16 (App Router)             | SSR + RSC hybrid               |
+| Language     | TypeScript 5                        | Strict mode                    |
+| Styling      | Tailwind CSS v4                     | CSS-based `@theme` config      |
+| Server state | TanStack React Query v5             | Caching, retries               |
+| HTTP client  | Axios                               | Wraps `NEXT_PUBLIC_API_URL`    |
+| Toasts       | Sonner                              | Rich toast notifications       |
+| Scanner      | html5-qrcode                        | ISBN barcode via device camera |
+| Fonts        | Merriweather (serif) + Inter (sans) | Google Fonts                   |
 
 ### Design System – "Modern Athenaeum"
 
 All design tokens live in `frontend/app/globals.css` as CSS custom properties mapped
 into Tailwind v4 via `@theme inline`.
 
-| Token | Value | Usage |
-| ----- | ----- | ----- |
-| `--color-primary` | Deep Indigo `hsl(210 29% 24%)` | Nav, headings, CTA |
-| `--color-accent` | Library Clay `hsl(24 100% 41%)` | Accent, badges |
-| `--color-background` | Warm Paper `hsl(43 50% 98%)` | Page background |
-| `--font-serif` | Merriweather | Display text, headings |
-| `--font-sans` | Inter | Body, labels |
+| Token                | Value                           | Usage                  |
+| -------------------- | ------------------------------- | ---------------------- |
+| `--color-primary`    | Deep Indigo `hsl(210 29% 24%)`  | Nav, headings, CTA     |
+| `--color-accent`     | Library Clay `hsl(24 100% 41%)` | Accent, badges         |
+| `--color-background` | Warm Paper `hsl(43 50% 98%)`    | Page background        |
+| `--font-serif`       | Merriweather                    | Display text, headings |
+| `--font-sans`        | Inter                           | Body, labels           |
 
 ### Directory Structure
 
@@ -428,11 +428,11 @@ a typed error when `success` is `false`.
 
 The `Item.status` column accepts exactly these values (enforced in `types/frbr.ts`):
 
-| Status | Meaning |
-| ------ | ------- |
-| `available` | On your shelf |
-| `lent` | Lent to a friend |
-| `lost` | Cannot be located |
+| Status      | Meaning                   |
+| ----------- | ------------------------- |
+| `available` | On your shelf             |
+| `lent`      | Lent to a friend          |
+| `lost`      | Cannot be located         |
 | `wish_list` | Want to acquire / to read |
 
 ### Local Development

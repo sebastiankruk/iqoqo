@@ -70,13 +70,27 @@ def test_isort_imports():
 
 def test_eslint_javascript():
     """Test that eslint JavaScript linting passes."""
+
+    # 1. Pass as a single string so shell=True interprets the whole command.
+    # 2. Add --cache so ESLint only lints files that have changed since the last run.
+    # 3. Add --ignore-pattern to skip heavy 3rd-party minified libraries.
+    # 4. Enclose the glob in quotes so ESLint resolves it, not the OS shell.
     result = subprocess.run(
-        ["npx", "eslint", "app/web/static/js/**/*.js"],
+        [
+            get_tool_path("npx"),
+            "eslint",
+            "--cache",
+            "--ignore-pattern",
+            "*.min.js",
+            "--ignore-pattern",
+            "bootstrap*.js",
+            "app/web/static/js/**/*.js",
+        ],
         capture_output=True,
         text=True,
-        shell=True,
         check=False,
     )
+
     if result.returncode != 0:
         # Only fail if eslint is installed and configured
         if "command not found" not in result.stderr and "Cannot find module" not in result.stderr:

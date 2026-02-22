@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -9,15 +9,18 @@ import type { IsbnMeta } from "@/types/frbr";
 
 /**
  * Full-screen camera scanner page.
- * The html5-qrcode library handles the actual barcode detection; this page
- * manages the result state and transitions between the scanning UI and the
- * "Book Found" success card.
+ *
+ * The <video> element is owned by React so that Safari honours playsInline
+ * and does not abort the stream. The BottomSheet component receives a ref to
+ * it and drives getUserMedia + BarcodeDetector scanning.
  */
 export default function ScanPage() {
   const [result, setResult] = useState<{
     isbn: string;
     meta: IsbnMeta;
   } | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
     setResult({ isbn, meta });
@@ -29,24 +32,24 @@ export default function ScanPage() {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
-      {/* Simulated camera feed background */}
-      <div className="absolute inset-0" aria-hidden="true">
-        <div className="h-full w-full bg-[#1a1a1e]">
-          <div
-            className="h-full w-full opacity-[0.07]"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)",
-              backgroundSize: "24px 24px",
-            }}
-          />
-        </div>
-      </div>
+      {/*
+       * React-owned <video> so we control all attributes (playsInline, muted).
+       * Safari requires playsInline to avoid aborting the stream, and muted
+       * to satisfy autoplay policies.
+       */}
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        aria-hidden="true"
+        className="absolute inset-0 z-0 h-full w-full object-cover"
+      />
 
       <TopBar />
       <Viewfinder />
 
-      {!result && <BottomSheet onFound={handleFound} />}
+      {!result && <BottomSheet videoRef={videoRef} onFound={handleFound} />}
       {result && (
         <SuccessCard
           isbn={result.isbn}

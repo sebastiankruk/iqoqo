@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Check, X, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -33,7 +34,7 @@ export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
     }
   };
 
-  const coverUrl = null; // Future: resolve cover from ISBN
+  const coverUrl: string | null = null; // Future: resolve cover from ISBN
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
@@ -64,10 +65,11 @@ export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
         <div className="flex gap-4 px-6 pb-5">
           <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg shadow-lg bg-secondary">
             {coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={coverUrl}
                 alt={meta.Title}
+                fill
+                unoptimized
                 className="h-full w-full object-cover"
               />
             ) : (
