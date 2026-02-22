@@ -136,22 +136,29 @@ fi
 echo "  Role '${POSTGRES_USER}' missing in container '${CONTAINER}' (superuser: '${SUPERUSER}')."
 echo "  Creating role and granting privileges..."
 
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres -c \
-    "CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';" 2>&1
+docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
+    -v "app_user=${POSTGRES_USER}" \
+    -v "app_pass=${POSTGRES_PASSWORD}" <<'SQL'
+SELECT format('CREATE USER %I WITH PASSWORD %L', :'app_user', :'app_pass') \gexec
+SQL
 
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres -c \
-    "CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER};" 2>/dev/null \
-    || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
+docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
+    -v "app_db=${POSTGRES_DB}" \
+    -v "app_user=${POSTGRES_USER}" <<'SQL'
+SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'app_user') \gexec
+SQL
+2>/dev/null || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
 
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d "$POSTGRES_DB" -c "
-    GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_USER};
-    GRANT ALL ON SCHEMA public TO ${POSTGRES_USER};
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${POSTGRES_USER};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${POSTGRES_USER};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public
-        GRANT ALL ON TABLES TO ${POSTGRES_USER};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public
-        GRANT ALL ON SEQUENCES TO ${POSTGRES_USER};
-" 2>&1
+docker exec "$CONTAINER" psql -U "$SUPERUSER" -d "$POSTGRES_DB" \
+    -v "app_db=${POSTGRES_DB}" \
+    -v "app_user=${POSTGRES_USER}" <<'SQL'
+SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'app_user') \gexec;
+SELECT format('GRANT ALL ON SCHEMA public TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+SQL
+2>&1
 
 echo "  Role '${POSTGRES_USER}' created and privileges granted. ✓"
