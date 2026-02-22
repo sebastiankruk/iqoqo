@@ -1,8 +1,11 @@
 import axios from "axios";
 import type { ApiResponse } from "@/types/frbr";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+// NEXT_PUBLIC_API_URL is the full API base URL including any path prefix.
+// Local dev default: "http://localhost:5000/api" (Flask on a separate port).
+// Production (nginx, same origin): "/api" — set via NEXT_PUBLIC_API_URL in .env.
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 
 /**
  * Preconfigured axios instance pointing at the Flask backend.
@@ -11,7 +14,7 @@ const API_URL =
  * in .env when cookie/session auth is introduced.
  */
 export const apiClient = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
 });
 

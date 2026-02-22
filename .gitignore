@@ -24,6 +24,7 @@ docker-compose.override.yml
 
 #npm
 node_modules/
+.eslintcache
 
 # Other
 *.sqlite3

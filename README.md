@@ -61,6 +61,7 @@ Use explicit origins in production (avoid wildcard origins). Enable `CORS_SUPPOR
 ## �📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Phase 4 Ubuntu Cutover](docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo

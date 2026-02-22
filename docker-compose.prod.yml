@@ -1,0 +1,59 @@
+# iqoqo production deployment (Phase 4 cutover)
+#
+# Uses nginx as the single public entrypoint:
+# - /api/* -> Flask API
+# - /*     -> Next.js frontend
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: gunicorn --bind 0.0.0.0:5000 run:app
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${APP_PORT:-8000}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - frontend
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
