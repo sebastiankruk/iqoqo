@@ -16,14 +16,14 @@ cp .env.example .env
 # Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed
 
 # 3. Build and start services
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 
 # 4. Initialize database
-docker-compose exec web flask db upgrade
+docker compose exec web flask db upgrade
 
 # 5. (Optional) Load sample data
-docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
 
 # 6. Access the application
 # http://localhost:5000 (or your configured WEB_PORT)
@@ -149,7 +149,7 @@ Use this option if you want to run the Flask application on your host machine bu
 1. **Start the database service:**
 
    ```bash
-   docker-compose up -d db
+   docker compose up -d db
    ```
 
    This starts only the PostgreSQL container. Make sure your `.env` file has:
@@ -205,10 +205,10 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
    ```bash
    # Build the application image
-   docker-compose build
+   docker compose build
 
    # Start all services (web + database)
-   docker-compose up -d
+   docker compose up -d
    ```
 
    If you need to use `sudo` with Docker:
@@ -223,7 +223,7 @@ Use this option to run both the Flask application and PostgreSQL database in con
    Run migrations inside the web container:
 
    ```bash
-   docker-compose exec web flask db upgrade
+   docker compose exec web flask db upgrade
    ```
 
    Or with sudo:
@@ -235,17 +235,17 @@ Use this option to run both the Flask application and PostgreSQL database in con
 4. **Initialize with seed data (optional):**
 
    ```bash
-   docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+   docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
    ```
 
 5. **Verify deployment:**
 
    ```bash
    # Check container status
-   docker-compose ps
+   docker compose ps
 
    # View logs
-   docker-compose logs -f web
+   docker compose logs -f web
 
    # Test the application
    curl http://localhost:8000/  # Use your WEB_PORT
@@ -257,29 +257,29 @@ The application will be available at `http://localhost:8000` (or whatever port y
 
 ```bash
 # View logs
-docker-compose logs -f web    # Follow web application logs
-docker-compose logs -f db     # Follow database logs
+docker compose logs -f web    # Follow web application logs
+docker compose logs -f db     # Follow database logs
 
 # Restart services
-docker-compose restart web
-docker-compose restart db
+docker compose restart web
+docker compose restart db
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (⚠️ this deletes all database data!)
-docker-compose down -v
+docker compose down -v
 
 # Rebuild after code changes
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 
 # Execute commands in containers
-docker-compose exec web flask db upgrade
-docker-compose exec db psql -U iqoqo -d iqoqo
+docker compose exec web flask db upgrade
+docker compose exec db psql -U iqoqo -d iqoqo
 
 # View running containers and resource usage
-docker-compose ps
+docker compose ps
 docker stats --no-stream
 ```
 
