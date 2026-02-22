@@ -11,19 +11,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-/** Minimal type shim for BarcodeDetector (not yet in lib.dom.d.ts). */
-interface BarcodeDetectorResult {
-  rawValue: string;
-}
-interface BarcodeDetectorLike {
-  detect(source: HTMLVideoElement): Promise<BarcodeDetectorResult[]>;
-}
-declare global {
-  interface Window {
-    BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
-  }
-}
-
 interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
@@ -75,14 +62,14 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
     [onFound],
   );
 
-  /* ── Start camera + BarcodeDetector scan loop ── */
+  /* ── Start camera + ZXing scan loop (works in Safari, Firefox, Chrome) ── */
   const startScanner = useCallback(async () => {
     setError(null);
     const video = videoRef.current;
     if (!video) return;
 
     try {
-      /* getUserMedia – Safari requires { ideal } not { exact } for facingMode */
+      /* getUserMedia – { ideal } not { exact } so desktop Safari doesn't reject */
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
@@ -94,33 +81,44 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
 
       streamRef.current = stream;
       video.srcObject = stream;
-      /* play() on a React-owned element with playsInline+muted works in Safari */
+      /* playsInline + muted on the <video> element (set in page.tsx) satisfies Safari autoplay */
       await video.play();
       setScannerActive(true);
 
-      if (!window.BarcodeDetector) {
-        setError("Barcode detection is not supported in this browser. Please use manual ISBN entry.");
-        return;
-      }
+      /* Lazy-load ZXing – pure JS, works in all browsers */
+      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const { BarcodeFormat, DecodeHintType } = await import("@zxing/library");
 
-      const detector = new window.BarcodeDetector({
-        /* ISBN barcodes are EAN-13; include UPC variants as fallback */
-        formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
-      });
+      const hints = new Map<number, unknown>();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+      ]);
 
-      const scan = async () => {
-        if (!streamRef.current || !video) return;
-        try {
-          const barcodes = await detector.detect(video);
-          if (barcodes.length > 0) {
-            const raw = barcodes[0].rawValue;
+      const reader = new BrowserMultiFormatReader(hints);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const scan = () => {
+        if (!streamRef.current || !video || !ctx) return;
+
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          try {
+            const result = reader.decodeFromCanvas(canvas);
             stopScanner();
-            await lookupIsbn(raw.replace(/[^0-9Xx]/g, ""));
+            lookupIsbn(result.getText().replace(/[^0-9Xx]/g, ""));
             return;
+          } catch {
+            /* NotFoundException – no barcode in this frame, keep looping */
           }
-        } catch {
-          /* Frame not ready yet – keep looping */
         }
+
         rafRef.current = requestAnimationFrame(scan);
       };
 
