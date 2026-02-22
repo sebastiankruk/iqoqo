@@ -74,9 +74,9 @@ if lsof -ti :"${NEXT_PORT}" &>/dev/null; then
 fi
 
 # Remove stale Next.js dev lock file ("Unable to acquire lock" error)
-if [ -f "frontend/.next/dev/lock" ]; then
+if [ -f "frontend/.next/lock" ]; then
     echo "  Removing stale Next.js lock file..."
-    rm -f "frontend/.next/dev/lock"
+    rm -f "frontend/.next/lock"
 fi
 
 sleep 1
