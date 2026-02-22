@@ -57,21 +57,63 @@ fi
 # WEB_PORT defaults to 5000 if not set in .env
 WEB_PORT=${WEB_PORT:-5000}
 
+# Directory for PID files of processes started by this script
+PID_DIR=".pids"
+
+# Create PID directory if it doesn't exist
+mkdir -p "${PID_DIR}"
+
+# Gracefully terminate a process referenced by a PID file, with SIGKILL fallback.
+terminate_from_pidfile() {
+    pidfile="$1"
+    desc="$2"
+
+    if [ ! -f "${pidfile}" ]; then
+        return 0
+    fi
+
+    pid="$(cat "${pidfile}" 2>/dev/null || true)"
+    if [ -z "${pid}" ]; then
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    if ! kill -0 "${pid}" 2>/dev/null; then
+        # Process is already gone; clean up stale pidfile.
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    echo "  Terminating ${desc} (PID ${pid})..."
+    # First try graceful shutdown (SIGTERM).
+    kill "${pid}" 2>/dev/null || true
+
+    # Wait up to 5 seconds for the process to exit.
+    for _ in 1 2 3 4 5; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    # If still running, escalate to SIGKILL.
+    if kill -0 "${pid}" 2>/dev/null; then
+        echo "  ${desc} did not exit gracefully; sending SIGKILL..."
+        kill -9 "${pid}" 2>/dev/null || true
+    fi
+
+    rm -f "${pidfile}"
+}
+
 # 1c. Kill stale processes and remove lock files to allow clean restart
 echo "Cleaning up stale processes and locks..."
 
-# Kill anything occupying the Flask API port
-if lsof -ti :"${WEB_PORT}" &>/dev/null; then
-    echo "  Port ${WEB_PORT} in use — terminating stale process..."
-    kill -9 "$(lsof -ti :"${WEB_PORT}")" 2>/dev/null || true
-fi
+# Terminate Flask API process started by this script (if PID file exists)
+terminate_from_pidfile "${PID_DIR}/web_server.pid" "Flask API server"
 
-# Kill anything occupying the Next.js port (3000)
+# Terminate Next.js dev server started by this script (if PID file exists)
 NEXT_PORT=${NEXT_PORT:-3000}
-if lsof -ti :"${NEXT_PORT}" &>/dev/null; then
-    echo "  Port ${NEXT_PORT} in use — terminating stale Next.js process..."
-    kill -9 "$(lsof -ti :"${NEXT_PORT}")" 2>/dev/null || true
-fi
+terminate_from_pidfile "${PID_DIR}/next_dev.pid" "Next.js dev server"
 
 # Remove stale Next.js dev lock file ("Unable to acquire lock" error)
 if [ -f "frontend/.next/lock" ]; then

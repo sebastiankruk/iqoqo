@@ -484,14 +484,12 @@ The following endpoints are available for data management:
   ```
 
 - **Port conflicts**: If you see "port already in use" errors:
-  - Check what's using the port: `sudo lsof -i :5432` or `sudo lsof -i :5001`
+  - Check what's using the port: `sudo lsof -i :5432` (database) or `sudo lsof -i :5000` (default `WEB_PORT`, or your configured port, e.g., `:5001`)
   - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
   - `./run_dev.sh` automatically kills stale processes on `WEB_PORT` and `3000` at startup
   - Restart the services: `docker-compose down && docker-compose up -d`
 
-- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds
-  to port 5000 on macOS Monterey and later. Set `WEB_PORT=5001` (or any free port) in
-  your `.env` to move Flask off port 5000:
+- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds to port 5000 (the default `WEB_PORT` when not overridden) on macOS Monterey and later. Set `WEB_PORT=5001` (or any other free port) in your `.env` to move Flask off port 5000:
 
   ```bash
   echo "WEB_PORT=5001" >> .env
