@@ -21,7 +21,8 @@ cd /opt/iqoqo
 
 git fetch --all --tags
 
-git checkout dev/skruk/v0.0.2-phase3
+# Ensure you are on the version currently running in production (tag or commit)
+git checkout <your-current-production-version>
 
 git pull
 
