@@ -42,7 +42,8 @@ def _parse_sql_values(values_str: str) -> list[str | None]:
                 current.append("'")
                 i += 2
                 continue
-            elif ch == "'":
+
+            if ch == "'":
                 # End of quoted string
                 in_quote = False
             else:
