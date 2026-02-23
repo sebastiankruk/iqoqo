@@ -112,7 +112,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
           try {
             const result = reader.decodeFromCanvas(canvas);
             stopScanner();
-            lookupIsbn(result.getText().replace(/[^0-9Xx]/g, ""));
+            lookupIsbn(result.getText().replace(/[^0-9X]/g, ""));
             return;
           } catch {
             /* NotFoundException – no barcode in this frame, keep looping */
@@ -143,7 +143,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupIsbn(manualIsbn.replace(/[^0-9Xx]/g, ""));
+    lookupIsbn(manualIsbn.replace(/[^0-9X]/g, ""));
   };
 
   return (
