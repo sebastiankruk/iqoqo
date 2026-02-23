@@ -24,6 +24,7 @@ docker-compose.override.yml
 
 #npm
 node_modules/
+.eslintcache
 
 # Other
 *.sqlite3
@@ -40,4 +41,7 @@ data/*.json
 
 # AI
 .github/context/*
-.github/copilot-instructions.md
+
+# Process IDs
+.flask.pid
+.frontend.pid

@@ -1,0 +1,10 @@
+# .geminiignore
+
+# This file tells the Gemini agent which files to read, even if they are
+# in .gitignore. Use ! to negate a pattern from .gitignore.
+
+# Allow the agent to access the primary instructions file.
+!.github/copilot-instructions.md
+
+# Allow the agent to access all context files.
+!.github/context/

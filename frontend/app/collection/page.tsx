@@ -1,0 +1,207 @@
+"use client";
+
+import { useState, useMemo, useCallback } from "react";
+import { SlidersHorizontal } from "lucide-react";
+import { Navbar } from "@/components/dashboard/navbar";
+import { SidebarFilters } from "@/components/collection/sidebar-filters";
+import type { ActiveFilter } from "@/components/collection/filter-bar";
+import { FilterBar } from "@/components/collection/filter-bar";
+import { CollectionGrid } from "@/components/collection/collection-grid";
+import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
+import { useItems } from "@/lib/api/hooks";
+import type { Item } from "@/types/frbr";
+
+/** Collection browser page with filtering, sorting and pagination. */
+export default function CollectionPage() {
+  const [page, setPage] = useState(1);
+  const limit = 40;
+  const { data, isLoading } = useItems(page, limit);
+
+  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
+  const total = data?.meta?.total ?? 0;
+  const pages = data?.meta?.pages ?? 1;
+
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+  const [sortBy, setSortBy] = useState("title");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const toggleFilter = useCallback((filter: ActiveFilter) => {
+    setActiveFilters((prev) => {
+      const exists = prev.some(
+        (f) => f.type === filter.type && f.value === filter.value
+      );
+      return exists
+        ? prev.filter(
+            (f) => !(f.type === filter.type && f.value === filter.value)
+          )
+        : [...prev, filter];
+    });
+  }, []);
+
+  const removeFilter = useCallback((filter: ActiveFilter) => {
+    setActiveFilters((prev) =>
+      prev.filter(
+        (f) => !(f.type === filter.type && f.value === filter.value)
+      )
+    );
+  }, []);
+
+  const clearAll = useCallback(() => setActiveFilters([]), []);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allItems.forEach((item) => {
+      counts[item.status] = (counts[item.status] ?? 0) + 1;
+    });
+    return counts;
+  }, [allItems]);
+
+  const filteredItems = useMemo(() => {
+    let items = [...allItems];
+
+    const statusFilters = activeFilters
+      .filter((f) => f.type === "status")
+      .map((f) => f.value);
+
+    if (statusFilters.length > 0) {
+      items = items.filter((item) => statusFilters.includes(item.status));
+    }
+
+    items.sort((a, b) => {
+      const ta = a.title ?? "";
+      const tb = b.title ?? "";
+      const aa = a.authors?.[0] ?? "";
+      const ab = b.authors?.[0] ?? "";
+      switch (sortBy) {
+        case "title":
+          return ta.localeCompare(tb);
+        case "title-desc":
+          return tb.localeCompare(ta);
+        case "author":
+          return aa.localeCompare(ab);
+        default:
+          return 0;
+      }
+    });
+
+    return items;
+  }, [allItems, activeFilters, sortBy]);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* Page header */}
+        <div className="mb-6 flex items-end justify-between">
+          <div>
+            <h1 className="font-serif text-2xl font-bold text-foreground">
+              Collection
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Browse and manage your entire library
+            </p>
+          </div>
+          <button
+            onClick={() => setMobileFiltersOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilters.length > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Filter bar */}
+        <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+          <FilterBar
+            activeFilters={activeFilters}
+            onRemoveFilter={removeFilter}
+            onClearAll={clearAll}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            resultCount={filteredItems.length}
+          />
+        </div>
+
+        {/* Sidebar + Grid */}
+        <div className="flex gap-8">
+          <div className="hidden w-56 shrink-0 lg:block">
+            <div className="sticky top-24 rounded-lg border border-border bg-card p-4 shadow-sm">
+              <SidebarFilters
+                activeFilters={activeFilters}
+                onToggleFilter={toggleFilter}
+                statusCounts={statusCounts}
+              />
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            {isLoading ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="overflow-hidden rounded-lg bg-card shadow-sm">
+                    <div className="aspect-[2/3] animate-pulse bg-muted" />
+                    <div className="p-3">
+                      <div className="h-3 animate-pulse rounded bg-muted" />
+                      <div className="mt-1.5 h-2.5 w-2/3 animate-pulse rounded bg-muted" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <CollectionGrid items={filteredItems} />
+            )}
+
+            {/* Pagination */}
+            {pages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-muted-foreground">
+                  Page {page} of {pages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                  disabled={page === pages}
+                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <footer className="mt-12 border-t border-border bg-card">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-serif font-bold text-foreground">iqoqo</span>
+            {" "}&middot;{" "}Modern Athenaeum
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {total} items curated with care
+          </p>
+        </div>
+      </footer>
+
+      <MobileFilterDrawer
+        open={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        activeFilters={activeFilters}
+        onToggleFilter={toggleFilter}
+        statusCounts={statusCounts}
+      />
+    </div>
+  );
+}
