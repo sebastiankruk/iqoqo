@@ -71,10 +71,9 @@ def test_isort_imports():
 def test_eslint_javascript():
     """Test that eslint JavaScript linting passes."""
 
-    # 1. Pass as a single string so shell=True interprets the whole command.
+    # 1. Pass as a list so subprocess spawns the process directly without a shell.
     # 2. Add --cache so ESLint only lints files that have changed since the last run.
     # 3. Add --ignore-pattern to skip heavy 3rd-party minified libraries.
-    # 4. Enclose the glob in quotes so ESLint resolves it, not the OS shell.
     result = subprocess.run(
         [
             get_tool_path("npx"),
