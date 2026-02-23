@@ -58,10 +58,7 @@ export function useItem(id: number) {
 export function useIsbnLookup(isbn: string, enabled = false) {
   return useQuery({
     queryKey: queryKeys.isbn(isbn),
-    queryFn: async () => {
-      const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
-      return res.data;
-    },
+    queryFn: () => apiFetch<IsbnMeta>(`/isbn/${isbn}`),
     enabled: enabled && isbn.length >= 10,
     retry: false,
     staleTime: Infinity,
@@ -127,8 +124,7 @@ export function useDeleteItem() {
 export function useIsbnSearch() {
   return useMutation({
     mutationFn: async (isbn: string) => {
-      const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
-      return res.data;
+      return apiFetch<IsbnMeta>(`/isbn/${isbn}`);
     },
   });
 }

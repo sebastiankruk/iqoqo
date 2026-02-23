@@ -27,9 +27,10 @@ export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
         meta
       );
       toast.success(`"${meta.Title}" added to your library!`);
-      router.push(`/item/${res.data.item_id}`);
+      await router.push(`/item/${res.data.item_id}`);
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
+    } finally {
       setAdding(false);
     }
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,16 @@ import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
 import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useDeleteItem } from "@/lib/api/hooks";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -24,10 +34,9 @@ export default function ItemPage({ params }: Props) {
 
   const { data: item, isLoading, isError } = useItem(itemId);
   const deleteItem = useDeleteItem();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleDelete = () => {
-    if (!confirm("Delete this item from your library? This cannot be undone."))
-      return;
+  const handleConfirmDelete = () => {
     deleteItem.mutate(itemId, {
       onSuccess: () => {
         toast.success("Item removed from library");
@@ -91,7 +100,7 @@ export default function ItemPage({ params }: Props) {
               {/* Danger zone */}
               <div className="mt-4 border-t border-border pt-4">
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setConfirmOpen(true)}
                   disabled={deleteItem.isPending}
                   className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
                 >
@@ -99,6 +108,27 @@ export default function ItemPage({ params }: Props) {
                   Remove from library
                 </button>
               </div>
+
+              <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently remove this item from your library. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleConfirmDelete}
+                      disabled={deleteItem.isPending}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {deleteItem.isPending ? "Removing…" : "Remove"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </div>

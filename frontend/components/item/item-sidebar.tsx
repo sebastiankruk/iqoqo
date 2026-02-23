@@ -52,7 +52,18 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const handleQrCode = async () => {
     const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"}/api/qrcode/${item.id}`;
-    window.open(url, "_blank");
+    try {
+      const response = await fetch(url, { method: "HEAD" });
+
+      if (!response.ok) {
+      toast.error("Unable to generate QR code. Please try again later.");
+      return;
+      }
+
+      window.open(url, "_blank");
+    } catch {
+      toast.error("Failed to contact QR code service. Please check your connection and try again.");
+    }
   };
 
   return (
