@@ -350,16 +350,16 @@ in `frontend/`.
 
 ### Technology Stack
 
-| Layer        | Technology                          | Notes                          |
-| ------------ | ----------------------------------- | ------------------------------ |
-| Framework    | Next.js 16 (App Router)             | SSR + RSC hybrid               |
-| Language     | TypeScript 5                        | Strict mode                    |
-| Styling      | Tailwind CSS v4                     | CSS-based `@theme` config      |
-| Server state | TanStack React Query v5             | Caching, retries               |
-| HTTP client  | Axios                               | Wraps `NEXT_PUBLIC_API_URL`    |
-| Toasts       | Sonner                              | Rich toast notifications       |
-| Scanner      | html5-qrcode                        | ISBN barcode via device camera |
-| Fonts        | Merriweather (serif) + Inter (sans) | Google Fonts                   |
+| Layer        | Technology                               | Notes                          |
+| ------------ | ---------------------------------------- | ------------------------------ |
+| Framework    | Next.js 16 (App Router)                  | SSR + RSC hybrid               |
+| Language     | TypeScript 5                             | Strict mode                    |
+| Styling      | Tailwind CSS v4                          | CSS-based `@theme` config      |
+| Server state | TanStack React Query v5                  | Caching, retries               |
+| HTTP client  | Axios                                    | Wraps `NEXT_PUBLIC_API_URL`    |
+| Toasts       | Sonner                                   | Rich toast notifications       |
+| Scanner      | ZXing (@zxing/browser, @zxing/library)   | ISBN barcode via device camera |
+| Fonts        | Merriweather (serif) + Inter (sans)      | Google Fonts                   |
 
 ### Design System – "Modern Athenaeum"
 
