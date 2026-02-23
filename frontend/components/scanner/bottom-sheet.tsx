@@ -47,6 +47,11 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
   const lookupIsbn = useCallback(
     async (isbn: string) => {
       if (!isbn) return;
+      const isValidIsbn = /^\d{9}[\dXx]$/.test(isbn) || /^\d{13}$/.test(isbn);
+      if (!isValidIsbn) {
+        setError("Please enter a valid ISBN-10 or ISBN-13.");
+        return;
+      }
       setIsSearching(true);
       setError(null);
       try {
