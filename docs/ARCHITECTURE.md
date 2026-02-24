@@ -148,7 +148,7 @@ An Item represents **your specific copy** - the physical book on your shelf or t
 
 - `manifestation_id` - Foreign key to Manifestation
 - `owner_id` - User who owns this copy
-- `status` - 'available', 'lent', 'lost', 'wish_list'
+- `status` - 'available', 'lent', 'lost', 'wish_list', 'reading', 'read'
 - `condition` - 'new', 'like_new', 'good', 'fair', 'poor'
 - `added_at` - When added to collection
 - `meta` - JSON for user-specific data:
@@ -426,14 +426,19 @@ a typed error when `success` is `false`.
 
 ### Item Status Values
 
-The `Item.status` column accepts exactly these values (enforced in `types/frbr.ts`):
+The `Item.status` column accepts exactly these values.  The canonical Python
+definition is `ITEM_STATUSES` in `app/db/models.py`; the TypeScript mirror is
+`ItemStatus` in `frontend/types/frbr.ts`.  The cross-subsystem contract is
+enforced by `tests/test_ontology.py`.
 
-| Status      | Meaning                   |
-| ----------- | ------------------------- |
-| `available` | On your shelf             |
-| `lent`      | Lent to a friend          |
-| `lost`      | Cannot be located         |
-| `wish_list` | Want to acquire / to read |
+| Status      | Meaning              |
+| ----------- | -------------------- |
+| `available` | On your shelf        |
+| `lent`      | Lent to a friend     |
+| `lost`      | Cannot be located    |
+| `wish_list` | Want to acquire      |
+| `reading`   | Currently being read |
+| `read`      | Finished reading     |
 
 ### Local Development
 

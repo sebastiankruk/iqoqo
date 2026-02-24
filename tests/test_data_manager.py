@@ -7,7 +7,8 @@ import json
 import pytest
 
 from app.core.data_manager import DataManager
-from app.db.models import Expression, Item, Manifestation, Work
+from app.db import db
+from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, Work
 
 
 @pytest.fixture
@@ -41,6 +42,13 @@ def test_get_stats_empty(app):
         assert stats["expressions"] == 0
         assert stats["manifestations"] == 0
         assert stats["items"] == 0
+        assert stats["total_items"] == 0
+        assert stats["lent_items"] == 0
+        assert stats["to_read"] == 0
+        # Every ITEM_STATUS value must appear as a per-status key
+        for status in ITEM_STATUSES:
+            assert f"items_{status}" in stats, f"Missing key 'items_{status}' in get_stats() result"
+            assert stats[f"items_{status}"] == 0
 
 
 def test_export_all_empty(app):
@@ -237,3 +245,37 @@ def test_stats_accuracy(app, sample_data):
         assert stats["expressions"] == 3
         assert stats["manifestations"] == 3
         assert stats["items"] == 3
+
+
+def test_get_stats_per_status_counts(app):
+    """Test that get_stats() returns correct per-status counts for all ITEM_STATUSES."""
+    with app.app_context():
+        # Build the minimum FRBR chain required to attach Items
+        work = Work(title="Status Test Work", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        # Create two items for each status so we can assert counts > 0
+        for status in ITEM_STATUSES:
+            for _ in range(2):
+                db.session.add(Item(manifestation_id=manif.id, owner_id="tester", status=status, meta={}))
+        db.session.commit()
+
+        stats = DataManager.get_stats()
+
+        total_items = len(ITEM_STATUSES) * 2
+        assert stats["items"] == total_items
+        assert stats["total_items"] == total_items
+        assert stats["lent_items"] == 2
+        assert stats["to_read"] == 2  # wish_list
+
+        for status in ITEM_STATUSES:
+            key = f"items_{status}"
+            assert key in stats, f"Missing key {key!r} in get_stats() result"
+            assert stats[key] == 2, f"Expected 2 items with status {status!r}, got {stats[key]}"

@@ -42,7 +42,13 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-/** Item status values as stored in the database. */
+/**
+ * Item status values as stored in the database.
+ *
+ * IMPORTANT: this union must stay in sync with `ITEM_STATUSES` in
+ * `app/db/models.py`.  The cross-subsystem contract is enforced by the
+ * `test_ontology.py` test suite.
+ */
 export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
 
 /** Standardised API envelope returned by every Flask endpoint. */
@@ -69,6 +75,13 @@ export interface DashboardStats {
   total_items: number;
   lent_items: number;
   to_read: number;
+  // Per-status counts — one key per ItemStatus value (items_available, items_lent, …)
+  items_available: number;
+  items_lent: number;
+  items_lost: number;
+  items_wish_list: number;
+  items_reading: number;
+  items_read: number;
 }
 
 /** ISBN lookup response */
