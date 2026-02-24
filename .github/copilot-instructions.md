@@ -15,11 +15,27 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 
 ## 🛠️ Tech Stack & Implementation
 
-- **Backend:** Python 3.11+ / Flask.
+### Backend
+
+- **Runtime:** Python 3.11+ / Flask.
 - **Database:** PostgreSQL. Use `JSONB` for flexible metadata and PostgreSQL Full-Text Search.
 - **Linked Data:** Use `rdflib` to expose every entity as JSON-LD/RDF.
-- **API-First:** Design for Web UI, but ensure the API is robust enough for future iOS/Android apps.
-- **Deployment:** The service must be fully containerized via Docker.
+- **Migrations:** Alembic (via Flask-Migrate).
+
+### Frontend
+
+- **Framework:** Next.js 16 (App Router) with React 19 and TypeScript 5.
+- **Styling:** Tailwind CSS 4 with Radix UI primitives and `class-variance-authority`.
+- **State / Data fetching:** TanStack Query (React Query) v5 + Axios.
+- **Forms & validation:** React Hook Form + Zod.
+- **Barcode scanning:** `@zxing/browser` + `@zxing/library`.
+- **Testing:** Vitest 4 + Testing Library (React) with `happy-dom`.
+- **Location:** `frontend/` directory.
+
+### General
+
+- **API-First:** The Flask backend exposes a REST API consumed by the Next.js frontend; it must also be robust enough for future iOS/Android apps.
+- **Deployment:** The full stack is containerized via Docker Compose.
 
 ## 🐍 Python Environment
 
@@ -35,13 +51,46 @@ Every object in this system MUST follow the Functional Requirements for Bibliogr
 
 **Never** run Python commands with system Python or assume global package installation. All dependencies (pytest, black, ruff, mypy, flask, etc.) are installed in `.venv/`.
 
+## ⚛️ Frontend Environment (Next.js / React / TypeScript)
+
+All frontend code lives in the `frontend/` directory. Always run frontend commands from inside that directory.
+
+**Dev server:**
+
+```bash
+cd frontend && npm run dev
+```
+
+**Running tests:**
+
+```bash
+cd frontend && npm run test          # single run
+cd frontend && npm run test:watch    # watch mode
+cd frontend && npm run test:coverage # with coverage
+```
+
+**Tests location:** `frontend/__tests__/` — mirrors the source structure:
+
+- `frontend/__tests__/components/` — component tests
+- `frontend/__tests__/lib/api/` — API client tests
+
+**Test framework:** Vitest 4 with Testing Library (`@testing-library/react`) and `happy-dom` as the DOM environment.
+
+**Installing packages:**
+
+```bash
+cd frontend && npm install <package>
+```
+
+**Never** run `npm` commands from the project root for frontend packages. The `frontend/` directory has its own `package.json` and `node_modules`.
+
 ## 📂 Context & Legacy References
 
 - **Research:** Refer to `.github/context/feasibility_study.md` for the original vision.
 - Key logic to port: Barcode scanning, ISBN metadata fetching.
 - Key change: Move from the old "flat" item table to the 4-tier FRBR structure.
 
-## � Code Style (MANDATORY)
+## 🎨 Code Style (MANDATORY)
 
 Code style is **non-negotiable**. Every change must pass the full lint suite before it is considered complete.
 
@@ -57,6 +106,22 @@ Code style is **non-negotiable**. Every change must pass the full lint suite bef
 - All source files should follow PEP 8 with a line length of 140 characters.
 - Use descriptive variable names and add docstrings for public functions and classes.
 - Test files are exempt from missing-docstring rules.
+
+### TypeScript / React
+
+| Tool        | Config file                    | Key rules                                              |
+| ----------- | ------------------------------ | ------------------------------------------------------ |
+| `eslint`    | `frontend/eslint.config.mjs`   | `eslint-config-next` core-web-vitals + TypeScript rules |
+| `tsc`       | `frontend/tsconfig.json`       | `strict: true`, `noEmit: true`, ES2017 target          |
+| `stylelint` | `.stylelintrc.json`            | CSS / Tailwind class ordering                          |
+
+- Use **strict TypeScript** — no `any`, no `@ts-ignore` without justification.
+- Prefer named exports over default exports for components and utilities.
+- Co-locate types with the code they describe; shared types live in `frontend/types/`.
+- Follow React 19 conventions: Server Components by default, add `'use client'` only when required.
+- Use the `@/` path alias (maps to `frontend/`) for all internal imports.
+- Component filenames use **kebab-case** (`item-card.tsx`); type/interface names use **PascalCase**.
+- Tests mirror the source structure under `frontend/__tests__/` and use `.test.{ts,tsx}` suffix.
 
 ### Markdown
 
@@ -83,22 +148,23 @@ make lint
 # Individual targets
 make lint-python      # ruff, mypy, pylint
 make lint-format      # black --check, isort --check
-make lint-js          # eslint
+make lint-js          # eslint (frontend)
+make lint-ts          # tsc --noEmit (frontend type check)
 make lint-css         # stylelint
 make lint-markdown    # markdownlint
 ```
 
 **Before committing, always run `make lint` and fix every issue.**
 
-## �📜 Coding Principles
+## 📜 Coding Principles
 
 - **No "Flat" Data:** Always ask "Is this a Work, Expression, or Manifestation?" before creating a table.
 - **Content Negotiation:** Endpoints should support `Accept: application/ld+json`.
 - **Privacy:** Design with a "local-first" mindset. Users choose what to sync to the central iqoqo discovery service.
 - **Code quality:** Use all linting tests as defined in Makefile
-- **Testing:** Write unit tests for all new features. Use `pytest`.
+- **Testing:** Write unit tests for all new features. Use `pytest` for Python, `vitest` + Testing Library for TypeScript/React.
 - **Documentation:** Update docstrings, API docs, and any related documentation with every change.
-- **Linting:** Use `black` for formatting, `ruff` and `pylint` for linting, and `mypy` for type checking, `markdownlint` for markdown files, and `stylelint` for CSS files. All must pass before merging. Any code generated must also pass these checks, see configuration files for each tool in the project root.
+- **Linting:** Python: `black`, `ruff`, `pylint`, `mypy`. TypeScript: `eslint` (Next.js config), `tsc --noEmit`. Docs: `markdownlint`. CSS: `stylelint`. All must pass before merging. Any code generated must also pass these checks — see configuration files in the project root and `frontend/`.
   - for Markdown, especially:
     - Don't use emphasis instead of a heading (MD036)
     - Lists should be surrounded by blank lines (MD032)
