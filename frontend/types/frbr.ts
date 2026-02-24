@@ -43,7 +43,7 @@ export interface Item {
 }
 
 /** Item status values as stored in the database. */
-export type ItemStatus = "available" | "lent" | "lost" | "wish_list";
+export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
 
 /** Standardised API envelope returned by every Flask endpoint. */
 export interface ApiResponse<T> {

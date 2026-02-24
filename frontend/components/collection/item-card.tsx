@@ -3,20 +3,24 @@
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen } from "lucide-react";
-import type { Item } from "@/types/frbr";
+import type { Item, ItemStatus } from "@/types/frbr";
 
-const statusDotColor: Record<string, string> = {
+const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
+  reading: "bg-green-500",
+  read: "bg-blue-500",
 };
 
-const statusDotTitle: Record<string, string> = {
+const statusDotTitle: Record<ItemStatus, string> = {
   available: "On Shelf",
   wish_list: "To Read",
   lent: "Lent Out",
   lost: "Lost",
+  reading: "Reading",
+  read: "Read",
 };
 
 /** Individual item card shown in the collection grid. */
