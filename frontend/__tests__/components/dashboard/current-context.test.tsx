@@ -5,7 +5,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Item } from "@/types/frbr";
+import type { Item, ItemStatus } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useItems: vi.fn(),
@@ -24,25 +24,28 @@ function makeApiResponse(items: Item[]) {
   } as ReturnType<typeof useItems>;
 }
 
-const WISH_LIST_ITEM: Item = {
-  id: 5,
-  manifestation_id: 5,
-  owner_id: "u1",
-  status: "wish_list",
-  meta: {},
-  title: "Project Hail Mary",
-  authors: ["Andy Weir"],
-};
+function makeItem(id: number, status: ItemStatus, title: string): Item {
+  return {
+    id,
+    manifestation_id: id,
+    owner_id: "u1",
+    status,
+    meta: {},
+    title,
+    authors: ["Test Author"],
+  };
+}
 
-const AVAILABLE_ITEM: Item = {
-  id: 6,
-  manifestation_id: 6,
-  owner_id: "u1",
-  status: "available",
-  meta: {},
-  title: "The Martian",
-  authors: ["Andy Weir"],
-};
+const WISH_LIST_ITEM = makeItem(5, "wish_list", "Project Hail Mary");
+
+/** One item per non-wish_list status — none should appear in the To Read list. */
+const NON_WISH_LIST_ITEMS: Item[] = [
+  makeItem(1, "available", "The Martian"),
+  makeItem(2, "lent",      "Dune"),
+  makeItem(3, "lost",      "Fahrenheit 451"),
+  makeItem(4, "reading",   "1984"),
+  makeItem(6, "read",      "Brave New World"),
+];
 
 describe("CurrentContext", () => {
   beforeEach(() => {
@@ -62,7 +65,13 @@ describe("CurrentContext", () => {
   });
 
   it("shows an empty state message when there are no wish_list items", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([AVAILABLE_ITEM]));
+    mockUseItems.mockReturnValue(makeApiResponse([NON_WISH_LIST_ITEMS[0]]));
+    render(<CurrentContext />);
+    expect(screen.getByText(/to read.*list is empty/i)).toBeInTheDocument();
+  });
+
+  it("shows the empty state when all non-wish_list statuses are present but no wish_list", () => {
+    mockUseItems.mockReturnValue(makeApiResponse(NON_WISH_LIST_ITEMS));
     render(<CurrentContext />);
     expect(screen.getByText(/to read.*list is empty/i)).toBeInTheDocument();
   });
@@ -86,17 +95,20 @@ describe("CurrentContext", () => {
 
   it("displays wish_list items when present", () => {
     mockUseItems.mockReturnValue(
-      makeApiResponse([WISH_LIST_ITEM, AVAILABLE_ITEM]),
+      makeApiResponse([WISH_LIST_ITEM, ...NON_WISH_LIST_ITEMS]),
     );
     render(<CurrentContext />);
     expect(screen.getByText("Project Hail Mary")).toBeInTheDocument();
   });
 
-  it("filters out non-wish_list items", () => {
-    mockUseItems.mockReturnValue(
-      makeApiResponse([WISH_LIST_ITEM, AVAILABLE_ITEM]),
-    );
-    render(<CurrentContext />);
-    expect(screen.queryByText("The Martian")).not.toBeInTheDocument();
-  });
+  it.each(NON_WISH_LIST_ITEMS.map((item) => [item.status, item.title as string]))(
+    "filters out items with status '%s'",
+    (_status, title) => {
+      mockUseItems.mockReturnValue(
+        makeApiResponse([WISH_LIST_ITEM, ...NON_WISH_LIST_ITEMS]),
+      );
+      render(<CurrentContext />);
+      expect(screen.queryByText(title)).not.toBeInTheDocument();
+    },
+  );
 });
