@@ -1,7 +1,7 @@
 /**
  * Tests for the CollectionPage component.
  *
- * Focuses on the three behavioural fixes made in the pagination/filtering
+ * Focuses on the three behavioral fixes made in the pagination/filtering
  * overhaul:
  *
  *  1. statusCounts shown in the sidebar come from useStats() (global totals)
@@ -12,7 +12,7 @@
  *     selected status is forwarded to useItems() as a server-side filter.
  *
  * useItems and useStats are mocked; sub-components that don't contribute to
- * the tested behaviour (Navbar, CollectionGrid, MobileFilterDrawer) are
+ * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
  * stubbed to keep the test surface small and fast.
  */
 import { render, screen, fireEvent } from "@testing-library/react";

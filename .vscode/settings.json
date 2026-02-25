@@ -131,6 +131,7 @@
     },
     // Spelling
     "cSpell.words": [
+        "Axios",
         "Activator",
         "backref",
         "Cormac",
@@ -147,14 +148,21 @@
         "manifestation",
         "manifestations",
         "metaform",
+        "mypy",
         "pylint",
+        "pylintrc",
         "pytest",
+        "pyproject",
         "rdflib",
+        "selectinload",
         "sisbn",
         "sqlalchemy",
         "Summers",
         "Unwin",
-        "venv"
+        "venv",
+        "Vitest",
+        "wireframes",
+        "zxing"
     ],
     "cSpell.useGitignore": true,
     "cSpell.ignorePaths": [
