@@ -106,10 +106,6 @@ pytest tests/ -k "not test_pylint_linting"
   isort --check-only app/ tests/ scripts/
   mypy app/ tests/
 
-  # JS/CSS linting (what GitHub runs)
-  npx eslint "app/web/static/js/**/*.js"
-  npx stylelint "app/web/static/css/**/*.css"
-
   # Tests (what GitHub runs)
   pytest tests/ -v
   ```

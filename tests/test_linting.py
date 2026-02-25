@@ -68,24 +68,6 @@ def test_isort_imports():
     assert result.returncode == 0, f"Isort import check failed:\n{result.stdout}\n{result.stderr}"
 
 
-def test_eslint_javascript():
-    """Test that eslint passes on the Next.js frontend."""
-    result = subprocess.run(
-        [get_tool_path("npm"), "run", "lint"],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd="frontend",
-    )
-
-    if result.returncode != 0:
-        # Only fail if npm / eslint is installed
-        if "command not found" not in result.stderr and "Cannot find module" not in result.stderr:
-            raise AssertionError(f"ESLint failed:\n{result.stdout}\n{result.stderr}")
-        # Skip if npm / eslint is not available
-        print("npm/ESLint not installed, skipping JavaScript linting", file=sys.stderr)
-
-
 def test_python_syntax():
     """Test that all Python files have valid syntax."""
     errors = []

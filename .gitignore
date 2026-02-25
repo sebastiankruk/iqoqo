@@ -12,6 +12,7 @@ pip-selfcheck.json
 *.egg-info/
 dist/
 build/
+.mypy_cache/
 
 # Docker
 .dockerignore
