@@ -1,4 +1,4 @@
-.PHONY: help start stop lint lint-python lint-format lint-js lint-css lint-markdown lint-frontend format format-python format-js test test-phase2 clean db-init db-seed db-export db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-phase2 clean db-init db-seed db-export db-stats build-frontend
 
 help:
 	@echo "Available targets:"
@@ -80,12 +80,14 @@ lint-format:
 	.venv/bin/isort --check-only app/ tests/ scripts/
 
 lint-js:
-	@echo "Running eslint (legacy JS)..."
-	npx eslint app/web/static/js/**/*.js
-
-lint-frontend:
-	@echo "Running Next.js / TypeScript lint..."
+	@echo "Running eslint..."
 	@cd frontend && npm run lint
+
+lint-ts:
+	@echo "Running TypeScript type checks..."
+	@cd frontend && npx tsc --noEmit
+
+lint-frontend: lint-js lint-ts
 
 build-frontend:
 	@echo "Building Next.js production bundle..."
@@ -93,14 +95,14 @@ build-frontend:
 
 lint-css:
 	@echo "Running stylelint..."
-	npx stylelint "app/web/static/css/**/*.css"
+	npx stylelint --allow-empty-input "frontend/app/**/*.css" "frontend/components/**/*.css"
 
 lint-markdown:
 	@echo "Running markdownlint..."
 	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules"
 
 # Run all linting checks (stops on first failure)
-lint: lint-python lint-format lint-js lint-css lint-markdown
+lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown
 	@echo "All linting checks passed!"
 
 # Formatting targets
@@ -110,9 +112,8 @@ format-python:
 	.venv/bin/isort app/ tests/ scripts/
 
 format-js:
-	@echo "Formatting JavaScript and CSS..."
-	npx prettier --write "app/web/static/js/**/*.js"
-	npx prettier --write "app/web/static/css/**/*.css"
+	@echo "Formatting frontend TypeScript and CSS..."
+	@cd frontend && npx prettier --write "**/*.{ts,tsx,css}" --ignore-path .gitignore
 
 format: format-python format-js
 	@echo "All code formatted!"

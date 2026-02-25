@@ -38,7 +38,7 @@ def test_ruff_linting():
 def test_mypy_type_checking():
     """Test that mypy type checking passes."""
     result = subprocess.run(
-        [get_tool_path("mypy"), "app/", "tests/"],
+        [get_tool_path("mypy"), "--no-incremental", "app/", "tests/"],
         capture_output=True,
         text=True,
         check=False,
@@ -69,33 +69,21 @@ def test_isort_imports():
 
 
 def test_eslint_javascript():
-    """Test that eslint JavaScript linting passes."""
-
-    # 1. Pass as a list so subprocess spawns the process directly without a shell.
-    # 2. Add --cache so ESLint only lints files that have changed since the last run.
-    # 3. Add --ignore-pattern to skip heavy 3rd-party minified libraries.
+    """Test that eslint passes on the Next.js frontend."""
     result = subprocess.run(
-        [
-            get_tool_path("npx"),
-            "eslint",
-            "--cache",
-            "--ignore-pattern",
-            "*.min.js",
-            "--ignore-pattern",
-            "bootstrap*.js",
-            "app/web/static/js/**/*.js",
-        ],
+        [get_tool_path("npm"), "run", "lint"],
         capture_output=True,
         text=True,
         check=False,
+        cwd="frontend",
     )
 
     if result.returncode != 0:
-        # Only fail if eslint is installed and configured
+        # Only fail if npm / eslint is installed
         if "command not found" not in result.stderr and "Cannot find module" not in result.stderr:
             raise AssertionError(f"ESLint failed:\n{result.stdout}\n{result.stderr}")
-        # Skip if eslint is not installed
-        print("ESLint not installed, skipping JavaScript linting", file=sys.stderr)
+        # Skip if npm / eslint is not available
+        print("npm/ESLint not installed, skipping JavaScript linting", file=sys.stderr)
 
 
 def test_python_syntax():

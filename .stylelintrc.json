@@ -4,7 +4,8 @@
     "**/*.min.css",
     "**/bootstrap*.css",
     "**/node_modules/**",
-    "**/iqoqo-prototype/**"
+    "**/iqoqo-prototype/**",
+    "frontend/app/globals.css"
   ],
   "rules": {
     "no-duplicate-selectors": true,
