@@ -8,24 +8,37 @@ import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
-import { useItems } from "@/lib/api/hooks";
+import { useItems, useStats } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 
 /** Collection browser page with filtering, sorting and pagination. */
 export default function CollectionPage() {
   const [page, setPage] = useState(1);
   const limit = 40;
-  const { data, isLoading } = useItems(page, limit);
-
-  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
-  const total = data?.meta?.total ?? 0;
-  const pages = data?.meta?.pages ?? 1;
 
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [sortBy, setSortBy] = useState("title");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
+  // Derive status filters for server-side filtering
+  const statusFilters = useMemo(
+    () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
+    [activeFilters]
+  );
+
+  const { data, isLoading } = useItems(
+    page,
+    limit,
+    statusFilters.length > 0 ? statusFilters : undefined
+  );
+  const { data: statsData } = useStats();
+
+  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
+  const total = data?.meta?.total ?? 0;
+  const pages = data?.meta?.pages ?? 1;
+
   const toggleFilter = useCallback((filter: ActiveFilter) => {
+    setPage(1);
     setActiveFilters((prev) => {
       const exists = prev.some(
         (f) => f.type === filter.type && f.value === filter.value
@@ -39,6 +52,7 @@ export default function CollectionPage() {
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
+    setPage(1);
     setActiveFilters((prev) =>
       prev.filter(
         (f) => !(f.type === filter.type && f.value === filter.value)
@@ -46,26 +60,25 @@ export default function CollectionPage() {
     );
   }, []);
 
-  const clearAll = useCallback(() => setActiveFilters([]), []);
+  const clearAll = useCallback(() => { setPage(1); setActiveFilters([]); }, []);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allItems.forEach((item) => {
-      counts[item.status] = (counts[item.status] ?? 0) + 1;
-    });
-    return counts;
-  }, [allItems]);
+  // Derive per-status counts from global stats so they reflect ALL items,
+  // not just the current page.
+  const statusCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    return {
+      available: statsData.items_available,
+      lent: statsData.items_lent,
+      lost: statsData.items_lost,
+      wish_list: statsData.items_wish_list,
+      reading: statsData.items_reading,
+      read: statsData.items_read,
+    };
+  }, [statsData]);
 
+  // Status filtering is now done server-side; only sort the current page.
   const filteredItems = useMemo(() => {
-    let items = [...allItems];
-
-    const statusFilters = activeFilters
-      .filter((f) => f.type === "status")
-      .map((f) => f.value);
-
-    if (statusFilters.length > 0) {
-      items = items.filter((item) => statusFilters.includes(item.status));
-    }
+    const items = [...allItems];
 
     items.sort((a, b) => {
       const ta = a.title ?? "";
@@ -85,7 +98,7 @@ export default function CollectionPage() {
     });
 
     return items;
-  }, [allItems, activeFilters, sortBy]);
+  }, [allItems, sortBy]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,7 +137,7 @@ export default function CollectionPage() {
             onClearAll={clearAll}
             sortBy={sortBy}
             onSortChange={setSortBy}
-            resultCount={filteredItems.length}
+            resultCount={total}
           />
         </div>
 
