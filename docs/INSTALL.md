@@ -203,45 +203,41 @@ Use this option to run both the Flask application and PostgreSQL database in con
     CORS_SUPPORTS_CREDENTIALS=false
    ```
 
-2. **Build and start all services (migrations run automatically):**
+2. **Start Production Services:**
+
+   Use the provided production script to build and launch the stack using Nginx:
 
    ```bash
-   # Build the application image
-   docker compose build
-
-   # Start all services (web + database)
-   # The web container waits for PostgreSQL to be healthy, then runs
-   # 'flask db upgrade' before starting gunicorn.
-   docker compose up -d
+   chmod +x run_prod.sh
+   ./run_prod.sh
    ```
 
    If you need to use `sudo` with Docker:
 
    ```bash
-   sudo docker compose build
-   sudo docker compose up -d
+   sudo ./run_prod.sh
    ```
 
 3. **Initialize with seed data (optional):**
 
    ```bash
-   docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
+   docker compose -f docker-compose.prod.yml exec web python scripts/init_db.py --seed-file data/seed_example.json
    ```
 
 4. **Verify deployment:**
 
    ```bash
    # Check container status
-   docker compose ps
+   docker compose -f docker-compose.prod.yml ps
 
    # View logs
-   docker compose logs -f web
+   docker compose -f docker-compose.prod.yml logs -f web
 
    # Test the application
-   curl http://localhost:8000/  # Use your WEB_PORT
+   curl http://localhost:8000/api/stats
    ```
 
-The application will be available at `http://localhost:8000` (or whatever port you configured as `WEB_PORT`).
+The application will be available at `http://localhost:8000` (via Nginx).
 
 #### Docker Management Commands
 
