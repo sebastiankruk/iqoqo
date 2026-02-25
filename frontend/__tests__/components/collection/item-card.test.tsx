@@ -66,7 +66,7 @@ describe("ItemCard", () => {
 
   it("shows a status dot with the correct title for 'wish_list'", () => {
     render(<ItemCard item={makeItem({ status: "wish_list" })} />);
-    expect(screen.getByTitle("To Read")).toBeInTheDocument();
+    expect(screen.getByTitle("On Wish List")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lost'", () => {

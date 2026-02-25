@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ItemCard } from "../collection/item-card";
 
 /**
- * "Current Context" section – shows items on the wish list ("To Read").
+ * "Current Context" section – shows items on the wish list ("On Wish List") and currently reading ("Reading").
  * Falls back to a placeholder card if none exist.
  */
 export function CurrentContext() {

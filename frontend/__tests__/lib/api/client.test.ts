@@ -24,7 +24,8 @@ describe("apiClient configuration", () => {
   });
 
   it("uses the NEXT_PUBLIC_API_URL env variable when set", async () => {
-    process.env.NEXT_PUBLIC_API_URL = "http://my-server:8080";
+    // NEXT_PUBLIC_API_URL is the full base URL (including path prefix like /api).
+    process.env.NEXT_PUBLIC_API_URL = "http://my-server:8080/api";
     const { apiClient } = await import("@/lib/api/client");
     expect((apiClient.defaults.baseURL as string)).toBe("http://my-server:8080/api");
   });

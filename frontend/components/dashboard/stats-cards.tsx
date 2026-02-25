@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HandHelping, Target } from "lucide-react";
+import { BookMarked, BookOpen, HandHelping, Target } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
 
 /** Three top-row stat cards pulled from the Flask /api/stats endpoint. */
@@ -27,13 +27,22 @@ export function StatsCards() {
       description: "Currently with friends",
     },
     {
-      label: "To Read",
+      label: "On Wish List",
       value: stats?.to_read ?? 0,
       icon: Target,
       borderColor: "border-l-chart-3",
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
       description: "On your list",
+    },
+    {
+      label: "Reading",
+      value: stats?.items_reading ?? 0,
+      icon: BookMarked,
+      borderColor: "border-l-green-500",
+      iconBg: "bg-green-500/10",
+      iconColor: "text-green-600",
+      description: "Currently active reads",
     },
   ];
 
