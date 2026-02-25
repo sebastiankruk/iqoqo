@@ -138,13 +138,18 @@ else
     source .venv/bin/activate
 fi
 
-# 3. Install frontend dependencies if needed
+# 3. Run database migrations
+echo "Running database migrations..."
+flask db upgrade
+echo "Migrations complete."
+
+# 4. Install frontend dependencies if needed
 if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
     echo "Installing frontend dependencies..."
     (cd frontend && npm install)
 fi
 
-# 4. Run Flask API (background) + Next.js frontend
+# 5. Run Flask API (background) + Next.js frontend
 export FLASK_APP=run.py
 export FLASK_DEBUG=1
 
@@ -157,7 +162,7 @@ if [ -d "frontend" ]; then
     echo "Starting Next.js frontend at http://localhost:3000 ..."
     # Pass the API URL derived from WEB_PORT so Next.js picks it up even when
     # frontend/.env.local has a different fallback value.
-    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}" npm run dev) &
+    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}/api" npm run dev) &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > .frontend.pid
 fi

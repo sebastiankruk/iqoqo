@@ -3,7 +3,7 @@
 # scripts/setup_db.sh
 #
 # Ensures the PostgreSQL database and role defined in .env exist and have the
-# correct privileges.
+# correct privileges, including ownership of all tables in the public schema.
 #
 # WHY THIS EXISTS
 # ---------------
@@ -13,8 +13,15 @@
 # This means the role name in .env may differ from the one actually in the
 # volume's pg_authid table, causing "role does not exist" errors.
 #
-# This script detects the actual superuser inside the running container,
-# then creates the expected application role if it is missing.
+# Even when the role already exists, pre-existing tables may be owned by a
+# different superuser, causing "must be owner of table" errors during
+# Alembic migrations (e.g. ALTER TABLE ... ADD COLUMN).
+#
+# This script:
+#   1. Detects the actual superuser inside the running container.
+#   2. Creates the expected application role if it is missing.
+#   3. ALWAYS reasserts GRANT privileges and table ownership so that
+#      Alembic can run DDL statements regardless of who created the tables.
 #
 # USAGE
 # -----
@@ -100,7 +107,46 @@ role_exists() {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Main
+# 4. Reassert all privileges and fix table ownership
+# ---------------------------------------------------------------------------
+# This is run unconditionally (role already existed or was just created) to
+# handle the case where tables were created by a different superuser and the
+# application role therefore lacks DDL rights needed by Alembic migrations.
+grant_privileges() {
+    local container="$1"
+    local superuser="$2"
+
+    docker exec "$container" psql -U "$superuser" -d "$POSTGRES_DB" \
+        -v "app_db=${POSTGRES_DB}" \
+        -v "app_user=${POSTGRES_USER}" <<'SQL'
+-- Database-level access
+SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'app_user') \gexec;
+-- Schema-level access
+SELECT format('GRANT ALL ON SCHEMA public TO %I', :'app_user') \gexec;
+-- Current tables & sequences
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_user') \gexec;
+-- Future tables & sequences
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+-- Transfer ownership of every existing table to the application role so that
+-- Alembic can run DDL statements (ALTER TABLE, DROP TABLE, etc.).
+-- We build the DO block as a string so the psql variable :app_user is
+-- interpolated before execution.
+SELECT format($$
+DO $do$
+DECLARE r record;
+BEGIN
+    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE format('ALTER TABLE public.%%I OWNER TO %%I', r.tablename, %L);
+    END LOOP;
+END $do$;
+$$, :'app_user') \gexec;
+SQL
+}
+
+# ---------------------------------------------------------------------------
+# 5. Main
 # ---------------------------------------------------------------------------
 echo "Checking database role '${POSTGRES_USER}'..."
 
@@ -129,36 +175,24 @@ if [ -z "$SUPERUSER" ]; then
 fi
 
 if role_exists "$CONTAINER" "$SUPERUSER" "$POSTGRES_USER"; then
-    echo "  Role '${POSTGRES_USER}' already exists. ✓"
-    exit 0
-fi
+    echo "  Role '${POSTGRES_USER}' already exists — reasserting privileges and ownership..."
+else
+    echo "  Role '${POSTGRES_USER}' missing in container '${CONTAINER}' (superuser: '${SUPERUSER}')."
+    echo "  Creating role..."
 
-echo "  Role '${POSTGRES_USER}' missing in container '${CONTAINER}' (superuser: '${SUPERUSER}')."
-echo "  Creating role and granting privileges..."
-
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
-    -v "app_user=${POSTGRES_USER}" \
-    -v "app_pass=${POSTGRES_PASSWORD}" <<'SQL'
+    docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
+        -v "app_user=${POSTGRES_USER}" \
+        -v "app_pass=${POSTGRES_PASSWORD}" <<'SQL'
 SELECT format('CREATE USER %I WITH PASSWORD %L', :'app_user', :'app_pass') \gexec
 SQL
 
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
-    -v "app_db=${POSTGRES_DB}" \
-    -v "app_user=${POSTGRES_USER}" <<'SQL'
+    docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
+        -v "app_db=${POSTGRES_DB}" \
+        -v "app_user=${POSTGRES_USER}" <<'SQL'
 SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'app_user') \gexec
 SQL
-2>/dev/null || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
+    2>/dev/null || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
+fi
 
-docker exec "$CONTAINER" psql -U "$SUPERUSER" -d "$POSTGRES_DB" \
-    -v "app_db=${POSTGRES_DB}" \
-    -v "app_user=${POSTGRES_USER}" <<'SQL'
-SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'app_user') \gexec;
-SELECT format('GRANT ALL ON SCHEMA public TO %I', :'app_user') \gexec;
-SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I', :'app_user') \gexec;
-SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_user') \gexec;
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
-SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
-SQL
-2>&1
-
-echo "  Role '${POSTGRES_USER}' created and privileges granted. ✓"
+grant_privileges "$CONTAINER" "$SUPERUSER"
+echo "  Privileges and table ownership for '${POSTGRES_USER}' ensured. ✓"

@@ -15,17 +15,14 @@ cd iqoqo
 cp .env.example .env
 # Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed
 
-# 3. Build and start services
+# 3. Build and start services (migrations run automatically on first start)
 docker compose build
 docker compose up -d
 
-# 4. Initialize database
-docker compose exec web flask db upgrade
-
-# 5. (Optional) Load sample data
+# 4. (Optional) Load sample data
 docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
 
-# 6. Access the application
+# 5. Access the application
 # http://localhost:5000 (or your configured WEB_PORT)
 ```
 
@@ -142,6 +139,10 @@ After installation, make sure the Docker daemon is running.
 
 This project uses PostgreSQL as its database. You have two options:
 
+> **Migrations run automatically** — you do not need to run `flask db upgrade` manually
+> in either the development or production workflows described below.
+> See the [Database Migrations](#database-migrations) section for details.
+
 ### Option A: Local Development (Database Only in Docker)
 
 Use this option if you want to run the Flask application on your host machine but use a containerized PostgreSQL database.
@@ -158,13 +159,14 @@ Use this option if you want to run the Flask application on your host machine bu
    DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
    ```
 
-2. **Initialize the database:**
-
-   Once the application is set up, you can initialize the database schema using Flask-Migrate:
+2. **Start the application (migrations run automatically):**
 
    ```bash
-   flask db upgrade
+   ./run_dev.sh
    ```
+
+   `run_dev.sh` activates the virtual environment, runs `flask db upgrade` to apply any
+   pending migrations, and then starts both the Flask API and Next.js dev server.
 
 3. **Initialize with seed data (optional):**
 
@@ -201,13 +203,15 @@ Use this option to run both the Flask application and PostgreSQL database in con
     CORS_SUPPORTS_CREDENTIALS=false
    ```
 
-2. **Build and start all services:**
+2. **Build and start all services (migrations run automatically):**
 
    ```bash
    # Build the application image
    docker compose build
 
    # Start all services (web + database)
+   # The web container waits for PostgreSQL to be healthy, then runs
+   # 'flask db upgrade' before starting gunicorn.
    docker compose up -d
    ```
 
@@ -218,27 +222,13 @@ Use this option to run both the Flask application and PostgreSQL database in con
    sudo docker compose up -d
    ```
 
-3. **Initialize the database:**
-
-   Run migrations inside the web container:
-
-   ```bash
-   docker compose exec web flask db upgrade
-   ```
-
-   Or with sudo:
-
-   ```bash
-   sudo docker compose exec web flask db upgrade
-   ```
-
-4. **Initialize with seed data (optional):**
+3. **Initialize with seed data (optional):**
 
    ```bash
    docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
    ```
 
-5. **Verify deployment:**
+4. **Verify deployment:**
 
    ```bash
    # Check container status
@@ -282,6 +272,64 @@ docker compose exec db psql -U iqoqo -d iqoqo
 docker compose ps
 docker stats --no-stream
 ```
+
+## Database Migrations
+
+iqoqo uses [Alembic](https://alembic.sqlalchemy.org/) via [Flask-Migrate](https://flask-migrate.readthedocs.io/)
+to manage database schema changes. Every structural change — new columns, renamed tables,
+new indexes — is captured in a versioned migration file under `migrations/versions/`.
+
+### When migrations run
+
+| Workflow                                                         | How migrations run                                                                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Local dev** (`./run_dev.sh`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
+| **Docker dev** (`docker compose up`)                             | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
+| **Docker prod** (`docker compose -f docker-compose.prod.yml up`) | Same as Docker dev — automatic on every container start.                                                        |
+
+`flask db upgrade` is **idempotent**: running it when the schema is already current is
+completely safe and takes only a fraction of a second. It is therefore safe to run on
+every startup without any guard condition.
+
+### Running migrations manually
+
+If you need to run migrations outside the normal startup flow:
+
+```bash
+# Local development (venv must be active):
+source .venv/bin/activate
+flask db upgrade
+
+# Inside a running Docker container:
+docker compose exec web flask db upgrade
+```
+
+### Viewing migration history
+
+```bash
+# Show current revision applied to the database:
+flask db current
+
+# Show full migration history:
+flask db history
+```
+
+### Adding a new migration (for contributors)
+
+When you change a SQLAlchemy model in `app/db/models.py`, generate a new migration
+file with:
+
+```bash
+# Autogenerate a migration from the model diff:
+flask db migrate -m "short description of the change"
+
+# Review the generated file in migrations/versions/, then apply it:
+flask db upgrade
+```
+
+Always review the auto-generated file — Alembic cannot detect every change (e.g.
+column renames, constraint name changes). Add manual SQL where necessary and include
+a matching `downgrade()` function so the migration can be rolled back.
 
 ### Data Import/Export
 
@@ -536,7 +584,7 @@ The following endpoints are available for data management:
   Also verify `frontend/.env.local` points to the actual Flask port:
 
   ```bash
-  NEXT_PUBLIC_API_URL=http://localhost:5001   # match WEB_PORT in .env
+  NEXT_PUBLIC_API_URL=http://localhost:5001/api   # match WEB_PORT in .env
   ```
 
   After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run_dev.sh`

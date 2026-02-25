@@ -247,6 +247,136 @@ def test_get_items_pagination(client, app):
     assert data["meta"]["page"] == 3
 
 
+def test_get_items_single_status_filter(client, app):
+    """Test that ?statuses=reading returns only items with that status."""
+    with app.app_context():
+        work = Work(title="Reading Filter Test", meta={"authors": ["A. Writer"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, isbn13="9780000000001", meta={})
+        db.session.add(manifestation)
+        db.session.flush()
+
+        reading_item = Item(manifestation_id=manifestation.id, owner_id="user1", status="reading", meta={})
+        available_item = Item(manifestation_id=manifestation.id, owner_id="user2", status="available", meta={})
+        db.session.add_all([reading_item, available_item])
+        db.session.commit()
+
+    response = client.get("/api/items?statuses=reading")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert all(item["status"] == "reading" for item in data["data"])
+    assert data["meta"]["total"] == 1
+
+
+def test_get_items_multi_status_filter(client, app):
+    """Test ?statuses=reading,wish_list returns items with either status."""
+    with app.app_context():
+        work = Work(title="Multi Status Test", meta={"authors": ["B. Reader"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, isbn13="9780000000002", meta={})
+        db.session.add(manifestation)
+        db.session.flush()
+
+        items = [
+            Item(manifestation_id=manifestation.id, owner_id="u1", status="reading", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id="u2", status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id="u3", status="available", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id="u4", status="read", meta={}),
+        ]
+        db.session.add_all(items)
+        db.session.commit()
+
+    response = client.get("/api/items?statuses=reading,wish_list")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    returned_statuses = {item["status"] for item in data["data"]}
+    assert returned_statuses == {"reading", "wish_list"}
+    assert data["meta"]["total"] == 2
+
+
+def test_get_items_includes_timestamps(client, sample_work):
+    """Test that GET /api/items includes added_at and updated_at in each item."""
+    response = client.get("/api/items")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert len(data["data"]) > 0
+
+    item = data["data"][0]
+    assert "added_at" in item
+    assert "updated_at" in item
+    # Both should be ISO-8601 strings (or None for legacy rows)
+    for field in ("added_at", "updated_at"):
+        if item[field] is not None:
+            assert isinstance(item[field], str), f"{field} should be a string"
+
+
+def test_get_items_ordering_by_updated_at(client, app):
+    """Test that items are returned most-recently-updated first."""
+    from datetime import UTC, datetime, timedelta  # pylint: disable=import-outside-toplevel
+
+    now = datetime.now(UTC)
+
+    with app.app_context():
+        work = Work(title="Ordering Test", meta={"authors": ["C. Chronos"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, isbn13="9780000000003", meta={})
+        db.session.add(manifestation)
+        db.session.flush()
+
+        # Older item
+        old_item = Item(manifestation_id=manifestation.id, owner_id="old", status="available", meta={})
+        old_item.added_at = now - timedelta(hours=2)
+        old_item.updated_at = now - timedelta(hours=2)
+
+        # Newer item
+        new_item = Item(manifestation_id=manifestation.id, owner_id="new", status="available", meta={})
+        new_item.added_at = now - timedelta(hours=1)
+        new_item.updated_at = now - timedelta(minutes=5)
+
+        db.session.add_all([old_item, new_item])
+        db.session.commit()
+
+        old_id = old_item.id
+        new_id = new_item.id
+
+    response = client.get("/api/items?statuses=available")
+    assert response.status_code == 200
+    data = response.json
+    ids = [item["id"] for item in data["data"]]
+    assert ids.index(new_id) < ids.index(old_id), "Newer item should appear before older item"
+
+
+def test_get_items_status_filter_no_matches(client, sample_work):
+    """Test that filtering by a status with no matching items returns empty list."""
+    response = client.get("/api/items?statuses=lost")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert data["data"] == []
+    assert data["meta"]["total"] == 0
+
+
 # =============================================================================
 # Item Detail Endpoint Tests
 # =============================================================================

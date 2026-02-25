@@ -33,6 +33,8 @@ export interface Item {
   status: ItemStatus;
   meta: Record<string, unknown>;
   added_at?: string;
+  /** ISO-8601 timestamp of the last update; falls back to added_at for legacy rows. */
+  updated_at?: string;
   // Joined fields from the API
   title?: string;
   isbn?: string;

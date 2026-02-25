@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 from flask import jsonify, request, send_file, session
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from app.core.data_manager import DataManager
@@ -36,10 +37,23 @@ def get_dashboard_stats():
 
 @api_bp.route("/items", methods=["GET"])
 def get_items():
-    """Get all items with pagination support."""
+    """Get all items with pagination support.
+
+    Query parameters:
+        page (int, default 1):    1-based page number.
+        limit (int, default 20):  Maximum items per page.
+        statuses (str, optional): Comma-separated list of item statuses to filter by
+                                  (e.g. ``reading,wish_list``).  When omitted all
+                                  statuses are returned.
+
+    Results are sorted by most-recently-updated first, falling back to
+    ``added_at`` for legacy rows that pre-date the ``updated_at`` column.
+    """
     # Get pagination parameters
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
+    statuses_filter = request.args.get("statuses", None)  # Optional filter by item status
+
     try:
         page = int(page_param)
         limit = int(limit_param)
@@ -70,6 +84,12 @@ def get_items():
 
     # Get all items with pagination
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    if statuses_filter:
+        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        query = query.filter(Item.status.in_(statuses_list))
+    # Order by most-recently-updated first; fall back to added_at for legacy rows
+    # where updated_at is NULL (pre-migration data).
+    query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
     total = query.count()
     items = query.offset(offset).limit(limit).all()
 
@@ -92,6 +112,8 @@ def get_items():
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
                 "authors": authors,
+                "added_at": item.added_at.isoformat() if item.added_at else None,
+                "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }
         )
 

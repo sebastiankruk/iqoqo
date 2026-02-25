@@ -12,11 +12,15 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    command: gunicorn --bind 0.0.0.0:5000 run:app
+    # Run migrations automatically before starting the application server.
+    # 'flask db upgrade' is idempotent: it is safe to run on every startup.
+    command: >-
+      sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -53,6 +57,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iqoqo} -d ${POSTGRES_DB:-iqoqo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
 volumes:

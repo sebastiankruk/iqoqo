@@ -13,7 +13,8 @@ import type {
 
 export const queryKeys = {
   stats: ["stats"] as const,
-  items: (page = 1, limit = 20) => ["items", page, limit] as const,
+  items: (page = 1, limit = 20, statuses?: string[]) =>
+    ["items", page, limit, statuses?.join(",") ?? ""] as const,
   item: (id: number) => ["item", id] as const,
   isbn: (isbn: string) => ["isbn", isbn] as const,
 };
@@ -30,13 +31,22 @@ export function useStats() {
 
 /* ── Items list ──────────────────────────────────────────────────────────── */
 
-export function useItems(page = 1, limit = 20) {
+/**
+ * Fetch a paginated list of items, optionally filtered by one or more statuses.
+ *
+ * Statuses are sent to the API as a comma-separated string so a single query
+ * parameter covers multiple values (e.g. `?statuses=reading,wish_list`).
+ * Results are returned ordered by most-recently-updated first.
+ */
+export function useItems(page = 1, limit = 20, statuses?: string[]) {
   return useQuery({
-    queryKey: queryKeys.items(page, limit),
+    queryKey: queryKeys.items(page, limit, statuses),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<Item[]>>("/items", {
-        params: { page, limit },
-      });
+      const params: Record<string, string | number> = { page, limit };
+      if (statuses && statuses.length > 0) {
+        params.statuses = statuses.join(",");
+      }
+      const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data; // Return full envelope so we get meta.total
     },
     staleTime: 10_000,
