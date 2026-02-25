@@ -18,13 +18,13 @@ export function StatsCards() {
       description: "Total in collection",
     },
     {
-      label: "Lent Out",
-      value: stats?.lent_items ?? 0,
-      icon: HandHelping,
-      borderColor: "border-l-accent",
-      iconBg: "bg-accent/10",
-      iconColor: "text-accent",
-      description: "Currently with friends",
+      label: "Reading",
+      value: stats?.items_reading ?? 0,
+      icon: BookMarked,
+      borderColor: "border-l-green-500",
+      iconBg: "bg-green-500/10",
+      iconColor: "text-green-600",
+      description: "Currently active reads",
     },
     {
       label: "On Wish List",
@@ -36,19 +36,19 @@ export function StatsCards() {
       description: "On your list",
     },
     {
-      label: "Reading",
-      value: stats?.items_reading ?? 0,
-      icon: BookMarked,
-      borderColor: "border-l-green-500",
-      iconBg: "bg-green-500/10",
-      iconColor: "text-green-600",
-      description: "Currently active reads",
+      label: "Lent Out",
+      value: stats?.lent_items ?? 0,
+      icon: HandHelping,
+      borderColor: "border-l-accent",
+      iconBg: "bg-accent/10",
+      iconColor: "text-accent",
+      description: "Currently with friends",
     },
   ];
 
   return (
     <section aria-label="Collection statistics">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
         {cards.map((stat) => (
           <div
             key={stat.label}
