@@ -88,23 +88,6 @@ The frontend communicates with the Flask backend API. Key endpoints:
 - `GET /api/isbn/:isbn` - ISBN lookup
 - `POST /api/isbn/:isbn` - Update manifestation
 
-## Development Notes
-
-### Phase 1 Status ✅
-
-- [x] Next.js project initialized with TypeScript & Tailwind
-- [x] Environment configuration set up
-- [x] Docker Compose integration added
-- [x] CORS configured on backend
-
-### Next Steps (Phase 2)
-
-- [ ] Install shadcn/ui components
-- [ ] Set up API client with TanStack Query
-- [ ] Implement design system (Modern Athenaeum theme)
-- [ ] Build core components
-- [ ] Migrate pages from Flask templates
-
 ## Design System
 
 **Modern Athenaeum Theme:**

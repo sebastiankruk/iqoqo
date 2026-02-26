@@ -15,7 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "iqoqo – Modern Athenaeum",
+  title: "iqoqo – The Library of Everything",
   description:
     "Your personal library dashboard for books, games, music and collections",
   icons: {

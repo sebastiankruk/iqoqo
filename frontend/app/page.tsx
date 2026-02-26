@@ -28,7 +28,7 @@ export default function DashboardPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <p className="text-xs text-muted-foreground">
             <span className="font-serif font-bold text-foreground">iqoqo</span>
-            {" "}&middot;{" "}Modern Athenaeum
+            {" "}&middot;{" "}The Library of Everything
           </p>
           <p className="text-xs text-muted-foreground">Your library, your rules.</p>
         </div>

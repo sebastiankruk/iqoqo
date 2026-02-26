@@ -144,7 +144,7 @@ export default function ItemPage({ params }: Props) {
           </Link>
           <p className="text-xs text-muted-foreground">
             <span className="font-serif font-bold text-foreground">iqoqo</span>
-            {" "}&middot;{" "}Modern Athenaeum
+            {" "}&middot;{" "}The Library of Everything
           </p>
         </footer>
       </div>
