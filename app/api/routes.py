@@ -8,9 +8,9 @@ from flask import jsonify, request, send_file, session
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
+import app.utils.isbn as isbn_utils
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
-from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 
 from . import api_bp
 
@@ -246,12 +246,12 @@ def lookup_isbn(isbn: str):
             return jsonify(**work_metadata)
 
     # Canonicalize ISBN-10 or ISBN-13 input into a standard 13-digit string.
-    canonical_isbn = canonicalize_isbn(isbn)
+    canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
     if not canonical_isbn:
         return jsonify({"error": "Invalid ISBN"}), 400
 
     # Fetch metadata from external sources (Google Books → Open Library).
-    metadata: dict[str, Any] | None = fetch_isbn_metadata(canonical_isbn)
+    metadata: dict[str, Any] | None = isbn_utils.fetch_isbn_metadata(canonical_isbn)
     if not metadata:
         return jsonify({}), 404
 

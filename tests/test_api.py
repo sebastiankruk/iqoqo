@@ -1,6 +1,6 @@
 """Tests for the API endpoints."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -92,35 +92,17 @@ def test_lookup_isbn_from_work_data(client, book_without_meta):
     assert data["Authors"] == ["Della Summers"]
 
 
-@patch("isbnlib.meta")
-@patch("app.api.routes.requests.get")
-def test_lookup_isbn_not_found(mock_get, mock_isbnlib_meta, client):
-    """Test ISBN lookup for non-existent ISBN returns 404."""
-    # Mock isbnlib to return None
-    mock_isbnlib_meta.return_value = None
-
-    # Mock Open Library API to return empty result
-    mock_response = MagicMock()
-    mock_response.json.return_value = {}
-    mock_get.return_value = mock_response
-
-    response = client.get("/api/isbn/9999999999999")
+@patch("app.utils.isbn.fetch_isbn_metadata", return_value=None)
+def test_lookup_isbn_not_found(mock_fetch, client):
+    """Test ISBN lookup for a valid ISBN not found in any upstream source returns 404."""
+    response = client.get("/api/isbn/9780000000002")
     assert response.status_code == 404
 
 
-@patch("isbnlib.meta")
-@patch("isbnlib.canonical")
-@patch("app.api.routes.requests.get")
-def test_lookup_isbn_from_open_library(mock_get, mock_canonical, mock_meta, client):
-    """Test ISBN lookup fetches from Open Library API when not in DB."""
-    # Mock isbnlib to return None (not available) so it falls back to Open Library
-    mock_meta.return_value = None
-    mock_canonical.return_value = "9780451524935"
-
-    # Mock Open Library API response
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"ISBN:9780451524935": {"title": "1984", "authors": [{"name": "George Orwell"}]}}
-    mock_get.return_value = mock_response
+@patch("app.utils.isbn.fetch_isbn_metadata")
+def test_lookup_isbn_from_open_library(mock_fetch, client):
+    """Test ISBN lookup fetches from external sources when not in DB."""
+    mock_fetch.return_value = {"Title": "1984", "Authors": ["George Orwell"]}
 
     response = client.get("/api/isbn/9780451524935")
     assert response.status_code == 200
@@ -219,13 +201,10 @@ def test_add_item(client, sample_book):
         assert len(items) == 1
 
 
-@patch("app.api.routes.requests.get")
-def test_add_item_creates_manifestation_if_not_exists(mock_get, client):
-    """Test adding item creates manifestation from Open Library if it doesn't exist."""
-    # Mock Open Library API response
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"ISBN:9780307277671": {"title": "The Road", "authors": [{"name": "Cormac McCarthy"}]}}
-    mock_get.return_value = mock_response
+@patch("app.utils.isbn.fetch_isbn_metadata")
+def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
+    """Test adding item creates manifestation from external sources if it doesn't exist."""
+    mock_fetch.return_value = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
     response = client.post("/api/item/9780307277671", json=metadata, content_type="application/json")
@@ -236,6 +215,4 @@ def test_add_item_creates_manifestation_if_not_exists(mock_get, client):
         manifestation = Manifestation.query.filter_by(isbn13="9780307277671").first()
         assert manifestation is not None
         items = Item.query.filter_by(manifestation_id=manifestation.id).all()
-        assert len(items) == 1
-        assert len(items) == 1
         assert len(items) == 1
