@@ -20,10 +20,11 @@ interface FilterBarProps {
 
 const statusLabel: Record<string, string> = {
   available: "On Shelf",
-  shelf: "On Shelf",
   reading: "Reading",
   lent: "Lent Out",
   lost: "Lost",
+  wish_list: "On Wish List",
+  read: "Read",
 };
 
 function chipLabel(filter: ActiveFilter): string {

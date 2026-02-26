@@ -10,16 +10,20 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
     label: "On Shelf",
     class: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   },
-  shelf: {
-    label: "On Shelf",
-    class: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  },
   reading: {
     label: "Reading",
     class: "bg-accent/10 text-accent ring-accent/20",
   },
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
+  wish_list: {
+    label: "On Wish List",
+    class: "bg-primary/10 text-primary ring-primary/20",
+  },
+  read: {
+    label: "Read",
+    class: "bg-blue-50 text-blue-700 ring-blue-200",
+  },
 };
 
 interface ItemSidebarProps {

@@ -153,6 +153,7 @@
         "pylintrc",
         "pytest",
         "pyproject",
+        "qrcode",
         "rdflib",
         "selectinload",
         "sisbn",
