@@ -175,5 +175,8 @@
         ".vscode",
         ".vscode-insiders",
         "*.toml"
-    ]
+    ],
+    "[svg]": {
+        "editor.defaultFormatter": "jock.svg"
+    }
 }
