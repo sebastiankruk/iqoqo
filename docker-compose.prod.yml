@@ -29,11 +29,11 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
+      args:
+        # NEXT_PUBLIC_* vars are baked in at build time; runtime env has no effect
+        NEXT_PUBLIC_API_URL: /api
     restart: always
-    environment:
-      # Frontend accesses API via Nginx (relative path)
-      - NEXT_PUBLIC_API_URL=/api
     depends_on:
       - web
     # No ports exposed directly to host
