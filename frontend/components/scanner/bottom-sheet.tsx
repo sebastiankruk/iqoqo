@@ -61,8 +61,8 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
         const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
         onFound(isbn, res.data);
       } catch (e: unknown) {
-        if (e && typeof e === "object" && "response" in e && (e as { response: { status: number } }).response?.status === 404) {
-          setError("Book not found in the database.");
+        if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
+          setError(e.message);
         } else {
           setError("Could not look up this ISBN. Please try again.");
         }

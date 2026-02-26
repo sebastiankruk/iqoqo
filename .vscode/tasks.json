@@ -1,0 +1,119 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Start only the PostgreSQL container (idempotent — safe to run when already up)
+      "label": "db: start",
+      "type": "shell",
+      "command": "docker-compose up -d db",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      // Run setup_db.sh — mirrors what run_dev.sh does between 'docker-compose up'
+      // and 'flask db upgrade'. This fixes role/password mismatches on stale Docker
+      // volumes where PostgreSQL ignores POSTGRES_USER on non-first-start.
+      "label": "db: setup role",
+      "type": "shell",
+      "command": "bash scripts/setup_db.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "db: start",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      // Apply any pending Alembic migrations. Runs after the DB role is guaranteed correct.
+      // Explicitly source .env (allexport) so DATABASE_URL and friends are available
+      // to Flask/SQLAlchemy — the same approach used by run_dev.sh.
+      "label": "db: migrate",
+      "type": "shell",
+      "command": "set -o allexport && source .env && set +o allexport && source .venv/bin/activate && FLASK_APP=run.py flask db upgrade",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "db: setup role",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      // Start Next.js with the Node.js inspector on port 9229 so VS Code can attach.
+      "label": "frontend: dev:debug",
+      "type": "shell",
+      "command": "npm run dev:debug",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "isBackground": true,
+      // Tell VS Code when the process is "ready" so dependent launch configs can proceed
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "starting|compiling|Starting|Compiling",
+          "endsPattern": "Ready|ready|started server|Local:.*http"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "dev"
+      }
+    },
+    {
+      // Open Chrome with remote debugging on port 9222 for the client-side debugger.
+      // Uses a dedicated profile dir so it always launches as a separate instance,
+      // even if the main Chrome is already running (macOS 'open -a' reuses existing
+      // instances otherwise, which ignores the --remote-debugging-port flag).
+      "label": "chrome: open with remote debugging",
+      "type": "shell",
+      // Using Chromium; if you install Google Chrome, change the path to:
+      // /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+      // Removes the stale SingletonLock first so a force-killed previous instance
+      // doesn't prevent Chromium from starting with the same --user-data-dir.
+      "command": "rm -f /tmp/chrome-iqoqo-debug/SingletonLock /tmp/chrome-iqoqo-debug/SingletonCookie /tmp/chrome-iqoqo-debug/SingletonSocket && /Applications/Chromium.app/Contents/MacOS/Chromium --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-iqoqo-debug http://localhost:3000",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "DevTools listening on"
+        }
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      // Poll until Chromium's DevTools port is accepting connections.
+      // Used as preLaunchTask for the Chrome attach config so VS Code doesn't
+      // try to attach before the browser is ready.
+      "label": "chrome: wait for debug port",
+      "type": "shell",
+      "command": "until curl -sf http://localhost:9222/json/version > /dev/null; do sleep 1; done",
+      "dependsOn": "chrome: open with remote debugging"
+    },
+  ]
+}

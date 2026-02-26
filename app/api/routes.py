@@ -248,12 +248,12 @@ def lookup_isbn(isbn: str):
     # Canonicalize ISBN-10 or ISBN-13 input into a standard 13-digit string.
     canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
     if not canonical_isbn:
-        return jsonify({"error": "Invalid ISBN"}), 400
+        return jsonify({"success": False, "data": None, "error": f"Invalid ISBN = {isbn}"}), 400
 
     # Fetch metadata from external sources (Google Books → Open Library).
     metadata: dict[str, Any] | None = isbn_utils.fetch_isbn_metadata(canonical_isbn)
     if not metadata:
-        return jsonify({}), 404
+        return jsonify({"success": False, "data": None, "error": f"Metadata not found for ISBN = {canonical_isbn}"}), 404
 
     # Store in database if not exists
     if not manifestation:
@@ -289,7 +289,7 @@ def update_manifestation(isbn: str):
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
-        return jsonify({"error": "Manifestation not found"}), 404
+        return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
     metadata = request.get_json(silent=True)
     if not isinstance(metadata, dict):
@@ -327,12 +327,12 @@ def get_items_by_isbn(isbn: str):
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
-        return jsonify({"error": "Manifestation not found"}), 404
+        return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
     items = Item.query.filter_by(manifestation_id=manifestation.id).all()
 
     if not items:
-        return jsonify({"error": "No items found"}), 404
+        return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
     return jsonify({"ids": [item.id for item in items]})
 
@@ -349,7 +349,7 @@ def add_item(isbn: str):
         if isinstance(lookup_response, tuple):
             status_code = lookup_response[1] if len(lookup_response) > 1 else 404
             if status_code != 200:
-                return jsonify({"error": "Manifestation not found"}), 404
+                return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     metadata = request.get_json()
