@@ -45,9 +45,11 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
 
   /* ── ISBN API lookup ── */
   const lookupIsbn = useCallback(
-    async (isbn: string) => {
-      if (!isbn) return;
-      const isValidIsbn = /^\d{9}[\dXx]$/.test(isbn) || /^\d{13}$/.test(isbn);
+    async (rawIsbn: string) => {
+      if (!rawIsbn) return;
+      const isbn = rawIsbn.replace(/[^0-9Xx]/g, "").toUpperCase();
+      const isValidIsbn = /^\d{9}[\dX]$/.test(isbn) || /^\d{13}$/.test(isbn);
+
       if (!isValidIsbn) {
         setError("Please enter a valid ISBN-10 or ISBN-13.");
         return;
@@ -58,8 +60,12 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
         const { apiClient } = await import("@/lib/api/client");
         const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
         onFound(isbn, res.data);
-      } catch {
-        setError("Could not find this ISBN. Try entering it manually.");
+      } catch (e: unknown) {
+        if (e && typeof e === "object" && "response" in e && (e as { response: { status: number } }).response?.status === 404) {
+          setError("Book not found in the database.");
+        } else {
+          setError("Could not look up this ISBN. Please try again.");
+        }
       } finally {
         setIsSearching(false);
       }
@@ -117,7 +123,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
           try {
             const result = reader.decodeFromCanvas(canvas);
             stopScanner();
-            lookupIsbn(result.getText().replace(/[^0-9X]/g, ""));
+            lookupIsbn(result.getText());
             return;
           } catch {
             /* NotFoundException – no barcode in this frame, keep looping */
@@ -148,7 +154,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupIsbn(manualIsbn.replace(/[^0-9X]/g, ""));
+    lookupIsbn(manualIsbn);
   };
 
   return (
