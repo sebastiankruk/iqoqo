@@ -2,6 +2,11 @@ from datetime import UTC, datetime
 
 from . import db
 
+#: Canonical list of allowed Item statuses.  This is the single source of truth
+#: on the Python side; the TypeScript ``ItemStatus`` union in
+#: ``frontend/types/frbr.ts`` must stay in sync with these values.
+ITEM_STATUSES: tuple[str, ...] = ("available", "lent", "lost", "wish_list", "reading", "read")
+
 
 class Work(db.Model):  # type: ignore[name-defined]
     """
@@ -75,8 +80,9 @@ class Item(db.Model):  # type: ignore[name-defined]
 
     # User ownership data
     owner_id = db.Column(db.String(100))  # Could link to a User table later
-    status = db.Column(db.String(50), default="available")  # available, lent, lost, wish_list
+    status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
     condition = db.Column(db.String(50))
 
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default={})  # Custom tags, notes, location on shelf

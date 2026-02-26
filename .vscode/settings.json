@@ -1,7 +1,7 @@
 {
     // Python environment and interpreter
     "python.envFile": "${workspaceFolder}/.venv/bin/python",
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python3",
     "python.terminal.activateEnvInCurrentTerminal": true,
     "terminal.integrated.env.osx": {
         "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
@@ -131,6 +131,7 @@
     },
     // Spelling
     "cSpell.words": [
+        "Axios",
         "Activator",
         "backref",
         "Cormac",
@@ -140,6 +141,7 @@
         "FRBR",
         "FRBRoo",
         "iqoqo",
+        "isbnlib",
         "isort",
         "jsonld",
         "Longman",
@@ -147,14 +149,22 @@
         "manifestation",
         "manifestations",
         "metaform",
+        "mypy",
         "pylint",
+        "pylintrc",
         "pytest",
+        "pyproject",
+        "qrcode",
         "rdflib",
+        "selectinload",
         "sisbn",
         "sqlalchemy",
         "Summers",
         "Unwin",
-        "venv"
+        "venv",
+        "Vitest",
+        "wireframes",
+        "zxing"
     ],
     "cSpell.useGitignore": true,
     "cSpell.ignorePaths": [

@@ -5,11 +5,7 @@
   "private": true,
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
-    "lint:js": "eslint 'app/web/static/js/**/*.js'",
-    "lint:css": "stylelint 'app/web/static/css/**/*.css'",
-    "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'",
-    "format": "prettier --write 'app/web/static/**/*.{js,css}'",
-    "format:check": "prettier --check 'app/web/static/**/*.{js,css}'"
+    "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'"
   },
   "devDependencies": {
     "eslint": "^9.39.2",

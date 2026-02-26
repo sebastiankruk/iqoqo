@@ -1,0 +1,57 @@
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    restart: always
+    ports:
+      # Cloudflare Tunnel expects traffic at localhost:8000
+      - "${NGINX_PORT:-8000}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - frontend
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    restart: always
+    # Run migrations automatically on startup
+    command: >-
+      sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports exposed directly to host
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    restart: always
+    environment:
+      # Frontend accesses API via Nginx (relative path)
+      - NEXT_PUBLIC_API_URL=/api
+    depends_on:
+      - web
+    # No ports exposed directly to host
+
+  db:
+    image: postgres:16-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iqoqo} -d ${POSTGRES_DB:-iqoqo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

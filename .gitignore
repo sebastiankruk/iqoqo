@@ -12,6 +12,7 @@ pip-selfcheck.json
 *.egg-info/
 dist/
 build/
+.mypy_cache/
 
 # Docker
 .dockerignore
@@ -24,6 +25,7 @@ docker-compose.override.yml
 
 #npm
 node_modules/
+.eslintcache
 
 # Other
 *.sqlite3
@@ -34,10 +36,14 @@ node_modules/
 # Data - exclude personal data exports but keep seed examples
 data/*.json
 !data/seed_example.json
+iqoqo_backup*.json
 
 # Virtual Env
 .venv*
 
 # AI
 .github/context/*
-.github/copilot-instructions.md
+
+# Process IDs
+.flask.pid
+.frontend.pid

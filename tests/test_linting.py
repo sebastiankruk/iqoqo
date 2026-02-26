@@ -38,22 +38,12 @@ def test_ruff_linting():
 def test_mypy_type_checking():
     """Test that mypy type checking passes."""
     result = subprocess.run(
-        [get_tool_path("mypy"), "app/", "tests/"],
+        [get_tool_path("mypy"), "--no-incremental", "app/", "tests/"],
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0, f"Mypy type checking failed:\n{result.stdout}\n{result.stderr}"
-
-
-@pytest.mark.skip(reason="Pylint not used in GitHub CI - use ruff instead")
-def test_pylint_linting():
-    """Test that pylint linting passes.
-
-    Note: Pylint is not run in GitHub CI. Only ruff, black, isort, and mypy are used.
-    Pylint often has false positives with virtual environments and is overly strict.
-    This test is skipped to match CI behavior.
-    """
 
 
 def test_black_formatting():
@@ -76,23 +66,6 @@ def test_isort_imports():
         check=False,
     )
     assert result.returncode == 0, f"Isort import check failed:\n{result.stdout}\n{result.stderr}"
-
-
-def test_eslint_javascript():
-    """Test that eslint JavaScript linting passes."""
-    result = subprocess.run(
-        ["npx", "eslint", "app/web/static/js/**/*.js"],
-        capture_output=True,
-        text=True,
-        shell=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        # Only fail if eslint is installed and configured
-        if "command not found" not in result.stderr and "Cannot find module" not in result.stderr:
-            raise AssertionError(f"ESLint failed:\n{result.stdout}\n{result.stderr}")
-        # Skip if eslint is not installed
-        print("ESLint not installed, skipping JavaScript linting", file=sys.stderr)
 
 
 def test_python_syntax():

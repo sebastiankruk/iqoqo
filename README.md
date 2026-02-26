@@ -44,9 +44,24 @@ docker-compose exec web flask db upgrade
 
 For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](docs/INSTALL.md).
 
+### CORS Configuration
+
+CORS is disabled by default and should be enabled only when the frontend is served from a different origin than the API.
+
+Configure via environment variables in `.env`:
+
+```text
+CORS_ENABLED=true
+CORS_ORIGINS="https://app.example.com,https://admin.example.com"
+CORS_SUPPORTS_CREDENTIALS=false
+```
+
+Use explicit origins in production (avoid wildcard origins). Enable `CORS_SUPPORTS_CREDENTIALS=true` only when required.
+
 ## �📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Phase 4 Ubuntu Cutover](docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo

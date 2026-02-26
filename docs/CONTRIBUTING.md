@@ -36,17 +36,49 @@ source .venv/bin/activate
 pip install -r requirements.txt
 npm install
 
-# Start database
+# Initialize database (first time only)
 docker-compose up -d db
-
-# Initialize database
-flask db upgrade
-
-# Run development server
-./run_dev.sh
+.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
 ```
 
-### 3. Create a Feature Branch
+### 3. Start/Stop Development Environment
+
+**Start everything (Colima, PostgreSQL, Flask):**
+
+```bash
+make start
+```
+
+This will:
+
+1. Start Colima (Docker runtime for macOS)
+2. Start PostgreSQL database container
+3. Activate virtual environment
+4. Run Flask development server at [http://localhost:5000](http://localhost:5000)
+
+**Stop everything cleanly:**
+
+```bash
+make stop
+```
+
+This will:
+
+1. Stop Flask server
+2. Stop database container
+3. Keep Colima running (stops only if you run `colima stop`)
+
+**Verify it's working:**
+
+```bash
+# Check API endpoint
+curl http://localhost:5000/api/stats
+
+# Access web interface
+open http://localhost:5000
+```
+
+### 4. Create a Feature Branch
 
 ```bash
 git checkout -b feature/your-feature-name
@@ -131,6 +163,32 @@ const scanBarcode = async (isbn) => {
 - **Formatting**: Prettier
 - **Linting**: stylelint with standard config
 - **Approach**: Use Bootstrap classes first; custom CSS as needed
+
+### Development Commands Quick Reference
+
+```bash
+# Start/Stop
+make start          # Start Colima, PostgreSQL, and Flask server
+make stop           # Stop Flask and database (keeps Colima running)
+
+# Code Quality
+make lint           # Run all linting checks (Python, JS, CSS, Markdown)
+make format         # Auto-format all code
+make test           # Run all tests (includes linting)
+
+# Database
+make db-init        # Initialize database with seed data
+make db-seed        # Load seed data into existing database
+make db-export      # Export database to data/backup.json
+make db-stats       # Show database statistics
+
+# Python Environment
+source .venv/bin/activate  # Activate virtual environment
+.venv/bin/python           # Use venv Python directly
+.venv/bin/pytest           # Run tests with venv
+```
+
+**Pro tip**: Use `make help` to see all available commands.
 
 ### Writing Tests
 

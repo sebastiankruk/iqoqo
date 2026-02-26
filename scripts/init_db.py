@@ -12,6 +12,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from sqlalchemy.exc import ProgrammingError
+
 # Add the parent directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
@@ -20,22 +22,42 @@ from app.core.data_manager import DataManager
 from app.db import db
 
 
-def init_database(seed_file: Path | None = None):
+def init_database(seed_file: Path | None = None, reset: bool = False):
     """
     Initialize the database.
 
     Args:
         seed_file: Optional path to a JSON file containing seed data.
+        reset: If True, drops all tables before creating them.
     """
     app = create_app()
 
     with app.app_context():
+        if reset:
+            print("Dropping all tables...")
+            try:
+                db.drop_all()
+            except ProgrammingError as e:
+                if "must be owner of table" in str(e):
+                    print("\nError: Insufficient privileges to drop tables.", file=sys.stderr)
+                    print("The configured database user does not own the tables.", file=sys.stderr)
+                    print("Please drop the tables manually using a database tool.", file=sys.stderr)
+                    sys.exit(1)
+                raise
+
         # Create all tables
         print("Creating database tables...")
         db.create_all()
 
         # Check if database is empty
-        stats = DataManager.get_stats()
+        try:
+            stats = DataManager.get_stats()
+        except ProgrammingError:
+            print("\nError: Database schema mismatch detected.", file=sys.stderr)
+            print("The existing tables might be outdated or incompatible with the current models.", file=sys.stderr)
+            print("Use --reset to drop and recreate the database tables (WARNING: Data will be lost).", file=sys.stderr)
+            sys.exit(1)
+
         total_records = sum(stats.values())
 
         print("Current database statistics:")
@@ -75,9 +97,14 @@ def main():
         type=Path,
         help="Path to JSON file containing seed data",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop all tables before initialization",
+    )
     args = parser.parse_args()
 
-    init_database(seed_file=args.seed_file)
+    init_database(seed_file=args.seed_file, reset=args.reset)
 
 
 if __name__ == "__main__":

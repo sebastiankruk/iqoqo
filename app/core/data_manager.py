@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db import db
-from app.db.models import Expression, Item, Manifestation, Work
+from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, Work
 
 
 class DataManager:
@@ -235,11 +235,23 @@ class DataManager:
         Get database statistics.
 
         Returns:
-            Dictionary with counts of each entity type.
+            Dictionary with counts for each FRBR entity type plus UI-friendly
+            derived fields (``total_items``, ``lent_items``, ``to_read``) used
+            by the React dashboard, and per-status counts keyed as
+            ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
+        total = Item.query.count()
+        status_counts: dict[str, int] = {s: Item.query.filter_by(status=s).count() for s in ITEM_STATUSES}
         return {
+            # FRBR entity counts
             "works": Work.query.count(),
             "expressions": Expression.query.count(),
             "manifestations": Manifestation.query.count(),
-            "items": Item.query.count(),
+            "items": total,
+            # UI-friendly aliases expected by the React dashboard
+            "total_items": total,
+            "lent_items": status_counts["lent"],
+            "to_read": status_counts["wish_list"],
+            # Per-status counts (items_available, items_lent, …)
+            **{f"items_{s}": count for s, count in status_counts.items()},
         }

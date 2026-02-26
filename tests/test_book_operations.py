@@ -1,8 +1,8 @@
 """Tests for scanning, adding, and updating book operations."""
 
-# cSpell:ignore Aldous isbnlib Vlissides sess
+# cSpell:ignore Aldous Vlissides sess
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -113,17 +113,10 @@ class TestISBNScanning:
             assert manifestation.meta["Title"] == "Minimal Book"
             assert manifestation.meta["Authors"] == ["Minimal Author"]
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_scan_new_isbn_from_open_library(self, mock_get, mock_isbnlib_meta, client):
-        """Test scanning a new ISBN fetches from Open Library and creates FRBR structure."""
-        # Mock isbnlib to return None so it falls back to Open Library
-        mock_isbnlib_meta.return_value = None
-
-        # Mock Open Library API response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"ISBN:9780060850524": {"title": "Brave New World", "authors": [{"name": "Aldous Huxley"}]}}
-        mock_get.return_value = mock_response
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_scan_new_isbn_from_open_library(self, mock_fetch, client):
+        """Test scanning a new ISBN fetches from external sources and creates FRBR structure."""
+        mock_fetch.return_value = {"Title": "Brave New World", "Authors": ["Aldous Huxley"]}
 
         response = client.get("/api/isbn/9780060850524")
         assert response.status_code == 200
@@ -147,77 +140,36 @@ class TestISBNScanning:
             assert work.title == "Brave New World"
             assert work.meta["authors"] == ["Aldous Huxley"]
 
-    def test_scan_isbn_with_isbnlib_success(self, client):
-        """Test scanning uses isbnlib when available."""
-        # Mock the isbnlib module by injecting it into sys.modules
-        import sys  # pylint: disable=import-outside-toplevel
-        from types import ModuleType  # pylint: disable=import-outside-toplevel
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_scan_isbn_fetches_from_external_source(self, mock_fetch, client):
+        """Test scanning a new ISBN fetches metadata from external sources (Google Books / Open Library)."""
+        mock_fetch.return_value = {
+            "Title": "The Catcher in the Rye",
+            "Authors": ["J.D. Salinger"],
+        }
 
-        # Create a mock isbnlib module
-        mock_isbnlib = ModuleType("isbnlib")
-        mock_isbnlib.canonical = MagicMock(return_value="9780316769488")
-        mock_isbnlib.meta = MagicMock(
-            return_value={
-                "Title": "The Catcher in the Rye",
-                "Authors": ["J.D. Salinger"],
-                "Publisher": "Little, Brown",
-                "Year": "1951",
-                "ISBN-13": "9780316769488",
-                "Language": "en",
-            }
-        )
+        response = client.get("/api/isbn/9780316769488")
+        assert response.status_code == 200
+        data = response.json
+        assert data["Title"] == "The Catcher in the Rye"
+        assert data["Authors"] == ["J.D. Salinger"]
 
-        # Create mock exceptions module
-        mock_exceptions = ModuleType("isbnlib.exceptions")
+        # Verify fetch_isbn_metadata was called with the canonical ISBN
+        mock_fetch.assert_called_once_with("9780316769488")
 
-        # Create a mock exception class
-        class MockISBNNotConsistentError(Exception):
-            pass
+        # Verify data was saved to database
+        with client.application.app_context():
+            manifestation = Manifestation.query.filter_by(isbn13="9780316769488").first()
+            assert manifestation is not None
+            assert manifestation.expression.work.title == "The Catcher in the Rye"
 
-        mock_exceptions.ISBNNotConsistentError = MockISBNNotConsistentError
-        mock_isbnlib.exceptions = mock_exceptions
-
-        # Inject the mocks into sys.modules
-        sys.modules["isbnlib"] = mock_isbnlib
-        sys.modules["isbnlib.exceptions"] = mock_exceptions
-
-        try:
-            response = client.get("/api/isbn/9780316769488")
-            assert response.status_code == 200
-            data = response.json
-            assert data["Title"] == "The Catcher in the Rye"
-            assert data["Authors"] == ["J.D. Salinger"]
-
-            # Verify isbnlib.canonical was called
-            mock_isbnlib.canonical.assert_called_once_with("9780316769488")
-            # Verify isbnlib.meta was called
-            mock_isbnlib.meta.assert_called_once_with("9780316769488")
-
-            # Verify data was saved to database
-            with client.application.app_context():
-                manifestation = Manifestation.query.filter_by(isbn13="9780316769488").first()
-                assert manifestation is not None
-                assert manifestation.expression.work.title == "The Catcher in the Rye"
-        finally:
-            # Clean up: remove the mocks from sys.modules
-            sys.modules.pop("isbnlib", None)
-            sys.modules.pop("isbnlib.exceptions", None)
-
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_scan_nonexistent_isbn(self, mock_get, mock_isbnlib_meta, client):
-        """Test scanning an ISBN that doesn't exist anywhere returns 404."""
-        # Mock isbnlib to return None
-        mock_isbnlib_meta.return_value = None
-
-        # Mock Open Library API to return empty result
-        mock_response = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
-
-        response = client.get("/api/isbn/9999999999999")
+    @patch("app.utils.isbn.fetch_isbn_metadata", return_value=None)
+    def test_scan_nonexistent_isbn(self, mock_fetch, client):
+        """Test scanning an ISBN not found in any upstream source returns 404."""
+        # 9780000000002 is a valid ISBN-13 that is not present in the database.
+        response = client.get("/api/isbn/9780000000002")
         assert response.status_code == 404
-        assert response.json == {}
+        assert response.json.get("error", None) == "Metadata not found for ISBN = 9780000000002"
 
     def test_scan_invalid_isbn(self, client):
         """Test scanning with invalid ISBN format."""
@@ -226,16 +178,10 @@ class TestISBNScanning:
         # Current implementation passes it through, so it will return 404
         assert response.status_code in [400, 404]
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_scan_creates_proper_frbr_hierarchy(self, mock_get, mock_isbnlib_meta, client):
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_scan_creates_proper_frbr_hierarchy(self, mock_fetch, client):
         """Test that scanning creates proper Work -> Expression -> Manifestation hierarchy."""
-        # Mock isbnlib to return None so it falls back to Open Library
-        mock_isbnlib_meta.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"ISBN:9780141439518": {"title": "Pride and Prejudice", "authors": [{"name": "Jane Austen"}]}}
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = {"Title": "Pride and Prejudice", "Authors": ["Jane Austen"]}
 
         response = client.get("/api/isbn/9780141439518")
         assert response.status_code == 200
@@ -256,26 +202,13 @@ class TestISBNScanning:
             assert work.id == expression.work_id
             assert work.title == "Pride and Prejudice"
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_scan_multiple_authors(self, mock_get, mock_isbnlib_meta, client):
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_scan_multiple_authors(self, mock_fetch, client):
         """Test scanning a book with multiple authors."""
-        # Mock isbnlib to return None so it falls back to Open Library
-        mock_isbnlib_meta.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ISBN:9780201633610": {
-                "title": "Design Patterns",
-                "authors": [
-                    {"name": "Erich Gamma"},
-                    {"name": "Richard Helm"},
-                    {"name": "Ralph Johnson"},
-                    {"name": "John Vlissides"},
-                ],
-            }
+        mock_fetch.return_value = {
+            "Title": "Design Patterns",
+            "Authors": ["Erich Gamma", "Richard Helm", "Ralph Johnson", "John Vlissides"],
         }
-        mock_get.return_value = mock_response
 
         response = client.get("/api/isbn/9780201633610")
         assert response.status_code == 200
@@ -309,12 +242,8 @@ class TestAddingBooks:
 
     def test_add_item_creates_manifestation_if_not_exists(self, client):
         """Test adding item creates manifestation structure if ISBN doesn't exist."""
-        with patch("app.api.routes.requests.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.json.return_value = {
-                "ISBN:9780316769174": {"title": "The Catcher in the Rye", "authors": [{"name": "J.D. Salinger"}]}
-            }
-            mock_get.return_value = mock_response
+        with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+            mock_fetch.return_value = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
 
             metadata = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
             response = client.post("/api/item/9780316769174", json=metadata, content_type="application/json")
@@ -387,18 +316,10 @@ class TestAddingBooks:
             items = Item.query.filter_by(manifestation_id=manifestation.id).all()
             assert len(items) == 3  # Original + 2 new ones
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_add_item_nonexistent_isbn_fails(self, mock_get, mock_isbnlib_meta, client):
-        """Test adding item for non-existent ISBN that can't be found fails."""
-        # Mock isbnlib to return None
-        mock_isbnlib_meta.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
-
-        response = client.post("/api/item/9999999999999", json={}, content_type="application/json")
+    @patch("app.utils.isbn.fetch_isbn_metadata", return_value=None)
+    def test_add_item_nonexistent_isbn_fails(self, mock_fetch, client):
+        """Test adding item for a valid ISBN not found in any upstream source fails."""
+        response = client.post("/api/item/9780000000002", json={}, content_type="application/json")
         assert response.status_code == 404
 
     def test_add_item_sets_default_status(self, client, sample_work_complete):
@@ -630,18 +551,12 @@ class TestGettingItems:
 class TestBookOperationsIntegration:
     """Integration tests for complete workflows."""
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_complete_workflow_scan_add_update(self, mock_get, mock_isbnlib_meta, client):
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_complete_workflow_scan_add_update(self, mock_fetch, client):
         """Test complete workflow: scan new book, add item, then update metadata."""
-        # Mock isbnlib to return None so it falls back to Open Library
-        mock_isbnlib_meta.return_value = None
+        mock_fetch.return_value = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
 
         # Step 1: Scan new ISBN (creates FRBR structure)
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"ISBN:9780547928227": {"title": "The Hobbit", "authors": [{"name": "J.R.R. Tolkien"}]}}
-        mock_get.return_value = mock_response
-
         scan_response = client.get("/api/isbn/9780547928227")
         assert scan_response.status_code == 200
         assert scan_response.json["Title"] == "The Hobbit"
@@ -669,19 +584,14 @@ class TestBookOperationsIntegration:
 
     def test_scan_same_book_twice_reuses_structure(self, client):
         """Test scanning the same ISBN twice doesn't create duplicates."""
-        with patch("isbnlib.meta") as mock_isbnlib_meta, patch("app.api.routes.requests.get") as mock_get:
-            # Mock isbnlib to return None so it falls back to Open Library
-            mock_isbnlib_meta.return_value = None
-
-            mock_response = MagicMock()
-            mock_response.json.return_value = {"ISBN:9780439708180": {"title": "Harry Potter", "authors": [{"name": "J.K. Rowling"}]}}
-            mock_get.return_value = mock_response
+        with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+            mock_fetch.return_value = {"Title": "Harry Potter", "Authors": ["J.K. Rowling"]}
 
             # First scan
             response1 = client.get("/api/isbn/9780439708180")
             assert response1.status_code == 200
 
-            # Second scan
+            # Second scan (served from DB; fetch_isbn_metadata not called again)
             response2 = client.get("/api/isbn/9780439708180")
             assert response2.status_code == 200
 
@@ -711,16 +621,10 @@ class TestBookOperationsIntegration:
             items = Item.query.filter_by(manifestation_id=manifestation.id).all()
             assert len(items) == 3  # Original + 2 new
 
-    @patch("isbnlib.meta")
-    @patch("app.api.routes.requests.get")
-    def test_frbr_structure_integrity(self, mock_get, mock_isbnlib_meta, client):
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_frbr_structure_integrity(self, mock_fetch, client):
         """Test that FRBR structure maintains referential integrity."""
-        # Mock isbnlib to return None so it falls back to Open Library
-        mock_isbnlib_meta.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"ISBN:9780141182605": {"title": "Animal Farm", "authors": [{"name": "George Orwell"}]}}
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = {"Title": "Animal Farm", "Authors": ["George Orwell"]}
 
         # Create structure through API
         client.get("/api/isbn/9780141182605")

@@ -13,19 +13,16 @@ cd iqoqo
 
 # 2. Create and configure environment file
 cp .env.example .env
-# Edit .env: Set DATABASE_URL to use 'db' hostname, configure ports, set strong passwords
+# Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed
 
-# 3. Build and start services
-docker-compose build
-docker-compose up -d
+# 3. Build and start services (migrations run automatically on first start)
+docker compose build
+docker compose up -d
 
-# 4. Initialize database
-docker-compose exec web flask db upgrade
+# 4. (Optional) Load sample data
+docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
 
-# 5. (Optional) Load sample data
-docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
-
-# 6. Access the application
+# 5. Access the application
 # http://localhost:5000 (or your configured WEB_PORT)
 ```
 
@@ -126,11 +123,25 @@ After installation, make sure the Docker daemon is running.
      # Update POSTGRES_PASSWORD and DATABASE_URL with the same password
      ```
 
+   - **CORS (for separate frontend origin):** Keep CORS disabled unless needed. If your frontend is served from a different origin, configure explicit origins:
+
+     ```text
+     CORS_ENABLED=true
+     CORS_ORIGINS="https://app.example.com,https://admin.example.com"
+     CORS_SUPPORTS_CREDENTIALS=false
+     ```
+
+     Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
+
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
 ## Database Setup
 
 This project uses PostgreSQL as its database. You have two options:
+
+> **Migrations run automatically** — you do not need to run `flask db upgrade` manually
+> in either the development or production workflows described below.
+> See the [Database Migrations](#database-migrations) section for details.
 
 ### Option A: Local Development (Database Only in Docker)
 
@@ -139,7 +150,7 @@ Use this option if you want to run the Flask application on your host machine bu
 1. **Start the database service:**
 
    ```bash
-   docker-compose up -d db
+   docker compose up -d db
    ```
 
    This starts only the PostgreSQL container. Make sure your `.env` file has:
@@ -148,13 +159,14 @@ Use this option if you want to run the Flask application on your host machine bu
    DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
    ```
 
-2. **Initialize the database:**
-
-   Once the application is set up, you can initialize the database schema using Flask-Migrate:
+2. **Start the application (migrations run automatically):**
 
    ```bash
-   flask db upgrade
+   ./run_dev.sh
    ```
+
+   `run_dev.sh` activates the virtual environment, runs `flask db upgrade` to apply any
+   pending migrations, and then starts both the Flask API and Next.js dev server.
 
 3. **Initialize with seed data (optional):**
 
@@ -174,99 +186,146 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
    Make sure your `.env` file is configured for Docker:
 
-   ```bash
-   # Use 'db' as hostname for container-to-container communication
-   DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+    ```text
+    # Use 'db' as hostname for container-to-container communication
+    DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
 
-   # Set external ports (change if you have other services running)
-   WEB_PORT=8000    # or 5000 if available
-   DB_PORT=5433     # or 5432 if available
+    # Set external ports (change if you have other services running)
+    WEB_PORT=8000    # or 5000 if available
+    DB_PORT=5433     # or 5432 if available
 
-   # Use production settings
-   FLASK_ENV=production
+    # Use production settings
+    FLASK_ENV=production
+
+    # Configure CORS explicitly when frontend and API use different origins
+    CORS_ENABLED=true
+    CORS_ORIGINS="https://app[.]example.com"
+    CORS_SUPPORTS_CREDENTIALS=false
    ```
 
-2. **Build and start all services:**
+2. **Start Production Services:**
+
+   Use the provided production script to build and launch the stack using Nginx:
 
    ```bash
-   # Build the application image
-   docker-compose build
-
-   # Start all services (web + database)
-   docker-compose up -d
+   chmod +x run_prod.sh
+   ./run_prod.sh
    ```
 
    If you need to use `sudo` with Docker:
 
    ```bash
-   sudo docker compose build
-   sudo docker compose up -d
+   sudo ./run_prod.sh
    ```
 
-3. **Initialize the database:**
-
-   Run migrations inside the web container:
+3. **Initialize with seed data (optional):**
 
    ```bash
-   docker-compose exec web flask db upgrade
+   docker compose -f docker-compose.prod.yml exec web python scripts/init_db.py --seed-file data/seed_example.json
    ```
 
-   Or with sudo:
-
-   ```bash
-   sudo docker compose exec web flask db upgrade
-   ```
-
-4. **Initialize with seed data (optional):**
-
-   ```bash
-   docker-compose exec web python scripts/init_db.py --seed-file data/seed_example.json
-   ```
-
-5. **Verify deployment:**
+4. **Verify deployment:**
 
    ```bash
    # Check container status
-   docker-compose ps
+   docker compose -f docker-compose.prod.yml ps
 
    # View logs
-   docker-compose logs -f web
+   docker compose -f docker-compose.prod.yml logs -f web
 
    # Test the application
-   curl http://localhost:8000/  # Use your WEB_PORT
+   curl http://localhost:8000/api/stats
    ```
 
-The application will be available at `http://localhost:8000` (or whatever port you configured as `WEB_PORT`).
+The application will be available at `http://localhost:8000` (via Nginx).
 
 #### Docker Management Commands
 
 ```bash
 # View logs
-docker-compose logs -f web    # Follow web application logs
-docker-compose logs -f db     # Follow database logs
+docker compose logs -f web    # Follow web application logs
+docker compose logs -f db     # Follow database logs
 
 # Restart services
-docker-compose restart web
-docker-compose restart db
+docker compose restart web
+docker compose restart db
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (⚠️ this deletes all database data!)
-docker-compose down -v
+docker compose down -v
 
 # Rebuild after code changes
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 
 # Execute commands in containers
-docker-compose exec web flask db upgrade
-docker-compose exec db psql -U iqoqo -d iqoqo
+docker compose exec web flask db upgrade
+docker compose exec db psql -U iqoqo -d iqoqo
 
 # View running containers and resource usage
-docker-compose ps
+docker compose ps
 docker stats --no-stream
 ```
+
+## Database Migrations
+
+iqoqo uses [Alembic](https://alembic.sqlalchemy.org/) via [Flask-Migrate](https://flask-migrate.readthedocs.io/)
+to manage database schema changes. Every structural change — new columns, renamed tables,
+new indexes — is captured in a versioned migration file under `migrations/versions/`.
+
+### When migrations run
+
+| Workflow                                                         | How migrations run                                                                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Local dev** (`./run_dev.sh`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
+| **Docker dev** (`docker compose up`)                             | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
+| **Docker prod** (`docker compose -f docker-compose.prod.yml up`) | Same as Docker dev — automatic on every container start.                                                        |
+
+`flask db upgrade` is **idempotent**: running it when the schema is already current is
+completely safe and takes only a fraction of a second. It is therefore safe to run on
+every startup without any guard condition.
+
+### Running migrations manually
+
+If you need to run migrations outside the normal startup flow:
+
+```bash
+# Local development (venv must be active):
+source .venv/bin/activate
+flask db upgrade
+
+# Inside a running Docker container:
+docker compose exec web flask db upgrade
+```
+
+### Viewing migration history
+
+```bash
+# Show current revision applied to the database:
+flask db current
+
+# Show full migration history:
+flask db history
+```
+
+### Adding a new migration (for contributors)
+
+When you change a SQLAlchemy model in `app/db/models.py`, generate a new migration
+file with:
+
+```bash
+# Autogenerate a migration from the model diff:
+flask db migrate -m "short description of the change"
+
+# Review the generated file in migrations/versions/, then apply it:
+flask db upgrade
+```
+
+Always review the auto-generated file — Alembic cannot detect every change (e.g.
+column renames, constraint name changes). Add manual SQL where necessary and include
+a matching `downgrade()` function so the migration can be rolled back.
 
 ### Data Import/Export
 
@@ -441,19 +500,44 @@ The following endpoints are available for data management:
 
 #### Database Connection Issues
 
-- **`FATAL: role "user" does not exist`**: This error usually means your application is connecting to a different PostgreSQL instance than the one running in Docker.
-  - Make sure you have started the Docker container with `docker-compose up -d db`.
-  - Check if you have another PostgreSQL server running on your machine. If so, either:
-    - Stop the local PostgreSQL: `brew services stop postgresql` (macOS) or `sudo systemctl stop postgresql` (Linux)
-    - Change the `DB_PORT` in your `.env` file to use a different port (e.g., 5433)
-  - Verify that your `.env` file contains the correct `DATABASE_URL`:
-    - For local development: `postgresql://iqoqo:password@localhost:5432/iqoqo`
-    - For Docker deployment: `postgresql://iqoqo:password@db:5432/iqoqo`
+- **`FATAL: role "iqoqo" does not exist`** (stale Docker volume): PostgreSQL only runs its
+  initialisation scripts when the data directory is **empty**. If your Docker volume was
+  previously created with a different `POSTGRES_USER` value, the `iqoqo` role is never
+  created on subsequent starts. Running `./run_dev.sh` handles this automatically via
+  `scripts/setup_db.sh`. To run the fix manually:
+
+  ```bash
+  bash scripts/setup_db.sh
+  # or, to just inspect without changing anything:
+  bash scripts/setup_db.sh --check
+  ```
+
+  The script detects the actual superuser in the volume, creates the `iqoqo` role (if
+  missing), and grants all necessary privileges, without touching existing data.
+
+- **`DATABASE_URL` host `db` not resolvable outside Docker**: The hostname `db` is a
+  Docker Compose internal service name — it only resolves inside the container network.
+  For local development (Flask running directly on the host), use `localhost`:
+
+  ```bash
+  # In .env — correct for local dev:
+  DATABASE_URL="postgresql://iqoqo:password@localhost:5432/iqoqo"
+
+  # In docker-compose.yml or when running inside a container:
+  DATABASE_URL="postgresql://iqoqo:password@db:5432/iqoqo"
+  ```
 
 - **Port conflicts**: If you see "port already in use" errors:
-  - Check what's using the port: `sudo lsof -i :5432` or `sudo lsof -i :5000`
+  - Check what's using the port: `sudo lsof -i :5432` (database) or `sudo lsof -i :5000` (default `WEB_PORT`, or your configured port, e.g., `:5001`)
   - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
+  - `./run_dev.sh` automatically kills stale processes on `WEB_PORT` and `3000` at startup
   - Restart the services: `docker-compose down && docker-compose up -d`
+
+- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds to port 5000 (the default `WEB_PORT` when not overridden) on macOS Monterey and later. Set `WEB_PORT=5001` (or any other free port) in your `.env` to move Flask off port 5000:
+
+  ```bash
+  echo "WEB_PORT=5001" >> .env
+  ```
 
 #### Docker Issues
 
@@ -473,6 +557,34 @@ The following endpoints are available for data management:
 
 - **Database initialization fails**: Make sure the database container is fully started before running migrations:
 
+#### Frontend Issues
+
+- **`Unable to acquire lock at frontend/.next/dev/lock`**: This happens when a previous
+  Next.js dev process crashed or was killed without cleaning up its lock file.
+  `./run_dev.sh` removes this file automatically at startup. To fix manually:
+
+  ```bash
+  rm -f frontend/.next/dev/lock
+  # Then restart:
+  ./run_dev.sh
+  ```
+
+- **CORS errors (`Origin ... is not allowed`)**: The Flask CORS configuration must
+  list the exact origin of the Next.js dev server. Check your `.env`:
+
+  ```bash
+  CORS_ENABLED=true
+  CORS_ORIGINS="http://localhost:3000"
+  ```
+
+  Also verify `frontend/.env.local` points to the actual Flask port:
+
+  ```bash
+  NEXT_PUBLIC_API_URL=http://localhost:5001/api   # match WEB_PORT in .env
+  ```
+
+  After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run_dev.sh`
+
   ```bash
   # Wait for database to be ready
   docker-compose up -d db
@@ -484,7 +596,26 @@ The following endpoints are available for data management:
 
 ### Development Mode (Local)
 
-To run the Flask development server on your host machine (with database in Docker):
+To run the Flask development server:
+
+```bash
+# Make sure the database is running
+docker-compose up -d db
+
+# Run the development server using the project's virtual environment
+.venv/bin/flask run
+```
+
+**Alternative:** Activate the virtual environment first, then run Flask:
+
+```bash
+source .venv/bin/activate
+flask run
+```
+
+The application will be available at `http://localhost:5000`.
+
+To run the Flask development server:
 
 ```bash
 # Make sure the database is running
@@ -494,10 +625,9 @@ docker-compose up -d db
 ./run_dev.sh
 ```
 
-Or manually:
+**Manual start:**
 
 ```bash
-source .venv/bin/activate
 flask run
 ```
 
