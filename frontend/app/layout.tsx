@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   title: "iqoqo – Modern Athenaeum",
   description:
     "Your personal library dashboard for books, games, music and collections",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon",
+  },
 };
 
 export const viewport: Viewport = {
