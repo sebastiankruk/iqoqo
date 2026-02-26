@@ -2,13 +2,11 @@ Flask==3.0.0
 Flask-CORS==6.0.*
 gunicorn==22.0.*
 psycopg2-binary==2.9.*
-isbnlib==3.10.*
 requests
 rdflib==7.*
 python-dotenv
 flask-sqlalchemy
 flask-migrate
-setuptools
 
 # Testing
 pytest

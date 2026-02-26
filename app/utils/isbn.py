@@ -1,0 +1,225 @@
+"""ISBN metadata lookup utilities.
+
+Provides ISBN canonicalization and metadata retrieval from two upstream
+services, tried in order:
+
+1. **Google Books API** – fast, high availability, good English coverage.
+2. **Open Library Books API** – broader language coverage, open data.
+
+Both services are queried with a shared retry policy (3 attempts, 1.5×
+exponential back-off) and generous connection / read timeouts so that
+slow cold-start DNS or TLS negotiation does not immediately return a 404
+to the caller.
+
+Typical usage::
+
+    from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
+
+    isbn = canonicalize_isbn(raw_input)
+    if isbn is None:
+        return error("Invalid ISBN")
+    meta = fetch_isbn_metadata(isbn)
+    if meta is None:
+        return error("Book not found")
+"""
+
+import logging
+import re
+from typing import Any
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# HTTP session configuration
+# ---------------------------------------------------------------------------
+
+# (connect timeout, read timeout) in seconds.
+# Connect: time to establish TCP + TLS with the upstream host.
+# Read: time to receive the full response body after the connection is open.
+_CONNECT_TIMEOUT: int = 15
+_READ_TIMEOUT: int = 45
+
+# Retry policy: 3 attempts with 1.5× back-off on transient errors.
+# Delays after failures: ~1.5 s, ~3 s, ~4.5 s.
+_RETRY_POLICY = Retry(
+    total=3,
+    backoff_factor=1.5,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET"],
+    raise_on_status=False,
+)
+
+
+def _make_session() -> requests.Session:
+    """Return a :class:`requests.Session` with the shared retry adapter mounted.
+
+    A new session is created per call so that the retry state is never shared
+    across different ISBN lookups happening in parallel request threads.
+    """
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=_RETRY_POLICY)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+# ---------------------------------------------------------------------------
+# ISBN canonicalization
+# ---------------------------------------------------------------------------
+
+
+def canonicalize_isbn(raw: str) -> str | None:
+    """Return a canonical 13-digit ISBN string, or ``None`` if invalid.
+
+    Accepts ISBN-10 and ISBN-13 in any common notation (hyphens, spaces,
+    mixed case).  ISBN-10 inputs are converted to ISBN-13 (978-prefix).
+
+    Args:
+        raw: Raw user input, e.g. ``"978-0-553-38016-8"`` or ``"0553380168"``.
+
+    Returns:
+        A 13-digit string (e.g. ``"9780553380163"``), or ``None`` if the
+        input cannot be parsed as a valid ISBN.
+    """
+    # Strip everything except digits and trailing X (ISBN-10 check character).
+    stripped = re.sub(r"[^0-9Xx]", "", raw).upper()
+
+    if len(stripped) == 10:
+        # Validate ISBN-10 check digit (modulo 11).
+        total = sum((10 - i) * (10 if c == "X" else int(c)) for i, c in enumerate(stripped))
+        if total % 11 != 0:
+            return None
+        # Convert to ISBN-13: prepend "978" and recalculate check digit.
+        body = "978" + stripped[:9]
+        check = (10 - sum((1 if i % 2 == 0 else 3) * int(d) for i, d in enumerate(body)) % 10) % 10
+        return body + str(check)
+
+    if len(stripped) == 13:
+        # Only 978/979 prefixes are defined by the ISBN-13 standard.
+        if stripped[:3] not in ("978", "979"):
+            return None
+        # Validate ISBN-13 check digit.
+        check = (10 - sum((1 if i % 2 == 0 else 3) * int(d) for i, d in enumerate(stripped[:12])) % 10) % 10
+        if int(stripped[12]) != check:
+            return None
+        return stripped
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Upstream service adapters
+# ---------------------------------------------------------------------------
+
+
+def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
+    """Fetch metadata from the Google Books API.
+
+    Uses the public (unauthenticated) ``volumes`` endpoint which does not
+    require an API key for low-volume lookups.
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.
+
+    Returns:
+        ``{"Title": str, "Authors": list[str]}`` on success, ``None``
+        if the API returns no results or the request fails.
+    """
+    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
+    try:
+        session = _make_session()
+        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        logger.warning("Google Books request failed for %s: %s", isbn, exc)
+        return None
+
+    if not data.get("totalItems") or not data.get("items"):
+        logger.debug("Google Books: no results for %s", isbn)
+        return None
+
+    info = data["items"][0].get("volumeInfo", {})
+    title = info.get("title", "").strip()
+    if not title:
+        return None
+
+    return {
+        "Title": title,
+        "Authors": [a for a in info.get("authors", []) if a],
+    }
+
+
+def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
+    """Fetch metadata from the Open Library Books API.
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.
+
+    Returns:
+        ``{"Title": str, "Authors": list[str]}`` on success, ``None``
+        if the API returns no results or the request fails.
+    """
+    url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
+    try:
+        session = _make_session()
+        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        logger.warning("Open Library request failed for %s: %s", isbn, exc)
+        return None
+
+    if not data:
+        logger.debug("Open Library: no results for %s", isbn)
+        return None
+
+    book = next(iter(data.values()))
+    title = book.get("title", "").strip()
+    if not title:
+        return None
+
+    authors = [a.get("name", "") for a in book.get("authors", []) if a.get("name")]
+    return {
+        "Title": title,
+        "Authors": authors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
+    """Look up book metadata for *isbn* from external sources.
+
+    Tries Google Books first; falls back to Open Library if Google Books
+    returns no results.  Both sources are queried with the shared retry
+    policy and generous timeouts (see module constants).
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.  Use
+              :func:`canonicalize_isbn` to obtain one from raw user input
+              before calling this function.
+
+    Returns:
+        A ``{"Title": str, "Authors": list[str]}`` dict on success, or
+        ``None`` when both upstream services return no usable results.
+    """
+    metadata = _lookup_google_books(isbn)
+    if metadata:
+        logger.info("ISBN %s resolved via Google Books", isbn)
+        return metadata
+
+    metadata = _lookup_open_library(isbn)
+    if metadata:
+        logger.info("ISBN %s resolved via Open Library", isbn)
+        return metadata
+
+    logger.warning("No metadata found for ISBN %s from any upstream source", isbn)
+    return None

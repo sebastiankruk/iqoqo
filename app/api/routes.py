@@ -1,18 +1,16 @@
 """Defines the API endpoints for the application."""
 
-# cSpell:ignore isbnlib
-
 import json
 from io import BytesIO
 from typing import Any
 
-import requests
 from flask import jsonify, request, send_file, session
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
+from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 
 from . import api_bp
 
@@ -247,75 +245,15 @@ def lookup_isbn(isbn: str):
                 print(f"Warning: Failed to update manifestation.meta: {e}")
             return jsonify(**work_metadata)
 
-    # Try to fetch using isbnlib (aggregates multiple sources: Google Books, WorldCat, etc.)
-    metadata: dict[str, Any] = {}
-    canonical_isbn = isbn  # Default to input ISBN
+    # Canonicalize ISBN-10 or ISBN-13 input into a standard 13-digit string.
+    canonical_isbn = canonicalize_isbn(isbn)
+    if not canonical_isbn:
+        return jsonify({"error": "Invalid ISBN"}), 400
 
-    try:
-        import isbnlib  # pylint: disable=import-outside-toplevel
-
-        # Canonicalize the ISBN
-        canonical_isbn = isbnlib.canonical(isbn)
-        if not canonical_isbn:
-            return jsonify({"error": "Invalid ISBN"}), 400
-
-        # Try to get metadata from multiple sources
-        book_data = None
-        try:
-            book_data = isbnlib.meta(canonical_isbn)
-        except Exception as e:  # pylint: disable=broad-except
-            # Check if this is an ISBN redirect error (ISBNNotConsistentError)
-            if "isbn request != isbn response" in str(e):
-                # Handle ISBN redirects (when ISBN-10/13 mismatch)
-                import ast  # pylint: disable=import-outside-toplevel
-                import re  # pylint: disable=import-outside-toplevel
-
-                m_isbn_redirect = re.match(r"isbn request != isbn response \(\S+ not in (\[[^\]]+\])\)", str(e))
-                if m_isbn_redirect:
-                    a_isbn_redirect = ast.literal_eval(m_isbn_redirect.group(1))  # type: ignore[arg-type]
-                    isbn_redirect_dict = {v["type"]: v["identifier"] for v in a_isbn_redirect}
-                    re_isbn = isbn_redirect_dict.get("ISBN_13", None) or isbn_redirect_dict.get("ISBN_10", None)
-
-                    if re_isbn:
-                        # Try again with redirected ISBN
-                        try:
-                            book_data = isbnlib.meta(re_isbn)
-                            canonical_isbn = re_isbn
-                        except Exception:  # pylint: disable=broad-except
-                            # If redirect also fails, continue to fallback
-                            pass
-
-        if book_data:
-            # isbnlib returns dict with 'Title', 'Authors', 'Publisher', 'Year', 'ISBN-13', 'Language'
-            metadata = {
-                "Title": book_data.get("Title", ""),
-                "Authors": book_data.get("Authors", []),
-            }
-    except (ImportError, AttributeError) as e:
-        # If isbnlib import fails, log and continue to Open Library fallback
-        print(f"isbnlib not available for {isbn}: {e}")
-
-    # Fall back to Open Library if isbnlib is not available or returned nothing
+    # Fetch metadata from external sources (Google Books → Open Library).
+    metadata: dict[str, Any] | None = fetch_isbn_metadata(canonical_isbn)
     if not metadata:
-        try:
-            response = requests.get(
-                f"https://openlibrary.org/api/books?bibkeys=ISBN:{canonical_isbn}&format=json&jscmd=data",
-                timeout=10,
-            )
-            data = response.json()
-
-            if not data:
-                return jsonify({}), 404
-
-            book_data = list(data.values())[0]
-            metadata = {
-                "Title": book_data.get("title", ""),
-                "Authors": [author.get("name", "") for author in book_data.get("authors", [])],
-            }
-        except (requests.RequestException, KeyError, ValueError) as e:
-            # Both isbnlib and Open Library failed
-            print(f"Open Library lookup also failed for {isbn}: {e}")
-            return jsonify({}), 404
+        return jsonify({}), 404
 
     # Store in database if not exists
     if not manifestation:

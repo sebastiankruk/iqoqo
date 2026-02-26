@@ -342,6 +342,44 @@ def test_frbr_hierarchy():
 
 See [tests/test_web.py](../tests/test_web.py) for comprehensive FRBR hierarchy tests.
 
+## 🔍 ISBN Lookup (`app/utils/isbn.py`)
+
+External metadata is fetched via `app/utils/isbn.py`, which is the single place
+responsible for all outbound HTTP calls to book metadata providers.
+
+### Lookup pipeline
+
+1. **Canonicalize** — `canonicalize_isbn(raw)` validates and normalises any
+   ISBN-10 or ISBN-13 input (hyphens, spaces, mixed case) into a standard
+   13-digit string.  Returns `None` for invalid input.
+2. **Google Books API** — queried first; fast, high availability, no API key
+   required for low-volume usage.
+3. **Open Library Books API** — fallback; broader language coverage and fully
+   open data.  Same retry/timeout policy.
+
+### Retry and timeout policy
+
+Both upstream calls use a shared `requests.Session` with:
+
+- **Connect timeout**: 15 s (TCP + TLS handshake)
+- **Read timeout**: 45 s (full response body)
+- **Retries**: 3 attempts, 1.5× exponential back-off, on HTTP 429/500/502/503/504
+
+This handles cold-start DNS latency and transient upstream errors without
+blocking the caller for too long.
+
+### Response shape
+
+Both adapters normalise their response to:
+
+```python
+{"Title": str, "Authors": list[str]}
+```
+
+The route in `app/api/routes.py` stores this in the FRBR hierarchy
+(`Work.title`, `Work.meta["authors"]`, `Manifestation.meta`) so subsequent
+lookups of the same ISBN are served from the local database.
+
 ## 🌐 Frontend Architecture (Phase 2)
 
 iqoqo uses a **decoupled** architecture where the Flask application serves only JSON
