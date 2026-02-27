@@ -15,6 +15,8 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     # Run migrations automatically on startup
     command: >-
@@ -33,6 +35,10 @@ services:
       args:
         # NEXT_PUBLIC_* vars are baked in at build time; runtime env has no effect
         NEXT_PUBLIC_API_URL: /api
+        APP_VERSION: ${APP_VERSION:-prod}
+        NEXT_PUBLIC_APP_VERSION: ${APP_VERSION:-prod}
+    environment:
+      - NEXT_PUBLIC_APP_VERSION=${APP_VERSION:-prod}
     restart: always
     depends_on:
       - web

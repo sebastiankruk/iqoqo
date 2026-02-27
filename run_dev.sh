@@ -3,6 +3,8 @@
 # Ensure we are in the script's directory
 cd "$(dirname "$0")"
 
+export APP_VERSION=$(cat VERSION).dev
+
 # 1. Start Database
 echo "Checking database status..."
 if command -v docker-compose &> /dev/null; then
@@ -162,7 +164,7 @@ if [ -d "frontend" ]; then
     echo "Starting Next.js frontend at http://localhost:3000 ..."
     # Pass the API URL derived from WEB_PORT so Next.js picks it up even when
     # frontend/.env.local has a different fallback value.
-    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}/api" npm run dev) &
+    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}/api" NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" npm run dev) &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > .frontend.pid
 fi
