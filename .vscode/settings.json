@@ -166,6 +166,7 @@
         "wireframes",
         "zxing"
     ],
+    "css.lint.unknownAtRules": "ignore",
     "cSpell.useGitignore": true,
     "cSpell.ignorePaths": [
         "package-lock.json",

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Merriweather, Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const merriweather = Merriweather({
@@ -34,9 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${merriweather.variable} ${inter.variable}`}>
+    <html lang="en" className={`${merriweather.variable} ${inter.variable}`} suppressHydrationWarning>
+      <head />
       <body className="font-sans antialiased">
-        <Providers>{children}</Providers>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

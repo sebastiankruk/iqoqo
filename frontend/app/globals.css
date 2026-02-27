@@ -1,7 +1,11 @@
 @import 'tailwindcss';
 
+/* Make Tailwind's dark: variant follow `.dark` class (next-themes) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── Modern Athenaeum Design System ─────────────────────────────────────── */
 
+/* @layer base { */
 :root {
   /* Base palette */
   --background: hsl(43 50% 98%);
@@ -44,6 +48,47 @@
   --sidebar-border: hsl(210 20% 35%);
   --sidebar-ring: hsl(24 100% 41%);
 }
+
+.dark {
+  /* Dark Mode Colors (Deep Indigo Background) */
+  --background: hsl(210 11% 15%); /* Matches Navbar #040608 */
+  --foreground: hsl(43 50% 90%); /* Light version of Warm Paper */
+
+  --primary: hsl(210 29% 80%); /* Muted light blue instead of stark white */
+  --primary-foreground: rgb(116 155 193);
+
+  --accent: hsl(24 100% 50%); /* Brighter clay for dark mode */
+  --accent-foreground: hsl(210 29% 10%);
+
+  --secondary: hsl(210 29% 16%);
+  --secondary-foreground: hsl(43 50% 90%);
+
+  --destructive: hsl(0, 100%, 54%); /* Brighter red for visibility */
+  --destructive-foreground: hsl(43 50% 90%);
+
+  --ring: hsl(24 100% 50%);
+
+  /* Shadcn UI specific overrides */
+  --card: hsl(210 29% 12%);
+  --card-foreground: hsl(43 50% 90%);
+  --popover: hsl(210 29% 12%);
+  --popover-foreground: hsl(43 50% 90%);
+  --muted: hsl(210 29% 20%);
+  --muted-foreground: hsl(215 20% 80%); /* Lighter gray for breadcrumbs */
+  --border: hsl(210 29% 20%);
+  --input: hsl(210 29% 20%);
+
+  /* Sidebar overrides for dark mode */
+  --sidebar-background: hsl(210 29% 10%);
+  --sidebar-foreground: hsl(43 50% 90%);
+  --sidebar-primary: hsl(24 100% 50%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(210 29% 16%);
+  --sidebar-accent-foreground: hsl(43 50% 90%);
+  --sidebar-border: hsl(210 29% 20%);
+  --sidebar-ring: hsl(24 100% 50%);
+}
+/* } */
 
 /* ── Tailwind v4 @theme mapping ──────────────────────────────────────────── */
 
@@ -145,6 +190,10 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
   }
 }
 
