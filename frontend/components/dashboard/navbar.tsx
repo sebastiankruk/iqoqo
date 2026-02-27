@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Search, Bell, ScanLine, Library } from "lucide-react";
+import { ModeToggle } from "@/components/mode-toggle";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
 export function Navbar() {
@@ -57,6 +58,7 @@ export function Navbar() {
             <ScanLine className="h-4 w-4" />
             <span className="hidden sm:inline">Scan</span>
           </Link>
+          <ModeToggle />
           <button
             className="relative rounded-full p-2 transition-colors hover:bg-primary-foreground/10"
             aria-label="Notifications"
