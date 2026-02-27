@@ -110,7 +110,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         <button
           onClick={handleLend}
           disabled={updateItem.isPending}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           <Send className="h-4 w-4" />
           Lend to Friend
