@@ -79,6 +79,7 @@ make lint-markdown  # markdownlint
 - Legacy prototype: <https://github.com/sebastiankruk/iqoqo-prototype>
 - git-ignored:
   - Vision: `.github/context/feasibility_study.md`
+  - Development roadmap: `.github/context/roadmap.md`
   - Migration plan: `.github/context/migration/`
   - UI/UX designs: `.github/context/private-designs/`
   - Dev notes: `.github/context/private-notes/` (git-ignored Obsidian vault)

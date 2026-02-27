@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Remove the X-Powered-By: Next.js response header
+  poweredByHeader: false,
   // Silence the "multiple lockfiles" workspace-root warning during dev
   turbopack: {
     root: path.resolve(__dirname),

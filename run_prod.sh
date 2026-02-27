@@ -10,8 +10,13 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Set APP_VERSION if not already set
+if [ -z "$APP_VERSION" ]; then
+    export APP_VERSION=$(cat VERSION)
+fi
+
 # 2. Build and Start Services
-echo "🚀 Starting iqoqo production deployment..."
+echo "🚀 Starting iqoqo production deployment (Version: $APP_VERSION)..."
 docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
 
 echo "✅ Deployment successful!"

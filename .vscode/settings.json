@@ -166,6 +166,7 @@
         "wireframes",
         "zxing"
     ],
+    "css.lint.unknownAtRules": "ignore",
     "cSpell.useGitignore": true,
     "cSpell.ignorePaths": [
         "package-lock.json",
@@ -175,5 +176,8 @@
         ".vscode",
         ".vscode-insiders",
         "*.toml"
-    ]
+    ],
+    "[svg]": {
+        "editor.defaultFormatter": "jock.svg"
+    }
 }

@@ -11,7 +11,7 @@ export function HeroBanner({
   title?: string;
 }) {
   return (
-    <div className="relative h-[200px] w-full overflow-hidden bg-primary">
+    <div className="relative h-[200px] w-full overflow-hidden bg-primary dark:bg-[#040608]">
       {coverUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -21,12 +21,12 @@ export function HeroBanner({
         />
       )}
       {/* Dark gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/60 via-primary/70 to-primary/90" />
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/60 via-primary/70 to-primary/90 dark:from-[#040608]/60 dark:via-[#040608]/70 dark:to-[#040608]/90" />
 
       {/* Breadcrumb */}
       <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-end px-6 pb-16">
         <nav
-          className="flex items-center gap-2 text-xs text-primary-foreground/60"
+          className="flex items-center gap-2 text-xs text-primary-foreground/80"
           aria-label="Breadcrumb"
         >
           <Link

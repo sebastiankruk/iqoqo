@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 import app.utils.isbn as isbn_utils
+from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
 
@@ -23,7 +24,7 @@ def _invalid_json_payload_response():
 @api_bp.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint for monitoring."""
-    return jsonify({"status": "ok", "service": "iqoqo-api"})
+    return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
 
 
 @api_bp.route("/stats", methods=["GET"])
