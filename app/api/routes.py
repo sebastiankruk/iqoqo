@@ -1,17 +1,20 @@
 """Defines the API endpoints for the application."""
 
 import json
+import os
 from io import BytesIO
 from typing import Any
 
 from flask import jsonify, request, send_file, session
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
+from app.utils.covers import RAW_DIR, start_cover_processing
 
 from . import api_bp
 
@@ -110,6 +113,8 @@ def get_items():
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
+                "cover_path": manifestation.cover_path if manifestation else None,
+                "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
@@ -151,6 +156,8 @@ def get_item_detail(item_id: int):
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["cover_path"] = manifestation.cover_path
+        item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
         if manifestation.expression:
             expression = manifestation.expression
@@ -385,6 +392,39 @@ def add_item(isbn: str):
     db.session.commit()
 
     return jsonify({"item_id": item.id})
+
+
+@api_bp.route("/items/<int:manifestation_id>/cover", methods=["POST"])
+def upload_cover(manifestation_id):
+    """Handles manual user photo uploads for a manifestation."""
+    if "cover" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["cover"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    manifestation = Manifestation.query.get_or_404(manifestation_id)
+    isbn = manifestation.isbn13 or f"item_{manifestation_id}"
+
+    filename = secure_filename(f"{isbn}_raw.jpg")
+    filepath = os.path.join(RAW_DIR, filename)
+    file.save(filepath)
+
+    # Set status to processing
+    if manifestation.meta is None:
+        manifestation.meta = {}
+    manifestation.meta["cover_status"] = "processing"
+    db.session.commit()
+
+    # Get Title/Author from related Expression/Work
+    work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
+    title = work.title if work else "Unknown Title"
+    author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
+
+    start_cover_processing(manifestation.id, isbn, title, author, user_image_path=filepath)
+
+    return jsonify({"message": "Cover upload processing started"}), 202
 
 
 # =============================================================================

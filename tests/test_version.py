@@ -15,7 +15,7 @@ def test_versions_are_in_sync() -> None:
         py_version = pyproject_data["project"]["version"]
 
     # Read package.json
-    with open(root_dir / "package.json", "r", encoding="utf-8") as f:
+    with open(root_dir / "package.json", encoding="utf-8") as f:
         package_data = json.load(f)
         js_version = package_data["version"]
 

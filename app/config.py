@@ -8,6 +8,7 @@ load_dotenv()
 
 
 class Config:
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -27,12 +28,11 @@ class Config:
 
         import tomllib
 
-        env_version = tomllib.load(open("pyproject.toml", "rb")).get("project", {}).get("version")
+        with open("pyproject.toml", "rb") as pyproject_file:
+            env_version = tomllib.load(pyproject_file).get("project", {}).get("version")
         if env_version:
             return env_version
 
         return "dev-local"
 
-    VERSION = _get_version()
-    VERSION = _get_version()
     VERSION = _get_version()
