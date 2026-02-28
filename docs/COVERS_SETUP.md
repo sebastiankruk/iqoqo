@@ -21,7 +21,7 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 ### Google Gemini (Imagen 3)
 
-1. Get key from Google AI Studio.
+1. Get key from [Google AI Studio](https://aistudio.google.com/api-keys).
 2. Add to `.env`:
 
    ```bash
