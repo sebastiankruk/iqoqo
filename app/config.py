@@ -1,7 +1,6 @@
 """Defines the configuration for the Flask application."""
 
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -26,13 +25,14 @@ class Config:
         if env_version and env_version != "dev":
             return env_version
 
-        # Try to read 'version' or 'VERSION' file from project root
-        root_dir = Path(__file__).parent.parent
-        for filename in ["version", "VERSION"]:
-            file_path = root_dir / filename
-            if file_path.exists():
-                return f"{file_path.read_text().strip()}"
+        import tomllib
+
+        env_version = tomllib.load(open("pyproject.toml", "rb")).get("project", {}).get("version")
+        if env_version:
+            return env_version
 
         return "dev-local"
 
+    VERSION = _get_version()
+    VERSION = _get_version()
     VERSION = _get_version()
