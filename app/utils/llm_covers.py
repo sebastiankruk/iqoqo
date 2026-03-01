@@ -156,3 +156,5 @@ def fetch_llm_cover(isbn: str, title: str, author: str) -> str | None:
 
     if os.environ.get("OPENAI_API_KEY"):
         return generate_cover_cloud(isbn, title, author)
+
+    return None

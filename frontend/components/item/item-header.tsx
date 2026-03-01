@@ -24,7 +24,7 @@ export function ItemHeader({ item: initialItem }: { item: Item }) {
     setIsRequesting(true);
     try {
       await apiClient.post(`/manifestations/${item.manifestation_id}/regenerate-cover`);
-      setItem((prev: any) => ({
+      setItem((prev) => ({
         ...prev,
         cover_status: 'pending'
       }));

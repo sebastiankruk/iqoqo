@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Camera, Upload, Loader2 } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 
 interface CameraCaptureProps {
   manifestationId: number;

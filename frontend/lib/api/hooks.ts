@@ -100,13 +100,13 @@ export function useAddItem() {
 
 /* ── Polling Hook for Async Updates ─────────────────────────────────────── */
 
-export function useManifestationWithPolling(initialData: any) {
-  const [item, setItem] = useState(initialData);
+export function useManifestationWithPolling(initialData: Item) {
+  const [item, setItem] = useState<Item>(initialData);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
 
-    const isPending = item?.meta?.cover_status === 'pending';
+    const isPending = item?.cover_status === 'pending';
 
     if (isPending && item?.id) {
       intervalId = setInterval(async () => {
@@ -129,7 +129,7 @@ export function useManifestationWithPolling(initialData: any) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [item?.meta?.cover_status, item?.id]);
+  }, [item?.cover_status, item?.id]);
 
   return { item, setItem };
 }

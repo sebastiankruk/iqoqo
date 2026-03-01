@@ -381,10 +381,11 @@ The route in `app/api/routes.py` stores this in the FRBR hierarchy
 lookups of the same ISBN are served from the local database.
 
 ### Cover Generation Pipeline
-* **Real-time Lookup:** Fast APIs (OpenLibrary, Google Books) run synchronously during item creation to provide immediate UI feedback.
-* **Asynchronous Generation:** If fast lookup fails, item metadata is marked `cover_status: "pending"` and a background thread orchestrates LLM generation (Local SD -> Gemini -> OpenAI).
-* **Optimization:** All generated covers are converted to `JPEG` at 85% quality to prevent storage bloat, while maintaining their 1024x1024 resolution.
-* **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
+
+- **Real-time Lookup:** Fast APIs (OpenLibrary, Google Books) run synchronously during item creation to provide immediate UI feedback.
+- **Asynchronous Generation:** If fast lookup fails, item metadata is marked `cover_status: "pending"` and a background thread orchestrates LLM generation (Local SD -> Gemini -> OpenAI).
+- **Optimization:** All generated covers are converted to `JPEG` at 85% quality to prevent storage bloat, while maintaining their 1024x1024 resolution.
+- **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
 
 ## ⚙️ Operations & Maintenance
 
@@ -394,10 +395,12 @@ iqoqo includes scripts to manage data portability and disaster recovery.
 
 **Backup:**
 Run `python scripts/backup.py` to create a ZIP archive containing the database dump (`metadata.json`) and the `covers/` directory.
+
 - **Configuration:** Set `BACKUP_DIR` env var to customize the output location (default: `exports/`).
 
 **Restore:**
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.
+
 - This script is "safe" — it updates existing records matching by ISBN/ID but does not wipe the database.
 
 ### Archiving Orphaned Covers
@@ -409,6 +412,7 @@ python scripts/archive_orphans.py
 ```
 
 This moves unused images to an archive folder.
+
 - **Configuration:** Set `COVERS_ARCHIVE_DIR` env var to customize the archive location (default: `app/static/archive/covers`).
 
 ## 🌐 Frontend Architecture (Phase 2)

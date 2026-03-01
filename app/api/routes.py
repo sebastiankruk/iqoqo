@@ -293,12 +293,9 @@ def lookup_isbn(isbn: str):
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
 
-            app = (
-                func.current_app._get_current_object() if hasattr(func, "current_app") else None
-            )  # Safety check, usually we use current_app
             from flask import current_app
 
-            app = current_app._get_current_object()
+            app = current_app._get_current_object()  # type: ignore[attr-defined]
 
             thread = threading.Thread(target=generate_cover_async, args=(app, manifestation.id, canonical_isbn, title, author))
             thread.start()
@@ -454,10 +451,10 @@ def upload_cover(manifestation_id):
     return jsonify({"message": "Cover upload processing started"}), 202
 
 
-@api_bp.route("/manifestations/<int:id>/regenerate-cover", methods=["POST"])
-def regenerate_cover(id):
+@api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
+def regenerate_cover(manifestation_id: int):
     """Force regeneration of a cover for a manifestation."""
-    manif = Manifestation.query.get_or_404(id)
+    manif = Manifestation.query.get_or_404(manifestation_id)
 
     # Reset status
     if manif.meta is None:
@@ -473,7 +470,7 @@ def regenerate_cover(id):
 
     from flask import current_app
 
-    app = current_app._get_current_object()
+    app = current_app._get_current_object()  # type: ignore[attr-defined]
     thread = threading.Thread(target=generate_cover_async, args=(app, manif.id, isbn, title, author))
     thread.start()
 

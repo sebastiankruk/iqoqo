@@ -27,7 +27,7 @@ def restore_covers(zip_path):
             shutil.copytree(src_covers, dst_covers, dirs_exist_ok=True)
 
         # 2. Update DB matching by ID (or ISBN)
-        with open(os.path.join(tmp, "metadata.json")) as f:
+        with open(os.path.join(tmp, "metadata.json"), encoding="utf-8") as f:
             data = json.load(f)
 
         with app.app_context():

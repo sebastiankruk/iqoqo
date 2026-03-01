@@ -42,11 +42,10 @@ def add_source_badge(filepath: str, source: str):
 
     try:
         with Image.open(filepath) as img:
-            if img.mode != "RGB":
-                img = img.convert("RGB")
+            out: Image.Image = img.convert("RGB")
 
-            d = ImageDraw.Draw(img)
-            w, h = img.size
+            d = ImageDraw.Draw(out)
+            w, h = out.size
 
             # Draw a 30x30 rectangle in bottom right
             box_size = 30
@@ -57,8 +56,8 @@ def add_source_badge(filepath: str, source: str):
             # Adjust position for default font
             d.text((w - 20, h - 22), text, fill="white", font=font)
 
-            img.save(filepath)
-    except Exception as e:
+            out.save(filepath)
+    except (OSError, ValueError, AttributeError) as e:
         logger.error(f"Failed to apply badge overlay: {e}")
 
 
@@ -205,7 +204,7 @@ def process_cover_pipeline(manifestation_id: int, isbn: str, title: str, author:
         app = create_app()
 
     with app.app_context():
-        manifestation = Manifestation.query.get(manifestation_id)
+        manifestation = db.session.get(Manifestation, manifestation_id)
         if not manifestation:
             return
 
