@@ -232,3 +232,68 @@ def start_cover_processing(manifestation_id: int, isbn: str, title: str, author:
     """Fires off the background thread."""
     thread = threading.Thread(target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_image_path))
     thread.start()
+
+
+def rebind_orphaned_covers() -> int:
+    """
+    Scans the covers directory for images that match books (Manifestations)
+    with missing covers, and links them.
+
+    Returns:
+        int: The number of covers rebound.
+    """
+    orphans_rebound = 0
+
+    # 1. Get books without covers
+    # Note: This query assumes we are in an app context
+    books_missing_covers = Manifestation.query.filter((Manifestation.cover_path.is_(None)) | (Manifestation.cover_path == "")).all()
+
+    if not books_missing_covers:
+        logger.info("No books found missing covers.")
+        return 0
+
+    # 2. List files
+    try:
+        files = os.listdir(COVERS_DIR)
+    except OSError as e:
+        logger.error(f"Failed to list covers directory: {e}")
+        return 0
+
+    # 3. Match
+    for book in books_missing_covers:
+        if not book.isbn13:
+            continue
+
+        # Find files starting with ISBN
+        candidates = [f for f in files if f.startswith(book.isbn13) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
+
+        if candidates:
+            # Sort candidates to pick the "best" one if multiple exist
+            # Priority: user > api > generated
+            def sort_key(f):
+                if "_user" in f:
+                    return 0
+                if "_ol" in f or "_gb" in f:
+                    return 1
+                return 2
+
+            candidates.sort(key=sort_key)
+            best_match = candidates[0]
+
+            # Update DB
+            book.cover_path = f"/static/covers/{best_match}"
+
+            # Update meta status
+            meta = dict(book.meta) if book.meta else {}
+            meta["cover_status"] = "ready"
+            if "cover_source" not in meta:
+                meta["cover_source"] = "rebind"
+            book.meta = meta
+
+            orphans_rebound += 1
+            logger.info(f"Rebound cover for ISBN {book.isbn13}: {best_match}")
+
+    if orphans_rebound > 0:
+        db.session.commit()
+
+    return orphans_rebound
