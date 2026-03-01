@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from 'react';
 import { apiClient, apiFetch } from "./client";
 import type {
   Item,
@@ -95,6 +96,42 @@ export function useAddItem() {
       qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
+}
+
+/* ── Polling Hook for Async Updates ─────────────────────────────────────── */
+
+export function useManifestationWithPolling(initialData: any) {
+  const [item, setItem] = useState(initialData);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    const isPending = item?.meta?.cover_status === 'pending';
+
+    if (isPending && item?.id) {
+      intervalId = setInterval(async () => {
+        try {
+          const response = await apiClient.get(`/items/${item.id}`); // Polling item detail which includes manifestation
+          const updatedItem = response.data.data; // Unwrap envelope
+
+          setItem(updatedItem);
+
+          if (updatedItem?.cover_status !== 'pending') {
+            clearInterval(intervalId);
+          }
+        } catch (error) {
+          console.error("Error polling for cover status:", error);
+          clearInterval(intervalId);
+        }
+      }, 3000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [item?.meta?.cover_status, item?.id]);
+
+  return { item, setItem };
 }
 
 /* ── Update item ─────────────────────────────────────────────────────────── */

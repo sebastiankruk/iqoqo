@@ -9,6 +9,7 @@ from openai import OpenAI
 from app.config import Config
 from app.db import db
 from app.db.models import LLMTelemetry
+from app.utils.images import optimize_and_save_image
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,7 @@ def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
     """Helper to save binary image data to disk."""
     filename = f"{isbn}_{suffix}.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(image_data)
+    optimize_and_save_image(image_data, filepath)
     return f"/static/covers/{filename}"
 
 

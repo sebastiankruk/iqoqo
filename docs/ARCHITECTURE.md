@@ -380,6 +380,12 @@ The route in `app/api/routes.py` stores this in the FRBR hierarchy
 (`Work.title`, `Work.meta["authors"]`, `Manifestation.meta`) so subsequent
 lookups of the same ISBN are served from the local database.
 
+### Cover Generation Pipeline
+* **Real-time Lookup:** Fast APIs (OpenLibrary, Google Books) run synchronously during item creation to provide immediate UI feedback.
+* **Asynchronous Generation:** If fast lookup fails, item metadata is marked `cover_status: "pending"` and a background thread orchestrates LLM generation (Local SD -> Gemini -> OpenAI).
+* **Optimization:** All generated covers are converted to `JPEG` at 85% quality to prevent storage bloat, while maintaining their 1024x1024 resolution.
+* **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
+
 ## 🌐 Frontend Architecture (Phase 2)
 
 iqoqo uses a **decoupled** architecture where the Flask application serves only JSON

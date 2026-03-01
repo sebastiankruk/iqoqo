@@ -94,10 +94,12 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         {/* Cover */}
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
-          {isProcessing ? (
+          {isProcessing || itemWithCoverFields.cover_status === 'pending' ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted/50 p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Generating Cover...</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {itemWithCoverFields.cover_status === 'pending' ? 'Generating...' : 'Processing...'}
+              </span>
             </div>
           ) : coverUrl ? (
             <Image

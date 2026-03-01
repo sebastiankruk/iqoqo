@@ -1,8 +1,10 @@
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
+from app.utils.images import optimize_and_save_image
 from app.utils.llm_covers import generate_cover_cloud
 
 
