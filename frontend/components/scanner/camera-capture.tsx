@@ -23,7 +23,7 @@ export function CameraCapture({ manifestationId, onUploadComplete, className }: 
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      await fetch(`${apiUrl}/api/items/${manifestationId}/cover`, {
+      await fetch(`${apiUrl}/api/manifestations/${manifestationId}/cover`, {
         method: "POST",
         body: formData,
       });

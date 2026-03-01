@@ -50,8 +50,8 @@ def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
     return f"/static/covers/{filename}"
 
 
-def generate_cover_cloud(isbn: str, title: str, author: str) -> str | None:
-    """Tier 3: OpenAI DALL-E 3."""
+def generate_cover_cloud(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+    """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
@@ -80,15 +80,15 @@ def generate_cover_cloud(isbn: str, title: str, author: str) -> str | None:
         if img_response.status_code == 200:
             path = save_image(img_response.content, isbn, "dalle")
             record_telemetry("openai")
-            return path
+            return path, "llm_openai"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
         logger.error(f"Cloud LLM Gen failed: {e}")
 
     return None
 
 
-def generate_cover_gemini(isbn: str, title: str, author: str) -> str | None:
-    """Tier 3: Google Imagen via Gemini API."""
+def generate_cover_gemini(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+    """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -107,15 +107,15 @@ def generate_cover_gemini(isbn: str, title: str, author: str) -> str | None:
                 image_data = base64.b64decode(predictions[0]["bytesBase64Encoded"])
                 path = save_image(image_data, isbn, "gemini")
                 record_telemetry("gemini")
-                return path
+                return path, "llm_gemini"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Gemini Gen failed: {e}")
 
     return None
 
 
-def generate_cover_local(isbn: str, title: str, author: str) -> str | None:
-    """Tier 4: Local Stable Diffusion (Automatic1111 API)."""
+def generate_cover_local(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+    """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
         return None
@@ -128,31 +128,31 @@ def generate_cover_local(isbn: str, title: str, author: str) -> str | None:
     }
 
     try:
-        response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, timeout=60)
+        response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, timeout=300)
         if response.status_code == 200:
             r = response.json()
             image_data = base64.b64decode(r["images"][0])
             path = save_image(image_data, isbn, "localsd")
             record_telemetry("local")
-            return path
+            return path, "llm_local_stable_diffusion"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Local SD Gen failed: {e}")
 
     return None
 
 
-def fetch_llm_cover(isbn: str, title: str, author: str) -> str | None:
-    """Orchestrates LLM generation tiers."""
+def fetch_llm_cover(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+    """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
-    cover = generate_cover_local(isbn, title, author)
-    if cover:
-        return cover
+    result = generate_cover_local(isbn, title, author)
+    if result:
+        return result
 
-    # 2. Cloud (Paid) - Check env vars to see which is preferred/available
+    # 2. Cloud (Paid) - check env vars for which provider is available
     if os.environ.get("GEMINI_API_KEY"):
-        cover = generate_cover_gemini(isbn, title, author)
-        if cover:
-            return cover
+        result = generate_cover_gemini(isbn, title, author)
+        if result:
+            return result
 
     if os.environ.get("OPENAI_API_KEY"):
         return generate_cover_cloud(isbn, title, author)

@@ -35,9 +35,12 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_requests_get.return_value = mock_resp
 
     with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
-        path = fetch_external_api_cover("9780123456789")
+        result = fetch_external_api_cover("9780123456789")
 
+        assert result is not None
+        path, source = result
         assert path == "/static/covers/9780123456789_ol.jpg"
+        assert source == "api_openlibrary"
         assert (tmp_path / "9780123456789_ol.jpg").exists()
         # Verify URL
         args, _ = mock_requests_get.call_args
@@ -74,6 +77,8 @@ def test_generate_cover_cloud_success(tmp_path, app):
                     patch("app.utils.images.optimize_and_save_image"),
                     patch("app.utils.llm_covers.record_telemetry"),
                 ):
-                    path = generate_cover_cloud("123", "Title", "Author")
-                    assert path is not None
+                    result = generate_cover_cloud("123", "Title", "Author")
+                    assert result is not None
+                    path, source = result
                     assert "123_dalle.jpg" in path
+                    assert source == "llm_openai"

@@ -91,8 +91,8 @@ def generate_fallback_cover(isbn: str, title: str, author: str) -> str | None:
         return None
 
 
-def fetch_external_api_cover(isbn: str) -> str | None:
-    """Tier 2: Try OpenLibrary then Google Books."""
+def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
+    """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
 
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
@@ -105,7 +105,7 @@ def fetch_external_api_cover(isbn: str) -> str | None:
             with open(filepath, "wb") as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
-            return f"/static/covers/{filename}"
+            return f"/static/covers/{filename}", "api_openlibrary"
     except (requests.RequestException, OSError, ValueError, TypeError):
         pass
 
@@ -124,7 +124,7 @@ def fetch_external_api_cover(isbn: str) -> str | None:
                     filepath = os.path.join(COVERS_DIR, filename)
                     with open(filepath, "wb") as f:
                         f.write(img_res.content)
-                    return f"/static/covers/{filename}"
+                    return f"/static/covers/{filename}", "api_google_books"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
 
@@ -133,66 +133,39 @@ def fetch_external_api_cover(isbn: str) -> str | None:
 
 def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
     """Runs real-time (fast) lookups. Returns True if a cover was found."""
-    # Try External APIs (OpenLibrary, Google Books)
-    local_path = fetch_external_api_cover(isbn)
-    if local_path:
+    result = fetch_external_api_cover(isbn)
+    if result:
+        local_path, source = result
         manifestation.cover_path = local_path
         if manifestation.meta is None:
             manifestation.meta = {}
-
-        # Determine source based on filename suffix
-        source = "external_api"
-        if "_ol.jpg" in local_path:
-            source = "api_openlibrary"
-        elif "_gb.jpg" in local_path:
-            source = "api_google_books"
-
         manifestation.meta["cover_source"] = source
         manifestation.meta["cover_status"] = "ready"
         return True
     return False
 
 
-def generate_cover_async(app, manifestation_id: int, isbn: str, title: str, author: str):
-    """Background thread for heavy LLM generation."""
-    with app.app_context():
-        manif = db.session.get(Manifestation, manifestation_id)
-        if not manif:
-            return
-
-        local_path = fetch_llm_cover(isbn, title, author)
-
-        # Fallback to basic pillow text cover if LLM fails
-        if not local_path:
-            local_path = generate_fallback_cover(isbn, title, author)
-
-        if local_path:
-            # Determine source
-            source = "llm_generated"
-            if "_gemini.jpg" in local_path:
-                source = "llm_gemini"
-            elif "_dalle.jpg" in local_path:
-                source = "llm_openai"
-            elif "_localsd.jpg" in local_path:
-                source = "llm_local_stable_diffusion"
-            elif "_generated.jpg" in local_path:
-                source = "fallback_pil"
-
-            abs_path = os.path.join(COVERS_DIR, os.path.basename(local_path))
-            add_source_badge(abs_path, source)
-
-            manif.cover_path = local_path
-            if manif.meta is None:
-                manif.meta = {}
-            manif.meta["cover_source"] = source
-            manif.meta["cover_status"] = "ready"
-            db.session.commit()
-
-
-def process_cover_pipeline(manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None):
+def process_cover_pipeline(
+    manifestation_id: int,
+    isbn: str,
+    title: str,
+    author: str,
+    user_image_path: str | None = None,
+):
     """
-    The Chain of Responsibility pipeline.
-    Can be run in background thread or via CLI script.
+    The single cover-generation pipeline (Chain of Responsibility).
+
+    Tiers:
+      1. User photo (if provided)
+      2. External APIs (OpenLibrary, Google Books)
+      3/4. LLM generation (local SD → Gemini → OpenAI)
+
+    If all tiers fail the existing cover_path is left unchanged so the
+    frontend can show its book-icon placeholder rather than an empty or
+    low-quality fallback image.  cover_status is set to ``"failed"``.
+
+    Can be invoked directly (e.g. from a CLI script) or via
+    ``start_cover_processing`` which fires it in a background thread.
     """
     from flask import current_app, has_app_context
 
@@ -208,8 +181,8 @@ def process_cover_pipeline(manifestation_id: int, isbn: str, title: str, author:
         if not manifestation:
             return
 
-        local_cover_path = None
-        source = None
+        local_cover_path: str | None = None
+        source: str | None = None
 
         # Tier 1: User Photo
         if user_image_path and os.path.exists(user_image_path):
@@ -221,29 +194,34 @@ def process_cover_pipeline(manifestation_id: int, isbn: str, title: str, author:
 
         # Tier 2: External APIs
         if not local_cover_path:
-            local_cover_path = fetch_external_api_cover(isbn)
-            source = "external_api" if local_cover_path else None
+            result = fetch_external_api_cover(isbn)
+            if result:
+                local_cover_path, source = result
 
-        # Tier 3/4: LLM Gen
+        # Tier 3/4: LLM Generation
         if not local_cover_path:
-            local_cover_path = fetch_llm_cover(isbn, title, author)
-            source = "llm_generated" if local_cover_path else None
-
-        # Tier 5: Fallback
-        if not local_cover_path:
-            local_cover_path = generate_fallback_cover(isbn, title, author)
-            source = "fallback_pil"
+            result = fetch_llm_cover(isbn, title, author)
+            if result:
+                local_cover_path, source = result
 
         # Update DB
         if manifestation.meta is None:
             manifestation.meta = {}
 
-        manifestation.cover_path = local_cover_path
-        manifestation.meta["cover_source"] = source
-        manifestation.meta["cover_status"] = "ready"
+        if local_cover_path:
+            abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_path))
+            add_source_badge(abs_path, source or "")
+            manifestation.cover_path = local_cover_path
+            manifestation.meta["cover_source"] = source
+            manifestation.meta["cover_status"] = "ready"
+            logger.info("Cover processed for %s: %s", isbn, source)
+        else:
+            # All tiers failed — leave cover_path as-is so the frontend shows
+            # a book-icon placeholder rather than an empty or text-only image.
+            manifestation.meta["cover_status"] = "failed"
+            logger.warning("Cover generation failed for %s: no cover produced, leaving existing", isbn)
 
         db.session.commit()
-        logger.info(f"Cover processed for {isbn}: {source}")
 
 
 def start_cover_processing(manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None):

@@ -2,7 +2,6 @@
 
 import json
 import os
-import threading
 from io import BytesIO
 from typing import Any
 
@@ -15,7 +14,7 @@ import app.utils.isbn as isbn_utils
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
-from app.utils.covers import RAW_DIR, generate_cover_async, process_fast_cover, start_cover_processing
+from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
 
@@ -284,7 +283,7 @@ def lookup_isbn(isbn: str):
         found_cover = process_fast_cover(manifestation, canonical_isbn)
 
         if not found_cover:
-            # 2. Schedule async generation
+            # 2. Schedule async LLM generation
             if manifestation.meta is None:
                 manifestation.meta = {}
             manifestation.meta["cover_status"] = "pending"
@@ -293,12 +292,7 @@ def lookup_isbn(isbn: str):
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
 
-            from flask import current_app
-
-            app = current_app._get_current_object()  # type: ignore[attr-defined]
-
-            thread = threading.Thread(target=generate_cover_async, args=(app, manifestation.id, canonical_isbn, title, author))
-            thread.start()
+            start_cover_processing(manifestation.id, canonical_isbn, title, author)
 
         db.session.commit()
     else:
@@ -418,7 +412,7 @@ def add_item(isbn: str):
     return jsonify({"item_id": item.id})
 
 
-@api_bp.route("/items/<int:manifestation_id>/cover", methods=["POST"])
+@api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
 def upload_cover(manifestation_id):
     """Handles manual user photo uploads for a manifestation."""
     if "cover" not in request.files:
@@ -462,17 +456,13 @@ def regenerate_cover(manifestation_id: int):
     manif.meta = meta
     db.session.commit()
 
-    # Launch background thread
+    # Launch background pipeline (API lookup → LLM generation)
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
     isbn = manif.isbn13 or str(manif.id)
 
-    from flask import current_app
-
-    app = current_app._get_current_object()  # type: ignore[attr-defined]
-    thread = threading.Thread(target=generate_cover_async, args=(app, manif.id, isbn, title, author))
-    thread.start()
+    start_cover_processing(manif.id, isbn, title, author)
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
 

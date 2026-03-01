@@ -218,8 +218,8 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
         assert len(items) == 1
 
 
-@patch("app.api.routes.threading.Thread")
-def test_regenerate_cover(mock_thread, client, sample_book):
+@patch("app.api.routes.start_cover_processing")
+def test_regenerate_cover(mock_start, client, sample_book):
     """Test the regenerate cover endpoint triggers background processing."""
     # 1. Call the endpoint
     response = client.post(f"/api/manifestations/{sample_book.id}/regenerate-cover")
@@ -233,6 +233,5 @@ def test_regenerate_cover(mock_thread, client, sample_book):
         manif = db.session.get(Manifestation, sample_book.id)
         assert manif.meta["cover_status"] == "pending"
 
-    # 4. Verify Background Thread was started
-    mock_thread.assert_called_once()
-    mock_thread.return_value.start.assert_called_once()
+    # 4. Verify background pipeline was scheduled
+    mock_start.assert_called_once()

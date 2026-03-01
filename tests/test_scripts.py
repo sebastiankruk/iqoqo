@@ -12,44 +12,76 @@ from app.config import Config
 from app.db.models import Manifestation
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
-from scripts.archive_orphans import archive_orphaned_covers
+from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
 from scripts.backup import create_export
 from scripts.restore_covers import restore_covers
 
 
 def test_archive_orphaned_covers(app, tmp_path):
     """Test that orphaned files are moved to archive."""
-    # Setup directories
     archive_dir = tmp_path / "archive"
+    covers_dir = tmp_path / "covers"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+    (covers_dir / "keep.jpg").touch()
+    (covers_dir / "orphan.jpg").touch()
 
-    # Mock Config and DB
     with (
-        patch("app.config.Config.BASE_DIR", str(tmp_path)),
+        patch("scripts.archive_orphans.COVERS_DIR", str(covers_dir)),
         patch.dict(os.environ, {"COVERS_ARCHIVE_DIR": str(archive_dir)}),
         patch("app.db.models.Manifestation.query") as mock_query,
-        patch("scripts.archive_orphans.os.path.join", side_effect=os.path.join),
+        patch("scripts.archive_orphans.app", app),
     ):
-
-        # Mock DB returning one valid cover
         mock_manif = MagicMock()
         mock_manif.cover_path = "/static/covers/keep.jpg"
         mock_query.filter.return_value.all.return_value = [mock_manif]
 
-        # Run script logic (we mock the app context inside the script via the app object imported there)
-        # But since we import the function, we need to mock the app object used inside the script
-        with patch("scripts.archive_orphans.app", app):
-            # Ensure the directory structure matches what the script expects:
-            # Config.BASE_DIR / "app" / "static" / "covers"
-            real_structure = tmp_path / "app" / "static" / "covers"
-            real_structure.mkdir(parents=True, exist_ok=True)
-            (real_structure / "keep.jpg").touch()
-            (real_structure / "orphan.jpg").touch()
+        archive_orphaned_covers()
 
-            archive_orphaned_covers()
+        assert (covers_dir / "keep.jpg").exists()
+        assert not (covers_dir / "orphan.jpg").exists()
+        assert (archive_dir / "orphan.jpg").exists()
 
-            assert (real_structure / "keep.jpg").exists()
-            assert not (real_structure / "orphan.jpg").exists()
-            assert (archive_dir / "orphan.jpg").exists()
+
+def test_schedule_missing_covers_null_path(app, tmp_path):
+    """Manifestations with cover_path=None are passed to the pipeline."""
+    mock_manif = MagicMock()
+    mock_manif.id = 42
+    mock_manif.isbn13 = "9780000000000"
+    mock_manif.cover_path = None
+    mock_manif.expression.work.title = "Test Book"
+    mock_manif.expression.work.meta = {"authors": ["Test Author"]}
+
+    with (
+        patch("scripts.archive_orphans.app", app),
+        patch("app.db.models.Manifestation.query") as mock_query,
+        patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
+    ):
+        mock_query.all.return_value = [mock_manif]
+
+        schedule_missing_covers()
+
+        mock_pipeline.assert_called_once_with(42, "9780000000000", "Test Book", "Test Author")
+
+
+def test_schedule_missing_covers_file_absent(app, tmp_path):
+    """Manifestations whose cover file is missing on disk are scheduled."""
+    mock_manif = MagicMock()
+    mock_manif.id = 7
+    mock_manif.isbn13 = "9780000000001"
+    mock_manif.cover_path = "/static/covers/gone.jpg"
+    mock_manif.expression.work.title = "Gone Book"
+    mock_manif.expression.work.meta = {"authors": ["Some Author"]}
+
+    with (
+        patch("scripts.archive_orphans.app", app),
+        patch("app.config.Config.BASE_DIR", str(tmp_path)),
+        patch("app.db.models.Manifestation.query") as mock_query,
+        patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
+    ):
+        mock_query.all.return_value = [mock_manif]
+        # File deliberately NOT created → pipeline should be called
+        schedule_missing_covers()
+        mock_pipeline.assert_called_once_with(7, "9780000000001", "Gone Book", "Some Author")
 
 
 def test_backup_creation(app, tmp_path):
