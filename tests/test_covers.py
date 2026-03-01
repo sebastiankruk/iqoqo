@@ -2,6 +2,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
 from app.utils.images import optimize_and_save_image
@@ -45,7 +46,7 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 
 def test_fetch_external_api_cover_failure(mock_requests_get):
     """Test API failure returns None."""
-    mock_requests_get.side_effect = Exception("Connection error")
+    mock_requests_get.side_effect = requests.RequestException("Connection error")
     path = fetch_external_api_cover("0000000000")
     assert path is None
 
@@ -57,10 +58,10 @@ def test_generate_cover_cloud_no_key():
         assert path is None
 
 
-def test_generate_cover_cloud_success(tmp_path):
+def test_generate_cover_cloud_success(tmp_path, app):
     """Test OpenAI generation flow."""
     with patch.dict("os.environ", {"OPENAI_API_KEY": "fake-key"}):
-        with patch("openai.OpenAI") as mock_client_cls:
+        with patch("app.utils.llm_covers.OpenAI") as mock_client_cls:
             mock_client = mock_client_cls.return_value
             mock_client.images.generate.return_value.data = [MagicMock(url="http://fake.url/img.jpg")]
 
@@ -68,7 +69,11 @@ def test_generate_cover_cloud_success(tmp_path):
                 mock_req.return_value.status_code = 200
                 mock_req.return_value.content = b"image_bytes"
 
-                with patch("app.utils.llm_covers.COVERS_DIR", str(tmp_path)):
+                with (
+                    patch("app.utils.llm_covers.COVERS_DIR", str(tmp_path)),
+                    patch("app.utils.images.optimize_and_save_image"),
+                    patch("app.utils.llm_covers.record_telemetry"),
+                ):
                     path = generate_cover_cloud("123", "Title", "Author")
                     assert path is not None
                     assert "123_dalle.jpg" in path

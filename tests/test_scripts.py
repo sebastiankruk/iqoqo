@@ -20,19 +20,14 @@ from scripts.restore_covers import restore_covers
 def test_archive_orphaned_covers(app, tmp_path):
     """Test that orphaned files are moved to archive."""
     # Setup directories
-    covers_dir = tmp_path / "covers"
     archive_dir = tmp_path / "archive"
-    covers_dir.mkdir()
-
-    # Create dummy files
-    (covers_dir / "keep.jpg").touch()
-    (covers_dir / "orphan.jpg").touch()
 
     # Mock Config and DB
     with (
         patch("app.config.Config.BASE_DIR", str(tmp_path)),
         patch.dict(os.environ, {"COVERS_ARCHIVE_DIR": str(archive_dir)}),
         patch("app.db.models.Manifestation.query") as mock_query,
+        patch("scripts.archive_orphans.os.path.join", side_effect=os.path.join),
     ):
 
         # Mock DB returning one valid cover
@@ -43,24 +38,18 @@ def test_archive_orphaned_covers(app, tmp_path):
         # Run script logic (we mock the app context inside the script via the app object imported there)
         # But since we import the function, we need to mock the app object used inside the script
         with patch("scripts.archive_orphans.app", app):
-            # We also need to patch the hardcoded paths inside the function if they don't use the mocked Config correctly
-            # The script uses Config.BASE_DIR, which we patched.
-            # However, the script constructs paths relative to "app/static/covers".
-            # Let's mock the paths directly for easier testing.
-            with patch("scripts.archive_orphans.os.path.join"):
-                # Complex mocking of join is fragile, let's rely on the Config patch
-                # and ensure the directory structure matches what the script expects:
-                # Config.BASE_DIR / "app" / "static" / "covers"
-                real_structure = tmp_path / "app" / "static" / "covers"
-                real_structure.mkdir(parents=True, exist_ok=True)
-                (real_structure / "keep.jpg").touch()
-                (real_structure / "orphan.jpg").touch()
+            # Ensure the directory structure matches what the script expects:
+            # Config.BASE_DIR / "app" / "static" / "covers"
+            real_structure = tmp_path / "app" / "static" / "covers"
+            real_structure.mkdir(parents=True, exist_ok=True)
+            (real_structure / "keep.jpg").touch()
+            (real_structure / "orphan.jpg").touch()
 
-                archive_orphaned_covers()
+            archive_orphaned_covers()
 
-                assert (real_structure / "keep.jpg").exists()
-                assert not (real_structure / "orphan.jpg").exists()
-                assert (archive_dir / "orphan.jpg").exists()
+            assert (real_structure / "keep.jpg").exists()
+            assert not (real_structure / "orphan.jpg").exists()
+            assert (archive_dir / "orphan.jpg").exists()
 
 
 def test_backup_creation(app, tmp_path):
