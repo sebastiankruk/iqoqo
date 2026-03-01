@@ -15,7 +15,14 @@ logger = logging.getLogger(__name__)
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 
 # Approximate costs per image (USD)
-PRICING = {"openai": 0.040, "gemini": 0.030, "local": 0.000}  # DALL-E 3 Standard  # Imagen 3
+PRICING = {
+    # DALL-E 3 Standard
+    "openai": 0.040,
+    # Imagen 3
+    "gemini": 0.030,
+    # Local Stable Diffusion
+    "local": 0.000,
+}
 
 
 def record_telemetry(provider: str):
@@ -143,6 +150,9 @@ def fetch_llm_cover(isbn: str, title: str, author: str) -> str | None:
 
     # 2. Cloud (Paid) - Check env vars to see which is preferred/available
     if os.environ.get("GEMINI_API_KEY"):
-        return generate_cover_gemini(isbn, title, author)
+        cover = generate_cover_gemini(isbn, title, author)
+        if cover:
+            return cover
 
-    return generate_cover_cloud(isbn, title, author)
+    if os.environ.get("OPENAI_API_KEY"):
+        return generate_cover_cloud(isbn, title, author)
