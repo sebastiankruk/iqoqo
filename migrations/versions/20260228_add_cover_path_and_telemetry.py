@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20260228_add_cover"
-down_revision = None  # TODO: Update this to your previous migration ID
+down_revision = "c3d8e1f20a45"
 
 
 def upgrade():

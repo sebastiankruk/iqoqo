@@ -7,6 +7,9 @@ max-line-length=140
 [MASTER]
 ignore=.git,__pycache__,build,dist,.venv,migrations
 
+[TYPECHECK]
+generated-members=alembic.op.*
+
 [DESIGN]
 max-args=10
 max-positional-arguments=10

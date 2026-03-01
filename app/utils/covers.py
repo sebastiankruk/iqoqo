@@ -98,14 +98,16 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
     try:
         response = requests.get(ol_url, stream=True, timeout=5)
-        # Check for 1x1 pixel tracking image
-        if response.status_code == 200 and int(response.headers.get("content-length", 0)) > 1000:
-            filename = f"{isbn}_ol.jpg"
-            filepath = os.path.join(COVERS_DIR, filename)
-            with open(filepath, "wb") as f:
-                for chunk in response.iter_content(1024):
-                    f.write(chunk)
-            return f"/static/covers/{filename}", "api_openlibrary"
+        if response.status_code == 200:
+            # content-length may be absent; consume the stream and measure actual bytes
+            content = b"".join(response.iter_content(1024))
+            # Reject 1×1 tracking pixels (always < 1 KB)
+            if len(content) > 1000:
+                filename = f"{isbn}_ol.jpg"
+                filepath = os.path.join(COVERS_DIR, filename)
+                with open(filepath, "wb") as f:
+                    f.write(content)
+                return f"/static/covers/{filename}", "api_openlibrary"
     except (requests.RequestException, OSError, ValueError, TypeError):
         pass
 
@@ -137,10 +139,11 @@ def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
     if result:
         local_path, source = result
         manifestation.cover_path = local_path
-        if manifestation.meta is None:
-            manifestation.meta = {}
-        manifestation.meta["cover_source"] = source
-        manifestation.meta["cover_status"] = "ready"
+        # Force SQLAlchemy to detect change in JSON field
+        meta = dict(manifestation.meta) if manifestation.meta else {}
+        meta["cover_source"] = source
+        meta["cover_status"] = "ready"
+        manifestation.meta = meta
         return True
     return False
 
@@ -205,22 +208,23 @@ def process_cover_pipeline(
                 local_cover_path, source = result
 
         # Update DB
-        if manifestation.meta is None:
-            manifestation.meta = {}
+        # Force SQLAlchemy to detect change in JSON field
+        meta = dict(manifestation.meta) if manifestation.meta else {}
 
         if local_cover_path:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_path))
             add_source_badge(abs_path, source or "")
             manifestation.cover_path = local_cover_path
-            manifestation.meta["cover_source"] = source
-            manifestation.meta["cover_status"] = "ready"
+            meta["cover_source"] = source
+            meta["cover_status"] = "ready"
             logger.info("Cover processed for %s: %s", isbn, source)
         else:
             # All tiers failed — leave cover_path as-is so the frontend shows
             # a book-icon placeholder rather than an empty or text-only image.
-            manifestation.meta["cover_status"] = "failed"
+            meta["cover_status"] = "failed"
             logger.warning("Cover generation failed for %s: no cover produced, leaving existing", isbn)
 
+        manifestation.meta = meta
         db.session.commit()
 
 

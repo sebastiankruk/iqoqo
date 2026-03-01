@@ -4,6 +4,19 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Fetch Covers",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scripts.fetch_covers",
+      "args": [
+        "--limit",
+        "${input:coverLimit}"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}"
+    },
+    {
       // Launch Flask API with full debugpy support.
       // --no-reload is required: the Flask reloader forks a child process and
       // VS Code's debugger attaches to the parent, so breakpoints would be
@@ -85,6 +98,14 @@
       "sourceMapPathOverrides": {
         "webpack://_N_E/*": "${workspaceFolder}/frontend/*"
       }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "coverLimit",
+      "type": "promptString",
+      "description": "Maximum number of covers to fetch (leave blank for no limit)",
+      "default": "10"
     }
   ],
   "compounds": [

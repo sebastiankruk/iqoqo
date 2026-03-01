@@ -102,6 +102,7 @@ export function useAddItem() {
 
 export function useManifestationWithPolling(initialData: Item) {
   const [item, setItem] = useState<Item>(initialData);
+  const qc = useQueryClient();
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -111,13 +112,17 @@ export function useManifestationWithPolling(initialData: Item) {
     if (isPending && item?.id) {
       intervalId = setInterval(async () => {
         try {
-          const response = await apiClient.get(`/items/${item.id}`); // Polling item detail which includes manifestation
-          const updatedItem = response.data.data; // Unwrap envelope
+          const response = await apiClient.get(`/items/${item.id}`);
+          const updatedItem: Item = response.data.data; // Unwrap envelope
 
           setItem(updatedItem);
 
           if (updatedItem?.cover_status !== 'pending') {
             clearInterval(intervalId);
+            // Refresh the collection list and the single-item cache so that
+            // cover_path changes are immediately visible without a page reload.
+            void qc.invalidateQueries({ queryKey: ["items"] });
+            void qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
           }
         } catch (error) {
           console.error("Error polling for cover status:", error);
@@ -129,7 +134,7 @@ export function useManifestationWithPolling(initialData: Item) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [item?.cover_status, item?.id]);
+  }, [item?.cover_status, item?.id, qc]);
 
   return { item, setItem };
 }
@@ -179,10 +184,15 @@ export function useIsbnSearch() {
 /* ── Regenerate Cover ───────────────────────────────────────────────────── */
 
 export function useRegenerateCover() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (manifestationId: number) => {
       const res = await apiClient.post(`/manifestations/${manifestationId}/regenerate-cover`);
       return res.data;
+    },
+    onSuccess: () => {
+      // Ensure the collection list picks up the new cover_status: 'pending' state.
+      void qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
 }

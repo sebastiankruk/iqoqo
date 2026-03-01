@@ -37,6 +37,8 @@ export interface Item {
   updated_at?: string;
   /** Cover processing status, flattened from manifestation.meta by the API. */
   cover_status?: string | null;
+  /** Relative path to a locally-stored cover image (e.g. /static/covers/…). */
+  cover_path?: string | null;
   // Joined fields from the API
   title?: string;
   isbn?: string;

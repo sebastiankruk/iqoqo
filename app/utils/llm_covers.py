@@ -93,21 +93,37 @@ def generate_cover_gemini(isbn: str, title: str, author: str) -> tuple[str, str]
     if not api_key:
         return None
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-images:predict?key={api_key}"
-    payload = {
-        "instances": [{"prompt": f"Minimalist book cover, highly detailed, title '{title}', author '{author}'"}],
-        "parameters": {"sampleCount": 1},
-    }
+    # {
+    #     "prompt": f"Minimalist book cover, highly detailed, title '{title}', author '{author}'",
+    #     "number_of_images": 1,
+    #     "height": 1024,
+    #     "width": 1024,
+    # }
 
     try:
-        response = requests.post(url, json=payload, timeout=30)
-        if response.status_code == 200:
-            predictions = response.json().get("predictions")
-            if predictions:
-                image_data = base64.b64decode(predictions[0]["bytesBase64Encoded"])
-                path = save_image(image_data, isbn, "gemini")
-                record_telemetry("gemini")
-                return path, "llm_gemini"
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key)
+        prompt = f"Minimalist book cover, highly detailed, title '{title}', author '{author}'"
+
+        # The SDK automatically resolves the correct endpoint and API version
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=prompt,
+            config=types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="1:1")),
+        )
+
+        # The new API returns the raw bytes inside inline_data
+        if response.candidates:
+            candidate = response.candidates[0]
+            if candidate.content and candidate.content.parts:
+                inline_data = candidate.content.parts[0].inline_data
+                if inline_data and inline_data.data:
+                    path = save_image(inline_data.data, isbn, "gemini")
+                    record_telemetry("gemini")
+                    return path, "llm_gemini"
+
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Gemini Gen failed: {e}")
 

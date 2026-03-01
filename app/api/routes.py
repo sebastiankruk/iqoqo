@@ -5,7 +5,7 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, session
+from flask import jsonify, request, send_file, send_from_directory, session
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
@@ -14,7 +14,7 @@ import app.utils.isbn as isbn_utils
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
-from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
+from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
 
@@ -22,6 +22,12 @@ from . import api_bp
 def _invalid_json_payload_response():
     """Return a standardized 400 response for absent/invalid JSON payloads."""
     return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
+
+
+@api_bp.route("/static/covers/<path:filename>", methods=["GET"])
+def serve_cover(filename: str):
+    """Serve a cover image from the local covers directory."""
+    return send_from_directory(COVERS_DIR, filename)
 
 
 @api_bp.route("/health", methods=["GET"])
