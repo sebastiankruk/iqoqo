@@ -436,9 +436,9 @@ def upload_cover(manifestation_id):
     file.save(filepath)
 
     # Set status to processing
-    if manifestation.meta is None:
-        manifestation.meta = {}
-    manifestation.meta["cover_status"] = "processing"
+    meta = dict(manifestation.meta) if manifestation.meta else {}
+    meta["cover_status"] = "processing"
+    manifestation.meta = meta
     db.session.commit()
 
     # Get Title/Author from related Expression/Work
@@ -457,9 +457,9 @@ def regenerate_cover(manifestation_id: int):
     manif = Manifestation.query.get_or_404(manifestation_id)
 
     # Reset status
-    if manif.meta is None:
-        manif.meta = {}
-    manif.meta["cover_status"] = "pending"
+    meta = dict(manif.meta) if manif.meta else {}
+    meta["cover_status"] = "pending"
+    manif.meta = meta
     db.session.commit()
 
     # Launch background thread

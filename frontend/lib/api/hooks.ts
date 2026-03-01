@@ -175,3 +175,14 @@ export function useIsbnSearch() {
     },
   });
 }
+
+/* ── Regenerate Cover ───────────────────────────────────────────────────── */
+
+export function useRegenerateCover() {
+  return useMutation({
+    mutationFn: async (manifestationId: number) => {
+      const res = await apiClient.post(`/manifestations/${manifestationId}/regenerate-cover`);
+      return res.data;
+    },
+  });
+}

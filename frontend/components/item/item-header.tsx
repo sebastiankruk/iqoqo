@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { Calendar, BookOpen, Tag, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { apiClient } from "@/lib/api/client";
-import { useManifestationWithPolling } from "@/lib/api/hooks";
+import { useManifestationWithPolling, useRegenerateCover } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 
 /** Title, authors, year, page count, and tag badges for an item. */
 export function ItemHeader({ item: initialItem }: { item: Item }) {
   const { item, setItem } = useManifestationWithPolling(initialItem);
+  const regenerateCover = useRegenerateCover();
   const [isRequesting, setIsRequesting] = useState(false);
 
   const work = item.work;
@@ -23,7 +23,7 @@ export function ItemHeader({ item: initialItem }: { item: Item }) {
     if (!item.manifestation_id) return;
     setIsRequesting(true);
     try {
-      await apiClient.post(`/manifestations/${item.manifestation_id}/regenerate-cover`);
+      await regenerateCover.mutateAsync(item.manifestation_id);
       setItem((prev) => ({
         ...prev,
         cover_status: 'pending'

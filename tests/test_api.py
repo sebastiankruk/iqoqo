@@ -216,3 +216,23 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
         assert manifestation is not None
         items = Item.query.filter_by(manifestation_id=manifestation.id).all()
         assert len(items) == 1
+
+
+@patch("app.api.routes.threading.Thread")
+def test_regenerate_cover(mock_thread, client, sample_book):
+    """Test the regenerate cover endpoint triggers background processing."""
+    # 1. Call the endpoint
+    response = client.post(f"/api/manifestations/{sample_book.id}/regenerate-cover")
+
+    # 2. Verify Response
+    assert response.status_code == 202
+    assert response.json["status"] == "pending"
+
+    # 3. Verify DB State (Optimistic update)
+    with client.application.app_context():
+        manif = db.session.get(Manifestation, sample_book.id)
+        assert manif.meta["cover_status"] == "pending"
+
+    # 4. Verify Background Thread was started
+    mock_thread.assert_called_once()
+    mock_thread.return_value.start.assert_called_once()
