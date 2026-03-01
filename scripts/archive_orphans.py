@@ -13,7 +13,10 @@ app = create_app()
 
 def archive_orphaned_covers():
     covers_dir = os.path.join(Config.BASE_DIR, "app", "static", "covers")
-    archive_dir = os.path.join(Config.BASE_DIR, "app", "static", "archive", "covers")
+
+    # Allow configuration via env var, default to static/archive/covers
+    default_archive = os.path.join(Config.BASE_DIR, "app", "static", "archive", "covers")
+    archive_dir = os.environ.get("COVERS_ARCHIVE_DIR", default_archive)
     os.makedirs(archive_dir, exist_ok=True)
 
     with app.app_context():

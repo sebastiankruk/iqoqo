@@ -18,7 +18,8 @@ def create_export():
     """Creates a full backup archive of data and covers."""
     with app.app_context():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_base_dir = os.path.join(Config.BASE_DIR, "exports")
+        # Allow configuration via env var
+        export_base_dir = os.environ.get("BACKUP_DIR", os.path.join(Config.BASE_DIR, "exports"))
         backup_dir_name = f"iqoqo_backup_{timestamp}"
         export_dir = os.path.join(export_base_dir, backup_dir_name)
 
