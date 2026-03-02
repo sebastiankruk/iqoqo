@@ -13,15 +13,17 @@ export function ItemHeader({ item }: { item: Item }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h1 className="text-balance font-serif text-2xl font-bold leading-tight text-foreground sm:text-3xl">
-          {work?.title ?? item.title ?? "Untitled"}
-        </h1>
-        {!!meta["Subtitle"] && (
-          <h2 className="font-serif text-base font-light text-muted-foreground sm:text-lg">
-            {meta["Subtitle"] as string}
-          </h2>
-        )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-balance font-serif text-2xl font-bold leading-tight text-foreground sm:text-3xl">
+            {work?.title ?? item.title ?? "Untitled"}
+          </h1>
+          {!!meta["Subtitle"] && (
+            <h2 className="font-serif text-base font-light text-muted-foreground sm:text-lg">
+              {meta["Subtitle"] as string}
+            </h2>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">

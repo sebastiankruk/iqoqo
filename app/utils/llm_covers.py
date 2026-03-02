@@ -56,7 +56,16 @@ def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
     return f"/static/covers/{filename}"
 
 
-def generate_cover_cloud(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+def build_context(description: str, genre: str) -> str:
+    ctx = ""
+    if genre:
+        ctx += f" Genre: {genre}."
+    if description:
+        ctx += f" Theme/Description: {description[:300]}."
+    return ctx
+
+
+def generate_cover_cloud(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -64,7 +73,8 @@ def generate_cover_cloud(isbn: str, title: str, author: str) -> tuple[str, str] 
 
     try:
         client = OpenAI(api_key=api_key)
-        prompt = f"A high-quality, minimalist book cover design for '{title}' by {author}. No text other than the title and author. Clean typography, modern aesthetic."
+        context = build_context(description, genre)
+        prompt = f"A high-quality, minimalist book cover design for '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
 
         response = client.images.generate(
             model="dall-e-3",
@@ -93,7 +103,7 @@ def generate_cover_cloud(isbn: str, title: str, author: str) -> tuple[str, str] 
     return None
 
 
-def generate_cover_gemini(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+def generate_cover_gemini(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -111,7 +121,8 @@ def generate_cover_gemini(isbn: str, title: str, author: str) -> tuple[str, str]
         from google.genai import types
 
         client = genai.Client(api_key=api_key)
-        prompt = f"Minimalist book cover, highly detailed, title '{title}', author '{author}'"
+        context = build_context(description, genre)
+        prompt = f"Minimalist book cover, highly detailed, title '{title}', author '{author}'.{context}"
 
         # The SDK automatically resolves the correct endpoint and API version
         response = client.models.generate_content(
@@ -136,14 +147,15 @@ def generate_cover_gemini(isbn: str, title: str, author: str) -> tuple[str, str]
     return None
 
 
-def generate_cover_local(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+def generate_cover_local(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
         return None
 
+    context = build_context(description, genre)
     payload = {
-        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text",
+        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text.{context}",
         "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
@@ -169,20 +181,20 @@ def generate_cover_local(isbn: str, title: str, author: str) -> tuple[str, str] 
     return None
 
 
-def fetch_llm_cover(isbn: str, title: str, author: str) -> tuple[str, str] | None:
+def fetch_llm_cover(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
     """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
-    result = generate_cover_local(isbn, title, author)
+    result = generate_cover_local(isbn, title, author, description, genre)
     if result:
         return result
 
     # 2. Cloud (Paid) - check env vars for which provider is available
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(isbn, title, author)
+        result = generate_cover_gemini(isbn, title, author, description, genre)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(isbn, title, author)
+        return generate_cover_cloud(isbn, title, author, description, genre)
 
     return None

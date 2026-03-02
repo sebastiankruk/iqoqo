@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw, CloudDownload } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -11,6 +11,7 @@ import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
 import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useDeleteItem, useManifestationWithPolling, useRegenerateCover } from "@/lib/api/hooks";
+import { apiClient } from "@/lib/api/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
+  const [isRefetching, setIsRefetching] = useState(false);
 
   const isPending = item.cover_status === 'pending';
 
@@ -77,6 +79,20 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
     }
   };
 
+  const handleRefetch = async () => {
+    if (!item.manifestation_id) return;
+    setIsRefetching(true);
+    try {
+      await apiClient.post(`/manifestations/${item.manifestation_id}/refetch-metadata`);
+      toast.success("Metadata refetched successfully. Reloading...");
+      window.location.reload();
+    } catch (error) {
+      toast.error("Failed to refetch metadata");
+    } finally {
+      setIsRefetching(false);
+    }
+  };
+
   const coverUrl =
     (item.manifestation_meta?.["cover_url"] as string | undefined) ??
     (item.meta?.["cover_url"] as string | undefined);
@@ -100,6 +116,15 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
 
               {/* Danger zone */}
               <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
+                <button
+                  onClick={handleRefetch}
+                  disabled={isRefetching}
+                  className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? 'animate-bounce' : ''}`} />
+                  {isRefetching ? "Fetching..." : "Refetch Metadata"}
+                </button>
+
                 <button
                   onClick={handleRegenerateClick}
                   disabled={isPending || isRequesting}

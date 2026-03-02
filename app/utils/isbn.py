@@ -148,10 +148,18 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
     if not title:
         return None
 
-    return {
-        "Title": title,
-        "Authors": [a for a in info.get("authors", []) if a],
-    }
+    # Clone the raw data so we don't mutate the original, then add standard keys
+    metadata = dict(info)
+    metadata.update(
+        {
+            "Title": title,
+            "Authors": [a for a in info.get("authors", []) if a],
+            "Description": info.get("description", "").strip(),
+            "Categories": [c for c in info.get("categories", []) if c],
+            "Source": "Google Books",
+        }
+    )
+    return metadata
 
 
 def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
@@ -184,10 +192,18 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         return None
 
     authors = [a.get("name", "") for a in book.get("authors", []) if a.get("name")]
-    return {
-        "Title": title,
-        "Authors": authors,
-    }
+
+    # Open Library sometimes stores description in 'notes'
+    description = book.get("notes", "")
+    if isinstance(description, dict):
+        description = description.get("value", "")
+
+    categories = [s.get("name", "") for s in book.get("subjects", []) if s.get("name")]
+
+    # Clone raw data and add standard keys
+    metadata = dict(book)
+    metadata.update({"Title": title, "Authors": authors, "Description": description, "Categories": categories, "Source": "Open Library"})
+    return metadata
 
 
 # ---------------------------------------------------------------------------
@@ -208,8 +224,8 @@ def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
               before calling this function.
 
     Returns:
-        A ``{"Title": str, "Authors": list[str]}`` dict on success, or
-        ``None`` when both upstream services return no usable results.
+        A dict containing standard keys (Title, Authors, Description, Categories)
+        plus the full raw metadata payload from the provider.
     """
     metadata = _lookup_google_books(isbn)
     if metadata:

@@ -468,7 +468,12 @@ def regenerate_cover(manifestation_id: int):
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
     isbn = manif.isbn13 or str(manif.id)
 
-    start_cover_processing(manif.id, isbn, title, author)
+    # Extract extra metadata for the LLM
+    meta = manif.meta or {}
+    description = meta.get("Description", "")
+    categories = meta.get("Categories", [])
+    genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
+    start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
 
@@ -476,6 +481,42 @@ def regenerate_cover(manifestation_id: int):
 # =============================================================================
 # Admin API Endpoints
 # =============================================================================
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
+def refetch_metadata(manifestation_id: int):
+    """Force refetch metadata from upstream providers."""
+    manif = Manifestation.query.get_or_404(manifestation_id)
+
+    if not manif.isbn13:
+        return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
+
+    # Canonicalize ISBN before lookup
+    canonical_isbn = isbn_utils.canonicalize_isbn(manif.isbn13)
+    if not canonical_isbn:
+        return jsonify({"success": False, "data": None, "error": "Invalid ISBN"}), 400
+
+    metadata = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+
+    if not metadata:
+        return jsonify({"success": False, "data": None, "error": "No upstream metadata found"}), 404
+
+    # Merge metadata into Manifestation
+    updated_meta = dict(manif.meta or {})
+    updated_meta.update(metadata)
+    manif.meta = updated_meta
+
+    # Update Work details if available
+    if manif.expression and manif.expression.work:
+        if "Title" in metadata:
+            manif.expression.work.title = metadata["Title"]
+        if "Authors" in metadata:
+            work_meta = dict(manif.expression.work.meta or {})
+            work_meta["authors"] = metadata["Authors"]
+            manif.expression.work.meta = work_meta
+
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": manif.id}, "error": None})
 
 
 @api_bp.route("/admin/stats", methods=["GET"])

@@ -154,6 +154,8 @@ def process_cover_pipeline(
     title: str,
     author: str,
     user_image_path: str | None = None,
+    description: str = "",
+    genre: str = "",
 ):
     """
     The single cover-generation pipeline (Chain of Responsibility).
@@ -203,7 +205,7 @@ def process_cover_pipeline(
 
         # Tier 3/4: LLM Generation
         if not local_cover_path:
-            result = fetch_llm_cover(isbn, title, author)
+            result = fetch_llm_cover(isbn, title, author, description, genre)
             if result:
                 local_cover_path, source = result
 
@@ -228,9 +230,13 @@ def process_cover_pipeline(
         db.session.commit()
 
 
-def start_cover_processing(manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None):
+def start_cover_processing(
+    manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None, description: str = "", genre: str = ""
+):
     """Fires off the background thread."""
-    thread = threading.Thread(target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_image_path))
+    thread = threading.Thread(
+        target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_image_path, description, genre)
+    )
     thread.start()
 
 
