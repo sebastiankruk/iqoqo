@@ -9,7 +9,7 @@ from openai import OpenAI
 from app.config import Config
 from app.db import db
 from app.db.models import LLMTelemetry
-from app.utils.images import optimize_and_save_image
+from app.utils.images import add_text_overlay, optimize_and_save_image
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,18 @@ def record_telemetry(provider: str):
         stat = LLMTelemetry.query.filter_by(provider=provider).first()
         if not stat:
             stat = LLMTelemetry(provider=provider)
+            stat.images_generated = 0
+            stat.estimated_cost_usd = 0.0
             db.session.add(stat)
 
+        if stat.images_generated is None:
+            stat.images_generated = 0
         stat.images_generated += 1
+        if stat.estimated_cost_usd is None:
+            stat.estimated_cost_usd = 0.0
         stat.estimated_cost_usd += PRICING.get(provider, 0.0)
         db.session.commit()
-    except (RuntimeError, ValueError) as e:
+    except (RuntimeError, ValueError, TypeError) as e:
         logger.error(f"Failed to record telemetry: {e}")
         db.session.rollback()
 
@@ -137,7 +143,8 @@ def generate_cover_local(isbn: str, title: str, author: str) -> tuple[str, str] 
         return None
 
     payload = {
-        "prompt": f"book cover, highly detailed, minimalist, aesthetic, title '{title}', author '{author}'",
+        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text",
+        "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
         "height": 768,
@@ -149,6 +156,11 @@ def generate_cover_local(isbn: str, title: str, author: str) -> tuple[str, str] 
             r = response.json()
             image_data = base64.b64decode(r["images"][0])
             path = save_image(image_data, isbn, "localsd")
+
+            # Overlay typography
+            full_path = os.path.join(COVERS_DIR, os.path.basename(path))
+            add_text_overlay(full_path, title, author)
+
             record_telemetry("local")
             return path, "llm_local_stable_diffusion"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
