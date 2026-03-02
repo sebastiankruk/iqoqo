@@ -27,9 +27,9 @@ def add_text_overlay(
     """Overlays title, author, and branding text onto an existing image."""
     try:
         with Image.open(filepath) as img:
-            img = img.convert("RGB")
-            draw = ImageDraw.Draw(img)
-            width, height = img.size
+            converted: Image.Image = img.convert("RGB")
+            draw = ImageDraw.Draw(converted)
+            width, height = converted.size
 
             # Define layout constants
             max_text_width = int(width * 0.90)  # Keep 5% margin on sides
@@ -43,9 +43,9 @@ def add_text_overlay(
             branding_box = (height * 0.95, height * 1.0)
 
             # Resolve font path once
-            valid_font_path = font_path
+            valid_font_path: str | None = font_path
             try:
-                ImageFont.truetype(valid_font_path, 10)
+                ImageFont.truetype(font_path, 10)
             except OSError:
                 fallbacks = [
                     "Arial.ttf",
@@ -149,6 +149,6 @@ def add_text_overlay(
             draw_text_in_box(author, author_box, 0.06)
             draw_text_in_box(branding, branding_box, 0.03)
 
-            img.save(filepath, "JPEG", quality=95)
+            converted.save(filepath, "JPEG", quality=95)
     except (OSError, ValueError) as e:
         logger.error(f"Error adding text overlay: {e}")
