@@ -45,7 +45,7 @@ def test_refetch_metadata_endpoint(client, app):
         db.session.add(w)
         e = Expression(work=w)
         db.session.add(e)
-        m = Manifestation(expression=e, isbn13="9780000000000", meta={})
+        m = Manifestation(expression=e, isbn13="9780553380163", meta={})
         db.session.add(m)
         db.session.commit()
         mid = m.id
