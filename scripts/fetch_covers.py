@@ -5,6 +5,8 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import func, or_
+
 from app import create_app
 from app.db.models import Manifestation
 from app.utils.covers import process_cover_pipeline
@@ -12,9 +14,12 @@ from app.utils.covers import process_cover_pipeline
 app = create_app()
 
 
-def run_batch(batch_limit=None):
+def run_batch(batch_limit=None, force=False):
     with app.app_context():
         query = Manifestation.query.filter(Manifestation.cover_path.is_(None))
+        if not force:
+            cover_status = func.json_extract_path_text(Manifestation.meta, "cover_status")
+            query = query.filter(or_(cover_status.is_(None), cover_status != "failed"))
 
         if batch_limit:
             query = query.limit(batch_limit)
@@ -51,6 +56,8 @@ def run_batch(batch_limit=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch missing covers.")
     parser.add_argument("--limit", type=int, help="Maximum number of covers to process in this run", default=None)
+    parser.add_argument("--force", action="store_true", help="Force reprocessing of covers even if previously failed")
     args = parser.parse_args()
 
-    run_batch(batch_limit=args.limit)
+    run_batch(batch_limit=args.limit, force=args.force)
+    run_batch(batch_limit=args.limit, force=args.force)
