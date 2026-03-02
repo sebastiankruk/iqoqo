@@ -2,9 +2,20 @@
 
 iqoqo uses a multi-tier pipeline to ensure every item has a cover image. This guide explains how to configure external providers and local AI models.
 
-## 1. External APIs (Free)
+## 1. External Metadata APIs
 
-No configuration is required for **OpenLibrary** or **Google Books**. These are enabled by default as Tier 2 sources.
+**OpenLibrary** requires no configuration.
+
+**Google Books** works out of the box, but unauthenticated requests are subject to lower rate limits. To avoid `429 Too Many Requests` errors:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+2. Create a project and enable the **Books API**.
+3. Create an **API Key** (Credentials -> Create Credentials -> API Key).
+4. Add the key to your `.env` file:
+
+   ```bash
+   GOOGLE_BOOKS_API_KEY=AIzaSy...
+   ```
 
 ## 2. Cloud AI Generation (Paid)
 
