@@ -19,6 +19,9 @@ cp .env.example .env
 docker compose build
 docker compose up -d
 
+# (Optional) To enable local AI generation (requires powerful hardware):
+# docker compose --profile local-ai up -d
+
 # 4. (Optional) Load sample data
 docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
 
@@ -130,6 +133,8 @@ After installation, make sure the Docker daemon is running.
      CORS_ORIGINS="https://app.example.com,https://admin.example.com"
      CORS_SUPPORTS_CREDENTIALS=false
      ```
+
+   - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
      Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
 
