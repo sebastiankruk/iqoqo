@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  stable-diffusion:
+    image: runpod/stable-diffusion:web-automatic-1111-v1.5
+    container_name: iqoqo-sd
+    environment:
+      - COMMANDLINE_ARGS=--api --listen
+    ports:
+      - "7860:3000"
+    volumes:
+      - sd_models:/workspace/stable-diffusion-webui/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  sd_models:

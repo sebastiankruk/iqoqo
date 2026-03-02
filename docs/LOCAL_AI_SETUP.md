@@ -1,22 +1,50 @@
-# Local AI Setup Guide
+# Local AI Generation Setup
 
-iqoqo supports generating book covers using a local installation of Stable Diffusion (via Automatic1111 WebUI). This allows for free, private image generation without relying on external cloud APIs.
+iqoqo supports generating book covers using a local LLM (Stable Diffusion). This allows for free, private image generation but requires capable hardware.
 
-## Option A: Docker (Recommended for Linux/Windows)
+## Option 1: Docker (Recommended for Linux/Windows with NVIDIA GPU)
 
-If you are running iqoqo via Docker on a machine with an NVIDIA GPU, this is the easiest method.
+If you are using Docker Compose, you can enable the local AI service by using the `local-ai` profile.
 
-### 1. Start the Service
+### 1. Update `docker-compose.yml`
 
-We provide a separate compose file `docker-compose.local-ai.yml` to run Stable Diffusion. Run it alongside your main application:
+Add the following service to your `docker-compose.yml` (or `docker-compose.prod.yml`):
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.local-ai.yml up -d
+```yaml
+services:
+  # ... other services ...
+
+  stable-diffusion:
+    image: runpod/stable-diffusion:web-automatic-1111-v1.5
+    profiles: ["local-ai"]
+    environment:
+      - COMMANDLINE_ARGS=--api --listen
+    ports:
+      - "7860:3000"
+    volumes:
+      - sd_models:/workspace/stable-diffusion-webui/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  # ... other volumes ...
+  sd_models:
 ```
 
-This will start the `stable-diffusion` service on port `7860`.
+### 2. Run with Profile
 
-### 2. Configure iqoqo
+Start the application with the `local-ai` profile enabled:
+
+```bash
+docker compose --profile local-ai up -d
+```
+
+### 3. Configure iqoqo
 
 Update your `.env` file to point to the Docker service:
 
@@ -24,88 +52,97 @@ Update your `.env` file to point to the Docker service:
 LOCAL_SD_URL=http://stable-diffusion:3000
 ```
 
-> **Note:** Docker GPU passthrough requires the NVIDIA Container Toolkit on the host machine. Docker on macOS does not currently support GPU acceleration for this image.
+## Option 2: Manual Installation (Mac/Apple Silicon or Custom Setup)
 
----
+This method is recommended for macOS users (Apple Silicon) or if you prefer running Stable Diffusion natively on your host machine.
 
-## Option B: Manual Installation (Recommended for macOS/Apple Silicon)
+### 1. Prerequisites
 
-For macOS users (M1/M2/M3) or those who prefer running the service natively.
+- **Python 3.10.6**: It is crucial to use this specific version or 3.10.x. Newer versions (3.11+) may cause compatibility issues.
+- **Git**: Ensure git is installed.
 
-### Prerequisites
+### 2. Installation Steps
 
-- **Python 3.10**: The WebUI requires Python 3.10 specifically.
-  - macOS: `brew install python@3.10`
-- **Git**: `brew install git`
+1. **Clone the repository**:
 
-### Installation Steps
+    ```bash
+    git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
+    cd stable-diffusion-webui
+    ```
 
-1. **Clone the Repository**
-   Navigate to a directory outside of the iqoqo project (e.g., `~/Development`) and clone the WebUI:
+1. **Configure Launch Arguments**:
 
-   ```bash
-   git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
-   cd stable-diffusion-webui
-   ```
+    **For Mac (Apple Silicon):**
 
-2. **Initial Setup (and Fixes)**
-   Recent updates to Python packages have introduced compatibility issues with the WebUI installer. Follow these steps carefully to patch the environment before launching.
+    Edit `webui-user.sh`:
 
-   First, attempt to run the script to create the virtual environment (it may fail, which is expected):
+    ```bash
+    # Enable API and skip CUDA checks for Mac
+    export COMMANDLINE_ARGS="--api --skip-torch-cuda-test --no-half --use-cpu all"
+    # Fix for missing Stability AI repository
+    export STABLE_DIFFUSION_REPO="https://github.com/w-e-w/stablediffusion.git"
+    ```
 
-   ```bash
-   ./webui.sh
-   ```
+    **For Windows/Linux (NVIDIA):**
+    Edit `webui-user.sh` (Linux) or `webui-user.bat` (Windows):
 
-   Now, activate the environment and apply the necessary fixes:
+    ```bash
+    export COMMANDLINE_ARGS="--api"
+    export STABLE_DIFFUSION_REPO="https://github.com/w-e-w/stablediffusion.git"
+    ```
 
-   ```bash
-   # 1. Activate the venv created by the script
-   source venv/bin/activate
+1. **Run the Installer**:
+    Execute the script:
 
-   # 2. Downgrade setuptools (fixes 'pkg_resources' error)
-   pip install "setuptools<70.0.0"
+    ```bash
+    ./webui.sh  # Mac/Linux
+    # or
+    ./webui-user.bat # Windows
+    ```
 
-   # 3. Install wheel (fixes 'bdist_wheel' error)
-   pip install wheel
+### 3. Troubleshooting Common Installation Errors
 
-   # 4. Manually install CLIP without build isolation
-   pip install https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip --no-build-isolation
+If the installation fails, follow these specific fixes for common issues encountered during setup.
 
-   # 5. Deactivate to return to your shell
-   deactivate
-   ```
+#### Error: `Repository not found` (Stability AI)
+If you see `fatal: repository 'https://github.com/Stability-AI/stablediffusion.git/' not found`, ensure you have set the `STABLE_DIFFUSION_REPO` environment variable as shown in step 2.
 
-3. **Configure Environment Variables**
-   The original Stability AI repository is currently unavailable, so we must point to a mirror. We also need to enable the API and optimize for Mac.
+#### Error: `ModuleNotFoundError: No module named 'pkg_resources'`
+This occurs because newer versions of `setuptools` (v70+) have removed `pkg_resources`, which is required by the CLIP library.
 
-   Create a `webui-user.sh` file (or edit the existing one) in the `stable-diffusion-webui` directory:
+**Fix:**
 
-   ```bash
-   # webui-user.sh
+1. Stop the installation script (Ctrl+C).
+1. Activate the virtual environment created by the script:
 
-   # Fix for missing repository
-   export STABLE_DIFFUSION_REPO="https://github.com/w-e-w/stablediffusion.git"
+    ```bash
+    source venv/bin/activate
+    ```
 
-   # Arguments: Enable API, skip CUDA check (for Mac), listen on local network
-   export COMMANDLINE_ARGS="--api --skip-torch-cuda-test --no-half --use-cpu interrorgate"
-   ```
+1. Downgrade `setuptools` and install `wheel`:
 
-4. **Launch**
-   Run the script again. It should now complete the installation and start the server.
+    ```bash
+    pip install "setuptools<70.0.0" wheel
+    ```
 
-   ```bash
-   ./webui.sh
-   ```
+1. Manually install CLIP without build isolation:
 
-### 3. Configure iqoqo
+    ```bash
+    pip install https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip --no-build-isolation
+    ```
 
-Once Stable Diffusion is running (usually at `http://127.0.0.1:7860`), update your iqoqo `.env` file:
+1. Deactivate the virtual environment:
+
+    ```bash
+    deactivate
+    ```
+
+1. Run `./webui.sh` again.
+
+### 4. Connect to iqoqo
+
+Once Stable Diffusion is running (you should see `Running on local URL: http://127.0.0.1:7860`), update your iqoqo `.env` file:
 
 ```bash
-# If running iqoqo locally (flask run)
 LOCAL_SD_URL=http://127.0.0.1:7860
-
-# If running iqoqo in Docker (connecting to host)
-LOCAL_SD_URL=http://host.docker.internal:7860
 ```
