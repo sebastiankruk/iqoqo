@@ -29,13 +29,12 @@ def test_archive_orphaned_covers(app, tmp_path):
         patch("scripts.archive_orphans.COVERS_DIR", str(covers_dir)),
         patch.dict(os.environ, {"COVERS_ARCHIVE_DIR": str(archive_dir)}),
         patch("app.db.models.Manifestation.query") as mock_query,
-        patch("scripts.archive_orphans.app", app),
     ):
         mock_manif = MagicMock()
         mock_manif.cover_path = "/static/covers/keep.jpg"
         mock_query.filter.return_value.all.return_value = [mock_manif]
 
-        archive_orphaned_covers()
+        archive_orphaned_covers(app=app)
 
         assert (covers_dir / "keep.jpg").exists()
         assert not (covers_dir / "orphan.jpg").exists()
@@ -52,13 +51,12 @@ def test_schedule_missing_covers_null_path(app, tmp_path):
     mock_manif.expression.work.meta = {"authors": ["Test Author"]}
 
     with (
-        patch("scripts.archive_orphans.app", app),
         patch("app.db.models.Manifestation.query") as mock_query,
         patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
     ):
         mock_query.all.return_value = [mock_manif]
 
-        schedule_missing_covers()
+        schedule_missing_covers(app=app)
 
         mock_pipeline.assert_called_once_with(42, "9780000000000", "Test Book", "Test Author")
 
@@ -73,21 +71,19 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
     mock_manif.expression.work.meta = {"authors": ["Some Author"]}
 
     with (
-        patch("scripts.archive_orphans.app", app),
         patch("app.config.Config.BASE_DIR", str(tmp_path)),
         patch("app.db.models.Manifestation.query") as mock_query,
         patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
     ):
         mock_query.all.return_value = [mock_manif]
         # File deliberately NOT created → pipeline should be called
-        schedule_missing_covers()
+        schedule_missing_covers(app=app)
         mock_pipeline.assert_called_once_with(7, "9780000000001", "Gone Book", "Some Author")
 
 
 def test_backup_creation(app, tmp_path):
     """Test that backup creates a zip file with metadata and covers."""
     with (
-        patch("scripts.backup.app", app),
         patch.dict(os.environ, {"BACKUP_DIR": str(tmp_path)}),
         patch("app.core.data_manager.DataManager.export_all") as mock_export,
     ):
@@ -98,7 +94,7 @@ def test_backup_creation(app, tmp_path):
         covers_dir = os.path.join(Config.BASE_DIR, "app", "static", "covers")
         os.makedirs(covers_dir, exist_ok=True)
 
-        create_export()
+        create_export(app=app)
 
         # Check if zip exists
         zips = list(tmp_path.glob("*.zip"))
@@ -116,11 +112,11 @@ def test_restore_covers(app, tmp_path):
         z.writestr("metadata.json", json.dumps({"manifestations": [{"isbn13": "123", "cover_path": "/c.jpg"}]}))
         z.writestr("covers/c.jpg", b"image data")
 
-    with patch("scripts.restore_covers.app", app), patch("app.config.Config.BASE_DIR", str(tmp_path)):
+    with patch("app.config.Config.BASE_DIR", str(tmp_path)):
 
         # Create target dir
         (tmp_path / "app" / "static" / "covers").mkdir(parents=True, exist_ok=True)
 
-        restore_covers(str(backup_zip))
+        restore_covers(str(backup_zip), app=app)
 
         assert (tmp_path / "app" / "static" / "covers" / "c.jpg").exists()

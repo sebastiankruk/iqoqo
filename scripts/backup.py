@@ -11,11 +11,11 @@ from app import create_app
 from app.config import Config
 from app.core.data_manager import DataManager
 
-app = create_app()
 
-
-def create_export():
+def create_export(app=None):
     """Creates a full backup archive of data and covers."""
+    if app is None:
+        app = create_app()
     with app.app_context():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # Allow configuration via env var

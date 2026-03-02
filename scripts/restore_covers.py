@@ -13,10 +13,10 @@ from app.config import Config
 from app.db import db
 from app.db.models import Manifestation
 
-app = create_app()
 
-
-def restore_covers(zip_path):
+def restore_covers(zip_path, app=None):
+    if app is None:
+        app = create_app()
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(tmp)

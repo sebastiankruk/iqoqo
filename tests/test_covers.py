@@ -31,7 +31,7 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"content-length": "5000"}
-    mock_resp.iter_content = lambda chunk_size: [b"fake_image_data"]
+    mock_resp.iter_content = lambda chunk_size: [b"x" * 1024]
     mock_requests_get.return_value = mock_resp
 
     with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):

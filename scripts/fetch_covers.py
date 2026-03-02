@@ -11,10 +11,10 @@ from app import create_app
 from app.db.models import Manifestation
 from app.utils.covers import process_cover_pipeline
 
-app = create_app()
 
-
-def run_batch(batch_limit=None, force=False):
+def run_batch(batch_limit=None, force=False, app=None):
+    if app is None:
+        app = create_app()
     with app.app_context():
         query = Manifestation.query.filter(Manifestation.cover_path.is_(None))
         if not force:

@@ -88,6 +88,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py
 "tests/*" = ["F401", "F811"]  # Allow unused imports and redefinitions in tests
+"scripts/*" = ["E402"]  # Scripts modify sys.path before app imports
 
 [tool.mypy]
 python_version = "3.11"

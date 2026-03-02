@@ -22,17 +22,18 @@ from app import create_app
 from app.config import Config
 from app.db.models import Manifestation
 
-app = create_app()
-
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 
 
-def archive_orphaned_covers():
+def archive_orphaned_covers(app=None):
     """Move on-disk cover files not referenced in the DB to an archive folder."""
     # Allow configuration via env var, default to static/archive/covers
     default_archive = os.path.join(Config.BASE_DIR, "app", "static", "archive", "covers")
     archive_dir = os.environ.get("COVERS_ARCHIVE_DIR", default_archive)
     os.makedirs(archive_dir, exist_ok=True)
+
+    if app is None:
+        app = create_app()
 
     with app.app_context():
         # Collect all basenames referenced by the DB
@@ -52,7 +53,7 @@ def archive_orphaned_covers():
         print(f"✅ Archived {archived_count} orphaned cover images.")
 
 
-def schedule_missing_covers():
+def schedule_missing_covers(app=None):
     """Find manifestations with no usable cover and trigger the generation pipeline.
 
     A cover is considered missing when:
@@ -69,6 +70,9 @@ def schedule_missing_covers():
     # We keep a reference to the module so tests can patch the function at
     # ``app.utils.covers.process_cover_pipeline``.
     import app.utils.covers as _covers  # noqa: PLC0415
+
+    if app is None:
+        app = create_app()
 
     with app.app_context():
         all_manifestations = Manifestation.query.all()
