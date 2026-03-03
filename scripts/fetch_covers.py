@@ -60,4 +60,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_batch(batch_limit=args.limit, force=args.force)
-    run_batch(batch_limit=args.limit, force=args.force)
