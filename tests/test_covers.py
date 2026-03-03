@@ -34,17 +34,23 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_resp.iter_content = lambda chunk_size: [b"x" * 1024]
     mock_requests_get.return_value = mock_resp
 
-    with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
-        result = fetch_external_api_cover("9780123456789")
+    def fake_optimize(image_bytes: bytes, filepath: str) -> None:
+        """Write a placeholder file so the existence check passes."""
+        with open(filepath, "wb") as fh:
+            fh.write(b"placeholder")
 
-        assert result is not None
-        path, source = result
-        assert path == "/static/covers/9780123456789_ol.jpg"
-        assert source == "api_openlibrary"
-        assert (tmp_path / "9780123456789_ol.jpg").exists()
-        # Verify URL
-        args, _ = mock_requests_get.call_args
-        assert "covers.openlibrary.org" in args[0]
+    with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
+        with patch("app.utils.covers.optimize_and_save_image", side_effect=fake_optimize):
+            result = fetch_external_api_cover("9780123456789")
+
+            assert result is not None
+            path, source = result
+            assert path == "/static/covers/9780123456789_ol.jpg"
+            assert source == "api_openlibrary"
+            assert (tmp_path / "9780123456789_ol.jpg").exists()
+            # Verify URL
+            args, _ = mock_requests_get.call_args
+            assert "covers.openlibrary.org" in args[0]
 
 
 def test_fetch_external_api_cover_failure(mock_requests_get):
