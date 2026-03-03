@@ -2,7 +2,6 @@ import hashlib
 import io
 import logging
 import os
-import shutil
 import threading
 
 import requests
@@ -106,8 +105,7 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
             if len(content) > 1000:
                 filename = f"{isbn}_ol.jpg"
                 filepath = os.path.join(COVERS_DIR, filename)
-                with open(filepath, "wb") as f:
-                    f.write(content)
+                optimize_and_save_image(content, filepath)
                 return f"/static/covers/{filename}", "api_openlibrary"
     except (requests.RequestException, OSError, ValueError, TypeError):
         pass
@@ -125,8 +123,7 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
                 if img_res.status_code == 200:
                     filename = f"{isbn}_gb.jpg"
                     filepath = os.path.join(COVERS_DIR, filename)
-                    with open(filepath, "wb") as f:
-                        f.write(img_res.content)
+                    optimize_and_save_image(img_res.content, filepath)
                     return f"/static/covers/{filename}", "api_google_books"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
@@ -195,11 +192,18 @@ def process_cover_pipeline(
             try:
                 filename = f"{isbn}_user.jpg"
                 dest_path = os.path.join(COVERS_DIR, filename)
-                shutil.move(user_image_path, dest_path)
+
+                # Normalize/compress the user-provided image before storing it
+                with open(user_image_path, "rb") as upload_file:
+                    image_bytes = upload_file.read()
+                optimize_and_save_image(image_bytes, dest_path)
+                # Remove the temporary upload file once it has been processed
+                os.remove(user_image_path)
+
                 local_cover_path = f"/static/covers/{filename}"
                 source = "user_photo"
-            except (OSError, shutil.Error) as e:
-                logger.error(f"Failed to move user image: {e}")
+            except (OSError, ValueError) as e:
+                logger.error(f"Failed to process user image: {e}")
                 meta = dict(manifestation.meta) if manifestation.meta else {}
                 meta["cover_status"] = "failed"
                 manifestation.meta = meta

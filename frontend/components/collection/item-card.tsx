@@ -44,13 +44,13 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemWithCoverFields.cover_path}`
     : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined);
-  const coverSource = item.manifestation_meta?.["cover_source"];
+  const hasLegacyCoverUrl =
+    Boolean(item.manifestation_meta?.["cover_url"] as string | undefined) ||
+    Boolean(item.meta?.["cover_url"] as string | undefined);
 
   const isProcessing = itemWithCoverFields.cover_status === "processing";
   const isGenerated =
-    itemWithCoverFields.cover_status === "ready" &&
-    typeof coverSource === "string" &&
-    coverSource.includes("generated");
+    itemWithCoverFields.cover_status === "ready" && !hasLegacyCoverUrl;
 
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";

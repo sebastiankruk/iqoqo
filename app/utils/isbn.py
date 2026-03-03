@@ -154,14 +154,29 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
     if not title:
         return None
 
+    # Normalize optional fields to guard against null / unexpected types.
+    raw_description = info.get("description")
+    description = raw_description.strip() if isinstance(raw_description, str) else ""
+
+    def __normalize_list_field(field):
+        raw_value = info.get(field)
+        if isinstance(raw_value, list):
+            return [str(v).strip() for v in raw_value if v and str(v).strip()]
+        if isinstance(raw_value, str):
+            return [str(v).strip() for v in raw_value.strip().split(",") if v and str(v).strip()] if raw_value.strip() else []
+        return []
+
+    authors = __normalize_list_field("authors")
+    categories = __normalize_list_field("categories")
+
     # Clone the raw data so we don't mutate the original, then add standard keys
     metadata = dict(info)
     metadata.update(
         {
             "Title": title,
-            "Authors": [a for a in info.get("authors", []) if a],
-            "Description": info.get("description", "").strip(),
-            "Categories": [c for c in info.get("categories", []) if c],
+            "Authors": authors,
+            "Description": description,
+            "Categories": categories,
             "Source": "Google Books",
         }
     )

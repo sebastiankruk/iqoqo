@@ -8,10 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 def optimize_and_save_image(image_bytes: bytes, filepath: str):
-    """Converts image to JPEG, keeps 1024x1024, sets 85% quality."""
+    """Converts image to JPEG, resizes to max 1024x1024, sets 85% quality."""
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
             out: Image.Image = img.convert("RGB")
+            out.thumbnail((1024, 1024))
             out.save(filepath, "JPEG", quality=85)
     except (OSError, ValueError):
         logger.exception("Error optimizing image")
@@ -148,6 +149,6 @@ def add_text_overlay(
             draw_text_in_box(author, author_box, 0.06)
             draw_text_in_box(branding, branding_box, 0.03)
 
-            converted.save(filepath, "JPEG", quality=95)
+            converted.save(filepath, "JPEG", quality=85)
     except (OSError, ValueError) as e:
         logger.error(f"Error adding text overlay: {e}")

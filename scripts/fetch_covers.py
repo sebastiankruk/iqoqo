@@ -5,7 +5,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 
 from app import create_app
 from app.db.models import Manifestation
@@ -18,7 +18,7 @@ def run_batch(batch_limit=None, force=False, app=None):
     with app.app_context():
         query = Manifestation.query.filter(Manifestation.cover_path.is_(None))
         if not force:
-            cover_status = func.json_extract_path_text(Manifestation.meta, "cover_status")
+            cover_status = Manifestation.meta["cover_status"]
             query = query.filter(or_(cover_status.is_(None), cover_status != "failed"))
 
         if batch_limit:

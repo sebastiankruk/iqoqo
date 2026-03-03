@@ -105,7 +105,7 @@ export function useManifestationWithPolling(initialData: Item) {
   const qc = useQueryClient();
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
 
     const isPending = item?.cover_status === 'pending';
 

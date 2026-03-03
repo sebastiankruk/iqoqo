@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import Any
 
 from flask import jsonify, request, send_file, send_from_directory, session
+from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
@@ -427,6 +428,29 @@ def upload_cover(manifestation_id):
     file = request.files["cover"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
+
+    # Validate extension
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
+        return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    # Validate size (10MB limit)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if request.content_length and request.content_length > max_size:
+        return jsonify({"error": "File too large. Max size: 10MB"}), 413
+
+    file.seek(0, os.SEEK_END)
+    if file.tell() > max_size:
+        return jsonify({"error": "File too large. Max size: 10MB"}), 413
+    file.seek(0)
+
+    # Verify image content
+    try:
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+    except (OSError, SyntaxError):
+        return jsonify({"error": "Invalid or corrupted image file"}), 400
 
     manifestation = Manifestation.query.get_or_404(manifestation_id)
     isbn = manifestation.isbn13 or f"item_{manifestation_id}"
