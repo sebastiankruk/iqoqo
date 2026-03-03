@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { ExtendedMetadata } from "./extended-metadata";
+import { ExtendedMetadata } from "@/components/item/extended-metadata";
 
 describe("ExtendedMetadata", () => {
   it("renders nothing when no relevant metadata is present", () => {

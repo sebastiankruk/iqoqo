@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
 interface CameraCaptureProps {
   manifestationId: number;
@@ -22,11 +23,7 @@ export function CameraCapture({ manifestationId, onUploadComplete, className }: 
     formData.append("cover", file);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      await fetch(`${apiUrl}/api/manifestations/${manifestationId}/cover`, {
-        method: "POST",
-        body: formData,
-      });
+      await apiClient.post(`/manifestations/${manifestationId}/cover`, formData);
       if (onUploadComplete) onUploadComplete();
     } catch (error) {
       console.error("Failed to upload cover", error);

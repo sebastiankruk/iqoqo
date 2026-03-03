@@ -28,8 +28,14 @@ class Config:
 
         import tomllib
 
-        with open("pyproject.toml", "rb") as pyproject_file:
-            env_version = tomllib.load(pyproject_file).get("project", {}).get("version")
+        try:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            pyproject_path = os.path.join(base_dir, "pyproject.toml")
+            with open(pyproject_path, "rb") as pyproject_file:
+                env_version = tomllib.load(pyproject_file).get("project", {}).get("version")
+        except (FileNotFoundError, OSError):
+            env_version = None
+
         if env_version:
             return env_version
 

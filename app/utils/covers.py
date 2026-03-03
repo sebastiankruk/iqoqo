@@ -2,6 +2,7 @@ import hashlib
 import io
 import logging
 import os
+import shutil
 import threading
 
 import requests
@@ -191,11 +192,19 @@ def process_cover_pipeline(
 
         # Tier 1: User Photo
         if user_image_path and os.path.exists(user_image_path):
-            filename = f"{isbn}_user.jpg"
-            dest_path = os.path.join(COVERS_DIR, filename)
-            os.rename(user_image_path, dest_path)
-            local_cover_path = f"/static/covers/{filename}"
-            source = "user_photo"
+            try:
+                filename = f"{isbn}_user.jpg"
+                dest_path = os.path.join(COVERS_DIR, filename)
+                shutil.move(user_image_path, dest_path)
+                local_cover_path = f"/static/covers/{filename}"
+                source = "user_photo"
+            except (OSError, shutil.Error) as e:
+                logger.error(f"Failed to move user image: {e}")
+                meta = dict(manifestation.meta) if manifestation.meta else {}
+                meta["cover_status"] = "failed"
+                manifestation.meta = meta
+                db.session.commit()
+                return
 
         # Tier 2: External APIs
         if not local_cover_path:

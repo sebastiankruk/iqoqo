@@ -41,7 +41,7 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
   // Resolve cover URL: Local > Legacy Meta > Placeholder
   const itemWithCoverFields = item as ItemWithCoverFields;
   const coverUrl = itemWithCoverFields.cover_path
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}${itemWithCoverFields.cover_path}`
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemWithCoverFields.cover_path}`
     : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined);
   const coverSource = item.manifestation_meta?.["cover_source"];

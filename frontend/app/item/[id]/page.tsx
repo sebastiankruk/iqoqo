@@ -93,9 +93,10 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
     }
   };
 
-  const coverUrl =
-    (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-    (item.meta?.["cover_url"] as string | undefined);
+  const coverUrl = item.cover_path
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_path}`
+    : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
+      (item.meta?.["cover_url"] as string | undefined);
 
   return (
     <>

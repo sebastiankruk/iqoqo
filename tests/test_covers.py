@@ -74,7 +74,7 @@ def test_generate_cover_cloud_success(tmp_path, app):
 
                 with (
                     patch("app.utils.llm_covers.COVERS_DIR", str(tmp_path)),
-                    patch("app.utils.images.optimize_and_save_image"),
+                    patch("app.utils.llm_covers.optimize_and_save_image"),
                     patch("app.utils.llm_covers.record_telemetry"),
                 ):
                     result = generate_cover_cloud("123", "Title", "Author")

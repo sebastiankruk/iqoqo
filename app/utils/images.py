@@ -13,8 +13,9 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
         with Image.open(io.BytesIO(image_bytes)) as img:
             out: Image.Image = img.convert("RGB")
             out.save(filepath, "JPEG", quality=85)
-    except (OSError, ValueError) as e:
-        logger.error(f"Error optimizing image: {e}")
+    except (OSError, ValueError):
+        logger.exception("Error optimizing image")
+        raise
 
 
 def add_text_overlay(
@@ -90,8 +91,7 @@ def add_text_overlay(
                     # Wrap text
                     avg_char_width = font.getlength("x") or 10
                     chars_per_line = int(max_text_width / avg_char_width)
-                    if chars_per_line < 1:
-                        chars_per_line = 1
+                    chars_per_line = max(chars_per_line, 1)
 
                     lines = textwrap.wrap(text, width=chars_per_line)
 
@@ -118,8 +118,7 @@ def add_text_overlay(
                     # Re-wrap with this font
                     avg_char_width = selected_font.getlength("x") or 10
                     chars_per_line = int(max_text_width / avg_char_width)
-                    if chars_per_line < 1:
-                        chars_per_line = 1
+                    chars_per_line = max(chars_per_line, 1)
                     final_lines = textwrap.wrap(text, width=chars_per_line)
                     bbox = selected_font.getbbox("Ay")
                     final_line_height = (bbox[3] - bbox[1]) * 1.2

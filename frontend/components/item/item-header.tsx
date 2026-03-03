@@ -10,6 +10,7 @@ export function ItemHeader({ item }: { item: Item }) {
   const tags = (meta["tags"] as string[] | undefined) ?? [];
   const year = meta["Year"] as string | undefined;
   const pages = meta["Pages"] as string | undefined;
+  const authors = work?.authors ?? item.authors ?? [];
 
   return (
     <div className="flex flex-col gap-3">
@@ -27,9 +28,9 @@ export function ItemHeader({ item }: { item: Item }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-        {work?.authors && work.authors.length > 0 && (
+        {authors.length > 0 && (
           <span className="font-medium text-foreground">
-            {work.authors.join(", ")}
+            {authors.join(", ")}
           </span>
         )}
         {year && (

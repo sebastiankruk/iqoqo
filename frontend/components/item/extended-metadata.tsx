@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 interface ExtendedMetadataProps {
-  meta: Record<string, any>;
+  meta: Record<string, unknown>;
 }
 
 export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {

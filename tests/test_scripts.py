@@ -83,16 +83,17 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
 
 def test_backup_creation(app, tmp_path):
     """Test that backup creates a zip file with metadata and covers."""
+    # Create dummy covers dir in temp path
+    covers_dir = tmp_path / "app" / "static" / "covers"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+
     with (
         patch.dict(os.environ, {"BACKUP_DIR": str(tmp_path)}),
+        patch("app.config.Config.BASE_DIR", str(tmp_path)),
         patch("app.core.data_manager.DataManager.export_all") as mock_export,
     ):
 
         mock_export.return_value = {"test": "data"}
-
-        # Create dummy covers dir
-        covers_dir = os.path.join(Config.BASE_DIR, "app", "static", "covers")
-        os.makedirs(covers_dir, exist_ok=True)
 
         create_export(app=app)
 
