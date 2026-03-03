@@ -9,11 +9,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import Config
-from app.db.models import Manifestation
+from app.db import db
+from app.db.models import Expression, Manifestation, Work
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
 from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
 from scripts.backup import create_export
+from scripts.fetch_covers import run_batch
 from scripts.restore_covers import restore_covers
 
 
@@ -121,3 +123,52 @@ def test_restore_covers(app, tmp_path):
         restore_covers(str(backup_zip), app=app)
 
         assert (tmp_path / "app" / "static" / "covers" / "c.jpg").exists()
+
+
+def test_fetch_covers_run_batch(app):
+    """Test fetch_covers.run_batch query logic with real DB (SQLite)."""
+    with app.app_context():
+        # Create parent objects to satisfy foreign key constraints
+        work = Work(title="Test Work", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        # 1. No cover, no meta (should process)
+        m1 = Manifestation(expression_id=expr.id, isbn13="9781000000001", meta={})
+        # 2. No cover, failed status (should skip unless force)
+        m2 = Manifestation(expression_id=expr.id, isbn13="9781000000002", meta={"cover_status": "failed"})
+        # 3. No cover, other status (should process)
+        m3 = Manifestation(expression_id=expr.id, isbn13="9781000000003", meta={"cover_status": "pending"})
+        # 4. Has cover (should skip)
+        m4 = Manifestation(expression_id=expr.id, isbn13="9781000000004", cover_path="/covers/exist.jpg", meta={})
+
+        db.session.add_all([m1, m2, m3, m4])
+        db.session.commit()
+
+        m1_id, m2_id, m3_id = m1.id, m2.id, m3.id
+
+    # Patch the pipeline to avoid actual work and sleep to speed up
+    with (
+        patch("scripts.fetch_covers.process_cover_pipeline") as mock_pipeline,
+        patch("scripts.fetch_covers.time.sleep"),
+    ):
+        # Run normal batch
+        run_batch(app=app)
+
+        assert mock_pipeline.call_count == 2
+        processed_ids = {call.args[0] for call in mock_pipeline.call_args_list}
+        assert m1_id in processed_ids
+        assert m3_id in processed_ids
+        assert m2_id not in processed_ids
+
+        # Run force batch
+        mock_pipeline.reset_mock()
+        run_batch(force=True, app=app)
+
+        # Should process m1, m2, m3 (m4 still has cover)
+        assert mock_pipeline.call_count == 3
+        processed_ids = {call.args[0] for call in mock_pipeline.call_args_list}
+        assert m2_id in processed_ids

@@ -5,7 +5,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import or_
+from sqlalchemy import String, and_, cast, or_
 
 from app import create_app
 from app.db.models import Manifestation
@@ -19,7 +19,8 @@ def run_batch(batch_limit=None, force=False, app=None):
         query = Manifestation.query.filter(Manifestation.cover_path.is_(None))
         if not force:
             cover_status = Manifestation.meta["cover_status"]
-            query = query.filter(or_(cover_status.is_(None), cover_status != "failed"))
+            status_str = cast(cover_status, String)
+            query = query.filter(or_(cover_status.is_(None), and_(status_str != "failed", status_str != '"failed"')))
 
         if batch_limit:
             query = query.limit(batch_limit)

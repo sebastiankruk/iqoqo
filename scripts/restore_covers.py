@@ -1,3 +1,5 @@
+"""Script to restore cover images and metadata from a backup zip file."""
+
 import argparse
 import json
 import os

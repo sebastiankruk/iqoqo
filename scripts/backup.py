@@ -1,3 +1,5 @@
+"""Script to create a backup of the iQoQo database and cover images."""
+
 import json
 import os
 import shutil
