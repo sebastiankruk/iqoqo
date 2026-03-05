@@ -402,6 +402,7 @@ Run `python scripts/backup.py` to create a ZIP archive containing the database d
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.
 
 - This script is "safe" — it updates existing records matching by ISBN/ID but does not wipe the database.
+- **HINT:** On production run `docker compose exec web python scripts/restore_covers.py <path_to_zip>`
 
 ### Archiving Orphaned Covers
 
