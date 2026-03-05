@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { useManifestationWithPolling, useRegenerateCover } from "@/lib/api/hooks";
+import { queryKeys, useManifestationWithPolling, useRegenerateCover } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ItemHeaderProps {
   initialItem: Item;
@@ -12,7 +13,8 @@ interface ItemHeaderProps {
 
 export function ItemHeader({ initialItem }: ItemHeaderProps) {
   // Use our hook to handle the real-time update via polling
-  const { item, setItem } = useManifestationWithPolling(initialItem);
+  const { item, } = useManifestationWithPolling(initialItem);
+  const qc = useQueryClient(); // Add this to access the React Query cache!
   const regenerateCover = useRegenerateCover();
   const [isRequesting, setIsRequesting] = useState(false);
 
@@ -24,12 +26,14 @@ export function ItemHeader({ initialItem }: ItemHeaderProps) {
     setIsRequesting(true);
     try {
       await regenerateCover.mutateAsync(item.manifestation_id);
-
-      // Optimistically update local state to trigger the polling hook and loading UI
-      setItem((prev) => ({
-        ...prev,
-        cover_status: 'pending'
-      }));
+      // Tell React Query to update the cache for this specific item
+      qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cover_status: 'pending'
+        };
+      });
     } catch (error) {
       console.error("Failed to schedule regeneration:", error);
     } finally {

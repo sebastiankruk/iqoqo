@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from 'react';
 import { apiClient, apiFetch } from "./client";
 import type {
   Item,
@@ -101,42 +100,17 @@ export function useAddItem() {
 /* ── Polling Hook for Async Updates ─────────────────────────────────────── */
 
 export function useManifestationWithPolling(initialData: Item) {
-  const [item, setItem] = useState<Item>(initialData);
-  const qc = useQueryClient();
+  const { data: item } = useQuery({
+    queryKey: queryKeys.item(initialData.id),
+    queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
+    initialData: initialData,
+    // Automatically polls every 3 seconds ONLY if the status is pending
+    refetchInterval: (query) =>
+      query.state.data?.cover_status === 'pending' ? 3000 : false,
+  });
 
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-
-    const isPending = item?.cover_status === 'pending';
-
-    if (isPending && item?.id) {
-      intervalId = setInterval(async () => {
-        try {
-          const response = await apiClient.get(`/items/${item.id}`);
-          const updatedItem: Item = response.data.data; // Unwrap envelope
-
-          setItem(updatedItem);
-
-          if (updatedItem?.cover_status !== 'pending') {
-            clearInterval(intervalId);
-            // Refresh the collection list and the single-item cache so that
-            // cover_path changes are immediately visible without a page reload.
-            void qc.invalidateQueries({ queryKey: ["items"] });
-            void qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
-          }
-        } catch (error) {
-          console.error("Error polling for cover status:", error);
-          clearInterval(intervalId);
-        }
-      }, 3000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [item?.cover_status, item?.id, qc]);
-
-  return { item, setItem };
+  // Return it in the same { item } shape the component is currently expecting
+  return { item };
 }
 
 /* ── Update item ─────────────────────────────────────────────────────────── */

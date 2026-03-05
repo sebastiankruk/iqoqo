@@ -10,7 +10,7 @@ import { HeroBanner } from "@/components/item/hero-banner";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
 import { ItemTabs } from "@/components/item/item-tabs";
-import { useItem, useDeleteItem, useManifestationWithPolling, useRegenerateCover } from "@/lib/api/hooks";
+import { useItem, useDeleteItem, useManifestationWithPolling, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import {
   AlertDialog,
@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Item } from "@/types/frbr";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -30,7 +31,8 @@ interface Props {
 
 function ItemDetail({ item: initialItem }: { item: Item }) {
   const router = useRouter();
-  const { item, setItem } = useManifestationWithPolling(initialItem);
+  const { item } = useManifestationWithPolling(initialItem);
+  const qc = useQueryClient(); // Add this to access the React Query cache!
   const deleteItem = useDeleteItem();
   const regenerateCover = useRegenerateCover();
 
@@ -66,10 +68,14 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
     setRegenerateConfirmOpen(false);
     try {
       await regenerateCover.mutateAsync(item.manifestation_id);
-      setItem((prev) => ({
-        ...prev,
-        cover_status: 'pending'
-      }));
+      // Tell React Query to update the cache for this specific item
+      qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cover_status: 'pending'
+        };
+      });
       toast.success("Cover regeneration started");
     } catch (error) {
       console.error("Failed to schedule regeneration:", error);
