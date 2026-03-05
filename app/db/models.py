@@ -64,6 +64,12 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     cover_path = db.Column(db.String(255), nullable=True)
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
 
+    def update_meta(self, **kwargs):
+        """Safely updates the meta JSON field."""
+        meta = dict(self.meta) if self.meta else {}
+        meta.update(kwargs)
+        self.meta = meta
+
     # Relationships
     items = db.relationship("Item", backref="manifestation", lazy=True)
 

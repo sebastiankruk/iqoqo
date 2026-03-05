@@ -249,9 +249,7 @@ def lookup_isbn(isbn: str):
         # Only return if we have at least a title
         if work_metadata["Title"]:
             # Update manifestation.meta for future use
-            if not manifestation.meta:
-                manifestation.meta = {}
-            manifestation.meta.update(work_metadata)
+            manifestation.update_meta(**work_metadata)
             try:
                 db.session.commit()
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
@@ -291,9 +289,7 @@ def lookup_isbn(isbn: str):
 
         if not found_cover:
             # 2. Schedule async LLM generation
-            if manifestation.meta is None:
-                manifestation.meta = {}
-            manifestation.meta["cover_status"] = "pending"
+            manifestation.update_meta(cover_status="pending")
 
             # Extract title/author
             title = work.title or "Unknown"
@@ -304,7 +300,7 @@ def lookup_isbn(isbn: str):
         db.session.commit()
     else:
         # Update existing manifestation
-        manifestation.meta = metadata
+        manifestation.update_meta(**metadata)
         # Also update the Work if it has a title
         if manifestation.expression and manifestation.expression.work:
             manifestation.expression.work.title = metadata["Title"]
@@ -330,12 +326,7 @@ def update_manifestation(isbn: str):
 
     if metadata:
         # Update the manifestation's metadata
-        if not manifestation.meta:
-            manifestation.meta = {}
-        # Need to update the mutable dict properly for SQLAlchemy to detect changes
-        updated_meta = dict(manifestation.meta)
-        updated_meta.update(metadata)
-        manifestation.meta = updated_meta
+        manifestation.update_meta(**metadata)
 
         # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
@@ -389,12 +380,7 @@ def add_item(isbn: str):
 
     # Update manifestation metadata if provided
     if metadata:
-        if not manifestation.meta:
-            manifestation.meta = {}
-        # Need to update the mutable dict properly for SQLAlchemy to detect changes
-        updated_meta = dict(manifestation.meta)
-        updated_meta.update(metadata)
-        manifestation.meta = updated_meta
+        manifestation.update_meta(**metadata)
 
         # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
@@ -460,9 +446,7 @@ def upload_cover(manifestation_id):
     file.save(filepath)
 
     # Set status to processing
-    meta = dict(manifestation.meta) if manifestation.meta else {}
-    meta["cover_status"] = "processing"
-    manifestation.meta = meta
+    manifestation.update_meta(cover_status="processing")
     db.session.commit()
 
     # Get Title/Author from related Expression/Work
@@ -481,9 +465,7 @@ def regenerate_cover(manifestation_id: int):
     manif = Manifestation.query.get_or_404(manifestation_id)
 
     # Reset status
-    meta = dict(manif.meta) if manif.meta else {}
-    meta["cover_status"] = "pending"
-    manif.meta = meta
+    manif.update_meta(cover_status="pending")
     db.session.commit()
 
     # Launch background pipeline (API lookup → LLM generation)
@@ -526,9 +508,7 @@ def refetch_metadata(manifestation_id: int):
         return jsonify({"success": False, "data": None, "error": "No upstream metadata found"}), 404
 
     # Merge metadata into Manifestation
-    updated_meta = dict(manif.meta or {})
-    updated_meta.update(metadata)
-    manif.meta = updated_meta
+    manif.update_meta(**metadata)
 
     # Update Work details if available
     if manif.expression and manif.expression.work:

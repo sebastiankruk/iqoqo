@@ -138,10 +138,7 @@ def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
         local_path, source = result
         manifestation.cover_path = local_path
         # Force SQLAlchemy to detect change in JSON field
-        meta = dict(manifestation.meta) if manifestation.meta else {}
-        meta["cover_source"] = source
-        meta["cover_status"] = "ready"
-        manifestation.meta = meta
+        manifestation.update_meta(cover_source=source, cover_status="ready")
         return True
     return False
 
@@ -204,9 +201,7 @@ def process_cover_pipeline(
                 source = "user_photo"
             except (OSError, ValueError) as e:
                 logger.error(f"Failed to process user image: {e}")
-                meta = dict(manifestation.meta) if manifestation.meta else {}
-                meta["cover_status"] = "failed"
-                manifestation.meta = meta
+                manifestation.update_meta(cover_status="failed")
                 db.session.commit()
                 return
 
@@ -224,22 +219,22 @@ def process_cover_pipeline(
 
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
-        meta = dict(manifestation.meta) if manifestation.meta else {}
+        updates = {}
 
         if local_cover_path:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_path))
             add_source_badge(abs_path, source or "")
             manifestation.cover_path = local_cover_path
-            meta["cover_source"] = source
-            meta["cover_status"] = "ready"
+            updates["cover_source"] = source
+            updates["cover_status"] = "ready"
             logger.info("Cover processed for %s: %s", isbn, source)
         else:
             # All tiers failed — leave cover_path as-is so the frontend shows
             # a book-icon placeholder rather than an empty or text-only image.
-            meta["cover_status"] = "failed"
+            updates["cover_status"] = "failed"
             logger.warning("Cover generation failed for %s: no cover produced, leaving existing", isbn)
 
-        manifestation.meta = meta
+        manifestation.update_meta(**updates)
         db.session.commit()
 
 
@@ -303,11 +298,10 @@ def rebind_orphaned_covers() -> int:
             book.cover_path = f"/static/covers/{best_match}"
 
             # Update meta status
-            meta = dict(book.meta) if book.meta else {}
-            meta["cover_status"] = "ready"
-            if "cover_source" not in meta:
-                meta["cover_source"] = "rebind"
-            book.meta = meta
+            updates = {"cover_status": "ready"}
+            if not (book.meta and "cover_source" in book.meta):
+                updates["cover_source"] = "rebind"
+            book.update_meta(**updates)
 
             orphans_rebound += 1
             logger.info(f"Rebound cover for ISBN {book.isbn13}: {best_match}")
