@@ -24,6 +24,7 @@ Typical usage::
 """
 
 import logging
+import os
 import re
 from typing import Any
 
@@ -44,10 +45,10 @@ _CONNECT_TIMEOUT: int = 15
 _READ_TIMEOUT: int = 45
 
 # Retry policy: 3 attempts with 1.5× back-off on transient errors.
-# Delays after failures: ~1.5 s, ~3 s, ~4.5 s.
+# Delays after failures: ~2 s, ~4 s, ~8 s.
 _RETRY_POLICY = Retry(
     total=3,
-    backoff_factor=1.5,
+    backoff_factor=3,
     status_forcelist=[429, 500, 502, 503, 504],
     allowed_methods=["GET"],
     raise_on_status=False,
@@ -61,6 +62,7 @@ def _make_session() -> requests.Session:
     across different ISBN lookups happening in parallel request threads.
     """
     session = requests.Session()
+    session.headers.update({"User-Agent": "iqoqo-catalog-app/1.0 (contact@iqoqo.cc)"})
     adapter = HTTPAdapter(max_retries=_RETRY_POLICY)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
@@ -129,13 +131,17 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
         ``{"Title": str, "Authors": list[str]}`` on success, ``None``
         if the API returns no results or the request fails.
     """
+    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
+    if api_key:
+        url += f"&key={api_key}"
+
     try:
         session = _make_session()
         response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         data = response.json()
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
         logger.warning("Google Books request failed for %s: %s", isbn, exc)
         return None
 
@@ -148,10 +154,33 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
     if not title:
         return None
 
-    return {
-        "Title": title,
-        "Authors": [a for a in info.get("authors", []) if a],
-    }
+    # Normalize optional fields to guard against null / unexpected types.
+    raw_description = info.get("description")
+    description = raw_description.strip() if isinstance(raw_description, str) else ""
+
+    def __normalize_list_field(field):
+        raw_value = info.get(field)
+        if isinstance(raw_value, list):
+            return [str(v).strip() for v in raw_value if v and str(v).strip()]
+        if isinstance(raw_value, str):
+            return [str(v).strip() for v in raw_value.strip().split(",") if v and str(v).strip()] if raw_value.strip() else []
+        return []
+
+    authors = __normalize_list_field("authors")
+    categories = __normalize_list_field("categories")
+
+    # Clone the raw data so we don't mutate the original, then add standard keys
+    metadata = dict(info)
+    metadata.update(
+        {
+            "Title": title,
+            "Authors": authors,
+            "Description": description,
+            "Categories": categories,
+            "Source": "Google Books",
+        }
+    )
+    return metadata
 
 
 def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
@@ -170,7 +199,7 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         data = response.json()
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
         logger.warning("Open Library request failed for %s: %s", isbn, exc)
         return None
 
@@ -184,10 +213,18 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         return None
 
     authors = [a.get("name", "") for a in book.get("authors", []) if a.get("name")]
-    return {
-        "Title": title,
-        "Authors": authors,
-    }
+
+    # Open Library sometimes stores description in 'notes'
+    description = book.get("notes", "")
+    if isinstance(description, dict):
+        description = description.get("value", "")
+
+    categories = [s.get("name", "") for s in book.get("subjects", []) if s.get("name")]
+
+    # Clone raw data and add standard keys
+    metadata = dict(book)
+    metadata.update({"Title": title, "Authors": authors, "Description": description, "Categories": categories, "Source": "Open Library"})
+    return metadata
 
 
 # ---------------------------------------------------------------------------
@@ -208,13 +245,15 @@ def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
               before calling this function.
 
     Returns:
-        A ``{"Title": str, "Authors": list[str]}`` dict on success, or
-        ``None`` when both upstream services return no usable results.
+        A dict containing standard keys (Title, Authors, Description, Categories)
+        plus the full raw metadata payload from the provider.
     """
     metadata = _lookup_google_books(isbn)
     if metadata:
         logger.info("ISBN %s resolved via Google Books", isbn)
         return metadata
+
+    logger.warning("Falling back to Open Library for ISBN %s", isbn)
 
     metadata = _lookup_open_library(isbn)
     if metadata:

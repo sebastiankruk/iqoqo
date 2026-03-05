@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Loader2 } from "lucide-react";
 import type { Item, ItemStatus } from "@/types/frbr";
 
 const statusDotColor: Record<ItemStatus, string> = {
@@ -28,13 +28,30 @@ interface ItemCardProps {
   variant?: "vertical" | "horizontal";
 }
 
+type ItemWithCoverFields = Item & {
+  cover_path?: string;
+  cover_status?: string;
+};
+
 /** Individual item card shown in the collection grid. */
 export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
   const dotColor = statusDotColor[item.status] ?? "bg-muted";
   const dotTitle = statusDotTitle[item.status] ?? item.status;
-  const coverUrl =
-    (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-    (item.meta?.["cover_url"] as string | undefined);
+
+  // Resolve cover URL: Local > Legacy Meta > Placeholder
+  const itemWithCoverFields = item as ItemWithCoverFields;
+  const coverUrl = itemWithCoverFields.cover_path
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemWithCoverFields.cover_path}`
+    : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
+      (item.meta?.["cover_url"] as string | undefined);
+  const hasLegacyCoverUrl =
+    Boolean(item.manifestation_meta?.["cover_url"] as string | undefined) ||
+    Boolean(item.meta?.["cover_url"] as string | undefined);
+
+  const isProcessing = itemWithCoverFields.cover_status === "processing";
+  const isGenerated =
+    itemWithCoverFields.cover_status === "ready" && !hasLegacyCoverUrl;
+
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";
 
@@ -77,6 +94,14 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         {/* Cover */}
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
+          {(isProcessing || itemWithCoverFields.cover_status === 'pending') && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="text-xs font-medium text-foreground">
+                {itemWithCoverFields.cover_status === 'pending' ? 'Generating...' : 'Processing...'}
+              </span>
+            </div>
+          )}
           {coverUrl ? (
             <Image
               src={coverUrl}
@@ -84,7 +109,7 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               unoptimized
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
             />
           ) : (
             <div className="flex h-full items-center justify-center">

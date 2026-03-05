@@ -1,17 +1,21 @@
 """Defines the API endpoints for the application."""
 
 import json
+import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, session
+from flask import jsonify, request, send_file, send_from_directory, session
+from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, Work, db
+from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
 
@@ -19,6 +23,12 @@ from . import api_bp
 def _invalid_json_payload_response():
     """Return a standardized 400 response for absent/invalid JSON payloads."""
     return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
+
+
+@api_bp.route("/static/covers/<path:filename>", methods=["GET"])
+def serve_cover(filename: str):
+    """Serve a cover image from the local covers directory."""
+    return send_from_directory(COVERS_DIR, filename)
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -110,6 +120,8 @@ def get_items():
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
+                "cover_path": manifestation.cover_path if manifestation else None,
+                "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
@@ -151,6 +163,8 @@ def get_item_detail(item_id: int):
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["cover_path"] = manifestation.cover_path
+        item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
         if manifestation.expression:
             expression = manifestation.expression
@@ -235,9 +249,7 @@ def lookup_isbn(isbn: str):
         # Only return if we have at least a title
         if work_metadata["Title"]:
             # Update manifestation.meta for future use
-            if not manifestation.meta:
-                manifestation.meta = {}
-            manifestation.meta.update(work_metadata)
+            manifestation.update_meta(**work_metadata)
             try:
                 db.session.commit()
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
@@ -270,9 +282,25 @@ def lookup_isbn(isbn: str):
         manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
         db.session.add(manifestation)
         db.session.commit()
+
+        # --- Cover Generation Pipeline ---
+        # 1. Try fast API lookup
+        found_cover = process_fast_cover(manifestation, canonical_isbn)
+
+        if not found_cover:
+            # 2. Schedule async LLM generation
+            manifestation.update_meta(cover_status="pending")
+
+            # Extract title/author
+            title = work.title or "Unknown"
+            author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
+
+            start_cover_processing(manifestation.id, canonical_isbn, title, author)
+
+        db.session.commit()
     else:
         # Update existing manifestation
-        manifestation.meta = metadata
+        manifestation.update_meta(**metadata)
         # Also update the Work if it has a title
         if manifestation.expression and manifestation.expression.work:
             manifestation.expression.work.title = metadata["Title"]
@@ -298,12 +326,7 @@ def update_manifestation(isbn: str):
 
     if metadata:
         # Update the manifestation's metadata
-        if not manifestation.meta:
-            manifestation.meta = {}
-        # Need to update the mutable dict properly for SQLAlchemy to detect changes
-        updated_meta = dict(manifestation.meta)
-        updated_meta.update(metadata)
-        manifestation.meta = updated_meta
+        manifestation.update_meta(**metadata)
 
         # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
@@ -357,12 +380,7 @@ def add_item(isbn: str):
 
     # Update manifestation metadata if provided
     if metadata:
-        if not manifestation.meta:
-            manifestation.meta = {}
-        # Need to update the mutable dict properly for SQLAlchemy to detect changes
-        updated_meta = dict(manifestation.meta)
-        updated_meta.update(metadata)
-        manifestation.meta = updated_meta
+        manifestation.update_meta(**metadata)
 
         # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
@@ -387,9 +405,122 @@ def add_item(isbn: str):
     return jsonify({"item_id": item.id})
 
 
+@api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
+def upload_cover(manifestation_id):
+    """Handles manual user photo uploads for a manifestation."""
+    if "cover" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["cover"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Validate extension
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
+        return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    # Validate size (10MB limit)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if request.content_length and request.content_length > max_size:
+        return jsonify({"error": "File too large. Max size: 10MB"}), 413
+
+    file.seek(0, os.SEEK_END)
+    if file.tell() > max_size:
+        return jsonify({"error": "File too large. Max size: 10MB"}), 413
+    file.seek(0)
+
+    # Verify image content
+    try:
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+    except (OSError, SyntaxError):
+        return jsonify({"error": "Invalid or corrupted image file"}), 400
+
+    manifestation = Manifestation.query.get_or_404(manifestation_id)
+    isbn = manifestation.isbn13 or f"item_{manifestation_id}"
+
+    filename = secure_filename(f"{isbn}_raw.jpg")
+    filepath = os.path.join(RAW_DIR, filename)
+    file.save(filepath)
+
+    # Set status to processing
+    manifestation.update_meta(cover_status="processing")
+    db.session.commit()
+
+    # Get Title/Author from related Expression/Work
+    work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
+    title = work.title if work else "Unknown Title"
+    author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
+
+    start_cover_processing(manifestation.id, isbn, title, author, user_image_path=filepath)
+
+    return jsonify({"message": "Cover upload processing started"}), 202
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
+def regenerate_cover(manifestation_id: int):
+    """Force regeneration of a cover for a manifestation."""
+    manif = Manifestation.query.get_or_404(manifestation_id)
+
+    # Reset status
+    manif.update_meta(cover_status="pending")
+    db.session.commit()
+
+    # Launch background pipeline (API lookup → LLM generation)
+    work = manif.expression.work if manif.expression else None
+    title = work.title if work else "Unknown"
+    author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
+    isbn = manif.isbn13 or str(manif.id)
+
+    # Extract extra metadata for the LLM
+    meta = manif.meta or {}
+    description = meta.get("Description", "")
+    categories = meta.get("Categories", [])
+    genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
+    start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
+
+    return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
+
+
 # =============================================================================
 # Admin API Endpoints
 # =============================================================================
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
+def refetch_metadata(manifestation_id: int):
+    """Force refetch metadata from upstream providers."""
+    manif = Manifestation.query.get_or_404(manifestation_id)
+
+    if not manif.isbn13:
+        return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
+
+    # Canonicalize ISBN before lookup
+    canonical_isbn = isbn_utils.canonicalize_isbn(manif.isbn13)
+    if not canonical_isbn:
+        return jsonify({"success": False, "data": None, "error": "Invalid ISBN"}), 400
+
+    metadata = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+
+    if not metadata:
+        return jsonify({"success": False, "data": None, "error": "No upstream metadata found"}), 404
+
+    # Merge metadata into Manifestation
+    manif.update_meta(**metadata)
+
+    # Update Work details if available
+    if manif.expression and manif.expression.work:
+        if "Title" in metadata:
+            manif.expression.work.title = metadata["Title"]
+        if "Authors" in metadata:
+            work_meta = dict(manif.expression.work.meta or {})
+            work_meta["authors"] = metadata["Authors"]
+            manif.expression.work.meta = work_meta
+
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": manif.id}, "error": None})
 
 
 @api_bp.route("/admin/stats", methods=["GET"])

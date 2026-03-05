@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iqoqo"
-version = "0.1.0"
+version = "0.0.5"
 description = "Library of Everything - FRBR-compliant personal collection manager"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -88,6 +88,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py
 "tests/*" = ["F401", "F811"]  # Allow unused imports and redefinitions in tests
+"scripts/*" = ["E402"]  # Scripts modify sys.path before app imports
 
 [tool.mypy]
 python_version = "3.11"
@@ -111,3 +112,4 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
+pythonpath = ["."]

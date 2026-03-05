@@ -61,7 +61,14 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
     publisher = db.Column(db.String(500))  # Increased from 255 for long publisher names
     publication_date = db.Column(db.Date)
+    cover_path = db.Column(db.String(255), nullable=True)
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
+
+    def update_meta(self, **kwargs):
+        """Safely updates the meta JSON field."""
+        meta = dict(self.meta) if self.meta else {}
+        meta.update(kwargs)
+        self.meta = meta
 
     # Relationships
     items = db.relationship("Item", backref="manifestation", lazy=True)
@@ -86,3 +93,11 @@ class Item(db.Model):  # type: ignore[name-defined]
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default={})  # Custom tags, notes, location on shelf
+
+
+class LLMTelemetry(db.Model):  # type: ignore[name-defined]
+    __tablename__ = "llm_telemetry"
+    id = db.Column(db.Integer, primary_key=True)
+    provider = db.Column(db.String(50), unique=True, nullable=False)
+    images_generated = db.Column(db.Integer, default=0)
+    estimated_cost_usd = db.Column(db.Float, default=0.0)

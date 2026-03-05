@@ -115,7 +115,10 @@ class TestLookupGoogleBooks:
     def test_success_returns_title_and_authors(self):
         with patch("app.utils.isbn._make_session", return_value=_mock_session_get(_GOOGLE_BOOKS_HIT)):
             result = _lookup_google_books("9780553380163")
-        assert result == {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        assert result is not None
+        assert result["Title"] == "The Hobbit"
+        assert result["Authors"] == ["J.R.R. Tolkien"]
+        assert result["Source"] == "Google Books"
 
     def test_no_items_returns_none(self):
         data = {"totalItems": 0, "items": []}
@@ -172,7 +175,10 @@ class TestLookupOpenLibrary:
     def test_success_returns_title_and_authors(self):
         with patch("app.utils.isbn._make_session", return_value=_mock_session_get(_OPEN_LIBRARY_HIT)):
             result = _lookup_open_library("9780553380163")
-        assert result == {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        assert result is not None
+        assert result["Title"] == "The Hobbit"
+        assert result["Authors"] == ["J.R.R. Tolkien"]
+        assert result["Source"] == "Open Library"
 
     def test_empty_response_returns_none(self):
         with patch("app.utils.isbn._make_session", return_value=_mock_session_get({})):

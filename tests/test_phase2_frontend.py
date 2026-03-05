@@ -229,6 +229,13 @@ class TestItemsListEndpoint:
         items = response.get_json()["data"]
         assert len(items) == 1
 
+    def test_item_has_cover_status(self, client, populated_library):
+        """Items in the list must include cover_status for the UI overlay."""
+        response = client.get("/api/items?limit=1")
+        items = response.get_json()["data"]
+        assert len(items) > 0
+        assert "cover_status" in items[0]
+
 
 # ===========================================================================
 # GET /api/items/<id> endpoint – shape expected by the item detail page
@@ -267,6 +274,13 @@ class TestItemDetailEndpoint:
         response = client.get(f"/api/items/{item_id}")
         data = response.get_json()["data"]
         assert data["status"] == "lent"
+
+    def test_detail_has_cover_status(self, client, populated_library):
+        """Item details must include cover_status for the polling hook."""
+        item_id = populated_library["item_available"].id
+        response = client.get(f"/api/items/{item_id}")
+        data = response.get_json()["data"]
+        assert "cover_status" in data
 
 
 # ===========================================================================

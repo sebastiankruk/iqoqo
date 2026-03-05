@@ -1,7 +1,6 @@
 """Defines the configuration for the Flask application."""
 
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -9,6 +8,7 @@ load_dotenv()
 
 
 class Config:
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -26,12 +26,18 @@ class Config:
         if env_version and env_version != "dev":
             return env_version
 
-        # Try to read 'version' or 'VERSION' file from project root
-        root_dir = Path(__file__).parent.parent
-        for filename in ["version", "VERSION"]:
-            file_path = root_dir / filename
-            if file_path.exists():
-                return f"{file_path.read_text().strip()}"
+        import tomllib
+
+        try:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            pyproject_path = os.path.join(base_dir, "pyproject.toml")
+            with open(pyproject_path, "rb") as pyproject_file:
+                env_version = tomllib.load(pyproject_file).get("project", {}).get("version")
+        except (FileNotFoundError, OSError):
+            env_version = None
+
+        if env_version:
+            return env_version
 
         return "dev-local"
 

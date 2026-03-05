@@ -33,7 +33,9 @@ interface ItemSidebarProps {
 
 /** Left sidebar of the item detail page – cover, status, actions, quick stats. */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
   const coverUrl =
+    (item.cover_path ? `${apiBase}${item.cover_path}` : undefined) ??
     (item.manifestation_meta?.["cover_url"] as string | undefined) ??
     (item.meta?.["cover_url"] as string | undefined);
 
@@ -55,7 +57,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   };
 
   const handleQrCode = async () => {
-    const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"}/api/qrcode/${item.id}`;
+    const url = `${apiBase}/qrcode/${item.id}`;
     try {
       const response = await fetch(url, { method: "HEAD" });
 

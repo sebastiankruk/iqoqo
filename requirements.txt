@@ -1,4 +1,4 @@
-Flask==3.1.3
+Flask==3.0.0
 Flask-CORS==6.0.*
 gunicorn==22.0.*
 psycopg2-binary==2.9.*
@@ -7,6 +7,9 @@ rdflib==7.*
 python-dotenv
 flask-sqlalchemy
 flask-migrate
+Pillow>=10.0.0
+openai>=1.10.0
+google-genai>=1.65.0
 
 # Testing
 pytest

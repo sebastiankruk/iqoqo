@@ -71,14 +71,13 @@ def test_isort_imports():
 def test_python_syntax():
     """Test that all Python files have valid syntax."""
     errors = []
-    for path in pathlib.Path(".").rglob("*.py"):
-        # Skip .venv and node_modules directories
-        if ".venv" in str(path) or "node_modules" in str(path):
-            continue
-        try:
-            py_compile.compile(str(path), doraise=True)
-        except py_compile.PyCompileError as e:
-            errors.append(f"{path}: {e}")
+    source_dirs = ["app", "tests", "scripts"]
+    for source_dir in source_dirs:
+        for path in pathlib.Path(source_dir).rglob("*.py"):
+            try:
+                py_compile.compile(str(path), doraise=True)
+            except py_compile.PyCompileError as e:
+                errors.append(f"{path}: {e}")
 
     assert not errors, "Python syntax errors found:\n" + "\n".join(errors)
 

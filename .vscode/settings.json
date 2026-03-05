@@ -1,7 +1,6 @@
 {
     // Python environment and interpreter
-    "python.envFile": "${workspaceFolder}/.venv/bin/python",
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python3",
+    "python.envFile": "${workspaceFolder}/.venv",
     "python.terminal.activateEnvInCurrentTerminal": true,
     "terminal.integrated.env.osx": {
         "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
@@ -138,12 +137,15 @@
         "Della",
         "docstrings",
         "doraise",
+        "dotenv",
         "FRBR",
         "FRBRoo",
         "iqoqo",
         "isbnlib",
         "isort",
+        "Imagen",
         "jsonld",
+        "localsd",
         "Longman",
         "manif",
         "manifestation",
@@ -164,7 +166,8 @@
         "venv",
         "Vitest",
         "wireframes",
-        "zxing"
+        "zxing",
+        "sdapi",
     ],
     "css.lint.unknownAtRules": "ignore",
     "cSpell.useGitignore": true,

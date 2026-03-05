@@ -97,6 +97,22 @@ export function useAddItem() {
   });
 }
 
+/* ── Polling Hook for Async Updates ─────────────────────────────────────── */
+
+export function useManifestationWithPolling(initialData: Item) {
+  const { data: item } = useQuery({
+    queryKey: queryKeys.item(initialData.id),
+    queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
+    initialData: initialData,
+    // Automatically polls every 3 seconds ONLY if the status is pending
+    refetchInterval: (query) =>
+      query.state.data?.cover_status === 'pending' ? 3000 : false,
+  });
+
+  // Return it in the same { item } shape the component is currently expecting
+  return { item };
+}
+
 /* ── Update item ─────────────────────────────────────────────────────────── */
 
 export function useUpdateItem(id: number) {
@@ -135,6 +151,22 @@ export function useIsbnSearch() {
   return useMutation({
     mutationFn: async (isbn: string) => {
       return apiFetch<IsbnMeta>(`/isbn/${isbn}`);
+    },
+  });
+}
+
+/* ── Regenerate Cover ───────────────────────────────────────────────────── */
+
+export function useRegenerateCover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (manifestationId: number) => {
+      const res = await apiClient.post(`/manifestations/${manifestationId}/regenerate-cover`);
+      return res.data;
+    },
+    onSuccess: () => {
+      // Ensure the collection list picks up the new cover_status: 'pending' state.
+      void qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
 }

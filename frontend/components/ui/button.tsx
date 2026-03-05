@@ -3,8 +3,8 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "default" | "ghost";
-type ButtonSize = "default" | "icon";
+type ButtonVariant = "default" | "ghost" | "outline";
+type ButtonSize = "default" | "icon" | "sm";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -16,11 +16,14 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-primary text-primary-foreground shadow hover:bg-primary/90",
   ghost:
     "hover:bg-accent hover:text-accent-foreground",
+  outline:
+    "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
   default: "h-9 px-4 py-2",
   icon: "h-9 w-9",
+  sm: "h-8 px-3 text-xs",
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(

@@ -3,7 +3,8 @@
 # Ensure we are in the script's directory
 cd "$(dirname "$0")"
 
-export APP_VERSION=$(cat VERSION).dev
+VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
+export APP_VERSION="${VERSION:-0}.dev"
 
 # 1. Start Database
 echo "Checking database status..."
@@ -171,7 +172,7 @@ fi
 
 echo ""
 echo "════════════════════════════════════════════════"
-echo "  iqoqo development servers running"
+echo "  iqoqo v${APP_VERSION} development servers running"
 echo "  Flask API  → http://127.0.0.1:${WEB_PORT}"
 if [ -d "frontend" ]; then
     echo "  Frontend   → http://localhost:3000"
