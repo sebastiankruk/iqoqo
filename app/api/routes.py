@@ -1,5 +1,20 @@
 """Defines the API endpoints for the application."""
 
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 import json
 import os
 from io import BytesIO
@@ -406,7 +421,7 @@ def add_item(isbn: str):
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
-def upload_cover(manifestation_id):
+def upload_cover(manifestation_id):  # pylint: disable=R0911
     """Handles manual user photo uploads for a manifestation."""
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400

@@ -1,4 +1,21 @@
 """Defines the Alembic migration environment."""
+
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+
 import logging
 from logging.config import fileConfig
 
@@ -13,13 +30,13 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)
-logger = logging.getLogger('alembic.env')
+logger = logging.getLogger("alembic.env")
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_db = current_app.extensions['migrate'].db
+target_db = current_app.extensions["migrate"].db
 target_metadata = target_db.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -29,11 +46,11 @@ target_metadata = target_db.metadata
 
 
 def get_url():
-    return current_app.config['SQLALCHEMY_DATABASE_URI'].replace('%', '%%')
+    return current_app.config["SQLALCHEMY_DATABASE_URI"].replace("%", "%%")
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == 'table' and object.schema is not None and object.schema != 'public':
+    if type_ == "table" and object.schema is not None and object.schema != "public":
         return False
     return True
 
@@ -52,9 +69,14 @@ def run_migrations_offline():
     """
     url = get_url()
     context.configure(
-        url=url, target_metadata=target_metadata, literal_binds=True,
-        compare_type=True, include_schemas=True, render_as_batch=True,
-        compare_server_default=True, include_object=include_object
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+        include_schemas=True,
+        render_as_batch=True,
+        compare_server_default=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -73,30 +95,26 @@ def run_migrations_online():
     # when there are no changes to the schema
     # reference: http://alembic.zzzcomputing.com/en/latest/cookbook.html
     def process_revision_directives(context, revision, directives):
-        if getattr(config.cmd_opts, 'autogenerate', False):
+        if getattr(config.cmd_opts, "autogenerate", False):
             script = directives[0]
             if script.upgrade_ops.is_empty():
                 directives[:] = []
-                logger.info('No changes in schema detected.')
+                logger.info("No changes in schema detected.")
 
-    conf_args = current_app.extensions['migrate'].configure_args
+    conf_args = current_app.extensions["migrate"].configure_args
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
-    
-    conf_args['compare_type'] = True
-    conf_args['include_schemas'] = True
-    conf_args['render_as_batch'] = True
-    conf_args['compare_server_default'] = True
-    conf_args['include_object'] = include_object
 
-    connectable = current_app.extensions['migrate'].db.engine
+    conf_args["compare_type"] = True
+    conf_args["include_schemas"] = True
+    conf_args["render_as_batch"] = True
+    conf_args["compare_server_default"] = True
+    conf_args["include_object"] = include_object
+
+    connectable = current_app.extensions["migrate"].db.engine
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            **conf_args
-        )
+        context.configure(connection=connection, target_metadata=target_metadata, **conf_args)
 
         with context.begin_transaction():
             context.run_migrations()
