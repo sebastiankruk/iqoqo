@@ -1,6 +1,5 @@
 {
     // Python environment and interpreter
-    "python.envFile": "${workspaceFolder}/.venv",
     "python.terminal.activateEnvInCurrentTerminal": true,
     "terminal.integrated.env.osx": {
         "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
