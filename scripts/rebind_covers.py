@@ -3,6 +3,7 @@
 Script to re-bind orphaned cover images to books that are missing covers.
 Run this before archiving orphans to ensure valid covers are not deleted.
 """
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify

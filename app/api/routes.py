@@ -421,7 +421,7 @@ def add_item(isbn: str):
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
-def upload_cover(manifestation_id):
+def upload_cover(manifestation_id):  # pylint: disable=R0911
     """Handles manual user photo uploads for a manifestation."""
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400

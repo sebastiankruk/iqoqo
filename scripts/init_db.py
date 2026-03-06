@@ -7,6 +7,7 @@ This script checks if the database is empty and optionally loads initial data.
 Usage:
     python scripts/init_db.py [--seed-file path/to/data.json]
 """
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
