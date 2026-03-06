@@ -61,7 +61,6 @@ Use explicit origins in production (avoid wildcard origins). Enable `CORS_SUPPOR
 ## �📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
-- **[Phase 4 Ubuntu Cutover](docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
@@ -99,18 +98,6 @@ curl -X POST -F "file=@my_library.json" http://localhost:5000/api/admin/import
 python scripts/init_db.py --seed-file my_library.json
 ```
 
-### Migrate from Legacy iqoqo-prototype
-
-If you're migrating from the original iqoqo-prototype:
-
-```bash
-# 1. Convert SQL dump to JSON
-python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
-
-# 2. Migrate to FRBR format
-python scripts/migrate_legacy.py legacy_data.json --clear
-```
-
 See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed documentation.
 
 ## 🎯 Roadmap
@@ -124,7 +111,7 @@ See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed doc
 
 ## 📜 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+LGPL-3.0 License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
