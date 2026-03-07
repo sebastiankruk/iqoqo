@@ -13,7 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import uuid
 from datetime import UTC, datetime
+
+from sqlalchemy.dialects.postgresql import UUID
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
 
@@ -21,6 +25,80 @@ from . import db
 #: on the Python side; the TypeScript ``ItemStatus`` union in
 #: ``frontend/types/frbr.ts`` must stay in sync with these values.
 ITEM_STATUSES: tuple[str, ...] = ("available", "lent", "lost", "wish_list", "reading", "read")
+
+# RBAC Association Tables
+
+user_roles = db.Table(
+    "user_roles",
+    db.Column("user_id", UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_permissions = db.Table(
+    "role_permissions",
+    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("permission_id", db.Integer, db.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class Permission(db.Model):  # type: ignore[name-defined]
+    __tablename__ = "permissions"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(255))
+
+
+class Role(db.Model):  # type: ignore[name-defined]
+    __tablename__ = "roles"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    permissions = db.relationship("Permission", secondary=role_permissions, lazy="selectin")
+
+
+class User(db.Model):  # type: ignore[name-defined]
+    __tablename__ = "users"
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    display_name = db.Column(db.String(100))
+    avatar_url = db.Column(db.String(500))
+    google_id = db.Column(db.String(255), unique=True, sparse=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    last_login = db.Column(db.DateTime, nullable=True)
+    visibility = db.Column(db.String(20), default="private")
+
+    roles = db.relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
+    items = db.relationship("Item", backref="owner", lazy="dynamic")
+    consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")
+
+    def set_password(self, password: str):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
+
+    def has_permission(self, permission_name: str) -> bool:
+        for role in self.roles:
+            for perm in role.permissions:
+                if perm.name == permission_name:
+                    return True
+        return False
+
+
+class ConsentRecord(db.Model):  # type: ignore[name-defined]
+    __tablename__ = "user_consents"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    consent_type = db.Column(db.String(50), nullable=False, index=True)
+    is_granted = db.Column(db.Boolean, nullable=False)
+    policy_version = db.Column(db.String(50), nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+
+# ... FRBR models (Work, Expression, Manifestation, LLMTelemetry)
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -114,5 +192,7 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     __tablename__ = "llm_telemetry"
     id = db.Column(db.Integer, primary_key=True)
     provider = db.Column(db.String(50), unique=True, nullable=False)
+    images_generated = db.Column(db.Integer, default=0)
+    estimated_cost_usd = db.Column(db.Float, default=0.0)
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)

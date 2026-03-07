@@ -15,29 +15,30 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from .frbr_service import create_work
+from app.db.models import Expression, Manifestation, Work, db
+from app.utils.isbn import fetch_isbn_metadata  # Your external fetcher (Google Books/OpenLibrary)
 
 
-def ingest_isbn(isbn):
-    """
-    Ingests a book from an ISBN.
-    Fetches metadata from an external API and creates the FRBR objects.
-    """
-    # Placeholder for fetching data from a service like Open Library or Google Books
-    # response = requests.get(f"https://openlibrary.org/isbn/{isbn}.json")
-    # data = response.json()
+class IngestService:
+    @staticmethod
+    def ingest_from_isbn(isbn: str) -> Manifestation:
+        meta = fetch_isbn_metadata(isbn)
+        if not meta:
+            raise ValueError("ISBN metadata not found in external services.")
 
-    # Placeholder data
-    data = {
-        "title": "The Hobbit",
-        "publishers": ["George Allen & Unwin"],
-        "publish_date": "1937-09-21",
-    }
+        # Create FRBR hierarchy
+        work = Work(title=meta.get("title"), author=meta.get("author"))
+        db.session.add(work)
 
-    # This is a simplified example. A real implementation would need to handle
-    # existing works, expressions, and manifestations.
+        expression = Expression(work=work, language=meta.get("language", "en"))
+        db.session.add(expression)
 
-    work = create_work(title=data["title"])
-    # ... and so on
+        manifestation = Manifestation(
+            expression=expression,
+            title=meta.get("title"),
+            meta={"isbn": isbn, "cover_url": meta.get("cover_url"), "publisher": meta.get("publisher")},
+        )
+        db.session.add(manifestation)
+        db.session.commit()
 
-    return work
+        return manifestation

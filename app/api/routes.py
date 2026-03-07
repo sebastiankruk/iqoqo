@@ -20,7 +20,7 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, send_from_directory, session
+from flask import Blueprint, jsonify, request, send_file, send_from_directory, session
 from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -29,10 +29,12 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.config import Config
 from app.core.data_manager import DataManager
+from app.core.ingest import IngestService  # Assuming this exists based on your architecture
 from app.db.models import Expression, Item, Manifestation, Work, db
 from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
+from .decorators import require_auth
 
 
 def _invalid_json_payload_response():
@@ -622,3 +624,77 @@ def clear_data():
         return jsonify({"status": "success", "message": "All data cleared"})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/scan", methods=["POST"])
+@require_auth
+def scan_barcode():
+    """
+    Handles Scenarios 1 & 2:
+    - Scans for existing manifestation.
+    - If missing, fetches metadata and creates Work->Expr->Manifestation.
+    - Creates user Item.
+    """
+    data = request.get_json()
+    barcode = data.get("barcode")
+
+    if not barcode:
+        return jsonify({"error": "Barcode is required"}), 400
+
+    # 1. Check if Manifestation already exists locally
+    # Assuming ISBN is stored in the meta JSON or a dedicated column. Adjust to your specific DB schema.
+    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()
+
+    # Scenario 1: No manifestation exists -> Fetch external metadata and build FRBR tree
+    if not manifestation:
+        try:
+            # You will need to ensure this function exists in app/core/ingest.py using app/utils/isbn.py
+            manifestation = IngestService.ingest_from_isbn(barcode)
+        except Exception as e:
+            return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
+
+    if not manifestation:
+        return jsonify({"error": "Could not resolve barcode"}), 404
+
+    # Scenario 2 & 1 Conclusion: Create the Item for the user
+    new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")  # Default status
+    db.session.add(new_item)
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "message": "Item successfully added to your collection",
+                "item_id": new_item.id,
+                "manifestation_id": manifestation.id,
+                "title": manifestation.title,
+                "is_new_manifestation": not manifestation,  # conceptually true if we just ingested it
+            }
+        ),
+        201,
+    )
+
+
+@api_bp.route("/discover", methods=["GET"])
+@require_auth
+def get_global_manifestations():
+    """
+    Scenario 3: Fetch all manifestations in the local node, independent of user ownership.
+    """
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
+    pagination = Manifestation.query.order_by(Manifestation.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+    result = []
+    for m in pagination.items:
+        result.append(
+            {
+                "id": m.id,
+                "title": m.title,
+                "cover_url": m.meta.get("cover_url"),
+                "author": m.expression.work.author if m.expression and m.expression.work else "Unknown",
+            }
+        )
+
+    return jsonify({"manifestations": result, "total": pagination.total, "pages": pagination.pages, "current_page": page})
