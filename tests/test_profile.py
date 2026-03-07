@@ -20,7 +20,7 @@ import pytest
 from app.db.models import Item, User, db
 
 
-def test_get_profile(client, app_context):
+def test_get_profile(client):
     # Register and login first (using the test_auth flow)
     client.post("/api/auth/register", json={"email": "prof@iqoqo.local", "password": "pass"})
     res = client.post("/api/auth/login", json={"email": "prof@iqoqo.local", "password": "pass"})
@@ -32,7 +32,7 @@ def test_get_profile(client, app_context):
     assert data["email"] == "prof@iqoqo.local"
 
 
-def test_update_profile(client, app_context):
+def test_update_profile(client):
     client.post("/api/auth/register", json={"email": "update@iqoqo.local", "password": "pass"})
     res = client.post("/api/auth/login", json={"email": "update@iqoqo.local", "password": "pass"})
     token = json.loads(res.data)["token"]
@@ -42,7 +42,7 @@ def test_update_profile(client, app_context):
     assert json.loads(response.data)["display_name"] == "New Name"
 
 
-def test_delete_account_right_to_be_forgotten(client, app_context):
+def test_delete_account_right_to_be_forgotten(client):
     client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "pass"})
     res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "pass"})
     token = json.loads(res.data)["token"]

@@ -17,10 +17,15 @@ import json
 
 import pytest
 
-from app.db.models import Role, User
+from app.db.models import Role, User, db
 
 
-def test_user_registration(client, app_context):
+def test_user_registration(client):
+    # Setup: Ensure the default 'user' role exists in the test DB
+    if not Role.query.filter_by(name="user").first():
+        db.session.add(Role(name="user"))
+        db.session.commit()
+
     response = client.post(
         "/api/auth/register", json={"email": "test@iqoqo.local", "password": "securepassword", "display_name": "Test User"}
     )
@@ -34,7 +39,7 @@ def test_user_registration(client, app_context):
     assert user.roles[0].name == "user"
 
 
-def test_local_login(client, app_context):
+def test_local_login(client):
     # Register first
     client.post("/api/auth/register", json={"email": "login@iqoqo.local", "password": "mypassword"})
 

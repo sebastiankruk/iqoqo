@@ -13,9 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-import os
-
-from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.db.models import Item, Permission, Role, User, db

@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from app import create_app
 from app.db import db
-from app.db.models import Expression, Item, Manifestation, Work
+from app.db.models import Expression, Item, Manifestation, User, Work
 
 
 def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict:
@@ -203,6 +203,15 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
     legacy_items = legacy_data.get("items", [])
     print(f"Processing {len(legacy_items)} legacy items...")
 
+    # 1. Ensure we have a valid default owner (Admin) for migrated items
+    default_owner = User.query.first()
+    if not default_owner:
+        default_owner = User(email="admin_migrator@iqoqo.local", display_name="Legacy Migrator", is_active=True)
+        db.session.add(default_owner)
+        db.session.commit()
+
+    owner_uuid = default_owner.id
+
     for old_item in legacy_items:
         old_manif_id = old_item.get("manifestation_id")
         mani = manif_map.get(old_manif_id)
@@ -226,7 +235,7 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict
 
         item = Item(
             manifestation_id=manifestation.id,
-            owner_id=str(old_item.get("added_by", "1")),  # Map legacy client ID
+            owner_id=owner_uuid,  # Use default owner for migrated items
             status="available",
             added_at=added_at,
             meta=old_item.get("meta", {}),

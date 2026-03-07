@@ -20,13 +20,14 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import Blueprint, jsonify, request, send_file, send_from_directory, session
+from flask import jsonify, request, send_file, send_from_directory
 from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
+from app.api.decorators import require_auth, require_permission
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.core.ingest import IngestService  # Assuming this exists based on your architecture
@@ -34,7 +35,6 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
-from .decorators import require_auth
 
 
 def _invalid_json_payload_response():
@@ -230,6 +230,8 @@ def update_item(item_id: int):
 
 
 @api_bp.route("/items/<int:item_id>", methods=["DELETE"])
+@require_auth
+@require_permission("delete:item")
 def delete_item(item_id: int):
     """Delete an item."""
     item = db.session.get(Item, item_id)
@@ -380,26 +382,20 @@ def get_items_by_isbn(isbn: str):
 
 @api_bp.route("/item/<isbn>", methods=["POST"])
 def add_item(isbn: str):
-    """Add a new item for a given ISBN."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
-        # If manifestation doesn't exist, try to fetch it first
         lookup_response = lookup_isbn(isbn)
-        # lookup_isbn returns a tuple (response, status_code) on error
         if isinstance(lookup_response, tuple):
             status_code = lookup_response[1] if len(lookup_response) > 1 else 404
             if status_code != 200:
                 return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
-    metadata = request.get_json()
+    metadata = request.get_json(silent=True)
 
-    # Update manifestation metadata if provided
     if metadata:
         manifestation.update_meta(**metadata)
-
-        # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
             if "Title" in metadata:
                 manifestation.expression.work.title = metadata["Title"]
@@ -410,11 +406,17 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    # Get or create client ID (simplified - you may want to use proper authentication)
-    client_id = session.get("client_id", "default_user")
+    # --- FIX: Fetch a valid User to assign ownership ---
+    from app.db.models import User
 
-    # Create new item
-    item = Item(manifestation_id=manifestation.id, owner_id=client_id, status="available", meta={})
+    user = User.query.first()
+    if not user:
+        user = User(email="api_default@iqoqo.local", display_name="API Default")
+        db.session.add(user)
+        db.session.flush()
+
+    # Create new item using the valid UUID
+    item = Item(manifestation_id=manifestation.id, owner_id=user.id, status="available", meta={})
 
     db.session.add(item)
     db.session.commit()
@@ -477,6 +479,8 @@ def upload_cover(manifestation_id):  # pylint: disable=R0911
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
+@require_auth
+@require_permission("regenerate:cover")
 def regenerate_cover(manifestation_id: int):
     """Force regeneration of a cover for a manifestation."""
     manif = Manifestation.query.get_or_404(manifestation_id)
@@ -507,6 +511,8 @@ def regenerate_cover(manifestation_id: int):
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
+@require_auth
+@require_permission("refetch:metadata")
 def refetch_metadata(manifestation_id: int):
     """Force refetch metadata from upstream providers."""
     manif = Manifestation.query.get_or_404(manifestation_id)
@@ -650,7 +656,11 @@ def scan_barcode():
         try:
             # You will need to ensure this function exists in app/core/ingest.py using app/utils/isbn.py
             manifestation = IngestService.ingest_from_isbn(barcode)
-        except Exception as e:
+        except ValueError as e:
+            return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
+        except ConnectionError as e:
+            return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
+        except Exception as e:  # pylint: disable=broad-except
             return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:

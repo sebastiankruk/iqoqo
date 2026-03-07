@@ -15,7 +15,6 @@
 #
 
 import os
-import time
 from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
@@ -44,7 +43,7 @@ def generate_internal_jwt(user: User) -> str:
     payload = {
         "sub": str(user.id),
         "email": user.email,
-        "roles": [role.name for role in user.roles],
+        "roles": [role.name for role in user.roles],  # type: ignore[attr-defined]
         "exp": datetime.now(UTC) + timedelta(hours=12),
         "iat": datetime.now(UTC),
     }
@@ -92,10 +91,6 @@ def local_login():
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.is_active:
         return jsonify({"error": "Suspended"}), 403
-
-    user.last_login = datetime.now(UTC)
-    db.session.commit()
-    return jsonify({"token": generate_internal_jwt(user), "user": {"id": str(user.id), "email": user.email}})
 
     user.last_login = datetime.now(UTC)
     db.session.commit()

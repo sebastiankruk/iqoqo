@@ -24,7 +24,7 @@ import pytest
 
 from app.core.data_manager import DataManager
 from app.db import db
-from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, Work
+from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, Work
 
 
 @pytest.fixture
@@ -266,6 +266,10 @@ def test_stats_accuracy(app, sample_data):
 def test_get_stats_per_status_counts(app):
     """Test that get_stats() returns correct per-status counts for all ITEM_STATUSES."""
     with app.app_context():
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        db.session.add(test_user)
+        db.session.commit()  # Commit to generate the UUID
+
         # Build the minimum FRBR chain required to attach Items
         work = Work(title="Status Test Work", meta={})
         db.session.add(work)
@@ -280,7 +284,7 @@ def test_get_stats_per_status_counts(app):
         # Create two items for each status so we can assert counts > 0
         for status in ITEM_STATUSES:
             for _ in range(2):
-                db.session.add(Item(manifestation_id=manif.id, owner_id="tester", status=status, meta={}))
+                db.session.add(Item(manifestation_id=manif.id, owner_id=test_user.id, status=status, meta={}))
         db.session.commit()
 
         stats = DataManager.get_stats()

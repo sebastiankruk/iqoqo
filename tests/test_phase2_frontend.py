@@ -25,7 +25,7 @@ Docker instance is required.
 import pytest
 
 from app.core.data_manager import DataManager
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument      # fixtures used for side-effects/setup
@@ -40,6 +40,10 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 def populated_library(app):
     """Seed an in-memory library with items spanning several statuses."""
     with app.app_context():
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        db.session.add(test_user)
+        db.session.commit()  # Commit to generate the UUID
+
         work1 = Work(title="Dune", meta={"authors": ["Frank Herbert"], "categories": ["Sci-Fi"]})
         work2 = Work(title="Recursion", meta={"authors": ["Blake Crouch"], "categories": ["Thriller"]})
         db.session.add_all([work1, work2])
@@ -69,9 +73,9 @@ def populated_library(app):
         db.session.flush()
 
         # available, lent, wish_list items to test stat counts
-        item_available = Item(manifestation_id=mani1.id, owner_id="user1", status="available", meta={})
-        item_lent = Item(manifestation_id=mani2.id, owner_id="user1", status="lent", meta={})
-        item_wish = Item(manifestation_id=mani3.id, owner_id="user1", status="wish_list", meta={})
+        item_available = Item(manifestation_id=mani1.id, owner_id=test_user.id, status="available", meta={})
+        item_lent = Item(manifestation_id=mani2.id, owner_id=test_user.id, status="lent", meta={})
+        item_wish = Item(manifestation_id=mani3.id, owner_id=test_user.id, status="wish_list", meta={})
         db.session.add_all([item_available, item_lent, item_wish])
         db.session.commit()
 

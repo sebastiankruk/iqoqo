@@ -17,6 +17,11 @@ from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 
+# Import blueprints
+from app.api import api_bp
+from app.api.auth import auth_bp, init_oauth
+from app.api.profile import profile_bp
+
 from .config import Config
 from .db import db
 
@@ -80,8 +85,10 @@ def create_app(config_class=Config, config_override=None):
                 },
             )
 
-    from app.api import api_bp
+    init_oauth(app)
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(profile_bp)
 
     return app

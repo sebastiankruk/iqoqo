@@ -68,9 +68,6 @@ def update_consent():
     db.session.commit()
     return jsonify({"message": "Consent updated successfully"})
 
-    db.session.commit()
-    return jsonify({"message": "Consent updated successfully"})
-
 
 # Add PUT and DELETE to profile_bp in app/api/profile.py
 

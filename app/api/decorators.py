@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import uuid
 from functools import wraps
 
 import jwt
@@ -31,11 +32,18 @@ def require_auth(f):
             return jsonify({"error": "Token missing"}), 401
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-            request.user_id = payload["sub"]
+
+            # FIX: Convert the string back to a UUID object
+            request.user_id = uuid.UUID(payload["sub"])
+
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
+        except ValueError:
+            # Catches cases where the 'sub' is not a properly formatted UUID string
+            return jsonify({"error": "Invalid user ID format"}), 401
+
         return f(*args, **kwargs)
 
     return decorated
@@ -51,7 +59,5 @@ def require_permission(perm_name):
             return f(*args, **kwargs)
 
         return decorated
-
-    return decorator
 
     return decorator

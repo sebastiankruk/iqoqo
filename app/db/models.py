@@ -62,7 +62,7 @@ class User(db.Model):  # type: ignore[name-defined]
     password_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(100))
     avatar_url = db.Column(db.String(500))
-    google_id = db.Column(db.String(255), unique=True, sparse=True)
+    google_id = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     last_login = db.Column(db.DateTime, nullable=True)
@@ -81,8 +81,8 @@ class User(db.Model):  # type: ignore[name-defined]
         return check_password_hash(self.password_hash, password)
 
     def has_permission(self, permission_name: str) -> bool:
-        for role in self.roles:
-            for perm in role.permissions:
+        for role in self.roles:  # type: ignore[attr-defined]
+            for perm in role.permissions:  # type: ignore[attr-defined]
                 if perm.name == permission_name:
                     return True
         return False
@@ -179,7 +179,8 @@ class Item(db.Model):  # type: ignore[name-defined]
     manifestation_id = db.Column(db.Integer, db.ForeignKey("manifestations.id"), nullable=False)
 
     # User ownership data
-    owner_id = db.Column(db.String(100))  # Could link to a User table later
+    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
     status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
     condition = db.Column(db.String(50))
 

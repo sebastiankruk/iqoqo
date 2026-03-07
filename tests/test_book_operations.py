@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument  # fixtures used for setup, not always referenced
@@ -32,6 +32,10 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 def sample_work_complete(app):
     """Create a complete FRBRoo structure with Work, Expression, Manifestation, and Item."""
     with app.app_context():
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        db.session.add(test_user)
+        db.session.commit()  # Commit to generate the UUID
+
         # Create Work
         work = Work(
             title="The Lord of the Rings",
@@ -55,11 +59,11 @@ def sample_work_complete(app):
         db.session.flush()
 
         # Create Item
-        item = Item(manifestation_id=manifestation.id, owner_id="test_user", status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
         db.session.add(item)
         db.session.commit()
 
-        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item}
+        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item, "user": test_user}
 
 
 # =============================================================================
@@ -301,7 +305,7 @@ class TestAddingBooks:
     def test_add_item_creates_correct_owner(self, client, sample_work_complete):
         """Test that adding an item associates it with correct owner."""
         with client.session_transaction() as sess:
-            sess["client_id"] = "specific_user_123"
+            sess["client_id"] = sample_work_complete["user"].id  # Use the test user from the fixture
 
         response = client.post("/api/item/9780544003415", json={}, content_type="application/json")
         assert response.status_code == 200
@@ -310,7 +314,7 @@ class TestAddingBooks:
             item = db.session.get(Item, response.json["item_id"])
             # Note: Current implementation uses "default_user", not session
             # This test documents current behavior
-            assert item.owner_id in ["default_user", "specific_user_123"]
+            assert item.owner_id in ["default_user", sample_work_complete["user"].id]
 
     def test_add_multiple_items_same_manifestation(self, client, sample_work_complete):
         """Test adding multiple items for the same manifestation."""
@@ -513,8 +517,8 @@ class TestGettingItems:
         # Add more items
         with client.application.app_context():
             manifestation = Manifestation.query.filter_by(isbn13="9780544003415").first()
-            item2 = Item(manifestation_id=manifestation.id, owner_id="user2")
-            item3 = Item(manifestation_id=manifestation.id, owner_id="user3")
+            item2 = Item(manifestation_id=manifestation.id, owner_id=sample_work_complete["user"].id)
+            item3 = Item(manifestation_id=manifestation.id, owner_id=sample_work_complete["user"].id)
             db.session.add_all([item2, item3])
             db.session.commit()
 
