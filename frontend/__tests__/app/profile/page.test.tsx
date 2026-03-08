@@ -1,6 +1,5 @@
-import { vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import ProfilePage from '@/app/profile/page';
 
 describe('ProfilePage', () => {
@@ -17,7 +16,7 @@ describe('ProfilePage', () => {
     global.fetch = vi.fn();
 
     // 2. Now you can safely call mock methods on it
-    (global.fetch as any).mockResolvedValueOnce({
+    (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockProfile,
     });
@@ -41,9 +40,16 @@ describe('ProfilePage', () => {
     });
 
     // Mock the subsequent fetch call for the consent toggle
-    (global.fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    (global.fetch as Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
-    const federationButtons = screen.getAllByRole('button');
+    const federationButtons = screen.getAllByRole("button", { name: /Opted/i });
+
+    // Actually use the variable to click the button
+    fireEvent.click(federationButtons[0]);
+
+    // Then assert your fetch mock was called with the right data
+    expect(global.fetch).toHaveBeenCalledWith("/api/profile/consent", expect.any(Object));
+
     // Find the button specifically for federation (currently "Opted Out" based on mock data)
     const fedButton = screen.getByText('Opted Out');
 

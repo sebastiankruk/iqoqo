@@ -6,7 +6,7 @@ const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET_KEY || "you-w
 const PROTECTED_ROUTES = ['/collection', '/item', '/settings', '/profile', '/scan'];
 const ADMIN_ROUTES = ['/admin'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
@@ -33,6 +33,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
 
   } catch (error) {
+    console.error("Proxy auth error:", error);
     const response = NextResponse.redirect(new URL('/login?error=SessionExpired', request.url));
     response.cookies.delete('iqoqo_session');
     return response;
