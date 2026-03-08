@@ -14,10 +14,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import type { Metadata, Viewport } from "next";
-import { Merriweather, Inter } from "next/font/google";
+import { Merriweather, Inter, Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const merriweather = Merriweather({
   subsets: ["latin"],
@@ -50,7 +53,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${merriweather.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" className={cn(merriweather.variable, inter.variable, "font-sans", geist.variable)} suppressHydrationWarning>
       <head />
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>

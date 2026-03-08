@@ -15,12 +15,12 @@
 //
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { TopBar } from "@/components/scanner/top-bar";
+import { useState } from "react";
 import { Viewfinder } from "@/components/scanner/viewfinder";
-import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
-import type { IsbnMeta } from "@/types/frbr";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { fetchWithAuth } from "@/lib/api/server-client";
 
 /**
  * Full-screen camera scanner page.
@@ -29,48 +29,62 @@ import type { IsbnMeta } from "@/types/frbr";
  * and does not abort the stream. The BottomSheet component receives a ref to
  * it and drives getUserMedia + BarcodeDetector scanning.
  */
+interface ResultItem {
+  title: string;
+  message: string;
+  item_id: number;
+}
 export default function ScanPage() {
-  const [result, setResult] = useState<{
-    isbn: string;
-    meta: IsbnMeta;
-  } | null>(null);
+  const [scanning, setScanning] = useState(true);
+  const [result, setResult] = useState<ResultItem | null>(null);
+  const router = useRouter();
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const handleDetected = async (barcode: string) => {
+    setScanning(false);
+    toast.loading("Resolving barcode...");
 
-  const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
-    setResult({ isbn, meta });
-  }, []);
+    try {
+      const res = await fetchWithAuth("/api/scan", {
+        method: "POST",
+        body: JSON.stringify({ barcode })
+      });
 
-  const handleDismiss = useCallback(() => {
-    setResult(null);
-  }, []);
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.dismiss();
+        toast.success("Added to library!");
+        setResult(data);
+      } else {
+        toast.dismiss();
+        toast.error(data.error || "Failed to scan item");
+        setScanning(true); // resume scanning on fail
+      }
+    } catch (_err) {
+      toast.dismiss();
+      toast.error("Network error. Try again.");
+      setScanning(true);
+    }
+  };
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
-      {/*
-       * React-owned <video> so we control all attributes (playsInline, muted).
-       * Safari requires playsInline to avoid aborting the stream, and muted
-       * to satisfy autoplay policies.
-       */}
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        autoPlay
-        aria-hidden="true"
-        className="absolute inset-0 z-0 h-full w-full object-cover"
-      />
-
-      <TopBar />
-      <Viewfinder />
-
-      {!result && <BottomSheet videoRef={videoRef} onFound={handleFound} />}
-      {result && (
-        <SuccessCard
-          isbn={result.isbn}
-          meta={result.meta}
-          onDismiss={handleDismiss}
-        />
+    <div className="flex flex-col h-screen bg-black">
+      {scanning ? (
+        <Viewfinder onDetect={handleDetected} />
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-4">
+          {result && (
+            <SuccessCard
+              title={result.title}
+              message={result.message}
+              onViewItem={() => router.push(`/item/${result.item_id}`)}
+              onScanNext={() => {
+                setResult(null);
+                setScanning(true);
+              }}
+            />
+          )}
+        </div>
       )}
     </div>
   );

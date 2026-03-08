@@ -387,6 +387,15 @@ lookups of the same ISBN are served from the local database.
 - **Optimization:** All generated covers are converted to `JPEG` at 85% quality to prevent storage bloat, while maintaining their 1024x1024 resolution.
 - **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
 
+## Authentication and Authorization (v0.1.0)
+Iqoqo uses a hybrid authentication approach suitable for distributed deployments:
+
+1. **SSO / Local Identity**: Users can register via standard email/password or use Google SSO (via Authlib).
+2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT. The Next.js frontend utilizes a Backend-For-Frontend (BFF) pattern (`/api/auth/exchange`) to catch this token and store it securely in an `HttpOnly` cookie.
+3. **Next.js Middleware**: Edge middleware intercepts requests to protected routes (`/collection`, `/profile`), verifying the JWT signature via `jose` before rendering pages.
+4. **RBAC**: The database implements an RBAC matrix (`Role`, `Permission`, `user_roles`). Backend API endpoints are protected using `@require_auth` and `@require_permission` decorators.
+5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
+
 ## ⚙️ Operations & Maintenance
 
 ### Backup & Restore

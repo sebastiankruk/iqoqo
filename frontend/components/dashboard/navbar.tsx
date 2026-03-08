@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Bell, ScanLine, Library } from "lucide-react";
+import { Search, ScanLine, Library, Compass } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
@@ -67,6 +67,13 @@ export function Navbar() {
             Collection
           </Link>
           <Link
+            href="/discover"
+            className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 px-3.5 py-1.5 text-xs font-medium text-primary-foreground/80 transition-colors hover:border-primary-foreground/40 hover:text-primary-foreground sm:flex dark:border-white/20 dark:text-white/90 dark:hover:text-white dark:hover:bg-transparent"
+          >
+            <Compass className="h-3.5 w-3.5" />
+            Discover
+          </Link>
+          <Link
             href="/scan"
             className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
           >
@@ -74,13 +81,6 @@ export function Navbar() {
             <span className="hidden sm:inline">Scan</span>
           </Link>
           <ModeToggle />
-          <button
-            className="relative rounded-full p-2 transition-colors hover:bg-primary-foreground/10 dark:hover:bg-white/10"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4.5 w-4.5" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />
-          </button>
           <button
             className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
             aria-label="User profile"

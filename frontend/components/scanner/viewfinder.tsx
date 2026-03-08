@@ -14,12 +14,101 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 /** Viewfinder overlay with corner brackets and animated scanning line. */
-export function Viewfinder() {
+"use client";
+
+import { useEffect, useRef } from "react";
+
+interface ViewfinderProps {
+  onDetect: (barcode: string) => void | Promise<void>;
+}
+
+interface DetectedBarcode {
+  rawValue: string;
+}
+
+interface BarcodeDetectorInstance {
+  detect(image: HTMLVideoElement | HTMLImageElement | ImageBitmap): Promise<DetectedBarcode[]>;
+}
+
+declare global {
+  interface Window {
+    BarcodeDetector: {
+      new (options?: { formats: string[] }): BarcodeDetectorInstance;
+    };
+  }
+}
+
+export function Viewfinder({ onDetect }: ViewfinderProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const bracketSize = 28;
   const strokeWidth = 3;
 
+  useEffect(() => {
+    let active = true;
+    let stream: MediaStream | null = null;
+
+    async function startScanner() {
+      try {
+        // 1. Request Camera
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+
+        if (videoRef.current && active) {
+          videoRef.current.srcObject = stream;
+        }
+
+        // 2. Barcode Detection Loop
+        // Note: Check if BarcodeDetector is supported in the browser
+        if (!("BarcodeDetector" in window)) {
+          console.error("BarcodeDetector API not supported");
+          return;
+        }
+
+        const barcodeDetector = new window.BarcodeDetector({
+          formats: ["ean_13", "code_128", "qr_code"],
+        });
+
+        const detect = async () => {
+          if (!active || !videoRef.current) return;
+
+          try {
+            const barcodes = await barcodeDetector.detect(videoRef.current);
+            if (barcodes.length > 0 && active) {
+              onDetect(barcodes[0].rawValue); // <--- NOW IT IS USED!
+              return; // Stop local loop once detected
+            }
+          } catch {
+            // Silently fail during individual frame detection
+          }
+          requestAnimationFrame(detect);
+        };
+
+        detect();
+      } catch (err) {
+        console.error("Scanner error:", err);
+      }
+    }
+
+    startScanner();
+
+    return () => {
+      active = false;
+      stream?.getTracks().forEach(track => track.stop());
+    };
+  }, [onDetect]);
+
   return (
-    <div className="absolute inset-0 flex items-center justify-center">
+    <div className="absolute inset-0 flex items-center justify-center bg-black">
+      {/* The actual camera feed */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+
       {/* Darkened overlay with transparent cutout */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-x-0 top-0 bottom-1/2 mb-[120px] bg-black/50" />
@@ -28,46 +117,15 @@ export function Viewfinder() {
         <div className="absolute top-1/2 bottom-1/2 right-0 -mt-[120px] -mb-[120px] w-[calc(50%-120px)] bg-black/50" />
       </div>
 
-      {/* Viewfinder box */}
+      {/* Viewfinder box (remains the same as your code) */}
       <div className="relative h-[240px] w-[240px]">
-        {/* Corner brackets */}
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox="0 0 240 240"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}
-            stroke="white"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={`M ${240 - bracketSize} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${bracketSize}`}
-            stroke="white"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={`M ${strokeWidth / 2} ${240 - bracketSize} L ${strokeWidth / 2} ${240 - strokeWidth / 2} L ${bracketSize} ${240 - strokeWidth / 2}`}
-            stroke="white"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={`M ${240 - bracketSize} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - bracketSize}`}
-            stroke="white"
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 240 240" fill="none" aria-hidden="true">
+          <path d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`} stroke="white" strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={`M ${240 - bracketSize} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${bracketSize}`} stroke="white" strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={`M ${strokeWidth / 2} ${240 - bracketSize} L ${strokeWidth / 2} ${240 - strokeWidth / 2} L ${bracketSize} ${240 - strokeWidth / 2}`} stroke="white" strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={`M ${240 - bracketSize} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - bracketSize}`} stroke="white" strokeWidth={strokeWidth} strokeLinecap="round" />
         </svg>
 
-        {/* Scanning line */}
         <div className="absolute inset-x-2 animate-[scan-line_2.5s_ease-in-out_infinite]">
           <div className="h-0.5 w-full bg-accent shadow-[0_0_8px_hsl(24_100%_41%)]" />
         </div>
