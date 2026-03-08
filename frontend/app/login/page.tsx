@@ -46,7 +46,7 @@ export default function LoginPage() {
         <Button
             className="w-full"
             variant="outline"
-            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login/google`}>
+            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
           Sign in with Google
         </Button>
         <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">

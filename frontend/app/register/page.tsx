@@ -61,7 +61,7 @@ export default function RegisterPage() {
         <Button
             className="w-full"
             variant="outline"
-            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login/google`}>
+            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
           Sign up with Google
         </Button>
 

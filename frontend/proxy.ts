@@ -13,48 +13,31 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import * as jose from 'jose';
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
 
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET_KEY || "you-will-never-guess");
-const PROTECTED_ROUTES = ['/collection', '/item', '/settings', '/profile', '/scan'];
-const ADMIN_ROUTES = ['/admin'];
+export const proxy = auth((req) => {
+  const isLoggedIn = !!req.auth;
+  const isAuthPage = req.nextUrl.pathname.startsWith('/login');
 
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
-
-  if (!isProtected && !isAdminRoute) return NextResponse.next();
-
-  const token = request.cookies.get('iqoqo_session')?.value;
-  if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  try {
-    const { payload } = await jose.jwtVerify(token, SECRET_KEY);
-
-    if (isAdminRoute) {
-      const roles = payload.roles as string[];
-      if (!roles || !roles.includes('admin')) {
-        return NextResponse.rewrite(new URL('/unauthorized', request.url));
-      }
+  // If they are on the login page but already logged in, send them to Discover
+  if (isAuthPage) {
+    if (isLoggedIn) {
+      return NextResponse.redirect(new URL('/discover', req.nextUrl));
     }
-
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-user-id', payload.sub as string);
-    return NextResponse.next({ request: { headers: requestHeaders } });
-
-  } catch (error) {
-    console.error("Proxy auth error:", error);
-    const response = NextResponse.redirect(new URL('/login?error=SessionExpired', request.url));
-    response.cookies.delete('iqoqo_session');
-    return response;
+    return NextResponse.next();
   }
-}
 
+  // If they are NOT logged in, redirect them to the login page
+  if (!isLoggedIn) {
+    return NextResponse.redirect(new URL('/login', req.nextUrl));
+  }
+
+  return NextResponse.next();
+});
+
+// The matcher defines which routes this proxy runs on.
+// This runs on everything EXCEPT /api, static files, and images.
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
