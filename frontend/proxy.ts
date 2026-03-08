@@ -13,11 +13,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export const proxy = auth((req) => {
-  const isLoggedIn = !!req.auth;
+export function proxy(req: NextRequest) {
+  // Check for the cookie we set in the /api/auth-exchange route
+  const sessionCookie = req.cookies.get("iqoqo_session");
+  const isLoggedIn = !!sessionCookie?.value;
   const isAuthPage = req.nextUrl.pathname.startsWith('/login');
 
   // If they are on the login page but already logged in, send them to Discover
@@ -30,13 +32,16 @@ export const proxy = auth((req) => {
 
   // If they are NOT logged in, redirect them to the login page
   if (!isLoggedIn) {
-    return NextResponse.redirect(new URL('/login', req.nextUrl));
+    // Optional: save the page they tried to visit so you can redirect them back after login
+    const loginUrl = new URL('/login', req.nextUrl);
+    // loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
-});
+}
 
-// The matcher defines which routes this proxy runs on.
+// The matcher defines which routes this middleware runs on.
 // This runs on everything EXCEPT /api, static files, and images.
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],

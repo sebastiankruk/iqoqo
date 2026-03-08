@@ -13,27 +13,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+// frontend/app/api/auth-exchange/route.ts
 import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');
 
   if (!token) {
     return NextResponse.redirect(new URL('/login?error=MissingToken', request.url));
   }
 
+  // Set the HttpOnly cookie
   const cookieStore = await cookies();
-  cookieStore.set({
-    name: 'iqoqo_session',
-    value: token,
+  cookieStore.set('iqoqo_session', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 12,
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  return NextResponse.redirect(new URL('/collection', request.url));
+  // Redirect to dashboard or profile
+  return NextResponse.redirect(new URL('/', request.url));
 }

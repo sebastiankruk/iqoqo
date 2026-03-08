@@ -75,7 +75,9 @@ def google_callback():
 
     internal_token = generate_internal_jwt(user)
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
-    return redirect(f"{frontend_url}/api/auth/exchange?token={internal_token}")
+
+    # Updated redirect path
+    return redirect(f"{frontend_url}/api/auth-exchange?token={internal_token}")
 
 
 @auth_bp.route("/login", methods=["POST"])
