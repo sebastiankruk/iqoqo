@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchWithAuth } from "@/lib/api/server-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -23,16 +22,19 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchWithAuth("/api/discover")
-      .then(res => res.json())
-      .then(data => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/discover");
+        const data = await res.json();
         setManifestations(data.manifestations);
         setLoading(false);
-      })
-      .catch(() => {
+      } catch {
         toast.error("Failed to load global library");
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
   }, []);
 
   const addToCollection = async (manifestationId: number) => {
