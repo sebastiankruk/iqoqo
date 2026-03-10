@@ -32,7 +32,7 @@ export function CookieConsent() {
         <a href="/privacy" className="text-xs text-muted-foreground underline hover:text-primary transition-colors">
           Privacy Policy
         </a>
-        <Button size="sm" onClick={acceptCookies} className="text-xs h-8">
+        <Button size="sm" onClick={acceptCookies} className="text-xs h-8" variant="ghost">
           Got it
         </Button>
       </div>

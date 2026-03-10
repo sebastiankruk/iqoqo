@@ -46,7 +46,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm">
+        <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
           <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
           <Button
               className="w-full"
@@ -55,24 +55,24 @@ export default function LoginPage() {
             Sign in with Google
           </Button>
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-            <span className="relative z-10 bg-background px-2 text-muted-foreground">Or</span>
+            <span className="relative z-10 px-2 text-muted-foreground">Or</span>
           </div>
           <form onSubmit={handleLocalLogin} className="space-y-4">
             <input
               type="email"
               placeholder="Email"
-              className="w-full rounded border px-3 py-2 text-sm text-black"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             <input
               type="password"
               placeholder="Password"
-              className="w-full rounded border px-3 py-2 text-sm text-black"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <Button type="submit" className="w-full">Sign In</Button>
+            <Button type="submit" className="w-full" variant="ghost">Sign In</Button>
 
           <div className="text-center text-sm pt-4">
             Don&apos;t have an account?{" "}
