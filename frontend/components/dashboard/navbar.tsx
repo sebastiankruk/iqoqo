@@ -16,11 +16,14 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Compass } from "lucide-react";
+import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
+import { useProfile } from "@/lib/api/hooks";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
 export function Navbar() {
+  const { data: profile, isLoading } = useProfile();
+
   return (
     <nav className="sticky top-0 z-50 bg-primary text-primary-foreground dark:bg-[#040608] dark:text-foreground dark:border-b">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
@@ -81,12 +84,28 @@ export function Navbar() {
             <span className="hidden sm:inline">Scan</span>
           </Link>
           <ModeToggle />
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-            aria-label="User profile"
-          >
-            iq
-          </button>
+
+          {/* Auth State Rendering */}
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : profile ? (
+            <Link
+              href="/profile"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+              aria-label="User profile"
+            >
+              {(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link href="/login" className="text-sm font-medium hover:underline">
+                Sign In
+              </Link>
+              <Link href="/register" className="hidden sm:inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+                Sign Up
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </nav>

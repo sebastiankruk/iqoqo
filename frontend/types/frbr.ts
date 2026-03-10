@@ -114,3 +114,12 @@ export interface IsbnMeta {
   Language?: string;
   "ISBN-13"?: string;
 }
+
+/** User profile data returned by GET /api/profile */
+export interface UserProfile {
+  id: number;
+  email: string;
+  display_name?: string;
+  role?: string;
+  created_at?: string;
+}

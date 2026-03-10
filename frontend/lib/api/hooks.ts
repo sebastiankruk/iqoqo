@@ -22,6 +22,7 @@ import type {
   DashboardStats,
   IsbnMeta,
   ApiResponse,
+  UserProfile,
 } from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
@@ -183,5 +184,23 @@ export function useRegenerateCover() {
       // Ensure the collection list picks up the new cover_status: 'pending' state.
       void qc.invalidateQueries({ queryKey: ["items"] });
     },
+  });
+}
+
+/* ── Auth / Profile ──────────────────────────────────────────────────────── */
+
+export function useProfile() {
+  return useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      try {
+        const res = await apiFetch<UserProfile>("/profile");
+        return res;
+      } catch {
+        return null; // Return null if not authenticated (401)
+      }
+    },
+    retry: false, // Don't retry on 401s
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 }

@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import Link from "next/dist/client/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -68,6 +69,13 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <Button type="submit" className="w-full">Sign In</Button>
+
+        <div className="text-center text-sm pt-4">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+            Sign up
+          </Link>
+        </div>
         </form>
       </div>
     </div>

@@ -19,10 +19,21 @@
  * next/link and next/navigation are mocked globally in vitest.setup.ts.
  */
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, type Mock, beforeEach } from "vitest"; // <-- Added vi and Mock
 import { Navbar } from "@/components/dashboard/navbar";
+import { useProfile } from "@/lib/api/hooks";
+
+// Mock the hook
+vi.mock("@/lib/api/hooks", () => ({
+  useProfile: vi.fn(),
+}));
 
 describe("Navbar", () => {
+  beforeEach(() => {
+    // Default mock implementation before each test
+    (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
+  });
+
   it("renders the iqoqo brand name", () => {
     render(<Navbar />);
     expect(screen.getByText("iqoqo")).toBeInTheDocument();
@@ -31,7 +42,7 @@ describe("Navbar", () => {
   it("renders a search input", () => {
     render(<Navbar />);
     expect(
-      screen.getByPlaceholderText("Search your collection..."),
+      screen.getByPlaceholderText("Search your collection...")
     ).toBeInTheDocument();
   });
 
@@ -52,5 +63,27 @@ describe("Navbar", () => {
     render(<Navbar />);
     const homeLink = screen.getByRole("link", { name: /iqoqo/i });
     expect(homeLink).toHaveAttribute("href", "/");
+  });
+});
+
+describe("Navbar Auth State", () => {
+  it("shows Sign In and Sign Up when not authenticated", () => {
+    (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
+    render(<Navbar />);
+
+    expect(screen.getByText("Sign In")).toBeInTheDocument();
+    expect(screen.getByText("Sign Up")).toBeInTheDocument();
+  });
+
+  it("shows user initials and links to profile when authenticated", () => {
+    (useProfile as Mock).mockReturnValue({
+      data: { email: "test@kruk.me", display_name: "Sebastian" },
+      isLoading: false,
+    });
+    render(<Navbar />);
+
+    const profileLink = screen.getByText("S");
+    expect(profileLink).toBeInTheDocument();
+    expect(profileLink.closest("a")).toHaveAttribute("href", "/profile");
   });
 });
