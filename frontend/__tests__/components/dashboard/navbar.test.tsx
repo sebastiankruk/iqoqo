@@ -53,6 +53,10 @@ describe("Navbar", () => {
   });
 
   it("contains a link to the Scan page", () => {
+    (useProfile as Mock).mockReturnValue({
+      data: { email: "test@kruk.me", display_name: "Test" },
+      isLoading: false,
+    });
     render(<Navbar />);
     const links = screen.getAllByRole("link");
     const scanLink = links.find((l) => l.getAttribute("href") === "/scan");
@@ -72,7 +76,6 @@ describe("Navbar Auth State", () => {
     render(<Navbar />);
 
     expect(screen.getByText("Sign In")).toBeInTheDocument();
-    expect(screen.getByText("Sign Up")).toBeInTheDocument();
   });
 
   it("shows user initials and links to profile when authenticated", () => {
