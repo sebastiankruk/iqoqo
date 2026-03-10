@@ -13,12 +13,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+"use client";
 
-export async function POST() {
-  const cookieStore = await cookies();
-  cookieStore.delete('iqoqo_session');
+/** Sticky top navigation bar – "Modern Athenaeum" style. */
+export function Footer() {
+  const uiVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
-  return NextResponse.json({ success: true, message: 'Logged out successfully' });
+  return (
+          <footer className="border-t border-border bg-card">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-serif font-bold text-foreground">iqoqo</span>
+            {" "}&middot;{" "}The Library of Everything
+            {" "}&middot;{" "}{uiVersion}
+          </p>
+          <p className="text-xs text-muted-foreground">Your library, your rules.</p>
+        </div>
+      </footer>
+  );
 }

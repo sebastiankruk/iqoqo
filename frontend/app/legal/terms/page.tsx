@@ -13,11 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import { Footer } from "@/components/dashboard/footer";
+import { Navbar } from "@/components/dashboard/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function TermsOfServicePage() {
   return (
-    <div className="container max-w-4xl py-10">
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <main className="container mx-auto max-w-4xl py-10">
       <Card>
         <CardHeader>
           <CardTitle className="text-3xl">Terms of Service</CardTitle>
@@ -40,6 +44,8 @@ export default function TermsOfServicePage() {
           <p>You may delete your account at any time. We reserve the right to suspend or terminate access to our instance for users who violate these terms.</p>
         </CardContent>
       </Card>
+      </main>
+      <Footer />
     </div>
   );
 }

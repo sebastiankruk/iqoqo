@@ -25,6 +25,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { useItems, useStats } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
+import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
 export default function CollectionPage() {
@@ -211,17 +212,7 @@ export default function CollectionPage() {
         </div>
       </div>
 
-      <footer className="mt-12 border-t border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-serif font-bold text-foreground">iqoqo</span>
-            {" "}&middot;{" "}The Library of Everything
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {total} items curated with care
-          </p>
-        </div>
-      </footer>
+      <Footer />
 
       <MobileFilterDrawer
         open={mobileFiltersOpen}

@@ -194,7 +194,7 @@ export function useProfile() {
     queryKey: ["profile"],
     queryFn: async () => {
       try {
-        const res = await apiFetch<UserProfile>("/profile");
+        const res = await apiFetch<UserProfile>("/profile/");
         return res;
       } catch {
         return null; // Return null if not authenticated (401)

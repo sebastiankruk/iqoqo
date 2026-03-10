@@ -18,6 +18,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/dist/client/link";
+import { Navbar } from "@/components/dashboard/navbar";
+import { Footer } from "@/components/dashboard/footer";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -41,43 +43,47 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
-        <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
-          Sign in with Google
-        </Button>
-        <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-          <span className="relative z-10 bg-background px-2 text-muted-foreground">Or</span>
-        </div>
-        <form onSubmit={handleLocalLogin} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full rounded border px-3 py-2 text-sm text-black"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full rounded border px-3 py-2 text-sm text-black"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <Button type="submit" className="w-full">Sign In</Button>
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm">
+          <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
+          <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
+            Sign in with Google
+          </Button>
+          <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
+            <span className="relative z-10 bg-background px-2 text-muted-foreground">Or</span>
+          </div>
+          <form onSubmit={handleLocalLogin} className="space-y-4">
+            <input
+              type="email"
+              placeholder="Email"
+              className="w-full rounded border px-3 py-2 text-sm text-black"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full rounded border px-3 py-2 text-sm text-black"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Button type="submit" className="w-full">Sign In</Button>
 
-        <div className="text-center text-sm pt-4">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-            Sign up
-          </Link>
+          <div className="text-center text-sm pt-4">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+              Sign up
+            </Link>
+          </div>
+          </form>
         </div>
-        </form>
-      </div>
+      </main>
+      <Footer />
     </div>
   );
 }

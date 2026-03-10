@@ -13,12 +13,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import { Footer } from "@/components/dashboard/footer";
+import { Navbar } from "@/components/dashboard/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="container max-w-4xl py-10">
-      <Card>
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <main className="container mx-auto max-w-4xl py-10">
+        <Card>
         <CardHeader>
           <CardTitle className="text-3xl">Privacy Policy</CardTitle>
           <p className="text-sm text-muted-foreground">Last updated: March 2026</p>
@@ -53,6 +57,8 @@ export default function PrivacyPolicyPage() {
           <p>To exercise these rights, please use the account management tools provided in the app or contact the instance administrator.</p>
         </CardContent>
       </Card>
+      </main>
+      <Footer />
     </div>
   );
 }

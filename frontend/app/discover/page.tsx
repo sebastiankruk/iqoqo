@@ -39,7 +39,7 @@ export default function DiscoverPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch("/api/discover");
+        const res = await fetch("/discover");
         const data = await res.json();
         setManifestations(data.manifestations);
         setLoading(false);

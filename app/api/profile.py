@@ -24,7 +24,7 @@ from .decorators import require_auth
 profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 
 
-@profile_bp.route("/", methods=["GET"])
+@profile_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_profile():
     user = db.session.get(User, request.user_id)
