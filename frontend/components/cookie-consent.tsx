@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"; // Assuming you are using shadcn/ui
 
 export function CookieConsent() {
-  const [isVisible, setIsVisible] = useState(() => {
-    // Check if user already consented to avoid hydration mismatch
-    if (typeof window === "undefined") return false;
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Only check localStorage after client hydration to avoid hydration mismatch.
+    // This is a necessary pattern for client-side persistent state in Next.js.
     const consent = localStorage.getItem("iqoqo-cookie-consent");
-    return !consent;
-  });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsVisible(!consent);
+  }, []);
 
   const acceptCookies = () => {
     localStorage.setItem("iqoqo-cookie-consent", "true");
