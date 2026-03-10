@@ -14,27 +14,54 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock the API client BEFORE importing the component
+vi.mock('@/lib/api/client', () => ({
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
+  apiFetch: vi.fn(),
+}));
+
+// Mock dashboard components
+vi.mock('@/components/dashboard/navbar', () => ({
+  Navbar: () => <div data-testid="navbar">Navbar</div>,
+}));
+
+vi.mock('@/components/dashboard/footer', () => ({
+  Footer: () => <div data-testid="footer">Footer</div>,
+}));
+
 import ProfilePage from '@/app/profile/page';
+import { apiClient, apiFetch } from '@/lib/api/client';
 
 describe('ProfilePage', () => {
-  const mockProfile = {
+  const mockProfileData = {
+    id: 'test-user-id',
     email: 'user@iqoqo.local',
     display_name: 'Test User',
-    consents: { federation: false, telemetry: true }
+    avatar_url: null,
+    visibility: 'private' as const,
+    created_at: '2026-01-01T00:00:00Z',
+    consents: {
+      consent_type: 'all',
+      is_granted: true,
+      policy_version: '1.0',
+      timestamp: '2026-01-01T00:00:00Z',
+      telemetry: true,
+      federation: false,
+    }
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // 1. Initialize fetch as a Vitest mock function
-    global.fetch = vi.fn();
-
-    // 2. Now you can safely call mock methods on it
-    (global.fetch as Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockProfile,
-    });
+    // Mock the apiFetch function to return the profile data
+    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
   });
 
   it('renders loading state initially, then profile data', async () => {
@@ -42,40 +69,45 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('user@iqoqo.local')).toBeInTheDocument();
       expect(screen.getByText('Test User')).toBeInTheDocument();
+      expect(screen.getByText('user@iqoqo.local')).toBeInTheDocument();
     });
+
+    // Verify apiFetch was called with the correct path
+    expect(apiFetch).toHaveBeenCalledWith('/profile/');
   });
 
   it('toggles GDPR consents', async () => {
+    // Mock the apiFetch for loading profile
+    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
+
     render(<ProfilePage />);
 
     await waitFor(() => {
       expect(screen.getByText('Test User')).toBeInTheDocument();
     });
 
-    // Mock the subsequent fetch call for the consent toggle
-    (global.fetch as Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    // Mock the POST request for the consent toggle
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {},
+        error: null,
+      },
+    } as never);
 
-    const federationButtons = screen.getAllByRole("button", { name: /Opted/i });
+    const federationButtons = screen.getAllByRole('button', { name: /Opted/i });
 
-    // Actually use the variable to click the button
+    // Click the federation button
     fireEvent.click(federationButtons[0]);
 
-    // Then assert your fetch mock was called with the right data
-    expect(global.fetch).toHaveBeenCalledWith("/api/profile/consent", expect.any(Object));
-
-    // Find the button specifically for federation (currently "Opted Out" based on mock data)
-    const fedButton = screen.getByText('Opted Out');
-
-    fireEvent.click(fedButton);
-
+    // Assert the API was called (note: apiClient.post, not global.fetch)
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/profile/consent',
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/profile/consent',
         expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ consent_type: 'federation', is_granted: true })
+          consent_type: 'federation',
+          is_granted: true
         })
       );
     });

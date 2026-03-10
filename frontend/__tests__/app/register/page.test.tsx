@@ -16,10 +16,27 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import RegisterPage from '@/app/register/page';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+const renderWithQueryClient = (component: React.ReactElement) => {
+  const testQueryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={testQueryClient}>
+      {component}
+    </QueryClientProvider>
+  );
+};
 
 describe('RegisterPage', () => {
   beforeEach(() => {
@@ -28,7 +45,7 @@ describe('RegisterPage', () => {
   });
 
   it('disables submit button until terms are accepted', () => {
-    render(<RegisterPage />);
+    renderWithQueryClient(<RegisterPage />);
 
     const submitButton = screen.getByRole('button', { name: 'Sign Up' });
     const termsCheckbox = screen.getByRole('checkbox', { name: /I agree to the/i });
@@ -45,7 +62,7 @@ describe('RegisterPage', () => {
       json: async () => ({ error: 'Email already registered' }),
     });
 
-    render(<RegisterPage />);
+    renderWithQueryClient(<RegisterPage />);
 
     fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'exist@iqoqo.local' } });
     fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'pass123' } });
