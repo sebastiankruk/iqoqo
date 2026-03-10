@@ -28,12 +28,14 @@ def require_auth(f):
         token = None
         if "Authorization" in request.headers:
             token = request.headers["Authorization"].split(" ")[1]
+        # 2. Fallback to Cookie
+        elif "iqoqo_session" in request.cookies:
+            token = request.cookies.get("iqoqo_session")
+
         if not token:
             return jsonify({"error": "Token missing"}), 401
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-
-            # FIX: Convert the string back to a UUID object
             request.user_id = uuid.UUID(payload["sub"])
 
         except jwt.ExpiredSignatureError:

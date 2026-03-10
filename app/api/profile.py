@@ -35,12 +35,17 @@ def get_profile():
 
     return jsonify(
         {
-            "id": str(user.id),
-            "email": user.email,
-            "display_name": user.display_name,
-            "avatar_url": user.avatar_url,
-            "visibility": user.visibility,
-            "consents": consents,
+            "success": True,
+            "data": {
+                "id": str(user.id),
+                "email": user.email,
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url,
+                "visibility": user.visibility,
+                "roles": [r.name for r in user.roles],
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "consents": consents,
+            },
         }
     )
 

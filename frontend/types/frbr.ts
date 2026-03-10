@@ -117,9 +117,12 @@ export interface IsbnMeta {
 
 /** User profile data returned by GET /api/profile */
 export interface UserProfile {
-  id: number;
+  id: string;
   email: string;
   display_name?: string;
-  role?: string;
+  avatar_url?: string;
+  visibility?: string;
+  consents?: Record<string, boolean>;
+  roles?: string[];
   created_at?: string;
 }

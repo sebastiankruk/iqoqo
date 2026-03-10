@@ -31,6 +31,7 @@ const API_BASE =
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 /** Unwrap the standard `{ success, data, error }` envelope. */
