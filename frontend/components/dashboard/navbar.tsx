@@ -31,9 +31,9 @@ export function Navbar() {
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
             <svg
-              width="20"
-              height="20"
-              viewBox="0 0 200 200"
+              width="27"
+              height="27"
+              viewBox="0 0 220 220"
               fill="none"
               className="text-accent-foreground dark:text-white"
             >
