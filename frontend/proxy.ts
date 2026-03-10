@@ -20,21 +20,24 @@ export function proxy(req: NextRequest) {
   // Check for the cookie we set in the /api/auth-exchange route
   const sessionCookie = req.cookies.get("iqoqo_session");
   const isLoggedIn = !!sessionCookie?.value;
-  const isAuthPage = req.nextUrl.pathname.startsWith('/login');
+  const pathname = req.nextUrl.pathname;
+
+  // Protected routes – require authentication
+  const protectedRoutes = ['/profile', '/discover'];
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
   // If they are on the login page but already logged in, send them to Discover
-  if (isAuthPage) {
+  if (pathname.startsWith('/login')) {
     if (isLoggedIn) {
       return NextResponse.redirect(new URL('/discover', req.nextUrl));
     }
     return NextResponse.next();
   }
 
-  // If they are NOT logged in, redirect them to the login page
-  if (!isLoggedIn) {
-    // Optional: save the page they tried to visit so you can redirect them back after login
+  // If they are NOT logged in AND trying to access a protected route, redirect to login
+  if (!isLoggedIn && isProtectedRoute) {
     const loginUrl = new URL('/login', req.nextUrl);
-    // loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 

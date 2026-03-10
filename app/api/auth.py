@@ -134,3 +134,9 @@ def local_register():
         ),
         201,
     )
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    """Log out the current user. Token is cleared on the client side."""
+    return jsonify({"message": "Logged out successfully"}), 200

@@ -60,8 +60,9 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     try {
-      await apiClient.post("/auth/logout");
-      window.location.href = "/login";
+      // Call the Next.js logout route to clear the session cookie
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/";
     } catch {
       toast.error("Failed to logout");
     }
