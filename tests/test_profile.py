@@ -29,7 +29,7 @@ def test_get_profile(client):
     response = client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["email"] == "prof@iqoqo.local"
+    assert data["data"]["email"] == "prof@iqoqo.local"
 
 
 def test_update_profile(client):

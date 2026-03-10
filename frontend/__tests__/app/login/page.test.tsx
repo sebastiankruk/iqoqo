@@ -15,12 +15,29 @@
 //
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LoginPage from '@/app/login/page';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+const renderWithQueryClient = (component: React.ReactElement) => {
+  const testQueryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={testQueryClient}>
+      {component}
+    </QueryClientProvider>
+  );
+};
 
 describe('LoginPage', () => {
   beforeEach(() => {
@@ -34,7 +51,7 @@ describe('LoginPage', () => {
   });
 
   it('renders login form and Google SSO button', () => {
-    render(<LoginPage />);
+    renderWithQueryClient(<LoginPage />);
     expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign In$/i })).toBeInTheDocument();
@@ -47,7 +64,7 @@ describe('LoginPage', () => {
       json: async () => ({ token: 'mock-jwt-token' }),
     });
 
-    render(<LoginPage />);
+    renderWithQueryClient(<LoginPage />);
 
     fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@iqoqo.local' } });
     fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password123' } });
