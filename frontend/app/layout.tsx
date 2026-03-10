@@ -17,6 +17,7 @@ import type { Metadata, Viewport } from "next";
 import { Merriweather, Inter, Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
+import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +58,10 @@ export default function RootLayout({
       <head />
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            <CookieConsent />
+          </Providers>
         </ThemeProvider>
       </body>
     </html>
