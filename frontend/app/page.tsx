@@ -45,11 +45,14 @@ export default function DashboardPage() {
           // Authenticated Dashboard
           <div className="space-y-8">
             <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.display_name ?? user.email}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your collection is growing nicely. Here is what is happening.
+            </p>
             <StatsCards />
-            <div className="grid gap-8 md:grid-cols-2">
-              <CurrentContext />
+            <CurrentContext />
+            <section>
               <FreshArrivals />
-            </div>
+            </section>
           </div>
         ) : (
           // Unauthenticated Landing Page
