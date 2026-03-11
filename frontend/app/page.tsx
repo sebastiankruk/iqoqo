@@ -57,7 +57,6 @@ export default function DashboardPage() {
             <Hero />
             <GlobalStats />
             <section>
-              <h2 className="text-2xl font-bold tracking-tight mb-4">Fresh Arrivals</h2>
               <FreshArrivals publicMode={true} />
             </section>
           </div>

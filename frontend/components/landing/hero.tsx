@@ -9,7 +9,7 @@ export function Hero() {
     <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl mb-12">
       <div className="absolute inset-0 z-0">
         <Image
-          src="/inside-library-photo.svg"
+          src="/inside-library-photo.png"
           alt="Inside the library"
           fill
           className="object-cover opacity-40"
@@ -28,10 +28,10 @@ export function Hero() {
           Web, designed for a distributed future.
         </p>
         <div className="flex gap-4 justify-center">
-          <Button asChild size="lg">
+          <Button asChild variant="outline" size="sm">
             <Link href="/register">Start Your Catalog</Link>
           </Button>
-          <Button asChild variant="outline" size="lg">
+          <Button asChild variant="outline" size="sm">
             <Link href="/collection">Browse Instance</Link>
           </Button>
         </div>

@@ -16,6 +16,7 @@
 "use client";
 
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 type ButtonVariant = "default" | "ghost" | "outline" | "secondary" | "destructive";
@@ -24,6 +25,7 @@ type ButtonSize = "default" | "icon" | "sm";
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  asChild?: boolean;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -45,20 +47,26 @@ const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
 };
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", type = "button", ...props }, ref) => {
+export const Button = React.forwardRef<any, ButtonProps>(
+  (
+    { className, variant = "default", size = "default", type = "button", asChild = false, ...props },
+    ref,
+  ) => {
+    const classNames = cn(
+      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      variantClasses[variant],
+      sizeClasses[size],
+      className,
+    );
+
+    if (asChild) {
+      return (
+        <Slot ref={ref} className={classNames} {...props} />
+      );
+    }
+
     return (
-      <button
-        ref={ref}
-        type={type}
-        className={cn(
-          "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-          variantClasses[variant],
-          sizeClasses[size],
-          className,
-        )}
-        {...props}
-      />
+      <button ref={ref} type={type} className={classNames} {...props} />
     );
   },
 );
