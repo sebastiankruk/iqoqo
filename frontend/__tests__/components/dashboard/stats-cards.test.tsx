@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/api/hooks", () => ({
   useStats: vi.fn(),
+  useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
 }));
 
 import { useStats } from "@/lib/api/hooks";

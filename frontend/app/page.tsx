@@ -13,31 +13,55 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+"use client";
+
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { CurrentContext } from "@/components/dashboard/current-context";
 import { FreshArrivals } from "@/components/dashboard/fresh-arrivals";
+import { Hero } from "@/components/landing/hero";
+import { GlobalStats } from "@/components/landing/global-stats";
+import { useProfile } from "@/lib/api/hooks";
+import { Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8">
-          <h1 className="font-serif text-2xl font-bold text-foreground">
-            Welcome to your library
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your collection is growing nicely. Here is what is happening.
-          </p>
-        </div>
+  const { data: user, isLoading } = useProfile();
 
-        <div className="flex flex-col gap-10">
-          <StatsCards />
-          <CurrentContext />
-          <FreshArrivals />
-        </div>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
+
+      <main className="flex-1 container mx-auto px-4 py-8">
+        {user ? (
+          // Authenticated Dashboard
+          <div className="space-y-8">
+            <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.display_name ?? user.email}</h1>
+            <StatsCards />
+            <div className="grid gap-8 md:grid-cols-2">
+              <CurrentContext />
+              <FreshArrivals />
+            </div>
+          </div>
+        ) : (
+          // Unauthenticated Landing Page
+          <div className="space-y-8">
+            <Hero />
+            <GlobalStats />
+            <section>
+              <h2 className="text-2xl font-bold tracking-tight mb-4">Fresh Arrivals</h2>
+              <FreshArrivals publicMode={true} />
+            </section>
+          </div>
+        )}
       </main>
 
       <Footer />

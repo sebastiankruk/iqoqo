@@ -211,3 +211,21 @@ export function useProfile() {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 }
+
+/* ── Global instance stats (for landing page) ───────────────────────────────── */
+export function useGlobalStats() {
+  return useQuery({
+    queryKey: ["globalStats"],
+    queryFn: () => apiFetch<{ works: number; manifestations: number; items: number; users: number }>("/stats/global"),
+    staleTime: 60_000,
+  });
+}
+
+/* ── Recent manifestations (public landing) ───────────────────────────────── */
+export function useRecentManifestations(limit = 10) {
+  return useQuery({
+    queryKey: ["recentManifestations", limit],
+    queryFn: () => apiFetch<any[]>("/manifestations/recent", { limit }),
+    staleTime: 30_000,
+  });
+}

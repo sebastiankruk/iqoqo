@@ -31,7 +31,7 @@ from app.api.decorators import require_auth, require_permission
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.core.ingest import IngestService  # Assuming this exists based on your architecture
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
 from . import api_bp
@@ -59,6 +59,34 @@ def get_dashboard_stats():
     """Get dashboard statistics for the frontend."""
     stats = DataManager.get_stats()
     return jsonify({"success": True, "data": stats, "error": None})
+
+
+@api_bp.route("/stats/global", methods=["GET"])
+def get_global_stats():
+    """Get global instance statistics (works, manifestations, items, users)."""
+    try:
+        works_count = db.session.query(Work).count()
+        manifestations_count = db.session.query(Manifestation).count()
+        items_count = db.session.query(Item).count()
+        users_count = db.session.query(User).count()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "works": works_count,
+                        "manifestations": manifestations_count,
+                        "items": items_count,
+                        "users": users_count,
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -406,9 +434,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    # --- FIX: Fetch a valid User to assign ownership ---
-    from app.db.models import User
-
+    # --- Ensure a valid User exists to assign ownership ---
     user = User.query.first()
     if not user:
         user = User(email="api_default@iqoqo.local", display_name="API Default")
@@ -708,3 +734,40 @@ def get_global_manifestations():
         )
 
     return jsonify({"manifestations": result, "total": pagination.total, "pages": pagination.pages, "current_page": page})
+
+
+@api_bp.route("/manifestations/recent", methods=["GET"])
+def get_recent_manifestations():
+    """Get the most recently added manifestations across the entire instance (public).
+
+    Query param: `limit` (int, default 10)
+    """
+    try:
+        limit = request.args.get("limit", 10, type=int)
+
+        recent = (
+            Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
+            .order_by(Manifestation.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+        result = []
+        for m in recent:
+            work = m.expression.work if (m.expression and m.expression.work) else None
+            title = work.title if work else (m.meta.get("Title") if m.meta else None)
+            authors = work.meta.get("authors", []) if (work and work.meta) else (m.meta.get("Authors") if m.meta else [])
+            author = authors[0] if authors else None
+
+            result.append(
+                {
+                    "id": m.id,
+                    "title": title,
+                    "cover_path": m.cover_path,
+                    "author": author,
+                }
+            )
+
+        return jsonify({"success": True, "data": result, "error": None}), 200
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500

@@ -54,3 +54,13 @@ export async function apiFetch<T>(path: string, params?: Record<string, unknown>
   }
   return res.data.data;
 }
+
+/** Fetch global instance statistics (works, manifestations, items, users) */
+export async function getGlobalStats(): Promise<{ works: number; manifestations: number; items: number; users: number }> {
+  return apiFetch('/stats/global');
+}
+
+/** Fetch most recent manifestations added to the instance */
+export async function getRecentManifestations(limit = 10) {
+  return apiFetch<any[]>("/manifestations/recent", { limit });
+}

@@ -17,13 +17,20 @@
 
 import Link from "next/link";
 import { ChevronRight, BookOpen } from "lucide-react";
-import { useItems } from "@/lib/api/hooks";
+import { useItems, useRecentManifestations } from "@/lib/api/hooks";
 
 /** Horizontally scrollable "Fresh Arrivals" strip using live API data. */
-export function FreshArrivals() {
-  const { data, isLoading, isError } = useItems(1, 12);
+interface FreshArrivalsProps {
+  publicMode?: boolean;
+}
 
-  const items = data?.data ?? [];
+export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
+  const { data: itemsEnvelope, isLoading: itemsLoading, isError: itemsError } = useItems(1, 12);
+  const { data: recentManifestations, isLoading: manifLoading, isError: manifError } = useRecentManifestations(12);
+
+  const isLoading = publicMode ? manifLoading : itemsLoading;
+  const isError = publicMode ? manifError : itemsError;
+  const items = publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? []);
 
   if (isError) {
     return (
@@ -69,9 +76,9 @@ export function FreshArrivals() {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item) => (
+          {items.map((item: any) => (
             <Link
-              href={`/item/${item.id}`}
+              href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
               key={item.id}
               className="group w-36 shrink-0 sm:w-40"
             >
@@ -83,11 +90,11 @@ export function FreshArrivals() {
                 <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
               <h3 className="truncate text-sm font-semibold text-card-foreground">
-                {item.title ?? "Untitled"}
+                {item.title ?? item.title ?? "Untitled"}
               </h3>
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                 <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                {item.authors?.[0] ?? "Unknown"}
+                {item.author ?? item.authors?.[0] ?? "Unknown"}
               </p>
             </Link>
           ))}

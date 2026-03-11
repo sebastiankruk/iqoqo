@@ -30,6 +30,7 @@ import type { Item, ItemStatus } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useItems: vi.fn(),
+  useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
 }));
 
 import { useItems } from "@/lib/api/hooks";
