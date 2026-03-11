@@ -78,7 +78,7 @@ describe('LoginPage', () => {
           body: JSON.stringify({ email: 'test@iqoqo.local', password: 'password123' })
         })
       );
-      expect(window.location.href).toContain('/api/auth/exchange?token=mock-jwt-token');
+      expect(window.location.href).toContain('/api/auth-exchange?token=mock-jwt-token');
     });
   });
 });

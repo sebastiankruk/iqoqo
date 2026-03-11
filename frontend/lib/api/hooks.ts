@@ -196,8 +196,15 @@ export function useProfile() {
       try {
         const res = await apiFetch<UserProfile>("/profile/");
         return res;
-      } catch {
-        return null; // Return null if not authenticated (401)
+      } catch (err) {
+        // If the token is expired/invalid, clear the stale httpOnly cookie so
+        // the proxy stops treating this browser as "logged in" and redirecting
+        // /login → /discover in an infinite loop.
+        const message = err instanceof Error ? err.message : "";
+        if (message.includes("Token expired") || message.includes("Invalid token") || message.includes("Token missing") || message.includes("Invalid user ID format")) {
+          await fetch("/api/auth/logout", { method: "POST" });
+        }
+        return null;
       }
     },
     retry: false, // Don't retry on 401s

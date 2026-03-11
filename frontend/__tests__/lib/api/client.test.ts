@@ -38,17 +38,20 @@ describe("apiClient configuration", () => {
     }
   });
 
-  it("uses the NEXT_PUBLIC_API_URL env variable when set", async () => {
-    // NEXT_PUBLIC_API_URL is the full base URL (including path prefix like /api).
+  it("always uses the relative /api base URL (browser same-origin proxy)", async () => {
+    // The client-side axios instance always uses a relative path so that
+    // requests are same-origin and flow through the Next.js rewrite proxy.
+    // NEXT_PUBLIC_API_URL is no longer read by the browser client – the
+    // Next.js rewrite uses it server-side to forward to Flask.
     process.env.NEXT_PUBLIC_API_URL = "http://my-server:8080/api";
     const { apiClient } = await import("@/lib/api/client");
-    expect((apiClient.defaults.baseURL as string)).toBe("http://my-server:8080/api");
+    expect((apiClient.defaults.baseURL as string)).toBe("/api");
   });
 
-  it("falls back to localhost:5000 when the env variable is not set", async () => {
+  it("uses /api regardless of whether NEXT_PUBLIC_API_URL is set", async () => {
     delete process.env.NEXT_PUBLIC_API_URL;
     const { apiClient } = await import("@/lib/api/client");
-    expect((apiClient.defaults.baseURL as string)).toBe("http://localhost:5000/api");
+    expect((apiClient.defaults.baseURL as string)).toBe("/api");
   });
 
   it("sets Content-Type to application/json by default", async () => {

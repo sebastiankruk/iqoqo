@@ -35,8 +35,9 @@ export default function LoginPage() {
 
     if (res.ok) {
       const data = await res.json();
-      // Exchange token in BFF
-      window.location.href = `/api/auth/exchange?token=${data.token}`;
+      // Exchange token in BFF — /api/auth-exchange is a Next.js route handler
+      // that sets the httpOnly session cookie then redirects to /.
+      window.location.href = `/api/auth-exchange?token=${data.token}`;
     } else {
       alert("Login failed");
     }
@@ -60,6 +61,7 @@ export default function LoginPage() {
           <form onSubmit={handleLocalLogin} className="space-y-4">
             <input
               type="email"
+              autoComplete="email"
               placeholder="Email"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={email}
@@ -67,6 +69,7 @@ export default function LoginPage() {
             />
             <input
               type="password"
+              autoComplete="current-password"
               placeholder="Password"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={password}

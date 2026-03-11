@@ -26,16 +26,18 @@ const nextConfig: NextConfig = {
   // Enable standalone output for the production Docker image (Dockerfile.prod)
   output: "standalone",
 
-  // ADD THIS REWRITES SECTION
   async rewrites() {
+    // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format).
+    // Strip it so we never produce a double "/api/api/" path segment.
+    const backendBase = (
+      process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000/api"
+    ).replace(/\/api\/?$/, "");
     return [
       {
         source: "/api/:path*",
-        // Proxy to Flask backend. Adjust the port if your Flask runs on a different one.
-        // In production Docker, this might point to a container name like "http://backend:5000/api/:path*"
-        destination: process.env.NEXT_PUBLIC_API_URL
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`
-          : "http://127.0.0.1:5000/api/:path*",
+        // Proxy to Flask backend. All browser API calls go through Next.js
+        // (same-origin) so the session cookie is forwarded without CORS issues.
+        destination: `${backendBase}/api/:path*`,
       },
     ];
   },

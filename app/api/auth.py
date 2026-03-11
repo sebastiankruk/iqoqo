@@ -44,7 +44,7 @@ def generate_internal_jwt(user: User) -> str:
         "sub": str(user.id),
         "email": user.email,
         "roles": [role.name for role in user.roles],  # type: ignore[attr-defined]
-        "exp": datetime.now(UTC) + timedelta(hours=12),
+        "exp": datetime.now(UTC) + timedelta(days=7),  # matches the session cookie lifetime
         "iat": datetime.now(UTC),
     }
     return pyjwt.encode(payload, current_app.config["JWT_SECRET_KEY"], algorithm="HS256")
