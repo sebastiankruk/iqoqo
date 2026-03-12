@@ -63,12 +63,23 @@ def google_callback():
     email = user_info.get("email")
 
     user = User.query.filter_by(email=email).first()
+    picture = user_info.get("picture")
     if not user:
-        user = User(email=email, display_name=user_info.get("name"), is_active=True, google_id=user_info.get("sub"))
+        user = User(
+            email=email,
+            display_name=user_info.get("name"),
+            is_active=True,
+            google_id=user_info.get("sub"),
+            avatar_url=picture,
+        )
         default_role = Role.query.filter_by(name="user").first()
         if default_role:
             user.roles.append(default_role)
         db.session.add(user)
+    else:
+        # Optionally update the avatar URL if Google provides a new picture
+        if picture and user.avatar_url != picture:
+            user.avatar_url = picture
 
     user.last_login = datetime.now(UTC)
     db.session.commit()
