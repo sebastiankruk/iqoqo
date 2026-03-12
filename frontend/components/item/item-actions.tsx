@@ -55,7 +55,8 @@ export function ItemActions({ item }: { item: Item }) {
   // If there is no authenticated profile, don't render administrative actions
   if (!profile) return null;
 
-
+  // Helper to check user permissions safely
+  const hasPermission = (perm: string) => profile?.permissions?.includes(perm);
 
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
@@ -115,32 +116,38 @@ export function ItemActions({ item }: { item: Item }) {
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      <button
-        onClick={handleRefetch}
-        disabled={isRefetching}
-        className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-      >
-        <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? 'animate-bounce' : ''}`} />
-        {isRefetching ? "Fetching..." : "Refetch Metadata"}
-      </button>
+      {hasPermission('refetch:metadata') && (
+        <button
+          onClick={handleRefetch}
+          disabled={isRefetching}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? 'animate-bounce' : ''}`} />
+          {isRefetching ? "Fetching..." : "Refetch Metadata"}
+        </button>
+      )}
 
-      <button
-        onClick={handleRegenerateClick}
-        disabled={isPending || isRequesting}
-        className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-      >
-        <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
-        {isPending ? "Generating..." : "Regenerate Cover"}
-      </button>
+      {hasPermission('regenerate:cover') && (
+        <button
+          onClick={handleRegenerateClick}
+          disabled={isPending || isRequesting}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
+          {isPending ? "Generating..." : "Regenerate Cover"}
+        </button>
+      )}
 
-      <button
-        onClick={() => setDeleteConfirmOpen(true)}
-        disabled={deleteItem.isPending}
-        className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-        Remove from library
-      </button>
+      {hasPermission('delete:item') && (
+        <button
+          onClick={() => setDeleteConfirmOpen(true)}
+          disabled={deleteItem.isPending}
+          className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Remove from library
+        </button>
+      )}
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

@@ -394,6 +394,10 @@ Iqoqo uses a hybrid authentication approach suitable for distributed deployments
 2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT. The Next.js frontend utilizes a Backend-For-Frontend (BFF) pattern (`/api/auth/exchange`) to catch this token and store it securely in an `HttpOnly` cookie.
 3. **Next.js Middleware**: Edge middleware intercepts requests to protected routes (`/collection`, `/profile`), verifying the JWT signature via `jose` before rendering pages.
 4. **RBAC**: The database implements an RBAC matrix (`Role`, `Permission`, `user_roles`). Backend API endpoints are protected using `@require_auth` and `@require_permission` decorators.
+
+> ### Frontend RBAC and UI State
+> 
+> To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilises the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions. **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
 5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
 
 ## ⚙️ Operations & Maintenance
