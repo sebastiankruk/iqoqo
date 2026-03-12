@@ -13,36 +13,37 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-phase2 clean db-init db-seed db-export db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend clean db-init db-seed db-export db-stats build-frontend
 
 help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Development:"
-	@echo "  start         - Start development environment (DB, Flask API, Next.js frontend)"
-	@echo "  stop          - Stop all development servers and containers"
+	@echo "  start          - Start development environment (DB, Flask API, Next.js frontend)"
+	@echo "  stop           - Stop all development servers and containers"
 	@echo ""
 	@echo "Code quality:"
-	@echo "  lint          - Run all linting checks"
-	@echo "  lint-python   - Run Python linters (ruff, mypy, pylint)"
-	@echo "  lint-format   - Check Python code formatting (black)"
-	@echo "  lint-js       - Run legacy JavaScript linter (eslint)"
-	@echo "  lint-frontend - Run Next.js / TypeScript linter"
-	@echo "  lint-css      - Run CSS linter (stylelint)"
-	@echo "  lint-markdown - Run Markdown linter"
-	@echo "  format        - Format all code"
-	@echo "  format-python - Format Python code (black, isort)"
-	@echo "  format-js     - Format JavaScript code (prettier)"
-	@echo "  test          - Run all backend tests"
-	@echo "  test-phase2   - Run Phase 2 API integration tests"
+	@echo "  lint           - Run all linting checks"
+	@echo "  lint-python    - Run Python linters (ruff, mypy, pylint)"
+	@echo "  lint-format    - Check Python code formatting (black)"
+	@echo "  lint-js        - Run legacy JavaScript linter (eslint)"
+	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
+	@echo "  lint-css       - Run CSS linter (stylelint)"
+	@echo "  lint-markdown  - Run Markdown linter"
+	@echo "  format         - Format all code"
+	@echo "  format-python  - Format Python code (black, isort)"
+	@echo "  format-js      - Format JavaScript code (prettier)"
+	@echo "  test           - Run all tests (backend and frontend)"
+	@echo "  test-backend   - Run backend tests (pytest)"
+	@echo "  test-frontend  - Run frontend tests (Vitest)"
 	@echo "  build-frontend - Build Next.js production bundle"
-	@echo "  clean         - Remove build artifacts"
+	@echo "  clean          - Remove build artifacts"
 	@echo ""
 	@echo "Database targets:"
-	@echo "  db-init       - Initialize database with seed data"
-	@echo "  db-seed       - Load seed data into existing database"
-	@echo "  db-export     - Export database to data/backup.json"
-	@echo "  db-stats      - Show database statistics"
+	@echo "  db-init        - Initialize database with seed data"
+	@echo "  db-seed        - Load seed data into existing database"
+	@echo "  db-export      - Export database to data/backup.json"
+	@echo "  db-stats       - Show database statistics"
 
 # Development targets
 start:
@@ -138,11 +139,16 @@ format: format-python format-js
 	@echo "All code formatted!"
 
 # Testing
-test:
+test-backend:
+	@echo "Running backend tests..."
 	.venv/bin/pytest tests/
 
-test-phase2:
-	.venv/bin/pytest tests/test_phase2_frontend.py -v
+test-frontend:
+	@echo "Running frontend tests..."
+	cd frontend && npm run test
+
+test: test-backend test-frontend
+	@echo "All tests completed!"
 
 # Clean
 clean:
