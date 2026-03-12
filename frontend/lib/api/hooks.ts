@@ -33,6 +33,7 @@ export const queryKeys = {
     ["items", page, limit, statuses?.join(",") ?? ""] as const,
   item: (id: number) => ["item", id] as const,
   isbn: (isbn: string) => ["isbn", isbn] as const,
+  manifestations: (page = 1, limit = 20) => ["manifestations", page, limit] as const,
 };
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
@@ -54,7 +55,7 @@ export function useStats() {
  * parameter covers multiple values (e.g. `?statuses=reading,wish_list`).
  * Results are returned ordered by most-recently-updated first.
  */
-export function useItems(page = 1, limit = 20, statuses?: string[]) {
+export function useItems(page = 1, limit = 20, statuses?: string[], enabled = true) {
   return useQuery({
     queryKey: queryKeys.items(page, limit, statuses),
     queryFn: async () => {
@@ -66,6 +67,22 @@ export function useItems(page = 1, limit = 20, statuses?: string[]) {
       return res.data; // Return full envelope so we get meta.total
     },
     staleTime: 10_000,
+    enabled,
+  });
+}
+
+/* ── Manifestations list (global catalog) ─────────────────────────────────── */
+
+export function useManifestations(page = 1, limit = 20, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.manifestations(page, limit),
+    queryFn: async () => {
+      const params = { page, limit };
+      const res = await apiClient.get<ApiResponse<Item[]>>("/manifestations", { params });
+      return res.data;
+    },
+    staleTime: 10_000,
+    enabled,
   });
 }
 

@@ -99,4 +99,24 @@ describe("ItemCard", () => {
     expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
   });
+
+  it("links to the manifestation detail page when isManifestationView is true", () => {
+    render(<ItemCard item={makeItem({ manifestation_id: 99 })} isManifestationView={true} />);
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/manifestation/99");
+  });
+
+  it("hides the user item status dot when isManifestationView is true", () => {
+    render(<ItemCard item={makeItem({ status: "available" })} isManifestationView={true} />);
+    expect(screen.queryByTitle("On Shelf")).not.toBeInTheDocument();
+  });
+
+  it("shows 'In Collection' badge when isManifestationView is true and user_owns is true", () => {
+    render(<ItemCard item={makeItem({ user_owns: true })} isManifestationView={true} />);
+    expect(screen.getByText("In Collection")).toBeInTheDocument();
+  });
+
+  it("does not show 'In Collection' badge when user_owns is false", () => {
+    render(<ItemCard item={makeItem({ user_owns: false })} isManifestationView={true} />);
+    expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
+  });
 });

@@ -61,6 +61,8 @@ export interface Item {
   manifestation_meta?: Record<string, unknown>;
   expression?: Pick<Expression, "id" | "content_type" | "language">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
+  // NEW: Indicates if the current user owns this manifestation (when returned from /manifestations)
+  user_owns?: boolean;
 }
 
 /**

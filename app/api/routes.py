@@ -20,7 +20,7 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, send_from_directory
+from flask import jsonify, request, send_file, send_from_directory, session
 from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -529,6 +529,86 @@ def regenerate_cover(manifestation_id: int):
     start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
+
+
+@api_bp.route("/manifestations", methods=["GET"])
+def get_manifestations():
+    """Get all manifestations (Global Library) with pagination and ownership status."""
+    # Use session-stored client id if available; fall back to None
+    client_id = session.get("client_id") if session is not None else None
+
+    page_param = request.args.get("page", "1")
+    limit_param = request.args.get("limit", "20")
+
+    try:
+        page = int(page_param)
+        limit = int(limit_param)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
+
+    if page < 1 or limit < 1:
+        return (
+            jsonify(
+                {"success": False, "data": None, "error": "Invalid pagination parameters: 'page' and 'limit' must be positive integers."}
+            ),
+            400,
+        )
+
+    offset = (page - 1) * limit
+
+    # Eager load expression, work, and items to avoid N+1 queries
+    query = Manifestation.query.options(
+        selectinload(Manifestation.expression).selectinload(Expression.work), selectinload(Manifestation.items)
+    ).order_by(Manifestation.id.desc())
+
+    total = query.count()
+    manifestations = query.offset(offset).limit(limit).all()
+
+    data = []
+    for m in manifestations:
+        work_title = ""
+        authors = []
+        if m.expression and m.expression.work:
+            work = m.expression.work
+            work_title = work.title or ""
+            authors = work.meta.get("authors", []) if work.meta else []
+
+        user_owns = False
+        if client_id and getattr(m, "items", None):
+            # owner_id in Item is a UUID; compare stringified forms for robustness
+            for it in m.items:
+                try:
+                    if str(it.owner_id) == str(client_id):
+                        user_owns = True
+                        break
+                except Exception:
+                    continue
+
+        data.append(
+            {
+                "id": m.id,
+                "owner_id": None,
+                "status": "library",
+                "manifestation_id": m.id,
+                "isbn": m.isbn13,
+                "title": work_title,
+                "cover_path": m.cover_path,
+                "cover_status": m.meta.get("cover_status") if m.meta else None,
+                "authors": authors,
+                "added_at": None,
+                "updated_at": None,
+                "user_owns": user_owns,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "data": data,
+            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit},
+            "error": None,
+        }
+    )
 
 
 # =============================================================================

@@ -16,14 +16,14 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Library as LibraryIcon, BookOpen } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
-import { useItems, useStats } from "@/lib/api/hooks";
+import { useItems, useManifestations, useStats } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
@@ -32,6 +32,7 @@ export default function CollectionPage() {
   const [page, setPage] = useState(1);
   const limit = 40;
 
+  const [viewMode, setViewMode] = useState<"items" | "manifestations">("items");
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [sortBy, setSortBy] = useState("title");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -42,16 +43,27 @@ export default function CollectionPage() {
     [activeFilters]
   );
 
-  const { data, isLoading } = useItems(
+  const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
-    statusFilters.length > 0 ? statusFilters : undefined
+    statusFilters.length > 0 ? statusFilters : undefined,
+    viewMode === "items"
   );
+
+  const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
+    page,
+    limit,
+    viewMode === "manifestations"
+  );
+
   const { data: statsData } = useStats();
 
-  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
-  const total = data?.meta?.total ?? 0;
-  const pages = data?.meta?.pages ?? 1;
+  const currentData = viewMode === "items" ? itemsData : manifestationsData;
+  const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
+
+  const allItems = useMemo<Item[]>(() => currentData?.data ?? [], [currentData?.data]);
+  const total = currentData?.meta?.total ?? 0;
+  const pages = currentData?.meta?.pages ?? 1;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
     setPage(1);
@@ -121,8 +133,8 @@ export default function CollectionPage() {
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Page header */}
-        <div className="mb-6 flex items-end justify-between">
+        {/* Header & View Toggle */}
+        <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
               Collection
@@ -131,18 +143,40 @@ export default function CollectionPage() {
               Browse and manage your entire library
             </p>
           </div>
-          <button
-            onClick={() => setMobileFiltersOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-            {activeFilters.length > 0 && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                {activeFilters.length}
-              </span>
-            )}
-          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+              <button
+                onClick={() => { setViewMode("items"); setPage(1); }}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  viewMode === "items" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <BookOpen className="h-4 w-4" /> My Items
+              </button>
+              <button
+                onClick={() => { setViewMode("manifestations"); setPage(1); }}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  viewMode === "manifestations" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <LibraryIcon className="h-4 w-4" /> Global Library
+              </button>
+            </div>
+
+            <button
+              onClick={() => setMobileFiltersOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeFilters.length > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                  {activeFilters.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -165,6 +199,8 @@ export default function CollectionPage() {
                 activeFilters={activeFilters}
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
+                // Hide or disable status filters if viewing global library
+                disableStatus={viewMode === "manifestations"}
               />
             </div>
           </div>
@@ -183,14 +219,14 @@ export default function CollectionPage() {
                 ))}
               </div>
             ) : (
-              <CollectionGrid items={filteredItems} />
+              <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
             )}
 
             {/* Pagination */}
             {pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick(() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
                 >
