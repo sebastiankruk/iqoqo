@@ -16,7 +16,8 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
@@ -42,10 +43,16 @@ export default function CollectionPage() {
     [activeFilters]
   );
 
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams?.get("q") ?? "";
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+
   const { data, isLoading } = useItems(
     page,
     limit,
-    statusFilters.length > 0 ? statusFilters : undefined
+    statusFilters.length > 0 ? statusFilters : undefined,
+    appliedQuery
   );
   const { data: statsData } = useStats();
 
@@ -122,7 +129,7 @@ export default function CollectionPage() {
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         {/* Page header */}
-        <div className="mb-6 flex items-end justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
               Collection
@@ -131,18 +138,39 @@ export default function CollectionPage() {
               Browse and manage your entire library
             </p>
           </div>
-          <button
-            onClick={() => setMobileFiltersOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-            {activeFilters.length > 0 && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                {activeFilters.length}
-              </span>
-            )}
-          </button>
+
+          <div className="flex items-center gap-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPage(1);
+                setAppliedQuery(searchQuery);
+              }}
+              className="relative w-full sm:w-64 md:w-80"
+            >
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, author, or ISBN..."
+                className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </form>
+
+            <button
+              onClick={() => setMobileFiltersOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeFilters.length > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                  {activeFilters.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Filter bar */}
