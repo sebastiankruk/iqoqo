@@ -20,7 +20,7 @@ import pytest
 import requests
 
 from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
-from app.utils.images import optimize_and_save_image
+from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import generate_cover_cloud
 
 
@@ -103,3 +103,15 @@ def test_generate_cover_cloud_success(tmp_path, app):
                     path, source = result
                     assert "123_dalle.jpg" in path
                     assert source == "llm_openai"
+
+
+def test_is_valid_cover_rejects_small_files():
+    # 5 bytes is obviously too small for a real JPEG/PNG
+    tiny_file = b"12345"
+    assert is_valid_cover(tiny_file) is False
+
+
+def test_is_valid_cover_rejects_corrupt_image():
+    # Large enough to pass the size check, but not a valid image
+    corrupt_image = b"corrupt_data_" * 300
+    assert is_valid_cover(corrupt_image) is False

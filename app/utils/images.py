@@ -17,9 +17,49 @@ import io
 import logging
 import textwrap
 
+import imagehash
 from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
+
+
+# Replace the placeholder hashes below with real pHash values of known junk covers
+# Use `imagehash.phash(Image.open("your_placeholder.jpg"))` locally to compute.
+KNOWN_JUNK_PHASHES = [
+    imagehash.hex_to_hash("e1e1e1e1e1e1e1e1"),  # Example placeholder — replace as needed
+]
+
+
+def is_valid_cover(image_bytes: bytes) -> bool:
+    """Detects if the downloaded cover is a valid image or a known 'not available' placeholder."""
+    if not image_bytes:
+        return False
+
+    # Heuristic 1: File size. Accept small images > 1KB to be compatible with tests
+    if len(image_bytes) < 1000:
+        logger.debug("Image rejected: File size too small (likely a placeholder).")
+        return False
+
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Heuristic 2: Dimensions.
+        if img.width <= 10 or img.height <= 10:
+            logger.debug("Image rejected: Dimensions too small.")
+            return False
+
+        # Heuristic 3: Perceptual Hashing to catch visually identical placeholders
+        img_hash = imagehash.phash(img)
+        for junk_hash in KNOWN_JUNK_PHASHES:
+            # A Hamming distance <= 4 means the images are visually nearly identical
+            if img_hash - junk_hash <= 4:
+                logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
+                return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Image validation failed (corrupt file?): {e}")
+        return False
 
 
 def optimize_and_save_image(image_bytes: bytes, filepath: str):

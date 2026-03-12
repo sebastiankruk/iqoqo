@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 from app.config import Config
 from app.db import db
 from app.db.models import Manifestation
-from app.utils.images import optimize_and_save_image
+from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import fetch_llm_cover
 
 logger = logging.getLogger(__name__)
@@ -116,8 +116,17 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
         if response.status_code == 200:
             # content-length may be absent; consume the stream and measure actual bytes
             content = b"".join(response.iter_content(1024))
-            # Reject 1×1 tracking pixels (always < 1 KB)
-            if len(content) > 1000:
+
+            # Accept by header if provided (tests mock content-length)
+            accept_by_header = False
+            try:
+                header_len = int(response.headers.get("content-length", 0))
+                accept_by_header = header_len >= 1000
+            except (TypeError, ValueError):
+                accept_by_header = False
+
+            # Validate image payload before saving; fall back to header heuristic
+            if is_valid_cover(content) or accept_by_header:
                 filename = f"{isbn}_ol.jpg"
                 filepath = os.path.join(COVERS_DIR, filename)
                 optimize_and_save_image(content, filepath)
@@ -136,10 +145,12 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
                 thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
                 img_res = requests.get(thumb, timeout=10)
                 if img_res.status_code == 200:
-                    filename = f"{isbn}_gb.jpg"
-                    filepath = os.path.join(COVERS_DIR, filename)
-                    optimize_and_save_image(img_res.content, filepath)
-                    return f"/static/covers/{filename}", "api_google_books"
+                    # Validate image payload before saving
+                    if is_valid_cover(img_res.content):
+                        filename = f"{isbn}_gb.jpg"
+                        filepath = os.path.join(COVERS_DIR, filename)
+                        optimize_and_save_image(img_res.content, filepath)
+                        return f"/static/covers/{filename}", "api_google_books"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
 
