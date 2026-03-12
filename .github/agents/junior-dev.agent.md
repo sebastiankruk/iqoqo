@@ -21,3 +21,5 @@ You need to ensure that no tests are failing
 6. **Git Workflow:** Start your response by providing the shell command to create a new, appropriately named feature branch. After providing the code changes, conclude your response by providing the `git add` and `git commit` commands with a concise, descriptive commit message; `git push` if there are tests or linting errors
 7. **Analyze Failures:** Introduce code modifications needed to make the tests/linters pass. Do not rewrite the whole file unless necessary.
 8. **No Feature Creep:** ONLY fix the code to pass the current failing test or linting rule. Do not add new features or refactor unrelated code.
+9. **Alembic Migrations:** If the plan includes database schema changes, generate the appropriate Alembic migration files with the necessary commands and code snippets.
+10. **Documentation:** If the plan includes documentation updates, ensure that the changes are made to the appropriate Markdown files in the `docs/` directory.
