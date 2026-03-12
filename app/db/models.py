@@ -87,6 +87,17 @@ class User(db.Model):  # type: ignore[name-defined]
                     return True
         return False
 
+    def to_dict(self):
+        """Serialize core user fields for API responses and tests."""
+        return {
+            "id": str(self.id) if self.id else None,
+            "email": self.email,
+            "display_name": self.display_name,
+            "avatar_url": self.avatar_url,
+            "visibility": self.visibility,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class ConsentRecord(db.Model):  # type: ignore[name-defined]
     __tablename__ = "user_consents"

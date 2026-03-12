@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { Avatar } from "@/components/ui/avatar";
 import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useProfile } from "@/lib/api/hooks";
@@ -99,20 +99,16 @@ export function Navbar() {
           ) : profile ? (
             <Link
               href="/profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden"
               aria-label="User profile"
             >
-              {profile.avatar_url ? (
-                <Image
-                  src={profile.avatar_url}
-                  alt={`${profile.display_name || profile.email}'s profile picture`}
-                  width={32}
-                  height={32}
-                  className="rounded-full object-cover border border-border"
-                />
-              ) : (
-                (profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()
-              )}
+              <Avatar
+                src={profile.avatar_url}
+                alt={`${profile.display_name || profile.email}'s profile picture`}
+                size={36}
+                className="rounded-full"
+                fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+              />
             </Link>
           ) : (
             <div className="flex items-center gap-2">

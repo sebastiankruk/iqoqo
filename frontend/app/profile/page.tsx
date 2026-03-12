@@ -121,13 +121,7 @@ export default function ProfilePage() {
       <Navbar />
       <main className="max-w-2xl mx-auto p-6 space-y-8">
         <div className="flex items-center space-x-4">
-          {profile.avatar_url ? (
-            <Image src={profile.avatar_url} alt="Avatar" width={64} height={64} className="rounded-full border" />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold">
-              {profile.email[0].toUpperCase()}
-            </div>
-          )}
+          <Avatar src={profile.avatar_url} alt="Avatar" size={64} className="border" fallback={profile.email[0].toUpperCase()} />
           <div>
             <h1 className="text-3xl font-bold">My Profile</h1>
             <p className="text-muted-foreground">{profile.email}</p>

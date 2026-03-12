@@ -64,6 +64,7 @@ def google_callback():
 
     user = User.query.filter_by(email=email).first()
     picture = user_info.get("picture")
+
     if not user:
         user = User(
             email=email,
@@ -77,7 +78,7 @@ def google_callback():
             user.roles.append(default_role)
         db.session.add(user)
     else:
-        # Optionally update the avatar URL if Google provides a new picture
+        # Optionally update avatar if it changed
         if picture and user.avatar_url != picture:
             user.avatar_url = picture
 
