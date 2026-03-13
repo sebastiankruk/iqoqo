@@ -117,16 +117,27 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
             # content-length may be absent; consume the stream and measure actual bytes
             content = b"".join(response.iter_content(1024))
 
-            # Accept by header if provided (tests mock content-length)
-            accept_by_header = False
+            # Use content-length only as an early reject for obviously too-small images.
+            # Do not use it as an acceptance condition, to ensure is_valid_cover() (incl. pHash)
+            # always runs for candidate covers.
+            min_bytes = 1000
             try:
-                header_len = int(response.headers.get("content-length", 0))
-                accept_by_header = header_len >= 1000
+                header_len_raw = response.headers.get("content-length", None)
+                if header_len_raw is not None:
+                    header_len = int(header_len_raw)
+                    if header_len > 0 and header_len < min_bytes:
+                        # Definitely too small; skip without further processing.
+                        return None
             except (TypeError, ValueError):
-                accept_by_header = False
+                # Ignore malformed content-length headers; fall back to actual content size.
+                pass
 
-            # Validate image payload before saving; fall back to header heuristic
-            if is_valid_cover(content) or accept_by_header:
+            # Also guard on actual payload size in case headers are missing or incorrect.
+            if len(content) < min_bytes:
+                return None
+
+            # Validate image payload before saving; header is only used for early rejection.
+            if is_valid_cover(content):
                 filename = f"{isbn}_ol.jpg"
                 filepath = os.path.join(COVERS_DIR, filename)
                 optimize_and_save_image(content, filepath)
