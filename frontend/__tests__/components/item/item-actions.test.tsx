@@ -35,7 +35,7 @@ describe('ItemActions Component', () => {
   afterEach(() => { vi.clearAllMocks(); });
 
   it('renders no buttons if user has no permissions', () => {
-    (hooks.useProfile as unknown as vi.Mock).mockReturnValue({ data: { permissions: [] } });
+    vi.mocked(hooks.useProfile).mockReturnValue({ data: { permissions: [] } });
 
     render(<ItemActions item={mockItem} />);
 
@@ -45,7 +45,7 @@ describe('ItemActions Component', () => {
   });
 
   it('renders only permitted buttons', () => {
-    (hooks.useProfile as unknown as vi.Mock).mockReturnValue({ data: { permissions: ['delete:item'] } });
+    vi.mocked(hooks.useProfile).mockReturnValue({ data: { permissions: ['delete:item'] } });
 
     render(<ItemActions item={mockItem} />);
 
