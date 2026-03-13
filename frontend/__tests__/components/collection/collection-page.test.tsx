@@ -37,6 +37,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/api/hooks", () => ({
   useItems: vi.fn(),
   useStats: vi.fn(),
+  useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
 }));
 

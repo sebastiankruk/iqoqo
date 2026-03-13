@@ -23,6 +23,8 @@ interface SidebarFiltersProps {
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
   statusCounts: Record<string, number>;
+  // When true, the status section is hidden/disabled (used when viewing global manifestations)
+  disableStatus?: boolean;
 }
 
 const statusOptions: { value: string; label: string; dot: string }[] = [
@@ -86,35 +88,38 @@ export function SidebarFilters({
         </h2>
       </div>
 
-      <AccordionSection title="Status">
-        <div className="flex flex-col gap-1">
-          {statusOptions.map(({ value, label, dot }) => {
-            const active = isActive(activeFilters, "status", value);
-            return (
-              <label
-                key={value}
-                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                  active
-                    ? "bg-primary/5 text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => onToggleFilter({ type: "status", value })}
-                  className="h-3.5 w-3.5 rounded border-border accent-primary"
-                />
-                <span className={`h-2 w-2 rounded-full ${dot}`} />
-                <span className="flex-1">{label}</span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {statusCounts[value] ?? 0}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </AccordionSection>
+      {!disableStatus && (
+        <AccordionSection title="Status">
+          <div className="flex flex-col gap-1">
+            {statusOptions.map(({ value, label, dot }) => {
+              const active = isActive(activeFilters, "status", value);
+              return (
+                <label
+                  key={value}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    active
+                      ? "bg-primary/5 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "status", value })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                    disabled={disableStatus}
+                  />
+                  <span className={`h-2 w-2 rounded-full ${dot}`} />
+                  <span className="flex-1">{label}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {statusCounts[value] ?? 0}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
     </aside>
   );
 }

@@ -534,7 +534,8 @@ def regenerate_cover(manifestation_id: int):
 @api_bp.route("/manifestations", methods=["GET"])
 def get_manifestations():
     """Get all manifestations (Global Library) with pagination and ownership status."""
-    # Use session-stored client id if available; fall back to None
+    # Prefer authenticated user id (set by require_auth) where available; fall back to session-stored client id for browser sessions
+    user_id = getattr(request, "user_id", None)
     client_id = session.get("client_id") if session is not None else None
 
     page_param = request.args.get("page", "1")
@@ -574,11 +575,13 @@ def get_manifestations():
             authors = work.meta.get("authors", []) if work.meta else []
 
         user_owns = False
-        if client_id and getattr(m, "items", None):
+        # Determine ownership using authenticated user id (preferred) or legacy session client id
+        lookup_id = user_id or client_id
+        if lookup_id and getattr(m, "items", None):
             # owner_id in Item is a UUID; compare stringified forms for robustness
             for it in m.items:
                 try:
-                    if str(it.owner_id) == str(client_id):
+                    if str(it.owner_id) == str(lookup_id):
                         user_owns = True
                         break
                 except Exception:
@@ -588,7 +591,7 @@ def get_manifestations():
             {
                 "id": m.id,
                 "owner_id": None,
-                "status": "library",
+                "status": "unowned",
                 "manifestation_id": m.id,
                 "isbn": m.isbn13,
                 "title": work_title,

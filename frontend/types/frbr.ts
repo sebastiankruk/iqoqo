@@ -44,7 +44,7 @@ export interface Manifestation {
 export interface Item {
   id: number;
   manifestation_id: number;
-  owner_id: string;
+  owner_id: string | null;
   status: ItemStatus;
   meta: Record<string, unknown>;
   added_at?: string;
@@ -72,7 +72,7 @@ export interface Item {
  * `app/db/models.py`.  The cross-subsystem contract is enforced by the
  * `test_ontology.py` test suite.
  */
-export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
+export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read" | "unowned";
 
 /** Standardised API envelope returned by every Flask endpoint. */
 export interface ApiResponse<T> {

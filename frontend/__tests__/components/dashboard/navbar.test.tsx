@@ -26,6 +26,7 @@ import { useProfile } from "@/lib/api/hooks";
 // Mock the hook
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
+  useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
 }));
 

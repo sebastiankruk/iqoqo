@@ -73,12 +73,19 @@ export function useItems(page = 1, limit = 20, statuses?: string[], enabled = tr
 
 /* ── Manifestations list (global catalog) ─────────────────────────────────── */
 
+// ManifestationListEntry represents the DTO returned by GET /manifestations.
+// It's intentionally loose here because the backend returns joined fields
+// (manifestation + work + optional ownership flag) used by the UI.
+export type ManifestationListEntry = {
+  user_owns?: boolean;
+} & Record<string, unknown>;
+
 export function useManifestations(page = 1, limit = 20, enabled = true) {
   return useQuery({
     queryKey: queryKeys.manifestations(page, limit),
     queryFn: async () => {
       const params = { page, limit };
-      const res = await apiClient.get<ApiResponse<Item[]>>("/manifestations", { params });
+      const res = await apiClient.get<ApiResponse<ManifestationListEntry[]>>("/manifestations", { params });
       return res.data;
     },
     staleTime: 10_000,
