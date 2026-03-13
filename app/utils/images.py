@@ -41,22 +41,22 @@ def is_valid_cover(image_bytes: bytes) -> bool:
         return False
 
     try:
-        img = Image.open(io.BytesIO(image_bytes))
+        with Image.open(io.BytesIO(image_bytes)) as img:
 
-        # Heuristic 2: Dimensions.
-        if img.width <= 10 or img.height <= 10:
-            logger.debug("Image rejected: Dimensions too small.")
-            return False
-
-        # Heuristic 3: Perceptual Hashing to catch visually identical placeholders
-        img_hash = imagehash.phash(img)
-        for junk_hash in KNOWN_JUNK_PHASHES:
-            # A Hamming distance <= 4 means the images are visually nearly identical
-            if img_hash - junk_hash <= 4:
-                logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
+            # Heuristic 2: Dimensions.
+            if img.width <= 10 or img.height <= 10:
+                logger.debug("Image rejected: Dimensions too small.")
                 return False
 
-        return True
+            # Heuristic 3: Perceptual Hashing to catch visually identical placeholders
+            img_hash = imagehash.phash(img)
+            for junk_hash in KNOWN_JUNK_PHASHES:
+                # A Hamming distance <= 4 means the images are visually nearly identical
+                if img_hash - junk_hash <= 4:
+                    logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
+                    return False
+
+            return True
     except Exception as e:
         logger.error(f"Image validation failed (corrupt file?): {e}")
         return False
