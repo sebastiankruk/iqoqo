@@ -33,27 +33,58 @@ depends_on = None
 
 
 def upgrade():
-    # Add expression-based GIN indexes for fast Full-Text Search
+    # Add generated tsvector columns and GIN indexes for fast Full-Text Search
     # using the 'simple' dictionary to gracefully handle ISBNs and mixed languages.
+    # The generated columns avoid expression-based indexes that are hard to
+    # reuse consistently from API queries.
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS ix_works_fts ON works
-        USING GIN (
-            (to_tsvector('simple', coalesce(title, '')) ||
-             to_tsvector('simple', coalesce((meta->>'authors'), '')))
-        );
-    """
+        ALTER TABLE works
+        ADD COLUMN IF NOT EXISTS fts_simple tsvector GENERATED ALWAYS AS (
+            to_tsvector(
+                'simple',
+                coalesce(title, '') || ' ' || coalesce(meta->>'authors', '')
+            )
+        ) STORED;
+        """
     )
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON manifestations
-        USING GIN (
+        CREATE INDEX IF NOT EXISTS ix_works_fts
+        ON works
+        USING GIN (fts_simple);
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE manifestations
+        ADD COLUMN IF NOT EXISTS fts_simple tsvector GENERATED ALWAYS AS (
             to_tsvector('simple', coalesce(isbn13, ''))
-        );
-    """
+        ) STORED;
+        """
+    )
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_manifestations_fts
+        ON manifestations
+        USING GIN (fts_simple);
+        """
     )
 
 
 def downgrade():
+    # Drop indexes first, then the generated columns.
     op.execute("DROP INDEX IF EXISTS ix_works_fts;")
     op.execute("DROP INDEX IF EXISTS ix_manifestations_fts;")
+    op.execute(
+        """
+        ALTER TABLE works
+        DROP COLUMN IF EXISTS fts_simple;
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE manifestations
+        DROP COLUMN IF EXISTS fts_simple;
+        """
+    )
