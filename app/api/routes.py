@@ -167,6 +167,7 @@ def get_items():
             JOIN works w ON w.id = e.work_id
             LEFT JOIN items i ON i.manifestation_id = m.id
             WHERE {tsvector_expr} @@ {tsquery_expr}
+              AND i.id IS NOT NULL
             {statuses_sql}
             """
 
@@ -180,6 +181,7 @@ def get_items():
             JOIN works w ON w.id = e.work_id
             LEFT JOIN items i ON i.manifestation_id = m.id
             WHERE {tsvector_expr} @@ {tsquery_expr}
+              AND i.id IS NOT NULL
             {statuses_sql}
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
@@ -200,9 +202,9 @@ def get_items():
 
                 items_data.append(
                     {
-                        "id": item_id if item_id is not None else f"m_{manifestation_id}",
+                        "id": item_id,
                         "owner_id": str(owner_id) if owner_id else None,
-                        "status": row.get("status") if row.get("status") else "unowned",
+                        "status": row.get("status"),
                         "manifestation_id": manifestation_id,
                         "isbn": row.get("isbn13"),
                         "title": row.get("title"),
