@@ -14,10 +14,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import os
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from PIL import Image
 
 from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
 from app.utils.images import is_valid_cover, optimize_and_save_image
@@ -115,3 +117,18 @@ def test_is_valid_cover_rejects_corrupt_image():
     # Large enough to pass the size check, but not a valid image
     corrupt_image = b"corrupt_data_" * 300
     assert is_valid_cover(corrupt_image) is False
+
+
+def test_is_valid_cover_accepts_valid_png_over_1kb():
+    """Ensure that a valid PNG payload larger than 1KB is accepted."""
+    # Create a simple valid RGB image in memory
+    image = Image.new("RGB", (64, 64), color="red")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    image_bytes = buffer.getvalue()
+
+    # Sanity check: make sure we satisfy the size requirement
+    assert len(image_bytes) > 1024
+
+    # The valid, sufficiently large image should be accepted
+    assert is_valid_cover(image_bytes) is True
