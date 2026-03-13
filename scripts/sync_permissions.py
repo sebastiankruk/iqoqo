@@ -3,16 +3,27 @@
 Simple permissions sync script for development.
 Reads shared/permissions.yaml and emits app/core/permissions.py and frontend/types/permissions.ts
 """
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+
 import argparse
-import os
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except Exception:
-    print("PyYAML not installed. Please install requirements.txt or add PyYAML.")
-    sys.exit(1)
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 YAML_PATH = ROOT / "shared" / "permissions.yaml"
@@ -27,7 +38,7 @@ if not YAML_PATH.exists():
     print(f"Permissions YAML not found: {YAML_PATH}")
     sys.exit(1)
 
-with open(YAML_PATH, "r") as f:
+with open(YAML_PATH, encoding="utf-8") as f:
     data = yaml.safe_load(f)
 
 permissions = [p["name"] for p in data.get("permissions", [])]
@@ -35,7 +46,7 @@ permissions = [p["name"] for p in data.get("permissions", [])]
 # Generate Python Enum
 members = []
 for name in permissions:
-    key = name.upper().replace(':', '_').replace('-', '_')
+    key = name.upper().replace(":", "_").replace("-", "_")
     members.append((key, name))
 
 py_lines = [
@@ -45,7 +56,7 @@ py_lines = [
     "class ItemPermissions(Enum):",
 ]
 for k, v in members:
-    py_lines.append(f"    {k} = \"{v}\"")
+    py_lines.append(f'    {k} = "{v}"')
 
 py_text = "\n".join(py_lines) + "\n"
 
@@ -63,12 +74,12 @@ if args.verify:
     # Compare existing files if present
     ok = True
     if PY_OUT.exists():
-        existing = PY_OUT.read_text()
+        existing = PY_OUT.read_text(encoding="utf-8")
         if existing != py_text:
             print("app/core/permissions.py differs from expected output")
             ok = False
     if TS_OUT.exists():
-        existing = TS_OUT.read_text()
+        existing = TS_OUT.read_text(encoding="utf-8")
         if existing != "\n".join(ts_lines) + "\n":
             print("frontend/types/permissions.ts differs from expected output")
             ok = False
@@ -79,8 +90,9 @@ if args.verify:
 
 # Write files
 PY_OUT.parent.mkdir(parents=True, exist_ok=True)
-PY_OUT.write_text(py_text)
+PY_OUT.write_text(py_text, encoding="utf-8")
 TS_OUT.parent.mkdir(parents=True, exist_ok=True)
-TS_OUT.write_text("\n".join(ts_lines) + "\n")
+TS_OUT.write_text("\n".join(ts_lines) + "\n", encoding="utf-8")
 
+print(f"Wrote {PY_OUT} and {TS_OUT}")
 print(f"Wrote {PY_OUT} and {TS_OUT}")
