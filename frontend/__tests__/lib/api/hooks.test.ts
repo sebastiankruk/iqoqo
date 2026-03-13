@@ -66,6 +66,16 @@ describe("queryKeys.items", () => {
     expect(key1).not.toEqual(key3);
     expect(key2).not.toEqual(key3);
   });
+
+  it("includes the query string in the cache key and separates caches by query", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    const emptyQueryKey = queryKeys.items(1, 20);
+    const nonEmptyQueryKey = queryKeys.items(1, 20, undefined, "hobbit");
+
+    expect(emptyQueryKey).toEqual(["items", 1, 20, "", ""]);
+    expect(nonEmptyQueryKey).toEqual(["items", 1, 20, "", "hobbit"]);
+    expect(emptyQueryKey).not.toEqual(nonEmptyQueryKey);
+  });
 });
 
 // ---------------------------------------------------------------------------
