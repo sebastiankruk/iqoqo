@@ -20,7 +20,7 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, send_from_directory
+from flask import current_app, jsonify, request, send_file, send_from_directory
 from PIL import Image
 from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
@@ -216,7 +216,16 @@ def get_items():
                     }
                 )
 
-        except Exception:
+        except Exception as exc:
+            current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
+
+            # If we are on PostgreSQL, an unexpected FTS error should not be silently masked.
+            if db.engine.dialect.name == "postgresql":
+                return (
+                    jsonify({"success": False, "data": None, "error": "Search backend error"}),
+                    500,
+                )
+
             # Fallback for SQLite tests or databases without FTS support.
             pattern = f"%{q}%"
             base_query = (
