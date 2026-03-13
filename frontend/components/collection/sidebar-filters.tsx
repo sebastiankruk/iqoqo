@@ -78,6 +78,7 @@ export function SidebarFilters({
   activeFilters,
   onToggleFilter,
   statusCounts,
+  disableStatus = false,
 }: SidebarFiltersProps) {
   return (
     <aside className="w-full">

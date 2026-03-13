@@ -19,7 +19,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import Image from "next/image";
 import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
@@ -122,7 +121,8 @@ export default function ProfilePage() {
       <main className="max-w-2xl mx-auto p-6 space-y-8">
         <div className="flex items-center space-x-4">
           {profile.avatar_url ? (
-            <Image src={profile.avatar_url} alt="Avatar" width={64} height={64} className="rounded-full border" />
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={profile.avatar_url} alt="Avatar" width={64} height={64} className="rounded-full border object-cover" />
           ) : (
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold">
               {profile.email[0].toUpperCase()}

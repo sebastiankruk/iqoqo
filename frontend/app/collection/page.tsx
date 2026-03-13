@@ -226,7 +226,7 @@ export default function CollectionPage() {
             {pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
-                  onClick(() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
                 >
