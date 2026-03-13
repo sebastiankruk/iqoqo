@@ -19,10 +19,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import Image from "next/image";
 import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
+import { Avatar } from "@/components/ui/avatar";
 
 interface ConsentRecord {
   consent_type: string;
