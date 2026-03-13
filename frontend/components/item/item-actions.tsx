@@ -56,7 +56,7 @@ export function ItemActions({ item }: { item: Item }) {
   if (!profile) return null;
 
   // Helper to check user permissions safely
-  const hasPermission = (perm: string) => profile?.permissions?.includes(perm);
+  const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
