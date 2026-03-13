@@ -58,7 +58,7 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 
             return True
     except Exception as e:
-        logger.error(f"Image validation failed (corrupt file?): {e}")
+        logger.warning(f"Image validation failed (likely non-image or corrupt payload): {e}")
         return False
 
 
