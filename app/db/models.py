@@ -61,7 +61,7 @@ class User(db.Model):  # type: ignore[name-defined]
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(100))
-    avatar_url = db.Column(db.String(500))
+    avatar_url = db.Column(db.String(500), nullable=True)  # Increased from 255 to handle long URLs
     google_id = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
