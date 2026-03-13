@@ -145,22 +145,23 @@ def get_items():
     # database does not support PostgreSQL FTS (e.g. tests using SQLite), fall
     # back to a simple ILIKE search.
     if q:
-        # Build SQL expressions used for FTS
-        tsvector_expr = (
-            "to_tsvector('simple', coalesce(w.title, '') || ' ' || coalesce(m.isbn13, '') || ' ' || coalesce(w.meta->>'authors',''))"
-        )
+        # Use the generated tsvector columns so the expressions exactly match
+        # the GIN indexes created by the migration. This avoids full table scans
+        # caused by mismatched expressions.
+        w_tsvector_expr = "w.fts_simple"
+        m_tsvector_expr = "m.fts_simple"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
-        # Optional statuses filter SQL
+        # Securely parameterize pagination and optional statuses filter
+        params = {"q": q, "limit": limit, "offset": offset}
         statuses_sql = ""
         if statuses_filter:
-            statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-            # Compose a literal-safe SQL list (statuses are controlled by server-side code)
-            esc = ",".join(["'" + s.replace("'", "''") + "'" for s in statuses_list])
+            statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
+            params["statuses"] = statuses_list
             if "unowned" in statuses_list:
-                statuses_sql = f" AND (i.status IN ({esc}) OR i.id IS NULL)"
+                statuses_sql = " AND (i.status IN :statuses OR i.id IS NULL)"
             else:
-                statuses_sql = f" AND i.status IN ({esc})"
+                statuses_sql = " AND i.status IN :statuses"
 
         # Attempt PostgreSQL FTS; fall back to ILIKE for SQLite in tests
         try:
@@ -169,7 +170,7 @@ def get_items():
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             LEFT JOIN items i ON i.manifestation_id = m.id
-            WHERE {tsvector_expr} @@ {tsquery_expr}
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
               AND i.id IS NOT NULL
             {statuses_sql}
             """
@@ -178,20 +179,29 @@ def get_items():
             SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_path, m.meta as manifestation_meta,
                    w.meta as work_meta, i.added_at, i.updated_at,
-                   ts_rank({tsvector_expr}, {tsquery_expr}) as rank
+                   ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
             FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             LEFT JOIN items i ON i.manifestation_id = m.id
-            WHERE {tsvector_expr} @@ {tsquery_expr}
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
               AND i.id IS NOT NULL
             {statuses_sql}
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
             """
 
-            total = int(db.session.execute(text(count_sql), {"q": q}).scalar() or 0)
-            results = db.session.execute(text(rows_sql), {"q": q, "limit": limit, "offset": offset}).mappings().all()
+            # Bind params and enable tuple-expansion for statuses when provided
+            count_stmt = text(count_sql)
+            rows_stmt = text(rows_sql)
+            if "statuses" in params:
+                from sqlalchemy import bindparam
+
+                count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
+                rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
+
+            total = int(db.session.execute(count_stmt, params).scalar() or 0)
+            results = db.session.execute(rows_stmt, params).mappings().all()
 
             items_data = []
             for row in results:
@@ -219,7 +229,7 @@ def get_items():
                     }
                 )
 
-        except Exception as exc:
+        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
             current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
 
             # If we are on PostgreSQL, an unexpected FTS error should not be silently masked.

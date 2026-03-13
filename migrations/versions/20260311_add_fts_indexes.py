@@ -59,7 +59,7 @@ def upgrade():
         """
         ALTER TABLE manifestations
         ADD COLUMN IF NOT EXISTS fts_simple tsvector GENERATED ALWAYS AS (
-            to_tsvector('simple', coalesce(isbn13, ''))
+            to_tsvector('simple', coalesce(isbn13, '') || ' ' || coalesce(meta->>'publisher', '') || ' ' || coalesce(meta->>'alt_title', ''))
         ) STORED;
         """
     )
