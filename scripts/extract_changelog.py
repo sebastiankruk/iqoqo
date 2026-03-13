@@ -23,16 +23,17 @@ def extract_release_notes(version: str) -> None:
             content = f.read()
     except FileNotFoundError:
         print("No docs/CHANGELOG.md found.")
-        sys.exit(0)
+        sys.exit(1)
 
-    # Look for the section starting with ## [version] and ending at the next ## [
-    pattern = rf"## \[{re.escape(version)}\].*?\n(.*?)(?=\n## \[|$)"
+    # Look for the section starting with ## [version] and ending at the next ## [ OR end of file
+    pattern = rf"## \[{re.escape(version)}\].*?\n(.*?)(?=\n## \[|\Z)"
     match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
 
     if match:
         print(match.group(1).strip())
     else:
         print(f"No release notes found for version {version}.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

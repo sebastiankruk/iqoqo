@@ -24,6 +24,13 @@ interface FreshArrivalsProps {
   publicMode?: boolean;
 }
 
+interface ArrivalItem {
+  id: number;
+  title?: string;
+  author?: string;
+  authors?: string[];
+}
+
 export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
   const { data: itemsEnvelope, isLoading: itemsLoading, isError: itemsError } = useItems(1, 12);
   const { data: recentManifestations, isLoading: manifLoading, isError: manifError } = useRecentManifestations(12);
@@ -76,7 +83,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item: any) => (
+          {items.map((item: ArrivalItem) => (
             <Link
               href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
               key={item.id}
