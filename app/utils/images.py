@@ -45,7 +45,7 @@ def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
             continue
         try:
             hashes.add(imagehash.hex_to_hash(hex_value))
-        except Exception as exc:  # narrow failures to this token only
+        except (ValueError, TypeError) as exc:  # narrow failures to this token only
             logger.warning("Invalid junk pHash '%s' in IQOQO_KNOWN_JUNK_PHASHES: %s", hex_value, exc)
 
     return hashes
@@ -78,7 +78,7 @@ def is_valid_cover(image_bytes: bytes) -> bool:
                 return False
 
         return True
-    except Exception as e:
+    except (OSError, ValueError, SyntaxError, TypeError) as e:
         logger.warning(f"Image validation failed (likely non-image or corrupt payload): {e}")
         return False
 
