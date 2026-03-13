@@ -397,7 +397,7 @@ Iqoqo uses a hybrid authentication approach suitable for distributed deployments
 
 > ### Frontend RBAC and UI State
 > 
-> To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilises the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions. **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
+> To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions. **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
 5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
 
 ## ⚙️ Operations & Maintenance
