@@ -17,6 +17,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemActions } from "@/components/item/item-actions";
 import * as hooks from "@/lib/api/hooks";
+import type { Item } from "@/types/frbr"; // <-- Add this import
 
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
@@ -29,7 +30,14 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: vi.fn(() => ({ setQueryData: vi.fn() })),
 }));
 
-const mockItem = { id: 1, manifestation_id: 1, cover_status: 'ready' } as any;
+const mockItem = { 
+  id: 1, 
+  manifestation_id: 1, 
+  owner_id: "00000000-0000-0000-0000-000000000000",
+  status: "available",
+  meta: {},
+  cover_status: 'ready' 
+} as unknown as Item;
 
 describe('ItemActions Component', () => {
   afterEach(() => { vi.clearAllMocks(); });
