@@ -97,8 +97,11 @@ def get_items():
         page (int, default 1):    1-based page number.
         limit (int, default 20):  Maximum items per page.
         statuses (str, optional): Comma-separated list of item statuses to filter by
-                                  (e.g. ``reading,wish_list``).  When omitted all
+                                  (e.g. ``reading,wish_list``). When omitted all
                                   statuses are returned.
+        q (str, optional):        Free-text search query applied to this collection
+                                  of items (i.e. owned/user items only). The search
+                                  does not include catalog or other unowned records.
 
     Results are sorted by most-recently-updated first, falling back to
     ``added_at`` for legacy rows that pre-date the ``updated_at`` column.
