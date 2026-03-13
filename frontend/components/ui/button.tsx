@@ -47,7 +47,7 @@ const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
 };
 
-export const Button = React.forwardRef<any, ButtonProps>(
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     { className, variant = "default", size = "default", type = "button", asChild = false, ...props },
     ref,
