@@ -15,6 +15,7 @@
 #
 import io
 import logging
+import os
 import textwrap
 
 import imagehash
@@ -23,11 +24,35 @@ from PIL import Image, ImageDraw, ImageFont
 logger = logging.getLogger(__name__)
 
 
-# Replace the placeholder hashes below with real pHash values of known junk covers
+# Load known junk cover pHashes from environment for configurable rejection
 # Use `imagehash.phash(Image.open("your_placeholder.jpg"))` locally to compute.
-KNOWN_JUNK_PHASHES = [
-    imagehash.hex_to_hash("e1e1e1e1e1e1e1e1"),  # Example placeholder — replace as needed
-]
+
+
+def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
+    """
+    Load known junk cover pHashes from the environment.
+    Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    """
+    raw_value = os.getenv("IQOQO_KNOWN_JUNK_PHASHES", "")
+    hashes: set[imagehash.ImageHash] = set()
+
+    if not raw_value:
+        return hashes
+
+    for token in raw_value.split(","):
+        hex_value = token.strip()
+        if not hex_value:
+            continue
+        try:
+            hashes.add(imagehash.hex_to_hash(hex_value))
+        except Exception as exc:  # narrow failures to this token only
+            logger.warning("Invalid junk pHash '%s' in IQOQO_KNOWN_JUNK_PHASHES: %s", hex_value, exc)
+
+    return hashes
+
+
+# Load once at module initialization
+KNOWN_JUNK_PHASHES = _load_known_junk_phashes()
 
 
 def is_valid_cover(image_bytes: bytes) -> bool:
@@ -37,26 +62,22 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 
     # Heuristic 1: File size. Accept small images > 1KB to be compatible with tests
     if len(image_bytes) < 1000:
-        logger.debug("Image rejected: File size too small (likely a placeholder).")
+        logger.debug(f"Image rejected: File size too small ({len(image_bytes)} bytes).")
         return False
 
     try:
+        # verify image integrity first
         with Image.open(io.BytesIO(image_bytes)) as img:
+            img.verify()
 
-            # Heuristic 2: Dimensions.
-            if img.width <= 10 or img.height <= 10:
-                logger.debug("Image rejected: Dimensions too small.")
+        # Re-open to compute perceptual hash
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img_hash = imagehash.phash(img)
+            if img_hash in KNOWN_JUNK_PHASHES:
+                logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
                 return False
 
-            # Heuristic 3: Perceptual Hashing to catch visually identical placeholders
-            img_hash = imagehash.phash(img)
-            for junk_hash in KNOWN_JUNK_PHASHES:
-                # A Hamming distance <= 4 means the images are visually nearly identical
-                if img_hash - junk_hash <= 4:
-                    logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
-                    return False
-
-            return True
+        return True
     except Exception as e:
         logger.warning(f"Image validation failed (likely non-image or corrupt payload): {e}")
         return False
