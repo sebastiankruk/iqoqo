@@ -45,3 +45,51 @@ def app():
 def client(app):
     """A test client for the app."""
     return app.test_client()
+
+
+# Global fixtures for admin and normal user headers so tests across modules can reuse them
+@pytest.fixture
+def admin_headers(app):
+    """Fixture to provide authorization headers for an admin user."""
+    # Import locally to avoid top-level circular imports during test collection
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import Permission, Role, User, db
+
+    with app.app_context():
+        # Create permissions
+        perms = [Permission(name="regenerate:cover"), Permission(name="refetch:metadata"), Permission(name="delete:item")]
+        db.session.add_all(perms)
+
+        # Create admin role
+        admin_role = Role(name="admin")
+        admin_role.permissions.extend(perms)
+        db.session.add(admin_role)
+
+        # Create admin user
+        admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")
+        admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
+
+        # Generate token
+        token = generate_internal_jwt(admin_user)
+        return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def normal_user_headers(app):
+    """Fixture to provide authorization headers for a normal (non-admin) user."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import Role, User, db
+
+    with app.app_context():
+        user_role = Role(name="user")
+        db.session.add(user_role)
+
+        user = User(email="test_user@iqoqo.local", display_name="User")
+        user.roles.append(user_role)
+        db.session.add(user)
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+        return {"Authorization": f"Bearer {token}"}

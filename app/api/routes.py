@@ -34,7 +34,7 @@ from app.core.ingest import IngestService  # Assuming this exists based on your 
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
-from . import api_bp
+from .core import api_bp
 
 
 def _invalid_json_payload_response():

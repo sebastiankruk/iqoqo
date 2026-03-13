@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from . import admin, routes
-from .core import api_bp
+from flask import Blueprint
 
-api_bp.register_blueprint(admin.admin_bp)
+api_bp = Blueprint("api", __name__, url_prefix="/api")

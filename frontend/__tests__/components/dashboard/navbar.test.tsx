@@ -18,7 +18,7 @@
  *
  * next/link and next/navigation are mocked globally in vitest.setup.ts.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, type Mock, beforeEach } from "vitest"; // <-- Added vi and Mock
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile } from "@/lib/api/hooks";
@@ -79,15 +79,30 @@ describe("Navbar Auth State", () => {
     expect(screen.getByText("Sign In")).toBeInTheDocument();
   });
 
-  it("shows user initials and links to profile when authenticated", () => {
+  it("shows user initials and opens dropdown when authenticated (non-admin)", () => {
     (useProfile as Mock).mockReturnValue({
-      data: { email: "test@kruk.me", display_name: "Sebastian" },
+      data: { email: "user@example.com", display_name: "User", roles: ["user"] },
       isLoading: false,
     });
     render(<Navbar />);
 
-    const profileLink = screen.getByText("S");
-    expect(profileLink).toBeInTheDocument();
-    expect(profileLink.closest("a")).toHaveAttribute("href", "/profile");
+    const avatarBtn = screen.getByLabelText("User menu");
+    fireEvent.click(avatarBtn);
+
+    expect(screen.queryByText("Admin Settings")).toBeNull();
+    expect(screen.getByText("Profile Settings")).toBeInTheDocument();
+  });
+
+  it("shows Admin Settings for admin users", () => {
+    (useProfile as Mock).mockReturnValue({
+      data: { email: "admin@example.com", display_name: "Admin", roles: ["admin"] },
+      isLoading: false,
+    });
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    fireEvent.click(avatarBtn);
+
+    expect(screen.getByText("Admin Settings")).toBeInTheDocument();
   });
 });

@@ -18,6 +18,14 @@
 import Link from "next/link";
 import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useProfile } from "@/lib/api/hooks";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
@@ -96,13 +104,34 @@ export function Navbar() {
           {isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : profile ? (
-            <Link
-              href="/profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-              aria-label="User profile"
-            >
-              {(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 outline-none"
+                  aria-label="User menu"
+                >
+                  {(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 dark:bg-[#040608] dark:border-white/20">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile">Profile Settings</Link>
+                </DropdownMenuItem>
+                
+                {profile.roles?.includes("admin") && (
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/admin/settings">Admin Settings</Link>
+                  </DropdownMenuItem>
+                )}
+                
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer text-red-500 focus:text-red-500">
+                  <Link href="/api/auth/logout">Log out</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/login" className="text-sm font-medium hover:underline">
