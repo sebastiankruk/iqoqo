@@ -3,6 +3,7 @@
 Simple permissions sync script for development.
 Reads shared/permissions.yaml and emits app/core/permissions.py and frontend/types/permissions.ts
 """
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
