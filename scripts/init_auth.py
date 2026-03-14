@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import uuid
 
 from app import create_app
 from app.db.models import Item, Permission, Role, User, db
@@ -56,15 +57,11 @@ with app.app_context():
     for item in legacy_items:
         # Check if owner_id is not already a valid UUID
         try:
-            import uuid
-
             uuid.UUID(str(item.owner_id))
         except ValueError:
             item.owner_id = admin_user.id
             migrated += 1
 
     if migrated > 0:
-        db.session.commit()
-        print(f"Migrated {migrated} items to admin user.")
         db.session.commit()
         print(f"Migrated {migrated} items to admin user.")
