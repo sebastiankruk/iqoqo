@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, Suspense } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -29,7 +29,7 @@ import type { Item } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
-export default function CollectionPage() {
+function CollectionContent() {
   const [page, setPage] = useState(1);
   const limit = 40;
 
@@ -260,5 +260,17 @@ export default function CollectionPage() {
         statusCounts={statusCounts}
       />
     </div>
+  );
+}
+
+export default function CollectionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading collection...</p>
+      </div>
+    }>
+      <CollectionContent />
+    </Suspense>
   );
 }
