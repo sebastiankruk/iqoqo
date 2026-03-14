@@ -30,7 +30,8 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
 
   const isLoading = publicMode ? manifLoading : itemsLoading;
   const isError = publicMode ? manifError : itemsError;
-  const items = publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? []);
+  const rawItems = publicMode ? recentManifestations : itemsEnvelope?.data;
+  const items = Array.isArray(rawItems) ? rawItems : [];
 
   if (isError) {
     return (
@@ -79,7 +80,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
           {items.map((item: any) => (
             <Link
               href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
-              key={item.id}
+              key={item.id as React.Key}
               className="group w-36 shrink-0 sm:w-40"
             >
               {/* Cover placeholder – real image would come from meta */}
@@ -90,11 +91,11 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
                 <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
               <h3 className="truncate text-sm font-semibold text-card-foreground">
-                {item.title ?? item.title ?? "Untitled"}
+                {(item.title as string) ?? "Untitled"}
               </h3>
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                 <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                {item.author ?? item.authors?.[0] ?? "Unknown"}
+                {(item.author as string) ?? ((item.authors as string[])?.[0]) ?? "Unknown"}
               </p>
             </Link>
           ))}

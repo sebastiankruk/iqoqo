@@ -1,3 +1,18 @@
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
 "use client";
 
 import { useEffect, useState } from "react";
@@ -23,24 +38,24 @@ export default function AdminSettingsPage() {
   return (
     <div className="max-w-6xl mx-auto py-10 px-6">
       <h1 className="text-3xl font-serif font-bold mb-8">Admin Settings</h1>
-      
+
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar Nav */}
         <aside className="w-full md:w-64 shrink-0">
           <nav className="flex flex-col gap-2">
-            <button 
+            <button
               onClick={() => setActiveTab("instance")}
               className={`text-left px-4 py-2 rounded-md ${activeTab === 'instance' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
             >
               Instance Settings
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab("users")}
               className={`text-left px-4 py-2 rounded-md ${activeTab === 'users' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
             >
               User Management
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab("integrations")}
               className={`text-left px-4 py-2 rounded-md ${activeTab === 'integrations' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
             >

@@ -225,7 +225,6 @@ export function useGlobalStats() {
 export function useRecentManifestations(limit = 10) {
   return useQuery({
     queryKey: ["recentManifestations", limit],
-    queryFn: () => apiFetch<any[]>("/manifestations/recent", { limit }),
-    staleTime: 30_000,
+    queryFn: () => apiFetch<
   });
 }
