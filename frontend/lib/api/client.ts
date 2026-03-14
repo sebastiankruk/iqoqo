@@ -62,5 +62,5 @@ export async function getGlobalStats(): Promise<{ works: number; manifestations:
 
 /** Fetch most recent manifestations added to the instance */
 export async function getRecentManifestations(limit = 10) {
-  return apiFetch<any[]>("/manifestations/recent", { limit });
+  return apiFetch<Record<string, unknown>[]>("/manifestations/recent", { limit });
 }

@@ -25,13 +25,20 @@ interface FreshArrivalsProps {
   publicMode?: boolean;
 }
 
+interface ArrivalItem {
+  id: number;
+  title?: string;
+  author?: string;
+  authors?: string[];
+}
+
 export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
   const { data: itemsEnvelope, isLoading: itemsLoading, isError: itemsError } = useItems(1, 12);
   const { data: recentManifestations, isLoading: manifLoading, isError: manifError } = useRecentManifestations(12);
 
   const isLoading = publicMode ? manifLoading : itemsLoading;
   const isError = publicMode ? manifError : itemsError;
-  const items = publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? []);
+  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as ArrivalItem[];
 
   if (isError) {
     return (
