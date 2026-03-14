@@ -79,7 +79,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {items.map((item: any) => {
             const coverUrl = item.cover_path
-              ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_path}`
+              ? `/api${item.cover_path}`
               : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
                 (item.meta?.["cover_url"] as string | undefined);
 
