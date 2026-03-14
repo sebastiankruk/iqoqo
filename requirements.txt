@@ -23,3 +23,6 @@ isort
 mypy
 pylint
 types-requests  # Type stubs for mypy
+
+PyYAML==6.0.1
+types-PyYAML
