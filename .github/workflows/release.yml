@@ -41,28 +41,9 @@ jobs:
       - name: Extract version from pyproject.toml
         id: extract_version
         run: |
-          python - << 'PY'
-          import os
-          import pathlib
-          import tomllib
-
-          pyproject_path = pathlib.Path("pyproject.toml")
-          with pyproject_path.open("rb") as fp:
-              data = tomllib.load(fp)
-
-          try:
-              version = data["project"]["version"]
-          except KeyError as exc:
-              raise SystemExit(f"Unable to read [project].version from {pyproject_path}") from exc
-
-          env_path = os.environ["GITHUB_ENV"]
-          with open(env_path, "a", encoding="utf-8") as env_file:
-              env_file.write(f"VERSION={version}\n")
-
-          output_path = os.environ["GITHUB_OUTPUT"]
-          with open(output_path, "a", encoding="utf-8") as output_file:
-              output_file.write(f"version={version}\n")
-          PY
+          VERSION=$(python scripts/extract_version.py)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Extract Release Notes from CHANGELOG
         id: extract_notes

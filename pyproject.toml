@@ -7,7 +7,7 @@ name = "iqoqo"
 version = "0.0.6"
 description = "Library of Everything - FRBR-compliant personal collection manager"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "Flask==3.1.*",
     "psycopg2-binary==2.9.*",
@@ -91,7 +91,7 @@ ignore = [
 "scripts/*" = ["E402"]  # Scripts modify sys.path before app imports
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Start lenient, tighten later
