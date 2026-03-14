@@ -53,6 +53,3 @@ def test_protected_route_without_token(client):
     response = client.delete("/api/items/1")
     assert response.status_code == 401
     assert b"Token missing" in response.data
-    assert response.status_code == 401
-    assert b"Token missing" in response.data
-    assert b"Token missing" in response.data

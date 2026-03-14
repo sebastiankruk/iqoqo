@@ -16,11 +16,19 @@
 "use client";
 
 import Link from "next/link";
-import { Avatar } from "@/components/ui/avatar";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Search, ScanLine, Library, Loader2 } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useProfile } from "@/lib/api/hooks";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
@@ -28,6 +36,15 @@ export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+    } catch (err) {
+      console.error("Failed to logout:", err);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +80,7 @@ export function Navbar() {
         </Link>
 
         {/* Search */}
-          <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md">
+        <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md">
           <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
             <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
           </div>
@@ -85,7 +102,7 @@ export function Navbar() {
             <Library className="h-3.5 w-3.5" />
             Collection
           </Link>
-          { profile ? (
+          {profile ? (
             <div className="flex items-center gap-2">
               <Link
                 href="/scan"
@@ -105,19 +122,42 @@ export function Navbar() {
           {isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : profile ? (
-            <Link
-              href="/profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden"
-              aria-label="User profile"
-            >
-              <Avatar
-                src={profile.avatar_url}
-                alt={`${profile.display_name || profile.email}'s profile picture`}
-                size={36}
-                className="rounded-full"
-                fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
-              />
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden outline-none"
+                  aria-label="User menu"
+                >
+                  <Avatar
+                    src={profile.avatar_url}
+                    alt={`${profile.display_name || profile.email}'s profile picture`}
+                    size={36}
+                    className="rounded-full"
+                    fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+                  />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 dark:bg-[#040608] dark:border-white/20">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile">Profile Settings</Link>
+                </DropdownMenuItem>
+
+                {profile.roles?.includes("admin") && (
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/admin/settings">Admin Settings</Link>
+                  </DropdownMenuItem>
+                )}
+
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer text-red-500 focus:text-red-500">
+                  <button onClick={handleLogout} className="w-full text-left">
+                    Log out
+                  </button>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/login" className="text-sm font-medium hover:underline">

@@ -65,3 +65,34 @@ def require_permission(perm_name):
         return decorated
 
     return decorator
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = None
+        if "Authorization" in request.headers:
+            token = request.headers["Authorization"].split(" ")[1]
+        elif "iqoqo_session" in request.cookies:
+            token = request.cookies.get("iqoqo_session")
+
+        if not token:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+        try:
+            payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+            request.user_id = uuid.UUID(payload["sub"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"success": False, "error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"success": False, "error": "Invalid token"}), 401
+        except ValueError:
+            return jsonify({"success": False, "error": "Invalid user ID format"}), 401
+
+        user = db.session.get(User, request.user_id)
+        is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
+        if not is_admin:
+            return jsonify({"success": False, "error": "Admin privileges required"}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function

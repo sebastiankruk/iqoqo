@@ -96,8 +96,3 @@ def test_refetch_metadata_endpoint(client, app, admin_headers):
         resp = client.post(f"/api/manifestations/{mid}/refetch-metadata", headers=admin_headers)
         assert resp.status_code == 200
         assert resp.json["success"] is True
-        resp = client.post(f"/api/manifestations/{mid}/refetch-metadata", headers=admin_headers)
-        assert resp.status_code == 200
-        assert resp.json["success"] is True
-        assert resp.json["success"] is True
-        assert resp.json["success"] is True

@@ -80,7 +80,7 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run Markdownlint
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv"
+        run: markdownlint-cli2 "**/*.md" "#node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github"
 
   lint-license:
     runs-on: ubuntu-latest

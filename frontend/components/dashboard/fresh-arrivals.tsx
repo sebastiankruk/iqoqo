@@ -30,6 +30,10 @@ interface ArrivalItem {
   title?: string;
   author?: string;
   authors?: string[];
+  cover_path?: string;
+  manifestation_meta?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
+  cover_status?: string;
 }
 
 export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
@@ -84,27 +88,27 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item: any) => {
+          {items.map((item) => {
             const coverUrl = item.cover_path
               ? `/api${item.cover_path}`
               : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
                 (item.meta?.["cover_url"] as string | undefined);
 
             const hasLegacyCoverUrl =
-              Boolean(item.manifestation_meta?.["cover_url"] as string | undefined) ||
-              Boolean(item.meta?.["cover_url"] as string | undefined);
+              Boolean(item.manifestation_meta?.["cover_url"]) ||
+              Boolean(item.meta?.["cover_url"]);
 
             const isProcessing = item.cover_status === "processing";
             const isGenerated = item.cover_status === "ready" && !hasLegacyCoverUrl;
 
             return (
               <Link
-                href={`/item/${item.id}`}
+                href={publicMode ? `/manifestation/${item.id}` : `/item/${item.id}`}
                 key={item.id}
                 className="group w-36 shrink-0 sm:w-40"
               >
                 <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-                  
+
                   {(isProcessing || item.cover_status === "pending") && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -128,7 +132,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
                       <BookOpen className="h-10 w-10 text-muted-foreground/40" />
                     </div>
                   )}
-                  
+
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
                 <h3 className="truncate text-sm font-semibold text-card-foreground">

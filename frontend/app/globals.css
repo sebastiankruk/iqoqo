@@ -16,7 +16,7 @@
 */
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
+
 
 /* Make Tailwind's dark: variant follow `.dark` class (next-themes) */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -161,7 +161,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Typography */
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-inter), system-ui, sans-serif; /* Fixed self-reference */
   --font-serif: var(--font-merriweather), Georgia, serif;
 
   /* Border radius tokens */

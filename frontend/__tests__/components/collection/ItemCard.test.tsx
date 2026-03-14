@@ -22,9 +22,18 @@ import type { Item } from "@/types/frbr";
 
 // Mock Next.js Image component
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...props }: { src: string; alt: string; [key: string]: unknown }) => {
+  default: ({ src, alt, ...props }: { src: string; alt: string } & Record<string, unknown>) => {
+    const rest = { ...props };
+    // Remove Next.js specific props to avoid React DOM warnings in tests
+    delete rest.fill;
+    delete rest.sizes;
+    delete rest.unoptimized;
+    delete rest.priority;
+    delete rest.placeholder;
+    delete rest.blurDataURL;
+
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} {...(props as React.ComponentProps<"img">)} />;
+    return <img src={src} alt={alt} {...(rest as React.ComponentProps<"img">)} />;
   },
 }));
 
