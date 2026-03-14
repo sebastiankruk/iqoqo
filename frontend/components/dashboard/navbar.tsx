@@ -16,6 +16,9 @@
 "use client";
 
 import Link from "next/link";
+import { Avatar } from "@/components/ui/avatar";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useProfile } from "@/lib/api/hooks";
@@ -23,6 +26,17 @@ import { useProfile } from "@/lib/api/hooks";
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/collection?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      router.push('/collection');
+    }
+  };
 
   return (
     <nav className="sticky top-0 z-50 bg-primary text-primary-foreground dark:bg-[#040608] dark:text-foreground dark:border-b">
@@ -49,16 +63,18 @@ export function Navbar() {
         </Link>
 
         {/* Search */}
-        <div className="relative mx-auto w-full max-w-md">
+          <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md">
           <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
             <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
           </div>
           <input
             type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search your collection..."
             className="h-9 w-full rounded-full border border-primary-foreground/15 bg-primary-foreground/10 pl-10 pr-4 text-sm text-primary-foreground placeholder-primary-foreground/40 outline-none transition-colors focus:border-accent focus:bg-primary-foreground/15 dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-white/60"
           />
-        </div>
+        </form>
 
         {/* Right section */}
         <div className="flex shrink-0 items-center gap-4">
@@ -98,10 +114,16 @@ export function Navbar() {
           ) : profile ? (
             <Link
               href="/profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden"
               aria-label="User profile"
             >
-              {(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+              <Avatar
+                src={profile.avatar_url}
+                alt={`${profile.display_name || profile.email}'s profile picture`}
+                size={36}
+                className="rounded-full"
+                fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+              />
             </Link>
           ) : (
             <div className="flex items-center gap-2">

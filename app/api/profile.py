@@ -33,6 +33,9 @@ def get_profile():
 
     consents = {c.consent_type: c.is_granted for c in user.consents}
 
+    # Extract unique permissions from all roles the user holds and return them
+    permissions = sorted({perm.name for role in user.roles for perm in role.permissions})
+
     return jsonify(
         {
             "success": True,
@@ -43,6 +46,7 @@ def get_profile():
                 "avatar_url": user.avatar_url,
                 "visibility": user.visibility,
                 "roles": [r.name for r in user.roles],
+                "permissions": permissions,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "consents": consents,
             },

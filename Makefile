@@ -185,3 +185,11 @@ db-stats:
 			print(f\"  Manifestations: {stats['manifestations']}\"); \
 			print(f\"  Items: {stats['items']}\"); \
 			print(f\"  Total: {sum(stats.values())}\")"
+
+sync-perms:
+	@echo "Syncing permissions from shared/permissions.yaml"
+	.venv/bin/python scripts/sync_permissions.py
+
+verify-perms:
+	@echo "Verifying permissions are synchronized"
+	.venv/bin/python scripts/sync_permissions.py --verify

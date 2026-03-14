@@ -1,3 +1,32 @@
+# Authentication Setup
+
+## Initializing the Admin Account
+
+Before you can log into your iqoqo instance using email and password, you must create the initial administrator account.
+
+1. Ensure your root `.env` file contains the following variables:
+
+    ```env
+    ADMIN_EMAIL=admin@iqoqo.local
+    ADMIN_PASSWORD=your_secure_password
+    ```
+
+2. Run the initialization script:
+
+    Local environment (venv):
+
+    ```bash
+    PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+    ```
+
+    Docker environment:
+
+    ```bash
+    docker compose exec web python scripts/init_auth.py
+    ```
+
+    This script reads your environment variables, creates the user, and securely hashes the password.
+
 ## Google OAuth Setup (Local Development)
 
 To enable "Sign in with Google", you must supply your own Google Cloud credentials.
