@@ -1,3 +1,5 @@
+// frontend/__tests__/components/dashboard/fresh-arrivals.test.tsx
+
 // Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 //
 // This program is free software: you can redistribute it and/or modify
@@ -85,7 +87,7 @@ describe("FreshArrivals", () => {
     render(<FreshArrivals />);
     const img = screen.getByAltText("Cover of Dune");
     expect(img).toBeInTheDocument();
-    // Ensure the component correctly prefixes legacy cover paths with /api
+    // Added assertion to strictly check that the URL resolves with the /api proxy prefix
     expect(img).toHaveAttribute("src", "/api/static/covers/1.jpg");
   });
 
