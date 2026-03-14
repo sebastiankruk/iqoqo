@@ -20,9 +20,9 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import jsonify, request, send_file, send_from_directory
+from flask import current_app, jsonify, request, send_file, send_from_directory
 from PIL import Image
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
 
@@ -97,8 +97,11 @@ def get_items():
         page (int, default 1):    1-based page number.
         limit (int, default 20):  Maximum items per page.
         statuses (str, optional): Comma-separated list of item statuses to filter by
-                                  (e.g. ``reading,wish_list``).  When omitted all
+                                  (e.g. ``reading,wish_list``). When omitted all
                                   statuses are returned.
+        q (str, optional):        Free-text search query applied to this collection
+                                  of items (i.e. owned/user items only). The search
+                                  does not include catalog or other unowned records.
 
     Results are sorted by most-recently-updated first, falling back to
     ``added_at`` for legacy rows that pre-date the ``updated_at`` column.
@@ -107,6 +110,7 @@ def get_items():
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)  # Optional filter by item status
+    q = request.args.get("q", "").strip()
 
     try:
         page = int(page_param)
@@ -136,13 +140,169 @@ def get_items():
         )
     offset = (page - 1) * limit
 
-    # Get all items with pagination
+    # If a search query is provided, run a full-text search across the global
+    # manifest catalog and include owned Items where they exist. When the
+    # database does not support PostgreSQL FTS (e.g. tests using SQLite), fall
+    # back to a simple ILIKE search.
+    if q:
+        # Use the generated tsvector columns so the expressions exactly match
+        # the GIN indexes created by the migration. This avoids full table scans
+        # caused by mismatched expressions.
+        w_tsvector_expr = "w.fts_simple"
+        m_tsvector_expr = "m.fts_simple"
+        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+
+        # Securely parameterize pagination and optional statuses filter
+        params = {"q": q, "limit": limit, "offset": offset}
+        statuses_sql = ""
+        if statuses_filter:
+            statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
+            params["statuses"] = statuses_list
+            if "unowned" in statuses_list:
+                statuses_sql = " AND (i.status IN :statuses OR i.id IS NULL)"
+            else:
+                statuses_sql = " AND i.status IN :statuses"
+
+        # Attempt PostgreSQL FTS; fall back to ILIKE for SQLite in tests
+        try:
+            count_sql = f"""
+            SELECT count(*) FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            LEFT JOIN items i ON i.manifestation_id = m.id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+              AND i.id IS NOT NULL
+            {statuses_sql}
+            """
+
+            rows_sql = f"""
+            SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
+                   m.isbn13, w.title, m.cover_path, m.meta as manifestation_meta,
+                   w.meta as work_meta, i.added_at, i.updated_at,
+                   ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+            FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            LEFT JOIN items i ON i.manifestation_id = m.id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+              AND i.id IS NOT NULL
+            {statuses_sql}
+            ORDER BY rank DESC
+            LIMIT :limit OFFSET :offset
+            """
+
+            # Bind params and enable tuple-expansion for statuses when provided
+            count_stmt = text(count_sql)
+            rows_stmt = text(rows_sql)
+            if "statuses" in params:
+                from sqlalchemy import bindparam
+
+                count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
+                rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
+
+            total = int(db.session.execute(count_stmt, params).scalar() or 0)
+            results = db.session.execute(rows_stmt, params).mappings().all()
+
+            items_data = []
+            for row in results:
+                item_id = row.get("item_id")
+                manifestation_id = row.get("manifestation_id")
+                owner_id = row.get("owner_id")
+                added_at = row.get("added_at")
+                updated_at = row.get("updated_at")
+                manifestation_meta = row.get("manifestation_meta") or {}
+                work_meta = row.get("work_meta") or {}
+
+                items_data.append(
+                    {
+                        "id": item_id,
+                        "owner_id": str(owner_id) if owner_id else None,
+                        "status": row.get("status"),
+                        "manifestation_id": manifestation_id,
+                        "isbn": row.get("isbn13"),
+                        "title": row.get("title"),
+                        "cover_path": row.get("cover_path"),
+                        "cover_status": manifestation_meta.get("cover_status") if isinstance(manifestation_meta, dict) else None,
+                        "authors": work_meta.get("authors", []) if isinstance(work_meta, dict) else [],
+                        "added_at": added_at.isoformat() if added_at else None,
+                        "updated_at": (updated_at or added_at).isoformat() if (updated_at or added_at) else None,
+                    }
+                )
+
+        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
+            current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
+
+            # If we are on PostgreSQL, an unexpected FTS error should not be silently masked.
+            if db.engine.dialect.name == "postgresql":
+                return (
+                    jsonify({"success": False, "data": None, "error": "Search backend error"}),
+                    500,
+                )
+
+            # Fallback for SQLite tests or databases without FTS support.
+            pattern = f"%{q}%"
+            base_query = (
+                db.session.query(Item, Manifestation, Expression, Work)
+                .select_from(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .outerjoin(Item, Item.manifestation_id == Manifestation.id)
+                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+            )
+
+            if statuses_filter:
+                statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+                if "unowned" in statuses_list:
+                    base_query = base_query.filter((Item.status.in_(statuses_list)) | (Item.id.is_(None)))
+                else:
+                    base_query = base_query.filter(Item.status.in_(statuses_list))
+
+            total = base_query.count()
+            results = base_query.offset(offset).limit(limit).all()
+
+            items_data = []
+            for item, manifestation, _expression, work in results:
+                m_id = manifestation.id if manifestation else None
+                w_meta = work.meta if work and work.meta else {}
+                m_meta = manifestation.meta if manifestation and manifestation.meta else {}
+
+                items_data.append(
+                    {
+                        "id": item.id if item else f"m_{m_id}",
+                        "owner_id": item.owner_id if item else None,
+                        "status": item.status if item else "unowned",
+                        "manifestation_id": m_id,
+                        "isbn": manifestation.isbn13 if manifestation else None,
+                        "title": work.title if work else None,
+                        "cover_path": manifestation.cover_path if manifestation else None,
+                        "cover_status": m_meta.get("cover_status") if m_meta else None,
+                        "authors": w_meta.get("authors", []) if w_meta else [],
+                        "added_at": item.added_at.isoformat() if item and item.added_at else None,
+                        "updated_at": (
+                            (item.updated_at or item.added_at).isoformat() if item and (item.updated_at or item.added_at) else None
+                        ),
+                    }
+                )
+
+        return jsonify(
+            {
+                "success": True,
+                "data": items_data,
+                "meta": {
+                    "page": page,
+                    "limit": limit,
+                    "total": total,
+                    "pages": (total + limit - 1) // limit,
+                },
+                "error": None,
+            }
+        )
+
+    # Standard collection mode (only owned items)
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(Item.status.in_(statuses_list))
-    # Order by most-recently-updated first; fall back to added_at for legacy rows
-    # where updated_at is NULL (pre-migration data).
     query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
     total = query.count()
     items = query.offset(offset).limit(limit).all()
