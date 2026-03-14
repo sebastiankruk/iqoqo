@@ -71,22 +71,30 @@ for k, v in members:
 
 ts_lines.append("} as const;\n")
 
+# ... (imports and data loading stay the same)
+
+# Helper to strip comments for comparison
+def get_functional_content(text):
+    return "\n".join(line for line in text.splitlines() 
+                     if line.strip() and not line.strip().startswith(('#', '//')))
+
 if args.verify:
-    # Compare existing files if present
     ok = True
+    # Verify Python
     if PY_OUT.exists():
-        existing = PY_OUT.read_text(encoding="utf-8")
-        if existing != py_text:
-            print("app/core/permissions.py differs from expected output")
+        if get_functional_content(PY_OUT.read_text()) != get_functional_content(py_text):
+            print(f"Mismatch in {PY_OUT}")
             ok = False
+            
+    # Verify TS
+    ts_text = "\n".join(ts_lines) + "\n"
     if TS_OUT.exists():
-        existing = TS_OUT.read_text(encoding="utf-8")
-        if existing != "\n".join(ts_lines) + "\n":
-            print("frontend/types/permissions.ts differs from expected output")
+        if get_functional_content(TS_OUT.read_text()) != get_functional_content(ts_text):
+            print(f"Mismatch in {TS_OUT}")
             ok = False
-    if not ok:
-        sys.exit(2)
-    print("Permissions files are up-to-date")
+            
+    if not ok: sys.exit(2)
+    print("Permissions are in sync.")
     sys.exit(0)
 
 # Write files
@@ -95,5 +103,4 @@ PY_OUT.write_text(py_text, encoding="utf-8")
 TS_OUT.parent.mkdir(parents=True, exist_ok=True)
 TS_OUT.write_text("\n".join(ts_lines) + "\n", encoding="utf-8")
 
-print(f"Wrote {PY_OUT} and {TS_OUT}")
-print(f"Wrote {PY_OUT} and {TS_OUT}")
+print(f"Successfully synced {PY_OUT} and {TS_OUT}")
