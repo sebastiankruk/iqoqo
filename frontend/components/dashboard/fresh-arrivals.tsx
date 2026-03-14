@@ -30,7 +30,12 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
 
   const isLoading = publicMode ? manifLoading : itemsLoading;
   const isError = publicMode ? manifError : itemsError;
-  const items = publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? []);
+  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as Array<{
+    id: string | number;
+    title?: string;
+    author?: string;
+    authors?: string[];
+  }>;
 
   if (isError) {
     return (
@@ -76,7 +81,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item: any) => (
+          {items.map((item) => (
             <Link
               href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
               key={item.id}
