@@ -16,12 +16,24 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, BookOpen } from "lucide-react";
+import Image from "next/image";
+import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
 import { useItems, useRecentManifestations } from "@/lib/api/hooks";
 
 /** Horizontally scrollable "Fresh Arrivals" strip using live API data. */
 interface FreshArrivalsProps {
   publicMode?: boolean;
+}
+
+interface ArrivalItem {
+  id: number;
+  title?: string;
+  author?: string;
+  authors?: string[];
+  cover_path?: string;
+  manifestation_meta?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
+  cover_status?: string;
 }
 
 export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
@@ -30,8 +42,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
 
   const isLoading = publicMode ? manifLoading : itemsLoading;
   const isError = publicMode ? manifError : itemsError;
-  const rawItems = publicMode ? recentManifestations : itemsEnvelope?.data;
-  const items = Array.isArray(rawItems) ? rawItems : [];
+  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as ArrivalItem[];
 
   if (isError) {
     return (
@@ -77,28 +88,63 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item: any) => (
-            <Link
-              href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
-              key={item.id as React.Key}
-              className="group w-36 shrink-0 sm:w-40"
-            >
-              {/* Cover placeholder – real image would come from meta */}
-              <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-                <div className="flex h-full items-center justify-center">
-                  <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+          {items.map((item) => {
+            const coverUrl = item.cover_path
+              ? `/api${item.cover_path}`
+              : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
+                (item.meta?.["cover_url"] as string | undefined);
+
+            const hasLegacyCoverUrl =
+              Boolean(item.manifestation_meta?.["cover_url"]) ||
+              Boolean(item.meta?.["cover_url"]);
+
+            const isProcessing = item.cover_status === "processing";
+            const isGenerated = item.cover_status === "ready" && !hasLegacyCoverUrl;
+
+            return (
+              <Link
+                href={publicMode ? `/manifestation/${item.id}` : `/item/${item.id}`}
+                key={item.id}
+                className="group w-36 shrink-0 sm:w-40"
+              >
+                <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
+
+                  {(isProcessing || item.cover_status === "pending") && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="text-xs font-medium text-foreground">
+                        {item.cover_status === "pending" ? "Generating..." : "Processing..."}
+                      </span>
+                    </div>
+                  )}
+
+                  {coverUrl ? (
+                    <Image
+                      src={coverUrl}
+                      alt={`Cover of ${item.title ?? "Untitled"}`}
+                      fill
+                      sizes="(max-width: 640px) 144px, 160px"
+                      unoptimized
+                      className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
-                <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              </div>
-              <h3 className="truncate text-sm font-semibold text-card-foreground">
-                {(item.title as string) ?? "Untitled"}
-              </h3>
-              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                {(item.author as string) ?? ((item.authors as string[])?.[0]) ?? "Unknown"}
-              </p>
-            </Link>
-          ))}
+                <h3 className="truncate text-sm font-semibold text-card-foreground">
+                  {item.title ?? "Untitled"}
+                </h3>
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+                  {item.author ?? item.authors?.[0] ?? "Unknown"}
+                </p>
+              </Link>
+            );
+          })}
         </div>
       )}
     </section>

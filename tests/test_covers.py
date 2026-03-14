@@ -14,13 +14,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import os
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from PIL import Image
 
 from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
-from app.utils.images import optimize_and_save_image
+from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import generate_cover_cloud
 
 
@@ -46,7 +48,7 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"content-length": "5000"}
-    mock_resp.iter_content = lambda chunk_size: [b"x" * 1024]
+    mock_resp.iter_content = lambda chunk_size: [b"x" * 1500]
     mock_requests_get.return_value = mock_resp
 
     def fake_optimize(image_bytes: bytes, filepath: str) -> None:
@@ -56,16 +58,24 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 
     with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
         with patch("app.utils.covers.optimize_and_save_image", side_effect=fake_optimize):
-            result = fetch_external_api_cover("9780123456789")
+            # Patch Image.open used by is_valid_cover to avoid trying to parse fake bytes
+            with patch("app.utils.images.Image.open") as mock_image_open:
+                mock_img = MagicMock()
+                # Make the context manager return a mock image
+                mock_image_open.return_value.__enter__.return_value = mock_img
 
-            assert result is not None
-            path, source = result
-            assert path == "/static/covers/9780123456789_ol.jpg"
-            assert source == "api_openlibrary"
-            assert (tmp_path / "9780123456789_ol.jpg").exists()
-            # Verify URL
-            args, _ = mock_requests_get.call_args
-            assert "covers.openlibrary.org" in args[0]
+                # Also mock imagehash.phash so the hashing step doesn't try to inspect the fake image
+                with patch("app.utils.images.imagehash.phash", return_value=MagicMock()):
+                    result = fetch_external_api_cover("9780123456789")
+
+                    assert result is not None
+                path, source = result
+                assert path == "/static/covers/9780123456789_ol.jpg"
+                assert source == "api_openlibrary"
+                assert (tmp_path / "9780123456789_ol.jpg").exists()
+                # Verify URL
+                args, _ = mock_requests_get.call_args
+                assert "covers.openlibrary.org" in args[0]
 
 
 def test_fetch_external_api_cover_failure(mock_requests_get):
@@ -103,3 +113,30 @@ def test_generate_cover_cloud_success(tmp_path, app):
                     path, source = result
                     assert "123_dalle.jpg" in path
                     assert source == "llm_openai"
+
+
+def test_is_valid_cover_rejects_small_files():
+    # 5 bytes is obviously too small for a real JPEG/PNG
+    tiny_file = b"12345"
+    assert is_valid_cover(tiny_file) is False
+
+
+def test_is_valid_cover_rejects_corrupt_image():
+    # Large enough to pass the size check, but not a valid image
+    corrupt_image = b"corrupt_data_" * 300
+    assert is_valid_cover(corrupt_image) is False
+
+
+def test_is_valid_cover_accepts_valid_png_over_1kb():
+    """Ensure that a valid PNG payload larger than 1KB is accepted."""
+    # Create a simple valid RGB image in memory (larger so the PNG exceeds 1KB)
+    image = Image.new("RGB", (512, 512), color="red")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    image_bytes = buffer.getvalue()
+
+    # Sanity check: make sure we satisfy the size requirement
+    assert len(image_bytes) > 1024
+
+    # The valid, sufficiently large image should be accepted
+    assert is_valid_cover(image_bytes) is True

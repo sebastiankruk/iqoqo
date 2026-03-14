@@ -99,6 +99,29 @@ Add the following to your iqoqo `.env` file:
 LOCAL_SD_URL=http://localhost:7860
 ```
 
+### 🛡️ Filtering Junk / Placeholder Covers
+
+Some external metadata APIs (like OpenLibrary or Google Books) occasionally return generic "No Image Available" placeholder images instead of an HTTP error. To prevent these from polluting your library, iqoqo uses perceptual hashing (`pHash`) to detect and reject them automatically, allowing the system to fall back to generating a custom LLM cover.
+
+Because different regions and APIs have different placeholder images, you can define a custom blocklist using environment variables.
+
+**How to block a generic cover:**
+
+1. Save the annoying placeholder image to your computer (e.g., `junk_cover.jpg`).
+2. Run a quick python script to compute its pHash:
+
+    ```python
+    import imagehash
+    from PIL import Image
+    print(imagehash.phash(Image.open("junk_cover.jpg")))
+    ```
+
+3. This will output a hash string like `e1e1e1e1e1e1e1e1`. Add this to your `.env`:
+
+    ```bash
+    IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    ```
+
 ## 4. Batch Processing
 
 To generate covers for existing items in your database:

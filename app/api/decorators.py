@@ -55,9 +55,11 @@ def require_permission(perm_name):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
+            # Allow passing Enum members (with .value) or plain strings
+            perm = perm_name.value if hasattr(perm_name, "value") else perm_name
             user = db.session.get(User, request.user_id)
-            if not user or not user.has_permission(perm_name):
-                return jsonify({"error": "Forbidden", "missing_permission": perm_name}), 403
+            if not user or not user.has_permission(perm):
+                return jsonify({"error": "Forbidden", "missing_permission": perm}), 403
             return f(*args, **kwargs)
 
         return decorated

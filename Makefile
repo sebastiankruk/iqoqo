@@ -119,7 +119,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules"
+	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license
@@ -185,3 +185,11 @@ db-stats:
 			print(f\"  Manifestations: {stats['manifestations']}\"); \
 			print(f\"  Items: {stats['items']}\"); \
 			print(f\"  Total: {sum(stats.values())}\")"
+
+sync-perms:
+	@echo "Syncing permissions from shared/permissions.yaml"
+	.venv/bin/python scripts/sync_permissions.py
+
+verify-perms:
+	@echo "Verifying permissions are synchronized"
+	.venv/bin/python scripts/sync_permissions.py --verify

@@ -48,7 +48,10 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", type = "button", asChild = false, ...props }, ref) => {
+  (
+    { className, variant = "default", size = "default", type = "button", asChild = false, ...props },
+    ref,
+  ) => {
     const classNames = cn(
       "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
       variantClasses[variant as keyof typeof variantClasses],
