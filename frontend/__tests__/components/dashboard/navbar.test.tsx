@@ -18,8 +18,9 @@
  *
  * next/link and next/navigation are mocked globally in vitest.setup.ts.
  */
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, type Mock, beforeEach } from "vitest"; // <-- Added vi and Mock
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile } from "@/lib/api/hooks";
 
@@ -72,37 +73,43 @@ describe("Navbar", () => {
 });
 
 describe("Navbar Auth State", () => {
-  it("shows Sign In and Sign Up when not authenticated", () => {
+  it("shows Sign In when not authenticated", () => {
     (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
 
     expect(screen.getByText("Sign In")).toBeInTheDocument();
   });
 
-  it("shows user initials and opens dropdown when authenticated (non-admin)", () => {
+  it("shows user initials and opens dropdown when authenticated (non-admin)", async () => {
+    const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "user@example.com", display_name: "User", roles: ["user"] },
       isLoading: false,
     });
+
     render(<Navbar />);
 
     const avatarBtn = screen.getByLabelText("User menu");
-    fireEvent.click(avatarBtn);
+    await user.click(avatarBtn);
 
+    // Use findByText to await the asynchronous opening of the Radix dropdown
+    expect(await screen.findByText("Profile Settings")).toBeInTheDocument();
     expect(screen.queryByText("Admin Settings")).toBeNull();
-    expect(screen.getByText("Profile Settings")).toBeInTheDocument();
   });
 
-  it("shows Admin Settings for admin users", () => {
+  it("shows Admin Settings for admin users", async () => {
+    const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "admin@example.com", display_name: "Admin", roles: ["admin"] },
       isLoading: false,
     });
+
     render(<Navbar />);
 
     const avatarBtn = screen.getByLabelText("User menu");
-    fireEvent.click(avatarBtn);
+    await user.click(avatarBtn);
 
-    expect(screen.getByText("Admin Settings")).toBeInTheDocument();
+    // Use findByText to await the asynchronous opening of the Radix dropdown
+    expect(await screen.findByText("Admin Settings")).toBeInTheDocument();
   });
 });
