@@ -16,7 +16,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, BookOpen } from "lucide-react";
+import Image from "next/image";
+import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
 import { useItems, useRecentManifestations } from "@/lib/api/hooks";
 
 /** Horizontally scrollable "Fresh Arrivals" strip using live API data. */
@@ -83,21 +84,54 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item) => (
+          {items.map((item: any) => {
+            const coverUrl = item.cover_path
+              ? `/api${item.cover_path}`
+              : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
+                (item.meta?.["cover_url"] as string | undefined);
+
+            const hasLegacyCoverUrl =
+              Boolean(item.manifestation_meta?.["cover_url"] as string | undefined) ||
+              Boolean(item.meta?.["cover_url"] as string | undefined);
+
+            const isProcessing = item.cover_status === "processing";
+            const isGenerated = item.cover_status === "ready" && !hasLegacyCoverUrl;
+
+            return (
               <Link
-                href={`/item/${item.id}`} // Fixed: no need for ternary if both return the same path
+                href={`/item/${item.id}`}
                 key={item.id}
                 className="group w-36 shrink-0 sm:w-40"
               >
-                {/* Cover placeholder */}
                 <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-                  <div className="flex h-full items-center justify-center">
-                    <BookOpen className="h-10 w-10 text-muted-foreground/40" />
-                  </div>
+                  
+                  {(isProcessing || item.cover_status === "pending") && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="text-xs font-medium text-foreground">
+                        {item.cover_status === "pending" ? "Generating..." : "Processing..."}
+                      </span>
+                    </div>
+                  )}
+
+                  {coverUrl ? (
+                    <Image
+                      src={coverUrl}
+                      alt={`Cover of ${item.title ?? "Untitled"}`}
+                      fill
+                      sizes="(max-width: 640px) 144px, 160px"
+                      unoptimized
+                      className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+                    </div>
+                  )}
+                  
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
                 <h3 className="truncate text-sm font-semibold text-card-foreground">
-                  {/* Fixed duplicate item.title fallback */}
                   {item.title ?? "Untitled"}
                 </h3>
                 <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
@@ -105,7 +139,8 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
                   {item.author ?? item.authors?.[0] ?? "Unknown"}
                 </p>
               </Link>
-            ))}
+            );
+          })}
         </div>
       )}
     </section>
