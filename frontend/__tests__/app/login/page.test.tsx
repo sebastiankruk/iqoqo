@@ -43,12 +43,18 @@ describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
+
+    // Mock the API URL environment variable
+    process.env.NEXT_PUBLIC_API_URL = '/api';
+
     // Mock window.location
     Object.defineProperty(window, 'location', {
       value: { href: '' },
       writable: true
     });
   });
+
+  // ... rest of your tests
 
   it('renders login form and Google SSO button', () => {
     renderWithQueryClient(<LoginPage />);
