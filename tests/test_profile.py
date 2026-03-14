@@ -57,5 +57,3 @@ def test_delete_account_right_to_be_forgotten(client):
     # Verify user is completely removed
     user_after = User.query.filter_by(email="delete@iqoqo.local").first()
     assert user_after is None
-    user_after = User.query.filter_by(email="delete@iqoqo.local").first()
-    assert user_after is None

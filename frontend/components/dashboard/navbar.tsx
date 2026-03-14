@@ -16,6 +16,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
@@ -31,6 +32,16 @@ import { useProfile } from "@/lib/api/hooks";
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+    } catch (err) {
+      console.error("Failed to logout:", err);
+    }
+  };
 
   return (
     <nav className="sticky top-0 z-50 bg-primary text-primary-foreground dark:bg-[#040608] dark:text-foreground dark:border-b">
@@ -128,7 +139,9 @@ export function Navbar() {
                 
                 <DropdownMenuSeparator className="dark:bg-white/10" />
                 <DropdownMenuItem asChild className="cursor-pointer text-red-500 focus:text-red-500">
-                  <Link href="/api/auth/logout">Log out</Link>
+                  <button onClick={handleLogout} className="w-full text-left">
+                    Log out
+                  </button>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

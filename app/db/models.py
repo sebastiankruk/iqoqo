@@ -195,8 +195,6 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     provider = db.Column(db.String(50), unique=True, nullable=False)
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
-    images_generated = db.Column(db.Integer, default=0)
-    estimated_cost_usd = db.Column(db.Float, default=0.0)
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]

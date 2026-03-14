@@ -87,30 +87,6 @@ def cors_client():
         db.drop_all()
 
 
-@pytest.fixture
-def admin_headers(app):
-    """Fixture to provide authorization headers for an admin user."""
-    with app.app_context():
-        # Create permissions
-        perms = [Permission(name="delete:item")]
-        db.session.add_all(perms)
-
-        # Create admin role
-        admin_role = Role(name="admin")
-        admin_role.permissions.extend(perms)
-        db.session.add(admin_role)
-
-        # Create admin user
-        admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")
-        admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
-
-        # Generate token
-        token = generate_internal_jwt(admin_user)
-        return {"Authorization": f"Bearer {token}"}
-
-
 # =============================================================================
 # CORS Tests
 # =============================================================================

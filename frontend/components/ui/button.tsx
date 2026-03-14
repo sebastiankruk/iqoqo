@@ -47,28 +47,24 @@ const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
 };
 
-export const Button = React.forwardRef<any, ButtonProps>(
-  (
-    { className, variant = "default", size = "default", type = "button", asChild = false, ...props },
-    ref,
-  ) => {
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", type = "button", asChild = false, ...props }, ref) => {
     const classNames = cn(
       "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-      variantClasses[variant],
-      sizeClasses[size],
+      variantClasses[variant as keyof typeof variantClasses],
+      sizeClasses[size as keyof typeof sizeClasses],
       className,
     );
 
     if (asChild) {
       return (
-        <Slot ref={ref} className={classNames} {...props} />
+        <Slot ref={ref as React.Ref<HTMLElement>} className={classNames} {...props} />
       );
     }
 
     return (
       <button ref={ref} type={type} className={classNames} {...props} />
     );
-  },
-);
-
+  }
+)
 Button.displayName = "Button";
