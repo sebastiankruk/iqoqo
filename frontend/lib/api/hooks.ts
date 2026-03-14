@@ -202,7 +202,6 @@ export function useProfile() {
       } catch (err) {
         // If the token is expired/invalid, clear the stale httpOnly cookie so
         // the proxy stops treating this browser as "logged in" and redirecting
-        // /login → /discover in an infinite loop.
         const message = err instanceof Error ? err.message : "";
         if (message.includes("Token expired") || message.includes("Invalid token") || message.includes("Token missing") || message.includes("Invalid user ID format")) {
           await fetch("/api/auth/logout", { method: "POST" });

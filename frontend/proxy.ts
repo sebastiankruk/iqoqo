@@ -23,13 +23,13 @@ export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Protected routes – require authentication
-  const protectedRoutes = ['/profile', '/discover'];
+  const protectedRoutes = ['/profile'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
   // If they are on the login page but already logged in, send them to Discover
   if (pathname.startsWith('/login')) {
     if (isLoggedIn) {
-      return NextResponse.redirect(new URL('/discover', req.nextUrl));
+      return NextResponse.redirect(new URL('/profile', req.nextUrl));
     }
     return NextResponse.next();
   }

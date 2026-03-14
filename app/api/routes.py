@@ -871,31 +871,6 @@ def scan_barcode():
     )
 
 
-@api_bp.route("/discover", methods=["GET"])
-@require_auth
-def get_global_manifestations():
-    """
-    Scenario 3: Fetch all manifestations in the local node, independent of user ownership.
-    """
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 20, type=int)
-
-    pagination = Manifestation.query.order_by(Manifestation.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
-
-    result = []
-    for m in pagination.items:
-        result.append(
-            {
-                "id": m.id,
-                "title": m.title,
-                "cover_url": m.meta.get("cover_url"),
-                "author": m.expression.work.author if m.expression and m.expression.work else "Unknown",
-            }
-        )
-
-    return jsonify({"manifestations": result, "total": pagination.total, "pages": pagination.pages, "current_page": page})
-
-
 @api_bp.route("/manifestations/recent", methods=["GET"])
 def get_recent_manifestations():
     """Get the most recently added manifestations across the entire instance (public).
