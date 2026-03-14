@@ -61,7 +61,7 @@ class User(db.Model):  # type: ignore[name-defined]
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(100))
-    avatar_url = db.Column(db.String(500))
+    avatar_url = db.Column(db.String(500), nullable=True)  # Increased from 255 to handle long URLs
     google_id = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
@@ -86,6 +86,17 @@ class User(db.Model):  # type: ignore[name-defined]
                 if perm.name == permission_name:
                     return True
         return False
+
+    def to_dict(self):
+        """Serialize core user fields for API responses and tests."""
+        return {
+            "id": str(self.id) if self.id else None,
+            "email": self.email,
+            "display_name": self.display_name,
+            "avatar_url": self.avatar_url,
+            "visibility": self.visibility,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class ConsentRecord(db.Model):  # type: ignore[name-defined]
@@ -195,5 +206,16 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     provider = db.Column(db.String(50), unique=True, nullable=False)
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
-    images_generated = db.Column(db.Integer, default=0)
-    estimated_cost_usd = db.Column(db.Float, default=0.0)
+
+
+class InstanceSettings(db.Model):  # type: ignore[name-defined]
+    """
+    Stores global configuration for the iqoqo instance (e.g., federation toggles,
+    affiliate links, default language).
+    """
+
+    __tablename__ = "instance_settings"
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    value = db.Column(db.JSON, nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))

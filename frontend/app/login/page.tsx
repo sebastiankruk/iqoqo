@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import Link from "next/dist/client/link";
+import Link from "next/link";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 
@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+    const res = await fetch(`/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -52,7 +52,7 @@ export default function LoginPage() {
           <Button
               className="w-full"
               variant="outline"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
+              onClick={() => window.location.href = `/api/auth/login/google`}>
             Sign in with Google
           </Button>
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">

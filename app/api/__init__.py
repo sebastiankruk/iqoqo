@@ -13,8 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from flask import Blueprint
+from . import admin, routes
+from .core import api_bp
 
-api_bp = Blueprint("api", __name__, url_prefix="/api")
-
-from . import routes  # noqa: E402
+api_bp.register_blueprint(admin.admin_bp)

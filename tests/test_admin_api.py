@@ -24,7 +24,7 @@ from io import BytesIO
 import pytest
 
 from app.core.data_manager import DataManager
-from app.db.models import Expression, Item, Manifestation, Work
+from app.db.models import Expression, InstanceSettings, Item, Manifestation, Work
 
 
 @pytest.fixture
@@ -276,3 +276,34 @@ def test_admin_import_handles_exceptions(client):
     # Should return error, not crash
     assert response.status_code in [400, 500]
     assert "error" in response.json
+
+
+# Additional admin settings RBAC tests
+def test_admin_settings_access_denied(client):
+    """Ensure unauthenticated or normal users get 403 Forbidden."""
+    # No auth headers provided
+    res = client.get("/api/v1/admin/settings")
+    assert res.status_code in [401, 403]
+
+
+def test_admin_settings_access_granted(client, admin_headers):
+    """Ensure admins can fetch settings."""
+    res = client.get("/api/v1/admin/settings", headers=admin_headers)
+    assert res.status_code == 200
+    assert "success" in res.json
+
+
+def test_admin_settings_update(client, app, admin_headers):
+    """Ensure admins can update key-value settings."""
+    payload = {
+        "instance_name": "Test Federation Library",
+        "amazon_affiliate_id": "test-20",
+    }
+    res = client.put("/api/v1/admin/settings", json=payload, headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json["data"]["amazon_affiliate_id"] == "test-20"
+
+    with app.app_context():
+        setting = InstanceSettings.query.filter_by(key="instance_name").first()
+        assert setting is not None
+        assert setting.value == "Test Federation Library"

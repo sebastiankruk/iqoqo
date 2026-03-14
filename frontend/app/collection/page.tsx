@@ -15,8 +15,9 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { SlidersHorizontal, Library as LibraryIcon, BookOpen } from "lucide-react";
+import { useState, useMemo, useCallback, Suspense } from "react";
+import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
@@ -28,7 +29,7 @@ import type { Item, ManifestationListEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
-export default function CollectionPage() {
+function CollectionContent() {
   const [page, setPage] = useState(1);
   const limit = 40;
 
@@ -43,17 +44,34 @@ export default function CollectionPage() {
     [activeFilters]
   );
 
+  const searchParams = useSearchParams();
+  const currentUrlQuery = searchParams?.get("q") ?? "";
+
+  const [prevUrlQuery, setPrevUrlQuery] = useState(currentUrlQuery);
+  const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
+  const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
+
+  // Sync state with URL changes during render (avoids cascading renders from useEffect)
+  if (currentUrlQuery !== prevUrlQuery) {
+    setPrevUrlQuery(currentUrlQuery);
+    setSearchQuery(currentUrlQuery);
+    setAppliedQuery(currentUrlQuery);
+    setPage(1);
+  }
+
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
-    viewMode === "items"
+    appliedQuery,
+    viewMode === "items" // mapped to `enabled` argument
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
-    viewMode === "manifestations"
+    // Add appliedQuery here as well if useManifestations supports search
+    viewMode === "manifestations" // mapped to `enabled` argument
   );
 
   const { data: statsData } = useStats();
@@ -61,7 +79,8 @@ export default function CollectionPage() {
   const currentData = viewMode === "items" ? itemsData : manifestationsData;
   const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
 
-  const allItems = useMemo<(Item | ManifestationListEntry)[]>(() => (currentData?.data as (Item | ManifestationListEntry)[]) ?? [], [currentData?.data]);  const total = currentData?.meta?.total ?? 0;
+  const allItems = useMemo<(Item | ManifestationListEntry)[]>(() => (currentData?.data as (Item | ManifestationListEntry)[]) ?? [], [currentData?.data]);
+  const total = currentData?.meta?.total ?? 0;
   const pages = currentData?.meta?.pages ?? 1;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
@@ -132,8 +151,8 @@ export default function CollectionPage() {
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Header & View Toggle */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        {/* Header & Controls */}
+        <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
               Collection
@@ -143,7 +162,8 @@ export default function CollectionPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* View Mode Toggle */}
             <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
               <button
                 onClick={() => { setViewMode("items"); setPage(1); }}
@@ -163,6 +183,26 @@ export default function CollectionPage() {
               </button>
             </div>
 
+            {/* Search Input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPage(1);
+                setAppliedQuery(searchQuery);
+              }}
+              className="relative w-full sm:w-64 md:w-80"
+            >
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, author, or ISBN..."
+                className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </form>
+
+            {/* Mobile Filters Trigger */}
             <button
               onClick={() => setMobileFiltersOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
@@ -221,7 +261,7 @@ export default function CollectionPage() {
               <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
             )}
 
-            {/* Pagination */}
+            {/* Pagination Controls */}
             {pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
@@ -257,5 +297,17 @@ export default function CollectionPage() {
         statusCounts={statusCounts}
       />
     </div>
+  );
+}
+
+export default function CollectionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading collection...</p>
+      </div>
+    }>
+      <CollectionContent />
+    </Suspense>
   );
 }

@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 from app.config import Config
 from app.db import db
 from app.db.models import Manifestation
-from app.utils.images import optimize_and_save_image
+from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import fetch_llm_cover
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,10 @@ RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers"
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
+
+# Size limits for externally fetched covers
+MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MIN_COVER_FILE_SIZE = 1000  # ~1 KB
 
 
 def add_source_badge(filepath: str, source: str):
@@ -107,21 +111,58 @@ def generate_fallback_cover(isbn: str, title: str, author: str) -> str | None:
 
 
 def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
-    """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
+    """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success.
+
+    This implementation streams responses with a maximum in-memory cap to avoid
+    memory bloat from malicious or misconfigured endpoints. It delegates image
+    integrity and placeholder detection to is_valid_cover().
+    """
+
+    def process_response(response, source_prefix: str, source_name: str) -> tuple[str, str] | None:
+        """Helper to safely stream, size-cap, and validate external cover images."""
+        downloaded = bytearray()
+
+        for chunk in response.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            downloaded.extend(chunk)
+            if len(downloaded) > MAX_COVER_FILE_SIZE:
+                logger.warning(f"Cover payload from {source_name} exceeded {MAX_COVER_FILE_SIZE} bytes. Aborting.")
+                return None
+
+        if len(downloaded) < MIN_COVER_FILE_SIZE:
+            # Too small to be a valid cover
+            return None
+
+        content = bytes(downloaded)
+
+        # Validate the image payload (includes pHash/junk detection in is_valid_cover)
+        if not is_valid_cover(content):
+            return None
+
+        filename = f"{isbn}_{source_prefix}.jpg"
+        filepath = os.path.join(COVERS_DIR, filename)
+        optimize_and_save_image(content, filepath)
+        return f"/static/covers/{filename}", source_name
 
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
     try:
         response = requests.get(ol_url, stream=True, timeout=5)
         if response.status_code == 200:
-            # content-length may be absent; consume the stream and measure actual bytes
-            content = b"".join(response.iter_content(1024))
-            # Reject 1×1 tracking pixels (always < 1 KB)
-            if len(content) > 1000:
-                filename = f"{isbn}_ol.jpg"
-                filepath = os.path.join(COVERS_DIR, filename)
-                optimize_and_save_image(content, filepath)
-                return f"/static/covers/{filename}", "api_openlibrary"
+            # Fast-fail using header when present and trustworthy
+            try:
+                header_len_raw = response.headers.get("content-length")
+                if header_len_raw is not None:
+                    header_len = int(header_len_raw)
+                    if 0 < header_len < MIN_COVER_FILE_SIZE:
+                        return None
+            except (TypeError, ValueError):
+                pass
+
+            res = process_response(response, "ol", "api_openlibrary")
+            if res:
+                return res
     except (requests.RequestException, OSError, ValueError, TypeError):
         pass
 
@@ -134,12 +175,11 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
             if thumb:
                 # Get higher res
                 thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
-                img_res = requests.get(thumb, timeout=10)
+                img_res = requests.get(thumb, stream=True, timeout=10)
                 if img_res.status_code == 200:
-                    filename = f"{isbn}_gb.jpg"
-                    filepath = os.path.join(COVERS_DIR, filename)
-                    optimize_and_save_image(img_res.content, filepath)
-                    return f"/static/covers/{filename}", "api_google_books"
+                    processed = process_response(img_res, "gb", "api_google_books")
+                    if processed:
+                        return processed
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
 

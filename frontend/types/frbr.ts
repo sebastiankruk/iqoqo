@@ -143,5 +143,7 @@ export interface UserProfile {
   visibility?: string;
   consents?: Record<string, boolean>;
   roles?: string[];
+  /** Array of permission strings granted to the user (e.g. 'delete:item') */
+  permissions?: string[];
   created_at?: string;
 }

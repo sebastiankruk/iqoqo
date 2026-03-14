@@ -1,3 +1,5 @@
+// frontend/__tests__/components/dashboard/fresh-arrivals.test.tsx
+
 // Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 //
 // This program is free software: you can redistribute it and/or modify
@@ -15,8 +17,6 @@
 //
 /**
  * Tests for the FreshArrivals component.
- *
- * useItems is mocked so we can simulate loading, error, and data states.
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -81,6 +81,17 @@ describe("FreshArrivals", () => {
     expect(screen.getByText("Recursion")).toBeInTheDocument();
   });
 
+  it("renders the book cover when cover_path is provided", () => {
+    mockUseItems.mockReturnValue(makeApiResponse([
+      { ...SAMPLE_ITEMS[0], cover_path: "/static/covers/1.jpg" }
+    ]));
+    render(<FreshArrivals />);
+    const img = screen.getByAltText("Cover of Dune");
+    expect(img).toBeInTheDocument();
+    // Added assertion to strictly check that the URL resolves with the /api proxy prefix
+    expect(img).toHaveAttribute("src", "/api/static/covers/1.jpg");
+  });
+
   it("shows an error message when the API fails", () => {
     mockUseItems.mockReturnValue({
       data: undefined,
@@ -95,7 +106,8 @@ describe("FreshArrivals", () => {
     mockUseItems.mockReturnValue(makeApiResponse(SAMPLE_ITEMS));
     render(<FreshArrivals />);
     const links = screen.getAllByRole("link", { name: /dune/i });
-    expect(links[0]).toHaveAttribute("href", "/item/1");
+    // In React Testing Library with generic nested queries, checking the closest link is safest.
+    expect(links[0].closest('a')).toHaveAttribute("href", "/item/1");
   });
 
   it("is wrapped in a landmark section for accessibility", () => {

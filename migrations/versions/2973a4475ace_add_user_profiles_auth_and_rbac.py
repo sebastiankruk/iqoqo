@@ -22,6 +22,7 @@ Create Date: 2026-03-07 20:28:22.947502
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import uuid
 from alembic import op
 import sqlalchemy as sa
 
@@ -102,13 +103,27 @@ def upgrade():
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("user_id", "role_id"),
     )
-    with op.batch_alter_table("items", schema=None) as batch_op:
-        batch_op.alter_column("owner_id", existing_type=sa.VARCHAR(length=100), type_=sa.UUID(), nullable=False)
-        # You would change it to explicitly cast (USING):
-        batch_op.execute("ALTER TABLE items ALTER COLUMN owner_id TYPE UUID USING owner_id::uuid")
 
-        # And then add the foreign key:
-        # batch_op.create_foreign_key(None, "items", "users", ["owner_id"], ["id"], ondelete="CASCADE")
+    # Safe migration for items owner_id to UUID
+    with op.batch_alter_table("items", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("new_owner_id", sa.UUID(), nullable=True))
+
+    default_uuid = str(uuid.uuid4())
+    op.execute(
+        f"""
+        UPDATE items
+        SET new_owner_id = CASE
+            WHEN owner_id ~ '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'
+            THEN owner_id::uuid
+            ELSE '{default_uuid}'::uuid
+        END
+    """
+    )
+
+    with op.batch_alter_table("items", schema=None) as batch_op:
+        batch_op.alter_column("new_owner_id", nullable=False)
+        batch_op.drop_column("owner_id")
+        batch_op.alter_column("new_owner_id", new_column_name="owner_id")
         batch_op.create_index(batch_op.f("ix_items_owner_id"), ["owner_id"], unique=False)
         batch_op.create_foreign_key(None, "users", ["owner_id"], ["id"], ondelete="CASCADE")
 
