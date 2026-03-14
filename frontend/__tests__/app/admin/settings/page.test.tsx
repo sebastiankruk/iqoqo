@@ -29,6 +29,13 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
 }));
 
+// Mock the admin API to prevent actual network calls from child components
+vi.mock("@/lib/api/admin", () => ({
+  getInstanceSettings: vi.fn().mockResolvedValue([]), // Added this!
+  getUsers: vi.fn().mockResolvedValue([]),
+  updateSettings: vi.fn().mockResolvedValue({ success: true }),
+}));
+
 describe("AdminSettingsPage", () => {
   const mockPush = vi.fn();
 
@@ -72,9 +79,9 @@ describe("AdminSettingsPage", () => {
     // Should render main layout elements
     expect(screen.getByRole("heading", { name: "Admin Settings", level: 1 })).toBeInTheDocument();
 
-    // Should render sidebar navigation buttons
-    expect(screen.getByText("Instance Settings")).toBeInTheDocument();
-    expect(screen.getByText("User Management")).toBeInTheDocument();
-    expect(screen.getByText("Integrations & Monetization")).toBeInTheDocument();
+    // Should render sidebar navigation buttons using getByRole to avoid conflicts with section headings
+    expect(screen.getByRole("button", { name: "Instance Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "User Management" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Integrations & Monetization" })).toBeInTheDocument();
   });
 });
