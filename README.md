@@ -109,8 +109,8 @@ See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed doc
 
 ## 🎯 Roadmap
 
-- [ ] Admin web UI for data management
-- [ ] Multi-user authentication and authorization
+- [x] Admin web UI for data management
+- [x] Multi-user authentication and authorization
 - [ ] Federation protocol for cross-instance discovery
 - [ ] Mobile apps (iOS & Android)
 - [ ] Advanced search with SPARQL queries

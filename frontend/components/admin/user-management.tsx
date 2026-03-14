@@ -33,7 +33,8 @@ export function UserManagement() {
 
   useEffect(() => {
     getUsers()
-      .then(setUsers)
+      // Double cast via unknown to satisfy TypeScript's overlap rules
+      .then((data) => setUsers(data as unknown as AdminUser[]))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

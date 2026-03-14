@@ -582,5 +582,3 @@ def test_standardized_response_format_error(client):
     assert data["success"] is False
     assert data["error"] is not None
     assert isinstance(data["error"], str)
-    assert isinstance(data["error"], str)
-    assert isinstance(data["error"], str)
