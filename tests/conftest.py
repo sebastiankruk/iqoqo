@@ -21,13 +21,13 @@
 import pytest
 
 from app import create_app
-from app.db import db
 
 
 @pytest.fixture
 def app():
     """Create and configure a new app instance for each test."""
-    # create a temporary file to isolate the database for each test
+    from app.db.models import db
+
     app = create_app(
         config_override={
             "TESTING": True,

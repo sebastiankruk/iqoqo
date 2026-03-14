@@ -283,7 +283,7 @@ def test_admin_settings_access_denied(client):
     """Ensure unauthenticated or normal users get 403 Forbidden."""
     # No auth headers provided
     res = client.get("/api/v1/admin/settings")
-    assert res.status_code == 401 or res.status_code == 403
+    assert res.status_code in [401, 403]
 
 
 def test_admin_settings_access_granted(client, admin_headers):
