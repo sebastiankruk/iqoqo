@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -44,23 +44,19 @@ export default function CollectionPage() {
   );
 
   const searchParams = useSearchParams();
-  const initialQuery = searchParams?.get("q") ?? "";
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+  const currentUrlQuery = searchParams?.get("q") ?? "";
 
-  useEffect(() => {
-    const nextQuery = searchParams?.get("q") ?? "";
-    // Only update state when the URL-derived query actually changes
-    setSearchQuery((prev) => (prev !== nextQuery ? nextQuery : prev));
-    setAppliedQuery((prev) => {
-      if (prev !== nextQuery) {
-        // When a new query comes from the URL, reset pagination
-        setPage(1);
-        return nextQuery;
-      }
-      return prev;
-    });
-  }, [searchParams]);
+  const [prevUrlQuery, setPrevUrlQuery] = useState(currentUrlQuery);
+  const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
+  const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
+
+  // Sync state with URL changes during render (avoids cascading renders from useEffect)
+  if (currentUrlQuery !== prevUrlQuery) {
+    setPrevUrlQuery(currentUrlQuery);
+    setSearchQuery(currentUrlQuery);
+    setAppliedQuery(currentUrlQuery);
+    setPage(1);
+  }
 
   const { data, isLoading } = useItems(
     page,
