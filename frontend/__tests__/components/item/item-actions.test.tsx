@@ -17,7 +17,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemActions } from "@/components/item/item-actions";
 import * as hooks from "@/lib/api/hooks";
-import type { Item } from "@/types/frbr"; // <-- Add this import
+import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
@@ -30,20 +30,22 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: vi.fn(() => ({ setQueryData: vi.fn() })),
 }));
 
-const mockItem = { 
-  id: 1, 
-  manifestation_id: 1, 
+const mockItem = {
+  id: 1,
+  manifestation_id: 1,
   owner_id: "00000000-0000-0000-0000-000000000000",
   status: "available",
   meta: {},
-  cover_status: 'ready' 
+  cover_status: 'ready'
 } as unknown as Item;
 
 describe('ItemActions Component', () => {
   afterEach(() => { vi.clearAllMocks(); });
 
   it('renders no buttons if user has no permissions', () => {
-    vi.mocked(hooks.useProfile).mockReturnValue({ data: { permissions: [] } });
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: { id: "test-id", email: "test@example.com", permissions: [] }
+    } as unknown as ReturnType<typeof hooks.useProfile>);
 
     render(<ItemActions item={mockItem} />);
 
@@ -53,7 +55,9 @@ describe('ItemActions Component', () => {
   });
 
   it('renders only permitted buttons', () => {
-    vi.mocked(hooks.useProfile).mockReturnValue({ data: { permissions: ['delete:item'] } });
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: { id: "test-id", email: "test@example.com", permissions: ['delete:item'] }
+    } as unknown as ReturnType<typeof hooks.useProfile>);
 
     render(<ItemActions item={mockItem} />);
 

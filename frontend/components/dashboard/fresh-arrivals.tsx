@@ -24,18 +24,20 @@ interface FreshArrivalsProps {
   publicMode?: boolean;
 }
 
+interface ArrivalItem {
+  id: number;
+  title?: string;
+  author?: string;
+  authors?: string[];
+}
+
 export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
   const { data: itemsEnvelope, isLoading: itemsLoading, isError: itemsError } = useItems(1, 12);
   const { data: recentManifestations, isLoading: manifLoading, isError: manifError } = useRecentManifestations(12);
 
   const isLoading = publicMode ? manifLoading : itemsLoading;
   const isError = publicMode ? manifError : itemsError;
-  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as Array<{
-    id: string | number;
-    title?: string;
-    author?: string;
-    authors?: string[];
-  }>;
+  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as ArrivalItem[];
 
   if (isError) {
     return (
@@ -82,27 +84,28 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {items.map((item) => (
-            <Link
-              href={publicMode ? `/item/${item.id}` : `/item/${item.id}`}
-              key={item.id}
-              className="group w-36 shrink-0 sm:w-40"
-            >
-              {/* Cover placeholder – real image would come from meta */}
-              <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-                <div className="flex h-full items-center justify-center">
-                  <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+              <Link
+                href={`/item/${item.id}`} // Fixed: no need for ternary if both return the same path
+                key={item.id}
+                className="group w-36 shrink-0 sm:w-40"
+              >
+                {/* Cover placeholder */}
+                <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
+                  <div className="flex h-full items-center justify-center">
+                    <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+                  </div>
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
-                <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              </div>
-              <h3 className="truncate text-sm font-semibold text-card-foreground">
-                {item.title ?? item.title ?? "Untitled"}
-              </h3>
-              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                {item.author ?? item.authors?.[0] ?? "Unknown"}
-              </p>
-            </Link>
-          ))}
+                <h3 className="truncate text-sm font-semibold text-card-foreground">
+                  {/* Fixed duplicate item.title fallback */}
+                  {item.title ?? "Untitled"}
+                </h3>
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+                  {item.author ?? item.authors?.[0] ?? "Unknown"}
+                </p>
+              </Link>
+            ))}
         </div>
       )}
     </section>

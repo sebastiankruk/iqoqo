@@ -1,5 +1,12 @@
 # iqoqo — The Library of Everything
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Next.js Version](https://img.shields.io/badge/Next.js-16%2B-black.svg)](https://nextjs.org/)
+[![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/en/)
+[![Flask Version](https://img.shields.io/badge/Flask-2.3%2B-green.svg)](https://flask.palletsprojects.com/en/latest/)
+[![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
+
 **iqoqo** is a distributed, semantic, and federated library system designed to catalog physical and digital collections—spanning books, vinyl, board games, and beyond.
 
 Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements for Bibliographic Records)** ontology, allowing for a deep understanding of the relationship between a *Work* (e.g., "The Hobbit"), its *Expression* (the English text), its *Manifestation* (the 1937 hardcover), and your specific *Item* (the copy on your shelf).
@@ -16,7 +23,7 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 ## 🛠 Tech Stack
 
 - **Frontend:** Next.js 16 / TypeScript / Tailwind CSS
-- **Backend:** Python 3.11+ / Flask
+- **Backend:** Python 3.14+ / Flask
 - **Database:** PostgreSQL (with Full-Text Search and JSONB)
 - **Deployment:** Docker & Docker Compose
 
@@ -111,7 +118,9 @@ See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed doc
 
 ## 📜 License
 
-LGPL-3.0 License - see [LICENSE](LICENSE) for details.
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](LICENSE).
 
 ## 🙏 Acknowledgments
 

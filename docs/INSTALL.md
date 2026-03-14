@@ -38,7 +38,7 @@ For detailed configuration and development setup, continue reading below.
 
 ### Required Software
 
-- **Python 3.11+** - [Download](https://www.python.org/downloads/)
+- **Python 3.14+** - [Download](https://www.python.org/downloads/)
 - **Node.js 18+** and **npm** - [Download](https://nodejs.org/)
 - **PostgreSQL 15+** - Can be run via Docker (recommended) or installed locally
 - **Docker & Docker Compose** - For containerized deployment

@@ -119,7 +119,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules"
+	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license

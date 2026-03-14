@@ -73,10 +73,11 @@ ts_lines.append("} as const;\n")
 
 # ... (imports and data loading stay the same)
 
+
 # Helper to strip comments for comparison
 def get_functional_content(text):
-    return "\n".join(line for line in text.splitlines() 
-                     if line.strip() and not line.strip().startswith(('#', '//')))
+    return "\n".join(line for line in text.splitlines() if line.strip() and not line.strip().startswith(("#", "//")))
+
 
 if args.verify:
     ok = True
@@ -85,15 +86,16 @@ if args.verify:
         if get_functional_content(PY_OUT.read_text()) != get_functional_content(py_text):
             print(f"Mismatch in {PY_OUT}")
             ok = False
-            
+
     # Verify TS
     ts_text = "\n".join(ts_lines) + "\n"
     if TS_OUT.exists():
         if get_functional_content(TS_OUT.read_text()) != get_functional_content(ts_text):
             print(f"Mismatch in {TS_OUT}")
             ok = False
-            
-    if not ok: sys.exit(2)
+
+    if not ok:
+        sys.exit(2)
     print("Permissions are in sync.")
     sys.exit(0)
 
