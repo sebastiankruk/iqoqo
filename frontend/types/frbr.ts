@@ -65,6 +65,23 @@ export interface Item {
   user_owns?: boolean;
 }
 
+export interface ManifestationListEntry {
+  id: number;
+  owner_id: null;
+  status: "unowned";
+  manifestation_id: number;
+  isbn?: string;
+  title?: string;
+  cover_path?: string | null;
+  cover_status?: string | null;
+  authors?: string[];
+  added_at?: string | null;
+  updated_at?: string | null;
+  user_owns?: boolean;
+  // Included to maintain compatibility with components expecting Item
+  meta?: Record<string, unknown>;
+}
+
 /**
  * Item status values as stored in the database.
  *
@@ -74,7 +91,7 @@ export interface Item {
  */
 export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read" | "unowned";
 
-/** Standardised API envelope returned by every Flask endpoint. */
+/** Standardized API envelope returned by every Flask endpoint. */
 export interface ApiResponse<T> {
   success: boolean;
   data: T | null;

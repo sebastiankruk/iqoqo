@@ -24,7 +24,7 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { useItems, useManifestations, useStats } from "@/lib/api/hooks";
-import type { Item } from "@/types/frbr";
+import type { Item, ManifestationListEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
@@ -61,8 +61,7 @@ export default function CollectionPage() {
   const currentData = viewMode === "items" ? itemsData : manifestationsData;
   const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
 
-  const allItems = useMemo<Item[]>(() => currentData?.data ?? [], [currentData?.data]);
-  const total = currentData?.meta?.total ?? 0;
+  const allItems = useMemo<(Item | ManifestationListEntry)[]>(() => (currentData?.data as (Item | ManifestationListEntry)[]) ?? [], [currentData?.data]);  const total = currentData?.meta?.total ?? 0;
   const pages = currentData?.meta?.pages ?? 1;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {

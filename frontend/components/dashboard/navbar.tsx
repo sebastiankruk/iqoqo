@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Compass, Loader2 } from "lucide-react";
+import { Search, ScanLine, Library, Loader2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useProfile } from "@/lib/api/hooks";
 
@@ -71,13 +71,6 @@ export function Navbar() {
           </Link>
           { profile ? (
             <div className="flex items-center gap-2">
-              <Link
-                href="/discover"
-                className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 px-3.5 py-1.5 text-xs font-medium text-primary-foreground/80 transition-colors hover:border-primary-foreground/40 hover:text-primary-foreground sm:flex dark:border-white/20 dark:text-white/90 dark:hover:text-white dark:hover:bg-transparent"
-              >
-                <Compass className="h-3.5 w-3.5" />
-                Discover
-              </Link>
               <Link
                 href="/scan"
                 className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
