@@ -1,13 +1,11 @@
 # iqoqo — The Library of Everything
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
-[![Flask Version](https://img.shields.io/badge/Flask-2.3%2B-green.svg)](https://flask.palletsprojects.com/en/latest/)
 [![Next.js Version](https://img.shields.io/badge/Next.js-16%2B-black.svg)](https://nextjs.org/)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/en/)
-
+[![Flask Version](https://img.shields.io/badge/Flask-2.3%2B-green.svg)](https://flask.palletsprojects.com/en/latest/)
+[![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
 
 **iqoqo** is a distributed, semantic, and federated library system designed to catalog physical and digital collections—spanning books, vinyl, board games, and beyond.
 
