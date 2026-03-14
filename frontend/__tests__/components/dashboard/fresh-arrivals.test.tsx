@@ -85,6 +85,8 @@ describe("FreshArrivals", () => {
     render(<FreshArrivals />);
     const img = screen.getByAltText("Cover of Dune");
     expect(img).toBeInTheDocument();
+    // Ensure the component correctly prefixes legacy cover paths with /api
+    expect(img).toHaveAttribute("src", "/api/static/covers/1.jpg");
   });
 
   it("shows an error message when the API fails", () => {
