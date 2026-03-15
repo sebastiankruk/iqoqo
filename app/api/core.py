@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+
+def invalid_json_payload_response():
+    """Return a standardized 400 response for absent/invalid JSON payloads."""
+    return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
