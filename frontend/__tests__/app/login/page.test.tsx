@@ -13,12 +13,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LoginPage from '@/app/login/page';
 
-// Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
@@ -40,21 +40,22 @@ const renderWithQueryClient = (component: React.ReactElement) => {
 };
 
 describe('LoginPage', () => {
+  let alertMock: Mock;
+
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
-
-    // Mock the API URL environment variable
     process.env.NEXT_PUBLIC_API_URL = '/api';
 
-    // Mock window.location
     Object.defineProperty(window, 'location', {
       value: { href: '' },
       writable: true
     });
-  });
 
-  // ... rest of your tests
+    // Fix: explicitly mock window.alert since it doesn't exist in jsdom by default
+    alertMock = vi.fn();
+    window.alert = alertMock;
+  });
 
   it('renders login form and Google SSO button', () => {
     renderWithQueryClient(<LoginPage />);
@@ -64,6 +65,12 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: /Sign in with Google/i })).toBeInTheDocument();
   });
 
+  it('redirects to Google SSO when button is clicked', () => {
+    renderWithQueryClient(<LoginPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Sign in with Google/i }));
+    expect(window.location.href).toContain('/api/auth/login/google');
+  });
+
   it('handles successful local login and redirects', async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
@@ -71,7 +78,6 @@ describe('LoginPage', () => {
     });
 
     renderWithQueryClient(<LoginPage />);
-
     fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@iqoqo.local' } });
     fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
@@ -85,6 +91,22 @@ describe('LoginPage', () => {
         })
       );
       expect(window.location.href).toContain('/api/auth-exchange?token=mock-jwt-token');
+    });
+  });
+
+  it('handles failed local login and shows alert', async () => {
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Invalid credentials' }),
+    });
+
+    renderWithQueryClient(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'wrong@iqoqo.local' } });
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'wrong123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+
+    await waitFor(() => {
+      expect(alertMock).toHaveBeenCalledWith("Login failed");
     });
   });
 });

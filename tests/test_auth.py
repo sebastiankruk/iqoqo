@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+
 import json
 
 import pytest
@@ -20,12 +21,15 @@ import pytest
 from app.db.models import Role, User, db
 
 
-def test_user_registration(client):
-    # Setup: Ensure the default 'user' role exists in the test DB
+@pytest.fixture(autouse=True)
+def setup_roles(app):
+    """Ensure the default 'user' role exists in the test DB before running auth tests."""
     if not Role.query.filter_by(name="user").first():
         db.session.add(Role(name="user"))
         db.session.commit()
 
+
+def test_user_registration(client):
     response = client.post(
         "/api/auth/register", json={"email": "test@iqoqo.local", "password": "securepassword", "display_name": "Test User"}
     )
@@ -39,6 +43,18 @@ def test_user_registration(client):
     assert user.roles[0].name == "user"
 
 
+def test_user_registration_duplicate(client):
+    client.post("/api/auth/register", json={"email": "dup@iqoqo.local", "password": "securepassword"})
+    response = client.post("/api/auth/register", json={"email": "dup@iqoqo.local", "password": "securepassword"})
+    assert response.status_code == 409
+    assert b"Email already registered" in response.data
+
+
+def test_user_registration_missing_fields(client):
+    response = client.post("/api/auth/register", json={"email": "missing@iqoqo.local"})
+    assert response.status_code == 400
+
+
 def test_local_login(client):
     # Register first
     client.post("/api/auth/register", json={"email": "login@iqoqo.local", "password": "mypassword"})
@@ -47,6 +63,24 @@ def test_local_login(client):
     response = client.post("/api/auth/login", json={"email": "login@iqoqo.local", "password": "mypassword"})
     assert response.status_code == 200
     assert "token" in json.loads(response.data)
+
+
+def test_local_login_invalid_credentials(client):
+    client.post("/api/auth/register", json={"email": "invalid@iqoqo.local", "password": "mypassword"})
+    response = client.post("/api/auth/login", json={"email": "invalid@iqoqo.local", "password": "wrongpassword"})
+    assert response.status_code == 401
+    assert b"Invalid credentials" in response.data
+
+
+def test_local_login_missing_fields(client):
+    response = client.post("/api/auth/login", json={"email": "login@iqoqo.local"})
+    assert response.status_code == 400
+
+
+def test_logout(client):
+    response = client.post("/api/auth/logout")
+    assert response.status_code == 200
+    assert b"Logged out successfully" in response.data
 
 
 def test_protected_route_without_token(client):
