@@ -364,14 +364,14 @@ def upload_cover(manifestation_id):
     if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
         return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
 
+    # Consolidate file size checks to reduce return statements
     max_size = 10 * 1024 * 1024
-    if request.content_length and request.content_length > max_size:
-        return jsonify({"error": "File too large. Max size: 10MB"}), 413
-
     file.seek(0, os.SEEK_END)
-    if file.tell() > max_size:
-        return jsonify({"error": "File too large. Max size: 10MB"}), 413
+    actual_size = file.tell()
     file.seek(0)
+
+    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
+        return jsonify({"error": "File too large. Max size: 10MB"}), 413
 
     try:
         img = Image.open(file)

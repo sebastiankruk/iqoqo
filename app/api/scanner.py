@@ -41,7 +41,7 @@ def scan_barcode():
             return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
         except ConnectionError as e:
             return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:

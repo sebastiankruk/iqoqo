@@ -20,7 +20,7 @@ import Image from "next/image";
 import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
 import { useRecentManifestations } from "@/lib/api/hooks";
 
-export function FreshArrivals() {
+export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } = {}) {
   const { data: recentManifestations, isLoading, isError } = useRecentManifestations(12);
   const items = recentManifestations ?? [];
 
@@ -44,13 +44,15 @@ export function FreshArrivals() {
             Latest
           </span>
         </div>
-        <Link
-          href="/collection?viewMode=manifestations"
-          className="flex items-center gap-1 text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          View global library
-          <ChevronRight className="h-4 w-4" />
-        </Link>
+        {!publicMode && (
+          <Link
+            href="/collection?viewMode=manifestations"
+            className="flex items-center gap-1 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            View global library
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
       </div>
 
       {isLoading ? (

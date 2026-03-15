@@ -134,5 +134,6 @@ export interface UserProfile {
   visibility?: string;
   consents?: Record<string, boolean>;
   roles?: string[];
+  permissions?: string[];
   created_at?: string;
 }

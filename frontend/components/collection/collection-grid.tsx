@@ -16,11 +16,11 @@
 "use client";
 
 import { Library } from "lucide-react";
-import type { Item, ManifestationListEntry } from "@/types/frbr";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "./item-card";
 
 /** Responsive grid of item cards. Shows empty state when no items match. */
-export function CollectionGrid({ items, isManifestationView = false }: { items: (Item | ManifestationListEntry)[]; isManifestationView?: boolean }) {
+export function CollectionGrid({ items, isManifestationView = false }: { items: (Item | CatalogEntry)[]; isManifestationView?: boolean }) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
