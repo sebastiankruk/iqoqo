@@ -16,6 +16,10 @@
 
 /** TypeScript types for the FRBR data model used by the iqoqo API. */
 
+/**
+ * A distinct intellectual or artistic creation.
+ * E.g., The abstract concept of "The Lord of the Rings".
+ */
 export interface Work {
   id: number;
   title: string;
@@ -23,6 +27,10 @@ export interface Work {
   meta: Record<string, unknown>;
 }
 
+/**
+ * The intellectual or artistic realization of a work.
+ * E.g., The original English text of "The Lord of the Rings", or a French translation.
+ */
 export interface Expression {
   id: number;
   work_id: number;
@@ -32,6 +40,10 @@ export interface Expression {
   meta?: Record<string, unknown>;
 }
 
+/**
+ * The physical embodiment of an expression of a work.
+ * E.g., A specific 2004 paperback edition of "The Lord of the Rings" by a specific publisher.
+ */
 export interface Manifestation {
   id: number;
   expression_id: number;
@@ -42,7 +54,9 @@ export interface Manifestation {
   meta: Record<string, unknown>;
 }
 
-/** Global Catalog Entry DTO (Returned by /manifestations) */
+/** * Global Catalog Entry DTO (Returned by /manifestations).
+ * This flattens Work/Expression fields into the Manifestation for UI consumption.
+ */
 export interface CatalogEntry extends Manifestation {
   title: string;
   authors: string[];
@@ -51,6 +65,10 @@ export interface CatalogEntry extends Manifestation {
   user_owns: boolean;
 }
 
+/**
+ * A single exemplar of a manifestation.
+ * E.g., The specific dog-eared copy of the 2004 paperback sitting on *your* bookshelf.
+ */
 export interface Item {
   id: number;
   manifestation_id: number;

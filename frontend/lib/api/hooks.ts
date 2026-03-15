@@ -35,6 +35,7 @@ export const queryKeys = {
   item: (id: number) => ["item", id] as const,
   isbn: (isbn: string) => ["isbn", isbn] as const,
   manifestations: (page = 1, limit = 20) => ["manifestations", page, limit] as const,
+  manifestation: (id: number) => ["manifestation", id] as const, // Added
 };
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
@@ -87,6 +88,17 @@ export function useManifestations(page = 1, limit = 20, enabled = true) {
     },
     staleTime: 10_000,
     enabled,
+  });
+}
+
+export function useManifestation(id: number) {
+  return useQuery({
+    queryKey: queryKeys.manifestation(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<CatalogEntry>>(`/manifestations/${id}`);
+      return res.data?.data ?? null;
+    },
+    enabled: id > 0,
   });
 }
 

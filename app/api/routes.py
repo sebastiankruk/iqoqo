@@ -311,7 +311,7 @@ def get_items():
     for item in items:
         manifestation = item.manifestation
         work_title = ""
-        authors = []
+        authors: list[str] = []
         if manifestation and manifestation.expression and manifestation.expression.work:
             work = manifestation.expression.work
             work_title = work.title or ""
@@ -739,7 +739,7 @@ def get_manifestations():
     data = []
     for m in manifestations:
         work_title = ""
-        authors = []
+        authors: list[str] = []
         if m.expression and m.expression.work:
             work = m.expression.work
             work_title = work.title or ""
@@ -774,6 +774,46 @@ def get_manifestations():
             "error": None,
         }
     )
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+def get_manifestation_detail(manifestation_id: int):
+    """Get a single global manifestation by ID."""
+    user_id = getattr(request, "user_id", None)
+    m = db.session.get(Manifestation, manifestation_id)
+
+    if not m:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    work_title = ""
+    authors: list[str] = []
+    if m.expression and m.expression.work:
+        work = m.expression.work
+        work_title = work.title or ""
+        authors = work.meta.get("authors", []) if work.meta else []
+
+    user_owns = False
+    if user_id:
+        # Check if the authenticated user owns any Items of this Manifestation
+        owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
+        if owned_item:
+            user_owns = True
+
+    data = {
+        "id": m.id,
+        "expression_id": m.expression_id,
+        "isbn13": m.isbn13,
+        "publisher": m.publisher,
+        "year": m.year,
+        "meta": m.meta,
+        "title": work_title,
+        "authors": authors,
+        "cover_path": m.cover_path,
+        "cover_status": m.meta.get("cover_status") if m.meta else None,
+        "user_owns": user_owns,
+    }
+
+    return jsonify({"success": True, "data": data, "error": None})
 
 
 # =============================================================================
@@ -976,7 +1016,7 @@ def get_recent_manifestations():
         for m in recent:
             work = m.expression.work if (m.expression and m.expression.work) else None
             title = work.title if work else (m.meta.get("Title") if m.meta else None)
-            authors = work.meta.get("authors", []) if (work and work.meta) else (m.meta.get("Authors") if m.meta else [])
+            authors: list[str] = work.meta.get("authors", []) if (work and work.meta) else (m.meta.get("Authors", []) if m.meta else [])
             author = authors[0] if authors else None
 
             result.append(
