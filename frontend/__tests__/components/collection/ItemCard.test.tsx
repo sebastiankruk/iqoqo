@@ -56,7 +56,7 @@ describe("ItemCard", () => {
   it("renders the cover image when available", () => {
     const itemWithCover = {
       ...mockItem,
-      cover_path: "/static/covers/test.jpg",
+      cover_url: "/static/covers/test.jpg",
       cover_status: "ready",
     };
 
@@ -70,7 +70,7 @@ describe("ItemCard", () => {
   it("shows loading overlay when status is pending", () => {
     const pendingItem = {
       ...mockItem,
-      cover_path: "/static/covers/placeholder.jpg",
+      cover_url: "/static/covers/placeholder.jpg",
       cover_status: "pending",
     };
 
@@ -82,7 +82,7 @@ describe("ItemCard", () => {
   it("shows processing overlay when status is processing", () => {
     const processingItem = {
       ...mockItem,
-      cover_path: "/static/covers/placeholder.jpg",
+      cover_url: "/static/covers/placeholder.jpg",
       cover_status: "processing",
     };
 

@@ -144,7 +144,7 @@ def get_manifestations():
                 "meta": m.meta,
                 "title": work_title,
                 "authors": authors,
-                "cover_path": m.cover_path,
+                "cover_url": m.cover_url,
                 "cover_status": m.meta.get("cover_status") if m.meta else None,
                 "user_owns": user_owns,
             }
@@ -192,7 +192,7 @@ def get_manifestation_detail(manifestation_id: int):
         "meta": m.meta,
         "title": work_title,
         "authors": authors,
-        "cover_path": m.cover_path,
+        "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
     }
@@ -222,7 +222,7 @@ def get_recent_manifestations():
                 {
                     "id": m.id,
                     "title": title,
-                    "cover_path": m.cover_path,
+                    "cover_url": m.cover_url,
                     "cover_status": m.meta.get("cover_status") if m.meta else None,
                     "meta": m.meta,
                     "author": author,

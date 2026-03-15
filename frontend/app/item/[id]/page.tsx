@@ -35,8 +35,8 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
   const { item } = useManifestationWithPolling(initialItem);
 
 
-  const coverUrl = item.cover_path
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_path}`
+  const coverUrl = item.cover_url
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_url}`
     : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined);
 

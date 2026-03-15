@@ -83,7 +83,7 @@ class DataManager:
                     "ean": manif.ean,
                     "publisher": manif.publisher,
                     "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
-                    "cover_path": manif.cover_path,
+                    "cover_url": manif.cover_url,
                     "meta": manif.meta,
                 }
             )

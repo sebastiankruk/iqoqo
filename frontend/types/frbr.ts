@@ -50,7 +50,7 @@ export interface Manifestation {
   isbn13?: string;
   publisher?: string;
   year?: number;
-  cover_url?: string;
+  cover_url?: string | null;
   meta: Record<string, unknown>;
 }
 
@@ -60,7 +60,7 @@ export interface Manifestation {
 export interface CatalogEntry extends Manifestation {
   title: string;
   authors: string[];
-  cover_path?: string | null;
+  cover_url?: string | null;
   cover_status?: string | null;
   user_owns: boolean;
 }
@@ -78,7 +78,7 @@ export interface Item {
   added_at?: string;
   updated_at?: string;
   cover_status?: string | null;
-  cover_path?: string | null;
+  cover_url?: string | null;
   title?: string;
   isbn?: string;
   authors?: string[];

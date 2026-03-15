@@ -61,12 +61,12 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   // Dynamic linking based on view context
   const targetHref = isCatalog ? `/manifestation/${manifestationId}` : `/item/${itemId}`;
 
-  // `cover_path` and `cover_status` exist on both Item and CatalogEntry
-  const coverPath = item.cover_path;
+  // `cover_url` and `cover_status` exist on both Item and CatalogEntry
+  const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
 
-  const coverUrl = coverPath
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${coverPath}`
+  const coverUrl = itemCoverUrl
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemCoverUrl}`
     : isCatalog
       ? (item as CatalogEntry).meta?.["cover_url"] as string | undefined
       : ((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??

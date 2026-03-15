@@ -31,7 +31,7 @@ def run_batch(batch_limit=None, force=False, app=None):
     if app is None:
         app = create_app()
     with app.app_context():
-        query = Manifestation.query.filter(Manifestation.cover_path.is_(None))
+        query = Manifestation.query.filter(Manifestation.cover_url.is_(None))
         if not force:
             cover_status = Manifestation.meta["cover_status"]
             status_str = cast(cover_status, String)

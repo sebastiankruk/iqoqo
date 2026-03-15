@@ -71,8 +71,8 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {items.map((item) => {
-            const coverUrl = item.cover_path
-              ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_path}`
+            const coverUrl = item.cover_url
+              ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_url}`
               : (item.meta?.["cover_url"] as string | undefined);
 
             const isProcessing = item.cover_status === "processing";

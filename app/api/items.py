@@ -77,7 +77,7 @@ def get_items():
 
             rows_sql = f"""
             SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
-                   m.isbn13, w.title, m.cover_path, m.meta as manifestation_meta,
+                   m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                    w.meta as work_meta, i.added_at, i.updated_at,
                    ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
             FROM manifestations m
@@ -119,7 +119,7 @@ def get_items():
                         "manifestation_id": manifestation_id,
                         "isbn": row.get("isbn13"),
                         "title": row.get("title"),
-                        "cover_path": row.get("cover_path"),
+                        "cover_url": row.get("cover_url"),
                         "cover_status": manifestation_meta.get("cover_status") if isinstance(manifestation_meta, dict) else None,
                         "authors": work_meta.get("authors", []) if isinstance(work_meta, dict) else [],
                         "added_at": added_at.isoformat() if added_at else None,
@@ -163,7 +163,7 @@ def get_items():
                         "manifestation_id": manifestation.id,
                         "isbn": manifestation.isbn13,
                         "title": work.title,
-                        "cover_path": manifestation.cover_path,
+                        "cover_url": manifestation.cover_url,
                         "cover_status": m_meta.get("cover_status") if m_meta else None,
                         "authors": w_meta.get("authors", []) if w_meta else [],
                         "added_at": item.added_at.isoformat() if item and item.added_at else None,
@@ -210,7 +210,7 @@ def get_items():
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
-                "cover_path": manifestation.cover_path if manifestation else None,
+                "cover_url": manifestation.cover_url if manifestation else None,
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
@@ -246,7 +246,7 @@ def get_item_detail(item_id: int):
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
-        item_data["cover_path"] = manifestation.cover_path
+        item_data["cover_url"] = manifestation.cover_url
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
         if manifestation.expression:

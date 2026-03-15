@@ -57,7 +57,7 @@ const SAMPLE_MANIFESTATIONS: CatalogEntry[] = [
     title: "Dune",
     authors: ["Frank Herbert"],
     meta: {},
-    cover_path: "/test-cover.jpg",
+    cover_url: "/test-cover.jpg",
     user_owns: false,
   },
   {
@@ -117,7 +117,7 @@ describe("FreshArrivals", () => {
     expect(screen.getByText("Recursion")).toBeInTheDocument();
   });
 
-  it("renders the book cover when cover_path is provided", () => {
+  it("renders the book cover when cover_url is provided", () => {
     mockUseRecentManifestations.mockReturnValue({
       data: SAMPLE_MANIFESTATIONS,
       isLoading: false,
