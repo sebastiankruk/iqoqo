@@ -326,7 +326,7 @@ def update_manifestation(isbn: str):
 @require_auth
 @require_permission("refetch:metadata")
 def refetch_metadata(manifestation_id: int):
-    manif = Manifestation.query.get_or_404(manifestation_id)
+    manif = db.get_or_404(Manifestation, manifestation_id)
     if not manif.isbn13:
         return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
 
@@ -379,7 +379,7 @@ def upload_cover(manifestation_id):
     except (OSError, SyntaxError):
         return jsonify({"error": "Invalid or corrupted image file"}), 400
 
-    manifestation = Manifestation.query.get_or_404(manifestation_id)
+    manifestation = db.get_or_404(Manifestation, manifestation_id)
     isbn = manifestation.isbn13 or f"item_{manifestation_id}"
 
     filename = secure_filename(f"{isbn}_raw.jpg")
@@ -402,7 +402,7 @@ def upload_cover(manifestation_id):
 @require_auth
 @require_permission("regenerate:cover")
 def regenerate_cover(manifestation_id: int):
-    manif = Manifestation.query.get_or_404(manifestation_id)
+    manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
     db.session.commit()
 
