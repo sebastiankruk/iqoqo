@@ -25,7 +25,7 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { useItems, useManifestations, useStats } from "@/lib/api/hooks";
-import type { Item, ManifestationListEntry } from "@/types/frbr";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
@@ -70,7 +70,6 @@ function CollectionContent() {
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
-    // Add appliedQuery here as well if useManifestations supports search
     viewMode === "manifestations" // mapped to `enabled` argument
   );
 
@@ -79,7 +78,12 @@ function CollectionContent() {
   const currentData = viewMode === "items" ? itemsData : manifestationsData;
   const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
 
-  const allItems = useMemo<(Item | ManifestationListEntry)[]>(() => (currentData?.data as (Item | ManifestationListEntry)[]) ?? [], [currentData?.data]);
+  // Replaced ManifestationListEntry with CatalogEntry
+  const allItems = useMemo<Array<Item | CatalogEntry>>(
+    () => (currentData?.data as Array<Item | CatalogEntry>) ?? [],
+    [currentData?.data]
+  );
+
   const total = currentData?.meta?.total ?? 0;
   const pages = currentData?.meta?.pages ?? 1;
 
@@ -127,10 +131,12 @@ function CollectionContent() {
     const items = [...allItems];
 
     items.sort((a, b) => {
+      // TypeScript now safely knows 'title' and 'authors' exist on both Item and CatalogEntry
       const ta = a.title ?? "";
       const tb = b.title ?? "";
       const aa = a.authors?.[0] ?? "";
       const ab = b.authors?.[0] ?? "";
+
       switch (sortBy) {
         case "title":
           return ta.localeCompare(tb);

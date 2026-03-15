@@ -20,7 +20,7 @@ import os
 from io import BytesIO
 from typing import Any
 
-from flask import current_app, jsonify, request, send_file, send_from_directory, session
+from flask import current_app, jsonify, request, send_file, send_from_directory
 from PIL import Image
 from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
@@ -694,9 +694,8 @@ def regenerate_cover(manifestation_id: int):
 @api_bp.route("/manifestations", methods=["GET"])
 def get_manifestations():
     """Get all manifestations (Global Library) with pagination and ownership status."""
-    # Prefer authenticated user id (set by require_auth) where available; fall back to session-stored client id for browser sessions
+    # Authenticated user id from JWT (set by require_auth, or optional public browsing)
     user_id = getattr(request, "user_id", None)
-    client_id = session.get("client_id") if session is not None else None
 
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
@@ -717,13 +716,25 @@ def get_manifestations():
 
     offset = (page - 1) * limit
 
-    # Eager load expression, work, and items to avoid N+1 queries
-    query = Manifestation.query.options(
-        selectinload(Manifestation.expression).selectinload(Expression.work), selectinload(Manifestation.items)
-    ).order_by(Manifestation.id.desc())
+    # Eager load expression and work
+    query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
+        Manifestation.id.desc()
+    )
 
     total = query.count()
     manifestations = query.offset(offset).limit(limit).all()
+
+    # Precompute which manifestations on this page the current user owns (Fix N+1 query)
+    owned_manifestation_ids = set()
+    if user_id and manifestations:
+        manifestation_ids = [m.id for m in manifestations]
+        owned_ids_query = (
+            db.session.query(Manifestation.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(Item.owner_id == user_id, Manifestation.id.in_(manifestation_ids))
+            .distinct()
+        )
+        owned_manifestation_ids = {str(row[0]) for row in owned_ids_query.all()}
 
     data = []
     for m in manifestations:
@@ -735,31 +746,22 @@ def get_manifestations():
             authors = work.meta.get("authors", []) if work.meta else []
 
         user_owns = False
-        # Determine ownership using authenticated user id (preferred) or legacy session client id
-        lookup_id = user_id or client_id
-        if lookup_id and getattr(m, "items", None):
-            # owner_id in Item is a UUID; compare stringified forms for robustness
-            for it in m.items:
-                try:
-                    if str(it.owner_id) == str(lookup_id):
-                        user_owns = True
-                        break
-                except Exception:
-                    continue
+        if user_id:
+            user_owns = str(m.id) in owned_manifestation_ids
 
+        # Return a manifestation-specific DTO instead of masquerading as an Item
         data.append(
             {
                 "id": m.id,
-                "owner_id": None,
-                "status": "unowned",
-                "manifestation_id": m.id,
-                "isbn": m.isbn13,
+                "expression_id": m.expression_id,
+                "isbn13": m.isbn13,
+                "publisher": m.publisher,
+                "year": m.year,
+                "meta": m.meta,
                 "title": work_title,
+                "authors": authors,
                 "cover_path": m.cover_path,
                 "cover_status": m.meta.get("cover_status") if m.meta else None,
-                "authors": authors,
-                "added_at": None,
-                "updated_at": None,
                 "user_owns": user_owns,
             }
         )

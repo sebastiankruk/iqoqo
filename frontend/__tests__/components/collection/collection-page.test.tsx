@@ -19,12 +19,12 @@
  * Focuses on the three behavioral fixes made in the pagination/filtering
  * overhaul:
  *
- *  1. statusCounts shown in the sidebar come from useStats() (global totals)
- *     and are therefore accurate across all pages, not just the visible 40.
- *  2. resultCount displayed in the FilterBar is meta.total from the API
- *     response, not the length of the local items array.
- *  3. When a status filter is toggled, the page number resets to 1 and the
- *     selected status is forwarded to useItems() as a server-side filter.
+ * 1. statusCounts shown in the sidebar come from useStats() (global totals)
+ * and are therefore accurate across all pages, not just the visible 40.
+ * 2. resultCount displayed in the FilterBar is meta.total from the API
+ * response, not the length of the local items array.
+ * 3. When a status filter is toggled, the page number resets to 1 and the
+ * selected status is forwarded to useItems() as a server-side filter.
  *
  * useItems and useStats are mocked; sub-components that don't contribute to
  * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
@@ -57,13 +57,14 @@ vi.mock("@/components/collection/mobile-filter-drawer", () => ({
 }));
 
 // ── Imports (after mocks are defined) ─────────────────────────────────────
-import { useItems, useStats } from "@/lib/api/hooks";
+import { useItems, useStats, useManifestations } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats } from "@/types/frbr";
 import type { Item } from "@/types/frbr";
 
 const mockUseItems = vi.mocked(useItems);
 const mockUseStats = vi.mocked(useStats);
+const mockUseManifestations = vi.mocked(useManifestations);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -275,5 +276,41 @@ describe("CollectionPage – filter toggles reset page to 1", () => {
     const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
     expect(lastCall[0]).toBe(1);
     expect(lastCall[2]).toBeUndefined();
+  });
+});
+
+describe("CollectionPage – View Modes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Replace "as any" with strict typing
+    mockUseItems.mockReturnValue({
+      data: undefined,
+      isLoading: false
+    } as ReturnType<typeof useItems>);
+
+    mockUseStats.mockReturnValue({
+      data: FULL_STATS,
+      isLoading: false
+    } as ReturnType<typeof useStats>);
+
+    mockUseManifestations.mockReturnValue({
+      data: undefined,
+      isLoading: false
+    } as ReturnType<typeof useManifestations>);
+  });
+
+  it("switches to Global Library manifestations via tabs", () => {
+    render(<CollectionPage />);
+    const libraryBtn = screen.getByRole("button", { name: /Global Library/i });
+
+    // Switch to global library
+    fireEvent.click(libraryBtn);
+
+    // verify the switch activated the correct hook (useManifestations enabled = true)
+    const calls = mockUseManifestations.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    // Assuming useManifestations(page, limit, enabled)
+    expect(calls[calls.length - 1][2]).toBe(true);
   });
 });

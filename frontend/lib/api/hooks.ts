@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
 import type {
   Item,
+  CatalogEntry,
   DashboardStats,
   IsbnMeta,
   ApiResponse,
@@ -76,19 +77,12 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
 
 /* ── Manifestations list (global catalog) ─────────────────────────────────── */
 
-// ManifestationListEntry represents the DTO returned by GET /manifestations.
-// It's intentionally loose here because the backend returns joined fields
-// (manifestation + work + optional ownership flag) used by the UI.
-export type ManifestationListEntry = {
-  user_owns?: boolean;
-} & Record<string, unknown>;
-
 export function useManifestations(page = 1, limit = 20, enabled = true) {
   return useQuery({
     queryKey: queryKeys.manifestations(page, limit),
     queryFn: async () => {
       const params = { page, limit };
-      const res = await apiClient.get<ApiResponse<ManifestationListEntry[]>>("/manifestations", { params });
+      const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
     staleTime: 10_000,
@@ -239,6 +233,7 @@ export function useProfile() {
 }
 
 /* ── Global instance stats (for landing page) ───────────────────────────────── */
+
 export function useGlobalStats() {
   return useQuery({
     queryKey: ["globalStats"],
@@ -248,10 +243,11 @@ export function useGlobalStats() {
 }
 
 /* ── Recent manifestations (public landing) ───────────────────────────────── */
+
 export function useRecentManifestations(limit = 10) {
   return useQuery({
     queryKey: ["recentManifestations", limit],
-    queryFn: () => apiFetch<ManifestationListEntry[]>("/manifestations/recent", { limit }),
+    queryFn: () => apiFetch<CatalogEntry[]>("/manifestations/recent", { limit }),
     staleTime: 30_000,
   });
 }
