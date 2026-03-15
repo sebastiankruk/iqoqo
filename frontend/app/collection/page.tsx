@@ -51,7 +51,6 @@ function CollectionContent() {
     }
   }
 
-  // Derive status filters for server-side filtering
   const statusFilters = useMemo(
     () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
     [activeFilters]
@@ -64,7 +63,6 @@ function CollectionContent() {
   const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
   const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
 
-  // Sync state with URL changes during render (avoids cascading renders from useEffect)
   if (currentUrlQuery !== prevUrlQuery) {
     setPrevUrlQuery(currentUrlQuery);
     setSearchQuery(currentUrlQuery);
@@ -83,6 +81,7 @@ function CollectionContent() {
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
+    appliedQuery, // Applied Search feature wired correctly
     viewMode === "manifestations"
   );
 
@@ -161,7 +160,6 @@ function CollectionContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            {/* View Mode Toggle - ONLY VISIBLE IF LOGGED IN */}
             {isLoggedIn && (
               <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
                 <button

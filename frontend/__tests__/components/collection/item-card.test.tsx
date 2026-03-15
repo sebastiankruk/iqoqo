@@ -77,7 +77,6 @@ describe("ItemCard", () => {
 
   it("renders a cover placeholder when coverUrl is absent", () => {
     render(<ItemCard item={makeItem({ meta: {}, manifestation_meta: {} })} />);
-    // Should not render an img; renders the BookOpen icon instead
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
@@ -113,7 +112,6 @@ describe("ItemCard", () => {
   });
 
   it("links to the manifestation detail page when isManifestationView is true", () => {
-    // When isManifestationView is true, the item is treated as a CatalogEntry, so it reads the primary `id`.
     render(<ItemCard item={makeCatalogEntry({ id: 99 })} isManifestationView={true} />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/manifestation/99");
   });

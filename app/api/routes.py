@@ -6,15 +6,7 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-#
+
 import json
 import os
 from io import BytesIO
@@ -30,7 +22,7 @@ import app.utils.isbn as isbn_utils
 from app.api.decorators import require_auth, require_permission
 from app.config import Config
 from app.core.data_manager import DataManager
-from app.core.ingest import IngestService  # Assuming this exists based on your architecture
+from app.core.ingest import IngestService
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, RAW_DIR, process_fast_cover, start_cover_processing
 
@@ -44,26 +36,22 @@ def _invalid_json_payload_response():
 
 @api_bp.route("/static/covers/<path:filename>", methods=["GET"])
 def serve_cover(filename: str):
-    """Serve a cover image from the local covers directory."""
     return send_from_directory(COVERS_DIR, filename)
 
 
 @api_bp.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint for monitoring."""
     return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
 
 
 @api_bp.route("/stats", methods=["GET"])
 def get_dashboard_stats():
-    """Get dashboard statistics for the frontend."""
     stats = DataManager.get_stats()
     return jsonify({"success": True, "data": stats, "error": None})
 
 
 @api_bp.route("/stats/global", methods=["GET"])
 def get_global_stats():
-    """Get global instance statistics (works, manifestations, items, users)."""
     try:
         works_count = db.session.query(Work).count()
         manifestations_count = db.session.query(Manifestation).count()
@@ -90,88 +78,52 @@ def get_global_stats():
 
 
 @api_bp.route("/items", methods=["GET"])
+@require_auth
 def get_items():
-    """Get all items with pagination support.
+    """Get all items with pagination support."""
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return (
+            jsonify({"success": False, "data": [], "meta": {"page": 1, "limit": 20, "total": 0, "pages": 0}, "error": "Unauthorized"}),
+            401,
+        )
 
-    Query parameters:
-        page (int, default 1):    1-based page number.
-        limit (int, default 20):  Maximum items per page.
-        statuses (str, optional): Comma-separated list of item statuses to filter by
-                                  (e.g. ``reading,wish_list``). When omitted all
-                                  statuses are returned.
-        q (str, optional):        Free-text search query applied to this collection
-                                  of items (i.e. owned/user items only). The search
-                                  does not include catalog or other unowned records.
-
-    Results are sorted by most-recently-updated first, falling back to
-    ``added_at`` for legacy rows that pre-date the ``updated_at`` column.
-    """
-    # Get pagination parameters
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
-    statuses_filter = request.args.get("statuses", None)  # Optional filter by item status
+    statuses_filter = request.args.get("statuses", None)
     q = request.args.get("q", "").strip()
 
     try:
         page = int(page_param)
         limit = int(limit_param)
     except (TypeError, ValueError):
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": "Invalid pagination parameters: 'page' and 'limit' must be integers.",
-                }
-            ),
-            400,
-        )
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
     if page < 1 or limit < 1:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": "Invalid pagination parameters: 'page' and 'limit' must be positive integers.",
-                }
-            ),
-            400,
-        )
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
+
     offset = (page - 1) * limit
 
-    # If a search query is provided, run a full-text search across the global
-    # manifest catalog and include owned Items where they exist. When the
-    # database does not support PostgreSQL FTS (e.g. tests using SQLite), fall
-    # back to a simple ILIKE search.
     if q:
-        # Use the generated tsvector columns so the expressions exactly match
-        # the GIN indexes created by the migration. This avoids full table scans
-        # caused by mismatched expressions.
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
-        # Securely parameterize pagination and optional statuses filter
-        params = {"q": q, "limit": limit, "offset": offset}
-        statuses_sql = ""
+        params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
+        statuses_sql = " AND i.owner_id = :user_id"
+
         if statuses_filter:
             statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
             params["statuses"] = statuses_list
-            if "unowned" in statuses_list:
-                statuses_sql = " AND (i.status IN :statuses OR i.id IS NULL)"
-            else:
-                statuses_sql = " AND i.status IN :statuses"
+            statuses_sql += " AND i.status IN :statuses"
 
-        # Attempt PostgreSQL FTS; fall back to ILIKE for SQLite in tests
         try:
             count_sql = f"""
             SELECT count(*) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            LEFT JOIN items i ON i.manifestation_id = m.id
+            JOIN items i ON i.manifestation_id = m.id
             WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
-              AND i.id IS NOT NULL
             {statuses_sql}
             """
 
@@ -183,15 +135,13 @@ def get_items():
             FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            LEFT JOIN items i ON i.manifestation_id = m.id
+            JOIN items i ON i.manifestation_id = m.id
             WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
-              AND i.id IS NOT NULL
             {statuses_sql}
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
             """
 
-            # Bind params and enable tuple-expansion for statuses when provided
             count_stmt = text(count_sql)
             rows_stmt = text(rows_sql)
             if "statuses" in params:
@@ -231,50 +181,41 @@ def get_items():
 
         except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
             current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
-
-            # If we are on PostgreSQL, an unexpected FTS error should not be silently masked.
             if db.engine.dialect.name == "postgresql":
-                return (
-                    jsonify({"success": False, "data": None, "error": "Search backend error"}),
-                    500,
-                )
+                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
 
-            # Fallback for SQLite tests or databases without FTS support.
             pattern = f"%{q}%"
             base_query = (
                 db.session.query(Item, Manifestation, Expression, Work)
                 .select_from(Manifestation)
                 .join(Expression, Manifestation.expression_id == Expression.id)
                 .join(Work, Expression.work_id == Work.id)
-                .outerjoin(Item, Item.manifestation_id == Manifestation.id)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .filter(Item.owner_id == user_id)
                 .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
             )
 
             if statuses_filter:
                 statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-                if "unowned" in statuses_list:
-                    base_query = base_query.filter((Item.status.in_(statuses_list)) | (Item.id.is_(None)))
-                else:
-                    base_query = base_query.filter(Item.status.in_(statuses_list))
+                base_query = base_query.filter(Item.status.in_(statuses_list))
 
             total = base_query.count()
             results = base_query.offset(offset).limit(limit).all()
 
             items_data = []
             for item, manifestation, _expression, work in results:
-                m_id = manifestation.id if manifestation else None
                 w_meta = work.meta if work and work.meta else {}
                 m_meta = manifestation.meta if manifestation and manifestation.meta else {}
 
                 items_data.append(
                     {
-                        "id": item.id if item else f"m_{m_id}",
-                        "owner_id": item.owner_id if item else None,
-                        "status": item.status if item else "unowned",
-                        "manifestation_id": m_id,
-                        "isbn": manifestation.isbn13 if manifestation else None,
-                        "title": work.title if work else None,
-                        "cover_path": manifestation.cover_path if manifestation else None,
+                        "id": item.id,
+                        "owner_id": item.owner_id,
+                        "status": item.status,
+                        "manifestation_id": manifestation.id,
+                        "isbn": manifestation.isbn13,
+                        "title": work.title,
+                        "cover_path": manifestation.cover_path,
                         "cover_status": m_meta.get("cover_status") if m_meta else None,
                         "authors": w_meta.get("authors", []) if w_meta else [],
                         "added_at": item.added_at.isoformat() if item and item.added_at else None,
@@ -288,21 +229,18 @@ def get_items():
             {
                 "success": True,
                 "data": items_data,
-                "meta": {
-                    "page": page,
-                    "limit": limit,
-                    "total": total,
-                    "pages": (total + limit - 1) // limit,
-                },
+                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
                 "error": None,
             }
         )
 
-    # Standard collection mode (only owned items)
+    # Standard collection mode
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    query = query.filter(Item.owner_id == user_id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(Item.status.in_(statuses_list))
+
     query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
     total = query.count()
     items = query.offset(offset).limit(limit).all()
@@ -337,12 +275,7 @@ def get_items():
         {
             "success": True,
             "data": items_data,
-            "meta": {
-                "page": page,
-                "limit": limit,
-                "total": total,
-                "pages": (total + limit - 1) // limit,
-            },
+            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
             "error": None,
         }
     )
@@ -350,9 +283,7 @@ def get_items():
 
 @api_bp.route("/items/<int:item_id>", methods=["GET"])
 def get_item_detail(item_id: int):
-    """Get detailed information about a specific item."""
     item = db.session.get(Item, item_id)
-
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
@@ -393,9 +324,7 @@ def get_item_detail(item_id: int):
 
 @api_bp.route("/items/<int:item_id>", methods=["PUT"])
 def update_item(item_id: int):
-    """Update an item's status or metadata."""
     item = db.session.get(Item, item_id)
-
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
@@ -405,7 +334,6 @@ def update_item(item_id: int):
 
     if data.get("status"):
         item.status = data["status"]
-
     if data.get("meta"):
         item.meta = data["meta"]
 
@@ -421,9 +349,7 @@ def update_item(item_id: int):
 @require_auth
 @require_permission("delete:item")
 def delete_item(item_id: int):
-    """Delete an item."""
     item = db.session.get(Item, item_id)
-
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
@@ -438,46 +364,33 @@ def delete_item(item_id: int):
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])
 def lookup_isbn(isbn: str):
-    """Look up book metadata by ISBN from multiple sources or local DB."""
-    # First check if we have it locally
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
-
-    # If we have manifestation with metadata in meta field, return it
     if manifestation and manifestation.meta and manifestation.meta.get("Title"):
         return jsonify(**manifestation.meta)
 
-    # If we have manifestation with Work/Expression data, build metadata from there
     if manifestation and manifestation.expression and manifestation.expression.work:
         work = manifestation.expression.work
         work_metadata = {
             "Title": work.title or "",
             "Authors": work.meta.get("authors", []) if work.meta else [],
         }
-        # Only return if we have at least a title
         if work_metadata["Title"]:
-            # Update manifestation.meta for future use
             manifestation.update_meta(**work_metadata)
             try:
                 db.session.commit()
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
                 db.session.rollback()
-                # Continue anyway, we can still return the data
-                print(f"Warning: Failed to update manifestation.meta: {e}")
             return jsonify(**work_metadata)
 
-    # Canonicalize ISBN-10 or ISBN-13 input into a standard 13-digit string.
     canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
     if not canonical_isbn:
         return jsonify({"success": False, "data": None, "error": f"Invalid ISBN = {isbn}"}), 400
 
-    # Fetch metadata from external sources (Google Books → Open Library).
     metadata: dict[str, Any] | None = isbn_utils.fetch_isbn_metadata(canonical_isbn)
     if not metadata:
         return jsonify({"success": False, "data": None, "error": f"Metadata not found for ISBN = {canonical_isbn}"}), 404
 
-    # Store in database if not exists
     if not manifestation:
-        # We need to create Work -> Expression -> Manifestation
         work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
         db.session.add(work)
         db.session.flush()
@@ -490,25 +403,15 @@ def lookup_isbn(isbn: str):
         db.session.add(manifestation)
         db.session.commit()
 
-        # --- Cover Generation Pipeline ---
-        # 1. Try fast API lookup
         found_cover = process_fast_cover(manifestation, canonical_isbn)
-
         if not found_cover:
-            # 2. Schedule async LLM generation
             manifestation.update_meta(cover_status="pending")
-
-            # Extract title/author
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-
             start_cover_processing(manifestation.id, canonical_isbn, title, author)
-
         db.session.commit()
     else:
-        # Update existing manifestation
         manifestation.update_meta(**metadata)
-        # Also update the Work if it has a title
         if manifestation.expression and manifestation.expression.work:
             manifestation.expression.work.title = metadata["Title"]
             if not manifestation.expression.work.meta:
@@ -521,9 +424,7 @@ def lookup_isbn(isbn: str):
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
 def update_manifestation(isbn: str):
-    """Update manifestation metadata."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
-
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
@@ -532,10 +433,7 @@ def update_manifestation(isbn: str):
         return _invalid_json_payload_response()
 
     if metadata:
-        # Update the manifestation's metadata
         manifestation.update_meta(**metadata)
-
-        # Also update the work title and authors if provided
         if manifestation.expression and manifestation.expression.work:
             if "Title" in metadata:
                 manifestation.expression.work.title = metadata["Title"]
@@ -545,7 +443,6 @@ def update_manifestation(isbn: str):
                 work_meta = dict(manifestation.expression.work.meta)
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
-
         db.session.commit()
         return jsonify({"status": "ok"})
 
@@ -554,14 +451,11 @@ def update_manifestation(isbn: str):
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
 def get_items_by_isbn(isbn: str):
-    """Get all items for a given ISBN."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
-
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
     items = Item.query.filter_by(manifestation_id=manifestation.id).all()
-
     if not items:
         return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
@@ -581,7 +475,6 @@ def add_item(isbn: str):
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     metadata = request.get_json(silent=True)
-
     if metadata:
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
@@ -594,16 +487,13 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    # --- Ensure a valid User exists to assign ownership ---
     user = User.query.first()
     if not user:
         user = User(email="api_default@iqoqo.local", display_name="API Default")
         db.session.add(user)
         db.session.flush()
 
-    # Create new item using the valid UUID
     item = Item(manifestation_id=manifestation.id, owner_id=user.id, status="available", meta={})
-
     db.session.add(item)
     db.session.commit()
 
@@ -612,7 +502,6 @@ def add_item(isbn: str):
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
 def upload_cover(manifestation_id):  # pylint: disable=R0911
-    """Handles manual user photo uploads for a manifestation."""
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -620,13 +509,11 @@ def upload_cover(manifestation_id):  # pylint: disable=R0911
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    # Validate extension
     allowed_extensions = {"png", "jpg", "jpeg", "webp"}
     if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
         return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
 
-    # Validate size (10MB limit)
-    max_size = 10 * 1024 * 1024  # 10MB
+    max_size = 10 * 1024 * 1024
     if request.content_length and request.content_length > max_size:
         return jsonify({"error": "File too large. Max size: 10MB"}), 413
 
@@ -635,7 +522,6 @@ def upload_cover(manifestation_id):  # pylint: disable=R0911
         return jsonify({"error": "File too large. Max size: 10MB"}), 413
     file.seek(0)
 
-    # Verify image content
     try:
         img = Image.open(file)
         img.verify()
@@ -650,11 +536,9 @@ def upload_cover(manifestation_id):  # pylint: disable=R0911
     filepath = os.path.join(RAW_DIR, filename)
     file.save(filepath)
 
-    # Set status to processing
     manifestation.update_meta(cover_status="processing")
     db.session.commit()
 
-    # Get Title/Author from related Expression/Work
     work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
     title = work.title if work else "Unknown Title"
     author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
@@ -668,20 +552,15 @@ def upload_cover(manifestation_id):  # pylint: disable=R0911
 @require_auth
 @require_permission("regenerate:cover")
 def regenerate_cover(manifestation_id: int):
-    """Force regeneration of a cover for a manifestation."""
     manif = Manifestation.query.get_or_404(manifestation_id)
-
-    # Reset status
     manif.update_meta(cover_status="pending")
     db.session.commit()
 
-    # Launch background pipeline (API lookup → LLM generation)
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
     isbn = manif.isbn13 or str(manif.id)
 
-    # Extract extra metadata for the LLM
     meta = manif.meta or {}
     description = meta.get("Description", "")
     categories = meta.get("Categories", [])
@@ -694,11 +573,11 @@ def regenerate_cover(manifestation_id: int):
 @api_bp.route("/manifestations", methods=["GET"])
 def get_manifestations():
     """Get all manifestations (Global Library) with pagination and ownership status."""
-    # Authenticated user id from JWT (set by require_auth, or optional public browsing)
     user_id = getattr(request, "user_id", None)
 
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
+    q = request.args.get("q", "").strip()
 
     try:
         page = int(page_param)
@@ -707,24 +586,72 @@ def get_manifestations():
         return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
     if page < 1 or limit < 1:
-        return (
-            jsonify(
-                {"success": False, "data": None, "error": "Invalid pagination parameters: 'page' and 'limit' must be positive integers."}
-            ),
-            400,
-        )
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
     offset = (page - 1) * limit
 
-    # Eager load expression and work
-    query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
-        Manifestation.id.desc()
-    )
+    if q:
+        w_tsvector_expr = "w.fts_simple"
+        m_tsvector_expr = "m.fts_simple"
+        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+        params = {"q": q, "limit": limit, "offset": offset}
 
-    total = query.count()
-    manifestations = query.offset(offset).limit(limit).all()
+        try:
+            count_sql = f"""
+            SELECT count(*) FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            """
 
-    # Precompute which manifestations on this page the current user owns (Fix N+1 query)
+            rows_sql = f"""
+            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+            FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            ORDER BY rank DESC
+            LIMIT :limit OFFSET :offset
+            """
+
+            count_stmt = text(count_sql)
+            rows_stmt = text(rows_sql)
+            total = int(db.session.execute(count_stmt, params).scalar() or 0)
+            result_ids = [row[0] for row in db.session.execute(rows_stmt, params).all()]
+
+            if result_ids:
+                manifestations_unordered = (
+                    Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                    .filter(Manifestation.id.in_(result_ids))
+                    .all()
+                )
+
+                m_dict = {m.id: m for m in manifestations_unordered}
+                manifestations = [m_dict[m_id] for m_id in result_ids if m_id in m_dict]
+            else:
+                manifestations = []
+
+        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
+            current_app.logger.exception("Error during FTS manifestation search, attempting fallback", exc_info=exc)
+            if db.engine.dialect.name == "postgresql":
+                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
+
+            pattern = f"%{q}%"
+            base_query = (
+                db.session.query(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+            )
+            total = base_query.count()
+            manifestations = base_query.offset(offset).limit(limit).all()
+    else:
+        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
+            Manifestation.id.desc()
+        )
+        total = query.count()
+        manifestations = query.offset(offset).limit(limit).all()
+
     owned_manifestation_ids = set()
     if user_id and manifestations:
         manifestation_ids = [m.id for m in manifestations]
@@ -749,14 +676,16 @@ def get_manifestations():
         if user_id:
             user_owns = str(m.id) in owned_manifestation_ids
 
-        # Return a manifestation-specific DTO instead of masquerading as an Item
+        # FIX: Extract year gracefully from Date column or meta fallback
+        resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
+
         data.append(
             {
                 "id": m.id,
                 "expression_id": m.expression_id,
                 "isbn13": m.isbn13,
                 "publisher": m.publisher,
-                "year": m.year,
+                "year": resolved_year,
                 "meta": m.meta,
                 "title": work_title,
                 "authors": authors,
@@ -770,7 +699,7 @@ def get_manifestations():
         {
             "success": True,
             "data": data,
-            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit},
+            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
             "error": None,
         }
     )
@@ -794,17 +723,19 @@ def get_manifestation_detail(manifestation_id: int):
 
     user_owns = False
     if user_id:
-        # Check if the authenticated user owns any Items of this Manifestation
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
+
+    # FIX: Extract year gracefully from Date column or meta fallback
+    resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
     data = {
         "id": m.id,
         "expression_id": m.expression_id,
         "isbn13": m.isbn13,
         "publisher": m.publisher,
-        "year": m.year,
+        "year": resolved_year,
         "meta": m.meta,
         "title": work_title,
         "authors": authors,
@@ -825,13 +756,11 @@ def get_manifestation_detail(manifestation_id: int):
 @require_auth
 @require_permission("refetch:metadata")
 def refetch_metadata(manifestation_id: int):
-    """Force refetch metadata from upstream providers."""
     manif = Manifestation.query.get_or_404(manifestation_id)
 
     if not manif.isbn13:
         return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
 
-    # Canonicalize ISBN before lookup
     canonical_isbn = isbn_utils.canonicalize_isbn(manif.isbn13)
     if not canonical_isbn:
         return jsonify({"success": False, "data": None, "error": "Invalid ISBN"}), 400
@@ -841,10 +770,8 @@ def refetch_metadata(manifestation_id: int):
     if not metadata:
         return jsonify({"success": False, "data": None, "error": "No upstream metadata found"}), 404
 
-    # Merge metadata into Manifestation
     manif.update_meta(**metadata)
 
-    # Update Work details if available
     if manif.expression and manif.expression.work:
         if "Title" in metadata:
             manif.expression.work.title = metadata["Title"]
@@ -859,23 +786,14 @@ def refetch_metadata(manifestation_id: int):
 
 @api_bp.route("/admin/stats", methods=["GET"])
 def get_stats():
-    """Get database statistics."""
     stats = DataManager.get_stats()
     return jsonify(stats)
 
 
 @api_bp.route("/admin/export", methods=["GET"])
 def export_data():
-    """
-    Export all database content as JSON.
-
-    Returns:
-        JSON file download containing all database content.
-    """
     try:
         data = DataManager.export_all()
-
-        # Create an in-memory file
         output = BytesIO()
         output.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
         output.seek(0)
@@ -892,20 +810,9 @@ def export_data():
 
 @api_bp.route("/admin/import", methods=["POST"])
 def import_data():
-    """
-    Import data from JSON.
-
-    Expects:
-        JSON body containing the data structure or multipart/form-data with file.
-        Optional query parameter: clear_existing=true
-
-    Returns:
-        JSON with import statistics.
-    """
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
 
-        # Check if data is in the request body or as a file upload
         if request.is_json:
             data = request.get_json(silent=True)
             if not isinstance(data, dict):
@@ -924,11 +831,6 @@ def import_data():
 
 @api_bp.route("/admin/clear", methods=["DELETE"])
 def clear_data():
-    """
-    Clear all data from the database. Use with extreme caution!
-
-    Requires confirmation in the request body: {"confirm": true}
-    """
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return _invalid_json_payload_response()
@@ -946,39 +848,28 @@ def clear_data():
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
 def scan_barcode():
-    """
-    Handles Scenarios 1 & 2:
-    - Scans for existing manifestation.
-    - If missing, fetches metadata and creates Work->Expr->Manifestation.
-    - Creates user Item.
-    """
     data = request.get_json()
     barcode = data.get("barcode")
 
     if not barcode:
         return jsonify({"error": "Barcode is required"}), 400
 
-    # 1. Check if Manifestation already exists locally
-    # Assuming ISBN is stored in the meta JSON or a dedicated column. Adjust to your specific DB schema.
     manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()
 
-    # Scenario 1: No manifestation exists -> Fetch external metadata and build FRBR tree
     if not manifestation:
         try:
-            # You will need to ensure this function exists in app/core/ingest.py using app/utils/isbn.py
             manifestation = IngestService.ingest_from_isbn(barcode)
         except ValueError as e:
             return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
         except ConnectionError as e:
             return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:
         return jsonify({"error": "Could not resolve barcode"}), 404
 
-    # Scenario 2 & 1 Conclusion: Create the Item for the user
-    new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")  # Default status
+    new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")
     db.session.add(new_item)
     db.session.commit()
 
@@ -989,7 +880,7 @@ def scan_barcode():
                 "item_id": new_item.id,
                 "manifestation_id": manifestation.id,
                 "title": manifestation.title,
-                "is_new_manifestation": not manifestation,  # conceptually true if we just ingested it
+                "is_new_manifestation": not manifestation,
             }
         ),
         201,
@@ -998,10 +889,6 @@ def scan_barcode():
 
 @api_bp.route("/manifestations/recent", methods=["GET"])
 def get_recent_manifestations():
-    """Get the most recently added manifestations across the entire instance (public).
-
-    Query param: `limit` (int, default 10)
-    """
     try:
         limit = request.args.get("limit", 10, type=int)
 

@@ -13,14 +13,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen } from "@testing-library/react";
+
+import { render, screen, waitFor } from "@testing-library/react";
 import AdminSettingsPage from "@/app/admin/settings/page";
 import { useProfile } from "@/lib/api/hooks";
 import { useRouter } from "next/navigation";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { UserProfile } from "@/types/frbr";
 
-// Mock dependencies
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
 }));
@@ -29,9 +29,8 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
 }));
 
-// Mock the admin API to prevent actual network calls from child components
 vi.mock("@/lib/api/admin", () => ({
-  getInstanceSettings: vi.fn().mockResolvedValue([]), // Added this!
+  getInstanceSettings: vi.fn().mockResolvedValue([]),
   getUsers: vi.fn().mockResolvedValue([]),
   updateSettings: vi.fn().mockResolvedValue({ success: true }),
 }));
@@ -48,12 +47,10 @@ describe("AdminSettingsPage", () => {
     vi.mocked(useProfile).mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useProfile>);
 
     render(<AdminSettingsPage />);
-
-    // Page title should not be visible while loading
     expect(screen.queryByText("Admin Settings")).toBeNull();
   });
 
-  it("redirects non-admin users to the home page", () => {
+  it("redirects non-admin users to the home page", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: { id: "1", email: "user@test.com", roles: ["user"] } as unknown as UserProfile,
       isLoading: false
@@ -61,11 +58,12 @@ describe("AdminSettingsPage", () => {
 
     render(<AdminSettingsPage />);
 
-    // Should trigger redirect
-    expect(mockPush).toHaveBeenCalledWith("/");
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
   });
 
-  it("renders the admin dashboard and sidebar tabs for admin users", () => {
+  it("renders the admin dashboard and sidebar tabs for admin users", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: { id: "2", email: "admin@test.com", roles: ["admin"] } as unknown as UserProfile,
       isLoading: false
@@ -73,13 +71,9 @@ describe("AdminSettingsPage", () => {
 
     render(<AdminSettingsPage />);
 
-    // Should not redirect
     expect(mockPush).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Admin Settings", level: 1 })).toBeInTheDocument();
 
-    // Should render main layout elements
-    expect(screen.getByRole("heading", { name: "Admin Settings", level: 1 })).toBeInTheDocument();
-
-    // Should render sidebar navigation buttons using getByRole to avoid conflicts with section headings
     expect(screen.getByRole("button", { name: "Instance Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "User Management" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Integrations & Monetization" })).toBeInTheDocument();
