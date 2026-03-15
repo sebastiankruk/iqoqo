@@ -22,8 +22,11 @@ Docker instance is required.
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+from wsgiref import headers
+
 import pytest
 
+from app.api.auth import generate_internal_jwt
 from app.core.data_manager import DataManager
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 
@@ -80,6 +83,7 @@ def populated_library(app):
         db.session.commit()
 
         yield {
+            "user": test_user,
             "work1": work1,
             "work2": work2,
             "mani1": mani1,
@@ -89,6 +93,13 @@ def populated_library(app):
             "item_lent": item_lent,
             "item_wish": item_wish,
         }
+
+
+@pytest.fixture
+def auth_headers(populated_library):
+    """Generate authentication headers for the user in the populated library."""
+    token = generate_internal_jwt(populated_library["user"])
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ===========================================================================
@@ -204,29 +215,29 @@ class TestStatsEndpoint:
 class TestItemsListEndpoint:
     """Tests for the paginated item list endpoint used by the collection page."""
 
-    def test_returns_200(self, client):
+    def test_returns_200(self, client, auth_headers):
         """Endpoint must respond with HTTP 200."""
-        response = client.get("/api/items")
+        response = client.get("/api/items", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_envelope_structure(self, client, populated_library):
+    def test_envelope_structure(self, client, populated_library, auth_headers):
         """Response must include success, data, error, and meta."""
-        response = client.get("/api/items")
+        response = client.get("/api/items", headers=auth_headers)
         payload = response.get_json()
         assert payload["success"] is True
         assert isinstance(payload["data"], list)
         assert payload["meta"] is not None
 
-    def test_pagination_meta_fields(self, client, populated_library):
+    def test_pagination_meta_fields(self, client, populated_library, auth_headers):
         """meta block must include page, limit, total, pages."""
-        response = client.get("/api/items?page=1&limit=2")
+        response = client.get("/api/items?page=1&limit=2", headers=auth_headers)
         meta = response.get_json()["meta"]
         for field in ("page", "limit", "total", "pages"):
             assert field in meta, f"Missing meta field: {field}"
 
-    def test_item_has_required_frontend_fields(self, client, populated_library):
+    def test_item_has_required_frontend_fields(self, client, populated_library, auth_headers):
         """Each item must expose the fields used by ItemCard in the frontend."""
-        response = client.get("/api/items?limit=10")
+        response = client.get("/api/items?limit=10", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) > 0
         for item in items:
@@ -235,23 +246,23 @@ class TestItemsListEndpoint:
             assert "status" in item
             assert "isbn" in item
 
-    def test_item_status_values_are_valid(self, client, populated_library):
+    def test_item_status_values_are_valid(self, client, populated_library, auth_headers):
         """item.status must be one of the known backend values."""
         valid_statuses = {"available", "lent", "lost", "wish_list"}
-        response = client.get("/api/items?limit=100")
+        response = client.get("/api/items?limit=100", headers=auth_headers)
         items = response.get_json()["data"]
         for item in items:
             assert item["status"] in valid_statuses, f"Unexpected status '{item['status']}' for item {item['id']}"
 
-    def test_respects_limit_parameter(self, client, populated_library):
+    def test_respects_limit_parameter(self, client, populated_library, auth_headers):
         """?limit= must cap the number of returned items."""
-        response = client.get("/api/items?limit=1")
+        response = client.get("/api/items?limit=1", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) == 1
 
-    def test_item_has_cover_status(self, client, populated_library):
+    def test_item_has_cover_status(self, client, populated_library, auth_headers):
         """Items in the list must include cover_status for the UI overlay."""
-        response = client.get("/api/items?limit=1")
+        response = client.get("/api/items?limit=1", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) > 0
         assert "cover_status" in items[0]

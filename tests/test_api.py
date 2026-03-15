@@ -262,7 +262,7 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
         assert len(items) == 1
 
 
-@patch("app.api.routes.start_cover_processing")
+@patch("app.api.manifestations.start_cover_processing")
 def test_regenerate_cover(mock_start, client, sample_book, admin_headers):
     """Test the regenerate cover endpoint triggers background processing."""
     # 1. Call the endpoint
