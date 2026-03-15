@@ -30,6 +30,38 @@
  * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
  * stubbed to keep the test surface small and fast.
  */
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
+/**
+ * Tests for the CollectionPage component.
+ *
+ * Focuses on the three behavioral fixes made in the pagination/filtering
+ * overhaul:
+ *
+ * 1. statusCounts shown in the sidebar come from useStats() (global totals)
+ * and are therefore accurate across all pages, not just the visible 40.
+ * 2. resultCount displayed in the FilterBar is meta.total from the API
+ * response, not the length of the local items array.
+ * 3. When a status filter is toggled, the page number resets to 1 and the
+ * selected status is forwarded to useItems() as a server-side filter.
+ *
+ * useItems and useStats are mocked; sub-components that don't contribute to
+ * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
+ * stubbed to keep the test surface small and fast.
+ */
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -293,7 +325,8 @@ describe("CollectionPage – Authentication & View Modes", () => {
 
     const calls = mockUseManifestations.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls[calls.length - 1][2]).toBe(true);
+    // Index [3] is the `enabled` parameter (page, limit, query, enabled)
+    expect(calls[calls.length - 1][3]).toBe(true);
   });
 
   it("hides My Items toggle and defaults to Global Library when logged out", () => {
@@ -306,6 +339,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
     // It should automatically trigger the manifestations fetch
     const calls = mockUseManifestations.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls[calls.length - 1][2]).toBe(true);
+    // Index [3] is the `enabled` parameter (page, limit, query, enabled)
+    expect(calls[calls.length - 1][3]).toBe(true);
   });
 });
