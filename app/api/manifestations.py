@@ -364,7 +364,6 @@ def upload_cover(manifestation_id):
     if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
         return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
 
-    # Consolidate file size checks to reduce return statements
     max_size = 10 * 1024 * 1024
     file.seek(0, os.SEEK_END)
     actual_size = file.tell()
@@ -419,3 +418,20 @@ def regenerate_cover(manifestation_id: int):
     start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>", methods=["DELETE"])
+@require_auth
+@require_permission("delete:manifestation")
+def delete_manifestation(manifestation_id: int):
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    try:
+        db.session.delete(manif)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500

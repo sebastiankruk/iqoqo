@@ -174,7 +174,8 @@
         "venv",
         "Vitest",
         "wireframes",
-        "zxing"
+        "zxing",
+        "ilike"
     ],
     "css.lint.unknownAtRules": "ignore",
     "cSpell.useGitignore": true,

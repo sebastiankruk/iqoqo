@@ -20,3 +20,5 @@ permissions:
     description: 'Allow regenerating covers'
   - name: delete:item
     description: 'Allow deletion of items'
+  - name: delete:manifestation
+    description: 'Allow deletion of manifestations'

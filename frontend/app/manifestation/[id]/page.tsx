@@ -15,9 +15,10 @@
 //
 "use client";
 
-import { useParams } from "next/navigation";
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, ImageIcon, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
@@ -25,8 +26,10 @@ import { Button } from "@/components/ui/button";
 
 export default function ManifestationPage() {
   const params = useParams();
+  const router = useRouter();
   const manifestationId = Number(params?.id);
 
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
   const { mutate: addItem, isPending: isAdding } = useAddItem();
@@ -64,6 +67,38 @@ export default function ManifestationPage() {
       addItem({ isbn: manifestation.isbn13 });
     }
   };
+
+  const handleAdminAction = async (endpoint: string, method: string = "POST") => {
+    setIsActionLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/manifestations/${manifestationId}${endpoint}`;
+
+      const res = await fetch(url, { method, headers, credentials: "omit" });
+
+      if (res.ok) {
+        if (method === "DELETE") {
+          router.push("/collection");
+        } else {
+          window.location.reload();
+        }
+      } else {
+        alert("Action failed. Ensure you have the right permissions.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("An error occurred performing this action.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const canRefetch = userProfile?.permissions?.includes("refetch:metadata");
+  const canRegenerate = userProfile?.permissions?.includes("regenerate:cover");
+  const canDelete = userProfile?.permissions?.includes("delete:manifestation");
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -124,24 +159,69 @@ export default function ManifestationPage() {
             </div>
 
             {userProfile && (
-              <div className="pt-6">
-                {manifestation.user_owns ? (
-                  <div className="inline-flex items-center rounded-lg bg-primary/10 px-4 py-2 font-medium text-primary">
-                    <span className="mr-2 block h-2 w-2 rounded-full bg-primary" />
-                    Already in your collection
+              <div className="pt-6 space-y-4">
+                <div>
+                  {manifestation.user_owns ? (
+                    <div className="inline-flex items-center rounded-lg bg-primary/10 px-4 py-2 font-medium text-primary">
+                      <span className="mr-2 block h-2 w-2 rounded-full bg-primary" />
+                      Already in your collection
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleAddToCollection}
+                      disabled={isAdding || !manifestation.isbn13}
+                      size="sm"
+                    >
+                      {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
+                      Add to My Collection
+                    </Button>
+                  )}
+                  {!manifestation.isbn13 && !manifestation.user_owns && (
+                    <p className="mt-2 text-xs text-destructive">Cannot be added automatically (No ISBN available).</p>
+                  )}
+                </div>
+
+                {/* Admin Actions */}
+                {(canRefetch || canRegenerate || canDelete) && (
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
+                    {canRefetch && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isActionLoading || !manifestation.isbn13}
+                        onClick={() => handleAdminAction("/refetch-metadata")}
+                      >
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isActionLoading ? "animate-spin" : ""}`} />
+                        Refetch
+                      </Button>
+                    )}
+                    {canRegenerate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isActionLoading}
+                        onClick={() => handleAdminAction("/regenerate-cover")}
+                      >
+                        <ImageIcon className="w-4 h-4 mr-2" />
+                        Regen Cover
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={isActionLoading}
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this manifestation?")) {
+                            handleAdminAction("", "DELETE");
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
+                    )}
                   </div>
-                ) : (
-                  <Button
-                    onClick={handleAddToCollection}
-                    disabled={isAdding || !manifestation.isbn13}
-                    size="sm"
-                  >
-                    {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
-                    Add to My Collection
-                  </Button>
-                )}
-                {!manifestation.isbn13 && !manifestation.user_owns && (
-                   <p className="mt-2 text-xs text-destructive">Cannot be added automatically (No ISBN available).</p>
                 )}
               </div>
             )}

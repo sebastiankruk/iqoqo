@@ -23,7 +23,7 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.api.manifestations import lookup_isbn
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.db.models import Expression, Item, Manifestation, Work, db
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -323,7 +323,12 @@ def get_items_by_isbn(isbn: str):
 
 
 @api_bp.route("/item/<isbn>", methods=["POST"])
+@require_auth
 def add_item(isbn: str):
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
@@ -347,13 +352,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    user = User.query.first()
-    if not user:
-        user = User(email="api_default@iqoqo.local", display_name="API Default")
-        db.session.add(user)
-        db.session.flush()
-
-    item = Item(manifestation_id=manifestation.id, owner_id=user.id, status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
