@@ -191,7 +191,7 @@ def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
     result = fetch_external_api_cover(isbn)
     if result:
         local_path, source = result
-        manifestation.cover_path = local_path
+        manifestation.cover_url = local_path
         # Force SQLAlchemy to detect change in JSON field
         manifestation.update_meta(cover_source=source, cover_status="ready")
         return True
@@ -215,7 +215,7 @@ def process_cover_pipeline(
       2. External APIs (OpenLibrary, Google Books)
       3/4. LLM generation (local SD → Gemini → OpenAI)
 
-    If all tiers fail the existing cover_path is left unchanged so the
+    If all tiers fail the existing cover_url is left unchanged so the
     frontend can show its book-icon placeholder rather than an empty or
     low-quality fallback image.  cover_status is set to ``"failed"``.
 
@@ -236,7 +236,7 @@ def process_cover_pipeline(
         if not manifestation:
             return
 
-        local_cover_path: str | None = None
+        local_cover_url: str | None = None
         source: str | None = None
 
         # Tier 1: User Photo
@@ -252,7 +252,7 @@ def process_cover_pipeline(
                 # Remove the temporary upload file once it has been processed
                 os.remove(user_image_path)
 
-                local_cover_path = f"/static/covers/{filename}"
+                local_cover_url = f"/static/covers/{filename}"
                 source = "user_photo"
             except (OSError, ValueError) as e:
                 logger.error(f"Failed to process user image: {e}")
@@ -261,30 +261,30 @@ def process_cover_pipeline(
                 return
 
         # Tier 2: External APIs
-        if not local_cover_path:
+        if not local_cover_url:
             result = fetch_external_api_cover(isbn)
             if result:
-                local_cover_path, source = result
+                local_cover_url, source = result
 
         # Tier 3/4: LLM Generation
-        if not local_cover_path:
+        if not local_cover_url:
             result = fetch_llm_cover(isbn, title, author, description, genre)
             if result:
-                local_cover_path, source = result
+                local_cover_url, source = result
 
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
         updates = {}
 
-        if local_cover_path:
-            abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_path))
+        if local_cover_url:
+            abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
             add_source_badge(abs_path, source or "")
-            manifestation.cover_path = local_cover_path
+            manifestation.cover_url = local_cover_url
             updates["cover_source"] = source
             updates["cover_status"] = "ready"
             logger.info("Cover processed for %s: %s", isbn, source)
         else:
-            # All tiers failed — leave cover_path as-is so the frontend shows
+            # All tiers failed — leave cover_url as-is so the frontend shows
             # a book-icon placeholder rather than an empty or text-only image.
             updates["cover_status"] = "failed"
             logger.warning("Cover generation failed for %s: no cover produced, leaving existing", isbn)
@@ -315,7 +315,7 @@ def rebind_orphaned_covers() -> int:
 
     # 1. Get books without covers
     # Note: This query assumes we are in an app context
-    books_missing_covers = Manifestation.query.filter((Manifestation.cover_path.is_(None)) | (Manifestation.cover_path == "")).all()
+    books_missing_covers = Manifestation.query.filter((Manifestation.cover_url.is_(None)) | (Manifestation.cover_url == "")).all()
 
     if not books_missing_covers:
         logger.info("No books found missing covers.")
@@ -350,7 +350,7 @@ def rebind_orphaned_covers() -> int:
             best_match = candidates[0]
 
             # Update DB
-            book.cover_path = f"/static/covers/{best_match}"
+            book.cover_url = f"/static/covers/{best_match}"
 
             # Update meta status
             updates = {"cover_status": "ready"}

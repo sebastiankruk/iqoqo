@@ -20,10 +20,10 @@ import { useRouter } from "next/navigation";
 import { Trash2, RefreshCw, CloudDownload } from "lucide-react";
 import { toast } from "sonner";
 
-import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
-import { useProfile } from "@/lib/api/hooks";
+import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
-import type { Item } from "@/types/frbr";
+import { useQueryClient } from "@tanstack/react-query";
+import type { CatalogEntry, Manifestation } from "@/types/frbr";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,42 +34,43 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useQueryClient } from "@tanstack/react-query";
 
-
-export function ItemActions({ item }: { item: Item }) {
+export function ManifestationActions({ manifestation }: { manifestation: Manifestation|CatalogEntry }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();
-  const deleteItem = useDeleteItem();
-  const qc = useQueryClient(); // Add this to access the React Query cache!
+  const qc = useQueryClient();
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const isPending = item.cover_status === 'pending';
+  const isPending = manifestation.meta?.cover_status === 'pending';
 
   const { data: profile } = useProfile();
 
-  // If there is no authenticated profile, don't render administrative actions
   if (!profile) return null;
 
-  // Helper to check user permissions safely
   const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
-  const handleConfirmDelete = () => {
-    deleteItem.mutate(item.id, {
-      onSuccess: () => {
-        toast.success("Item removed from library");
-        router.push("/collection");
-      },
-      onError: (e) => toast.error(e.message),
-    });
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await apiClient.delete(`/manifestations/${manifestation.id}`);
+      toast.success("Manifestation deleted");
+      router.push("/collection");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete manifestation";
+      toast.error(msg);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
   };
 
   const handleRegenerateClick = () => {
-    const hasCover = !!(item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]);
+    const hasCover = !!(manifestation.cover_url || manifestation.meta?.["cover_url"]);
     if (hasCover) {
       setRegenerateConfirmOpen(true);
     } else {
@@ -78,17 +79,16 @@ export function ItemActions({ item }: { item: Item }) {
   };
 
   const handleRegenerate = async () => {
-    if (!item.manifestation_id) return;
+    if (!manifestation.id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
     try {
-      await regenerateCover.mutateAsync(item.manifestation_id);
-      // Tell React Query to update the cache for this specific item
-      qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+      await regenerateCover.mutateAsync(manifestation.id);
+      qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
         if (!prev) return prev;
         return {
           ...prev,
-          cover_status: 'pending'
+          meta: { ...(prev.meta || {}), cover_status: 'pending' }
         };
       });
       toast.success("Cover regeneration started");
@@ -101,10 +101,10 @@ export function ItemActions({ item }: { item: Item }) {
   };
 
   const handleRefetch = async () => {
-    if (!item.manifestation_id) return;
+    if (!manifestation.id) return;
     setIsRefetching(true);
     try {
-      await apiClient.post(`/manifestations/${item.manifestation_id}/refetch-metadata`);
+      await apiClient.post(`/manifestations/${manifestation.id}/refetch-metadata`);
       toast.success("Metadata refetched successfully. Reloading...");
       window.location.reload();
     } catch {
@@ -138,33 +138,33 @@ export function ItemActions({ item }: { item: Item }) {
         </button>
       )}
 
-      {hasPermission('delete:item') && (
+      {hasPermission('delete:manifestation') && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
-          disabled={deleteItem.isPending}
+          disabled={isDeleting}
           className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Remove from library
+          Delete manifestation
         </button>
       )}
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+            <AlertDialogTitle>Delete manifestation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove this item from your library. This action cannot be undone.
+              This will permanently delete this manifestation and all associated items across the system. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
-              disabled={deleteItem.isPending}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteItem.isPending ? "Removing…" : "Remove"}
+              {isDeleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -175,7 +175,7 @@ export function ItemActions({ item }: { item: Item }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
             <AlertDialogDescription>
-              This item already has a cover image. Regenerating it will overwrite the existing cover.
+              This manifestation already has a cover image. Regenerating it will overwrite the existing cover.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

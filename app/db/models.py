@@ -165,7 +165,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
     publisher = db.Column(db.String(500))  # Increased from 255 for long publisher names
     publication_date = db.Column(db.Date)
-    cover_path = db.Column(db.String(255), nullable=True)
+    cover_url = db.Column(db.String(255), nullable=True)
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
 
     def update_meta(self, **kwargs):

@@ -15,9 +15,9 @@
 #
 
 
-def test_search_items_by_title(client):
+def test_search_items_by_title(client, admin_headers):
     """Ensure full-text search endpoint responds and that `q` filters results."""
-    response = client.get("/api/items?q=Hobbit")
+    response = client.get("/api/items?q=Hobbit", headers=admin_headers)
     assert response.status_code == 200
     data = response.get_json()
     assert data["success"] is True
@@ -29,7 +29,7 @@ def test_search_items_by_title(client):
         assert "title" in first_item
 
         # Verify that a clearly non-matching query returns no results, ensuring `q` filters.
-        no_match_response = client.get("/api/items?q=__no_such_title__")
+        no_match_response = client.get("/api/items?q=__no_such_title__", headers=admin_headers)
         assert no_match_response.status_code == 200
         no_match_data = no_match_response.get_json()
         assert no_match_data["success"] is True

@@ -23,3 +23,4 @@ class ItemPermissions(Enum):
     REFETCH_METADATA = "refetch:metadata"
     REGENERATE_COVER = "regenerate:cover"
     DELETE_ITEM = "delete:item"
+    DELETE_MANIFESTATION = "delete:manifestation"

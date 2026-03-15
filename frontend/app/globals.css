@@ -17,7 +17,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-
 /* Make Tailwind's dark: variant follow `.dark` class (next-themes) */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -78,7 +77,7 @@
   --foreground: hsl(43 50% 90%);
 
   --primary: hsl(210 29% 80%);
-  --primary-foreground: rgb(116 155 193);
+  --primary-foreground: rgb(0 0 0);
 
   --accent: hsl(24 100% 50%);
   --accent-foreground: hsl(210 29% 10%);

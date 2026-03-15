@@ -1,3 +1,4 @@
+# tests/test_api.py
 """Tests for the API endpoints."""
 
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
@@ -231,10 +232,10 @@ def test_get_items_by_isbn_no_manifestation(client):
     assert response.status_code == 404
 
 
-def test_add_item(client, sample_book):
+def test_add_item(client, sample_book, normal_user_headers):
     """Test adding a new item for a given ISBN."""
     metadata = {"Title": "Test Book", "Authors": ["Test Author"]}
-    response = client.post("/api/item/9780345391803", json=metadata, content_type="application/json")
+    response = client.post("/api/item/9780345391803", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
     data = response.json
     assert "item_id" in data
@@ -246,12 +247,12 @@ def test_add_item(client, sample_book):
 
 
 @patch("app.utils.isbn.fetch_isbn_metadata")
-def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
+def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client, normal_user_headers):
     """Test adding item creates manifestation from external sources if it doesn't exist."""
     mock_fetch.return_value = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
-    response = client.post("/api/item/9780307277671", json=metadata, content_type="application/json")
+    response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
 
     # Verify manifestation and item were created
@@ -262,7 +263,7 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
         assert len(items) == 1
 
 
-@patch("app.api.routes.start_cover_processing")
+@patch("app.api.manifestations.start_cover_processing")
 def test_regenerate_cover(mock_start, client, sample_book, admin_headers):
     """Test the regenerate cover endpoint triggers background processing."""
     # 1. Call the endpoint

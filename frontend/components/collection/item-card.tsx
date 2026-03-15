@@ -18,7 +18,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Loader2 } from "lucide-react";
-import type { Item, ItemStatus } from "@/types/frbr";
+import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
 
 const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
@@ -39,42 +39,55 @@ const statusDotTitle: Record<ItemStatus, string> = {
 };
 
 interface ItemCardProps {
-  item: Item;
+  item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
+  isManifestationView?: boolean;
 }
 
-type ItemWithCoverFields = Item & {
-  cover_path?: string;
-  cover_status?: string;
-};
-
 /** Individual item card shown in the collection grid. */
-export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
-  const dotColor = statusDotColor[item.status] ?? "bg-muted";
-  const dotTitle = statusDotTitle[item.status] ?? item.status;
+export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
+  const isCatalog = isManifestationView;
 
-  // Resolve cover URL: Local > Legacy Meta > Placeholder
-  const itemWithCoverFields = item as ItemWithCoverFields;
-  const coverUrl = itemWithCoverFields.cover_path
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemWithCoverFields.cover_path}`
-    : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-      (item.meta?.["cover_url"] as string | undefined);
-  const hasLegacyCoverUrl =
-    Boolean(item.manifestation_meta?.["cover_url"] as string | undefined) ||
-    Boolean(item.meta?.["cover_url"] as string | undefined);
+  // Narrow types safely instead of using 'any'
+  const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
+  const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
 
-  const isProcessing = itemWithCoverFields.cover_status === "processing";
-  const isGenerated =
-    itemWithCoverFields.cover_status === "ready" && !hasLegacyCoverUrl;
+  const status = isCatalog ? undefined : (item as Item).status;
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : true;
 
+  const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
+  const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
+
+  // Dynamic linking based on view context
+  const targetHref = isCatalog ? `/manifestation/${manifestationId}` : `/item/${itemId}`;
+
+  // `cover_url` and `cover_status` exist on both Item and CatalogEntry
+  const itemCoverUrl = item.cover_url;
+  const coverStatus = item.cover_status;
+
+  const coverUrl = itemCoverUrl
+    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemCoverUrl}`
+    : isCatalog
+      ? (item as CatalogEntry).meta?.["cover_url"] as string | undefined
+      : ((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
+        ((item as Item).meta?.["cover_url"] as string | undefined);
+
+  const hasLegacyCoverUrl = isCatalog
+    ? Boolean((item as CatalogEntry).meta?.["cover_url"])
+    : Boolean((item as Item).manifestation_meta?.["cover_url"]) || Boolean((item as Item).meta?.["cover_url"]);
+
+  const isProcessing = coverStatus === "processing";
+  const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
+
+  // TypeScript allows accessing `title` and `authors` because they are defined on both types in the union
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";
 
   if (variant === "horizontal") {
     return (
         <Link
-            key={item.id}
-            href={`/item/${item.id}`}
+            key={itemId}
+            href={targetHref}
             className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
           >
             <div className="flex h-full p-5">
@@ -93,9 +106,16 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
                     {authors}
                   </p>
                   <div className="mt-3 flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-                      {dotTitle}
-                    </span>
+                    {!isCatalog && (
+                      <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                        {dotTitle}
+                      </span>
+                    )}
+                    {isCatalog && userOwns && (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                        In Collection
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -105,15 +125,15 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
   }
 
   return (
-    <Link href={`/item/${item.id}`} className="group block">
+    <Link href={targetHref} className="group block">
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         {/* Cover */}
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
-          {(isProcessing || itemWithCoverFields.cover_status === 'pending') && (
+          {(isProcessing || coverStatus === 'pending') && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="text-xs font-medium text-foreground">
-                {itemWithCoverFields.cover_status === 'pending' ? 'Generating...' : 'Processing...'}
+                {coverStatus === 'pending' ? 'Generating...' : 'Processing...'}
               </span>
             </div>
           )}
@@ -136,10 +156,12 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
         {/* Footer */}
         <div className="flex items-start gap-2 px-3 py-2.5">
           {/* Status dot */}
-          <span
-            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`}
-            title={dotTitle}
-          />
+          {!isCatalog && (
+            <span
+              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`}
+              title={dotTitle}
+            />
+          )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-snug text-foreground">
               {title}
@@ -147,6 +169,13 @@ export function ItemCard({ item, variant = "vertical" }: ItemCardProps) {
             <p className="truncate text-xs text-muted-foreground">
               {authors}
             </p>
+
+            {isCatalog && userOwns && (
+              <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
+                <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
+                In Collection
+              </div>
+            )}
           </div>
         </div>
       </div>

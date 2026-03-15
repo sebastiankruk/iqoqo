@@ -16,7 +16,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense } from "react";
-import { SlidersHorizontal, Search } from "lucide-react";
+import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
@@ -24,8 +24,8 @@ import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
-import { useItems, useStats } from "@/lib/api/hooks";
-import type { Item } from "@/types/frbr";
+import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
 /** Collection browser page with filtering, sorting and pagination. */
@@ -33,11 +33,24 @@ function CollectionContent() {
   const [page, setPage] = useState(1);
   const limit = 40;
 
+  const { data: profile, isLoading: isProfileLoading } = useProfile();
+  const isLoggedIn = !!profile;
+
+  const [viewMode, setViewMode] = useState<"items" | "manifestations">("items");
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [sortBy, setSortBy] = useState("title");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  // Derive status filters for server-side filtering
+  // Track profile state to adjust viewMode during render (avoids useEffect cascading renders)
+  const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
+  if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
+    setPrevIsLoggedIn(isLoggedIn);
+    if (!isLoggedIn && viewMode === "items") {
+      setViewMode("manifestations");
+      setPage(1);
+    }
+  }
+
   const statusFilters = useMemo(
     () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
     [activeFilters]
@@ -50,7 +63,6 @@ function CollectionContent() {
   const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
   const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
 
-  // Sync state with URL changes during render (avoids cascading renders from useEffect)
   if (currentUrlQuery !== prevUrlQuery) {
     setPrevUrlQuery(currentUrlQuery);
     setSearchQuery(currentUrlQuery);
@@ -58,45 +70,51 @@ function CollectionContent() {
     setPage(1);
   }
 
-  const { data, isLoading } = useItems(
+  const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
-    appliedQuery
+    appliedQuery,
+    viewMode === "items" && isLoggedIn
   );
+
+  const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
+    page,
+    limit,
+    appliedQuery, // Applied Search feature wired correctly
+    viewMode === "manifestations"
+  );
+
   const { data: statsData } = useStats();
 
-  const allItems = useMemo<Item[]>(() => data?.data ?? [], [data?.data]);
-  const total = data?.meta?.total ?? 0;
-  const pages = data?.meta?.pages ?? 1;
+  const currentData = viewMode === "items" ? itemsData : manifestationsData;
+  const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
+
+  const allItems = useMemo<Array<Item | CatalogEntry>>(
+    () => (currentData?.data as Array<Item | CatalogEntry>) ?? [],
+    [currentData?.data]
+  );
+
+  const total = currentData?.meta?.total ?? 0;
+  const pages = currentData?.meta?.pages ?? 1;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
     setPage(1);
     setActiveFilters((prev) => {
-      const exists = prev.some(
-        (f) => f.type === filter.type && f.value === filter.value
-      );
+      const exists = prev.some((f) => f.type === filter.type && f.value === filter.value);
       return exists
-        ? prev.filter(
-            (f) => !(f.type === filter.type && f.value === filter.value)
-          )
+        ? prev.filter((f) => !(f.type === filter.type && f.value === filter.value))
         : [...prev, filter];
     });
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
     setPage(1);
-    setActiveFilters((prev) =>
-      prev.filter(
-        (f) => !(f.type === filter.type && f.value === filter.value)
-      )
-    );
+    setActiveFilters((prev) => prev.filter((f) => !(f.type === filter.type && f.value === filter.value)));
   }, []);
 
   const clearAll = useCallback(() => { setPage(1); setActiveFilters([]); }, []);
 
-  // Derive per-status counts from global stats so they reflect ALL items,
-  // not just the current page.
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
     return {
@@ -109,27 +127,20 @@ function CollectionContent() {
     };
   }, [statsData]);
 
-  // Status filtering is now done server-side; only sort the current page.
   const filteredItems = useMemo(() => {
     const items = [...allItems];
-
     items.sort((a, b) => {
       const ta = a.title ?? "";
       const tb = b.title ?? "";
       const aa = a.authors?.[0] ?? "";
       const ab = b.authors?.[0] ?? "";
       switch (sortBy) {
-        case "title":
-          return ta.localeCompare(tb);
-        case "title-desc":
-          return tb.localeCompare(ta);
-        case "author":
-          return aa.localeCompare(ab);
-        default:
-          return 0;
+        case "title": return ta.localeCompare(tb);
+        case "title-desc": return tb.localeCompare(ta);
+        case "author": return aa.localeCompare(ab);
+        default: return 0;
       }
     });
-
     return items;
   }, [allItems, sortBy]);
 
@@ -138,18 +149,38 @@ function CollectionContent() {
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Page header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
               Collection
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Browse and manage your entire library
+              Browse and manage your library
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {isLoggedIn && (
+              <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+                <button
+                  onClick={() => { setViewMode("items"); setPage(1); }}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    viewMode === "items" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" /> My Items
+                </button>
+                <button
+                  onClick={() => { setViewMode("manifestations"); setPage(1); }}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    viewMode === "manifestations" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  <LibraryIcon className="h-4 w-4" /> Global Library
+                </button>
+              </div>
+            )}
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -183,7 +214,6 @@ function CollectionContent() {
           </div>
         </div>
 
-        {/* Filter bar */}
         <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           <FilterBar
             activeFilters={activeFilters}
@@ -195,7 +225,6 @@ function CollectionContent() {
           />
         </div>
 
-        {/* Sidebar + Grid */}
         <div className="flex gap-8">
           <div className="hidden w-56 shrink-0 lg:block">
             <div className="sticky top-24 rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -203,6 +232,7 @@ function CollectionContent() {
                 activeFilters={activeFilters}
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
+                disableStatus={viewMode === "manifestations"}
               />
             </div>
           </div>
@@ -221,10 +251,9 @@ function CollectionContent() {
                 ))}
               </div>
             ) : (
-              <CollectionGrid items={filteredItems} />
+              <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
             )}
 
-            {/* Pagination */}
             {pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
@@ -249,9 +278,7 @@ function CollectionContent() {
           </div>
         </div>
       </div>
-
       <Footer />
-
       <MobileFilterDrawer
         open={mobileFiltersOpen}
         onClose={() => setMobileFiltersOpen(false)}
@@ -265,11 +292,7 @@ function CollectionContent() {
 
 export default function CollectionPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading collection...</p>
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading collection...</p></div>}>
       <CollectionContent />
     </Suspense>
   );

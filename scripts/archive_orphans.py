@@ -5,7 +5,7 @@ Two complementary processes:
 1. **archive_orphaned_covers** — moves image files that exist on disk but are
    no longer referenced by any Manifestation row into an archive directory.
 
-2. **schedule_missing_covers** — finds Manifestation rows whose cover_path is
+2. **schedule_missing_covers** — finds Manifestation rows whose cover_url is
    NULL or points to a file that no longer exists on disk, then runs the full
    cover-generation pipeline for each one.  Generation is performed serially
    within this process; for large libraries consider wrapping each call in a
@@ -53,7 +53,7 @@ def archive_orphaned_covers(app=None):
 
     with app.app_context():
         # Collect all basenames referenced by the DB
-        valid_paths = {os.path.basename(m.cover_path) for m in Manifestation.query.filter(Manifestation.cover_path.isnot(None)).all()}
+        valid_paths = {os.path.basename(m.cover_url) for m in Manifestation.query.filter(Manifestation.cover_url.isnot(None)).all()}
 
         archived_count = 0
         for filename in os.listdir(COVERS_DIR):
@@ -73,8 +73,8 @@ def schedule_missing_covers(app=None):
     """Find manifestations with no usable cover and trigger the generation pipeline.
 
     A cover is considered missing when:
-    * ``cover_path`` is NULL, or
-    * ``cover_path`` references a file that does not exist on disk.
+    * ``cover_url`` is NULL, or
+    * ``cover_url`` references a file that does not exist on disk.
 
     Each missing manifestation is passed through :func:`process_cover_pipeline`
     which tries (in order): External APIs → LLM generation.  If all tiers fail
@@ -95,11 +95,11 @@ def schedule_missing_covers(app=None):
 
         missing = []
         for manif in all_manifestations:
-            if manif.cover_path is None:
+            if manif.cover_url is None:
                 missing.append(manif)
                 continue
             # Resolve absolute path from the "/static/covers/<file>" URL stored in DB
-            abs_path = os.path.join(Config.BASE_DIR, "app", manif.cover_path.lstrip("/"))
+            abs_path = os.path.join(Config.BASE_DIR, "app", manif.cover_url.lstrip("/"))
             if not os.path.exists(abs_path):
                 missing.append(manif)
 

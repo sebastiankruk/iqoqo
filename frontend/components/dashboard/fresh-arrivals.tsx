@@ -18,31 +18,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
-import { useItems, useRecentManifestations } from "@/lib/api/hooks";
+import { useRecentManifestations } from "@/lib/api/hooks";
 
-/** Horizontally scrollable "Fresh Arrivals" strip using live API data. */
-interface FreshArrivalsProps {
-  publicMode?: boolean;
-}
-
-interface ArrivalItem {
-  id: number;
-  title?: string;
-  author?: string;
-  authors?: string[];
-  cover_path?: string;
-  manifestation_meta?: Record<string, unknown>;
-  meta?: Record<string, unknown>;
-  cover_status?: string;
-}
-
-export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
-  const { data: itemsEnvelope, isLoading: itemsLoading, isError: itemsError } = useItems(1, 12);
-  const { data: recentManifestations, isLoading: manifLoading, isError: manifError } = useRecentManifestations(12);
-
-  const isLoading = publicMode ? manifLoading : itemsLoading;
-  const isError = publicMode ? manifError : itemsError;
-  const items = (publicMode ? (recentManifestations ?? []) : (itemsEnvelope?.data ?? [])) as ArrivalItem[];
+export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } = {}) {
+  const { data: recentManifestations, isLoading, isError } = useRecentManifestations(12);
+  const items = recentManifestations ?? [];
 
   if (isError) {
     return (
@@ -64,13 +44,15 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
             Latest
           </span>
         </div>
-        <Link
-          href="/collection"
-          className="flex items-center gap-1 text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          View all
-          <ChevronRight className="h-4 w-4" />
-        </Link>
+        {!publicMode && (
+          <Link
+            href="/collection?viewMode=manifestations"
+            className="flex items-center gap-1 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            View global library
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
       </div>
 
       {isLoading ? (
@@ -89,21 +71,16 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {items.map((item) => {
-            const coverUrl = item.cover_path
-              ? `/api${item.cover_path}`
-              : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-                (item.meta?.["cover_url"] as string | undefined);
-
-            const hasLegacyCoverUrl =
-              Boolean(item.manifestation_meta?.["cover_url"]) ||
-              Boolean(item.meta?.["cover_url"]);
+            const coverUrl = item.cover_url
+              ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_url}`
+              : (item.meta?.["cover_url"] as string | undefined);
 
             const isProcessing = item.cover_status === "processing";
-            const isGenerated = item.cover_status === "ready" && !hasLegacyCoverUrl;
+            const isGenerated = item.cover_status === "ready" && !item.meta?.["cover_url"];
 
             return (
               <Link
-                href={publicMode ? `/manifestation/${item.id}` : `/item/${item.id}`}
+                href={`/manifestation/${item.id}`}
                 key={item.id}
                 className="group w-36 shrink-0 sm:w-40"
               >
@@ -140,7 +117,7 @@ export function FreshArrivals({ publicMode = false }: FreshArrivalsProps) {
                 </h3>
                 <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                   <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                  {item.author ?? item.authors?.[0] ?? "Unknown"}
+                  {item.authors?.[0] ?? "Unknown"}
                 </p>
               </Link>
             );

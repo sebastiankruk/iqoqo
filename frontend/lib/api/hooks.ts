@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
 import type {
   Item,
+  CatalogEntry,
   DashboardStats,
   IsbnMeta,
   ApiResponse,
@@ -33,6 +34,8 @@ export const queryKeys = {
     ["items", page, limit, statuses?.join(",") ?? "", query ?? ""] as const,
   item: (id: number) => ["item", id] as const,
   isbn: (isbn: string) => ["isbn", isbn] as const,
+  manifestations: (page = 1, limit = 20, query?: string) => ["manifestations", page, limit, query ?? ""] as const,
+  manifestation: (id: number) => ["manifestation", id] as const,
 };
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
@@ -47,14 +50,7 @@ export function useStats() {
 
 /* ── Items list ──────────────────────────────────────────────────────────── */
 
-/**
- * Fetch a paginated list of items, optionally filtered by one or more statuses.
- *
- * Statuses are sent to the API as a comma-separated string so a single query
- * parameter covers multiple values (e.g. `?statuses=reading,wish_list`).
- * Results are returned ordered by most-recently-updated first.
- */
-export function useItems(page = 1, limit = 20, statuses?: string[], query?: string) {
+export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.items(page, limit, statuses, query),
     queryFn: async () => {
@@ -66,9 +62,39 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
         params.q = query;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
-      return res.data; // Return full envelope so we get meta.total
+      return res.data;
     },
     staleTime: 10_000,
+    enabled,
+  });
+}
+
+/* ── Manifestations list (global catalog) ─────────────────────────────────── */
+
+export function useManifestations(page = 1, limit = 20, query?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.manifestations(page, limit, query),
+    queryFn: async () => {
+      const params: Record<string, string | number> = { page, limit };
+      if (query && query.length > 0) {
+        params.q = query;
+      }
+      const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
+      return res.data;
+    },
+    staleTime: 10_000,
+    enabled,
+  });
+}
+
+export function useManifestation(id: number) {
+  return useQuery({
+    queryKey: queryKeys.manifestation(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<CatalogEntry>>(`/manifestations/${id}`);
+      return res.data?.data ?? null;
+    },
+    enabled: id > 0,
   });
 }
 
@@ -82,7 +108,7 @@ export function useItem(id: number) {
   });
 }
 
-/* ── ISBN lookup ─────────────────────────────────────────────────────────── */
+/* ── Rest of the hooks ─────────────────────────────────────────────────────── */
 
 export function useIsbnLookup(isbn: string, enabled = false) {
   return useQuery({
@@ -94,18 +120,10 @@ export function useIsbnLookup(isbn: string, enabled = false) {
   });
 }
 
-/* ── Add item (by ISBN) ──────────────────────────────────────────────────── */
-
 export function useAddItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      isbn,
-      metadata,
-    }: {
-      isbn: string;
-      metadata?: IsbnMeta;
-    }) => {
+    mutationFn: async ({ isbn, metadata }: { isbn: string; metadata?: IsbnMeta }) => {
       const res = await apiClient.post<{ item_id: number }>(`/item/${isbn}`, metadata ?? {});
       return res.data;
     },
@@ -116,23 +134,16 @@ export function useAddItem() {
   });
 }
 
-/* ── Polling Hook for Async Updates ─────────────────────────────────────── */
-
 export function useManifestationWithPolling(initialData: Item) {
   const { data: item } = useQuery({
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    // Automatically polls every 3 seconds ONLY if the status is pending
     refetchInterval: (query) =>
       query.state.data?.cover_status === 'pending' ? 3000 : false,
   });
-
-  // Return it in the same { item } shape the component is currently expecting
   return { item };
 }
-
-/* ── Update item ─────────────────────────────────────────────────────────── */
 
 export function useUpdateItem(id: number) {
   const qc = useQueryClient();
@@ -148,8 +159,6 @@ export function useUpdateItem(id: number) {
   });
 }
 
-/* ── Delete item ─────────────────────────────────────────────────────────── */
-
 export function useDeleteItem() {
   const qc = useQueryClient();
   return useMutation({
@@ -164,8 +173,6 @@ export function useDeleteItem() {
   });
 }
 
-/* ── Lazy ISBN lookup (triggered on demand) ─────────────────────────────── */
-
 export function useIsbnSearch() {
   return useMutation({
     mutationFn: async (isbn: string) => {
@@ -173,8 +180,6 @@ export function useIsbnSearch() {
     },
   });
 }
-
-/* ── Regenerate Cover ───────────────────────────────────────────────────── */
 
 export function useRegenerateCover() {
   const qc = useQueryClient();
@@ -184,13 +189,10 @@ export function useRegenerateCover() {
       return res.data;
     },
     onSuccess: () => {
-      // Ensure the collection list picks up the new cover_status: 'pending' state.
       void qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
 }
-
-/* ── Auth / Profile ──────────────────────────────────────────────────────── */
 
 export function useProfile() {
   return useQuery({
@@ -200,8 +202,6 @@ export function useProfile() {
         const res = await apiFetch<UserProfile>("/profile/");
         return res;
       } catch (err) {
-        // If the token is expired/invalid, clear the stale httpOnly cookie so
-        // the proxy stops treating this browser as "logged in" and redirecting
         const message = err instanceof Error ? err.message : "";
         if (message.includes("Token expired") || message.includes("Invalid token") || message.includes("Token missing") || message.includes("Invalid user ID format")) {
           await fetch("/api/auth/logout", { method: "POST" });
@@ -209,12 +209,11 @@ export function useProfile() {
         return null;
       }
     },
-    retry: false, // Don't retry on 401s
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
-/* ── Global instance stats (for landing page) ───────────────────────────────── */
 export function useGlobalStats() {
   return useQuery({
     queryKey: ["globalStats"],
@@ -223,11 +222,10 @@ export function useGlobalStats() {
   });
 }
 
-/* ── Recent manifestations (public landing) ───────────────────────────────── */
 export function useRecentManifestations(limit = 10) {
   return useQuery({
     queryKey: ["recentManifestations", limit],
-    queryFn: () => apiFetch<Record<string, unknown>[]>("/manifestations/recent", { limit }),
+    queryFn: () => apiFetch<CatalogEntry[]>("/manifestations/recent", { limit }),
     staleTime: 30_000,
   });
 }

@@ -13,8 +13,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+
 /** TypeScript types for the FRBR data model used by the iqoqo API. */
 
+/**
+ * A distinct intellectual or artistic creation.
+ * E.g., The abstract concept of "The Lord of the Rings".
+ */
 export interface Work {
   id: number;
   title: string;
@@ -22,6 +27,10 @@ export interface Work {
   meta: Record<string, unknown>;
 }
 
+/**
+ * The intellectual or artistic realization of a work.
+ * E.g., The original English text of "The Lord of the Rings", or a French translation.
+ */
 export interface Expression {
   id: number;
   work_id: number;
@@ -31,16 +40,35 @@ export interface Expression {
   meta?: Record<string, unknown>;
 }
 
+/**
+ * The physical embodiment of an expression of a work.
+ * E.g., A specific 2004 paperback edition of "The Lord of the Rings" by a specific publisher.
+ */
 export interface Manifestation {
   id: number;
   expression_id: number;
   isbn13?: string;
   publisher?: string;
   year?: number;
-  cover_url?: string;
+  cover_url?: string | null;
   meta: Record<string, unknown>;
 }
 
+/** * Global Catalog Entry DTO (Returned by /manifestations).
+ * This flattens Work/Expression fields into the Manifestation for UI consumption.
+ */
+export interface CatalogEntry extends Manifestation {
+  title: string;
+  authors: string[];
+  cover_url?: string | null;
+  cover_status?: string | null;
+  user_owns: boolean;
+}
+
+/**
+ * A single exemplar of a manifestation.
+ * E.g., The specific dog-eared copy of the 2004 paperback sitting on *your* bookshelf.
+ */
 export interface Item {
   id: number;
   manifestation_id: number;
@@ -48,13 +76,9 @@ export interface Item {
   status: ItemStatus;
   meta: Record<string, unknown>;
   added_at?: string;
-  /** ISO-8601 timestamp of the last update; falls back to added_at for legacy rows. */
   updated_at?: string;
-  /** Cover processing status, flattened from manifestation.meta by the API. */
   cover_status?: string | null;
-  /** Relative path to a locally-stored cover image (e.g. /static/covers/…). */
-  cover_path?: string | null;
-  // Joined fields from the API
+  cover_url?: string | null;
   title?: string;
   isbn?: string;
   authors?: string[];
@@ -63,16 +87,8 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-/**
- * Item status values as stored in the database.
- *
- * IMPORTANT: this union must stay in sync with `ITEM_STATUSES` in
- * `app/db/models.py`.  The cross-subsystem contract is enforced by the
- * `test_ontology.py` test suite.
- */
 export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
 
-/** Standardised API envelope returned by every Flask endpoint. */
 export interface ApiResponse<T> {
   success: boolean;
   data: T | null;
@@ -85,18 +101,14 @@ export interface ApiResponse<T> {
   };
 }
 
-/** Dashboard statistics returned by GET /api/stats */
 export interface DashboardStats {
-  // FRBR entity counts
   works: number;
   expressions: number;
   manifestations: number;
   items: number;
-  // UI-friendly aliases
   total_items: number;
   lent_items: number;
   to_read: number;
-  // Per-status counts — one key per ItemStatus value (items_available, items_lent, …)
   items_available: number;
   items_lent: number;
   items_lost: number;
@@ -105,7 +117,6 @@ export interface DashboardStats {
   items_read: number;
 }
 
-/** ISBN lookup response */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
@@ -115,7 +126,6 @@ export interface IsbnMeta {
   "ISBN-13"?: string;
 }
 
-/** User profile data returned by GET /api/profile */
 export interface UserProfile {
   id: string;
   email: string;
@@ -124,7 +134,6 @@ export interface UserProfile {
   visibility?: string;
   consents?: Record<string, boolean>;
   roles?: string[];
-  /** Array of permission strings granted to the user (e.g. 'delete:item') */
   permissions?: string[];
   created_at?: string;
 }

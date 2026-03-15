@@ -1,3 +1,11 @@
+"""Merge migration branches
+
+Revision ID: 9549d8c37cbc
+Revises: 012982fb9fe5, 20260311_fts
+Create Date: 2026-03-15 21:28:01.835028
+
+"""
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,11 +21,20 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from flask import Blueprint, jsonify
+from alembic import op
+import sqlalchemy as sa
 
-api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+# revision identifiers, used by Alembic.
+revision = "9549d8c37cbc"
+down_revision = ("012982fb9fe5", "20260311_fts")
+branch_labels = None
+depends_on = None
 
 
-def invalid_json_payload_response():
-    """Return a standardized 400 response for absent/invalid JSON payloads."""
-    return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
+def upgrade():
+    pass
+
+
+def downgrade():
+    pass

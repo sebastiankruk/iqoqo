@@ -16,9 +16,9 @@
 "use client";
 
 import Link from "next/link";
+import { Search, ScanLine, Library, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Search, ScanLine, Library, Loader2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
