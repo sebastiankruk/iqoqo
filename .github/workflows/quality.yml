@@ -99,6 +99,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: iqoqo_test
+          ADMIN_PASSWORD: slzh1b805b
         ports:
           - 5432:5432
         options: >-
