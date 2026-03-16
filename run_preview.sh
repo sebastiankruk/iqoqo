@@ -17,26 +17,30 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+# Stop on first error
 set -e
 
-echo "🚀 Deploying iqoqo PRODUCTION environment..."
+echo "🚀 Deploying iqoqo PREVIEW environment..."
 
-# 1. Check for configuration
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file not found."
-    echo "   Please copy .env.example to .env and configure your secrets."
+if [ ! -f .env.preview ]; then
+    echo "❌ Error: .env.preview file not found."
+    echo "   Please copy .env.preview.example to .env.preview and configure your secrets."
     exit 1
 fi
 
 # Set APP_VERSION if not already set
 if [ -z "$APP_VERSION" ]; then
     VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
-    export APP_VERSION="${VERSION:-prod}"
+    export APP_VERSION="${VERSION:-preview}"
 fi
 
-# 2. Build and Start Services
-echo "🚀 Starting iqoqo production deployment (Version: $APP_VERSION)..."
-docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+# Start containers using base + preview overrides
+echo "🚀 Starting iqoqo preview deployment (Version: $APP_VERSION)..."
+docker compose -p iqoqo-preview -f docker-compose.prod.yml --env-file .env.preview up -d --build
 
-echo "✅ Deployment successful!"
-echo "🌍 Nginx is listening on port ${NGINX_PORT:-8000}"
+# Optional: Run database migrations for the preview DB
+# docker exec -it iqoqo_backend_preview alembic upgrade head
+
+echo "✅ Preview environment started successfully!"
+echo "🌐 Local access: http://localhost:8081"
+echo "☁️  Next step: Configure Cloudflare Tunnel to route pre.iqoqo.cc to localhost:8081"
