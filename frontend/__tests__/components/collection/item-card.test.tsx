@@ -21,7 +21,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import type { Item } from "@/types/frbr";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
 
 function makeItem(overrides: Partial<Item> = {}): Item {
@@ -33,6 +33,18 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     meta: {},
     title: "Dune",
     authors: ["Frank Herbert"],
+    ...overrides,
+  };
+}
+
+function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
+  return {
+    id: 1,
+    expression_id: 1,
+    title: "Dune",
+    authors: ["Frank Herbert"],
+    meta: {},
+    user_owns: false,
     ...overrides,
   };
 }
@@ -65,7 +77,6 @@ describe("ItemCard", () => {
 
   it("renders a cover placeholder when coverUrl is absent", () => {
     render(<ItemCard item={makeItem({ meta: {}, manifestation_meta: {} })} />);
-    // Should not render an img; renders the BookOpen icon instead
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
@@ -98,5 +109,25 @@ describe("ItemCard", () => {
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
+  });
+
+  it("links to the manifestation detail page when isManifestationView is true", () => {
+    render(<ItemCard item={makeCatalogEntry({ id: 99 })} isManifestationView={true} />);
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/manifestation/99");
+  });
+
+  it("hides the user item status dot when isManifestationView is true", () => {
+    render(<ItemCard item={makeCatalogEntry()} isManifestationView={true} />);
+    expect(screen.queryByTitle("On Shelf")).not.toBeInTheDocument();
+  });
+
+  it("shows 'In Collection' badge when isManifestationView is true and user_owns is true", () => {
+    render(<ItemCard item={makeCatalogEntry({ user_owns: true })} isManifestationView={true} />);
+    expect(screen.getByText("In Collection")).toBeInTheDocument();
+  });
+
+  it("does not show 'In Collection' badge when user_owns is false", () => {
+    render(<ItemCard item={makeCatalogEntry({ user_owns: false })} isManifestationView={true} />);
+    expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
   });
 });

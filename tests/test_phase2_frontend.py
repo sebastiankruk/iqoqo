@@ -24,8 +24,9 @@ Docker instance is required.
 
 import pytest
 
+from app.api.auth import generate_internal_jwt
 from app.core.data_manager import DataManager
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument      # fixtures used for side-effects/setup
@@ -40,6 +41,10 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 def populated_library(app):
     """Seed an in-memory library with items spanning several statuses."""
     with app.app_context():
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        db.session.add(test_user)
+        db.session.commit()  # Commit to generate the UUID
+
         work1 = Work(title="Dune", meta={"authors": ["Frank Herbert"], "categories": ["Sci-Fi"]})
         work2 = Work(title="Recursion", meta={"authors": ["Blake Crouch"], "categories": ["Thriller"]})
         db.session.add_all([work1, work2])
@@ -69,13 +74,14 @@ def populated_library(app):
         db.session.flush()
 
         # available, lent, wish_list items to test stat counts
-        item_available = Item(manifestation_id=mani1.id, owner_id="user1", status="available", meta={})
-        item_lent = Item(manifestation_id=mani2.id, owner_id="user1", status="lent", meta={})
-        item_wish = Item(manifestation_id=mani3.id, owner_id="user1", status="wish_list", meta={})
+        item_available = Item(manifestation_id=mani1.id, owner_id=test_user.id, status="available", meta={})
+        item_lent = Item(manifestation_id=mani2.id, owner_id=test_user.id, status="lent", meta={})
+        item_wish = Item(manifestation_id=mani3.id, owner_id=test_user.id, status="wish_list", meta={})
         db.session.add_all([item_available, item_lent, item_wish])
         db.session.commit()
 
         yield {
+            "user": test_user,
             "work1": work1,
             "work2": work2,
             "mani1": mani1,
@@ -85,6 +91,13 @@ def populated_library(app):
             "item_lent": item_lent,
             "item_wish": item_wish,
         }
+
+
+@pytest.fixture
+def auth_headers(populated_library):
+    """Generate authentication headers for the user in the populated library."""
+    token = generate_internal_jwt(populated_library["user"])
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ===========================================================================
@@ -200,29 +213,29 @@ class TestStatsEndpoint:
 class TestItemsListEndpoint:
     """Tests for the paginated item list endpoint used by the collection page."""
 
-    def test_returns_200(self, client):
+    def test_returns_200(self, client, auth_headers):
         """Endpoint must respond with HTTP 200."""
-        response = client.get("/api/items")
+        response = client.get("/api/items", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_envelope_structure(self, client, populated_library):
+    def test_envelope_structure(self, client, populated_library, auth_headers):
         """Response must include success, data, error, and meta."""
-        response = client.get("/api/items")
+        response = client.get("/api/items", headers=auth_headers)
         payload = response.get_json()
         assert payload["success"] is True
         assert isinstance(payload["data"], list)
         assert payload["meta"] is not None
 
-    def test_pagination_meta_fields(self, client, populated_library):
+    def test_pagination_meta_fields(self, client, populated_library, auth_headers):
         """meta block must include page, limit, total, pages."""
-        response = client.get("/api/items?page=1&limit=2")
+        response = client.get("/api/items?page=1&limit=2", headers=auth_headers)
         meta = response.get_json()["meta"]
         for field in ("page", "limit", "total", "pages"):
             assert field in meta, f"Missing meta field: {field}"
 
-    def test_item_has_required_frontend_fields(self, client, populated_library):
+    def test_item_has_required_frontend_fields(self, client, populated_library, auth_headers):
         """Each item must expose the fields used by ItemCard in the frontend."""
-        response = client.get("/api/items?limit=10")
+        response = client.get("/api/items?limit=10", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) > 0
         for item in items:
@@ -231,23 +244,23 @@ class TestItemsListEndpoint:
             assert "status" in item
             assert "isbn" in item
 
-    def test_item_status_values_are_valid(self, client, populated_library):
+    def test_item_status_values_are_valid(self, client, populated_library, auth_headers):
         """item.status must be one of the known backend values."""
         valid_statuses = {"available", "lent", "lost", "wish_list"}
-        response = client.get("/api/items?limit=100")
+        response = client.get("/api/items?limit=100", headers=auth_headers)
         items = response.get_json()["data"]
         for item in items:
             assert item["status"] in valid_statuses, f"Unexpected status '{item['status']}' for item {item['id']}"
 
-    def test_respects_limit_parameter(self, client, populated_library):
+    def test_respects_limit_parameter(self, client, populated_library, auth_headers):
         """?limit= must cap the number of returned items."""
-        response = client.get("/api/items?limit=1")
+        response = client.get("/api/items?limit=1", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) == 1
 
-    def test_item_has_cover_status(self, client, populated_library):
+    def test_item_has_cover_status(self, client, populated_library, auth_headers):
         """Items in the list must include cover_status for the UI overlay."""
-        response = client.get("/api/items?limit=1")
+        response = client.get("/api/items?limit=1", headers=auth_headers)
         items = response.get_json()["data"]
         assert len(items) > 0
         assert "cover_status" in items[0]

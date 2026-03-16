@@ -25,7 +25,10 @@ docker compose up -d
 # 4. (Optional) Load sample data
 docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
 
-# 5. Access the application
+# 5. Initialize the admin user (uses ADMIN_EMAIL and ADMIN_PASSWORD from .env)
+docker compose exec web python scripts/init_auth.py
+
+# 6. Access the application
 # http://localhost:5000 (or your configured WEB_PORT)
 ```
 
@@ -35,7 +38,7 @@ For detailed configuration and development setup, continue reading below.
 
 ### Required Software
 
-- **Python 3.11+** - [Download](https://www.python.org/downloads/)
+- **Python 3.14+** - [Download](https://www.python.org/downloads/)
 - **Node.js 18+** and **npm** - [Download](https://nodejs.org/)
 - **PostgreSQL 15+** - Can be run via Docker (recommended) or installed locally
 - **Docker & Docker Compose** - For containerized deployment
@@ -182,6 +185,14 @@ Use this option if you want to run the Flask application on your host machine bu
    ```
 
    This will only import data if the database is empty.
+
+4. **Initialize the admin account:**
+
+    To log in, you must create the initial admin user using the credentials specified in your `.env` file (`ADMIN_EMAIL` and `ADMIN_PASSWORD`):
+
+    ```bash
+    PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+    ```
 
 ### Option B: Full Docker Deployment (Production)
 

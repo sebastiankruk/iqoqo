@@ -16,11 +16,11 @@
 import axios from "axios";
 import type { ApiResponse } from "@/types/frbr";
 
-// NEXT_PUBLIC_API_URL is the full API base URL including any path prefix.
-// Local dev default: "http://localhost:5000/api" (Flask on a separate port).
-// Production (nginx, same origin): "/api" — set via NEXT_PUBLIC_API_URL in .env.
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+// In the browser we always use a relative "/api" base so requests are same-origin
+// and flow through the Next.js rewrite proxy (/api/:path* → Flask). This avoids
+// CORS issues and ensures the httpOnly session cookie is forwarded to Flask.
+// For server-side calls use lib/api/server-client.ts instead.
+const API_BASE = "/api";
 
 /**
  * Preconfigured axios instance pointing at the Flask backend.
@@ -31,6 +31,7 @@ const API_BASE =
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 /** Unwrap the standard `{ success, data, error }` envelope. */
@@ -52,4 +53,14 @@ export async function apiFetch<T>(path: string, params?: Record<string, unknown>
     throw new Error(res.data.error ?? "Unknown error");
   }
   return res.data.data;
+}
+
+/** Fetch global instance statistics (works, manifestations, items, users) */
+export async function getGlobalStats(): Promise<{ works: number; manifestations: number; items: number; users: number }> {
+  return apiFetch('/stats/global');
+}
+
+/** Fetch most recent manifestations added to the instance */
+export async function getRecentManifestations(limit = 10) {
+  return apiFetch<Record<string, unknown>[]>("/manifestations/recent", { limit });
 }

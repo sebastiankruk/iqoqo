@@ -1,3 +1,4 @@
+# tests/test_api.py
 """Tests for the API endpoints."""
 
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
@@ -20,7 +21,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.api.auth import generate_internal_jwt
+from app.db.models import Expression, Item, Manifestation, Permission, Role, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument  # fixtures used for setup, not always referenced
@@ -79,6 +81,30 @@ def book_without_meta(app):
         db.session.commit()
 
         yield manifestation
+
+
+@pytest.fixture
+def admin_headers(app):
+    """Fixture to provide authorization headers for an admin user."""
+    with app.app_context():
+        # Create permissions
+        perms = [Permission(name="regenerate:cover"), Permission(name="refetch:metadata"), Permission(name="delete:item")]
+        db.session.add_all(perms)
+
+        # Create admin role
+        admin_role = Role(name="admin")
+        admin_role.permissions.extend(perms)
+        db.session.add(admin_role)
+
+        # Create admin user
+        admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")
+        admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
+
+        # Generate token
+        token = generate_internal_jwt(admin_user)
+        return {"Authorization": f"Bearer {token}"}
 
 
 def test_health_check(client):
@@ -180,7 +206,10 @@ def test_get_items_by_isbn(client, sample_book):
     """Test getting items for a given ISBN."""
     # First add an item
     with client.application.app_context():
-        item = Item(manifestation_id=sample_book.id, owner_id="test_user")
+        test_user = User(email="datamanager_tester@iqoqo.local", display_name="DM Tester")
+        db.session.add(test_user)
+        db.session.flush()
+        item = Item(manifestation_id=sample_book.id, owner_id=test_user.id)
         db.session.add(item)
         db.session.commit()
 
@@ -203,10 +232,10 @@ def test_get_items_by_isbn_no_manifestation(client):
     assert response.status_code == 404
 
 
-def test_add_item(client, sample_book):
+def test_add_item(client, sample_book, normal_user_headers):
     """Test adding a new item for a given ISBN."""
     metadata = {"Title": "Test Book", "Authors": ["Test Author"]}
-    response = client.post("/api/item/9780345391803", json=metadata, content_type="application/json")
+    response = client.post("/api/item/9780345391803", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
     data = response.json
     assert "item_id" in data
@@ -218,12 +247,12 @@ def test_add_item(client, sample_book):
 
 
 @patch("app.utils.isbn.fetch_isbn_metadata")
-def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
+def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client, normal_user_headers):
     """Test adding item creates manifestation from external sources if it doesn't exist."""
     mock_fetch.return_value = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
-    response = client.post("/api/item/9780307277671", json=metadata, content_type="application/json")
+    response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
 
     # Verify manifestation and item were created
@@ -234,11 +263,11 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client):
         assert len(items) == 1
 
 
-@patch("app.api.routes.start_cover_processing")
-def test_regenerate_cover(mock_start, client, sample_book):
+@patch("app.api.manifestations.start_cover_processing")
+def test_regenerate_cover(mock_start, client, sample_book, admin_headers):
     """Test the regenerate cover endpoint triggers background processing."""
     # 1. Call the endpoint
-    response = client.post(f"/api/manifestations/{sample_book.id}/regenerate-cover")
+    response = client.post(f"/api/manifestations/{sample_book.id}/regenerate-cover", headers=admin_headers)
 
     # 2. Verify Response
     assert response.status_code == 202

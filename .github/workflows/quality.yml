@@ -31,7 +31,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
@@ -80,7 +80,7 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run Markdownlint
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv"
+        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github"
 
   lint-license:
     runs-on: ubuntu-latest
@@ -113,7 +113,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
@@ -124,4 +124,5 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
+          ADMIN_PASSWORD: test_admin_password
         run: pytest tests/ -v

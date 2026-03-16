@@ -49,7 +49,7 @@ def test_archive_orphaned_covers(app, tmp_path):
         patch("app.db.models.Manifestation.query") as mock_query,
     ):
         mock_manif = MagicMock()
-        mock_manif.cover_path = "/static/covers/keep.jpg"
+        mock_manif.cover_url = "/static/covers/keep.jpg"
         mock_query.filter.return_value.all.return_value = [mock_manif]
 
         archive_orphaned_covers(app=app)
@@ -60,11 +60,11 @@ def test_archive_orphaned_covers(app, tmp_path):
 
 
 def test_schedule_missing_covers_null_path(app, tmp_path):
-    """Manifestations with cover_path=None are passed to the pipeline."""
+    """Manifestations with cover_url=None are passed to the pipeline."""
     mock_manif = MagicMock()
     mock_manif.id = 42
     mock_manif.isbn13 = "9780000000000"
-    mock_manif.cover_path = None
+    mock_manif.cover_url = None
     mock_manif.expression.work.title = "Test Book"
     mock_manif.expression.work.meta = {"authors": ["Test Author"]}
 
@@ -84,7 +84,7 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
     mock_manif = MagicMock()
     mock_manif.id = 7
     mock_manif.isbn13 = "9780000000001"
-    mock_manif.cover_path = "/static/covers/gone.jpg"
+    mock_manif.cover_url = "/static/covers/gone.jpg"
     mock_manif.expression.work.title = "Gone Book"
     mock_manif.expression.work.meta = {"authors": ["Some Author"]}
 
@@ -128,7 +128,7 @@ def test_restore_covers(app, tmp_path):
     # Create a dummy backup zip
     backup_zip = tmp_path / "backup.zip"
     with zipfile.ZipFile(backup_zip, "w") as z:
-        z.writestr("metadata.json", json.dumps({"manifestations": [{"isbn13": "123", "cover_path": "/c.jpg"}]}))
+        z.writestr("metadata.json", json.dumps({"manifestations": [{"isbn13": "123", "cover_url": "/c.jpg"}]}))
         z.writestr("covers/c.jpg", b"image data")
 
     with patch("app.config.Config.BASE_DIR", str(tmp_path)):
@@ -159,7 +159,7 @@ def test_fetch_covers_run_batch(app):
         # 3. No cover, other status (should process)
         m3 = Manifestation(expression_id=expr.id, isbn13="9781000000003", meta={"cover_status": "pending"})
         # 4. Has cover (should skip)
-        m4 = Manifestation(expression_id=expr.id, isbn13="9781000000004", cover_path="/covers/exist.jpg", meta={})
+        m4 = Manifestation(expression_id=expr.id, isbn13="9781000000004", cover_url="/covers/exist.jpg", meta={})
 
         db.session.add_all([m1, m2, m3, m4])
         db.session.commit()

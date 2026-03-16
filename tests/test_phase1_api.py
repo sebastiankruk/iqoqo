@@ -16,10 +16,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import uuid
+
 import pytest
 
 from app import create_app
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.api.auth import generate_internal_jwt
+from app.db.models import Expression, Item, Manifestation, Permission, Role, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument  # fixtures used for setup, not always referenced
@@ -27,8 +30,13 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 
 @pytest.fixture
 def sample_work(app):
-    """Create a sample work with expression, manifestation, and item."""
+    # 1. Create a test user first so we have a valid UUID for the foreign key
     with app.app_context():
+        test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        db.session.add(test_user)
+        db.session.flush()  # Commit so the DB generates the UUID
+
+        # 2. Create the FRBR tree
         # Create Work
         work = Work(
             title="Test Book",
@@ -50,13 +58,12 @@ def sample_work(app):
         )
         db.session.add(manifestation)
         db.session.flush()
-
-        # Create Item
-        item = Item(manifestation_id=manifestation.id, owner_id="test_user", status="available", meta={})
+        # 3. Create the item using the User's UUID, NOT the string "test_user"
+        item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available")  # <--- FIX: Use the actual User UUID
         db.session.add(item)
         db.session.commit()
 
-        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item}
+        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item, "user": test_user}
 
 
 @pytest.fixture
@@ -187,9 +194,9 @@ def test_stats_cors_headers(cors_client):
 # =============================================================================
 
 
-def test_get_items_empty(client):
+def test_get_items_empty(client, admin_headers):
     """Test getting items list when database is empty."""
-    response = client.get("/api/items")
+    response = client.get("/api/items", headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -198,9 +205,14 @@ def test_get_items_empty(client):
     assert data["meta"]["page"] == 1
 
 
-def test_get_items_with_data(client, sample_work):
+def test_get_items_with_data(client, sample_work, admin_headers):
     """Test getting items list with data."""
-    response = client.get("/api/items")
+    # Generate token for the user who owns the item
+    token = generate_internal_jwt(sample_work["user"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/items", headers=headers)
+
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -220,6 +232,14 @@ def test_get_items_pagination(client, app):
     """Test items list pagination."""
     # Create multiple items
     with app.app_context():
+        test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        db.session.add(test_user)
+        db.session.flush()  # Commit so the DB generates the UUID
+
+        # Generate the token while we have the user object
+        token = generate_internal_jwt(test_user)
+        headers = {"Authorization": f"Bearer {token}"}
+
         work = Work(title="Test", meta={"authors": []})
         db.session.add(work)
         db.session.flush()
@@ -233,13 +253,13 @@ def test_get_items_pagination(client, app):
         db.session.flush()
 
         # Add 25 items
-        for i in range(25):
-            item = Item(manifestation_id=manifestation.id, owner_id=f"user_{i}", status="available", meta={})
+        for _ in range(25):
+            item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
             db.session.add(item)
         db.session.commit()
 
-    # Test first page
-    response = client.get("/api/items?page=1&limit=10")
+    # Test first page (Add headers here)
+    response = client.get("/api/items?page=1&limit=10", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert len(data["data"]) == 10
@@ -248,15 +268,15 @@ def test_get_items_pagination(client, app):
     assert data["meta"]["total"] == 25
     assert data["meta"]["pages"] == 3
 
-    # Test second page
-    response = client.get("/api/items?page=2&limit=10")
+    # Test second page (Add headers here)
+    response = client.get("/api/items?page=2&limit=10", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert len(data["data"]) == 10
     assert data["meta"]["page"] == 2
 
-    # Test last page
-    response = client.get("/api/items?page=3&limit=10")
+    # Test last page (Add headers here)
+    response = client.get("/api/items?page=3&limit=10", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert len(data["data"]) == 5
@@ -278,12 +298,22 @@ def test_get_items_single_status_filter(client, app):
         db.session.add(manifestation)
         db.session.flush()
 
-        reading_item = Item(manifestation_id=manifestation.id, owner_id="user1", status="reading", meta={})
-        available_item = Item(manifestation_id=manifestation.id, owner_id="user2", status="available", meta={})
+        test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        db.session.add(test_user)
+        db.session.flush()  # Commit so the DB generates the UUID
+
+        # --- FIX: Generate the token for the newly created user ---
+        token = generate_internal_jwt(test_user)
+        headers = {"Authorization": f"Bearer {token}"}
+        # ----------------------------------------------------------
+
+        reading_item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", meta={})
+        available_item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
         db.session.add_all([reading_item, available_item])
         db.session.commit()
 
-    response = client.get("/api/items?statuses=reading")
+    # --- FIX: Pass the headers in the request ---
+    response = client.get("/api/items?statuses=reading", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -306,16 +336,25 @@ def test_get_items_multi_status_filter(client, app):
         db.session.add(manifestation)
         db.session.flush()
 
+        test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        db.session.add(test_user)
+        db.session.flush()  # Commit so the DB generates the UUID
+
+        # --- FIX: Generate the token for the newly created user ---
+        token = generate_internal_jwt(test_user)
+        headers = {"Authorization": f"Bearer {token}"}
+        # ----------------------------------------------------------
+
         items = [
-            Item(manifestation_id=manifestation.id, owner_id="u1", status="reading", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id="u2", status="wish_list", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id="u3", status="available", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id="u4", status="read", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", meta={}),
         ]
         db.session.add_all(items)
         db.session.commit()
 
-    response = client.get("/api/items?statuses=reading,wish_list")
+    response = client.get("/api/items?statuses=reading,wish_list", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -326,7 +365,10 @@ def test_get_items_multi_status_filter(client, app):
 
 def test_get_items_includes_timestamps(client, sample_work):
     """Test that GET /api/items includes added_at and updated_at in each item."""
-    response = client.get("/api/items")
+    token = generate_internal_jwt(sample_work["user"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/items", headers=headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -360,13 +402,22 @@ def test_get_items_ordering_by_updated_at(client, app):
         db.session.add(manifestation)
         db.session.flush()
 
+        test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        db.session.add(test_user)
+        db.session.flush()  # Commit so the DB generates the UUID
+
+        # --- FIX: Generate the token for the newly created user ---
+        token = generate_internal_jwt(test_user)
+        headers = {"Authorization": f"Bearer {token}"}
+        # ----------------------------------------------------------
+
         # Older item
-        old_item = Item(manifestation_id=manifestation.id, owner_id="old", status="available", meta={})
+        old_item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
         old_item.added_at = now - timedelta(hours=2)
         old_item.updated_at = now - timedelta(hours=2)
 
         # Newer item
-        new_item = Item(manifestation_id=manifestation.id, owner_id="new", status="available", meta={})
+        new_item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
         new_item.added_at = now - timedelta(hours=1)
         new_item.updated_at = now - timedelta(minutes=5)
 
@@ -376,16 +427,16 @@ def test_get_items_ordering_by_updated_at(client, app):
         old_id = old_item.id
         new_id = new_item.id
 
-    response = client.get("/api/items?statuses=available")
+    response = client.get("/api/items?statuses=available", headers=headers)
     assert response.status_code == 200
     data = response.json
     ids = [item["id"] for item in data["data"]]
     assert ids.index(new_id) < ids.index(old_id), "Newer item should appear before older item"
 
 
-def test_get_items_status_filter_no_matches(client, sample_work):
+def test_get_items_status_filter_no_matches(client, sample_work, admin_headers):
     """Test that filtering by a status with no matching items returns empty list."""
-    response = client.get("/api/items?statuses=lost")
+    response = client.get("/api/items?statuses=lost", headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -400,7 +451,9 @@ def test_get_items_status_filter_no_matches(client, sample_work):
 
 def test_get_item_detail(client, sample_work):
     """Test getting detailed item information."""
+
     item_id = sample_work["item"].id
+    owner_id = sample_work["item"].owner_id
 
     response = client.get(f"/api/items/{item_id}")
     assert response.status_code == 200
@@ -410,7 +463,7 @@ def test_get_item_detail(client, sample_work):
 
     item = data["data"]
     assert item["id"] == item_id
-    assert item["owner_id"] == "test_user"
+    assert item["owner_id"] == str(owner_id)
     assert item["status"] == "available"
     assert item["isbn"] == "9781234567890"
     assert item["work"]["title"] == "Test Book"
@@ -475,11 +528,11 @@ def test_update_item_not_found(client):
         (None, "application/json"),  # missing JSON body
     ],
 )
-def test_update_item_invalid_or_missing_json_payload(client, sample_work, payload, content_type):
+def test_update_item_invalid_or_missing_json_payload(client, sample_work, payload, content_type, admin_headers):
     """Test update_item returns standardized 400 for invalid or missing JSON payload."""
     item_id = sample_work["item"].id
 
-    request_kwargs = {"content_type": content_type}
+    request_kwargs = {"content_type": content_type, "headers": admin_headers}
     if payload is not None:
         request_kwargs["data"] = payload
 
@@ -498,11 +551,11 @@ def test_update_item_invalid_or_missing_json_payload(client, sample_work, payloa
 # =============================================================================
 
 
-def test_delete_item(client, sample_work):
+def test_delete_item(client, sample_work, admin_headers):
     """Test deleting an item."""
     item_id = sample_work["item"].id
 
-    response = client.delete(f"/api/items/{item_id}")
+    response = client.delete(f"/api/items/{item_id}", headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -513,9 +566,9 @@ def test_delete_item(client, sample_work):
     assert response.status_code == 404
 
 
-def test_delete_item_not_found(client):
+def test_delete_item_not_found(client, admin_headers):
     """Test deleting non-existent item returns 404."""
-    response = client.delete("/api/items/99999")
+    response = client.delete("/api/items/99999", headers=admin_headers)
     assert response.status_code == 404
     data = response.json
     assert data["success"] is False
@@ -528,7 +581,10 @@ def test_delete_item_not_found(client):
 
 def test_standardized_response_format_success(client, sample_work):
     """Test that successful responses follow the standardized format."""
-    response = client.get("/api/items")
+    token = generate_internal_jwt(sample_work["user"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/items", headers=headers)
     assert response.status_code == 200
     data = response.json
 

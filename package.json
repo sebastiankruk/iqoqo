@@ -1,6 +1,6 @@
 {
   "name": "iqoqo",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {
@@ -26,5 +26,5 @@
     "linked-data"
   ],
   "author": "Sebastian Kruk",
-  "license": "MIT"
+  "license": "AGPL-3.0-or-later"
 }

@@ -22,11 +22,12 @@ Supports both full database dumps and selective exports.
 #
 
 import json
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from app.db import db
-from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, Work
+from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, Work
 
 
 class DataManager:
@@ -82,7 +83,7 @@ class DataManager:
                     "ean": manif.ean,
                     "publisher": manif.publisher,
                     "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
-                    "cover_path": manif.cover_path,
+                    "cover_url": manif.cover_url,
                     "meta": manif.meta,
                 }
             )
@@ -93,7 +94,7 @@ class DataManager:
                 {
                     "id": item.id,
                     "manifestation_id": item.manifestation_id,
-                    "owner_id": item.owner_id,
+                    "owner_id": str(item.owner_id) if item.owner_id else None,
                     "status": item.status,
                     "condition": item.condition,
                     "added_at": item.added_at.isoformat() if item.added_at else None,
@@ -141,6 +142,13 @@ class DataManager:
             "manifestations": 0,
             "items": 0,
         }
+
+        # Ensure a fallback user exists for imported items lacking valid UUID owners
+        default_owner = User.query.first()
+        if not default_owner:
+            default_owner = User(email="data_importer@iqoqo.local", display_name="Data Importer")
+            db.session.add(default_owner)
+            db.session.flush()
 
         # Import works
         for work_data in data.get("works", []):
@@ -207,9 +215,18 @@ class DataManager:
             if item_data.get("added_at"):
                 added_at = datetime.fromisoformat(item_data["added_at"])
 
+            # Resolve Owner ID (fallback to default if invalid/missing)
+            raw_owner_id = item_data.get("owner_id")
+            owner_id = default_owner.id
+            if raw_owner_id:
+                try:
+                    owner_id = uuid.UUID(str(raw_owner_id))
+                except ValueError:
+                    pass
+
             item = Item(
                 manifestation_id=new_manif_id,
-                owner_id=item_data.get("owner_id"),
+                owner_id=owner_id,
                 status=item_data.get("status", "available"),
                 condition=item_data.get("condition"),
                 added_at=added_at,

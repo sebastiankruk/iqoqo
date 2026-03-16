@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 # pylint: disable=unused-argument  # fixtures used for setup, not always referenced
@@ -32,6 +32,10 @@ from app.db.models import Expression, Item, Manifestation, Work, db
 def sample_work_complete(app):
     """Create a complete FRBRoo structure with Work, Expression, Manifestation, and Item."""
     with app.app_context():
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        db.session.add(test_user)
+        db.session.commit()  # Commit to generate the UUID
+
         # Create Work
         work = Work(
             title="The Lord of the Rings",
@@ -55,11 +59,11 @@ def sample_work_complete(app):
         db.session.flush()
 
         # Create Item
-        item = Item(manifestation_id=manifestation.id, owner_id="test_user", status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
         db.session.add(item)
         db.session.commit()
 
-        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item}
+        yield {"work": work, "expression": expression, "manifestation": manifestation, "item": item, "user": test_user}
 
 
 # =============================================================================
@@ -242,10 +246,10 @@ class TestISBNScanning:
 class TestAddingBooks:
     """Test suite for adding books and items."""
 
-    def test_add_item_to_existing_manifestation(self, client, sample_work_complete):
+    def test_add_item_to_existing_manifestation(self, client, sample_work_complete, normal_user_headers):
         """Test adding an item to an existing manifestation."""
         metadata = {"Title": "The Lord of the Rings", "Authors": ["J.R.R. Tolkien"]}
-        response = client.post("/api/item/9780544003415", json=metadata, content_type="application/json")
+        response = client.post("/api/item/9780544003415", json=metadata, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
         data = response.json
         assert "item_id" in data
@@ -256,13 +260,13 @@ class TestAddingBooks:
             items = Item.query.filter_by(manifestation_id=manifestation.id).all()
             assert len(items) == 2
 
-    def test_add_item_creates_manifestation_if_not_exists(self, client):
+    def test_add_item_creates_manifestation_if_not_exists(self, client, normal_user_headers):
         """Test adding item creates manifestation structure if ISBN doesn't exist."""
         with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
             mock_fetch.return_value = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
 
             metadata = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
-            response = client.post("/api/item/9780316769174", json=metadata, content_type="application/json")
+            response = client.post("/api/item/9780316769174", json=metadata, headers=normal_user_headers, content_type="application/json")
             assert response.status_code == 200
 
         # Verify complete FRBR structure was created
@@ -276,10 +280,10 @@ class TestAddingBooks:
             work = manifestation.expression.work
             assert work.title == "The Catcher in the Rye"
 
-    def test_add_item_with_metadata_update(self, client, sample_work_complete):
+    def test_add_item_with_metadata_update(self, client, sample_work_complete, normal_user_headers):
         """Test adding item with metadata updates the manifestation."""
         new_metadata = {"Title": "Updated Title", "Authors": ["Updated Author"]}
-        response = client.post("/api/item/9780544003415", json=new_metadata, content_type="application/json")
+        response = client.post("/api/item/9780544003415", json=new_metadata, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
 
         # Verify metadata was updated
@@ -292,35 +296,31 @@ class TestAddingBooks:
             assert manifestation.expression.work.title == "Updated Title"
             assert manifestation.expression.work.meta["authors"] == ["Updated Author"]
 
-    def test_add_item_without_metadata(self, client, sample_work_complete):
+    def test_add_item_without_metadata(self, client, sample_work_complete, normal_user_headers):
         """Test adding item without providing metadata."""
-        response = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
         assert "item_id" in response.json
 
-    def test_add_item_creates_correct_owner(self, client, sample_work_complete):
+    def test_add_item_creates_correct_owner(self, client, sample_work_complete, normal_user_headers):
         """Test that adding an item associates it with correct owner."""
-        with client.session_transaction() as sess:
-            sess["client_id"] = "specific_user_123"
-
-        response = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
             item = db.session.get(Item, response.json["item_id"])
-            # Note: Current implementation uses "default_user", not session
-            # This test documents current behavior
-            assert item.owner_id in ["default_user", "specific_user_123"]
+            user = User.query.filter_by(email="test_user@iqoqo.local").first()
+            assert item.owner_id == user.id
 
-    def test_add_multiple_items_same_manifestation(self, client, sample_work_complete):
+    def test_add_multiple_items_same_manifestation(self, client, sample_work_complete, normal_user_headers):
         """Test adding multiple items for the same manifestation."""
         # Add first item
-        response1 = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response1 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response1.status_code == 200
         item_id_1 = response1.json["item_id"]
 
         # Add second item
-        response2 = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response2 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response2.status_code == 200
         item_id_2 = response2.json["item_id"]
 
@@ -333,14 +333,14 @@ class TestAddingBooks:
             assert len(items) == 3  # Original + 2 new ones
 
     @patch("app.utils.isbn.fetch_isbn_metadata", return_value=None)
-    def test_add_item_nonexistent_isbn_fails(self, mock_fetch, client):
+    def test_add_item_nonexistent_isbn_fails(self, mock_fetch, client, normal_user_headers):
         """Test adding item for a valid ISBN not found in any upstream source fails."""
-        response = client.post("/api/item/9780000000002", json={}, content_type="application/json")
+        response = client.post("/api/item/9780000000002", json={}, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 404
 
-    def test_add_item_sets_default_status(self, client, sample_work_complete):
+    def test_add_item_sets_default_status(self, client, sample_work_complete, normal_user_headers):
         """Test that adding an item sets default status to 'available'."""
-        response = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -513,8 +513,8 @@ class TestGettingItems:
         # Add more items
         with client.application.app_context():
             manifestation = Manifestation.query.filter_by(isbn13="9780544003415").first()
-            item2 = Item(manifestation_id=manifestation.id, owner_id="user2")
-            item3 = Item(manifestation_id=manifestation.id, owner_id="user3")
+            item2 = Item(manifestation_id=manifestation.id, owner_id=sample_work_complete["user"].id)
+            item3 = Item(manifestation_id=manifestation.id, owner_id=sample_work_complete["user"].id)
             db.session.add_all([item2, item3])
             db.session.commit()
 
@@ -568,7 +568,7 @@ class TestBookOperationsIntegration:
     """Integration tests for complete workflows."""
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
-    def test_complete_workflow_scan_add_update(self, mock_fetch, client):
+    def test_complete_workflow_scan_add_update(self, mock_fetch, client, normal_user_headers):
         """Test complete workflow: scan new book, add item, then update metadata."""
         mock_fetch.return_value = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
 
@@ -578,7 +578,7 @@ class TestBookOperationsIntegration:
         assert scan_response.json["Title"] == "The Hobbit"
 
         # Step 2: Add an item
-        add_response = client.post("/api/item/9780547928227", json={}, content_type="application/json")
+        add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
         assert add_response.status_code == 200
         item_id = add_response.json["item_id"]
 
@@ -619,15 +619,15 @@ class TestBookOperationsIntegration:
             works = Work.query.filter_by(title="Harry Potter").all()
             assert len(works) == 1
 
-    def test_add_items_different_owners(self, client, sample_work_complete):
+    def test_add_items_different_owners(self, client, sample_work_complete, normal_user_headers, admin_headers):
         """Test adding items for different owners to the same manifestation."""
         # Add item for first owner
-        response1 = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response1 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response1.status_code == 200
         assert "item_id" in response1.json
 
         # Add item for second owner (in real app, would be different session)
-        response2 = client.post("/api/item/9780544003415", json={}, content_type="application/json")
+        response2 = client.post("/api/item/9780544003415", json={}, headers=admin_headers, content_type="application/json")
         assert response2.status_code == 200
         assert "item_id" in response2.json
 
@@ -638,13 +638,13 @@ class TestBookOperationsIntegration:
             assert len(items) == 3  # Original + 2 new
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
-    def test_frbr_structure_integrity(self, mock_fetch, client):
+    def test_frbr_structure_integrity(self, mock_fetch, client, normal_user_headers):
         """Test that FRBR structure maintains referential integrity."""
         mock_fetch.return_value = {"Title": "Animal Farm", "Authors": ["George Orwell"]}
 
         # Create structure through API
         client.get("/api/isbn/9780141182605")
-        client.post("/api/item/9780141182605", json={}, content_type="application/json")
+        client.post("/api/item/9780141182605", json={}, headers=normal_user_headers, content_type="application/json")
 
         # Verify complete chain
         with client.application.app_context():

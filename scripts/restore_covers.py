@@ -51,12 +51,12 @@ def restore_covers(zip_path, app=None):
 
         with app.app_context():
             for m_data in data.get("manifestations", []):
-                if not m_data.get("cover_path"):
+                if not m_data.get("cover_url"):
                     continue
 
                 manif = Manifestation.query.filter_by(isbn13=m_data.get("isbn13")).first()
                 if manif:
-                    manif.cover_path = m_data["cover_path"]
+                    manif.cover_url = m_data["cover_url"]
                     new_meta = dict(manif.meta or {})
                     if "cover_source" in (m_data.get("meta") or {}):
                         new_meta["cover_source"] = m_data["meta"]["cover_source"]

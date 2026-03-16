@@ -16,11 +16,45 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Bell, ScanLine, Library } from "lucide-react";
+import { Search, ScanLine, Library, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useProfile } from "@/lib/api/hooks";
 
 /** Sticky top navigation bar – "Modern Athenaeum" style. */
 export function Navbar() {
+  const { data: profile, isLoading } = useProfile();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+    } catch (err) {
+      console.error("Failed to logout:", err);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/collection?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      router.push('/collection');
+    }
+  };
+
   return (
     <nav className="sticky top-0 z-50 bg-primary text-primary-foreground dark:bg-[#040608] dark:text-foreground dark:border-b">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
@@ -28,9 +62,9 @@ export function Navbar() {
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
             <svg
-              width="20"
-              height="20"
-              viewBox="0 0 200 200"
+              width="27"
+              height="27"
+              viewBox="0 0 220 220"
               fill="none"
               className="text-accent-foreground dark:text-white"
             >
@@ -46,16 +80,18 @@ export function Navbar() {
         </Link>
 
         {/* Search */}
-        <div className="relative mx-auto w-full max-w-md">
+        <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md">
           <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
             <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
           </div>
           <input
             type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search your collection..."
             className="h-9 w-full rounded-full border border-primary-foreground/15 bg-primary-foreground/10 pl-10 pr-4 text-sm text-primary-foreground placeholder-primary-foreground/40 outline-none transition-colors focus:border-accent focus:bg-primary-foreground/15 dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-white/60"
           />
-        </div>
+        </form>
 
         {/* Right section */}
         <div className="flex shrink-0 items-center gap-4">
@@ -66,27 +102,69 @@ export function Navbar() {
             <Library className="h-3.5 w-3.5" />
             Collection
           </Link>
-          <Link
-            href="/scan"
-            className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-          >
-            <ScanLine className="h-4 w-4" />
-            <span className="hidden sm:inline">Scan</span>
-          </Link>
+          {profile ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/scan"
+                className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+              >
+                <ScanLine className="h-4 w-4" />
+                <span className="hidden sm:inline">Scan</span>
+              </Link>
+            </div>
+          ) : (
+            <span />
+          )}
+
           <ModeToggle />
-          <button
-            className="relative rounded-full p-2 transition-colors hover:bg-primary-foreground/10 dark:hover:bg-white/10"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4.5 w-4.5" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />
-          </button>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-            aria-label="User profile"
-          >
-            iq
-          </button>
+
+          {/* Auth State Rendering */}
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : profile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden outline-none"
+                  aria-label="User menu"
+                >
+                  <Avatar
+                    src={profile.avatar_url}
+                    alt={`${profile.display_name || profile.email}'s profile picture`}
+                    size={36}
+                    className="rounded-full"
+                    fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+                  />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 dark:bg-[#040608] dark:border-white/20">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile">Profile Settings</Link>
+                </DropdownMenuItem>
+
+                {profile.roles?.includes("admin") && (
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/admin/settings">Admin Settings</Link>
+                  </DropdownMenuItem>
+                )}
+
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem asChild className="cursor-pointer text-red-500 focus:text-red-500">
+                  <button onClick={handleLogout} className="w-full text-left">
+                    Log out
+                  </button>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link href="/login" className="text-sm font-medium hover:underline">
+                Sign In
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </nav>

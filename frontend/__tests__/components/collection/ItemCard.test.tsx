@@ -22,10 +22,19 @@ import type { Item } from "@/types/frbr";
 
 // Mock Next.js Image component
 vi.mock("next/image", () => ({
-  default: (props: React.ComponentProps<"img">) => (
+  default: ({ src, alt, ...props }: { src: string; alt: string } & Record<string, unknown>) => {
+    const rest = { ...props };
+    // Remove Next.js specific props to avoid React DOM warnings in tests
+    delete rest.fill;
+    delete rest.sizes;
+    delete rest.unoptimized;
+    delete rest.priority;
+    delete rest.placeholder;
+    delete rest.blurDataURL;
+
     // eslint-disable-next-line @next/next/no-img-element
-    <img {...props} alt={props.alt} />
-  ),
+    return <img src={src} alt={alt} {...(rest as React.ComponentProps<"img">)} />;
+  },
 }));
 
 const mockItem: Item = {
@@ -47,7 +56,7 @@ describe("ItemCard", () => {
   it("renders the cover image when available", () => {
     const itemWithCover = {
       ...mockItem,
-      cover_path: "/static/covers/test.jpg",
+      cover_url: "/static/covers/test.jpg",
       cover_status: "ready",
     };
 
@@ -61,7 +70,7 @@ describe("ItemCard", () => {
   it("shows loading overlay when status is pending", () => {
     const pendingItem = {
       ...mockItem,
-      cover_path: "/static/covers/placeholder.jpg",
+      cover_url: "/static/covers/placeholder.jpg",
       cover_status: "pending",
     };
 
@@ -73,7 +82,7 @@ describe("ItemCard", () => {
   it("shows processing overlay when status is processing", () => {
     const processingItem = {
       ...mockItem,
-      cover_path: "/static/covers/placeholder.jpg",
+      cover_url: "/static/covers/placeholder.jpg",
       cover_status: "processing",
     };
 

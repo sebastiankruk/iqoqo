@@ -1,0 +1,359 @@
+"""(Handles User Collections)"""
+
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+
+from flask import current_app, jsonify, request
+from sqlalchemy import func, text
+from sqlalchemy.orm import selectinload
+
+from app.api.core import api_bp, invalid_json_payload_response
+from app.api.decorators import require_auth, require_permission
+from app.api.manifestations import lookup_isbn
+from app.db.models import Expression, Item, Manifestation, Work, db
+
+
+@api_bp.route("/items", methods=["GET"])
+@require_auth
+def get_items():
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return (
+            jsonify({"success": False, "data": [], "meta": {"page": 1, "limit": 20, "total": 0, "pages": 0}, "error": "Unauthorized"}),
+            401,
+        )
+
+    page_param = request.args.get("page", "1")
+    limit_param = request.args.get("limit", "20")
+    statuses_filter = request.args.get("statuses", None)
+    q = request.args.get("q", "").strip()
+
+    try:
+        page = int(page_param)
+        limit = int(limit_param)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
+
+    if page < 1 or limit < 1:
+        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
+
+    offset = (page - 1) * limit
+
+    if q:
+        w_tsvector_expr = "w.fts_simple"
+        m_tsvector_expr = "m.fts_simple"
+        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+
+        params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
+        statuses_sql = " AND i.owner_id = :user_id"
+
+        if statuses_filter:
+            statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
+            params["statuses"] = statuses_list
+            statuses_sql += " AND i.status IN :statuses"
+
+        try:
+            count_sql = f"""
+            SELECT count(*) FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            JOIN items i ON i.manifestation_id = m.id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            {statuses_sql}
+            """
+
+            rows_sql = f"""
+            SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
+                   m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
+                   w.meta as work_meta, i.added_at, i.updated_at,
+                   ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+            FROM manifestations m
+            JOIN expressions e ON e.id = m.expression_id
+            JOIN works w ON w.id = e.work_id
+            JOIN items i ON i.manifestation_id = m.id
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            {statuses_sql}
+            ORDER BY rank DESC
+            LIMIT :limit OFFSET :offset
+            """
+
+            count_stmt = text(count_sql)
+            rows_stmt = text(rows_sql)
+            if "statuses" in params:
+                from sqlalchemy import bindparam
+
+                count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
+                rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
+
+            total = int(db.session.execute(count_stmt, params).scalar() or 0)
+            results = db.session.execute(rows_stmt, params).mappings().all()
+
+            items_data = []
+            for row in results:
+                item_id = row.get("item_id")
+                manifestation_id = row.get("manifestation_id")
+                owner_id = row.get("owner_id")
+                added_at = row.get("added_at")
+                updated_at = row.get("updated_at")
+                manifestation_meta = row.get("manifestation_meta") or {}
+                work_meta = row.get("work_meta") or {}
+
+                items_data.append(
+                    {
+                        "id": item_id,
+                        "owner_id": str(owner_id) if owner_id else None,
+                        "status": row.get("status"),
+                        "manifestation_id": manifestation_id,
+                        "isbn": row.get("isbn13"),
+                        "title": row.get("title"),
+                        "cover_url": row.get("cover_url"),
+                        "cover_status": manifestation_meta.get("cover_status") if isinstance(manifestation_meta, dict) else None,
+                        "authors": work_meta.get("authors", []) if isinstance(work_meta, dict) else [],
+                        "added_at": added_at.isoformat() if added_at else None,
+                        "updated_at": (updated_at or added_at).isoformat() if (updated_at or added_at) else None,
+                    }
+                )
+
+        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
+            current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
+            if db.engine.dialect.name == "postgresql":
+                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
+
+            pattern = f"%{q}%"
+            base_query = (
+                db.session.query(Item, Manifestation, Expression, Work)
+                .select_from(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .filter(Item.owner_id == user_id)
+                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+            )
+
+            if statuses_filter:
+                statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+                base_query = base_query.filter(Item.status.in_(statuses_list))
+
+            total = base_query.count()
+            results = base_query.offset(offset).limit(limit).all()
+
+            items_data = []
+            for item, manifestation, _expression, work in results:
+                w_meta = work.meta if work and work.meta else {}
+                m_meta = manifestation.meta if manifestation and manifestation.meta else {}
+
+                items_data.append(
+                    {
+                        "id": item.id,
+                        "owner_id": item.owner_id,
+                        "status": item.status,
+                        "manifestation_id": manifestation.id,
+                        "isbn": manifestation.isbn13,
+                        "title": work.title,
+                        "cover_url": manifestation.cover_url,
+                        "cover_status": m_meta.get("cover_status") if m_meta else None,
+                        "authors": w_meta.get("authors", []) if w_meta else [],
+                        "added_at": item.added_at.isoformat() if item and item.added_at else None,
+                        "updated_at": (
+                            (item.updated_at or item.added_at).isoformat() if item and (item.updated_at or item.added_at) else None
+                        ),
+                    }
+                )
+
+        return jsonify(
+            {
+                "success": True,
+                "data": items_data,
+                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "error": None,
+            }
+        )
+
+    query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    query = query.filter(Item.owner_id == user_id)
+    if statuses_filter:
+        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        query = query.filter(Item.status.in_(statuses_list))
+
+    query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+    total = query.count()
+    items = query.offset(offset).limit(limit).all()
+
+    items_data = []
+    for item in items:
+        manifestation = item.manifestation
+        work_title = ""
+        authors: list[str] = []
+        if manifestation and manifestation.expression and manifestation.expression.work:
+            work = manifestation.expression.work
+            work_title = work.title or ""
+            authors = work.meta.get("authors", []) if work.meta else []
+
+        items_data.append(
+            {
+                "id": item.id,
+                "owner_id": item.owner_id,
+                "status": item.status,
+                "manifestation_id": item.manifestation_id,
+                "isbn": manifestation.isbn13 if manifestation else None,
+                "title": work_title,
+                "cover_url": manifestation.cover_url if manifestation else None,
+                "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
+                "authors": authors,
+                "added_at": item.added_at.isoformat() if item.added_at else None,
+                "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "data": items_data,
+            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+            "error": None,
+        }
+    )
+
+
+@api_bp.route("/items/<int:item_id>", methods=["GET"])
+def get_item_detail(item_id: int):
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    manifestation = item.manifestation
+    item_data = {
+        "id": item.id,
+        "owner_id": item.owner_id,
+        "status": item.status,
+        "manifestation_id": item.manifestation_id,
+        "meta": item.meta,
+    }
+
+    if manifestation:
+        item_data["isbn"] = manifestation.isbn13
+        item_data["manifestation_meta"] = manifestation.meta
+        item_data["cover_url"] = manifestation.cover_url
+        item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
+
+        if manifestation.expression:
+            expression = manifestation.expression
+            item_data["expression"] = {
+                "id": expression.id,
+                "content_type": expression.content_type,
+                "language": expression.language,
+            }
+
+            if expression.work:
+                work = expression.work
+                item_data["work"] = {
+                    "id": work.id,
+                    "title": work.title,
+                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "meta": work.meta,
+                }
+
+    return jsonify({"success": True, "data": item_data, "error": None})
+
+
+@api_bp.route("/items/<int:item_id>", methods=["PUT"])
+def update_item(item_id: int):
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    if data.get("status"):
+        item.status = data["status"]
+    if data.get("meta"):
+        item.meta = data["meta"]
+
+    try:
+        db.session.commit()
+        return jsonify({"success": True, "data": {"id": item.id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500
+
+
+@api_bp.route("/items/<int:item_id>", methods=["DELETE"])
+@require_auth
+@require_permission("delete:item")
+def delete_item(item_id: int):
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    try:
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"id": item_id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "data": None, "error": str(e)}), 500
+
+
+@api_bp.route("/item/<isbn>", methods=["GET"])
+def get_items_by_isbn(isbn: str):
+    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    if not manifestation:
+        return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+    items = Item.query.filter_by(manifestation_id=manifestation.id).all()
+    if not items:
+        return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
+
+    return jsonify({"ids": [item.id for item in items]})
+
+
+@api_bp.route("/item/<isbn>", methods=["POST"])
+@require_auth
+def add_item(isbn: str):
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+
+    if not manifestation:
+        lookup_response = lookup_isbn(isbn)
+        if isinstance(lookup_response, tuple):
+            status_code = lookup_response[1] if len(lookup_response) > 1 else 404
+            if status_code != 200:
+                return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
+        manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+
+    metadata = request.get_json(silent=True)
+    if metadata:
+        manifestation.update_meta(**metadata)
+        if manifestation.expression and manifestation.expression.work:
+            if "Title" in metadata:
+                manifestation.expression.work.title = metadata["Title"]
+            if "Authors" in metadata:
+                if not manifestation.expression.work.meta:
+                    manifestation.expression.work.meta = {}
+                work_meta = dict(manifestation.expression.work.meta)
+                work_meta["authors"] = metadata["Authors"]
+                manifestation.expression.work.meta = work_meta
+
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    db.session.add(item)
+    db.session.commit()
+
+    return jsonify({"item_id": item.id})
