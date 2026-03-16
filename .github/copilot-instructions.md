@@ -15,12 +15,12 @@ Every entity **must** fit the FRBR hierarchy — ask "Work, Expression, Manifest
 
 ## Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Backend | Python 3.11+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations |
-| Frontend | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4, Radix UI, TanStack Query v5 + Axios, React Hook Form + Zod, `@zxing/browser` |
-| Testing | Python: `pytest` · Frontend: Vitest 4 + Testing Library + `happy-dom` |
-| Deployment | Docker Compose |
+| Layer      | Technology                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend    | Python 3.11+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations                                                |
+| Frontend   | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4, Radix UI, TanStack Query v5 + Axios, React Hook Form + Zod, `@zxing/browser` |
+| Testing    | Python: `pytest` · Frontend: Vitest 4 + Testing Library + `happy-dom`                                                                       |
+| Deployment | Docker Compose                                                                                                                              |
 
 ## Environments
 
@@ -73,6 +73,8 @@ make lint-markdown  # markdownlint
 - **Linting:** `make lint` must pass before merging. Use US English. For Markdown:
   - Don't use emphasis instead of a heading (MD036)
   - Lists should be surrounded by blank lines (MD032)
+- **Do & Don't:**
+  - Do not implement Next.js Edge Middleware; we use layout-level Auth Guards
 
 ## Context & References
 
