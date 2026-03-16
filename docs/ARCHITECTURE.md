@@ -391,8 +391,8 @@ lookups of the same ISBN are served from the local database.
 Iqoqo uses a hybrid authentication approach suitable for distributed deployments:
 
 1. **SSO / Local Identity**: Users can register via standard email/password or use Google SSO (via Authlib).
-2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT. The Next.js frontend utilizes a Backend-For-Frontend (BFF) pattern (`/api/auth/exchange`) to catch this token and store it securely in an `HttpOnly` cookie.
-3. **Next.js Middleware**: Edge middleware intercepts requests to protected routes (`/collection`, `/profile`), verifying the JWT signature via `jose` before rendering pages.
+2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT and redirects the browser to the Next.js Backend-For-Frontend (BFF) route (`/api/auth-exchange`). That route handler catches the token and stores it securely in an `HttpOnly` cookie.
+3. **Next.js Auth Guard (current behavior)**: A small helper used by protected routes (for example, `/collection`, `/profile`) checks for the presence of the auth cookie set by the BFF route before rendering pages. JWT signature and expiry verification are enforced on the Python backend; the Next.js layer currently treats the cookie as an opaque session token. A future iteration may introduce Edge middleware using `jose` for full client-side verification.
 4. **RBAC**: The database implements an RBAC matrix (`Role`, `Permission`, `user_roles`). Backend API endpoints are protected using `@require_auth` and `@require_permission` decorators.
     > **Frontend RBAC and UI State:**
     > To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions.

@@ -22,8 +22,6 @@ Docker instance is required.
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-from wsgiref import headers
-
 import pytest
 
 from app.api.auth import generate_internal_jwt

@@ -45,7 +45,7 @@ export default function RegisterPage() {
     if (res.ok) {
       const data = await res.json();
       // Exchange token in BFF to set the session cookie
-      window.location.href = `/api/auth/exchange?token=${data.token}`;
+      window.location.href = `/api/auth-exchange?token=${data.token}`;
     } else {
       const errData = await res.json();
       setError(errData.error || "Registration failed. Please try again.");

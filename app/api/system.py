@@ -19,6 +19,7 @@ import json
 from io import BytesIO
 
 from flask import jsonify, request, send_file, send_from_directory
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.config import Config
@@ -66,7 +67,7 @@ def get_global_stats():
             ),
             200,
         )
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+    except (SQLAlchemyError, DBAPIError) as e:
         return jsonify({"error": str(e)}), 500
 
 
@@ -105,7 +106,7 @@ def import_data():
 
         counts = DataManager.import_data(data, clear_existing=clear_existing)
         return jsonify({"status": "success", "imported": counts})
-    except (ValueError, TypeError, KeyError, db.exc.SQLAlchemyError) as e:
+    except (ValueError, TypeError, KeyError, SQLAlchemyError) as e:
         return jsonify({"error": str(e)}), 500
 
 
@@ -121,5 +122,5 @@ def clear_data():
     try:
         DataManager.clear_all_data()
         return jsonify({"status": "success", "message": "All data cleared"})
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+    except (SQLAlchemyError, DBAPIError) as e:
         return jsonify({"error": str(e)}), 500

@@ -32,11 +32,13 @@ def scan_barcode():
     if not barcode:
         return jsonify({"error": "Barcode is required"}), 400
 
+    is_new_manifestation = False
     manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()
 
     if not manifestation:
         try:
             manifestation = IngestService.ingest_from_isbn(barcode)
+            is_new_manifestation = True
         except ValueError as e:
             return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
         except ConnectionError as e:
@@ -58,7 +60,7 @@ def scan_barcode():
                 "item_id": new_item.id,
                 "manifestation_id": manifestation.id,
                 "title": manifestation.title,
-                "is_new_manifestation": not manifestation,
+                "is_new_manifestation": is_new_manifestation,
             }
         ),
         201,

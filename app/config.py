@@ -17,6 +17,7 @@
 #
 
 import os
+import tomllib
 
 from dotenv import load_dotenv
 
@@ -43,12 +44,34 @@ class Config:
 
     # Admin Init
     ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@iqoqo.local")
-    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1qoQ0")
+    _admin_password = os.environ.get("ADMIN_PASSWORD")
+
+    if not _admin_password:
+        raise RuntimeError("ADMIN_PASSWORD environment variable is required and must not be empty.")
+
+    ADMIN_PASSWORD = _admin_password
 
     @staticmethod
     def _get_version():
-        # ... existing version logic
-        return "dev-local"
+        """Resolve application version from environment or pyproject.toml.
 
-    VERSION = _get_version()
+        The resolution order is:
+        1. APP_VERSION environment variable.
+        2. project.version field in pyproject.toml located in BASE_DIR.
+        3. Fallback to "dev-local" if neither source is available.
+        """
+        env_version = os.environ.get("APP_VERSION")
+        if env_version:
+            return env_version
+
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        pyproject_path = os.path.join(base_dir, "pyproject.toml")
+        try:
+            with open(pyproject_path, "rb") as pyproject_file:
+                pyproject_data = tomllib.load(pyproject_file)
+        except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
+            return "dev-local"
+
+        return pyproject_data.get("project", {}).get("version", "dev-local")
+
     VERSION = _get_version()
