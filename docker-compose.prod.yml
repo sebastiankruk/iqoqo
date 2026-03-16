@@ -37,7 +37,7 @@ services:
     command: >-
       sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     depends_on:
       db:
         condition: service_healthy

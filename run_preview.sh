@@ -20,11 +20,14 @@
 # Stop on first error
 set -e
 
-echo "🚀 Deploying iqoqo PREVIEW environment..."
+# Export the specific environment file to inject into the web container
+export ENV_FILE=".env.preview"
 
-if [ ! -f .env.preview ]; then
-    echo "❌ Error: .env.preview file not found."
-    echo "   Please copy .env.preview.example to .env.preview and configure your secrets."
+echo "🚀 Deploying iqoqo PREVIEW environment with ENV_FILE=$ENV_FILE..."
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ Error: $ENV_FILE file not found."
+    echo "   Please copy .env.preview.example to $ENV_FILE and configure your secrets."
     exit 1
 fi
 
@@ -36,7 +39,7 @@ fi
 
 # Start containers using base + preview overrides
 echo "🚀 Starting iqoqo preview deployment (Version: $APP_VERSION)..."
-docker compose -p iqoqo-preview -f docker-compose.prod.yml --env-file .env.preview up -d --build
+docker compose -p iqoqo-preview -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --build
 
 # Optional: Run database migrations for the preview DB
 # docker exec -it iqoqo_backend_preview alembic upgrade head
