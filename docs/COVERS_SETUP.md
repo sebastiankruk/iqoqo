@@ -2,6 +2,23 @@
 
 iqoqo uses a multi-tier pipeline to ensure every item has a cover image. This guide explains how to configure external providers and local AI models.
 
+- [Cover Generation \& Retrieval Setup](#cover-generation--retrieval-setup)
+  - [1. External Metadata APIs](#1-external-metadata-apis)
+  - [2. Cloud AI Generation (Paid)](#2-cloud-ai-generation-paid)
+    - [OpenAI (DALL-E 3)](#openai-dall-e-3)
+    - [Google Gemini (Imagen 3)](#google-gemini-imagen-3)
+  - [3. Local AI Generation (Free)](#3-local-ai-generation-free)
+    - [Step 1: Install Prerequisites](#step-1-install-prerequisites)
+    - [Step 2: Clone the Repository](#step-2-clone-the-repository)
+    - [Step 3: Enable the API \& Launch](#step-3-enable-the-api--launch)
+      - [For Windows](#for-windows)
+      - [For Mac / Linux](#for-mac--linux)
+    - [Step 4: Connect iqoqo](#step-4-connect-iqoqo)
+    - [🛡️ Filtering Junk / Placeholder Covers](#️-filtering-junk--placeholder-covers)
+  - [4. Batch Processing](#4-batch-processing)
+  - [5. Troubleshooting](#5-troubleshooting)
+  - [6. Importing Covers to a Remote iqoqo Instance](#6-importing-covers-to-a-remote-iqoqo-instance)
+
 ## 1. External Metadata APIs
 
 **OpenLibrary** requires no configuration.
@@ -138,3 +155,18 @@ This script is **resumable**. You can stop it with `Ctrl+C` and run it again lat
 
 - **Missing Covers:** Check `app/static/covers/` permissions. Ensure Docker volumes are mounted correctly.
 - **API Errors:** Check application logs for "Cloud LLM Gen failed" messages.
+
+## 6. Importing Covers to a Remote iqoqo Instance
+
+To efficiently transfer and bind generated cover pages from your local machine to a remote Docker instance, follow this automated workflow.
+
+**Package and Transfer (Local Machine):**
+Compress your local covers directory and securely copy it to the remote server's `/tmp` directory.
+
+```bash
+# Compress the covers directory
+tar -czvf covers.tar.gz -C app/static covers
+
+# Securely copy it to the remote server
+scp covers.tar.gz user@your-server-ip:/tmp/
+```

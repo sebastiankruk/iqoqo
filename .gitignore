@@ -51,3 +51,4 @@ iqoqo_backup*.json
 # Generated covers - we want to keep the original ones but ignore the generated ones
 app/static/covers/*
 app/static/archive/covers/*
+covers.tar.gz
