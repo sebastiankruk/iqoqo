@@ -53,6 +53,12 @@ def generate_internal_jwt(user: User) -> str:
 @auth_bp.route("/login/google")
 def google_login():
     redirect_uri = request.url_root + "api/auth/callback/google"
+
+    # Bulletproof Fail-safe: Force HTTPS in production/preview environments
+    # just in case Nginx proxy headers strip the secure scheme.
+    if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+
     return oauth.google.authorize_redirect(redirect_uri)
 
 
