@@ -16,6 +16,7 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import blueprints
 from app.api import api_bp
@@ -50,6 +51,10 @@ def _coerce_list(value, default=None):
 
 def create_app(config_class=Config, config_override=None):
     app = Flask(__name__)
+
+    # Trust reverse proxy headers to correctly build HTTPS URLs
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     app.config.from_object(config_class)
 
     if config_override:

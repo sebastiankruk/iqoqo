@@ -19,10 +19,18 @@ Before you can log into your iqoqo instance using email and password, you must c
     PYTHONPATH=. .venv/bin/python scripts/init_auth.py
     ```
 
-    Docker environment:
+    Docker environment (Preview):
 
     ```bash
-    docker compose exec web python scripts/init_auth.py
+    # preview
+    docker compose -p iqoqo-preview exec web python -m scripts.init_auth
+    ```
+
+    Docker environment (Production):
+
+    ```bash
+    # production
+    docker compose exec web python -m scripts.init_auth
     ```
 
     This script reads your environment variables, creates the user, and securely hashes the password.
