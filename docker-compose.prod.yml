@@ -48,12 +48,16 @@ services:
         NEXT_PUBLIC_API_URL: /api
         APP_VERSION: ${APP_VERSION:-prod}
         NEXT_PUBLIC_APP_VERSION: ${APP_VERSION:-prod}
-        # Bake NEXT_PUBLIC_FRONTEND_URL at build time so client components get it too
         NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.cc}
     env_file:
-      - ${ENV_FILE:-.env}    # <-- ADD THIS so server-side API routes can read the preview domain
+      - ${ENV_FILE:-.env}
     environment:
       - NEXT_PUBLIC_APP_VERSION=${APP_VERSION:-prod}
+      # Explicitly force these variables into the Node runtime
+      # so Next.js never falls back to 0.0.0.0
+      - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - APP_URL=${NEXT_PUBLIC_APP_URL}
     restart: always
     depends_on:
       - web

@@ -21,8 +21,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');
 
+  // Use our explicit environment variable as the base URL, fallback to request.url just in case
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || request.url;
+
   if (!token) {
-    return NextResponse.redirect(new URL('/login?error=MissingToken', request.url));
+    return NextResponse.redirect(new URL('/login?error=MissingToken', baseUrl));
   }
 
   // Set the HttpOnly cookie
@@ -35,6 +38,6 @@ export async function GET(request: Request) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  // Redirect to dashboard or profile
-  return NextResponse.redirect(new URL('/', request.url));
+  // Redirect to dashboard explicitly using the correct domain
+  return NextResponse.redirect(new URL('/', baseUrl));
 }
