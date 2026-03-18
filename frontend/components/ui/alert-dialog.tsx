@@ -28,6 +28,7 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal;
  * Alert dialog overlay.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>) {
@@ -46,6 +47,7 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithout
  * Alert dialog content.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>) {
@@ -69,6 +71,7 @@ function AlertDialogContent({ className, ...props }: React.ComponentPropsWithout
  * Alert dialog header.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -79,6 +82,7 @@ function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
  * Alert dialog footer.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -89,6 +93,7 @@ function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDiv
  * Alert dialog title.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogTitle({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>) {
@@ -99,6 +104,7 @@ function AlertDialogTitle({ className, ...props }: React.ComponentPropsWithoutRe
  * Alert dialog description.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogDescription({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>) {
@@ -109,6 +115,7 @@ function AlertDialogDescription({ className, ...props }: React.ComponentPropsWit
  * Alert dialog action button.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>) {
@@ -127,6 +134,7 @@ function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutR
  * Alert dialog cancel button.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
 function AlertDialogCancel({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>) {

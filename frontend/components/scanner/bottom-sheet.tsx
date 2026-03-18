@@ -68,6 +68,12 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
 
   /* ── ISBN API lookup ── */
   const lookupIsbn = useCallback(
+    /**
+     * Looks up ISBN metadata and calls the onFound callback.
+     *
+     * @param {string} rawIsbn - Raw ISBN input (may contain hyphens/spaces).
+     * @returns {Promise<void>} Resolves when lookup completes.
+     */
     async (rawIsbn: string) => {
       if (!rawIsbn) return;
       const isbn = rawIsbn.replace(/[^0-9Xx]/g, "").toUpperCase();
@@ -97,6 +103,9 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
   );
 
   /* ── Start camera + ZXing scan loop (works in Safari, Firefox, Chrome) ── */
+  /**
+   * Starts the camera and initiates the barcode scanning process.
+   */
   const startScanner = useCallback(async () => {
     setError(null);
     const video = videoRef.current;

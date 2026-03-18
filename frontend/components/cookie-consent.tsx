@@ -34,6 +34,9 @@ export function CookieConsent() {
     setIsVisible(!consent);
   }, []);
 
+  /**
+   * Accepts the cookie consent and hides the banner.
+   */
   const acceptCookies = () => {
     localStorage.setItem("iqoqo-cookie-consent", "true");
     setIsVisible(false);

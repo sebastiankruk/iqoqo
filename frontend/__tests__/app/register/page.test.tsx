@@ -19,6 +19,11 @@ import RegisterPage from '@/app/register/page';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('next/navigation', () => ({
+  /**
+   * Mock for useRouter.
+   *
+   * @returns {object} The mocked router object.
+   */
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -70,6 +75,11 @@ describe('RegisterPage', () => {
   it('shows error message on failed registration', async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: false,
+      /**
+       * Mock for json response.
+       *
+       * @returns {Promise<{error: string}>} The mocked json response.
+       */
       json: async () => ({ error: 'Email already registered' }),
     });
 

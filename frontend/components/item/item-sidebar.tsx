@@ -69,6 +69,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     class: "bg-secondary text-foreground ring-border",
   };
 
+  /**
+   * Handles lending the item to a friend.
+   *
+   * @returns {void}
+   */
   const handleLend = () => {
     updateItem.mutate(
       { status: "lent" },
@@ -78,6 +83,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       }
     );
   };
+
+  /**
+   * Handles generating and opening the QR code for the item.
+   * @returns {Promise<void>} A promise that resolves when the QR code is generated and opened.
+   */
 
   const handleQrCode = async () => {
     const url = `${apiBase}/qrcode/${item.id}`;

@@ -46,6 +46,9 @@ export function InstanceSettings() {
       .finally(() => setLoading(false));
   }, []);
 
+  /**
+   * Handles saving the settings.
+   */
   const handleSave = async () => {
     setSaving(true);
     try {

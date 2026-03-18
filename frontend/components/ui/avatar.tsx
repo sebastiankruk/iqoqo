@@ -31,6 +31,11 @@ export interface AvatarProps {
  * Avatar component.
  *
  * @param props - The component props
+ * @param props.src - The image source URL for the avatar.
+ * @param props.alt - The alt text for the avatar image.
+ * @param props.size - The size (width and height) of the avatar in pixels.
+ * @param props.className - Additional CSS classes to apply to the avatar container.
+ * @param props.fallback - Fallback text (e.g., initials) to display if no image is provided.
  * @returns {JSX.Element} The component
  */
 export function Avatar({ src, alt, size = 40, className, fallback }: AvatarProps) {

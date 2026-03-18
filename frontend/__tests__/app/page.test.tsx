@@ -21,6 +21,12 @@ import * as hooks from '@/lib/api/hooks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('next/image', () => ({
+  /**
+   * Mock for Next.js Image component.
+   *
+   * @param {object} props - The component props.
+   * @returns {React.ReactElement} The rendered component.
+   */
   default: (props: React.ComponentProps<'img'> & Record<string, unknown>) => {
     const { fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest } = props;
     void fill; void sizes; void unoptimized; void priority; void placeholder; void blurDataURL;

@@ -39,6 +39,8 @@ const variantClasses: Record<BadgeVariant, string> = {
  * Badge component.
  *
  * @param props - The component props
+ * @param props.className - Additional CSS classes to apply.
+ * @param props.variant - The visual style variant of the badge.
  * @returns {JSX.Element} The component
  */
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {

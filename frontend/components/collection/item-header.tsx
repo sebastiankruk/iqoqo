@@ -43,6 +43,9 @@ export function ItemHeader({ initialItem }: ItemHeaderProps) {
 
   const isPending = item?.cover_status === 'pending';
 
+  /**
+   * Handles the regeneration of the item cover.
+   */
   const handleRegenerate = async () => {
     if (!item.manifestation_id) return;
 

@@ -69,6 +69,11 @@ export default function ProfilePage() {
       .catch(err => console.error("Failed to load profile", err));
   }, []);
 
+  /**
+   * Handles the user logout.
+   *
+   * @returns {Promise<void>} A promise that resolves when the logout process is complete.
+   */
   const handleLogout = async () => {
     try {
       // Call the Next.js logout route to clear the session cookie
@@ -78,6 +83,11 @@ export default function ProfilePage() {
       toast.error("Failed to logout");
     }
   };
+
+  /**
+   * Handles the update of the user's display name.
+   * @returns {Promise<void>} A promise that resolves when the name update is complete.
+   */
 
   const handleUpdateName = async () => {
     try {
@@ -89,6 +99,11 @@ export default function ProfilePage() {
       toast.error("Failed to update profile");
     }
   };
+
+  /**
+   * Handles the deletion of the user's account.
+   * @returns {Promise<void>} A promise that resolves when the account deletion is complete.
+   */
 
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm("Are you absolutely sure? This will permanently delete your account, your library collection, and all your data. This cannot be undone.");
@@ -102,6 +117,12 @@ export default function ProfilePage() {
       toast.error("Failed to delete account");
     }
   };
+
+  /**
+   * Toggles the consent for a given type.
+   * @param {string} type - The type of consent to toggle.
+   * @param {boolean} currentStatus - The current status of the consent.
+   */
 
   const toggleConsent = async (type: string, currentStatus: boolean) => {
     try {

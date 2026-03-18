@@ -32,9 +32,9 @@ type TabId = (typeof TABS)[number]["id"];
 /**
  * Details tab component.
  *
- * @param root0 - The props object
- * @param root0.item - The item
- * @returns {JSX.Element} The component
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
  */
 function DetailsTab({ item }: { item: Item }) {
   const meta = item.manifestation_meta ?? {};
@@ -132,9 +132,9 @@ function DetailsTab({ item }: { item: Item }) {
 /**
  * My Copy tab component.
  *
- * @param root0 - The props object
- * @param root0.item - The item
- * @returns {JSX.Element} The component
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
  */
 function MyCopyTab({ item }: { item: Item }) {
   const fields = [
@@ -194,9 +194,9 @@ function FederationTab() {
 /**
  * Tabbed detail panel for an item page.
  *
- * @param root0 - The props object
- * @param root0.item - The item
- * @returns {JSX.Element} The component
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
  */
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");

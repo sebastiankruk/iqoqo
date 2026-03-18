@@ -43,6 +43,11 @@ export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
+  /**
+   * Handles adding the found book to the user's library.
+   * Sets the `adding` state to true during the process and shows a toast notification
+   * for success or failure. Redirects to the item's detail page on success.
+   */
   const handleAdd = async () => {
     setAdding(true);
     try {
