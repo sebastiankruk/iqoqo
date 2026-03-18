@@ -51,9 +51,9 @@ CORS is disabled by default and should be enabled only when the frontend is serv
 
 Configure via environment variables in `.env`:
 
-```markdown
+```env
 CORS_ENABLED=true
-CORS_ORIGINS="[https://app.example.com](https://app.example.com),[https://admin.example.com](https://admin.example.com)"
+CORS_ORIGINS=https://app.example.com,https://admin.example.com
 CORS_SUPPORTS_CREDENTIALS=false
 ```
 
