@@ -125,7 +125,7 @@ See the [Installation Guide](https://www.google.com/search?q=docs/INSTALL.md%23d
 
 ## 📜 License
 
-MIT License - see [LICENSE](https://www.google.com/search?q=LICENSE) for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE) for full details.
 
 ## 🙏 Acknowledgments
 
