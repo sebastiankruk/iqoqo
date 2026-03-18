@@ -108,4 +108,5 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
+          ADMIN_PASSWORD: dummy-admin-password
         run: pytest tests/ -v
