@@ -24,6 +24,11 @@ import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 
+/**
+ * Page displaying a single manifestation with metadata and add-to-collection action.
+ *
+ * @returns {JSX.Element}
+ */
 export default function ManifestationPage() {
   const params = useParams();
   const manifestationId = Number(params?.id);
@@ -60,6 +65,10 @@ export default function ManifestationPage() {
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${manifestation.cover_url}`
     : manifestation.meta?.["cover_url"] as string | undefined;
 
+  /**
+   * Add the current manifestation to the user's collection when an ISBN is available.
+   * @returns {void}
+   */
   const handleAddToCollection = () => {
     if (manifestation.isbn13) {
       addItem({ isbn: manifestation.isbn13 });

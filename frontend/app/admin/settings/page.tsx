@@ -24,6 +24,11 @@ import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 
+/**
+ * Admin settings page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function AdminSettingsPage() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();

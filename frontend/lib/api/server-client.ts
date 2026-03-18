@@ -15,6 +15,13 @@
 //
 import { cookies } from 'next/headers';
 
+/**
+ * Fetch data with authentication.
+ *
+ * @param endpoint - API endpoint
+ * @param options - Fetch options
+ * @returns {Promise<Response>} Fetch response
+ */
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();
   const token = cookieStore.get('iqoqo_session')?.value;

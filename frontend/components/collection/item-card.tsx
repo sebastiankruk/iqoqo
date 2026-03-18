@@ -38,13 +38,22 @@ const statusDotTitle: Record<ItemStatus, string> = {
   read: "Read",
 };
 
+/** Props for ItemCard component */
 interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
   isManifestationView?: boolean;
 }
 
-/** Individual item card shown in the collection grid. */
+/**
+ * Individual item card shown in the collection grid.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item to display
+ * @param root0.variant - The card variant
+ * @param root0.isManifestationView - Whether to show the manifestation view
+ * @returns {JSX.Element} The component
+ */
 export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
   const isCatalog = isManifestationView;
 

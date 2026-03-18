@@ -17,6 +17,11 @@ import { Footer } from "@/components/dashboard/footer";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+/**
+ * Privacy Policy page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-background">

@@ -25,6 +25,14 @@ import { describe, it, expect } from "vitest";
 import type { Item } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 
+/**
+ * Factory for creating mock Items.
+ *
+ * @param id - Item ID
+ * @param title - Item title
+ * @param author - Item author
+ * @returns {Item} Mock Item
+ */
 function makeItem(id: number, title: string, author: string): Item {
   return {
     id,

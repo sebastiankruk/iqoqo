@@ -46,7 +46,13 @@ apiClient.interceptors.response.use(
   }
 );
 
-/** Helper: GET and unwrap the `data` field from an ApiResponse envelope. */
+/**
+ * Helper: GET and unwrap the `data` field from an ApiResponse envelope.
+ *
+ * @param path - The API path
+ * @param params - Optional query parameters
+ * @returns {Promise<T>} The unwrapped data
+ */
 export async function apiFetch<T>(path: string, params?: Record<string, unknown>): Promise<T> {
   const res = await apiClient.get<ApiResponse<T>>(path, { params });
   if (!res.data.success || res.data.data === null) {
@@ -55,12 +61,21 @@ export async function apiFetch<T>(path: string, params?: Record<string, unknown>
   return res.data.data;
 }
 
-/** Fetch global instance statistics (works, manifestations, items, users) */
+/**
+ * Fetch global instance statistics (works, manifestations, items, users)
+ *
+ * @returns {Promise<{ works: number; manifestations: number; items: number; users: number }>} The statistics
+ */
 export async function getGlobalStats(): Promise<{ works: number; manifestations: number; items: number; users: number }> {
   return apiFetch('/stats/global');
 }
 
-/** Fetch most recent manifestations added to the instance */
+/**
+ * Fetch most recent manifestations added to the instance
+ *
+ * @param limit - Maximum number of items to return
+ * @returns {Promise<Record<string, unknown>[]>} The recent manifestations
+ */
 export async function getRecentManifestations(limit = 10) {
   return apiFetch<Record<string, unknown>[]>("/manifestations/recent", { limit });
 }

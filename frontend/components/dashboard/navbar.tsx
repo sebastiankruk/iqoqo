@@ -31,12 +31,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProfile } from "@/lib/api/hooks";
 
-/** Sticky top navigation bar – "Modern Athenaeum" style. */
+/**
+ * Sticky top navigation bar – "Modern Athenaeum" style.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
+  /**
+   * Handles the user logout process.
+   */
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -46,6 +53,11 @@ export function Navbar() {
     }
   };
 
+  /**
+   * Handles the search form submission.
+   *
+   * @param {React.FormEvent} e - The form event.
+   */
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {

@@ -76,16 +76,29 @@ vi.mock("@/lib/api/hooks", () => ({
 
 // ── Stub heavy / irrelevant sub-components ─────────────────────────────────
 vi.mock("@/components/dashboard/navbar", () => ({
+  /**
+   * Test stub: Navbar component.
+   * @returns {JSX.Element}
+   */
   Navbar: () => <nav data-testid="navbar" />,
 }));
 
 vi.mock("@/components/collection/collection-grid", () => ({
+  /**
+   * Test stub: CollectionGrid renders number of items.
+   * @param {{ items: unknown[] }} props - Component props.
+   * @returns {JSX.Element}
+   */
   CollectionGrid: ({ items }: { items: unknown[] }) => (
     <div data-testid="collection-grid">{items.length} rendered</div>
   ),
 }));
 
 vi.mock("@/components/collection/mobile-filter-drawer", () => ({
+  /**
+   * Test stub: MobileFilterDrawer component.
+   * @returns {JSX.Element}
+   */
   MobileFilterDrawer: () => <div data-testid="mobile-filter-drawer" />,
 }));
 
@@ -101,6 +114,7 @@ const mockUseProfile = vi.mocked(useProfile);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
+/** Full dashboard stats mock */
 const FULL_STATS: DashboardStats = {
   works: 80,
   expressions: 80,
@@ -117,8 +131,16 @@ const FULL_STATS: DashboardStats = {
   items_read: 50,
 };
 
+/** Mock user profile */
 const MOCK_PROFILE: UserProfile = { id: "1", email: "test@example.com" };
 
+/**
+ * Make a mock API response for items.
+ *
+ * @param {Partial<NonNullable<ApiResponse<Item[]>["meta"]>>} overrides - Metadata overrides.
+ * @param {number} dataLength - Number of items to generate.
+ * @returns {ApiResponse<Item[]>} Mock API response.
+ */
 function makeItemsResponse(
   overrides: Partial<NonNullable<ApiResponse<Item[]>["meta"]>> = {},
   dataLength = 2

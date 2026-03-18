@@ -22,6 +22,14 @@ import type { Item } from "@/types/frbr";
 
 // Mock Next.js Image component
 vi.mock("next/image", () => ({
+  /**
+   * Mock for Next.js Image component.
+   *
+   * @param {object} props - The component props.
+   * @param {string} props.src - The image source.
+   * @param {string} props.alt - The image alt text.
+   * @returns {React.ReactElement} The rendered component.
+   */
   default: ({ src, alt, ...props }: { src: string; alt: string } & Record<string, unknown>) => {
     const rest = { ...props };
     // Remove Next.js specific props to avoid React DOM warnings in tests
@@ -37,6 +45,9 @@ vi.mock("next/image", () => ({
   },
 }));
 
+/**
+ * Mock Item for testing
+ */
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",

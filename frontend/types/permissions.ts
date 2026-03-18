@@ -21,4 +21,5 @@ export const ItemPermissions = {
   DELETE_MANIFESTATION: 'delete:manifestation' as const,
 } as const;
 
+/** Item permission type */
 export type ItemPermission = typeof ItemPermissions[keyof typeof ItemPermissions];

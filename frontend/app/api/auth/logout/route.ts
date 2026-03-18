@@ -16,6 +16,11 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+/**
+ * Handle POST requests to logout by deleting the session cookie.
+ *
+ * @returns {Promise<NextResponse>} The Next.js response with success message
+ */
 export async function POST() {
   const cookieStore = await cookies();
   cookieStore.delete('iqoqo_session');

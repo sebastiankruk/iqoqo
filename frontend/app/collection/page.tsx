@@ -28,7 +28,11 @@ import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hoo
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
-/** Collection browser page with filtering, sorting and pagination. */
+/**
+ * Collection browser page with filtering, sorting and pagination.
+ *
+ * @returns {JSX.Element} The collection page component
+ */
 function CollectionContent() {
   const [page, setPage] = useState(1);
   const limit = 40;
@@ -290,6 +294,11 @@ function CollectionContent() {
   );
 }
 
+/**
+ * Collection page wrapper with Suspense.
+ *
+ * @returns {JSX.Element} The collection page component
+ */
 export default function CollectionPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading collection...</p></div>}>

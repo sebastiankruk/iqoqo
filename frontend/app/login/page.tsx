@@ -21,10 +21,20 @@ import Link from "next/link";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 
+/**
+ * Login page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  /**
+   * Handles the local login process.
+   *
+   * @param {React.FormEvent} e - The form event.
+   */
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch(`/api/auth/login`, {

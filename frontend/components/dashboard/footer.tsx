@@ -15,7 +15,11 @@
 //
 "use client";
 
-/** Sticky top navigation bar – "Modern Athenaeum" style. */
+/**
+ * Sticky top navigation bar – "Modern Athenaeum" style.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Footer() {
   const uiVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 

@@ -28,6 +28,8 @@ import type { IsbnMeta } from "@/types/frbr";
  * The <video> element is owned by React so that Safari honours playsInline
  * and does not abort the stream. The BottomSheet component receives a ref to
  * it and drives getUserMedia + BarcodeDetector scanning.
+ *
+ * @returns {JSX.Element} The page component
  */
 export default function ScanPage() {
   const [result, setResult] = useState<{

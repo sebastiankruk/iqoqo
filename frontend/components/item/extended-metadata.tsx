@@ -20,10 +20,18 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
+/** Props for ExtendedMetadata component */
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
 }
 
+/**
+ * Extended metadata component.
+ *
+ * @param root0 - The props object
+ * @param root0.meta - The metadata to display
+ * @returns {JSX.Element | null} The component or null if no metadata
+ */
 export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 

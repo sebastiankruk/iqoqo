@@ -27,11 +27,20 @@ import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 
+/** Page props for the Item page. */
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-function ItemDetail({ item: initialItem }: { item: Item }) {
+/**
+ * Renders the item detail content (hero, sidebar, tabs, actions).
+ *
+ * @param {{ item: Item }} props - Component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
+function ItemDetail(props: { item: Item }) {
+  const { item: initialItem } = props;
   const { item } = useManifestationWithPolling(initialItem);
 
 
@@ -82,8 +91,15 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
   );
 }
 
-/** Item detail page showing the full FRBR hierarchy for one item. */
-export default function ItemPage({ params }: Props) {
+/**
+ * Item detail page showing the full FRBR hierarchy for one item.
+ *
+ * @param {Props} props - Page props containing `params` promise.
+ * @param {Promise<{id: string}>} props.params - Route params promise provided by Next.js.
+ * @returns {JSX.Element}
+ */
+export default function ItemPage(props: Props) {
+  const { params } = props;
   const { id } = use(params);
   const itemId = parseInt(id, 10);
 

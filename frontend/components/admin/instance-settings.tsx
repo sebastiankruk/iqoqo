@@ -20,6 +20,9 @@ import { getInstanceSettings, updateInstanceSettings } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
+/**
+ * Instance settings data
+ */
 interface InstanceSettingsData {
   instance_name?: string;
   amazon_affiliate_id?: string;
@@ -27,6 +30,11 @@ interface InstanceSettingsData {
   [key: string]: unknown;
 }
 
+/**
+ * Component for managing global instance settings.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function InstanceSettings() {
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
@@ -38,6 +46,9 @@ export function InstanceSettings() {
       .finally(() => setLoading(false));
   }, []);
 
+  /**
+   * Handles saving the settings.
+   */
   const handleSave = async () => {
     setSaving(true);
     try {

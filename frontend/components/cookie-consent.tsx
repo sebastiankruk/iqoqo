@@ -18,6 +18,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"; // Assuming you are using shadcn/ui
 
+/**
+ * Cookie consent banner component.
+ *
+ * @returns {JSX.Element | null} The component or null if already accepted
+ */
 export function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -29,6 +34,9 @@ export function CookieConsent() {
     setIsVisible(!consent);
   }, []);
 
+  /**
+   * Accepts the cookie consent and hides the banner.
+   */
   const acceptCookies = () => {
     localStorage.setItem("iqoqo-cookie-consent", "true");
     setIsVisible(false);

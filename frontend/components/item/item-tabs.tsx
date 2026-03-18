@@ -29,6 +29,13 @@ type TabId = (typeof TABS)[number]["id"];
 
 /* ── Details tab ─────────────────────────────────────────────────────────── */
 
+/**
+ * Details tab component.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 function DetailsTab({ item }: { item: Item }) {
   const meta = item.manifestation_meta ?? {};
   const description =
@@ -122,6 +129,13 @@ function DetailsTab({ item }: { item: Item }) {
 
 /* ── My Copy tab ─────────────────────────────────────────────────────────── */
 
+/**
+ * My Copy tab component.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 function MyCopyTab({ item }: { item: Item }) {
   const fields = [
     { label: "Status", value: item.status },
@@ -153,6 +167,11 @@ function MyCopyTab({ item }: { item: Item }) {
 
 /* ── Federation tab ──────────────────────────────────────────────────────── */
 
+/**
+ * Federation tab component.
+ *
+ * @returns {JSX.Element} The component
+ */
 function FederationTab() {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -172,7 +191,13 @@ function FederationTab() {
 
 /* ── Tabs component ──────────────────────────────────────────────────────── */
 
-/** Tabbed detail panel for an item page. */
+/**
+ * Tabbed detail panel for an item page.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
 
