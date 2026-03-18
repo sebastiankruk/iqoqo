@@ -27,7 +27,7 @@ Get iqoqo running in minutes with Docker:
 
 ```bash
 # Clone the repository
-git clone [https://github.com/sebastiankruk/iqoqo.git](https://github.com/sebastiankruk/iqoqo.git)
+git clone https://github.com/sebastiankruk/iqoqo.git
 cd iqoqo
 
 # Configure environment (edit .env after copying)
