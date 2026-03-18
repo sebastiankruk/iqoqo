@@ -53,9 +53,9 @@ All changes must pass `make lint` before they are complete.
 
 **Markdown** (`.markdownlint.json`): ATX headers, fenced code blocks with language tags, no trailing spaces, blank lines around lists/headers, no emphasis-as-heading (MD036), lists surrounded by blank lines (MD032).
 
-**Naming & Comments**: Use slang EN US for variable naming/comments where appropriate.
+**Naming & Comments**: Use clear, concise US English for variable names and comments; avoid slang and ambiguous abbreviations.
 
-**UI/Styling**: Strict guidelines for button design/styling must be followed. Always use our standard Tailwind utility classes (e.g., `px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors`) for consistency across the Next.js app.
+**UI/Styling**: Use the shared UI components (for example, `frontend/components/ui/button.tsx`) for buttons instead of ad-hoc Tailwind utility classes, and follow the existing variants and theme defined there for consistency across the Next.js app.
 
 ```markdown
 make lint           # all linters
