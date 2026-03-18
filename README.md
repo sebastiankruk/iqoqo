@@ -43,7 +43,7 @@ docker-compose exec web flask db upgrade
 # Access at http://localhost:3000 (Frontend) and http://localhost:5000 (API)
 ```
 
-For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](https://www.google.com/search?q=docs/INSTALL.md).
+For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](docs/INSTALL.md).
 
 ### CORS Configuration
 
@@ -61,11 +61,11 @@ Use explicit origins in production (avoid wildcard origins). Enable `CORS_SUPPOR
 
 ## 📖 Documentation
 
-- **[Installation Guide](https://www.google.com/search?q=docs/INSTALL.md)** - Complete setup instructions including data migration
-- **[Phase 4 Ubuntu Cutover](https://www.google.com/search?q=docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
-- **[Architecture Guide](https://www.google.com/search?q=docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
-- **[Contributing Guide](https://www.google.com/search?q=docs/CONTRIBUTING.md)** - Development workflow and coding standards
-- **[FRBR Ontology](https://www.google.com/search?q=docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
+- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Phase 4 Ubuntu Cutover](docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
+- **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
 
 ## 📦 Data Management
 
