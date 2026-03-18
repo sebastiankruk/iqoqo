@@ -24,6 +24,12 @@ const AlertDialog = AlertDialogPrimitive.Root;
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
+/**
+ * Alert dialog overlay.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>) {
   return (
     <AlertDialogPrimitive.Overlay
@@ -36,6 +42,12 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithout
   );
 }
 
+/**
+ * Alert dialog content.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>) {
   return (
     <AlertDialogPortal>
@@ -53,22 +65,52 @@ function AlertDialogContent({ className, ...props }: React.ComponentPropsWithout
   );
 }
 
+/**
+ * Alert dialog header.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col gap-2 text-center sm:text-left", className)} {...props} />;
 }
 
+/**
+ * Alert dialog footer.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />;
 }
 
+/**
+ * Alert dialog title.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogTitle({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>) {
   return <AlertDialogPrimitive.Title className={cn("text-lg font-semibold", className)} {...props} />;
 }
 
+/**
+ * Alert dialog description.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogDescription({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>) {
   return <AlertDialogPrimitive.Description className={cn("text-sm text-muted-foreground", className)} {...props} />;
 }
 
+/**
+ * Alert dialog action button.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>) {
   return (
     <AlertDialogPrimitive.Action
@@ -81,6 +123,12 @@ function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutR
   );
 }
 
+/**
+ * Alert dialog cancel button.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function AlertDialogCancel({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel

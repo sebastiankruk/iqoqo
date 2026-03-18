@@ -17,6 +17,11 @@ import { Footer } from "@/components/dashboard/footer";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+/**
+ * Terms of Service page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-background">

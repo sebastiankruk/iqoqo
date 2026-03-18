@@ -16,14 +16,30 @@
 import { apiFetch, apiClient } from "./client";
 import type { ApiResponse } from "@/types/frbr";
 
+/**
+ * Fetch a list of users.
+ *
+ * @returns {Promise<Record<string, unknown>[]>} The users
+ */
 export async function getUsers(): Promise<Record<string, unknown>[]> {
   return apiFetch<Record<string, unknown>[]>('/v1/admin/users');
 }
 
+/**
+ * Fetch instance settings.
+ *
+ * @returns {Promise<Record<string, unknown>>} The settings
+ */
 export async function getInstanceSettings(): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>("/v1/admin/settings");
 }
 
+/**
+ * Update instance settings.
+ *
+ * @param settings - The new settings
+ * @returns {Promise<Record<string, unknown>>} The updated settings
+ */
 export async function updateInstanceSettings(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await apiClient.put<ApiResponse<Record<string, unknown>>>("/v1/admin/settings", settings);
   if (!res.data.success || !res.data.data) {

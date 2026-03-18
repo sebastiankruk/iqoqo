@@ -18,7 +18,11 @@
 import { BookMarked, BookOpen, HandHelping, Target } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
 
-/** Three top-row stat cards pulled from the Flask /api/stats endpoint. */
+/**
+ * Three top-row stat cards pulled from the Flask /api/stats endpoint.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function StatsCards() {
   const { data: stats, isLoading, isError } = useStats();
 

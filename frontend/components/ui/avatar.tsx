@@ -18,6 +18,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+/** Props for Avatar component */
 export interface AvatarProps {
   src?: string | null;
   alt?: string;
@@ -26,6 +27,12 @@ export interface AvatarProps {
   fallback?: string;
 }
 
+/**
+ * Avatar component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 export function Avatar({ src, alt, size = 40, className, fallback }: AvatarProps) {
   const initials = fallback;
   return (

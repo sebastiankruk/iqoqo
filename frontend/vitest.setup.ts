@@ -49,6 +49,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/link", async () => {
   const { createElement } = await import("react");
   return {
+    /**
+     * Mock component for next/link
+     * @param props component props
+     * @returns React element
+     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     default: ({ href, children, className, ...rest }: any) =>
       createElement("a", { href, className, ...rest }, children),
@@ -62,6 +67,11 @@ vi.mock("next/image", async () => {
   return {
     // Strips Next.js-specific props (fill, sizes, unoptimized, priority) so
     // only standard <img> attributes are forwarded to the DOM element.
+    /**
+     * Mock component for next/image
+     * @param props component props
+     * @returns React element
+     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     default: ({ src, alt, className, fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest }: any) => {
       void fill; void sizes; void unoptimized; void priority; void placeholder; void blurDataURL;
@@ -78,5 +88,9 @@ vi.mock("sonner", () => ({
     info: vi.fn(),
     warning: vi.fn(),
   },
+  /**
+   * Mock component for Toaster
+   * @returns null
+   */
   Toaster: () => null,
 }));

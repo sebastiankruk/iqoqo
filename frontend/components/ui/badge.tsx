@@ -16,8 +16,10 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/** Badge variant type */
 type BadgeVariant = "default" | "secondary" | "outline" | "destructive";
 
+/** Props for Badge component */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
 }
@@ -33,6 +35,12 @@ const variantClasses: Record<BadgeVariant, string> = {
     "bg-destructive text-destructive-foreground",
 };
 
+/**
+ * Badge component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {
   return (
     <span

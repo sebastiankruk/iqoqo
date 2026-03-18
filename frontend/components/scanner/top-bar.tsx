@@ -16,7 +16,11 @@
 import Link from "next/link";
 import { ArrowLeft, Zap } from "lucide-react";
 
-/** Scanner page top overlay bar. */
+/**
+ * Scanner page top overlay bar.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function TopBar() {
   return (
     <div className="absolute inset-x-0 top-0 z-20">

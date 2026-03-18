@@ -28,6 +28,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 
+/**
+ * Theme mode toggle component.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function ModeToggle() {
   const { setTheme, theme } = useTheme()
   const [mounted, setMounted] = React.useState(false)

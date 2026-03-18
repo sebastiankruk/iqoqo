@@ -41,12 +41,20 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   },
 };
 
+/** Props for ItemSidebar component */
 interface ItemSidebarProps {
   item: Item;
   onEdit?: () => void;
 }
 
-/** Left sidebar of the item detail page – cover, status, actions, quick stats. */
+/**
+ * Left sidebar of the item detail page – cover, status, actions, quick stats.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item
+ * @param root0.onEdit - Callback when edit is clicked
+ * @returns {JSX.Element} The component
+ */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
   const coverUrl =

@@ -22,10 +22,18 @@ import { queryKeys, useManifestationWithPolling, useRegenerateCover } from "@/li
 import type { Item } from "@/types/frbr";
 import { useQueryClient } from "@tanstack/react-query";
 
+/** Props for ItemHeader component */
 interface ItemHeaderProps {
   initialItem: Item;
 }
 
+/**
+ * Header for an item detail page.
+ *
+ * @param root0 - The props object
+ * @param root0.initialItem - The initial item data
+ * @returns {JSX.Element} The component
+ */
 export function ItemHeader({ initialItem }: ItemHeaderProps) {
   // Use our hook to handle the real-time update via polling
   const { item, } = useManifestationWithPolling(initialItem);

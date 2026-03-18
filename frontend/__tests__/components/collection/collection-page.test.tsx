@@ -101,6 +101,7 @@ const mockUseProfile = vi.mocked(useProfile);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
+/** Full dashboard stats mock */
 const FULL_STATS: DashboardStats = {
   works: 80,
   expressions: 80,
@@ -117,8 +118,16 @@ const FULL_STATS: DashboardStats = {
   items_read: 50,
 };
 
+/** Mock user profile */
 const MOCK_PROFILE: UserProfile = { id: "1", email: "test@example.com" };
 
+/**
+ * Make a mock API response for items.
+ *
+ * @param overrides - Metadata overrides
+ * @param dataLength - Number of items to generate
+ * @returns {ApiResponse<Item[]>} Mock API response
+ */
 function makeItemsResponse(
   overrides: Partial<NonNullable<ApiResponse<Item[]>["meta"]>> = {},
   dataLength = 2

@@ -17,30 +17,468 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Card({
+/**
+ * Card component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card component.
+ *
+ *
+}
+
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+ */ */
+/**
+ * Card component.
+ *
+ *
+}
+
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*/ */
+/**
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+ *
+}
+
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+ *
+}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element  The component*
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element  The component*
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element  The component*
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element  The component*
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component./**
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ * Card component.
+ *
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element  The component*
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props@param props - The component props
+ * @returns {JSX.Element  The component* @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./ */
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component.function Card({
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
   className,
-  size = "default",
-  ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
-  return (
-    <div
+  s
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component propsize = "default",
+ * @returns {JSX.Element  The component .
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props..props
+ * @returns {JSX.Element} The component: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+
+*
+
+/**
+ * Card description component./  return (
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component.    <div
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
       data-slot="card"
-      data-size={size}
-      className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
-      )}
-      {...props}
-    />
-  )
+
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Card footer component.
+ *
+ * @param props - The component props   data-size={size}
+ * @returns {JSX.Element  The component
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props   className={cn(
+ * @returns {JSX.Element  The component       "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+
+*
+
+/**
+ * Card description component./        className
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component.      )}
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+      {...props}
+
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props />
+ * @returns {JSX.Element  The component )
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+/**
+ * Card header component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+
+*
+
+/**
+ * Card description component./
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component.function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
   return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
+
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component props <div
+ * @returns {JSX.Element  The component     data-slot="card-header"
+ */
+
+/**
+ * Card action component.     className={cn(
+ *        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
         className
       )}
       {...props}
@@ -48,11 +486,41 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+
+/**
+ * Card description component.
+ */**
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
+ * Card title component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
+  r
+}
+
+/**
+ * Card footer component.
+ *
+ * @param props - The component propseturn (
+ * @returns {JSX.Element  The component   <div
+ */
+
+/**
+ * Card action component.     data-slot="card-title"
+ *      className={cn(
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
         "text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
         className
       )}
@@ -61,16 +529,40 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Card description component.
+ *
+
+
+/*** @param props - The component props
+ * Card content component. * @returns {JSX.Element} The component
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
+ */
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
-    />
-  )
+
 }
 
+/**
+ * Card footer component.
+ *
+ * @param props - The component props />
+ * @returns {JSX.Element  The component )
+ */}
+
+/**
+ * Card action component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -84,6 +576,12 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Card content component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -94,6 +592,12 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Card footer component.
+ *
+ * @param props - The component props
+ * @returns {JSX.Element} The component
+ */
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

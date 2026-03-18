@@ -20,6 +20,7 @@ import { X, SlidersHorizontal } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { SidebarFilters } from "./sidebar-filters";
 
+/** Props for MobileFilterDrawer component */
 interface MobileFilterDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -28,7 +29,16 @@ interface MobileFilterDrawerProps {
   statusCounts: Record<string, number>;
 }
 
-/** Slide-in drawer for filter controls on mobile devices. */
+/**
+ * Slide-in drawer for filter controls on mobile devices.
+ *
+ * @param root0 - The props object
+ * @param root0.open - Whether the drawer is open
+ * @param root0.onClose - Callback to close the drawer
+ * @param root0.activeFilters - The active filters
+ * @param root0.onToggleFilter - Callback to toggle a filter
+ * @param root0.statusCounts - The counts for each status
+ * @returns {JSX.Element} The component*/
 export function MobileFilterDrawer({
   open,
   onClose,

@@ -26,12 +26,20 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/** Props for BottomSheet component */
 interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
 }
 
-/** Bottom-sheet panel with barcode scanner and manual ISBN entry. */
+/**
+ * Bottom-sheet panel with barcode scanner and manual ISBN entry.
+ *
+ * @param root0 - The props object
+ * @param root0.videoRef - The video element ref
+ * @param root0.onFound - Callback when a barcode is found
+ * @returns {JSX.Element} The component
+ */
 export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
   const [manualIsbn, setManualIsbn] = useState("");

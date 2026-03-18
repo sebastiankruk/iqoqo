@@ -37,6 +37,9 @@ vi.mock("next/image", () => ({
   },
 }));
 
+/**
+ * Mock Item for testing
+ */
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",

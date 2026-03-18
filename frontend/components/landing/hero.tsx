@@ -19,6 +19,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Hero section component.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Hero() {
   return (
     <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl mb-12">

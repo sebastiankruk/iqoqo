@@ -18,6 +18,12 @@
 import * as React from "react"
 import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes"
 
+/**
+ * Theme provider component.
+ *
+ * @param props - The provider props
+ * @returns {JSX.Element} The component
+ */
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }

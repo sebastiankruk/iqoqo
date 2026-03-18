@@ -37,6 +37,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 
+/**
+ * Item actions component.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item
+ * @returns {JSX.Element | null} The component or null if no profile
+ */
 export function ItemActions({ item }: { item: Item }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();

@@ -23,6 +23,10 @@ import { Toaster } from "sonner";
 /**
  * Global client-side providers: React Query + Sonner toasts.
  * Wraps the entire application via `app/layout.tsx`.
+ *
+ * @param root0 - The props object
+ * @param root0.children - The child components
+ * @returns {JSX.Element} The component
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create a stable QueryClient per render tree (avoids shared state across

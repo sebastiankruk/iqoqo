@@ -35,6 +35,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+/**
+ * Manifestation actions component.
+ *
+ * @param root0 - The props object
+ * @param root0.manifestation - The manifestation
+ * @returns {JSX.Element | null} The component or null if no profile
+ */
 export function ManifestationActions({ manifestation }: { manifestation: Manifestation|CatalogEntry }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();

@@ -26,6 +26,11 @@ const nextConfig: NextConfig = {
   // Enable standalone output for the production Docker image (Dockerfile.prod)
   output: "standalone",
 
+  /**
+   * Rewrites for API and other requests.
+   *
+   * @returns {Promise<Array<{ source: string, destination: string }>>} The rewrites
+   */
   async rewrites() {
     // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format).
     // Strip it so we never produce a double "/api/api/" path segment.

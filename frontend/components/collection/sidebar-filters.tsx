@@ -19,6 +19,7 @@ import { useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 
+/** Props for SidebarFilters component */
 interface SidebarFiltersProps {
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
@@ -35,10 +36,27 @@ const statusOptions: { value: string; label: string; dot: string }[] = [
   { value: "read", label: "Read", dot: "bg-blue-500" },
 ];
 
+/**
+ * Checks if a filter is active.
+ *
+ * @param filters - The active filters
+ * @param type - The filter type
+ * @param value - The filter value
+ * @returns {boolean} Whether the filter is active
+ */
 function isActive(filters: ActiveFilter[], type: string, value: string) {
   return filters.some((f) => f.type === type && f.value === value);
 }
 
+/**
+ * Collapsible section for the sidebar.
+ *
+ * @param root0 - The props object
+ * @param root0.title - The section title
+ * @param root0.defaultOpen - Whether the section is open by default
+ * @param root0.children - The section content
+ * @returns {JSX.Element} The component
+ */
 function AccordionSection({
   title,
   defaultOpen = true,
@@ -72,7 +90,15 @@ function AccordionSection({
   );
 }
 
-/** Desktop sidebar with collapsible filter sections. */
+/**
+ * Desktop sidebar with collapsible filter sections.
+ *
+ * @param root0 - The props object
+ * @param root0.activeFilters - The active filters
+ * @param root0.onToggleFilter - Callback to toggle a filter
+ * @param root0.statusCounts - The counts for each status
+ * @param root0.disableStatus - Whether to disable the status filter
+ * @returns {JSX.Element} The component*/
 export function SidebarFilters({
   activeFilters,
   onToggleFilter,

@@ -24,6 +24,9 @@ import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
 
+/**
+ * User consent record
+ */
 interface ConsentRecord {
   consent_type: string;
   is_granted: boolean;
@@ -33,6 +36,9 @@ interface ConsentRecord {
   federation: boolean;
 }
 
+/**
+ * User profile details
+ */
 interface UserProfile {
   id: string;
   email: string;
@@ -43,6 +49,11 @@ interface UserProfile {
   consents: ConsentRecord;
 }
 
+/**
+ * Profile page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);

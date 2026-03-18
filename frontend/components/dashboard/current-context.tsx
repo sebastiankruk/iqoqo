@@ -22,6 +22,8 @@ import { ItemCard } from "../collection/item-card";
 /**
  * "Current Context" section – shows items on the wish list ("On Wish List") and currently reading ("Reading").
  * Falls back to a placeholder card if none exist.
+ *
+ * @returns {JSX.Element} The component
  */
 export function CurrentContext() {
   const { data, isLoading } = useItems(1, 10, ["wish_list", "reading"]);

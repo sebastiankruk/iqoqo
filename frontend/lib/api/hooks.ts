@@ -40,6 +40,11 @@ export const queryKeys = {
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
 
+/**
+ * Fetch dashboard statistics.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<DashboardStats>} Query result
+ */
 export function useStats() {
   return useQuery({
     queryKey: queryKeys.stats,
@@ -50,6 +55,16 @@ export function useStats() {
 
 /* ── Items list ──────────────────────────────────────────────────────────── */
 
+/**
+ * Fetch items list.
+ *
+ * @param page - Page number
+ * @param limit - Items per page
+ * @param statuses - Filter by statuses
+ * @param query - Search query
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
+ */
 export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.items(page, limit, statuses, query),
@@ -71,6 +86,15 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
 
 /* ── Manifestations list (global catalog) ─────────────────────────────────── */
 
+/**
+ * Fetch manifestations list.
+ *
+ * @param page - Page number
+ * @param limit - Items per page
+ * @param query - Search query
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<CatalogEntry[]>>} Query result
+ */
 export function useManifestations(page = 1, limit = 20, query?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.manifestations(page, limit, query),
@@ -87,6 +111,12 @@ export function useManifestations(page = 1, limit = 20, query?: string, enabled 
   });
 }
 
+/**
+ * Fetch a single manifestation.
+ *
+ * @param id - Manifestation ID
+ * @returns {import('@tanstack/react-query').UseQueryResult<CatalogEntry>} Query result
+ */
 export function useManifestation(id: number) {
   return useQuery({
     queryKey: queryKeys.manifestation(id),
@@ -100,6 +130,12 @@ export function useManifestation(id: number) {
 
 /* ── Single item ─────────────────────────────────────────────────────────── */
 
+/**
+ * Fetch a single item.
+ *
+ * @param id - Item ID
+ * @returns {import('@tanstack/react-query').UseQueryResult<Item>} Query result
+ */
 export function useItem(id: number) {
   return useQuery({
     queryKey: queryKeys.item(id),
@@ -110,6 +146,13 @@ export function useItem(id: number) {
 
 /* ── Rest of the hooks ─────────────────────────────────────────────────────── */
 
+/**
+ * Lookup an ISBN.
+ *
+ * @param isbn - ISBN string
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<IsbnMeta>} Query result
+ */
 export function useIsbnLookup(isbn: string, enabled = false) {
   return useQuery({
     queryKey: queryKeys.isbn(isbn),
@@ -120,6 +163,11 @@ export function useIsbnLookup(isbn: string, enabled = false) {
   });
 }
 
+/**
+ * Add a new item.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
+ */
 export function useAddItem() {
   const qc = useQueryClient();
   return useMutation({
@@ -134,6 +182,12 @@ export function useAddItem() {
   });
 }
 
+/**
+ * Fetch an item with polling if cover is pending.
+ *
+ * @param initialData - Initial item data
+ * @returns {{ item: Item | undefined }} Object containing the item
+ */
 export function useManifestationWithPolling(initialData: Item) {
   const { data: item } = useQuery({
     queryKey: queryKeys.item(initialData.id),
@@ -145,6 +199,12 @@ export function useManifestationWithPolling(initialData: Item) {
   return { item };
 }
 
+/**
+ * Update an item.
+ *
+ * @param id - Item ID
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ id: number }>, Error, Partial<Item>>} Mutation result
+ */
 export function useUpdateItem(id: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -159,6 +219,11 @@ export function useUpdateItem(id: number) {
   });
 }
 
+/**
+ * Delete an item.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<number, Error, number>} Mutation result
+ */
 export function useDeleteItem() {
   const qc = useQueryClient();
   return useMutation({
@@ -173,6 +238,11 @@ export function useDeleteItem() {
   });
 }
 
+/**
+ * Search an ISBN.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<IsbnMeta, Error, string>} Mutation result
+ */
 export function useIsbnSearch() {
   return useMutation({
     mutationFn: async (isbn: string) => {
@@ -181,6 +251,11 @@ export function useIsbnSearch() {
   });
 }
 
+/**
+ * Regenerate cover for a manifestation.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<unknown, Error, number>} Mutation result
+ */
 export function useRegenerateCover() {
   const qc = useQueryClient();
   return useMutation({
@@ -194,6 +269,11 @@ export function useRegenerateCover() {
   });
 }
 
+/**
+ * Fetch the user profile.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<UserProfile | null>} Query result
+ */
 export function useProfile() {
   return useQuery({
     queryKey: ["profile"],
@@ -214,6 +294,11 @@ export function useProfile() {
   });
 }
 
+/**
+ * Fetch global statistics.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<{ works: number; manifestations: number; items: number; users: number }>} Query result
+ */
 export function useGlobalStats() {
   return useQuery({
     queryKey: ["globalStats"],
@@ -222,6 +307,12 @@ export function useGlobalStats() {
   });
 }
 
+/**
+ * Fetch recent manifestations.
+ *
+ * @param limit - Maximum number of items
+ * @returns {import('@tanstack/react-query').UseQueryResult<CatalogEntry[]>} Query result
+ */
 export function useRecentManifestations(limit = 10) {
   return useQuery({
     queryKey: ["recentManifestations", limit],

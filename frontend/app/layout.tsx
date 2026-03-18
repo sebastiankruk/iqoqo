@@ -48,6 +48,13 @@ export const viewport: Viewport = {
   themeColor: "#2C3E50",
 };
 
+/**
+ * Root layout component.
+ *
+ * @param root0 - The props object
+ * @param root0.children - The child components
+ * @returns {JSX.Element} The root layout
+ */
 export default function RootLayout({
   children,
 }: Readonly<{

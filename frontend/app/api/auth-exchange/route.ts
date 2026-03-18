@@ -17,6 +17,12 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+/**
+ * Handle GET requests to exchange a short-lived token for a session cookie.
+ *
+ * @param request - The incoming Next.js request
+ * @returns {Promise<NextResponse>} The Next.js response redirecting to the dashboard
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');

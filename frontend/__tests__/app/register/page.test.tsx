@@ -22,6 +22,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+/**
+ * Creates a test query client with retries disabled.
+ *
+ * @returns {QueryClient} The query client instance.
+ */
 const createTestQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: { retry: false },
@@ -29,6 +34,12 @@ const createTestQueryClient = () => new QueryClient({
   },
 });
 
+/**
+ * Renders a component wrapped in a QueryClientProvider.
+ *
+ * @param {React.ReactElement} component - The component to render.
+ * @returns {import('@testing-library/react').RenderResult} The render result.
+ */
 const renderWithQueryClient = (component: React.ReactElement) => {
   const testQueryClient = createTestQueryClient();
   return render(

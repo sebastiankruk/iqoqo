@@ -19,7 +19,14 @@ import { Library } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "./item-card";
 
-/** Responsive grid of item cards. Shows empty state when no items match. */
+/**
+ * Responsive grid of item cards. Shows empty state when no items match.
+ *
+ * @param root0 - The props object
+ * @param root0.items - The items to display
+ * @param root0.isManifestationView - Whether to show the manifestation view
+ * @returns {JSX.Element} The component
+ */
 export function CollectionGrid({ items, isManifestationView = false }: { items: (Item | CatalogEntry)[]; isManifestationView?: boolean }) {
   if (items.length === 0) {
     return (

@@ -29,10 +29,12 @@ vi.mock('@/lib/api/client', () => ({
 
 // Mock dashboard components
 vi.mock('@/components/dashboard/navbar', () => ({
+  /** @returns {JSX.Element} Navbar mock */
   Navbar: () => <div data-testid="navbar">Navbar</div>,
 }));
 
 vi.mock('@/components/dashboard/footer', () => ({
+  /** @returns {JSX.Element} Footer mock */
   Footer: () => <div data-testid="footer">Footer</div>,
 }));
 

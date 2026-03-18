@@ -33,7 +33,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** Minimal confirm dialog that reuses all the named exports. */
+/**
+ * Minimal confirm dialog that reuses all the named exports.
+ *
+ * @param root0 - The props object
+ * @param root0.open - Whether the dialog is open
+ * @param root0.onOpenChange - Callback when open state changes
+ * @param root0.onConfirm - Callback when confirmed
+ * @returns {JSX.Element} The dialog component */
 function ConfirmDialog({
   open,
   onOpenChange,

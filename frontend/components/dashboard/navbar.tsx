@@ -31,7 +31,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProfile } from "@/lib/api/hooks";
 
-/** Sticky top navigation bar – "Modern Athenaeum" style. */
+/**
+ * Sticky top navigation bar – "Modern Athenaeum" style.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();

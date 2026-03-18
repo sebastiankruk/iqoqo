@@ -17,7 +17,14 @@
 
 import Link from "next/link";
 
-/** Blurred-cover hero banner with breadcrumb navigation. */
+/**
+ * Blurred-cover hero banner with breadcrumb navigation.
+ *
+ * @param root0 - The props object
+ * @param root0.coverUrl - The cover URL
+ * @param root0.title - The title
+ * @returns {JSX.Element} The component
+ */
 export function HeroBanner({
   coverUrl,
   title,

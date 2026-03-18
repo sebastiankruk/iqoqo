@@ -20,6 +20,13 @@ import Image from "next/image";
 import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
 import { useRecentManifestations } from "@/lib/api/hooks";
 
+/**
+ * Fresh arrivals section component.
+ *
+ * @param root0 - The props object
+ * @param root0.publicMode - Whether to render in public mode
+ * @returns {JSX.Element} The component
+ */
 export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } = {}) {
   const { data: recentManifestations, isLoading, isError } = useRecentManifestations(12);
   const items = recentManifestations ?? [];

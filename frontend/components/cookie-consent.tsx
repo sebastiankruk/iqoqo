@@ -18,6 +18,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"; // Assuming you are using shadcn/ui
 
+/**
+ * Cookie consent banner component.
+ *
+ * @returns {JSX.Element | null} The component or null if already accepted
+ */
 export function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
 

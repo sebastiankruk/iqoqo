@@ -19,12 +19,22 @@ import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 
+/** Props for CameraCapture component */
 interface CameraCaptureProps {
   manifestationId: number;
   onUploadComplete?: () => void;
   className?: string;
 }
 
+/**
+ * Camera capture button component.
+ *
+ * @param root0 - The props object
+ * @param root0.manifestationId - The manifestation ID
+ * @param root0.onUploadComplete - Callback when upload is complete
+ * @param root0.className - Additional CSS classes
+ * @returns {JSX.Element} The component
+ */
 export function CameraCapture({ manifestationId, onUploadComplete, className }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
