@@ -87,3 +87,4 @@ make lint-markdown  # markdownlint
 		- Migration plan: `.github/context/migration/`
 		- UI/UX designs: `.github/context/private-designs/`
 		- Dev notes: `.github/context/private-notes/` (git-ignored Obsidian vault)
+- GitHub Dependabot Alerts can be retrieved with `.github/tools/get_alerts.sh`
