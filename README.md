@@ -1,12 +1,5 @@
 # iqoqo — The Library of Everything
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Next.js Version](https://img.shields.io/badge/Next.js-16%2B-black.svg)](https://nextjs.org/)
-[![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/en/)
-[![Flask Version](https://img.shields.io/badge/Flask-2.3%2B-green.svg)](https://flask.palletsprojects.com/en/latest/)
-[![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
-[![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
-
 **iqoqo** is a distributed, semantic, and federated library system designed to catalog physical and digital collections—spanning books, vinyl, board games, and beyond.
 
 Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements for Bibliographic Records)** ontology, allowing for a deep understanding of the relationship between a *Work* (e.g., "The Hobbit"), its *Expression* (the English text), its *Manifestation* (the 1937 hardcover), and your specific *Item* (the copy on your shelf).
@@ -22,18 +15,19 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 
 ## 🛠 Tech Stack
 
-- **Frontend:** Next.js 16 / TypeScript / Tailwind CSS
-- **Backend:** Python 3.14+ / Flask
+- **Frontend:** React, Next.js (App Router), TypeScript, Tailwind CSS
+- **Backend:** Python 3.11+ / Flask
 - **Database:** PostgreSQL (with Full-Text Search and JSONB)
+- **Ontology:** RDFLib / FRBR
 - **Deployment:** Docker & Docker Compose
 
-## � Quick Start
+## 🚀 Quick Start
 
 Get iqoqo running in minutes with Docker:
 
 ```bash
 # Clone the repository
-git clone https://github.com/sebastiankruk/iqoqo.git
+git clone [https://github.com/sebastiankruk/iqoqo.git](https://github.com/sebastiankruk/iqoqo.git)
 cd iqoqo
 
 # Configure environment (edit .env after copying)
@@ -46,10 +40,10 @@ docker-compose up -d
 # Initialize database
 docker-compose exec web flask db upgrade
 
-# Access at http://localhost:5000
+# Access at http://localhost:3000 (Frontend) and http://localhost:5000 (API)
 ```
 
-For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](docs/INSTALL.md).
+For detailed installation instructions, port configuration, and development setup, see the [Installation Guide](https://www.google.com/search?q=docs/INSTALL.md).
 
 ### CORS Configuration
 
@@ -57,20 +51,21 @@ CORS is disabled by default and should be enabled only when the frontend is serv
 
 Configure via environment variables in `.env`:
 
-```text
+```markdown
 CORS_ENABLED=true
-CORS_ORIGINS="https://app.example.com,https://admin.example.com"
+CORS_ORIGINS="[https://app.example.com](https://app.example.com),[https://admin.example.com](https://admin.example.com)"
 CORS_SUPPORTS_CREDENTIALS=false
 ```
 
 Use explicit origins in production (avoid wildcard origins). Enable `CORS_SUPPORTS_CREDENTIALS=true` only when required.
 
-## �📖 Documentation
+## 📖 Documentation
 
-- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
-- **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
+- **[Installation Guide](https://www.google.com/search?q=docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Phase 4 Ubuntu Cutover](https://www.google.com/search?q=docs/PHASE4_UBUNTU_CUTOVER.md)** - Deployment runbook for switching to frontend+API+nginx
+- **[Architecture Guide](https://www.google.com/search?q=docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
+- **[Contributing Guide](https://www.google.com/search?q=docs/CONTRIBUTING.md)** - Development workflow and coding standards
+- **[FRBR Ontology](https://www.google.com/search?q=docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
 
 ## 📦 Data Management
 
@@ -78,14 +73,14 @@ iqoqo provides comprehensive tools for data import, export, and migration:
 
 ### Quick Start with Seed Data
 
-```bash
+```markdown
 # Initialize database with example books
 python scripts/init_db.py --seed-file data/seed_example.json
 ```
 
 ### Export Your Library
 
-```bash
+```markdown
 # Via API
 curl -o my_library.json http://localhost:5000/api/admin/export
 
@@ -97,7 +92,7 @@ with app.app_context(): DataManager.export_to_file('my_library.json')"
 
 ### Import Data
 
-```bash
+```markdown
 # Via API
 curl -X POST -F "file=@my_library.json" http://localhost:5000/api/admin/import
 
@@ -105,12 +100,24 @@ curl -X POST -F "file=@my_library.json" http://localhost:5000/api/admin/import
 python scripts/init_db.py --seed-file my_library.json
 ```
 
-See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed documentation.
+### Migrate from Legacy iqoqo-prototype
+
+If you're migrating from the original iqoqo-prototype:
+
+```markdown
+# 1. Convert SQL dump to JSON
+python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
+
+# 2. Migrate to FRBR format
+python scripts/migrate_legacy.py legacy_data.json --clear
+```
+
+See the [Installation Guide](https://www.google.com/search?q=docs/INSTALL.md%23data-importexport) for detailed documentation.
 
 ## 🎯 Roadmap
 
-- [x] Admin web UI for data management
-- [x] Multi-user authentication and authorization
+- [ ] Admin web UI for data management
+- [ ] Multi-user authentication and authorization
 - [ ] Federation protocol for cross-instance discovery
 - [ ] Mobile apps (iOS & Android)
 - [ ] Advanced search with SPARQL queries
@@ -118,9 +125,7 @@ See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed doc
 
 ## 📜 License
 
-## License
-
-This project is licensed under the [GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](LICENSE).
+MIT License - see [LICENSE](https://www.google.com/search?q=LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
