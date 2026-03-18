@@ -17,7 +17,7 @@ Every entity **must** fit the FRBR hierarchy — ask "Work, Expression, Manifest
 
 | Layer | Technology |
 | --- | --- |
-| Backend | Python 3.11+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations |
+| Backend | Python 3.14+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations |
 | Frontend | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4, Radix UI, TanStack Query v5 + Axios, React Hook Form + Zod, `@zxing/browser` |
 | Testing | Python: `pytest` · Frontend: Vitest 4 + Testing Library + `happy-dom` |
 | Deployment | Docker Compose |
