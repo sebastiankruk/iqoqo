@@ -19,9 +19,9 @@ name: Code Quality
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, 'release/*']
   pull_request:
-    branches: [main, develop]
+    branches: [main, 'release/*']
 
 jobs:
   lint-python:
