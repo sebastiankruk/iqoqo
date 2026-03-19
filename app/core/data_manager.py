@@ -268,6 +268,15 @@ class DataManager:
         """
         Get database statistics.
 
+        When ``owner_id`` is provided all counts — including the FRBR entity
+        counts for works, expressions, and manifestations — are scoped to that
+        user's collection by walking the join chain
+        ``Item → Manifestation → Expression → Work`` with ``distinct()``.
+        This ensures the response is fully user-scoped rather than mixing
+        user-scoped item counts with global FRBR counts.
+
+        When ``owner_id`` is ``None`` all counts reflect the full database.
+
         Args:
             owner_id: Optional ID of the owner to filter their specific collection.
 
@@ -277,17 +286,45 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
+        from sqlalchemy import select
+
         item_query = Item.query
         if owner_id:
             item_query = item_query.filter_by(owner_id=owner_id)
 
         total = item_query.count()
         status_counts: dict[str, int] = {s: item_query.filter_by(status=s).count() for s in ITEM_STATUSES}
+
+        if owner_id:
+            # Compute FRBR entity counts scoped to the user's collection via joins.
+            # Each level uses .distinct().count() to avoid inflating counts when
+            # multiple items share the same manifestation / expression / work.
+            # Note: we use the ORM .distinct().count() pattern (rather than
+            # func.count(func.distinct(...))) so that pylint can resolve the call chain.
+            base_manif_ids = select(Item.manifestation_id).where(Item.owner_id == owner_id).distinct().scalar_subquery()
+
+            manifestations_count = db.session.query(Manifestation.id).filter(Manifestation.id.in_(base_manif_ids)).distinct().count()
+
+            base_expr_ids = select(Manifestation.expression_id).where(Manifestation.id.in_(base_manif_ids)).distinct().scalar_subquery()
+
+            expressions_count = db.session.query(Expression.id).filter(Expression.id.in_(base_expr_ids)).distinct().count()
+
+            works_count = (
+                db.session.query(Work.id)
+                .filter(Work.id.in_(select(Expression.work_id).where(Expression.id.in_(base_expr_ids)).distinct().scalar_subquery()))
+                .distinct()
+                .count()
+            )
+        else:
+            works_count = Work.query.count()
+            expressions_count = Expression.query.count()
+            manifestations_count = Manifestation.query.count()
+
         return {
-            # FRBR entity counts
-            "works": Work.query.count(),
-            "expressions": Expression.query.count(),
-            "manifestations": Manifestation.query.count(),
+            # FRBR entity counts (user-scoped when owner_id is set)
+            "works": works_count,
+            "expressions": expressions_count,
+            "manifestations": manifestations_count,
             "items": total,
             # UI-friendly aliases expected by the React dashboard
             "total_items": total,

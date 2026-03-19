@@ -106,3 +106,25 @@ vi.mock("sonner", () => ({
    */
   Toaster: () => null,
 }));
+
+/* ── TanStack React Query ──────────────────────────────────────────────────
+ * Stub useQueryClient so components that call it (e.g. Navbar clears cache
+ * on logout) work in unit tests without a real QueryClientProvider wrapper.
+ * All other exports (useQuery, useMutation, …) are forwarded to the real
+ * library so per-test mocks of hooks like useProfile still work normally.  */
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueryClient: vi.fn().mockReturnValue({
+      clear: vi.fn(),
+      invalidateQueries: vi.fn(),
+      removeQueries: vi.fn(),
+      resetQueries: vi.fn(),
+      cancelQueries: vi.fn(),
+      getQueryData: vi.fn(),
+      setQueryData: vi.fn(),
+    }),
+  };
+});
+
