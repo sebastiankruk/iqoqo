@@ -60,7 +60,16 @@ export const queryKeys = {
   isbn: (isbn: string) => ["isbn", isbn] as const,
   manifestations: (page = 1, limit = 20, query?: string) => ["manifestations", page, limit, query ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  config: ["config"] as const,
 };
+
+export function useAppConfig() {
+  return useQuery({
+    queryKey: queryKeys.config,
+    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string }>("/config"),
+    staleTime: 60 * 60 * 1000,
+  });
+}
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
 
@@ -221,6 +230,20 @@ export function useManifestationWithPolling(initialData: Item) {
       query.state.data?.cover_status === 'pending' ? 3000 : false,
   });
   return { item };
+}
+
+export function useAddManualItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (metadata: any) => {
+      const res = await apiClient.post<{ item_id: number; success: boolean }>("/items/manual", metadata);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
 }
 
 /**

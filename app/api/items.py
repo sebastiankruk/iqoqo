@@ -357,3 +357,45 @@ def add_item(isbn: str):
     db.session.commit()
 
     return jsonify({"item_id": item.id})
+
+
+@api_bp.route("/items/manual", methods=["POST"])
+@require_auth
+def add_item_manual():
+    """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    title = data.get("Title", "Unknown Title")
+    authors = data.get("Authors", [])
+    if isinstance(authors, str):
+        authors = [authors]
+    content_type = data.get("Format", "text")
+
+    try:
+        work = Work(title=title, meta={"authors": authors})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, meta=data)
+        db.session.add(manifestation)
+        db.session.flush()
+
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+        db.session.add(item)
+        db.session.commit()
+
+        return jsonify({"item_id": item.id, "success": True})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e), "success": False}), 500
+
