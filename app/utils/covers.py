@@ -18,6 +18,7 @@ import io
 import logging
 import os
 import threading
+from datetime import UTC, datetime
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -203,6 +204,8 @@ def process_cover_pipeline(
     isbn: str,
     title: str,
     author: str,
+    user_id: str,
+    allow_llm: bool = False,
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
@@ -267,14 +270,14 @@ def process_cover_pipeline(
                 local_cover_url, source = result
 
         # Tier 3/4: LLM Generation
-        if not local_cover_url:
-            result = fetch_llm_cover(isbn, title, author, description, genre)
+        if not local_cover_url and allow_llm:
+            result = fetch_llm_cover(isbn, title, author, user_id, description, genre)
             if result:
                 local_cover_url, source = result
 
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
-        updates = {}
+        updates = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
 
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
@@ -294,11 +297,11 @@ def process_cover_pipeline(
 
 
 def start_cover_processing(
-    manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None, description: str = "", genre: str = ""
+    manifestation_id: int, isbn: str, title: str, author: str, user_id: str, allow_llm: bool = False, user_image_path: str | None = None, description: str = "", genre: str = ""
 ):
     """Fires off the background thread."""
     thread = threading.Thread(
-        target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_image_path, description, genre)
+        target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_id, allow_llm, user_image_path, description, genre)
     )
     thread.start()
 

@@ -203,9 +203,28 @@ class Item(db.Model):  # type: ignore[name-defined]
 class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     __tablename__ = "llm_telemetry"
     id = db.Column(db.Integer, primary_key=True)
-    provider = db.Column(db.String(50), unique=True, nullable=False)
+    provider = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.String(100), nullable=False)
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
+    total_duration_seconds = db.Column(db.Float, default=0.0)
+    
+    __table_args__ = (
+        db.UniqueConstraint('provider', 'user_id', name='uq_provider_user'),
+    )
+
+
+class InstanceSettings(db.Model):  # type: ignore[name-defined]
+    """
+    Stores global configuration for the iqoqo instance (e.g., federation toggles,
+    affiliate links, default language).
+    """
+
+    __tablename__ = "instance_settings"
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    value = db.Column(db.JSON, nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]
