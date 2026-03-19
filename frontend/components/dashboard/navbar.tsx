@@ -48,7 +48,10 @@ export function Navbar() {
    */
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`Logout failed with status ${response.status} ${response.statusText}`);
+      }
     } catch (err) {
       console.error("Failed to logout:", err);
     } finally {
