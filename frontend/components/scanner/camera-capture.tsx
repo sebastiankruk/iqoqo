@@ -1,50 +1,21 @@
-// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published
-// by the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>
-//
 "use client";
 
 import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 
-/** Props for CameraCapture component */
 interface CameraCaptureProps {
-  manifestationId: number;
+  manifestationId?: number; // Optional: If missing, operates in OCR vision extraction mode
   onUploadComplete?: () => void;
+  onExtractComplete?: (data: { Title?: string; Authors?: string[] }) => void;
   className?: string;
 }
 
-/**
- * Camera capture button component.
- *
- * @param root0 - The props object
- * @param root0.manifestationId - The manifestation ID
- * @param root0.onUploadComplete - Callback when upload is complete
- * @param root0.className - Additional CSS classes
- * @returns {JSX.Element} The component
- */
-export function CameraCapture({ manifestationId, onUploadComplete, className }: CameraCaptureProps) {
+export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    /**
-     * Handles the capture of an image file, uploads it as a cover, and triggers a callback upon completion.
-     *
-     * @param {React.ChangeEvent<HTMLInputElement>} event - The change event from the file input.
-     */
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -53,12 +24,22 @@ export function CameraCapture({ manifestationId, onUploadComplete, className }: 
     formData.append("cover", file);
 
     try {
-      await apiClient.post(`/manifestations/${manifestationId}/cover`, formData);
-      if (onUploadComplete) onUploadComplete();
+      if (manifestationId) {
+        // Mode 1: Upload a user-contributed cover
+        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData);
+        if (onUploadComplete) onUploadComplete();
+      } else {
+        // Mode 2: OCR Metadata Extraction 
+        const response = await apiClient.post<{ data: { Title?: string; Authors?: string[] } }>(`/vision/extract`, formData);
+        if (onExtractComplete && response.data) {
+          onExtractComplete(response.data);
+        }
+      }
     } catch (error) {
-      console.error("Failed to upload cover", error);
+      console.error("Failed to process cover image", error);
     } finally {
       setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 

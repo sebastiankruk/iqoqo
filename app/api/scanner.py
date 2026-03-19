@@ -65,3 +65,27 @@ def scan_barcode():
         ),
         201,
     )
+
+
+@api_bp.route("/vision/extract", methods=["POST"])
+def extract_from_cover():
+    """Extract Title/Author from an uploaded cover image using OCR/Vision."""
+    if "cover" not in request.files:
+        return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
+
+    file = request.files["cover"]
+    if not file.filename:
+        return jsonify({"success": False, "data": None, "error": "No selected file"}), 400
+
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
+        return jsonify({"success": False, "data": None, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    # TODO: Integrate external AI/Vision API (e.g., Google Vision/Gemini/Tesseract) here
+    # Mock return extracting metadata from an image
+    extracted_data = {
+        "Title": "Extracted Title",
+        "Authors": ["Extracted Author"]
+    }
+
+    return jsonify({"success": True, "data": extracted_data, "error": None}), 200

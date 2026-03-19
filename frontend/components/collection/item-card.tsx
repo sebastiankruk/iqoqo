@@ -156,8 +156,10 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <BookOpen className="h-10 w-10 text-muted-foreground/30" />
+            <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
+              <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
+              <span className="text-xs text-muted-foreground line-clamp-2">{authors}</span>
+              <BookOpen className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
         </div>

@@ -18,7 +18,7 @@
  *
  * @returns {JSX.Element} The component
  */
-export function Viewfinder() {
+export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
   const bracketSize = 28;
   const strokeWidth = 3;
 
@@ -72,9 +72,11 @@ export function Viewfinder() {
         </svg>
 
         {/* Scanning line */}
-        <div className="absolute inset-x-2 animate-[scan-line_2.5s_ease-in-out_infinite]">
-          <div className="h-0.5 w-full bg-accent shadow-[0_0_8px_hsl(24_100%_41%)]" />
-        </div>
+        {isScanning && (
+          <div className="absolute inset-x-2 animate-[scan-line_2.5s_ease-in-out_infinite]">
+            <div className="h-0.5 w-full bg-accent shadow-[0_0_8px_hsl(24_100%_41%)]" />
+          </div>
+        )}
       </div>
     </div>
   );
