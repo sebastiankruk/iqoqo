@@ -1,0 +1,13 @@
+# Antigravity IDE - Project Rules
+
+CRITICAL INITIALIZATION STEP:
+Whenever you start a new chat, session, or task, your very first action MUST be to actively use your file-reading capabilities to ingest all files within:
+`.github/context/private-notes/plan/`
+
+Do not proceed with any analysis, planning, or coding until you have fully loaded and read the contents of that specific directory.
+
+- **Core Instructions:** Read `.github/copilot-instructions.md`
+- **Project Context:** You MUST list and scan the [.github/context/private-notes](file:///.github/context/private-notes:0:0-0:0) directory (including all subdirectories like `plan/`) BEFORE proposing any changes, to ensure you have the full context of the current development phase.
+- **Agent Definitions:** Review the agent personas and workflows in the `.github/agents/` directory.
+
+Ensure all architectural decisions, code generation (Python/Flask backend, Next.js/React frontend), and database interactions comply strictly with the guidelines specified in these documents.

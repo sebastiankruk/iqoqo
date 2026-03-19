@@ -15,12 +15,12 @@ Every entity **must** fit the FRBR hierarchy — ask "Work, Expression, Manifest
 
 ## Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Backend | Python 3.14+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations |
-| Frontend | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4, Radix UI, TanStack Query v5 + Axios, React Hook Form + Zod, `@zxing/browser` |
-| Testing | Python: `pytest` · Frontend: Vitest 4 + Testing Library + `happy-dom` |
-| Deployment | Docker Compose |
+| Layer      | Technology                                                                                                                                  |
+|------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Backend    | Python 3.14+ / Flask, PostgreSQL (`JSONB` + FTS), `rdflib` (JSON-LD/RDF), Alembic migrations                                                |
+| Frontend   | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4, Radix UI, TanStack Query v5 + Axios, React Hook Form + Zod, `@zxing/browser` |
+| Testing    | Python: `pytest` · Frontend: Vitest 4 + Testing Library + `happy-dom`                                                                       |
+| Deployment | Docker Compose                                                                                                                              |
 
 ## Environments
 
@@ -75,16 +75,17 @@ make lint-markdown  # markdownlint
 - **Test everything** — `pytest` for Python, Vitest + Testing Library for React.
 - **Docs** — update docstrings and API docs with every change.
 - **Linting:** `make lint` must pass before merging. For Markdown:
-	- Don't use emphasis instead of a heading (MD036)
-		- Lists should be surrounded by blank lines (MD032)
+  - Don't use emphasis instead of a heading (MD036)
+  - Lists should be surrounded by blank lines (MD032)
+- **Pull Requests:** use `gh pr` to create pull requests or read GitHub PR comments
 
 ## Context & References
 
 - Legacy prototype: [https://github.com/sebastiankruk/iqoqo-prototype](https://github.com/sebastiankruk/iqoqo-prototype)
 - git-ignored:
-	- Vision: `.github/context/feasibility_study.md`
-		- Development roadmap: `.github/context/roadmap.md`
-		- Migration plan: `.github/context/migration/`
-		- UI/UX designs: `.github/context/private-designs/`
-		- Dev notes: `.github/context/private-notes/` (git-ignored Obsidian vault)
+  - Vision: `ai-context/feasibility_study.md`
+    - Development roadmap: `ai-context/roadmap.md`
+    - Migration plan: `ai-context/migration/`
+    - UI/UX designs: `ai-context/private-designs/`
+    - Dev notes: `ai-context/private-notes/` (git-ignored Obsidian vault)
 - GitHub Dependabot Alerts can be retrieved with `.github/tools/get_alerts.sh`

@@ -154,9 +154,9 @@ def test_health_check_enhanced(client):
 # =============================================================================
 
 
-def test_get_stats_empty_database(client):
+def test_get_stats_empty_database(client, admin_headers):
     """Test stats endpoint with empty database."""
-    response = client.get("/api/stats")
+    response = client.get("/api/stats", headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -170,8 +170,11 @@ def test_get_stats_empty_database(client):
 
 
 def test_get_stats_with_data(client, sample_work):
-    """Test stats endpoint with data in database."""
-    response = client.get("/api/stats")
+    """Test stats endpoint with data in database — response must be scoped to the owner."""
+    # Use the token for the user who actually owns the seeded item so that
+    # the user-scoped stats correctly reflect their 1 item.
+    token = generate_internal_jwt(sample_work["user"])
+    response = client.get("/api/stats", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -184,7 +187,20 @@ def test_get_stats_with_data(client, sample_work):
 
 def test_stats_cors_headers(cors_client):
     """Test that stats endpoint returns CORS headers."""
-    response = cors_client.get("/api/stats", headers={"Origin": "http://localhost:3000"})
+    from app.api.auth import generate_internal_jwt  # pylint: disable=import-outside-toplevel
+    from app.db.models import User, db  # pylint: disable=import-outside-toplevel
+
+    # cors_client has its own isolated in-memory DB — create the user inside its context
+    with cors_client.application.app_context():
+        cors_user = User(email="cors_test@iqoqo.local", display_name="CORS User")
+        db.session.add(cors_user)
+        db.session.commit()
+        token = generate_internal_jwt(cors_user)
+
+    response = cors_client.get(
+        "/api/stats",
+        headers={"Origin": "http://localhost:3000", "Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     assert "Access-Control-Allow-Origin" in response.headers
 

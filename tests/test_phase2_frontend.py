@@ -160,45 +160,45 @@ class TestGetStats:
 class TestStatsEndpoint:
     """Integration tests for the GET /api/stats endpoint."""
 
-    def test_returns_200(self, client):
+    def test_returns_200(self, client, auth_headers):
         """Endpoint must respond with HTTP 200."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_returns_success_envelope(self, client):
+    def test_returns_success_envelope(self, client, auth_headers):
         """Response must use the standard {success, data, error} envelope."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         payload = response.get_json()
         assert payload["success"] is True
         assert payload["error"] is None
         assert isinstance(payload["data"], dict)
 
-    def test_data_contains_ui_fields(self, client):
+    def test_data_contains_ui_fields(self, client, auth_headers):
         """data block must contain the UI-friendly aliases."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         data = response.get_json()["data"]
         assert "total_items" in data
         assert "lent_items" in data
         assert "to_read" in data
 
-    def test_data_contains_frbr_counts(self, client):
+    def test_data_contains_frbr_counts(self, client, auth_headers):
         """data block must contain FRBR entity counts."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         data = response.get_json()["data"]
         for field in ("works", "expressions", "manifestations", "items"):
             assert field in data, f"Missing field: {field}"
 
-    def test_stat_values_are_integers(self, client, populated_library):
+    def test_stat_values_are_integers(self, client, populated_library, auth_headers):
         """All stat values must be non-negative integers."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         data = response.get_json()["data"]
         for key, value in data.items():
             assert isinstance(value, int), f"{key} is not an int: {value!r}"
             assert value >= 0, f"{key} is negative: {value}"
 
-    def test_stat_counts_reflect_seeded_data(self, client, populated_library):
+    def test_stat_counts_reflect_seeded_data(self, client, populated_library, auth_headers):
         """Stats must reflect the three seeded items with different statuses."""
-        response = client.get("/api/stats")
+        response = client.get("/api/stats", headers=auth_headers)
         data = response.get_json()["data"]
         assert data["total_items"] == 3
         assert data["lent_items"] == 1

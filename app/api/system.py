@@ -22,6 +22,7 @@ from flask import jsonify, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
+from app.api.decorators import require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Item, Manifestation, User, Work, db
@@ -39,8 +40,9 @@ def health_check():
 
 
 @api_bp.route("/stats", methods=["GET"])
+@require_auth
 def get_dashboard_stats():
-    stats = DataManager.get_stats()
+    stats = DataManager.get_stats(owner_id=request.user_id)
     return jsonify({"success": True, "data": stats, "error": None})
 
 
