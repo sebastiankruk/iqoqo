@@ -264,9 +264,12 @@ class DataManager:
         db.session.commit()
 
     @staticmethod
-    def get_stats() -> dict[str, int]:
+    def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:
         """
         Get database statistics.
+
+        Args:
+            owner_id: Optional ID of the owner to filter their specific collection.
 
         Returns:
             Dictionary with counts for each FRBR entity type plus UI-friendly
@@ -274,8 +277,12 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
-        total = Item.query.count()
-        status_counts: dict[str, int] = {s: Item.query.filter_by(status=s).count() for s in ITEM_STATUSES}
+        item_query = Item.query
+        if owner_id:
+            item_query = item_query.filter_by(owner_id=owner_id)
+
+        total = item_query.count()
+        status_counts: dict[str, int] = {s: item_query.filter_by(status=s).count() for s in ITEM_STATUSES}
         return {
             # FRBR entity counts
             "works": Work.query.count(),

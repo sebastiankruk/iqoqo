@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const queryClient = useQueryClient();
 
   /**
    * Handles the user logout process.
@@ -47,9 +49,11 @@ export function Navbar() {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
     } catch (err) {
       console.error("Failed to logout:", err);
+    } finally {
+      queryClient.clear();
+      router.push("/login");
     }
   };
 
