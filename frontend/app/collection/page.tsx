@@ -156,10 +156,10 @@ function CollectionContent() {
         <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
-              Collection
+              {appliedQuery ? `Search results for "${appliedQuery}"` : "Collection"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Browse and manage your library
+              {appliedQuery ? `Found ${total} items` : "Browse and manage your library"}
             </p>
           </div>
 
