@@ -225,16 +225,3 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     key = db.Column(db.String(100), unique=True, nullable=False, index=True)
     value = db.Column(db.JSON, nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-
-
-class InstanceSettings(db.Model):  # type: ignore[name-defined]
-    """
-    Stores global configuration for the iqoqo instance (e.g., federation toggles,
-    affiliate links, default language).
-    """
-
-    __tablename__ = "instance_settings"
-    id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    value = db.Column(db.JSON, nullable=False)
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
