@@ -25,6 +25,11 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { IsbnMeta } from "@/types/frbr";
 
+/**
+ * The scan page component for scanning barcodes and manual entry.
+ *
+ * @returns {JSX.Element} The ScanPage component
+ */
 export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
   const [showManual, setShowManual] = useState(false);

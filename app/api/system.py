@@ -42,11 +42,13 @@ def health_check():
 @api_bp.route("/config", methods=["GET"])
 def get_config():
     """Return public application configuration for the frontend (non-sensitive)."""
-    return jsonify({
-        "success": True,
-        "data": {"federation_enabled": Config.FEDERATION_ENABLED, "version": Config.VERSION},
-        "error": None,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "data": {"federation_enabled": Config.FEDERATION_ENABLED, "version": Config.VERSION},
+            "error": None,
+        }
+    )
 
 
 @api_bp.route("/stats", methods=["GET"])

@@ -196,7 +196,7 @@ def get_items():
     for item in items:
         manifestation = item.manifestation
         work_title = ""
-        authors: list[str] = []
+        authors = []
         if manifestation and manifestation.expression and manifestation.expression.work:
             work = manifestation.expression.work
             work_title = work.title or ""
@@ -398,4 +398,3 @@ def add_item_manual():
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"error": str(e), "success": False}), 500
-

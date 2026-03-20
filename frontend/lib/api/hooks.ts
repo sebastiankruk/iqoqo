@@ -63,6 +63,11 @@ export const queryKeys = {
   config: ["config"] as const,
 };
 
+/**
+ * Custom hook to fetch the application configuration.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<{ federation_enabled: boolean; version: string }>} Query result containing the app config
+ */
 export function useAppConfig() {
   return useQuery({
     queryKey: queryKeys.config,
@@ -232,10 +237,15 @@ export function useManifestationWithPolling(initialData: Item) {
   return { item };
 }
 
+/**
+ * Custom hook to add a new item manually when ISBN is not available.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; success: boolean }, Error, Record<string, unknown>>} Mutation result
+ */
 export function useAddManualItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (metadata: any) => {
+    mutationFn: async (metadata: Record<string, unknown>) => {
       const res = await apiClient.post<{ item_id: number; success: boolean }>("/items/manual", metadata);
       return res.data;
     },

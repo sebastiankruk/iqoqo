@@ -57,7 +57,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value;
     updateItem.mutate(
-      { status: newStatus as any },
+      { status: newStatus as Item["status"] },
       {
         onSuccess: () => toast.success(`Item status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
         onError: (e) => toast.error((e as Error).message),
