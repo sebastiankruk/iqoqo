@@ -128,6 +128,7 @@ function CollectionContent() {
       wish_list: statsData.items_wish_list,
       reading: statsData.items_reading,
       read: statsData.items_read,
+      unread: statsData.items_unread ?? statsData.to_read,
     };
   }, [statsData]);
 

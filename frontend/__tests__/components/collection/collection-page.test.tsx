@@ -129,6 +129,7 @@ const FULL_STATS: DashboardStats = {
   items_wish_list: 20,
   items_reading: 10,
   items_read: 50,
+  items_unread: 20,
 };
 
 /** Mock user profile */
@@ -239,7 +240,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
       isLoading: true,
     } as ReturnType<typeof useItems>);
     render(<CollectionPage />);
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText(/0 items/i)).toBeInTheDocument();
   });
 });
 

@@ -43,6 +43,7 @@ iqoqo_backup*.json
 .venv*
 
 # AI
+.github/context
 
 # Process IDs
 .flask.pid
