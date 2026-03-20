@@ -133,7 +133,7 @@ def get_items():
         except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
             db.session.rollback()  # Crucial rollback so fallback queries don't trigger "InFailedSqlTransaction"
             current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
-            
+
             # Subquery approach deduplicates successfully when FTS acts up
             search_term = f"%{q}%"
             matching_items = db.session.query(Item.id) \
