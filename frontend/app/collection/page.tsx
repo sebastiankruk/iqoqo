@@ -160,7 +160,7 @@ function CollectionContent() {
               {appliedQuery ? `Search results for "${appliedQuery}"` : "Collection"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {appliedQuery ? `Found ${total} items` : "Browse and manage your library"}
+              {appliedQuery ? `Found ${total} ${total === 1 ? "item" : "items"}` : "Browse and manage your library"}
             </p>
           </div>
 

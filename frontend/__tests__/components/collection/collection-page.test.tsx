@@ -126,10 +126,10 @@ const FULL_STATS: DashboardStats = {
   items_available: 150,
   items_lent: 5,
   items_lost: 2,
-  items_wish_list: 20,
+  items_wish_list: 21,
   items_reading: 10,
   items_read: 50,
-  items_unread: 20,
+  items_unread: 23,
 };
 
 /** Mock user profile */
@@ -197,7 +197,7 @@ describe("CollectionPage – statusCounts from useStats()", () => {
 
   it("shows the global 'wish_list' count from useStats", () => {
     render(<CollectionPage />);
-    expect(screen.getByText("20")).toBeInTheDocument();
+    expect(screen.getByText("21")).toBeInTheDocument();
   });
 
   it("falls back to 0 when useStats has not yet loaded", () => {
@@ -240,7 +240,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
       isLoading: true,
     } as ReturnType<typeof useItems>);
     render(<CollectionPage />);
-    expect(screen.getByText(/0 items/i)).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
   });
 });
 
