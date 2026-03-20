@@ -23,6 +23,7 @@ import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured c
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
+import { useAppConfig } from "@/lib/api/hooks";
 
 /**
  * User consent record
@@ -58,6 +59,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const { data: config } = useAppConfig();
 
   useEffect(() => {
     // Note the trailing slash to match Flask's route: /profile/
@@ -193,18 +195,20 @@ export default function ProfilePage() {
               Read Policy
             </Link>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="font-medium">Allow Federal Discovery (ActivityPub)</p>
-              <p className="text-xs text-muted-foreground">Shares your public collection with the broader network.</p>
+          {config?.federation_enabled && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="font-medium">Allow Federal Discovery (ActivityPub)</p>
+                <p className="text-xs text-muted-foreground">Shares your public collection with the broader network.</p>
+              </div>
+              <Button
+                variant={profile.consents?.federation ? "default" : "outline"}
+                onClick={() => toggleConsent("federation", profile.consents?.federation)}
+              >
+                {profile.consents?.federation ? "Opted In" : "Opted Out"}
+              </Button>
             </div>
-            <Button
-              variant={profile.consents?.federation ? "default" : "outline"}
-              onClick={() => toggleConsent("federation", profile.consents?.federation)}
-            >
-              {profile.consents?.federation ? "Opted In" : "Opted Out"}
-            </Button>
-          </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <p className="font-medium">Allow Anonymous Telemetry for AI</p>

@@ -15,12 +15,13 @@
 //
 "use client";
 
+import type { ChangeEvent } from "react";
 import { Pencil, QrCode, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem } from "@/lib/api/hooks";
 
-const STATUS_LABELS: Record<string, { label: string; class: string }> = {
+const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
   reading: { label: "Reading...", class: "bg-accent/10 text-accent ring-accent/20" },
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
@@ -54,10 +55,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const statusInfo = STATUS_LABELS[item.status] ?? { label: item.status, class: "bg-secondary text-foreground ring-border" };
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStatus = e.target.value;
+  const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as Item["status"];
     updateItem.mutate(
-      { status: newStatus as Item["status"] },
+      { status: newStatus },
       {
         onSuccess: () => toast.success(`Item status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
         onError: (e) => toast.error((e as Error).message),
@@ -123,6 +124,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       {/* Action buttons & Status Select */}
       <div className="flex w-full flex-col gap-2.5">
         <select
+          aria-label="Item status"
           value={item.status}
           onChange={handleStatusChange}
           disabled={updateItem.isPending}

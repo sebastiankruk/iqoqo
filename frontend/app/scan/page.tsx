@@ -16,6 +16,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import type { FormEvent } from "react";
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -46,7 +47,7 @@ export default function ScanPage() {
     setResult(null);
   }, []);
 
-  const handleManualSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleManualSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const payload = {
@@ -56,9 +57,11 @@ export default function ScanPage() {
     };
 
     addManualMutation.mutate(payload, {
-      onSuccess: (data) => {
+      onSuccess: (response) => {
         toast.success(`"${payload.Title}" added to your library!`);
-        router.push(`/item/${data.item_id}`);
+        if (response.data?.item_id) {
+          router.push(`/item/${response.data.item_id}`);
+        }
       },
       onError: (err) => {
         toast.error((err as Error).message || "Failed to add item manually");
@@ -93,16 +96,16 @@ export default function ScanPage() {
           </div>
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Title</label>
-              <input name="title" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. The Hobbit" />
+              <label htmlFor="manual-title" className="text-sm font-medium text-foreground block mb-1">Title</label>
+              <input id="manual-title" name="title" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. The Hobbit" />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Author / Creator</label>
-              <input name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
+              <label htmlFor="manual-author" className="text-sm font-medium text-foreground block mb-1">Author / Creator</label>
+              <input id="manual-author" name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Format</label>
-              <select name="format" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary">
+              <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">Format</label>
+              <select id="manual-format" name="format" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary">
                 <option value="text">Book (Text)</option>
                 <option value="sound">CD/Vinyl (Audio)</option>
                 <option value="video">DVD/BluRay (Video)</option>

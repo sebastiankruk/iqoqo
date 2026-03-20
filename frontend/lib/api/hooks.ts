@@ -237,16 +237,22 @@ export function useManifestationWithPolling(initialData: Item) {
   return { item };
 }
 
+type ManualItemPayload = {
+  Title: string;
+  Authors: string[];
+  Format: string;
+};
+
 /**
  * Custom hook to add a new item manually when ISBN is not available.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; success: boolean }, Error, Record<string, unknown>>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>} Mutation result
  */
 export function useAddManualItem() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (metadata: Record<string, unknown>) => {
-      const res = await apiClient.post<{ item_id: number; success: boolean }>("/items/manual", metadata);
+  return useMutation<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>({
+    mutationFn: async (metadata: ManualItemPayload) => {
+      const res = await apiClient.post<ApiResponse<{ item_id: number }>>("/items/manual", metadata);
       return res.data;
     },
     onSuccess: () => {
