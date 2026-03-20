@@ -15,9 +15,9 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, Suspense } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
 import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
@@ -34,18 +34,35 @@ import { Footer } from "@/components/dashboard/footer";
  * @returns {JSX.Element} The collection page component
  */
 function CollectionContent() {
-  const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
+  const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
+  const initialSort = searchParams?.get("sort") || "title";
+  const initialStatuses = searchParams?.get("statuses") || "";
+  const initialFilters: ActiveFilter[] = initialStatuses 
+      ? initialStatuses.split(",").map(s => ({ type: "status", value: s })) 
+      : [];
+  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
+  const initialQuery = searchParams?.get("q") ?? "";
+
+  const [page, setPage] = useState(initialPage);
+  const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
+  const [sortBy, setSortBy] = useState(initialSort);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+
   const limit = 40;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
   const isLoggedIn = !!profile;
 
-  const [viewMode, setViewMode] = useState<"items" | "manifestations">("items");
-  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
-  const [sortBy, setSortBy] = useState("title");
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-
-  // Track profile state to adjust viewMode during render (avoids useEffect cascading renders)
+  // Track profile state to adjust viewMode dynamically
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
     setPrevIsLoggedIn(isLoggedIn);
@@ -55,24 +72,25 @@ function CollectionContent() {
     }
   }
 
+  // Automatically sync all states robustly back to the URL as they change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", page.toString());
+    if (sortBy !== "title") params.set("sort", sortBy);
+    
+    const statuses = activeFilters.filter((f) => f.type === "status").map((f) => f.value);
+    if (statuses.length > 0) params.set("statuses", statuses.join(","));
+    if (appliedQuery) params.set("q", appliedQuery);
+    if (viewMode !== "items") params.set("view", viewMode);
+    
+    // Replace state blocks messy rapid history buildup while keeping deep link persistency active
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
+
   const statusFilters = useMemo(
     () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
     [activeFilters]
   );
-
-  const searchParams = useSearchParams();
-  const currentUrlQuery = searchParams?.get("q") ?? "";
-
-  const [prevUrlQuery, setPrevUrlQuery] = useState(currentUrlQuery);
-  const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
-  const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
-
-  if (currentUrlQuery !== prevUrlQuery) {
-    setPrevUrlQuery(currentUrlQuery);
-    setSearchQuery(currentUrlQuery);
-    setAppliedQuery(currentUrlQuery);
-    setPage(1);
-  }
 
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
@@ -85,7 +103,7 @@ function CollectionContent() {
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
-    appliedQuery, // Applied Search feature wired correctly
+    appliedQuery, 
     viewMode === "manifestations"
   );
 
