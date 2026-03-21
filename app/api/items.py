@@ -98,6 +98,7 @@ def get_items():
             rows_stmt = text(rows_sql)
             if "statuses" in params:
                 from sqlalchemy import bindparam
+
                 count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
                 rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
 
@@ -136,24 +137,29 @@ def get_items():
 
             # Subquery approach deduplicates successfully when FTS acts up
             search_term = f"%{q}%"
-            matching_items = db.session.query(Item.id) \
-                .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id) \
-                .outerjoin(Expression, Manifestation.expression_id == Expression.id) \
-                .outerjoin(Work, Expression.work_id == Work.id) \
+            matching_items = (
+                db.session.query(Item.id)
+                .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                .outerjoin(Work, Expression.work_id == Work.id)
                 .filter(
                     db.or_(
                         Work.title.ilike(search_term),
                         db.cast(Work.meta, db.String).ilike(search_term),
-                        Manifestation.isbn13.ilike(search_term)
+                        Manifestation.isbn13.ilike(search_term),
                     )
                 )
+            )
 
-            base_query = db.session.query(Item, Manifestation, Expression, Work).select_from(Item) \
-                .join(Manifestation, Item.manifestation_id == Manifestation.id) \
-                .join(Expression, Manifestation.expression_id == Expression.id) \
-                .join(Work, Expression.work_id == Work.id) \
-                .filter(Item.owner_id == user_id) \
+            base_query = (
+                db.session.query(Item, Manifestation, Expression, Work)
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .filter(Item.owner_id == user_id)
                 .filter(Item.id.in_(matching_items))
+            )
 
             if statuses_filter:
                 statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
@@ -202,20 +208,26 @@ def get_items():
         query = query.filter(Item.status.in_(statuses_list))
 
     if sort_by == "title":
-        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id) \
-                     .outerjoin(Expression, Manifestation.expression_id == Expression.id) \
-                     .outerjoin(Work, Expression.work_id == Work.id) \
-                     .order_by(Work.title.asc().nulls_last())
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(Work.title.asc().nulls_last())
+        )
     elif sort_by == "title-desc":
-        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id) \
-                     .outerjoin(Expression, Manifestation.expression_id == Expression.id) \
-                     .outerjoin(Work, Expression.work_id == Work.id) \
-                     .order_by(Work.title.desc().nulls_last())
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(Work.title.desc().nulls_last())
+        )
     elif sort_by == "author":
-        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id) \
-                     .outerjoin(Expression, Manifestation.expression_id == Expression.id) \
-                     .outerjoin(Work, Expression.work_id == Work.id) \
-                     .order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
+        )
     elif sort_by == "added":
         query = query.order_by(Item.added_at.desc().nulls_last())
     else:
