@@ -28,6 +28,7 @@ const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = 
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
   wish_list: { label: "On Wish List", class: "bg-primary/10 text-primary ring-primary/20" },
   read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
+  unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
 };
 
 /** Props for ItemSidebar component */
