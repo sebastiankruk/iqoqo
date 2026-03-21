@@ -40,6 +40,7 @@ def get_items():
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
     q = request.args.get("q", "").strip()
+    sort_by = request.args.get("sort", "updated")
 
     try:
         page = int(page_param)
@@ -57,6 +58,7 @@ def get_items():
         m_tsvector_expr = "m.fts_simple"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
+        # Set up explicit exact bindings for count/rows so FTS executes safely
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
         statuses_sql = " AND i.owner_id = :user_id"
 
@@ -66,8 +68,9 @@ def get_items():
             statuses_sql += " AND i.status IN :statuses"
 
         try:
+            # Safely grab exact total of matches natively
             count_sql = f"""
-            SELECT count(*) FROM manifestations m
+            SELECT count(i.id) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             JOIN items i ON i.manifestation_id = m.id
@@ -75,6 +78,7 @@ def get_items():
             {statuses_sql}
             """
 
+            # Pull fully populated rows ordered gracefully by the computed FTS rank
             rows_sql = f"""
             SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
@@ -128,19 +132,33 @@ def get_items():
                 )
 
         except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
+            db.session.rollback()  # Crucial rollback so fallback queries don't trigger "InFailedSqlTransaction"
             current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
-            if db.engine.dialect.name == "postgresql":
-                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
 
-            pattern = f"%{q}%"
+            # Subquery approach deduplicates successfully when FTS acts up
+            search_term = f"%{q}%"
+            matching_items = (
+                db.session.query(Item.id)
+                .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                .outerjoin(Work, Expression.work_id == Work.id)
+                .filter(
+                    db.or_(
+                        Work.title.ilike(search_term),
+                        db.cast(Work.meta, db.String).ilike(search_term),
+                        Manifestation.isbn13.ilike(search_term),
+                    )
+                )
+            )
+
             base_query = (
                 db.session.query(Item, Manifestation, Expression, Work)
-                .select_from(Manifestation)
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
                 .join(Expression, Manifestation.expression_id == Expression.id)
                 .join(Work, Expression.work_id == Work.id)
-                .join(Item, Item.manifestation_id == Manifestation.id)
                 .filter(Item.owner_id == user_id)
-                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+                .filter(Item.id.in_(matching_items))
             )
 
             if statuses_filter:
@@ -182,13 +200,40 @@ def get_items():
             }
         )
 
+    # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     query = query.filter(Item.owner_id == user_id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(Item.status.in_(statuses_list))
 
-    query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+    if sort_by == "title":
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(Work.title.asc().nulls_last())
+        )
+    elif sort_by == "title-desc":
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(Work.title.desc().nulls_last())
+        )
+    elif sort_by == "author":
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+            .order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
+        )
+    elif sort_by == "added":
+        query = query.order_by(Item.added_at.desc().nulls_last())
+    else:
+        # Default sort fallback to recency
+        query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+
     total = query.count()
     items = query.offset(offset).limit(limit).all()
 
