@@ -60,9 +60,16 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 ## 2a. Vision-based Metadata Extraction
 
-iqoqo can extract a book's **Title** and **Authors** directly from a photo of its cover using the Gemini Vision API. This powers the **"Snap Cover"** button on the scan page — users can photograph a book and have its metadata filled in automatically.
+iqoqo can extract a book's **Title** and **Authors** directly from a photo of its cover. This powers the **"Snap Cover"** button on the scan page — users can photograph a book and have its metadata filled in automatically.
 
-**Required:** The same `GEMINI_API_KEY` used for cover generation (see above). The feature uses the `gemini-2.0-flash` multimodal model.
+This feature uses a progressive fallback waterfall to ensure extraction:
+
+1. **Gemini API (Primary)**: High quality extraction.
+   - **Required:** The `GEMINI_API_KEY` environment variable. Uses the `gemini-2.0-flash` multimodal model.
+2. **Local Vision LLM via Ollama (Free local fallback)**: Used if Gemini is unavailable or fails.
+   - **Required:** An Ollama instance. Set `OLLAMA_URL` (default: `http://localhost:11434`) and `OLLAMA_VISION_MODEL` (default: `llava`).
+3. **Tesseract OCR (Basic offline fallback)**: Used when LLMs fail or aren't configured.
+   - **Required:** The `tesseract-ocr` host package (included in the Docker image) and `pytesseract` Python dependency.
 
 **API endpoint:** `POST /api/vision/extract` (requires authentication)
 
