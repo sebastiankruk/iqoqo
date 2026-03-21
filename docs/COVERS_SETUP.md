@@ -58,6 +58,43 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 *Note: Telemetry for estimated costs is tracked in the `llm_telemetry` database table.*
 
+## 2a. Vision-based Metadata Extraction
+
+iqoqo can extract a book's **Title** and **Authors** directly from a photo of its cover using the Gemini Vision API. This powers the **"Snap Cover"** button on the scan page — users can photograph a book and have its metadata filled in automatically.
+
+**Required:** The same `GEMINI_API_KEY` used for cover generation (see above). The feature uses the `gemini-2.0-flash` multimodal model.
+
+**API endpoint:** `POST /api/vision/extract` (requires authentication)
+
+| Field   | Type   | Description                                               |
+|---------|--------|-----------------------------------------------------------|
+| `cover` | `file` | The book cover photo (JPEG, PNG, or WebP, max **10 MB**). |
+
+**Successful response (HTTP 200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "Title": "Dune",
+    "Authors": ["Frank Herbert"]
+  },
+  "error": null
+}
+```
+
+**Error response when `GEMINI_API_KEY` is not set (HTTP 503):**
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "Vision extraction is unavailable. Ensure GEMINI_API_KEY is configured. See docs/COVERS_SETUP.md for setup instructions."
+}
+```
+
+> **Note:** The endpoint validates file type and size before contacting the Vision API. Only JPEG, PNG, and WebP uploads ≤ 10 MB are accepted.
+
 ## 3. Local AI Generation (Free)
 
 To use your own hardware for generation (Tier 4), iqoqo supports Stable Diffusion via the Automatic1111 WebUI API. This requires a dedicated GPU (Nvidia recommended, Apple Silicon supported) and at least 10GB of disk space.
