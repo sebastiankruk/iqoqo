@@ -30,6 +30,7 @@ type TabId = (typeof TABS)[number]["id"];
 interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
+  onScannerStateChange?: (isActive: boolean) => void;
 }
 
 /**
@@ -38,9 +39,10 @@ interface BottomSheetProps {
  * @param root0 - The props object
  * @param root0.videoRef - The video element ref
  * @param root0.onFound - Callback when a barcode is found
+ * @param root0.onScannerStateChange - Optional callback when scanner active state changes
  * @returns {JSX.Element} The component
  */
-export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
+export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
   const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -64,7 +66,8 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
       video.srcObject = null;
     }
     setScannerActive(false);
-  }, [videoRef]);
+    if (onScannerStateChange) onScannerStateChange(false);
+  }, [videoRef, onScannerStateChange]);
 
   /* ── ISBN API lookup ── */
   const lookupIsbn = useCallback(
@@ -127,6 +130,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
       /* playsInline + muted on the <video> element (set in page.tsx) satisfies Safari autoplay */
       await video.play();
       setScannerActive(true);
+      if (onScannerStateChange) onScannerStateChange(true);
 
       /* Lazy-load ZXing – pure JS, works in all browsers */
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
@@ -170,7 +174,7 @@ export function BottomSheet({ videoRef, onFound }: BottomSheetProps) {
       setError((e as Error).message ?? "Camera unavailable");
       stopScanner();
     }
-  }, [videoRef, lookupIsbn, stopScanner]);
+  }, [videoRef, lookupIsbn, stopScanner, onScannerStateChange]);
 
   /* Stop scanner when switching away from barcode tab */
   useEffect(() => {

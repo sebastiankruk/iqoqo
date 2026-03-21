@@ -21,6 +21,7 @@ import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
+import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -34,6 +35,9 @@ import type { IsbnMeta } from "@/types/frbr";
 export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
   const [showManual, setShowManual] = useState(false);
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [scannerActive, setScannerActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -45,6 +49,13 @@ export default function ScanPage() {
 
   const handleDismiss = useCallback(() => {
     setResult(null);
+  }, []);
+
+  const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }) => {
+    setTitle(data.Title || "");
+    setAuthor(data.Authors?.join(", ") || "");
+    setShowManual(true);
+    toast.success("Cover metadata extracted! Please review.");
   }, []);
 
   const handleManualSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -74,15 +85,19 @@ export default function ScanPage() {
       <video ref={videoRef} playsInline muted autoPlay aria-hidden="true" className="absolute inset-0 z-0 h-full w-full object-cover" />
 
       <TopBar />
-      <Viewfinder />
+      {(!result && !showManual) && <Viewfinder isScanning={scannerActive} />}
 
-      {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} />}
+      {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} onScannerStateChange={setScannerActive} />}
       {result && <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} />}
 
       {/* Manual Entry Trigger & Form */}
       {!result && !showManual && (
-        <div className="absolute bottom-32 w-full flex justify-center z-10">
-          <button onClick={() => setShowManual(true)} className="rounded-full bg-secondary px-6 py-2.5 text-sm font-semibold text-secondary-foreground shadow-lg hover:bg-secondary/80">
+        <div className="absolute bottom-32 w-full flex flex-col items-center gap-4 z-10 px-4">
+          <CameraCapture 
+            onExtractComplete={handleExtractComplete} 
+            className="flex w-full max-w-xs justify-center [&>button]:w-full [&>button]:py-5 [&>button]:rounded-full [&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary/90 [&>button]:shadow-lg [&>button]:border-none" 
+          />
+          <button onClick={() => setShowManual(true)} className="rounded-full bg-secondary px-6 py-2.5 text-sm font-semibold text-secondary-foreground shadow-lg hover:bg-secondary/80 w-full max-w-xs">
             Cannot find barcode? Enter Manually
           </button>
         </div>
@@ -97,11 +112,11 @@ export default function ScanPage() {
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
             <div>
               <label htmlFor="manual-title" className="text-sm font-medium text-foreground block mb-1">Title</label>
-              <input id="manual-title" name="title" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. The Hobbit" />
+              <input value={title} onChange={e => setTitle(e.target.value)} id="manual-title" name="title" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. The Hobbit" />
             </div>
             <div>
               <label htmlFor="manual-author" className="text-sm font-medium text-foreground block mb-1">Author / Creator</label>
-              <input id="manual-author" name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
+              <input value={author} onChange={e => setAuthor(e.target.value)} id="manual-author" name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
             </div>
             <div>
               <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">Format</label>
