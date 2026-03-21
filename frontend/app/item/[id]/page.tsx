@@ -16,7 +16,6 @@
 "use client";
 
 import { use } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";

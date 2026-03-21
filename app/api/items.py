@@ -207,27 +207,19 @@ def get_items():
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(Item.status.in_(statuses_list))
 
+    if sort_by in ("title", "title-desc", "author"):
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+        )
+
     if sort_by == "title":
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-            .order_by(Work.title.asc().nulls_last())
-        )
+        query = query.order_by(Work.title.asc().nulls_last())
     elif sort_by == "title-desc":
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-            .order_by(Work.title.desc().nulls_last())
-        )
+        query = query.order_by(Work.title.desc().nulls_last())
     elif sort_by == "author":
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-            .order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
-        )
+        query = query.order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
     elif sort_by == "added":
         query = query.order_by(Item.added_at.desc().nulls_last())
     else:
@@ -241,7 +233,7 @@ def get_items():
     for item in items:
         manifestation = item.manifestation
         work_title = ""
-        authors: list[str] = []
+        authors = []
         if manifestation and manifestation.expression and manifestation.expression.work:
             work = manifestation.expression.work
             work_title = work.title or ""
@@ -402,3 +394,45 @@ def add_item(isbn: str):
     db.session.commit()
 
     return jsonify({"item_id": item.id})
+
+
+@api_bp.route("/items/manual", methods=["POST"])
+@require_auth
+def add_item_manual():
+    """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    title = data.get("Title", "Unknown Title")
+    authors = data.get("Authors", [])
+    if isinstance(authors, str):
+        authors = [authors]
+    content_type = data.get("Format", "text")
+
+    try:
+        work = Work(title=title, meta={"authors": authors})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, meta=data)
+        db.session.add(manifestation)
+        db.session.flush()
+
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+        db.session.add(item)
+        db.session.commit()
+
+        return jsonify({"success": True, "data": {"item_id": item.id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)
+        return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500

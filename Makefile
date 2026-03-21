@@ -46,6 +46,12 @@ help:
 	@echo "  db-stats       - Show database statistics"
 
 # Development targets
+init:
+	@echo "Initializing development environment..."
+	python3 -m venv .venv
+	.venv/bin/pip install -r requirements.txt
+	cd frontend && npm install
+
 start:
 	@echo "Starting development environment..."
 	@./run_dev.sh
