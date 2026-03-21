@@ -32,7 +32,7 @@ describe("ScanPage", () => {
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: vi.fn(),
       isPending: false
-    } as any);
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);
     expect(screen.getByTestId("top-bar")).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("ScanPage", () => {
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: vi.fn(),
       isPending: false
-    } as any);
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);
     
@@ -67,7 +67,7 @@ describe("ScanPage", () => {
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: mutateMock,
       isPending: false
-    } as any);
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);
     

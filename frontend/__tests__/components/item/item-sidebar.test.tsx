@@ -34,10 +34,10 @@ describe("ItemSidebar Component", () => {
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: vi.fn(),
       isPending: false
-    } as any);
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
-    expect(screen.getByText(/On Shelf/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/On Shelf/i)[0]).toBeInTheDocument();
     expect(screen.getByText(/ISBN: 9780544003415/i)).toBeInTheDocument();
   });
 
@@ -46,7 +46,7 @@ describe("ItemSidebar Component", () => {
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: mutateMock,
       isPending: false
-    } as any);
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
     const select = screen.getByLabelText("Item status");
