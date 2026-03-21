@@ -97,7 +97,7 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str) -> dict | None:
 
 
 def _extract_via_ollama(image_bytes: bytes) -> dict | None:
-    url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    url = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
     model = os.environ.get("OLLAMA_VISION_MODEL", "llava")
 
     try:
@@ -116,7 +116,13 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
     except ImportError:
         logger.error("requests library is missing for Ollama extraction.")
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error("Ollama vision extraction failed: %s", e)
+        import requests
+        msg = str(e)
+        if isinstance(e, requests.exceptions.RequestException):
+            response = getattr(e, "response", None)
+            if response is not None and getattr(response, "status_code", None) == 404:
+                msg = f"Model '{model}' not found on Ollama. Run 'ollama pull {model}' to fix."
+        logger.error("Ollama vision extraction failed: %s", msg)
 
     return None
 
@@ -144,7 +150,10 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
     except ImportError:
         logger.error("pytesseract or Pillow is not installed.")
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error("Tesseract extraction failed: %s", e)
+        msg = str(e)
+        if "tesseract is not installed" in msg:
+            msg = "tesseract-ocr not found on host. On macOS, run 'brew install tesseract'."
+        logger.error("Tesseract extraction failed: %s", msg)
 
     return None
 

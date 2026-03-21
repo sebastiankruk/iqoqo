@@ -53,6 +53,12 @@ interface CameraCaptureProps {
   /** Called with extracted metadata after a successful vision extraction (mode 2). */
   onExtractComplete?: (data: ExtractedMetadata) => void;
   className?: string;
+  /** Label for the button */
+  label?: string;
+  /** Whether to force the camera (environment) or omit for gallery. */
+  capture?: "environment" | "user" | false;
+  /** Optional icon to replace the default Camera icon */
+  icon?: React.ReactNode;
 }
 
 /**
@@ -64,9 +70,12 @@ interface CameraCaptureProps {
  * @param root0.onUploadComplete - Called after a successful cover upload (mode 1).
  * @param root0.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
  * @param root0.className - Optional CSS class name applied to the wrapper div.
+ * @param root0.capture - Whether to force the camera or omit for gallery
+ * @param root0.label - Label for the button
+ * @param root0.icon - Optional icon component
  * @returns The rendered camera capture button element.
  */
-export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className }: CameraCaptureProps) {
+export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className, capture = "environment", label = "Snap Cover", icon }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,11 +90,11 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
     try {
       if (manifestationId) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
-        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData);
+        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData, { headers: { "Content-Type": "multipart/form-data" } });
         if (onUploadComplete) onUploadComplete();
       } else {
         // Mode 2: OCR / Vision Metadata Extraction
-        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData);
+        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
         const envelope = response.data;
         if (envelope.success && envelope.data) {
           if (onExtractComplete) onExtractComplete(envelope.data);
@@ -106,7 +115,7 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
       <input
         type="file"
         accept="image/*"
-        capture="environment"
+        {...(capture !== false ? { capture } : {})}
         ref={fileInputRef}
         onChange={handleCapture}
         className="hidden"
@@ -123,8 +132,8 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
           </>
         ) : (
           <>
-            <Camera className="mr-2 h-4 w-4" />
-            Snap Cover
+            {icon || <Camera className="mr-2 h-4 w-4" />}
+            {label}
           </>
         )}
       </button>

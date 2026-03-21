@@ -26,7 +26,8 @@ load_dotenv()
 
 class Config:
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    SECRET_KEY = os.environ.get("SECRET_KEY", "you-will-never-guess")
+    # Default secret key must be at least 32 bytes for HMAC-SHA256 (JWT requirement)
+    SECRET_KEY = os.environ.get("SECRET_KEY", "iqoqo-default-secret-key-32-chars-at-least")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

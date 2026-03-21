@@ -66,10 +66,13 @@ This feature uses a progressive fallback waterfall to ensure extraction:
 
 1. **Gemini API (Primary)**: High quality extraction.
    - **Required:** The `GEMINI_API_KEY` environment variable. Uses the `gemini-2.0-flash` multimodal model.
-2. **Local Vision LLM via Ollama (Free local fallback)**: Used if Gemini is unavailable or fails.
+2. **Local Vision LLM via Ollama (Free local fallback)**: Used if Gemini is unavailable or fails. The `llava` model is highly recommended.
    - **Required:** An Ollama instance. Set `OLLAMA_URL` (default: `http://localhost:11434`) and `OLLAMA_VISION_MODEL` (default: `llava`).
+   - **Setup:** `ollama pull llava`
 3. **Tesseract OCR (Basic offline fallback)**: Used when LLMs fail or aren't configured.
-   - **Required:** The `tesseract-ocr` host package (included in the Docker image) and `pytesseract` Python dependency.
+   - **Required:** The `tesseract-ocr` host package and `pytesseract` Python dependency.
+   - **Setup (macOS):** `brew install tesseract`
+   - **Setup (Ubuntu/Docker):** `apt-get install tesseract-ocr` (included in the default Dockerfile)
 
 **API endpoint:** `POST /api/vision/extract` (requires authentication)
 
@@ -90,13 +93,13 @@ This feature uses a progressive fallback waterfall to ensure extraction:
 }
 ```
 
-**Error response when `GEMINI_API_KEY` is not set (HTTP 503):**
+**Error response when all extraction methods fail (HTTP 503):**
 
 ```json
 {
   "success": false,
   "data": null,
-  "error": "Vision extraction is unavailable. Ensure GEMINI_API_KEY is configured. See docs/COVERS_SETUP.md for setup instructions."
+  "error": "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs."
 }
 ```
 

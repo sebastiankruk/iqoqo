@@ -21,7 +21,6 @@ import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
-import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -38,6 +37,7 @@ export default function ScanPage() {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
+  const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -65,6 +65,9 @@ export default function ScanPage() {
       Title: formData.get("title")?.toString() || "Unknown",
       Authors: [formData.get("author")?.toString() || "Unknown"],
       Format: formData.get("format")?.toString() || "text",
+      ISBN: formData.get("isbn")?.toString() || undefined,
+      PublicationDate: formData.get("pubdate")?.toString() || undefined,
+      Description: formData.get("description")?.toString() || undefined,
     };
 
     addManualMutation.mutate(payload, {
@@ -85,23 +88,10 @@ export default function ScanPage() {
       <video ref={videoRef} playsInline muted autoPlay aria-hidden="true" className="absolute inset-0 z-0 h-full w-full object-cover" />
 
       <TopBar />
-      {(!result && !showManual) && <Viewfinder isScanning={scannerActive} />}
+      {(!result && !showManual && scannerTab === "barcode") && <Viewfinder isScanning={scannerActive} />}
 
-      {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} onScannerStateChange={setScannerActive} />}
+      {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} onScannerStateChange={setScannerActive} onTabChange={setScannerTab} onExtractComplete={handleExtractComplete} onShowManualForm={() => setShowManual(true)} />}
       {result && <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} />}
-
-      {/* Manual Entry Trigger & Form */}
-      {!result && !showManual && (
-        <div className="absolute bottom-32 w-full flex flex-col items-center gap-4 z-10 px-4">
-          <CameraCapture 
-            onExtractComplete={handleExtractComplete} 
-            className="flex w-full max-w-xs justify-center [&>button]:w-full [&>button]:py-5 [&>button]:rounded-full [&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary/90 [&>button]:shadow-lg [&>button]:border-none" 
-          />
-          <button onClick={() => setShowManual(true)} className="rounded-full bg-secondary px-6 py-2.5 text-sm font-semibold text-secondary-foreground shadow-lg hover:bg-secondary/80 w-full max-w-xs">
-            Cannot find barcode? Enter Manually
-          </button>
-        </div>
-      )}
 
       {showManual && (
         <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl p-6 pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
@@ -119,13 +109,27 @@ export default function ScanPage() {
               <input value={author} onChange={e => setAuthor(e.target.value)} id="manual-author" name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
             </div>
             <div>
-              <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">Format</label>
-              <select id="manual-format" name="format" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary">
-                <option value="text">Book (Text)</option>
-                <option value="sound">CD/Vinyl (Audio)</option>
-                <option value="video">DVD/BluRay (Video)</option>
-                <option value="game">Board Game</option>
-              </select>
+              <label htmlFor="manual-isbn" className="text-sm font-medium text-foreground block mb-1">ISBN (Optional)</label>
+              <input id="manual-isbn" name="isbn" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="978-..." />
+            </div>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label htmlFor="manual-pubdate" className="text-sm font-medium text-foreground block mb-1">Publish Date</label>
+                <input type="date" id="manual-pubdate" name="pubdate" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">Format</label>
+                <select id="manual-format" name="format" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary">
+                  <option value="text">Book (Text)</option>
+                  <option value="sound">CD/Vinyl</option>
+                  <option value="video">DVD/BluRay</option>
+                  <option value="game">Board Game</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="manual-description" className="text-sm font-medium text-foreground block mb-1">Description (Optional)</label>
+              <textarea id="manual-description" name="description" rows={3} className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Brief summary..."></textarea>
             </div>
             <button type="submit" disabled={addManualMutation.isPending} className="mt-2 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
               {addManualMutation.isPending ? "Adding..." : "Add to Library"}

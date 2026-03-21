@@ -16,11 +16,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search } from "lucide-react";
+import { Camera, Search, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
+import { CameraCapture } from "@/components/scanner/camera-capture";
 
 const TABS = [
   { id: "barcode", label: "Barcode" },
+  { id: "cover", label: "Snap Cover" },
   { id: "manual", label: "Manual Search" },
 ] as const;
 
@@ -31,6 +33,9 @@ interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
   onScannerStateChange?: (isActive: boolean) => void;
+  onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
+  onExtractComplete?: (data: { Title?: string; Authors?: string[] }) => void;
+  onShowManualForm?: () => void;
 }
 
 /**
@@ -40,16 +45,31 @@ interface BottomSheetProps {
  * @param root0.videoRef - The video element ref
  * @param root0.onFound - Callback when a barcode is found
  * @param root0.onScannerStateChange - Optional callback when scanner active state changes
+ * @param root0.onTabChange - Optional callback when the bottom sheet tab changes
+ * @param root0.onExtractComplete - Optional callback when cover metadata is extracted
+ * @param root0.onShowManualForm - Optional callback to show manual entry form
  * @returns {JSX.Element} The component
  */
-export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomSheetProps) {
+export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChange, onExtractComplete, onShowManualForm }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
+
+  const handleTabChange = useCallback((tabId: TabId) => {
+    setActiveTab(tabId);
+    if (onTabChange) onTabChange(tabId);
+  }, [onTabChange]);
   const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const barcodeEnabledRef = useRef<boolean>(true);
+
+  // Sync ref with state
+  useEffect(() => {
+    barcodeEnabledRef.current = activeTab === "barcode";
+  }, [activeTab]);
 
   /* ── Stop everything ── */
   const stopScanner = useCallback(() => {
@@ -151,7 +171,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomS
       const scan = () => {
         if (!streamRef.current || !video || !ctx) return;
 
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
+        if (video.videoWidth > 0 && video.videoHeight > 0 && barcodeEnabledRef.current) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -176,10 +196,51 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomS
     }
   }, [videoRef, lookupIsbn, stopScanner, onScannerStateChange]);
 
-  /* Stop scanner when switching away from barcode tab */
+  /* Stop scanner only if manual mode is entered */
   useEffect(() => {
-    if (activeTab !== "barcode") stopScanner();
+    if (activeTab === "manual") stopScanner();
   }, [activeTab, stopScanner]);
+
+  /* Capture snapshot directly from live video feed */
+  const handleSnapFromVideo = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !streamRef.current) return;
+
+    setIsUploadingCover(true);
+    setError(null);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not map camera feed");
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      if (!blob) throw new Error("Failed to encode image");
+
+      const file = new File([blob], "cover_snapshot.jpg", { type: "image/jpeg" });
+      const formData = new FormData();
+      formData.append("cover", file);
+
+      const { apiClient } = await import("@/lib/api/client");
+      const response = await apiClient.post<{ success: boolean; data: { Title?: string; Authors?: string[] } | null; error?: string | null }>(`/vision/extract`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      const envelope = response.data;
+      
+      if (envelope.success && envelope.data) {
+        if (onExtractComplete) onExtractComplete(envelope.data);
+      } else {
+        setError(envelope.error ?? "Failed to extract metadata");
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message);
+      else setError("Could not snap cover");
+    } finally {
+      setIsUploadingCover(false);
+    }
+  }, [videoRef, onExtractComplete]);
 
   /* Cleanup on unmount */
   useEffect(() => {
@@ -206,7 +267,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomS
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id as TabId)}
               className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                 activeTab === tab.id
                   ? "bg-card text-foreground shadow-sm"
@@ -249,8 +310,53 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomS
           </>
         )}
 
+        {activeTab === "cover" && (
+          <div className="flex w-full flex-col gap-4">
+            {!scannerActive ? (
+              <button
+                onClick={startScanner}
+                className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground hover:bg-primary/90 shadow-sm"
+              >
+                <Camera className="mr-2 h-5 w-5" /> Start Live Camera
+              </button>
+            ) : (
+              <button
+                onClick={handleSnapFromVideo}
+                disabled={isUploadingCover}
+                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground hover:bg-primary/90 shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50"
+              >
+                {isUploadingCover ? (
+                  <span className="animate-pulse">Analyzing frame...</span>
+                ) : (
+                  <>
+                    <Camera className="mr-2 h-5 w-5" /> Snap Live Frame
+                  </>
+                )}
+              </button>
+            )}
+
+            <div className="relative flex w-full items-center py-1">
+              <div className="flex-grow border-t border-border"></div>
+              <span className="mx-4 flex-shrink-0 text-xs text-muted-foreground uppercase tracking-widest">or</span>
+              <div className="flex-grow border-t border-border"></div>
+            </div>
+
+            <CameraCapture
+              capture={false}
+              label="Upload from Gallery"
+              icon={<ImagePlus className="mr-2 h-5 w-5" />}
+              onExtractComplete={onExtractComplete}
+              className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
+            />
+            <p className="px-2 pt-2 text-center text-[0.7rem] text-muted-foreground leading-tight">
+              Snap a frame from the live video feed or upload an existing image.
+            </p>
+          </div>
+        )}
+
         {activeTab === "manual" && (
-          <form onSubmit={handleManualSearch} className="w-full">
+          <div className="flex w-full flex-col">
+            <form onSubmit={handleManualSearch} className="w-full">
             <div className="relative">
               <input
                 type="text"
@@ -270,7 +376,20 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange }: BottomS
             <p className="mt-2 text-center text-xs text-muted-foreground">
               {isSearching ? "Looking up…" : "Try ISBN: 978-0-553-38016-8"}
             </p>
-          </form>
+            </form>
+            
+            <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
+              <span className="mb-3 text-xs text-muted-foreground">Or enter full metadata manually</span>
+              <button
+                type="button"
+                onClick={onShowManualForm}
+                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 transition-colors"
+                aria-label="Enter details manually"
+              >
+                Manual Entry Form
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

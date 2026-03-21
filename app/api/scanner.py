@@ -164,9 +164,9 @@ def extract_from_cover():
                     "success": False,
                     "data": None,
                     "error": (
-                        "Vision extraction is unavailable. "
-                        "Ensure GEMINI_API_KEY is configured. "
-                        "See docs/COVERS_SETUP.md for setup instructions."
+                        "Vision extraction failed. "
+                        "All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. "
+                        "Please check the server logs."
                     ),
                 }
             ),
