@@ -116,6 +116,17 @@ def test_health_check(client):
     assert data["service"] == "iqoqo-api"
 
 
+def test_config(client):
+    """Test the config endpoint returns expected envelope and fields."""
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert "federation_enabled" in data["data"]
+    assert "version" in data["data"]
+    assert data["error"] is None
+
+
 def test_lookup_isbn_with_meta_field(client, sample_book):
     """Test ISBN lookup when metadata exists in manifestation.meta."""
     response = client.get("/api/isbn/9780345391803")

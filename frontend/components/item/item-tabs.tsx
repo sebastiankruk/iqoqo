@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { FileText, BookCopy, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
+import { useAppConfig } from "@/lib/api/hooks";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -200,12 +201,17 @@ function FederationTab() {
  */
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
+  const { data: config } = useAppConfig();
+
+  const visibleTabs = TABS.filter(
+    (tab) => tab.id !== "federation" || config?.federation_enabled
+  );
 
   return (
     <div className="flex flex-col gap-6">
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-secondary p-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActive(id)}

@@ -187,8 +187,6 @@ def test_get_stats_with_data(client, sample_work):
 
 def test_stats_cors_headers(cors_client):
     """Test that stats endpoint returns CORS headers."""
-    from app.api.auth import generate_internal_jwt  # pylint: disable=import-outside-toplevel
-    from app.db.models import User, db  # pylint: disable=import-outside-toplevel
 
     # cors_client has its own isolated in-memory DB — create the user inside its context
     with cors_client.application.app_context():

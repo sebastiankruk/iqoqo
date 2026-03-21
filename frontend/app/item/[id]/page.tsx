@@ -16,7 +16,7 @@
 "use client";
 
 import { use } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { HeroBanner } from "@/components/item/hero-banner";
@@ -42,6 +42,7 @@ interface Props {
 function ItemDetail(props: { item: Item }) {
   const { item: initialItem } = props;
   const { item } = useManifestationWithPolling(initialItem);
+  const router = useRouter();
 
 
   const coverUrl = item.cover_url
@@ -74,13 +75,13 @@ function ItemDetail(props: { item: Item }) {
 
         {/* Footer */}
         <footer className="mt-8 flex items-center justify-between px-2">
-          <Link
-            href="/collection"
+          <button
+            onClick={() => router.back()}
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to collection
-          </Link>
+          </button>
           <p className="text-xs text-muted-foreground">
             <span className="font-serif font-bold text-foreground">iqoqo</span>
             {" "}&middot;{" "}The Library of Everything
@@ -102,6 +103,7 @@ export default function ItemPage(props: Props) {
   const { params } = props;
   const { id } = use(params);
   const itemId = parseInt(id, 10);
+  const router = useRouter();
 
   const { data: item, isLoading, isError } = useItem(itemId);
 
@@ -123,12 +125,12 @@ export default function ItemPage(props: Props) {
         <Navbar />
         <div className="flex flex-col items-center justify-center py-32">
           <p className="text-muted-foreground">Item not found.</p>
-          <Link
-            href="/collection"
+          <button
+            onClick={() => router.back()}
             className="mt-4 text-sm font-medium text-accent hover:underline"
           >
             Back to collection
-          </Link>
+          </button>
         </div>
       </div>
     );

@@ -60,7 +60,21 @@ export const queryKeys = {
   isbn: (isbn: string) => ["isbn", isbn] as const,
   manifestations: (page = 1, limit = 20, query?: string) => ["manifestations", page, limit, query ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  config: ["config"] as const,
 };
+
+/**
+ * Custom hook to fetch the application configuration.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<{ federation_enabled: boolean; version: string }>} Query result containing the app config
+ */
+export function useAppConfig() {
+  return useQuery({
+    queryKey: queryKeys.config,
+    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string }>("/config"),
+    staleTime: 60 * 60 * 1000,
+  });
+}
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
 
@@ -221,6 +235,31 @@ export function useManifestationWithPolling(initialData: Item) {
       query.state.data?.cover_status === 'pending' ? 3000 : false,
   });
   return { item };
+}
+
+type ManualItemPayload = {
+  Title: string;
+  Authors: string[];
+  Format: string;
+};
+
+/**
+ * Custom hook to add a new item manually when ISBN is not available.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>} Mutation result
+ */
+export function useAddManualItem() {
+  const qc = useQueryClient();
+  return useMutation<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>({
+    mutationFn: async (metadata: ManualItemPayload) => {
+      const res = await apiClient.post<ApiResponse<{ item_id: number }>>("/items/manual", metadata);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
 }
 
 /**
