@@ -16,6 +16,8 @@
 /**
  * Viewfinder overlay with corner brackets and animated scanning line.
  *
+ * @param {object} props The component props
+ * @param {boolean} [props.isScanning=true] Whether the line should animate
  * @returns {JSX.Element} The component
  */
 export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {

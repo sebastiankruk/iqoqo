@@ -52,8 +52,7 @@ def scan_barcode():
         return jsonify({"error": "Barcode is required"}), 400
 
     is_new_manifestation = False
-    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")(  # type: ignore[attr-defined]
-        "isbn") == barcode).first()
+    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()  # type: ignore[attr-defined]
 
     if not manifestation:
         try:
@@ -90,6 +89,7 @@ def scan_barcode():
 @api_bp.route("/vision/extract", methods=["POST"])
 @require_auth
 def extract_from_cover():
+    # pylint: disable=too-many-return-statements
     """Extract book Title and Authors from an uploaded cover image using Gemini Vision.
 
     Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
