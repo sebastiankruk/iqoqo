@@ -286,32 +286,43 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
-        from sqlalchemy import select
+        from sqlalchemy import func, select
 
-        item_query = Item.query
+        # Single GROUP BY query replaces one COUNT per status (was 7+ round-trips).
+        owner_filter = [Item.owner_id == owner_id] if owner_id else []
+        rows = db.session.execute(
+            select(Item.status, func.count(Item.id).label("cnt")).where(*owner_filter).group_by(Item.status)  # pylint: disable=not-callable
+        ).all()
+        status_counts: dict[str, int] = dict.fromkeys(ITEM_STATUSES, 0)
+        total = 0
+        for status, cnt in rows:
+            if status in status_counts:
+                status_counts[status] = cnt
+            total += cnt
+
         if owner_id:
-            item_query = item_query.filter_by(owner_id=owner_id)
+            # Use .subquery() (not .scalar_subquery()) for multi-row IN contexts
+            # so the intent is clear and dialect edge-cases are avoided (Thread 5 fix).
+            base_manif_sq = select(Item.manifestation_id).where(Item.owner_id == owner_id).distinct().subquery()
 
-        total = item_query.count()
-        status_counts: dict[str, int] = {s: item_query.filter_by(status=s).count() for s in ITEM_STATUSES}
+            manifestations_count = (
+                db.session.query(Manifestation.id).filter(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id))).distinct().count()
+            )
 
-        if owner_id:
-            # Compute FRBR entity counts scoped to the user's collection via joins.
-            # Each level uses .distinct().count() to avoid inflating counts when
-            # multiple items share the same manifestation / expression / work.
-            # Note: we use the ORM .distinct().count() pattern (rather than
-            # func.count(func.distinct(...))) so that pylint can resolve the call chain.
-            base_manif_ids = select(Item.manifestation_id).where(Item.owner_id == owner_id).distinct().scalar_subquery()
+            base_expr_sq = (
+                select(Manifestation.expression_id)
+                .where(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id)))
+                .distinct()
+                .subquery()
+            )
 
-            manifestations_count = db.session.query(Manifestation.id).filter(Manifestation.id.in_(base_manif_ids)).distinct().count()
-
-            base_expr_ids = select(Manifestation.expression_id).where(Manifestation.id.in_(base_manif_ids)).distinct().scalar_subquery()
-
-            expressions_count = db.session.query(Expression.id).filter(Expression.id.in_(base_expr_ids)).distinct().count()
+            expressions_count = (
+                db.session.query(Expression.id).filter(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct().count()
+            )
 
             works_count = (
                 db.session.query(Work.id)
-                .filter(Work.id.in_(select(Expression.work_id).where(Expression.id.in_(base_expr_ids)).distinct().scalar_subquery()))
+                .filter(Work.id.in_(select(Expression.work_id).where(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct()))
                 .distinct()
                 .count()
             )

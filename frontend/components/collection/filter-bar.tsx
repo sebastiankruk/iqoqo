@@ -123,8 +123,6 @@ export function FilterBar({
           onChange={(e) => onSortChange(e.target.value)}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary"
         >
-          <option value="updated">Recently updated</option>
-          <option value="added">Recently added</option>
           <option value="title">Title A-Z</option>
           <option value="title-desc">Title Z-A</option>
           <option value="author">Author</option>
