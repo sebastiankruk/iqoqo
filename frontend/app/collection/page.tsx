@@ -98,8 +98,10 @@ function CollectionContent() {
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
+    sortBy,
     viewMode === "items" && isLoggedIn
   );
+
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,

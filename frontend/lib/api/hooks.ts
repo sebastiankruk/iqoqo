@@ -40,10 +40,11 @@ export const queryKeys = {
    * @param limit - The number of items per page.
    * @param statuses - Optional array of item statuses to filter by.
    * @param query - Optional search query string.
-   * @returns {readonly ["items", number, number, string, string]} The query key for items.
+   * @param sort - Optional sort order (updated, added, title, title-desc, author).
+   * @returns {readonly ["items", number, number, string, string, string]} The query key for items.
    */
-  items: (page = 1, limit = 20, statuses?: string[], query?: string) =>
-    ["items", page, limit, statuses?.join(",") ?? "", query ?? ""] as const,
+  items: (page = 1, limit = 20, statuses?: string[], query?: string, sort?: string) =>
+    ["items", page, limit, statuses?.join(",") ?? "", query ?? "", sort ?? ""] as const,
   /**
    * Query key for a single item.
    *
@@ -100,12 +101,13 @@ export function useStats() {
  * @param limit - Items per page
  * @param statuses - Filter by statuses
  * @param query - Search query
+ * @param sort - Sort order (updated, added, title, title-desc, author)
  * @param enabled - Whether the query is enabled
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
-export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, enabled = true) {
+export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, sort?: string, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.items(page, limit, statuses, query),
+    queryKey: queryKeys.items(page, limit, statuses, query, sort),
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (statuses && statuses.length > 0) {
@@ -113,6 +115,9 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
       }
       if (query && query.length > 0) {
         params.q = query;
+      }
+      if (sort) {
+        params.sort = sort;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
