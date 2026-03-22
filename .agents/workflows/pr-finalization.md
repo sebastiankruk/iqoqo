@@ -20,24 +20,30 @@ Use this workflow when asked to "Review and finalize PR <number>" or prepare a b
    - Read all plans outlined in `.github/context/private-notes/plan/*.md`.
    - Identify gaps between the PR state, the comments, and the private notes plan.
 
-2. **Implementation & Fixes**
+1. **Critical Assessment (Do Not Blindly Follow)**
+
+   - Cross-reference every PR comment against the project plan.
+   - **WARNING:** Reviewers (especially AI tools like Copilot) frequently suggest deleting "unsupported" or "unused" UI elements. If an element is part of the plan (e.g., sorting options, filters), **you must wire it up to the backend instead of deleting it.**
+   - Create a final, reconciled execution plan.
+
+1. **Implementation & Fixes**
 
    - Address missing items from the notes.
    - Address unresolved code review comments left by Copilot, the user, or other developers.
 
-3. **Intelligent Linting & Testing**
+1. **Intelligent Linting & Testing**
 
    - Execute the `makefile-tester` skill.
    - Ensure all fixes are verified. Do not proceed until tests are fully green and linting passes.
 
-4. **Release Documentation (Conditional)**
+1. **Release Documentation (Conditional)**
 
    - Check the current branch name.
    - IF the branch name starts with `release/` (e.g., `release/0.0.7`):
      - Update `docs/CHANGELOG.md`.
      - Explicitly detail new features, changed items, breaking changes, and database migrations.
 
-5. **Finalization**
+1. **Finalization**
 
    - Commit all changes with standard conventional commits.
    - Push changes to the remote repository.

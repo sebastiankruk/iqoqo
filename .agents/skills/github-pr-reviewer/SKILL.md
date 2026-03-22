@@ -43,5 +43,6 @@ for i, thread in enumerate(threads):
 "
 ```
 
+1. **Halt and Assess:** Do not write code immediately after fetching these comments. Proceed to cross-reference them with the project plan as mandated by your workflow.
 1. **Targeted Diffs:** Only if you need more context around a specific comment's line number, use `sed -n '<start>,<end>p' <file>` to view the local file contents.
 1. **Parse and Plan:** Read the JSON output from step 2 to identify actionable review items requested by reviewers (like Copilot or human developers) and create a precise to-do list before modifying any code.

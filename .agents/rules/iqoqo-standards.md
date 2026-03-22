@@ -7,6 +7,10 @@ description: "Global coding standards and architectural rules for the iqoqo proj
 ---
 # iqoqo Global Project Rules
 
+## Decision Making & Feature Preservation
+
+- **Plan Over Comments:** The project plan files in `.github/context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
+
 ## General Architectural Principles
 
 - **Domain First:** This is a "Library of Everything" built on the FRBR (Functional Requirements for Bibliographic Records) ontology. Always respect the Work -> Expression -> Manifestation -> Item hierarchy.
