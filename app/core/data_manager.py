@@ -264,9 +264,21 @@ class DataManager:
         db.session.commit()
 
     @staticmethod
-    def get_stats() -> dict[str, int]:
+    def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:
         """
         Get database statistics.
+
+        When ``owner_id`` is provided all counts — including the FRBR entity
+        counts for works, expressions, and manifestations — are scoped to that
+        user's collection by walking the join chain
+        ``Item → Manifestation → Expression → Work`` with ``distinct()``.
+        This ensures the response is fully user-scoped rather than mixing
+        user-scoped item counts with global FRBR counts.
+
+        When ``owner_id`` is ``None`` all counts reflect the full database.
+
+        Args:
+            owner_id: Optional ID of the owner to filter their specific collection.
 
         Returns:
             Dictionary with counts for each FRBR entity type plus UI-friendly
@@ -274,13 +286,56 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
-        total = Item.query.count()
-        status_counts: dict[str, int] = {s: Item.query.filter_by(status=s).count() for s in ITEM_STATUSES}
+        from sqlalchemy import func, select
+
+        # Single GROUP BY query replaces one COUNT per status (was 7+ round-trips).
+        owner_filter = [Item.owner_id == owner_id] if owner_id else []
+        rows = db.session.execute(
+            select(Item.status, func.count(Item.id).label("cnt")).where(*owner_filter).group_by(Item.status)  # pylint: disable=not-callable
+        ).all()
+        status_counts: dict[str, int] = dict.fromkeys(ITEM_STATUSES, 0)
+        total = 0
+        for status, cnt in rows:
+            if status in status_counts:
+                status_counts[status] = cnt
+            total += cnt
+
+        if owner_id:
+            # Use .subquery() (not .scalar_subquery()) for multi-row IN contexts
+            # so the intent is clear and dialect edge-cases are avoided (Thread 5 fix).
+            base_manif_sq = select(Item.manifestation_id).where(Item.owner_id == owner_id).distinct().subquery()
+
+            manifestations_count = (
+                db.session.query(Manifestation.id).filter(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id))).distinct().count()
+            )
+
+            base_expr_sq = (
+                select(Manifestation.expression_id)
+                .where(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id)))
+                .distinct()
+                .subquery()
+            )
+
+            expressions_count = (
+                db.session.query(Expression.id).filter(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct().count()
+            )
+
+            works_count = (
+                db.session.query(Work.id)
+                .filter(Work.id.in_(select(Expression.work_id).where(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct()))
+                .distinct()
+                .count()
+            )
+        else:
+            works_count = Work.query.count()
+            expressions_count = Expression.query.count()
+            manifestations_count = Manifestation.query.count()
+
         return {
-            # FRBR entity counts
-            "works": Work.query.count(),
-            "expressions": Expression.query.count(),
-            "manifestations": Manifestation.query.count(),
+            # FRBR entity counts (user-scoped when owner_id is set)
+            "works": works_count,
+            "expressions": expressions_count,
+            "manifestations": manifestations_count,
             "items": total,
             # UI-friendly aliases expected by the React dashboard
             "total_items": total,

@@ -25,7 +25,11 @@ export const size = {
 }
 export const contentType = 'image/png'
 
-// Image generation
+/**
+ * Generate the Apple icon.
+ *
+ * @returns {ImageResponse} The generated image response
+ */
 export default function Icon() {
   return new ImageResponse(
     (

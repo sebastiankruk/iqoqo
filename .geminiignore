@@ -3,8 +3,13 @@
 # This file tells the Gemini agent which files to read, even if they are
 # in .gitignore. Use ! to negate a pattern from .gitignore.
 
-# Allow the agent to access the primary instructions file.
-!.github/copilot-instructions.md
+# 1. Un-ignore the parent directories and exact wildcards from .gitignore
+!/.github/
+!/.github/context/
+!/.github/context/*
 
-# Allow the agent to access all context files.
-!.github/context/**
+# 2. Allow the agent to access the primary instructions file.
+!/.github/copilot-instructions.md
+
+# 3. Allow the agent to access all nested context files.
+!/.github/context/**

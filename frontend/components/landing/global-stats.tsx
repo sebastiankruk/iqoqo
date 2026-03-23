@@ -19,6 +19,11 @@ import { useGlobalStats } from "@/lib/api/hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Layers, Library, Users } from "lucide-react";
 
+/**
+ * Global stats section component.
+ *
+ * @returns {JSX.Element | null} The component
+ */
 export function GlobalStats() {
   const { data: stats, isLoading } = useGlobalStats();
 

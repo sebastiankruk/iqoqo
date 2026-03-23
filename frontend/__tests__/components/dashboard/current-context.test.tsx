@@ -39,6 +39,12 @@ import { CurrentContext } from "@/components/dashboard/current-context";
 
 const mockUseItems = vi.mocked(useItems);
 
+/**
+ * Make a mock API response for items.
+ *
+ * @param items - Items to include in the response
+ * @returns {ReturnType<typeof useItems>} Mock API response
+ */
 function makeApiResponse(items: Item[]) {
   return {
     data: { success: true, data: items, error: null, meta: { page: 1, limit: 10, total: items.length, pages: 1 } },
@@ -47,6 +53,14 @@ function makeApiResponse(items: Item[]) {
   } as ReturnType<typeof useItems>;
 }
 
+/**
+ * Make a mock Item.
+ *
+ * @param id - Item ID
+ * @param status - Item status
+ * @param title - Item title
+ * @returns {Item} Mock Item
+ */
 function makeItem(id: number, status: ItemStatus, title: string): Item {
   return {
     id,

@@ -18,7 +18,11 @@
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 
+import os
+
 import pytest
+
+os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
 from app import create_app
 

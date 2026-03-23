@@ -18,6 +18,7 @@
         "-s",
         "--capture=no"
     ],
+    "python.useEnvironmentsExtension": true,
     "python.analysis.inlayHints.pytestParameters": true,
     "python.analysis.typeCheckingMode": "off",
     "python.analysis.autoImportCompletions": true,
@@ -54,7 +55,7 @@
     },
     // Markdown
     "[markdown]": {
-        "editor.defaultFormatter": "yzhang.markdown-all-in-one",
+        "editor.defaultFormatter": "fcrespo82.markdown-table-formatter",
         "editor.formatOnSave": true,
         "editor.detectIndentation": false,
         "editor.indentSize": "tabSize",
@@ -142,10 +143,12 @@
         "dotenv",
         "FRBR",
         "FRBRoo",
+        "ilike",
         "Imagen",
         "iqoqo",
         "isbnlib",
         "isort",
+        "isready",
         "jsonld",
         "Kruk",
         "localsd",
@@ -174,8 +177,7 @@
         "venv",
         "Vitest",
         "wireframes",
-        "zxing",
-        "ilike"
+        "zxing"
     ],
     "css.lint.unknownAtRules": "ignore",
     "cSpell.useGitignore": true,

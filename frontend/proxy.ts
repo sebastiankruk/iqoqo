@@ -16,6 +16,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+/**
+ * Middleware function for routing and auth checks.
+ *
+ * @param req - The Next.js request
+ * @returns {NextResponse} The Next.js response
+ */
 export function proxy(req: NextRequest) {
   // Check for the cookie we set in the /api/auth-exchange route
   const sessionCookie = req.cookies.get("iqoqo_session");

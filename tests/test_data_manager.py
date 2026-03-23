@@ -299,3 +299,93 @@ def test_get_stats_per_status_counts(app):
             key = f"items_{status}"
             assert key in stats, f"Missing key {key!r} in get_stats() result"
             assert stats[key] == 2, f"Expected 2 items with status {status!r}, got {stats[key]}"
+
+
+def test_get_stats_owner_scopes_frbr_counts(app):
+    """FRBR entity counts must be user-scoped when owner_id is supplied.
+
+    Two users each own items from a *different* FRBR chain.  Calling
+    get_stats(owner_id=user_a.id) must return FRBR counts of 1 for that user
+    even though the global database totals are 2.
+    """
+    with app.app_context():
+        user_a = User(email="user_a@iqoqo.local", display_name="User A")
+        user_b = User(email="user_b@iqoqo.local", display_name="User B")
+        db.session.add_all([user_a, user_b])
+        db.session.commit()
+
+        def _make_frbr_chain(title: str, isbn: str):
+            work = Work(title=title, meta={})
+            db.session.add(work)
+            db.session.flush()
+            expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+            db.session.add(expr)
+            db.session.flush()
+            manif = Manifestation(expression_id=expr.id, isbn13=isbn, meta={})
+            db.session.add(manif)
+            db.session.flush()
+            return manif
+
+        manif_a = _make_frbr_chain("Book A", "9780000000001")
+        manif_b = _make_frbr_chain("Book B", "9780000000002")
+
+        db.session.add(Item(manifestation_id=manif_a.id, owner_id=user_a.id, status="available", meta={}))
+        db.session.add(Item(manifestation_id=manif_b.id, owner_id=user_b.id, status="available", meta={}))
+        db.session.commit()
+
+        # Global (no owner_id) — should see both chains
+        global_stats = DataManager.get_stats()
+        assert global_stats["works"] == 2
+        assert global_stats["expressions"] == 2
+        assert global_stats["manifestations"] == 2
+        assert global_stats["items"] == 2
+
+        # Scoped to user_a — should only see chain A
+        stats_a = DataManager.get_stats(owner_id=user_a.id)
+        assert stats_a["works"] == 1, f"Expected 1 work for user_a, got {stats_a['works']}"
+        assert stats_a["expressions"] == 1, f"Expected 1 expression for user_a, got {stats_a['expressions']}"
+        assert stats_a["manifestations"] == 1, f"Expected 1 manifestation for user_a, got {stats_a['manifestations']}"
+        assert stats_a["items"] == 1
+        assert stats_a["total_items"] == 1
+
+        # Scoped to user_b — should only see chain B
+        stats_b = DataManager.get_stats(owner_id=user_b.id)
+        assert stats_b["works"] == 1, f"Expected 1 work for user_b, got {stats_b['works']}"
+        assert stats_b["expressions"] == 1
+        assert stats_b["manifestations"] == 1
+        assert stats_b["items"] == 1
+
+
+def test_get_stats_owner_shared_manifestation(app):
+    """When two users own items from the *same* manifestation, user-scoped counts
+    must still be 1 (not 2) for manifestations/expressions/works — i.e. DISTINCT
+    is applied correctly.
+    """
+    with app.app_context():
+        user_a = User(email="shared_a@iqoqo.local", display_name="Shared A")
+        user_b = User(email="shared_b@iqoqo.local", display_name="Shared B")
+        db.session.add_all([user_a, user_b])
+        db.session.commit()
+
+        work = Work(title="Shared Book", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000099", meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        # Both users own a copy of *the same* manifestation
+        db.session.add(Item(manifestation_id=manif.id, owner_id=user_a.id, status="available", meta={}))
+        db.session.add(Item(manifestation_id=manif.id, owner_id=user_a.id, status="lent", meta={}))
+        db.session.add(Item(manifestation_id=manif.id, owner_id=user_b.id, status="available", meta={}))
+        db.session.commit()
+
+        stats_a = DataManager.get_stats(owner_id=user_a.id)
+        # user_a has 2 items but they all point to the same manifestation/expression/work
+        assert stats_a["items"] == 2
+        assert stats_a["manifestations"] == 1, f"Expected 1 distinct manifestation, got {stats_a['manifestations']}"
+        assert stats_a["expressions"] == 1
+        assert stats_a["works"] == 1

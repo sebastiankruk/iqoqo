@@ -15,9 +15,9 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, Suspense } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
 import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
@@ -28,20 +28,41 @@ import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hoo
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { Footer } from "@/components/dashboard/footer";
 
-/** Collection browser page with filtering, sorting and pagination. */
+/**
+ * Collection browser page with filtering, sorting and pagination.
+ *
+ * @returns {JSX.Element} The collection page component
+ */
 function CollectionContent() {
-  const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
+  const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
+  const initialSort = searchParams?.get("sort") || "title";
+  const initialStatuses = searchParams?.get("statuses") || "";
+  const initialFilters: ActiveFilter[] = initialStatuses 
+      ? initialStatuses.split(",").map(s => ({ type: "status", value: s })) 
+      : [];
+  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
+  const initialQuery = searchParams?.get("q") ?? "";
+
+  const [page, setPage] = useState(initialPage);
+  const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
+  const [sortBy, setSortBy] = useState(initialSort);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+
   const limit = 40;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
   const isLoggedIn = !!profile;
 
-  const [viewMode, setViewMode] = useState<"items" | "manifestations">("items");
-  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
-  const [sortBy, setSortBy] = useState("title");
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-
-  // Track profile state to adjust viewMode during render (avoids useEffect cascading renders)
+  // Track profile state to adjust viewMode dynamically
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
     setPrevIsLoggedIn(isLoggedIn);
@@ -51,37 +72,41 @@ function CollectionContent() {
     }
   }
 
+  // Automatically sync all states robustly back to the URL as they change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", page.toString());
+    if (sortBy !== "title") params.set("sort", sortBy);
+    
+    const statuses = activeFilters.filter((f) => f.type === "status").map((f) => f.value);
+    if (statuses.length > 0) params.set("statuses", statuses.join(","));
+    if (appliedQuery) params.set("q", appliedQuery);
+    if (viewMode !== "items") params.set("view", viewMode);
+    
+    // Replace state blocks messy rapid history buildup while keeping deep link persistency active
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
+
   const statusFilters = useMemo(
     () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
     [activeFilters]
   );
-
-  const searchParams = useSearchParams();
-  const currentUrlQuery = searchParams?.get("q") ?? "";
-
-  const [prevUrlQuery, setPrevUrlQuery] = useState(currentUrlQuery);
-  const [searchQuery, setSearchQuery] = useState(currentUrlQuery);
-  const [appliedQuery, setAppliedQuery] = useState(currentUrlQuery);
-
-  if (currentUrlQuery !== prevUrlQuery) {
-    setPrevUrlQuery(currentUrlQuery);
-    setSearchQuery(currentUrlQuery);
-    setAppliedQuery(currentUrlQuery);
-    setPage(1);
-  }
 
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
+    sortBy,
     viewMode === "items" && isLoggedIn
   );
+
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
-    appliedQuery, // Applied Search feature wired correctly
+    appliedQuery, 
     viewMode === "manifestations"
   );
 
@@ -124,6 +149,7 @@ function CollectionContent() {
       wish_list: statsData.items_wish_list,
       reading: statsData.items_reading,
       read: statsData.items_read,
+      unread: statsData.items_unread ?? statsData.to_read,
     };
   }, [statsData]);
 
@@ -152,10 +178,10 @@ function CollectionContent() {
         <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
-              Collection
+              {appliedQuery ? `Search results for "${appliedQuery}"` : "Collection"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Browse and manage your library
+              {appliedQuery ? `Found ${total} ${total === 1 ? "item" : "items"}` : "Browse and manage your library"}
             </p>
           </div>
 
@@ -290,6 +316,11 @@ function CollectionContent() {
   );
 }
 
+/**
+ * Collection page wrapper with Suspense.
+ *
+ * @returns {JSX.Element} The collection page component
+ */
 export default function CollectionPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading collection...</p></div>}>

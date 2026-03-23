@@ -19,6 +19,9 @@ import { useState, useEffect } from "react";
 import { getUsers } from "@/lib/api/admin";
 import { Loader2 } from "lucide-react";
 
+/**
+ * Admin user details
+ */
 interface AdminUser {
   id: string;
   email: string;
@@ -27,6 +30,11 @@ interface AdminUser {
   is_active?: boolean;
 }
 
+/**
+ * Component for managing users.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function UserManagement() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);

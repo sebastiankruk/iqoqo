@@ -18,7 +18,13 @@
 import { Calendar, BookOpen, Tag } from "lucide-react";
 import type { Item } from "@/types/frbr";
 
-/** Title, authors, year, page count, and tag badges for an item. */
+/**
+ * Title, authors, year, page count, and tag badges for an item.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item
+ * @returns {JSX.Element} The component
+ */
 export function ItemHeader({ item }: { item: Item }) {
   const work = item.work;
   const meta = item.manifestation_meta ?? {};

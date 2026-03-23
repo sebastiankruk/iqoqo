@@ -39,6 +39,7 @@ class Config:
     CORS_SUPPORTS_CREDENTIALS = os.environ.get("CORS_SUPPORTS_CREDENTIALS", "false")
 
     # OAuth
+    FEDERATION_ENABLED = os.environ.get("FEDERATION_ENABLED", "false").lower() == "true"
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 

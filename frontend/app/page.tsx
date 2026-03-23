@@ -25,6 +25,11 @@ import { GlobalStats } from "@/components/landing/global-stats";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2 } from "lucide-react";
 
+/**
+ * Dashboard page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function DashboardPage() {
   const { data: user, isLoading } = useProfile();
 

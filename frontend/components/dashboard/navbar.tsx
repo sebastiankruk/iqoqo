@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,21 +32,39 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProfile } from "@/lib/api/hooks";
 
-/** Sticky top navigation bar – "Modern Athenaeum" style. */
+/**
+ * Sticky top navigation bar – "Modern Athenaeum" style.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const queryClient = useQueryClient();
 
+  /**
+   * Handles the user logout process.
+   */
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`Logout failed with status ${response.status} ${response.statusText}`);
+      }
     } catch (err) {
       console.error("Failed to logout:", err);
+    } finally {
+      queryClient.clear();
+      router.push("/login");
     }
   };
 
+  /**
+   * Handles the search form submission.
+   *
+   * @param {React.FormEvent} e - The form event.
+   */
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {

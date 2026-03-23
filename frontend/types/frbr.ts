@@ -87,8 +87,10 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
+/** Item status type */
+export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read" | "unread";
 
+/** API Response envelope */
 export interface ApiResponse<T> {
   success: boolean;
   data: T | null;
@@ -101,6 +103,7 @@ export interface ApiResponse<T> {
   };
 }
 
+/** Dashboard statistics */
 export interface DashboardStats {
   works: number;
   expressions: number;
@@ -110,6 +113,7 @@ export interface DashboardStats {
   lent_items: number;
   to_read: number;
   items_available: number;
+  items_unread: number;
   items_lent: number;
   items_lost: number;
   items_wish_list: number;
@@ -117,6 +121,7 @@ export interface DashboardStats {
   items_read: number;
 }
 
+/** ISBN metadata */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
@@ -126,6 +131,7 @@ export interface IsbnMeta {
   "ISBN-13"?: string;
 }
 
+/** User profile */
 export interface UserProfile {
   id: string;
   email: string;

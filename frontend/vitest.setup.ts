@@ -49,6 +49,14 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/link", async () => {
   const { createElement } = await import("react");
   return {
+    /**
+     * Mock component for next/link
+     * @param props - Component props
+     * @param props.href - The URL of the link.
+     * @param props.children - The content of the link.
+     * @param props.className - The CSS class names for the link.
+     * @returns {JSX.Element} React element
+     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     default: ({ href, children, className, ...rest }: any) =>
       createElement("a", { href, className, ...rest }, children),
@@ -56,12 +64,26 @@ vi.mock("next/link", async () => {
 });
 /* ── Next.js Image ───────────────────────────────────────────────────────
  * Render as a plain <img> so RTL assertions on src/alt work normally and
- * we don't need a real Next.js image-optimisation server running.          */
+ * we don't need a real Next.js image-optimization server running.          */
 vi.mock("next/image", async () => {
   const { createElement } = await import("react");
   return {
     // Strips Next.js-specific props (fill, sizes, unoptimized, priority) so
     // only standard <img> attributes are forwarded to the DOM element.
+    /**
+     * Mock component for next/image
+     * @param props - Component props
+     * @param props.src - The image source URL.
+     * @param props.alt - The image alt text.
+     * @param props.className - The CSS class names for the image.
+     * @param props.fill - Whether the image should fill the container.
+     * @param props.sizes - Image sizes attribute.
+     * @param props.unoptimized - Whether the image should be unoptimized.
+     * @param props.priority - Whether the image has high priority.
+     * @param props.placeholder - Image placeholder type.
+     * @param props.blurDataURL - Image blur data URL.
+     * @returns {JSX.Element} React element
+     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     default: ({ src, alt, className, fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest }: any) => {
       void fill; void sizes; void unoptimized; void priority; void placeholder; void blurDataURL;
@@ -78,5 +100,31 @@ vi.mock("sonner", () => ({
     info: vi.fn(),
     warning: vi.fn(),
   },
+  /**
+   * Mock component for Toaster
+   * @returns null
+   */
   Toaster: () => null,
 }));
+
+/* ── TanStack React Query ──────────────────────────────────────────────────
+ * Stub useQueryClient so components that call it (e.g. Navbar clears cache
+ * on logout) work in unit tests without a real QueryClientProvider wrapper.
+ * All other exports (useQuery, useMutation, …) are forwarded to the real
+ * library so per-test mocks of hooks like useProfile still work normally.  */
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueryClient: vi.fn().mockReturnValue({
+      clear: vi.fn(),
+      invalidateQueries: vi.fn(),
+      removeQueries: vi.fn(),
+      resetQueries: vi.fn(),
+      cancelQueries: vi.fn(),
+      getQueryData: vi.fn(),
+      setQueryData: vi.fn(),
+    }),
+  };
+});
+

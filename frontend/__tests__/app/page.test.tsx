@@ -21,6 +21,12 @@ import * as hooks from '@/lib/api/hooks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('next/image', () => ({
+  /**
+   * Mock for Next.js Image component.
+   *
+   * @param {object} props - The component props.
+   * @returns {React.ReactElement} The rendered component.
+   */
   default: (props: React.ComponentProps<'img'> & Record<string, unknown>) => {
     const { fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest } = props;
     void fill; void sizes; void unoptimized; void priority; void placeholder; void blurDataURL;
@@ -30,8 +36,19 @@ vi.mock('next/image', () => ({
   },
 }))
 
+/**
+ * Creates a test query client with retries disabled.
+ *
+ * @returns {QueryClient} The query client instance.
+ */
 const createTestQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+/**
+ * Renders a component wrapped in a QueryClientProvider.
+ *
+ * @param {React.ReactElement} component - The component to render.
+ * @returns {import('@testing-library/react').RenderResult} The render result.
+ */
 const renderWithQueryClient = (component: React.ReactElement) => {
   const testQueryClient = createTestQueryClient();
   return render(

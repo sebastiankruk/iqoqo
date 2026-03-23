@@ -17,13 +17,16 @@
 
 import { X, ArrowDownUp } from "lucide-react";
 
+/** Filter type */
 export type FilterType = "status";
 
+/** Active filter */
 export interface ActiveFilter {
   type: FilterType;
   value: string;
 }
 
+/** Filter bar props */
 interface FilterBarProps {
   activeFilters: ActiveFilter[];
   onRemoveFilter: (filter: ActiveFilter) => void;
@@ -35,6 +38,7 @@ interface FilterBarProps {
 
 const statusLabel: Record<string, string> = {
   available: "On Shelf",
+  unread: "Unread",
   reading: "Reading",
   lent: "Lent Out",
   lost: "Lost",
@@ -42,19 +46,41 @@ const statusLabel: Record<string, string> = {
   read: "Read",
 };
 
+/**
+ * Generates a label for a filter chip.
+ *
+ * @param filter - The active filter
+ * @returns {string} The label
+ */
 function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "status")
     return `Status: ${statusLabel[filter.value] ?? filter.value}`;
   return filter.value;
 }
 
+/**
+ * Generates a color class for a filter chip.
+ *
+ * @param filter - The active filter
+ * @returns {string} The color class
+ */
 function chipColor(filter: ActiveFilter): string {
   if (filter.type === "status")
     return "bg-accent/10 text-accent border-accent/20";
   return "bg-secondary text-secondary-foreground border-border";
 }
 
-/** Active-filter chips + sort selector shown above the grid. */
+/**
+ * Active-filter chips + sort selector shown above the grid.
+ *
+ * @param root0 - The props object
+ * @param root0.activeFilters - The active filters
+ * @param root0.onRemoveFilter - Callback to remove a filter
+ * @param root0.onClearAll - Callback to clear all filters
+ * @param root0.sortBy - The current sort option
+ * @param root0.onSortChange - Callback to change the sort option
+ * @param root0.resultCount - The total number of results
+ * @returns {JSX.Element} The component*/
 export function FilterBar({
   activeFilters,
   onRemoveFilter,
@@ -97,6 +123,8 @@ export function FilterBar({
           onChange={(e) => onSortChange(e.target.value)}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary"
         >
+          <option value="updated">Recently updated</option>
+          <option value="added">Recently added</option>
           <option value="title">Title A-Z</option>
           <option value="title-desc">Title Z-A</option>
           <option value="author">Author</option>

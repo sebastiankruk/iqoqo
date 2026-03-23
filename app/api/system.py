@@ -22,6 +22,7 @@ from flask import jsonify, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
+from app.api.decorators import require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Item, Manifestation, User, Work, db
@@ -38,9 +39,22 @@ def health_check():
     return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
 
 
+@api_bp.route("/config", methods=["GET"])
+def get_config():
+    """Return public application configuration for the frontend (non-sensitive)."""
+    return jsonify(
+        {
+            "success": True,
+            "data": {"federation_enabled": Config.FEDERATION_ENABLED, "version": Config.VERSION},
+            "error": None,
+        }
+    )
+
+
 @api_bp.route("/stats", methods=["GET"])
+@require_auth
 def get_dashboard_stats():
-    stats = DataManager.get_stats()
+    stats = DataManager.get_stats(owner_id=request.user_id)
     return jsonify({"success": True, "data": stats, "error": None})
 
 

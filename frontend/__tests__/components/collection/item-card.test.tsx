@@ -24,6 +24,12 @@ import { describe, it, expect } from "vitest";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
 
+/**
+ * Make a mock Item.
+ *
+ * @param overrides - Item overrides
+ * @returns {Item} Mock Item
+ */
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
     id: 1,
@@ -37,6 +43,12 @@ function makeItem(overrides: Partial<Item> = {}): Item {
   };
 }
 
+/**
+ * Make a mock CatalogEntry.
+ *
+ * @param overrides - CatalogEntry overrides
+ * @returns {CatalogEntry} Mock CatalogEntry
+ */
 function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
     id: 1,

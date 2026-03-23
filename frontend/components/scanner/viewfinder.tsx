@@ -13,7 +13,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-/** Viewfinder overlay with corner brackets and animated scanning line. */
+/**
+ * Viewfinder overlay with corner brackets and animated scanning line.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function Viewfinder() {
   const bracketSize = 28;
   const strokeWidth = 3;

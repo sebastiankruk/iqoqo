@@ -37,6 +37,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 
+/**
+ * Item actions component.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item
+ * @returns {JSX.Element | null} The component or null if no profile
+ */
 export function ItemActions({ item }: { item: Item }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();
@@ -56,8 +63,17 @@ export function ItemActions({ item }: { item: Item }) {
   if (!profile) return null;
 
   // Helper to check user permissions safely
+  /**
+   * Check if the current profile includes a permission.
+   * @param {string} perm - Permission to check.
+   * @returns {boolean}
+   */
   const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
+  /**
+   * Execute the confirmed delete action for the current item.
+   * @returns {void}
+   */
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
       onSuccess: () => {
@@ -68,6 +84,11 @@ export function ItemActions({ item }: { item: Item }) {
     });
   };
 
+  /**
+   * Handles the click event for regenerating the cover.
+   * If a cover already exists, it opens a confirmation dialog.
+   * Otherwise, it directly calls the regeneration function.
+   */
   const handleRegenerateClick = () => {
     const hasCover = !!(item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]);
     if (hasCover) {
@@ -77,6 +98,11 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
+  /**
+   * Initiates the cover regeneration process for the item.
+   *
+   * @returns {Promise<void>} A promise that resolves when the regeneration is scheduled.
+   */
   const handleRegenerate = async () => {
     if (!item.manifestation_id) return;
     setIsRequesting(true);
@@ -100,6 +126,11 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
+  /**
+   * Handles refetching metadata for the item.
+   *
+   * @returns {Promise<void>} A promise that resolves when the metadata is refetched.
+   */
   const handleRefetch = async () => {
     if (!item.manifestation_id) return;
     setIsRefetching(true);

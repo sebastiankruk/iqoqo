@@ -29,15 +29,23 @@ vi.mock('@/lib/api/client', () => ({
 
 // Mock dashboard components
 vi.mock('@/components/dashboard/navbar', () => ({
+  /** @returns {JSX.Element} Navbar mock */
   Navbar: () => <div data-testid="navbar">Navbar</div>,
 }));
 
 vi.mock('@/components/dashboard/footer', () => ({
+  /** @returns {JSX.Element} Footer mock */
   Footer: () => <div data-testid="footer">Footer</div>,
+}));
+
+// Mock useAppConfig so it doesn't compete with apiFetch mocks via useQuery
+vi.mock('@/lib/api/hooks', () => ({
+  useAppConfig: vi.fn(),
 }));
 
 import ProfilePage from '@/app/profile/page';
 import { apiClient, apiFetch } from '@/lib/api/client';
+import { useAppConfig } from '@/lib/api/hooks';
 
 describe('ProfilePage', () => {
   const mockProfileData = {
@@ -60,6 +68,9 @@ describe('ProfilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    // Default: federation disabled (federation button won't render)
+    vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: false, version: '0.0.7' } } as never);
+
     // Mock the apiFetch function to return the profile data
     vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
   });
@@ -78,7 +89,10 @@ describe('ProfilePage', () => {
   });
 
   it('toggles GDPR consents', async () => {
-    // Mock the apiFetch for loading profile
+    // Enable federation so the federation consent button renders
+    vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: true, version: '0.0.7' } } as never);
+
+    // Extra apiFetch mock for this test's profile load
     vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
 
     render(<ProfilePage />);
@@ -96,12 +110,13 @@ describe('ProfilePage', () => {
       },
     } as never);
 
+    // With federation_enabled: true, the federation button appears before telemetry
     const federationButtons = screen.getAllByRole('button', { name: /Opted/i });
 
-    // Click the federation button
+    // Click the first "Opted" button — the federation one
     fireEvent.click(federationButtons[0]);
 
-    // Assert the API was called (note: apiClient.post, not global.fetch)
+    // Assert the API was called with federation consent
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
         '/profile/consent',

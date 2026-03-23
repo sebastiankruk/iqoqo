@@ -21,6 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 
+/**
+ * Register page component.
+ *
+ * @returns {JSX.Element} The page component
+ */
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

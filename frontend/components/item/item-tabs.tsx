@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { FileText, BookCopy, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
+import { useAppConfig } from "@/lib/api/hooks";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -29,6 +30,13 @@ type TabId = (typeof TABS)[number]["id"];
 
 /* ── Details tab ─────────────────────────────────────────────────────────── */
 
+/**
+ * Details tab component.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 function DetailsTab({ item }: { item: Item }) {
   const meta = item.manifestation_meta ?? {};
   const description =
@@ -122,6 +130,13 @@ function DetailsTab({ item }: { item: Item }) {
 
 /* ── My Copy tab ─────────────────────────────────────────────────────────── */
 
+/**
+ * My Copy tab component.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 function MyCopyTab({ item }: { item: Item }) {
   const fields = [
     { label: "Status", value: item.status },
@@ -153,6 +168,11 @@ function MyCopyTab({ item }: { item: Item }) {
 
 /* ── Federation tab ──────────────────────────────────────────────────────── */
 
+/**
+ * Federation tab component.
+ *
+ * @returns {JSX.Element} The component
+ */
 function FederationTab() {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -172,15 +192,26 @@ function FederationTab() {
 
 /* ── Tabs component ──────────────────────────────────────────────────────── */
 
-/** Tabbed detail panel for an item page. */
+/**
+ * Tabbed detail panel for an item page.
+ *
+ * @param {{ item: Item }} props - The component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
+  const { data: config } = useAppConfig();
+
+  const visibleTabs = TABS.filter(
+    (tab) => tab.id !== "federation" || config?.federation_enabled
+  );
 
   return (
     <div className="flex flex-col gap-6">
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-secondary p-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActive(id)}

@@ -23,17 +23,31 @@ import { useRouter } from "next/navigation";
 import type { IsbnMeta } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 
+/** Props for SuccessCard component */
 interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
   onDismiss: () => void;
 }
 
-/** Slide-up result card shown after a successful barcode scan. */
+/**
+ * Slide-up result card shown after a successful barcode scan.
+ *
+ * @param root0 - The props object
+ * @param root0.isbn - The scanned ISBN
+ * @param root0.meta - The metadata for the ISBN
+ * @param root0.onDismiss - Callback to dismiss the card
+ * @returns {JSX.Element} The component
+ */
 export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
+  /**
+   * Handles adding the found book to the user's library.
+   * Sets the `adding` state to true during the process and shows a toast notification
+   * for success or failure. Redirects to the item's detail page on success.
+   */
   const handleAdd = async () => {
     setAdding(true);
     try {

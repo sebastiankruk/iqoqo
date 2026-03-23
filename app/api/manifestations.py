@@ -18,7 +18,7 @@
 import os
 from typing import Any
 
-from flask import current_app, jsonify, request
+from flask import Response, current_app, jsonify, request
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
@@ -32,7 +32,7 @@ from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 
 
 @api_bp.route("/manifestations", methods=["GET"])
-def get_manifestations():
+def get_manifestations() -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
@@ -150,18 +150,21 @@ def get_manifestations():
             }
         )
 
-    return jsonify(
-        {
-            "success": True,
-            "data": data,
-            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
-            "error": None,
-        }
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": data,
+                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "error": None,
+            }
+        ),
+        200,
     )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
-def get_manifestation_detail(manifestation_id: int):
+def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
 
@@ -196,11 +199,11 @@ def get_manifestation_detail(manifestation_id: int):
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
     }
-    return jsonify({"success": True, "data": data, "error": None})
+    return jsonify({"success": True, "data": data, "error": None}), 200
 
 
 @api_bp.route("/manifestations/recent", methods=["GET"])
-def get_recent_manifestations():
+def get_recent_manifestations() -> tuple[Response, int]:
     try:
         limit = request.args.get("limit", 10, type=int)
 
@@ -236,10 +239,10 @@ def get_recent_manifestations():
 
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])
-def lookup_isbn(isbn: str):
+def lookup_isbn(isbn: str) -> tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if manifestation and manifestation.meta and manifestation.meta.get("Title"):
-        return jsonify(**manifestation.meta)
+        return jsonify(**manifestation.meta), 200
 
     if manifestation and manifestation.expression and manifestation.expression.work:
         work = manifestation.expression.work
@@ -253,7 +256,7 @@ def lookup_isbn(isbn: str):
                 db.session.commit()
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
                 db.session.rollback()
-            return jsonify(**work_metadata)
+            return jsonify(**work_metadata), 200
 
     canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
     if not canonical_isbn:
@@ -292,11 +295,11 @@ def lookup_isbn(isbn: str):
             manifestation.expression.work.meta["authors"] = metadata["Authors"]
         db.session.commit()
 
-    return jsonify(**metadata)
+    return jsonify(**metadata), 200
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
-def update_manifestation(isbn: str):
+def update_manifestation(isbn: str) -> tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
@@ -317,7 +320,7 @@ def update_manifestation(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
         db.session.commit()
-        return jsonify({"status": "ok"})
+        return jsonify({"status": "ok"}), 200
 
     return jsonify({"error": "No metadata provided"}), 400
 
@@ -325,7 +328,7 @@ def update_manifestation(isbn: str):
 @api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
 @require_auth
 @require_permission("refetch:metadata")
-def refetch_metadata(manifestation_id: int):
+def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     if not manif.isbn13:
         return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
@@ -348,16 +351,16 @@ def refetch_metadata(manifestation_id: int):
             manif.expression.work.meta = work_meta
 
     db.session.commit()
-    return jsonify({"success": True, "data": {"id": manif.id}, "error": None})
+    return jsonify({"success": True, "data": {"id": manif.id}, "error": None}), 200
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
-def upload_cover(manifestation_id):
+def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
     file = request.files["cover"]
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "No selected file"}), 400
 
     allowed_extensions = {"png", "jpg", "jpeg", "webp"}
@@ -401,7 +404,7 @@ def upload_cover(manifestation_id):
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
 @require_auth
 @require_permission("regenerate:cover")
-def regenerate_cover(manifestation_id: int):
+def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
     db.session.commit()
@@ -423,7 +426,7 @@ def regenerate_cover(manifestation_id: int):
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["DELETE"])
 @require_auth
 @require_permission("delete:manifestation")
-def delete_manifestation(manifestation_id: int):
+def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
@@ -431,7 +434,7 @@ def delete_manifestation(manifestation_id: int):
     try:
         db.session.delete(manif)
         db.session.commit()
-        return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None})
+        return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500

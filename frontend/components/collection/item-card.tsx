@@ -27,6 +27,7 @@ const statusDotColor: Record<ItemStatus, string> = {
   lost: "bg-destructive",
   reading: "bg-green-500",
   read: "bg-blue-500",
+  unread: "bg-purple-500",
 };
 
 const statusDotTitle: Record<ItemStatus, string> = {
@@ -36,15 +37,25 @@ const statusDotTitle: Record<ItemStatus, string> = {
   lost: "Lost",
   reading: "Reading",
   read: "Read",
+  unread: "Unread",
 };
 
+/** Props for ItemCard component */
 interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
   isManifestationView?: boolean;
 }
 
-/** Individual item card shown in the collection grid. */
+/**
+ * Individual item card shown in the collection grid.
+ *
+ * @param root0 - The props object
+ * @param root0.item - The item to display
+ * @param root0.variant - The card variant
+ * @param root0.isManifestationView - Whether to show the manifestation view
+ * @returns {JSX.Element} The component
+ */
 export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
   const isCatalog = isManifestationView;
 

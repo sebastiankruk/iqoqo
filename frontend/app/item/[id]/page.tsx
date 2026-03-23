@@ -16,7 +16,7 @@
 "use client";
 
 import { use } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { HeroBanner } from "@/components/item/hero-banner";
@@ -27,12 +27,22 @@ import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 
+/** Page props for the Item page. */
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-function ItemDetail({ item: initialItem }: { item: Item }) {
+/**
+ * Renders the item detail content (hero, sidebar, tabs, actions).
+ *
+ * @param {{ item: Item }} props - Component props.
+ * @param {Item} props.item - The item to display.
+ * @returns {JSX.Element}
+ */
+function ItemDetail(props: { item: Item }) {
+  const { item: initialItem } = props;
   const { item } = useManifestationWithPolling(initialItem);
+  const router = useRouter();
 
 
   const coverUrl = item.cover_url
@@ -65,13 +75,13 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
 
         {/* Footer */}
         <footer className="mt-8 flex items-center justify-between px-2">
-          <Link
-            href="/collection"
+          <button
+            onClick={() => router.back()}
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to collection
-          </Link>
+          </button>
           <p className="text-xs text-muted-foreground">
             <span className="font-serif font-bold text-foreground">iqoqo</span>
             {" "}&middot;{" "}The Library of Everything
@@ -82,10 +92,18 @@ function ItemDetail({ item: initialItem }: { item: Item }) {
   );
 }
 
-/** Item detail page showing the full FRBR hierarchy for one item. */
-export default function ItemPage({ params }: Props) {
+/**
+ * Item detail page showing the full FRBR hierarchy for one item.
+ *
+ * @param {Props} props - Page props containing `params` promise.
+ * @param {Promise<{id: string}>} props.params - Route params promise provided by Next.js.
+ * @returns {JSX.Element}
+ */
+export default function ItemPage(props: Props) {
+  const { params } = props;
   const { id } = use(params);
   const itemId = parseInt(id, 10);
+  const router = useRouter();
 
   const { data: item, isLoading, isError } = useItem(itemId);
 
@@ -107,12 +125,12 @@ export default function ItemPage({ params }: Props) {
         <Navbar />
         <div className="flex flex-col items-center justify-center py-32">
           <p className="text-muted-foreground">Item not found.</p>
-          <Link
-            href="/collection"
+          <button
+            onClick={() => router.back()}
             className="mt-4 text-sm font-medium text-accent hover:underline"
           >
             Back to collection
-          </Link>
+          </button>
         </div>
       </div>
     );

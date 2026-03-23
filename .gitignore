@@ -32,6 +32,7 @@ node_modules/
 *.db
 *.log
 .DS_Store
+.alerts.json
 
 # Data - exclude personal data exports but keep seed examples
 data/*.json
@@ -42,7 +43,7 @@ iqoqo_backup*.json
 .venv*
 
 # AI
-.github/context/*
+.github/context
 
 # Process IDs
 .flask.pid
