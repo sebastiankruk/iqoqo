@@ -40,10 +40,11 @@ export const queryKeys = {
    * @param limit - The number of items per page.
    * @param statuses - Optional array of item statuses to filter by.
    * @param query - Optional search query string.
-   * @returns {readonly ["items", number, number, string, string]} The query key for items.
+   * @param sort - Optional sort order (updated, added, title, title-desc, author).
+   * @returns {readonly ["items", number, number, string, string, string]} The query key for items.
    */
-  items: (page = 1, limit = 20, statuses?: string[], query?: string) =>
-    ["items", page, limit, statuses?.join(",") ?? "", query ?? ""] as const,
+  items: (page = 1, limit = 20, statuses?: string[], query?: string, sort?: string) =>
+    ["items", page, limit, statuses?.join(",") ?? "", query ?? "", sort ?? ""] as const,
   /**
    * Query key for a single item.
    *
@@ -60,7 +61,21 @@ export const queryKeys = {
   isbn: (isbn: string) => ["isbn", isbn] as const,
   manifestations: (page = 1, limit = 20, query?: string) => ["manifestations", page, limit, query ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  config: ["config"] as const,
 };
+
+/**
+ * Custom hook to fetch the application configuration.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<{ federation_enabled: boolean; version: string }>} Query result containing the app config
+ */
+export function useAppConfig() {
+  return useQuery({
+    queryKey: queryKeys.config,
+    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string }>("/config"),
+    staleTime: 60 * 60 * 1000,
+  });
+}
 
 /* ── Dashboard stats ─────────────────────────────────────────────────────── */
 
@@ -86,12 +101,13 @@ export function useStats() {
  * @param limit - Items per page
  * @param statuses - Filter by statuses
  * @param query - Search query
+ * @param sort - Sort order (updated, added, title, title-desc, author)
  * @param enabled - Whether the query is enabled
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
-export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, enabled = true) {
+export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, sort?: string, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.items(page, limit, statuses, query),
+    queryKey: queryKeys.items(page, limit, statuses, query, sort),
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (statuses && statuses.length > 0) {
@@ -99,6 +115,9 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
       }
       if (query && query.length > 0) {
         params.q = query;
+      }
+      if (sort) {
+        params.sort = sort;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
@@ -221,6 +240,31 @@ export function useManifestationWithPolling(initialData: Item) {
       query.state.data?.cover_status === 'pending' ? 3000 : false,
   });
   return { item };
+}
+
+type ManualItemPayload = {
+  Title: string;
+  Authors: string[];
+  Format: string;
+};
+
+/**
+ * Custom hook to add a new item manually when ISBN is not available.
+ *
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>} Mutation result
+ */
+export function useAddManualItem() {
+  const qc = useQueryClient();
+  return useMutation<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>({
+    mutationFn: async (metadata: ManualItemPayload) => {
+      const res = await apiClient.post<ApiResponse<{ item_id: number }>>("/items/manual", metadata);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
 }
 
 /**

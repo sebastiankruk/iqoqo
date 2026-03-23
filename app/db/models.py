@@ -24,7 +24,7 @@ from . import db
 #: Canonical list of allowed Item statuses.  This is the single source of truth
 #: on the Python side; the TypeScript ``ItemStatus`` union in
 #: ``frontend/types/frbr.ts`` must stay in sync with these values.
-ITEM_STATUSES: tuple[str, ...] = ("available", "lent", "lost", "wish_list", "reading", "read")
+ITEM_STATUSES: tuple[str, ...] = ("available", "lent", "lost", "wish_list", "reading", "read", "unread")
 
 # RBAC Association Tables
 

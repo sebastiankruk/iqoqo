@@ -88,7 +88,7 @@ export interface Item {
 }
 
 /** Item status type */
-export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read";
+export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read" | "unread";
 
 /** API Response envelope */
 export interface ApiResponse<T> {
@@ -113,6 +113,7 @@ export interface DashboardStats {
   lent_items: number;
   to_read: number;
   items_available: number;
+  items_unread: number;
   items_lent: number;
   items_lost: number;
   items_wish_list: number;

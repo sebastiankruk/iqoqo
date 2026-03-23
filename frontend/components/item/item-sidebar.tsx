@@ -15,30 +15,20 @@
 //
 "use client";
 
-import { Send, Pencil, QrCode, BookOpen } from "lucide-react";
+import type { ChangeEvent } from "react";
+import { Pencil, QrCode, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem } from "@/lib/api/hooks";
 
-const STATUS_LABELS: Record<string, { label: string; class: string }> = {
-  available: {
-    label: "On Shelf",
-    class: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  },
-  reading: {
-    label: "Reading",
-    class: "bg-accent/10 text-accent ring-accent/20",
-  },
+const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
+  available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  reading: { label: "Reading...", class: "bg-accent/10 text-accent ring-accent/20" },
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
-  wish_list: {
-    label: "On Wish List",
-    class: "bg-primary/10 text-primary ring-primary/20",
-  },
-  read: {
-    label: "Read",
-    class: "bg-blue-50 text-blue-700 ring-blue-200",
-  },
+  wish_list: { label: "On Wish List", class: "bg-primary/10 text-primary ring-primary/20" },
+  read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
+  unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
 };
 
 /** Props for ItemSidebar component */
@@ -64,29 +54,21 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const updateItem = useUpdateItem(item.id);
 
-  const statusInfo = STATUS_LABELS[item.status] ?? {
-    label: item.status,
-    class: "bg-secondary text-foreground ring-border",
-  };
+  const statusInfo = STATUS_LABELS[item.status] ?? { label: item.status, class: "bg-secondary text-foreground ring-border" };
 
-  /**
-   * Handles lending the item to a friend.
-   *
-   * @returns {void}
-   */
-  const handleLend = () => {
+  const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as Item["status"];
     updateItem.mutate(
-      { status: "lent" },
+      { status: newStatus },
       {
-        onSuccess: () => toast.success("Item marked as lent out"),
-        onError: (e) => toast.error(e.message),
+        onSuccess: () => toast.success(`Item status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        onError: (e) => toast.error((e as Error).message),
       }
     );
   };
 
   /**
    * Handles generating and opening the QR code for the item.
-   * @returns {Promise<void>} A promise that resolves when the QR code is generated and opened.
    */
 
   const handleQrCode = async () => {
@@ -140,16 +122,22 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         </p>
       )}
 
-      {/* Action buttons */}
+      {/* Action buttons & Status Select */}
       <div className="flex w-full flex-col gap-2.5">
-        <button
-          onClick={handleLend}
+        <select
+          aria-label="Item status"
+          value={item.status}
+          onChange={handleStatusChange}
           disabled={updateItem.isPending}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
         >
-          <Send className="h-4 w-4" />
-          Lend to Friend
-        </button>
+          {Object.entries(STATUS_LABELS).map(([key, info]) => (
+            <option key={key} value={key} className="text-foreground bg-card">
+              {info.label}
+            </option>
+          ))}
+        </select>
+
         {onEdit && (
           <button
             onClick={onEdit}

@@ -347,6 +347,37 @@ class TestAddingBooks:
             item = db.session.get(Item, response.json["item_id"])
             assert item.status == "available"
 
+    def test_add_manual_item(self, client, normal_user_headers):
+        """Test adding an item manually."""
+        metadata = {"Title": "Manual Book", "Authors": ["Manual Author"], "Format": "text"}
+        response = client.post("/api/items/manual", json=metadata, headers=normal_user_headers, content_type="application/json")
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert "item_id" in response.json["data"]
+
+        with client.application.app_context():
+            item = db.session.get(Item, response.json["data"]["item_id"])
+            assert item is not None
+            assert item.manifestation.expression.work.title == "Manual Book"
+
+    @pytest.mark.parametrize(
+        ("payload", "content_type"),
+        [
+            ('{"Title": "Invalid JSON"', "application/json"),
+            (None, "application/json"),
+        ],
+    )
+    def test_add_manual_item_invalid_json(self, client, payload, content_type, normal_user_headers):
+        """Test adding manual item with invalid JSON payload fails."""
+        request_kwargs = {"content_type": content_type, "headers": normal_user_headers}
+        if payload is not None:
+            request_kwargs["data"] = payload
+
+        response = client.post("/api/items/manual", **request_kwargs)
+        assert response.status_code == 400
+        assert response.json["success"] is False
+        assert response.json["error"] == "Invalid or missing JSON payload"
+
 
 # =============================================================================
 # Updating Books Tests

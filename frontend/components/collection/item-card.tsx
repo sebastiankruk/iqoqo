@@ -27,6 +27,7 @@ const statusDotColor: Record<ItemStatus, string> = {
   lost: "bg-destructive",
   reading: "bg-green-500",
   read: "bg-blue-500",
+  unread: "bg-purple-500",
 };
 
 const statusDotTitle: Record<ItemStatus, string> = {
@@ -36,6 +37,7 @@ const statusDotTitle: Record<ItemStatus, string> = {
   lost: "Lost",
   reading: "Reading",
   read: "Read",
+  unread: "Unread",
 };
 
 /** Props for ItemCard component */

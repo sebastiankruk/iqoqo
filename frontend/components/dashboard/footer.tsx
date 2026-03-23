@@ -16,9 +16,9 @@
 "use client";
 
 /**
- * Sticky top navigation bar – "Modern Athenaeum" style.
+ * Site footer displaying the iqoqo brand name and the current UI version string.
  *
- * @returns {JSX.Element} The component
+ * @returns {JSX.Element} The footer component
  */
 export function Footer() {
   const uiVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';

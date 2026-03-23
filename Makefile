@@ -46,6 +46,12 @@ help:
 	@echo "  db-stats       - Show database statistics"
 
 # Development targets
+init:
+	@echo "Initializing development environment..."
+	python3 -m venv .venv
+	.venv/bin/pip install -r requirements.txt
+	cd frontend && npm install
+
 start:
 	@echo "Starting development environment..."
 	@./run_dev.sh
@@ -119,7 +125,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github"
+	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license

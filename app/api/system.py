@@ -39,6 +39,18 @@ def health_check():
     return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
 
 
+@api_bp.route("/config", methods=["GET"])
+def get_config():
+    """Return public application configuration for the frontend (non-sensitive)."""
+    return jsonify(
+        {
+            "success": True,
+            "data": {"federation_enabled": Config.FEDERATION_ENABLED, "version": Config.VERSION},
+            "error": None,
+        }
+    )
+
+
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():

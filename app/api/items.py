@@ -40,6 +40,7 @@ def get_items():
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
     q = request.args.get("q", "").strip()
+    sort_by = request.args.get("sort", "updated")
 
     try:
         page = int(page_param)
@@ -57,6 +58,7 @@ def get_items():
         m_tsvector_expr = "m.fts_simple"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
+        # Set up explicit exact bindings for count/rows so FTS executes safely
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
         statuses_sql = " AND i.owner_id = :user_id"
 
@@ -66,8 +68,9 @@ def get_items():
             statuses_sql += " AND i.status IN :statuses"
 
         try:
+            # Safely grab exact total of matches natively
             count_sql = f"""
-            SELECT count(*) FROM manifestations m
+            SELECT count(i.id) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             JOIN items i ON i.manifestation_id = m.id
@@ -75,6 +78,7 @@ def get_items():
             {statuses_sql}
             """
 
+            # Pull fully populated rows ordered gracefully by the computed FTS rank
             rows_sql = f"""
             SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
@@ -128,19 +132,33 @@ def get_items():
                 )
 
         except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
+            db.session.rollback()  # Crucial rollback so fallback queries don't trigger "InFailedSqlTransaction"
             current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
-            if db.engine.dialect.name == "postgresql":
-                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
 
-            pattern = f"%{q}%"
+            # Subquery approach deduplicates successfully when FTS acts up
+            search_term = f"%{q}%"
+            matching_items = (
+                db.session.query(Item.id)
+                .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                .outerjoin(Work, Expression.work_id == Work.id)
+                .filter(
+                    db.or_(
+                        Work.title.ilike(search_term),
+                        db.cast(Work.meta, db.String).ilike(search_term),
+                        Manifestation.isbn13.ilike(search_term),
+                    )
+                )
+            )
+
             base_query = (
                 db.session.query(Item, Manifestation, Expression, Work)
-                .select_from(Manifestation)
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
                 .join(Expression, Manifestation.expression_id == Expression.id)
                 .join(Work, Expression.work_id == Work.id)
-                .join(Item, Item.manifestation_id == Manifestation.id)
                 .filter(Item.owner_id == user_id)
-                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+                .filter(Item.id.in_(matching_items))
             )
 
             if statuses_filter:
@@ -182,13 +200,32 @@ def get_items():
             }
         )
 
+    # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     query = query.filter(Item.owner_id == user_id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(Item.status.in_(statuses_list))
 
-    query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+    if sort_by in ("title", "title-desc", "author"):
+        query = (
+            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .outerjoin(Work, Expression.work_id == Work.id)
+        )
+
+    if sort_by == "title":
+        query = query.order_by(Work.title.asc().nulls_last())
+    elif sort_by == "title-desc":
+        query = query.order_by(Work.title.desc().nulls_last())
+    elif sort_by == "author":
+        query = query.order_by(db.cast(Work.meta["authors"], db.String).asc().nulls_last())
+    elif sort_by == "added":
+        query = query.order_by(Item.added_at.desc().nulls_last())
+    else:
+        # Default sort fallback to recency
+        query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+
     total = query.count()
     items = query.offset(offset).limit(limit).all()
 
@@ -196,7 +233,7 @@ def get_items():
     for item in items:
         manifestation = item.manifestation
         work_title = ""
-        authors: list[str] = []
+        authors = []
         if manifestation and manifestation.expression and manifestation.expression.work:
             work = manifestation.expression.work
             work_title = work.title or ""
@@ -357,3 +394,45 @@ def add_item(isbn: str):
     db.session.commit()
 
     return jsonify({"item_id": item.id})
+
+
+@api_bp.route("/items/manual", methods=["POST"])
+@require_auth
+def add_item_manual():
+    """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    title = data.get("Title", "Unknown Title")
+    authors = data.get("Authors", [])
+    if isinstance(authors, str):
+        authors = [authors]
+    content_type = data.get("Format", "text")
+
+    try:
+        work = Work(title=title, meta={"authors": authors})
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        manifestation = Manifestation(expression_id=expression.id, meta=data)
+        db.session.add(manifestation)
+        db.session.flush()
+
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+        db.session.add(item)
+        db.session.commit()
+
+        return jsonify({"success": True, "data": {"item_id": item.id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)
+        return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
