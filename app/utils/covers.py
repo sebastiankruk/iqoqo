@@ -277,7 +277,8 @@ def process_cover_pipeline(
 
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
-        updates = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
+        from typing import Any
+        updates: dict[str, Any] = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
 
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))

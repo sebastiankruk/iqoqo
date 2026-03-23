@@ -284,7 +284,8 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             manifestation.update_meta(cover_status="pending")
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-            start_cover_processing(manifestation.id, canonical_isbn, title, author)
+            user_id_str = str(getattr(request, "user_id", ""))
+            start_cover_processing(manifestation.id, canonical_isbn, title, author, user_id_str)
         db.session.commit()
     else:
         manifestation.update_meta(**metadata)
@@ -396,7 +397,8 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     title = work.title if work else "Unknown Title"
     author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
 
-    start_cover_processing(manifestation.id, isbn, title, author, user_image_path=filepath)
+    user_id_str = str(getattr(request, "user_id", ""))
+    start_cover_processing(manifestation.id, isbn, title, author, user_id_str, user_image_path=filepath)
 
     return jsonify({"message": "Cover upload processing started"}), 202
 
@@ -418,7 +420,8 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     description = meta.get("Description", "")
     categories = meta.get("Categories", [])
     genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
-    start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
+    user_id_str = str(getattr(request, "user_id", ""))
+    start_cover_processing(manif.id, isbn, title, author, user_id_str, description=description, genre=genre)
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
 

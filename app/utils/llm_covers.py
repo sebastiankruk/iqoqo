@@ -17,6 +17,7 @@ import base64
 import binascii
 import logging
 import os
+import time
 
 import requests
 from openai import OpenAI
@@ -58,15 +59,15 @@ def record_telemetry(provider: str, user_id: str, duration: float):
         if stat.images_generated is None:
             stat.images_generated = 0
         stat.images_generated += 1
-        
+
         if stat.estimated_cost_usd is None:
             stat.estimated_cost_usd = 0.0
         stat.estimated_cost_usd += PRICING.get(provider, 0.0)
-        
+
         if stat.total_duration_seconds is None:
             stat.total_duration_seconds = 0.0
         stat.total_duration_seconds += duration
-        
+
         db.session.commit()
     except (RuntimeError, ValueError, TypeError) as e:
         logger.error(f"Failed to record telemetry: {e}")
@@ -90,7 +91,9 @@ def build_context(description: str, genre: str) -> str:
     return ctx
 
 
-def generate_cover_cloud(isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_cloud(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -130,7 +133,9 @@ def generate_cover_cloud(isbn: str, title: str, author: str, user_id: str, descr
     return None
 
 
-def generate_cover_gemini(isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_gemini(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -167,7 +172,9 @@ def generate_cover_gemini(isbn: str, title: str, author: str, user_id: str, desc
     return None
 
 
-def generate_cover_local(isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_local(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
