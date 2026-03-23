@@ -36,7 +36,13 @@ vi.mock("sonner", () => ({
 // Mock the components so we don't need their full implementation
 vi.mock("@/components/scanner/top-bar", () => ({ TopBar: () => <div data-testid="top-bar" /> }));
 vi.mock("@/components/scanner/viewfinder", () => ({ Viewfinder: () => <div data-testid="viewfinder" /> }));
-vi.mock("@/components/scanner/bottom-sheet", () => ({ BottomSheet: () => <div data-testid="bottom-sheet" /> }));
+vi.mock("@/components/scanner/bottom-sheet", () => ({
+  BottomSheet: ({ onShowManualForm }: { onShowManualForm?: () => void }) => (
+    <div data-testid="bottom-sheet">
+      <button onClick={onShowManualForm}>Cannot find barcode? Enter Manually</button>
+    </div>
+  )
+}));
 vi.mock("@/components/scanner/success-card", () => ({ SuccessCard: () => <div data-testid="success-card" /> }));
 
 describe("ScanPage", () => {

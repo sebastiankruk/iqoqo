@@ -83,7 +83,7 @@ def create_app(config_class=Config, config_override=None):
                         ),
                         "supports_credentials": _coerce_bool(
                             app.config.get("CORS_SUPPORTS_CREDENTIALS"),
-                            default=True, # Changed to True for OAuth sessions
+                            default=True,  # Changed to True for OAuth sessions
                         ),
                     }
                 },
