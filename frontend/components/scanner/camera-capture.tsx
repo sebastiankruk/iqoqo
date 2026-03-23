@@ -80,6 +80,11 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    /**
+     * Handles the capture of an image file, uploads it as a cover, and triggers a callback upon completion.
+     *
+     * @param {React.ChangeEvent<HTMLInputElement>} event - The change event from the file input.
+     */
     const file = event.target.files?.[0];
     if (!file) return;
 

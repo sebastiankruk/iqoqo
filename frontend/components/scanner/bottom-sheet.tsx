@@ -228,7 +228,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
         headers: { "Content-Type": "multipart/form-data" }
       });
       const envelope = response.data;
-      
+
       if (envelope.success && envelope.data) {
         if (onExtractComplete) onExtractComplete(envelope.data);
       } else {
@@ -377,7 +377,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
               {isSearching ? "Looking up…" : "Try ISBN: 978-0-553-38016-8"}
             </p>
             </form>
-            
+
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <span className="mb-3 text-xs text-muted-foreground">Or enter full metadata manually</span>
               <button
