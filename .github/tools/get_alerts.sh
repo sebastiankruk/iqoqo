@@ -27,4 +27,4 @@ gh api /repos/sebastiankruk/iqoqo/dependabot/alerts \
     patched_versions:         .security_vulnerability.first_patched_version.identifier,
     manifest_path:            .dependency.manifest_path
   }' \
-  2>&1 > .alerts.json
+  > .alerts.json 2>&1

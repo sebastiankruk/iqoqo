@@ -84,7 +84,8 @@ function CollectionContent() {
     if (viewMode !== "items") params.set("view", viewMode);
     
     // Replace state blocks messy rapid history buildup while keeping deep link persistency active
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
 
   const statusFilters = useMemo(
@@ -97,8 +98,10 @@ function CollectionContent() {
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
+    sortBy,
     viewMode === "items" && isLoggedIn
   );
+
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,

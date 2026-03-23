@@ -73,14 +73,14 @@ iqoqo provides comprehensive tools for data import, export, and migration:
 
 ### Quick Start with Seed Data
 
-```markdown
+```bash
 # Initialize database with example books
 python scripts/init_db.py --seed-file data/seed_example.json
 ```
 
 ### Export Your Library
 
-```markdown
+```bash
 # Via API
 curl -o my_library.json http://localhost:5000/api/admin/export
 
@@ -92,7 +92,7 @@ with app.app_context(): DataManager.export_to_file('my_library.json')"
 
 ### Import Data
 
-```markdown
+```bash
 # Via API
 curl -X POST -F "file=@my_library.json" http://localhost:5000/api/admin/import
 
@@ -104,7 +104,7 @@ python scripts/init_db.py --seed-file my_library.json
 
 If you're migrating from the original iqoqo-prototype:
 
-```markdown
+```bash
 # 1. Convert SQL dump to JSON
 python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
 
@@ -112,7 +112,7 @@ python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
 python scripts/migrate_legacy.py legacy_data.json --clear
 ```
 
-See the [Installation Guide](https://www.google.com/search?q=docs/INSTALL.md%23data-importexport) for detailed documentation.
+See the [Installation Guide](docs/INSTALL.md#data-importexport) for detailed documentation.
 
 ## 🎯 Roadmap
 
