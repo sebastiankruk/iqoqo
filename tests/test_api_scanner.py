@@ -72,4 +72,4 @@ def test_extract_from_cover_failure(mock_extract, mock_image_open, client, norma
     response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=normal_user_headers)
 
     assert response.status_code == 503
-    assert "Vision extraction is unavailable" in response.json["error"]
+    assert "Vision extraction failed. All fallback methods" in response.json["error"]

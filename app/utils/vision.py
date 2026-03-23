@@ -117,10 +117,11 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
         logger.error("requests library is missing for Ollama extraction.")
     except Exception as e:  # pylint: disable=broad-exception-caught
         import requests
+
         msg = str(e)
         if isinstance(e, requests.exceptions.RequestException):
-            response = getattr(e, "response", None)
-            if response is not None and getattr(response, "status_code", None) == 404:
+            err_resp = getattr(e, "response", None)
+            if err_resp is not None and getattr(err_resp, "status_code", None) == 404:
                 msg = f"Model '{model}' not found on Ollama. Run 'ollama pull {model}' to fix."
         logger.error("Ollama vision extraction failed: %s", msg)
 

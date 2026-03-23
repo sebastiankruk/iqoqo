@@ -410,4 +410,4 @@ def test_vision_extract_api_unavailable(mock_extract, client, normal_user_header
     assert response.status_code == 503
     data = response.json
     assert data["success"] is False
-    assert "GEMINI_API_KEY" in data["error"]
+    assert "Vision extraction failed. All fallback methods" in data["error"]

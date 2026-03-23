@@ -430,6 +430,7 @@ def add_item_manual():
             manifestation.isbn13 = str(isbn).replace("-", "").replace(" ", "").strip()
         if pub_date_str:
             from datetime import date
+
             try:
                 manifestation.publication_date = date.fromisoformat(pub_date_str)
             except (ValueError, TypeError):
