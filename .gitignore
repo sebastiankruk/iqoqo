@@ -48,6 +48,7 @@ iqoqo_backup*.json
 # Process IDs
 .flask.pid
 .frontend.pid
+.pids
 
 # Generated covers - we want to keep the original ones but ignore the generated ones
 app/static/covers/*

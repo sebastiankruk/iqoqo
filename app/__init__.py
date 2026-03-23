@@ -51,20 +51,19 @@ def _coerce_list(value, default=None):
 
 def create_app(config_class=Config, config_override=None):
     app = Flask(__name__)
-
-    # Trust reverse proxy headers to correctly build HTTPS URLs
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-
     app.config.from_object(config_class)
+
+    # Trust the proxy headers (Cloudflare -> Next.js -> Flask)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     if config_override:
         app.config.from_mapping(config_override)
 
     # Initialize database and migrations
     db.init_app(app)
-    _ = Migrate(app, db)  # Initialize migrations
+    _ = Migrate(app, db)
 
-    # Configure CORS from config (disabled by default)
+    # Configure CORS from config
     cors_enabled = _coerce_bool(app.config.get("CORS_ENABLED"), default=False)
     if cors_enabled:
         cors_origins = _coerce_list(app.config.get("CORS_ORIGINS"))
@@ -84,7 +83,7 @@ def create_app(config_class=Config, config_override=None):
                         ),
                         "supports_credentials": _coerce_bool(
                             app.config.get("CORS_SUPPORTS_CREDENTIALS"),
-                            default=False,
+                            default=True, # Changed to True for OAuth sessions
                         ),
                     }
                 },

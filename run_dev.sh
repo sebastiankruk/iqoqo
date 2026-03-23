@@ -18,6 +18,9 @@
 # Ensure we are in the script's directory
 cd "$(dirname "$0")"
 
+# 0. Set Mode (Default to dev/tunnel if not specified)
+MODE=${MODE:-dev}
+
 VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
 export APP_VERSION="${VERSION:-0}.dev"
 
@@ -65,14 +68,25 @@ else
     echo "Warning: docker-compose not found. Please ensure your PostgreSQL database is running."
 fi
 
-# 1b. Load environment variables from .env (single source of truth for ports etc.)
+# 1b. Load environment variables
 if [ -f ".env" ]; then
-    # shellcheck disable=SC1091
     set -o allexport
     source .env
     set +o allexport
 fi
-# WEB_PORT defaults to 5000 if not set in .env
+
+# Load Tunnel-specific overrides if in dev mode
+if [ "$MODE" == "dev" ] && [ -f ".env.dev" ]; then
+    echo "⚡ Loading Tunnel Configuration (.env.dev) for dev.iqoqo.cc"
+    set -o allexport
+    source .env.dev
+    set +o allexport
+else
+    echo "🏠 Running in Localhost mode"
+    export NEXTAUTH_URL="http://localhost:3000"
+    export AUTH_TRUST_HOST="false"
+fi
+
 WEB_PORT=${WEB_PORT:-5000}
 
 # Directory for PID files of processes started by this script
@@ -174,28 +188,35 @@ export FLASK_DEBUG=1
 echo "Starting Flask API at http://127.0.0.1:${WEB_PORT} ..."
 flask run --port "${WEB_PORT}" &
 FLASK_PID=$!
-echo $FLASK_PID > .flask.pid
+echo $FLASK_PID > "${PID_DIR}/web_server.pid"
 
 if [ -d "frontend" ]; then
-    echo "Starting Next.js frontend at http://localhost:3000 ..."
-    # Pass the API URL derived from WEB_PORT so Next.js picks it up even when
-    # frontend/.env.local has a different fallback value.
-    (cd frontend && NEXT_PUBLIC_API_URL="http://localhost:${WEB_PORT}/api" NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" npm run dev) &
+    echo "Starting Next.js frontend (Mode: $MODE) ..."
+    # NEXT_PUBLIC_API_URL="/api" triggers the Next.js config rewrites (proxy)
+    # FLASK_API_URL tells the proxy where to send the traffic
+    (cd frontend && \
+     NEXT_PUBLIC_API_URL="/api" \
+     FLASK_API_URL="http://127.0.0.1:${WEB_PORT}/api" \
+     NEXTAUTH_URL="${NEXTAUTH_URL}" \
+     AUTH_TRUST_HOST="${AUTH_TRUST_HOST}" \
+     NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" \
+     npm run dev) &
     FRONTEND_PID=$!
-    echo $FRONTEND_PID > .frontend.pid
+    echo $FRONTEND_PID > "${PID_DIR}/next_dev.pid"
 fi
 
 echo ""
 echo "════════════════════════════════════════════════"
-echo "  iqoqo v${APP_VERSION} development servers running"
+echo "  iqoqo v${APP_VERSION} ($MODE) servers running"
 echo "  Flask API  → http://127.0.0.1:${WEB_PORT}"
-if [ -d "frontend" ]; then
-    echo "  Frontend   → http://localhost:3000"
+if [ "$MODE" == "dev" ]; then
+    echo "  Public URL → https://dev.iqoqo.cc"
+else
+    echo "  Local URL  → http://localhost:3000"
 fi
 echo "  Press Ctrl+C to stop all servers"
 echo "════════════════════════════════════════════════"
 
-# Wait for Ctrl-C and clean up
 cleanup() {
     echo ""
     echo "Stopping servers..."
@@ -203,7 +224,7 @@ cleanup() {
     if [ -d "frontend" ] && [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null
     fi
-    rm -f .flask.pid .frontend.pid
+    rm -f "${PID_DIR}/web_server.pid" "${PID_DIR}/next_dev.pid"
     echo "Stopped."
     exit 0
 }
