@@ -76,7 +76,13 @@ def test_schedule_missing_covers_null_path(app, tmp_path):
 
         schedule_missing_covers(app=app)
 
-        mock_pipeline.assert_called_once_with(42, "9780000000000", "Test Book", "Test Author")
+        mock_pipeline.assert_called_once_with(
+            42,
+            "9780000000000",
+            "Test Book",
+            "Test Author",
+            llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
+        )
 
 
 def test_schedule_missing_covers_file_absent(app, tmp_path):
@@ -96,7 +102,13 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
         mock_query.all.return_value = [mock_manif]
         # File deliberately NOT created → pipeline should be called
         schedule_missing_covers(app=app)
-        mock_pipeline.assert_called_once_with(7, "9780000000001", "Gone Book", "Some Author")
+        mock_pipeline.assert_called_once_with(
+            7,
+            "9780000000001",
+            "Gone Book",
+            "Some Author",
+            llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
+        )
 
 
 def test_backup_creation(app, tmp_path):
