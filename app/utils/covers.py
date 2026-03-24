@@ -204,7 +204,7 @@ def process_cover_pipeline(
     isbn: str,
     title: str,
     author: str,
-    user_id: str,
+    user_id: str = "system",
     allow_llm: bool = False,
     user_image_path: str | None = None,
     description: str = "",
@@ -278,6 +278,7 @@ def process_cover_pipeline(
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
         from typing import Any
+
         updates: dict[str, Any] = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
 
         if local_cover_url:
@@ -298,7 +299,15 @@ def process_cover_pipeline(
 
 
 def start_cover_processing(
-    manifestation_id: int, isbn: str, title: str, author: str, user_id: str, allow_llm: bool = False, user_image_path: str | None = None, description: str = "", genre: str = ""
+    manifestation_id: int,
+    isbn: str,
+    title: str,
+    author: str,
+    user_id: str = "system",
+    allow_llm: bool = False,
+    user_image_path: str | None = None,
+    description: str = "",
+    genre: str = "",
 ):
     """Fires off the background thread."""
     thread = threading.Thread(
