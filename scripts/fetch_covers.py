@@ -58,7 +58,16 @@ def run_batch(batch_limit=None, force=False, app=None):
 
                 try:
                     # Catch individual item failures so the batch continues
-                    process_cover_pipeline(man.id, isbn, title, author)
+                    process_cover_pipeline(
+                        man.id,
+                        isbn,
+                        title,
+                        author,
+                        llm_permissions={
+                            "allow_generate_cover": True,
+                            "allow_cloud_llm": True,
+                        },
+                    )
                 except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, RuntimeError) as e:
                     print(f"  -> Error processing {isbn}: {str(e)}")
 

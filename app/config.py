@@ -28,8 +28,11 @@ class Config:
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     SECRET_KEY = os.environ.get("SECRET_KEY", "you-will-never-guess")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Set to True to see all SQL queries emitted to the console
+    SQLALCHEMY_ECHO = os.environ.get("SQLALCHEMY_ECHO", "false").lower() in {"true", "1", "yes"}
 
     # CORS setup...
     CORS_ENABLED = os.environ.get("CORS_ENABLED", "false")
@@ -51,6 +54,11 @@ class Config:
         raise RuntimeError("ADMIN_PASSWORD environment variable is required and must not be empty.")
 
     ADMIN_PASSWORD = _admin_password
+
+    # LLM feature gate: set ALLOW_LLM=true to enable LLM cover generation for
+    # users who also hold the llm_generate:* RBAC permission.
+    # When False, LLM tiers are never invoked regardless of user permissions.
+    ALLOW_LLM: bool = os.environ.get("ALLOW_LLM", "false").lower() in {"true", "1", "yes"}
 
     @staticmethod
     def _get_version():
