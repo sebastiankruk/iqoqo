@@ -23,6 +23,7 @@ import requests
 from openai import OpenAI
 
 from app.config import Config
+from app.core.permissions import ItemPermissions
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
@@ -47,31 +48,40 @@ def record_telemetry(provider: str, user_id: str, duration: float):
 
     Records per-user telemetry and accumulates total processing duration.
     """
-    try:
-        stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id).first()
-        if not stat:
-            stat = LLMTelemetry(provider=provider, user_id=user_id)
-            stat.images_generated = 0
-            stat.estimated_cost_usd = 0.0
-            stat.total_duration_seconds = 0.0
-            db.session.add(stat)
+    from sqlalchemy.exc import IntegrityError
 
-        if stat.images_generated is None:
-            stat.images_generated = 0
-        stat.images_generated += 1
+    for attempt in range(2):
+        try:
+            stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id).first()
+            if not stat:
+                stat = LLMTelemetry(provider=provider, user_id=user_id)
+                stat.images_generated = 0
+                stat.estimated_cost_usd = 0.0
+                stat.total_duration_seconds = 0.0
+                db.session.add(stat)
 
-        if stat.estimated_cost_usd is None:
-            stat.estimated_cost_usd = 0.0
-        stat.estimated_cost_usd += PRICING.get(provider, 0.0)
+            if stat.images_generated is None:
+                stat.images_generated = 0
+            stat.images_generated += 1
 
-        if stat.total_duration_seconds is None:
-            stat.total_duration_seconds = 0.0
-        stat.total_duration_seconds += duration
+            if stat.estimated_cost_usd is None:
+                stat.estimated_cost_usd = 0.0
+            stat.estimated_cost_usd += PRICING.get(provider, 0.0)
 
-        db.session.commit()
-    except (RuntimeError, ValueError, TypeError) as e:
-        logger.error(f"Failed to record telemetry: {e}")
-        db.session.rollback()
+            if stat.total_duration_seconds is None:
+                stat.total_duration_seconds = 0.0
+            stat.total_duration_seconds += duration
+
+            db.session.commit()
+            break
+        except IntegrityError:
+            db.session.rollback()
+            if attempt == 1:
+                logger.error("Failed to record telemetry after 2 attempts due to concurrent inserts.")
+        except (RuntimeError, ValueError, TypeError) as e:
+            logger.error("Failed to record telemetry: %s", e)
+            db.session.rollback()
+            break
 
 
 def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
@@ -214,14 +224,20 @@ def generate_cover_local(
     return None
 
 
-def fetch_llm_cover(isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def fetch_llm_cover(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", allow_cloud_llm: bool = False
+) -> tuple[str, str] | None:
     """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
     result = generate_cover_local(isbn, title, author, user_id, description, genre)
     if result:
         return result
 
-    # 2. Cloud (Paid) - check env vars for which provider is available
+    # 2. Cloud (Paid) - restricted by cloud permission
+    if not allow_cloud_llm:
+        logger.debug(f"Cloud LLM generation skipped: user lacks {ItemPermissions.LLM_GENERATE_CLOUD.value} permission.")
+        return None
+
     if os.environ.get("GEMINI_API_KEY"):
         result = generate_cover_gemini(isbn, title, author, user_id, description, genre)
         if result:

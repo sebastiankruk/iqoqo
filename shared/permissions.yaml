@@ -22,3 +22,7 @@ permissions:
     description: 'Allow deletion of items'
   - name: delete:manifestation
     description: 'Allow deletion of manifestations'
+  - name: llm_generate:cover
+    description: 'Allow LLM to generate covers'
+  - name: llm_generate:cloud
+    description: 'Allow LLM to generate content using cloud resources'
