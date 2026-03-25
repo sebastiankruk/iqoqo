@@ -31,6 +31,16 @@
 import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /** API response envelope returned by backend endpoints. */
 interface ApiEnvelope<T> {
@@ -51,7 +61,7 @@ interface CameraCaptureProps {
   /** Called after a successful cover upload (mode 1). */
   onUploadComplete?: () => void;
   /** Called with extracted metadata after a successful vision extraction (mode 2). */
-  onExtractComplete?: (data: ExtractedMetadata) => void;
+  onExtractComplete?: (data: ExtractedMetadata, file: File) => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -59,6 +69,10 @@ interface CameraCaptureProps {
   capture?: "environment" | "user" | false;
   /** Optional icon to replace the default Camera icon */
   icon?: React.ReactNode;
+  /** If set, shows a confirmation dialog before opening the camera */
+  confirmTitle?: string;
+  /** Confirmation message */
+  confirmMessage?: string;
 }
 
 /**
@@ -73,10 +87,13 @@ interface CameraCaptureProps {
  * @param root0.capture - Whether to force the camera or omit for gallery
  * @param root0.label - Label for the button
  * @param root0.icon - Optional icon component
+ * @param root0.confirmTitle - If set, shows a confirmation dialog before opening the camera
+ * @param root0.confirmMessage - Confirmation message
  * @returns The rendered camera capture button element.
  */
-export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className, capture = "environment", label = "Snap Cover", icon }: CameraCaptureProps) {
+export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className, capture = "environment", label = "Snap Cover", icon, confirmTitle, confirmMessage }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +119,7 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
         const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
         const envelope = response.data;
         if (envelope.success && envelope.data) {
-          if (onExtractComplete) onExtractComplete(envelope.data);
+          if (onExtractComplete) onExtractComplete(envelope.data, file);
         } else {
           console.error("Vision extraction failed:", envelope.error ?? "Unknown error");
         }
@@ -113,6 +130,19 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleClick = () => {
+      if (confirmTitle && confirmMessage) {
+          setConfirmOpen(true);
+      } else {
+          fileInputRef.current?.click();
+      }
+  };
+
+  const handleConfirmAction = () => {
+      setConfirmOpen(false);
+      fileInputRef.current?.click();
   };
 
   return (
@@ -126,7 +156,7 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
         className="hidden"
       />
       <button
-        onClick={() => fileInputRef.current?.click()}
+        onClick={handleClick}
         disabled={uploading}
         className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
       >
@@ -142,6 +172,21 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
           </>
         )}
       </button>
+
+      {confirmTitle && (
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+                      <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+      )}
     </div>
   );
 }

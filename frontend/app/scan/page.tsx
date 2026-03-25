@@ -25,6 +25,7 @@ import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { IsbnMeta } from "@/types/frbr";
+import { apiClient } from "@/lib/api/client";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -38,6 +39,7 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
+  const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -51,9 +53,10 @@ export default function ScanPage() {
     setResult(null);
   }, []);
 
-  const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }) => {
+  const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }, file?: File) => {
     setTitle(data.Title || "");
     setAuthor(data.Authors?.join(", ") || "");
+    if (file) setSnappedCover(file);
     setShowManual(true);
     toast.success("Cover metadata extracted! Please review.");
   }, []);
@@ -71,8 +74,24 @@ export default function ScanPage() {
     };
 
     addManualMutation.mutate(payload, {
-      onSuccess: (response) => {
-        toast.success(`"${payload.Title}" added to your library!`);
+      onSuccess: async (response) => {
+        const item = response.data;
+        if (item && snappedCover && item.manifestation_id) {
+            const coverFormData = new FormData();
+            coverFormData.append("cover", snappedCover);
+            try {
+                await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
+                    headers: { "Content-Type": "multipart/form-data" }
+                });
+                toast.success(`"${payload.Title}" added with your custom cover!`);
+            } catch (e) {
+                console.error("Failed to upload captured cover:", e);
+                toast.warning(`"${payload.Title}" added, but cover upload failed.`);
+            }
+        } else {
+            toast.success(`"${payload.Title}" added to your library!`);
+        }
+
         if (response.data?.item_id) {
           router.push(`/item/${response.data.item_id}`);
         }
@@ -91,7 +110,7 @@ export default function ScanPage() {
       {(!result && !showManual && scannerTab === "barcode") && <Viewfinder isScanning={scannerActive} />}
 
       {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} onScannerStateChange={setScannerActive} onTabChange={setScannerTab} onExtractComplete={handleExtractComplete} onShowManualForm={() => setShowManual(true)} />}
-      {result && <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} />}
+      {result && <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />}
 
       {showManual && (
         <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl p-6 pb-12 animate-[slide-up_0.3s_ease-out_forwards]">

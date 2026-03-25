@@ -28,6 +28,7 @@ interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
   onDismiss: () => void;
+  snappedCover?: File | null;
 }
 
 /**
@@ -39,7 +40,7 @@ interface SuccessCardProps {
  * @param root0.onDismiss - Callback to dismiss the card
  * @returns {JSX.Element} The component
  */
-export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
+export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
@@ -51,11 +52,27 @@ export function SuccessCard({ isbn, meta, onDismiss }: SuccessCardProps) {
   const handleAdd = async () => {
     setAdding(true);
     try {
-      const res = await apiClient.post<{ item_id: number }>(
+      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(
         `/item/${isbn}`,
         meta
       );
-      toast.success(`"${meta.Title}" added to your library!`);
+
+      if (snappedCover && res.data.manifestation_id) {
+          const coverFormData = new FormData();
+          coverFormData.append("cover", snappedCover);
+          try {
+              await apiClient.post(`/manifestations/${res.data.manifestation_id}/cover`, coverFormData, {
+                  headers: { "Content-Type": "multipart/form-data" }
+              });
+              toast.success(`"${meta.Title}" added with your custom cover!`);
+          } catch (e) {
+              console.error("Failed to upload snapped cover:", e);
+              toast.warning(`"${meta.Title}" added, but cover upload failed.`);
+          }
+      } else {
+          toast.success(`"${meta.Title}" added to your library!`);
+      }
+
       await router.push(`/item/${res.data.item_id}`);
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");

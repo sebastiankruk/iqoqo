@@ -27,3 +27,4 @@ class ItemPermissions(Enum):
     LLM_GENERATE_COVER = "llm_generate:cover"
     LLM_GENERATE_METADATA = "llm_generate:metadata"
     LLM_GENERATE_CLOUD = "llm_generate:cloud"
+    UPLOAD_COVER = "upload:cover"

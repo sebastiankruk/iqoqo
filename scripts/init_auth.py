@@ -21,9 +21,19 @@ from app.db.models import Item, Permission, Role, User, db
 app = create_app()
 with app.app_context():
     # 1. Create permissions
-    perms = ["delete:item", "regenerate:cover", "refetch:metadata"]
+    perms = [
+        "delete:item",
+        "delete:manifestation",
+        "regenerate:cover",
+        "refetch:metadata",
+        "llm_generate:cover",
+        "llm_generate:metadata",
+        "llm_generate:cloud",
+        "upload:cover",
+    ]
     for p in perms:
-        if not Permission.query.filter_by(name=p).first():
+        existing = Permission.query.filter_by(name=p).first()
+        if not existing:
             db.session.add(Permission(name=p))
     db.session.commit()
 

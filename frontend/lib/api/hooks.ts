@@ -209,13 +209,13 @@ export function useIsbnLookup(isbn: string, enabled = false) {
 /**
  * Custom hook to add a new item.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; manifestation_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
  */
 export function useAddItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ isbn, metadata }: { isbn: string; metadata?: IsbnMeta }) => {
-      const res = await apiClient.post<{ item_id: number }>(`/item/${isbn}`, metadata ?? {});
+      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, metadata ?? {});
       return res.data;
     },
     onSuccess: () => {
@@ -246,18 +246,21 @@ type ManualItemPayload = {
   Title: string;
   Authors: string[];
   Format: string;
+  ISBN?: string;
+  PublicationDate?: string;
+  Description?: string;
 };
 
 /**
  * Custom hook to add a new item manually when ISBN is not available.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
  */
 export function useAddManualItem() {
   const qc = useQueryClient();
-  return useMutation<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>({
+  return useMutation<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>({
     mutationFn: async (metadata: ManualItemPayload) => {
-      const res = await apiClient.post<ApiResponse<{ item_id: number }>>("/items/manual", metadata);
+      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/items/manual", metadata);
       return res.data;
     },
     onSuccess: () => {

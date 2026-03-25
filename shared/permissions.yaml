@@ -28,3 +28,5 @@ permissions:
     description: "Allow LLM to extract metadata from cover image"
   - name: llm_generate:cloud
     description: "Allow LLM to generate content using cloud resources"
+  - name: upload:cover
+    description: "Allow uploading/contributing manifestation covers"

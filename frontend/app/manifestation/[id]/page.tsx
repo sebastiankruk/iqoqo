@@ -23,6 +23,10 @@ import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
+import { CameraCapture } from "@/components/scanner/camera-capture";
+import { ImagePlus } from "lucide-react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 /**
  * Page displaying a single manifestation with metadata and add-to-collection action.
@@ -36,6 +40,7 @@ export default function ManifestationPage() {
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
   const { mutate: addItem, isPending: isAdding } = useAddItem();
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -98,6 +103,20 @@ export default function ManifestationPage() {
                 </div>
               )}
             </div>
+            {!coverUrl && (
+              <div className="mt-4">
+                <CameraCapture
+                  manifestationId={manifestation.id}
+                  onUploadComplete={() => {
+                    toast.success("Cover contributed! Processing started.");
+                    router.refresh();
+                  }}
+                  label="Contribute Cover"
+                  icon={<ImagePlus className="mr-2 h-4 w-4" />}
+                  className="[&>button]:w-full [&>button]:rounded-xl [&>button]:py-6"
+                />
+              </div>
+            )}
           </div>
 
           {/* Metadata */}

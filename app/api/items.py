@@ -393,7 +393,7 @@ def add_item(isbn: str):
     db.session.add(item)
     db.session.commit()
 
-    return jsonify({"item_id": item.id})
+    return jsonify({"item_id": item.id, "manifestation_id": manifestation.id})
 
 
 @api_bp.route("/items/manual", methods=["POST"])
@@ -442,7 +442,7 @@ def add_item_manual():
         db.session.add(item)
         db.session.commit()
 
-        return jsonify({"success": True, "data": {"item_id": item.id}, "error": None})
+        return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)

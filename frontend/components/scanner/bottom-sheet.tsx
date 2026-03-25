@@ -34,7 +34,7 @@ interface BottomSheetProps {
   onFound: (isbn: string, meta: IsbnMeta) => void;
   onScannerStateChange?: (isActive: boolean) => void;
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
-  onExtractComplete?: (data: { Title?: string; Authors?: string[] }) => void;
+  onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
 }
 
@@ -230,7 +230,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
       const envelope = response.data;
 
       if (envelope.success && envelope.data) {
-        if (onExtractComplete) onExtractComplete(envelope.data);
+        if (onExtractComplete) onExtractComplete(envelope.data, file);
       } else {
         setError(envelope.error ?? "Failed to extract metadata");
       }
@@ -345,7 +345,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
               capture={false}
               label="Upload from Gallery"
               icon={<ImagePlus className="mr-2 h-5 w-5" />}
-              onExtractComplete={onExtractComplete}
+              onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />
             <p className="px-2 pt-2 text-center text-[0.7rem] text-muted-foreground leading-tight">

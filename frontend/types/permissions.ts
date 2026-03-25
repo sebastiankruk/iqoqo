@@ -22,6 +22,7 @@ export const ItemPermissions = {
   LLM_GENERATE_COVER: 'llm_generate:cover' as const,
   LLM_GENERATE_METADATA: 'llm_generate:metadata' as const,
   LLM_GENERATE_CLOUD: 'llm_generate:cloud' as const,
+  UPLOAD_COVER: 'upload:cover' as const,
 } as const;
 
 /** Item permission type */

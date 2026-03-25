@@ -17,8 +17,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
+import { CameraCapture } from "@/components/scanner/camera-capture";
 
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
@@ -163,6 +164,21 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
+      )}
+
+      {hasPermission('upload:cover') && (
+        <CameraCapture
+          manifestationId={manifestation.id}
+          onUploadComplete={() => {
+            toast.success("Cover uploaded and processing started!");
+            router.refresh();
+          }}
+          label={manifestation.cover_url ? "Replace Cover" : "Contribute Cover"}
+          icon={<ImagePlus className="h-3.5 w-3.5" />}
+          confirmTitle={manifestation.cover_url ? "Replace Existing Cover?" : undefined}
+          confirmMessage={manifestation.cover_url ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?" : undefined}
+          className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
+        />
       )}
 
       {hasPermission('delete:manifestation') && (
