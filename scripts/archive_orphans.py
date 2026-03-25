@@ -119,7 +119,16 @@ def schedule_missing_covers(app=None):
             # process_cover_pipeline manages its own app context when called
             # outside one; calling it here while already inside app.app_context()
             # is also safe (it will reuse the existing context).
-            _covers.process_cover_pipeline(manif.id, isbn, title, author)
+            _covers.process_cover_pipeline(
+                manif.id,
+                isbn,
+                title,
+                author,
+                llm_permissions={
+                    "allow_generate_cover": True,
+                    "allow_cloud_llm": True,
+                },
+            )
             scheduled += 1
 
         print(f"✅ Processed {scheduled} missing cover(s).")

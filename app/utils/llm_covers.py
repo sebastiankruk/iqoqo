@@ -17,11 +17,13 @@ import base64
 import binascii
 import logging
 import os
+import time
 
 import requests
 from openai import OpenAI
 
 from app.config import Config
+from app.core.permissions import ItemPermissions
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
@@ -41,26 +43,45 @@ PRICING = {
 }
 
 
-def record_telemetry(provider: str):
-    """Updates telemetry after a successful generation."""
-    try:
-        stat = LLMTelemetry.query.filter_by(provider=provider).first()
-        if not stat:
-            stat = LLMTelemetry(provider=provider)
-            stat.images_generated = 0
-            stat.estimated_cost_usd = 0.0
-            db.session.add(stat)
+def record_telemetry(provider: str, user_id: str, duration: float):
+    """Updates telemetry after a successful generation.
 
-        if stat.images_generated is None:
-            stat.images_generated = 0
-        stat.images_generated += 1
-        if stat.estimated_cost_usd is None:
-            stat.estimated_cost_usd = 0.0
-        stat.estimated_cost_usd += PRICING.get(provider, 0.0)
-        db.session.commit()
-    except (RuntimeError, ValueError, TypeError) as e:
-        logger.error(f"Failed to record telemetry: {e}")
-        db.session.rollback()
+    Records per-user telemetry and accumulates total processing duration.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    for attempt in range(2):
+        try:
+            stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id).first()
+            if not stat:
+                stat = LLMTelemetry(provider=provider, user_id=user_id)
+                stat.images_generated = 0
+                stat.estimated_cost_usd = 0.0
+                stat.total_duration_seconds = 0.0
+                db.session.add(stat)
+
+            if stat.images_generated is None:
+                stat.images_generated = 0
+            stat.images_generated += 1
+
+            if stat.estimated_cost_usd is None:
+                stat.estimated_cost_usd = 0.0
+            stat.estimated_cost_usd += PRICING.get(provider, 0.0)
+
+            if stat.total_duration_seconds is None:
+                stat.total_duration_seconds = 0.0
+            stat.total_duration_seconds += duration
+
+            db.session.commit()
+            break
+        except IntegrityError:
+            db.session.rollback()
+            if attempt == 1:
+                logger.error("Failed to record telemetry after 2 attempts due to concurrent inserts.")
+        except (RuntimeError, ValueError, TypeError) as e:
+            logger.error("Failed to record telemetry: %s", e)
+            db.session.rollback()
+            break
 
 
 def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
@@ -80,13 +101,16 @@ def build_context(description: str, genre: str) -> str:
     return ctx
 
 
-def generate_cover_cloud(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_cloud(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
 
     try:
+        start_time = time.time()
         client = OpenAI(api_key=api_key)
         context = build_context(description, genre)
         prompt = f"A high-quality, minimalist book cover design for '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
@@ -110,7 +134,8 @@ def generate_cover_cloud(isbn: str, title: str, author: str, description: str = 
 
         if img_response.status_code == 200:
             path = save_image(img_response.content, isbn, "dalle")
-            record_telemetry("openai")
+            duration = time.time() - start_time
+            record_telemetry("openai", user_id, duration)
             return path, "llm_openai"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
         logger.error(f"Cloud LLM Gen failed: {e}")
@@ -118,20 +143,16 @@ def generate_cover_cloud(isbn: str, title: str, author: str, description: str = 
     return None
 
 
-def generate_cover_gemini(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_gemini(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
 
-    # {
-    #     "prompt": f"Minimalist book cover, highly detailed, title '{title}', author '{author}'",
-    #     "number_of_images": 1,
-    #     "height": 1024,
-    #     "width": 1024,
-    # }
-
     try:
+        start_time = time.time()
         from google import genai
         from google.genai import types
 
@@ -139,21 +160,20 @@ def generate_cover_gemini(isbn: str, title: str, author: str, description: str =
         context = build_context(description, genre)
         prompt = f"Minimalist book cover, highly detailed, title '{title}', author '{author}'.{context}"
 
-        # The SDK automatically resolves the correct endpoint and API version
         response = client.models.generate_content(
             model="gemini-2.5-flash-image",
             contents=prompt,
             config=types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="1:1")),
         )
 
-        # The new API returns the raw bytes inside inline_data
         if response.candidates:
             candidate = response.candidates[0]
             if candidate.content and candidate.content.parts:
                 inline_data = candidate.content.parts[0].inline_data
                 if inline_data and inline_data.data:
                     path = save_image(inline_data.data, isbn, "gemini")
-                    record_telemetry("gemini")
+                    duration = time.time() - start_time
+                    record_telemetry("gemini", user_id, duration)
                     return path, "llm_gemini"
 
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
@@ -162,15 +182,21 @@ def generate_cover_gemini(isbn: str, title: str, author: str, description: str =
     return None
 
 
-def generate_cover_local(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def generate_cover_local(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+) -> tuple[str, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
         return None
 
+    # Truncate title to first 4 words for local SD prompt
+    words = title.split()
+    trimmed_title = " ".join(words[:4]) if len(words) > 4 else title
+
     context = build_context(description, genre)
     payload = {
-        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text.{context}",
+        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{trimmed_title}' by {author}, clean background, no text.{context}",
         "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
@@ -178,6 +204,7 @@ def generate_cover_local(isbn: str, title: str, author: str, description: str = 
     }
 
     try:
+        start_time = time.time()
         response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, timeout=300)
         if response.status_code == 200:
             r = response.json()
@@ -188,7 +215,8 @@ def generate_cover_local(isbn: str, title: str, author: str, description: str = 
             full_path = os.path.join(COVERS_DIR, os.path.basename(path))
             add_text_overlay(full_path, title, author)
 
-            record_telemetry("local")
+            duration = time.time() - start_time
+            record_telemetry("local", user_id, duration)
             return path, "llm_local_stable_diffusion"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Local SD Gen failed: {e}")
@@ -196,20 +224,26 @@ def generate_cover_local(isbn: str, title: str, author: str, description: str = 
     return None
 
 
-def fetch_llm_cover(isbn: str, title: str, author: str, description: str = "", genre: str = "") -> tuple[str, str] | None:
+def fetch_llm_cover(
+    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", allow_cloud_llm: bool = False
+) -> tuple[str, str] | None:
     """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
-    result = generate_cover_local(isbn, title, author, description, genre)
+    result = generate_cover_local(isbn, title, author, user_id, description, genre)
     if result:
         return result
 
-    # 2. Cloud (Paid) - check env vars for which provider is available
+    # 2. Cloud (Paid) - restricted by cloud permission
+    if not allow_cloud_llm:
+        logger.debug(f"Cloud LLM generation skipped: user lacks {ItemPermissions.LLM_GENERATE_CLOUD.value} permission.")
+        return None
+
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(isbn, title, author, description, genre)
+        result = generate_cover_gemini(isbn, title, author, user_id, description, genre)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(isbn, title, author, description, genre)
+        return generate_cover_cloud(isbn, title, author, user_id, description, genre)
 
     return None

@@ -18,6 +18,7 @@ import io
 import logging
 import os
 import threading
+from datetime import UTC, datetime
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -203,6 +204,8 @@ def process_cover_pipeline(
     isbn: str,
     title: str,
     author: str,
+    llm_permissions: dict[str, bool],
+    user_id: str = "system",
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
@@ -267,14 +270,24 @@ def process_cover_pipeline(
                 local_cover_url, source = result
 
         # Tier 3/4: LLM Generation
-        if not local_cover_url:
-            result = fetch_llm_cover(isbn, title, author, description, genre)
+        # Two-layer guard: ALLOW_LLM must be True in Config (operator opt-in)
+        # AND the calling user must hold the llm_generate:cover permission
+        # (passed in as allow_llm from the API layer).  Both must be satisfied
+        # so that neither a misconfigured .env nor a rogue role alone can
+        # trigger paid cloud API calls.
+        allow_generate_cover = Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover", False)
+        if not local_cover_url and allow_generate_cover:
+            result = fetch_llm_cover(
+                isbn, title, author, user_id, description, genre, allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False)
+            )
             if result:
                 local_cover_url, source = result
 
         # Update DB
         # Force SQLAlchemy to detect change in JSON field
-        updates = {}
+        from typing import Any
+
+        updates: dict[str, Any] = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
 
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
@@ -294,11 +307,30 @@ def process_cover_pipeline(
 
 
 def start_cover_processing(
-    manifestation_id: int, isbn: str, title: str, author: str, user_image_path: str | None = None, description: str = "", genre: str = ""
+    manifestation_id: int,
+    isbn: str,
+    title: str,
+    author: str,
+    user_id: str = "system",
+    llm_permissions: dict[str, bool] | None = None,
+    user_image_path: str | None = None,
+    description: str = "",
+    genre: str = "",
 ):
     """Fires off the background thread."""
     thread = threading.Thread(
-        target=process_cover_pipeline, args=(manifestation_id, isbn, title, author, user_image_path, description, genre)
+        target=process_cover_pipeline,
+        kwargs={
+            "manifestation_id": manifestation_id,
+            "isbn": isbn,
+            "title": title,
+            "author": author,
+            "user_id": user_id,
+            "llm_permissions": llm_permissions,
+            "user_image_path": user_image_path,
+            "description": description,
+            "genre": genre,
+        },
     )
     thread.start()
 
