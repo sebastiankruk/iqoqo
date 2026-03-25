@@ -15,14 +15,16 @@
 #
 permissions:
   - name: refetch:metadata
-    description: 'Allow refetching manifestation metadata'
+    description: "Allow refetching manifestation metadata"
   - name: regenerate:cover
-    description: 'Allow regenerating covers'
+    description: "Allow regenerating covers"
   - name: delete:item
-    description: 'Allow deletion of items'
+    description: "Allow deletion of items"
   - name: delete:manifestation
-    description: 'Allow deletion of manifestations'
+    description: "Allow deletion of manifestations"
   - name: llm_generate:cover
-    description: 'Allow LLM to generate covers'
+    description: "Allow LLM to generate covers"
+  - name: llm_generate:metadata
+    description: "Allow LLM to extract metadata from cover image"
   - name: llm_generate:cloud
-    description: 'Allow LLM to generate content using cloud resources'
+    description: "Allow LLM to generate content using cloud resources"

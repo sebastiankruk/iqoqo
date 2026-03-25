@@ -19,6 +19,9 @@ export const ItemPermissions = {
   REGENERATE_COVER: 'regenerate:cover' as const,
   DELETE_ITEM: 'delete:item' as const,
   DELETE_MANIFESTATION: 'delete:manifestation' as const,
+  LLM_GENERATE_COVER: 'llm_generate:cover' as const,
+  LLM_GENERATE_METADATA: 'llm_generate:metadata' as const,
+  LLM_GENERATE_CLOUD: 'llm_generate:cloud' as const,
 } as const;
 
 /** Item permission type */

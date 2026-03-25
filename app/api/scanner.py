@@ -21,8 +21,9 @@ from flask import jsonify, request
 from PIL import Image
 
 from app.api.core import api_bp
-from app.api.decorators import require_auth
+from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
+from app.core.permissions import ItemPermissions
 from app.db.models import Item, Manifestation, db
 from app.utils.vision import extract_metadata_from_cover
 
@@ -88,6 +89,7 @@ def scan_barcode():
 
 @api_bp.route("/vision/extract", methods=["POST"])
 @require_auth
+@require_permission(ItemPermissions.LLM_GENERATE_METADATA)
 def extract_from_cover():
     # pylint: disable=too-many-return-statements
     """Extract book Title and Authors from an uploaded cover image using Gemini Vision.
@@ -155,7 +157,8 @@ def extract_from_cover():
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
 
-    result = extract_metadata_from_cover(image_bytes, mime_type=mime_type)
+    user_id = str(getattr(request, "user_id", ""))
+    result = extract_metadata_from_cover(image_bytes, mime_type=mime_type, user_id=user_id)
 
     if result is None:
         return (

@@ -315,22 +315,29 @@ def test_vision_extract_requires_auth(client):
     assert response.status_code == 401
 
 
-def test_vision_extract_missing_file(client, normal_user_headers):
-    """POST /api/vision/extract must return 400 when no 'cover' file is included."""
+def test_vision_extract_forbidden(client, normal_user_headers):
+    """POST /api/vision/extract must return 403 when user lacks permission."""
     response = client.post("/api/vision/extract", headers=normal_user_headers)
+    assert response.status_code == 403
+    assert response.json["error"] == "Forbidden"
+
+
+def test_vision_extract_missing_file(client, vision_user_headers):
+    """POST /api/vision/extract must return 400 when no 'cover' file is included."""
+    response = client.post("/api/vision/extract", headers=vision_user_headers)
     assert response.status_code == 400
     data = response.json
     assert data["success"] is False
     assert "No file provided" in data["error"]
 
 
-def test_vision_extract_empty_filename(client, normal_user_headers):
+def test_vision_extract_empty_filename(client, vision_user_headers):
     """POST /api/vision/extract must return 400 when the filename is empty."""
     from io import BytesIO
 
     response = client.post(
         "/api/vision/extract",
-        headers=normal_user_headers,
+        headers=vision_user_headers,
         data={"cover": (BytesIO(b"data"), "")},
         content_type="multipart/form-data",
     )
@@ -341,13 +348,13 @@ def test_vision_extract_empty_filename(client, normal_user_headers):
 
 
 @pytest.mark.parametrize("bad_ext", ["exe", "txt", "gif", "pdf"])
-def test_vision_extract_invalid_extension(client, normal_user_headers, bad_ext):
+def test_vision_extract_invalid_extension(client, vision_user_headers, bad_ext):
     """POST /api/vision/extract must return 400 for disallowed file extensions."""
     from io import BytesIO
 
     response = client.post(
         "/api/vision/extract",
-        headers=normal_user_headers,
+        headers=vision_user_headers,
         data={"cover": (BytesIO(b"data"), f"cover.{bad_ext}")},
         content_type="multipart/form-data",
     )
@@ -357,13 +364,13 @@ def test_vision_extract_invalid_extension(client, normal_user_headers, bad_ext):
     assert "Invalid file type" in data["error"]
 
 
-def test_vision_extract_corrupted_image(client, normal_user_headers):
+def test_vision_extract_corrupted_image(client, vision_user_headers):
     """POST /api/vision/extract must return 400 for a corrupt/non-image payload."""
     from io import BytesIO
 
     response = client.post(
         "/api/vision/extract",
-        headers=normal_user_headers,
+        headers=vision_user_headers,
         data={"cover": (BytesIO(b"not-an-image-at-all"), "cover.jpg")},
         content_type="multipart/form-data",
     )
@@ -374,7 +381,7 @@ def test_vision_extract_corrupted_image(client, normal_user_headers):
 
 
 @patch("app.api.scanner.extract_metadata_from_cover")
-def test_vision_extract_success(mock_extract, client, normal_user_headers):
+def test_vision_extract_success(mock_extract, client, vision_user_headers):
     """POST /api/vision/extract returns extracted metadata on success."""
     from io import BytesIO
 
@@ -383,7 +390,7 @@ def test_vision_extract_success(mock_extract, client, normal_user_headers):
     jpeg_bytes = _make_minimal_jpeg()
     response = client.post(
         "/api/vision/extract",
-        headers=normal_user_headers,
+        headers=vision_user_headers,
         data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
         content_type="multipart/form-data",
     )
@@ -396,14 +403,14 @@ def test_vision_extract_success(mock_extract, client, normal_user_headers):
 
 
 @patch("app.api.scanner.extract_metadata_from_cover", return_value=None)
-def test_vision_extract_api_unavailable(mock_extract, client, normal_user_headers):
+def test_vision_extract_api_unavailable(mock_extract, client, vision_user_headers):
     """POST /api/vision/extract returns 503 when the Vision API is unavailable."""
     from io import BytesIO
 
     jpeg_bytes = _make_minimal_jpeg()
     response = client.post(
         "/api/vision/extract",
-        headers=normal_user_headers,
+        headers=vision_user_headers,
         data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
         content_type="multipart/form-data",
     )
@@ -411,3 +418,20 @@ def test_vision_extract_api_unavailable(mock_extract, client, normal_user_header
     data = response.json
     assert data["success"] is False
     assert "Vision extraction failed. All fallback methods" in data["error"]
+
+
+@patch("app.api.manifestations.start_cover_processing")
+def test_upload_cover(mock_start, client, sample_book, normal_user_headers):
+    """POST /api/manifestations/<id>/cover returns 202 on success."""
+    from io import BytesIO
+
+    jpeg_bytes = _make_minimal_jpeg()
+    response = client.post(
+        f"/api/manifestations/{sample_book.id}/cover",
+        headers=normal_user_headers,
+        data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 202
+    assert response.json["message"] == "Cover upload processing started"
+    mock_start.assert_called_once()

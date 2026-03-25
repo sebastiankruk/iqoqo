@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ PROMPT = (
 )
 
 
-def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict | None:
+def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg", user_id: str | None = None) -> dict | None:
     """Extract book Title and Authors from a cover image using a fallback waterfall.
 
     The function attempts to extract metadata in the following order:
@@ -52,7 +53,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         A dict ``{"Title": str, "Authors": [str, ...]}`` on success, or ``None``.
     """
     # 1. Try Gemini
-    result = _extract_via_gemini(image_bytes, mime_type)
+    result = _extract_via_gemini(image_bytes, mime_type, user_id)
     if result:
         return result
 
@@ -65,11 +66,13 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     return _extract_via_tesseract(image_bytes)
 
 
-def _extract_via_gemini(image_bytes: bytes, mime_type: str) -> dict | None:
+def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         logger.warning("GEMINI_API_KEY not set – skipping Gemini vision extraction.")
         return None
+
+    from app.utils.llm_covers import record_telemetry
 
     try:
         from google import genai  # type: ignore[import-untyped]
@@ -77,8 +80,9 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str) -> dict | None:
 
         client = genai.Client(api_key=api_key)
 
+        start_time = time.time()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-flash-latest",
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 PROMPT,
@@ -86,7 +90,13 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str) -> dict | None:
         )
 
         raw = response.text.strip() if response.text else ""
-        return _parse_json_response(raw)
+        result = _parse_json_response(raw)
+
+        if result and user_id:
+            duration = time.time() - start_time
+            record_telemetry("gemini", user_id, duration)
+
+        return result
 
     except (ImportError, AttributeError) as e:
         logger.error("google-genai package is not installed or API surface changed: %s", e)
