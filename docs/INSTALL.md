@@ -40,7 +40,7 @@ For detailed configuration and development setup, continue reading below.
 
 - **Python 3.14+** - [Download](https://www.python.org/downloads/)
 - **Node.js 18+** and **npm** - [Download](https://nodejs.org/)
-- **PostgreSQL 15+** - Can be run via Docker (recommended) or installed locally
+- **PostgreSQL 16-alpine+** - Can be run via Docker (recommended) or installed locally
 - **Docker & Docker Compose** - For containerized deployment
 - **Git** - For version control
 
@@ -294,7 +294,7 @@ new indexes — is captured in a versioned migration file under `migrations/vers
 ### When migrations run
 
 | Workflow                                                         | How migrations run                                                                                              |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
 | **Local dev** (`./run_dev.sh`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
 | **Docker dev** (`docker compose up`)                             | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
 | **Docker prod** (`docker compose -f docker-compose.prod.yml up`) | Same as Docker dev — automatic on every container start.                                                        |

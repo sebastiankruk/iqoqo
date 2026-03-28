@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-import os
+import io
 
 from flask import jsonify, request
 from PIL import Image
@@ -30,6 +30,21 @@ from app.utils.vision import extract_metadata_from_cover
 # Maximum allowed upload size for cover images (10 MB)
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
 _ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+
+def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
+    """Read at most *max_bytes* from *file_storage*.
+
+    Reads exactly ``max_bytes + 1`` bytes in a single call so that the result
+    fits in one allocation and we can detect an oversized payload without
+    buffering the whole stream first.
+
+    Returns:
+        The raw bytes when the payload is within the limit, or ``None`` when it
+        exceeds *max_bytes*.
+    """
+    buf = file_storage.read(max_bytes + 1)
+    return None if len(buf) > max_bytes else buf
 
 
 @api_bp.route("/scan", methods=["POST"])
@@ -133,27 +148,26 @@ def extract_from_cover():
             400,
         )
 
-    # --- Size validation (Content-Length header, fast path) ---
+    # --- Fast-path size guard (Content-Length header, when present and trustworthy) ---
     if request.content_length and request.content_length > _MAX_COVER_SIZE:
         return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
 
-    # --- Size validation (seek-based, catches missing Content-Length) ---
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-    if file_size > _MAX_COVER_SIZE:
+    # --- Capped streaming read (guards against missing / spoofed Content-Length) ---
+    # Reads at most _MAX_COVER_SIZE + 1 bytes in a single allocation; avoids the
+    # seek-to-end pattern which forces the full payload into the Werkzeug buffer
+    # before we can measure it, and also avoids a second file.read() later.
+    image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
+    if image_bytes is None:
         return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
 
-    # --- PIL content verification ---
+    # --- PIL content verification (uses already-read bytes — no second read) ---
     try:
-        img = Image.open(file)
+        img = Image.open(io.BytesIO(image_bytes))
         img.verify()
-        file.seek(0)
     except (OSError, SyntaxError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
     # --- Vision extraction ---
-    image_bytes = file.read()
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
 

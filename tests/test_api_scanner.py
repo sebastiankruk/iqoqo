@@ -19,6 +19,8 @@
 from io import BytesIO
 from unittest.mock import patch
 
+from app.api.scanner import _MAX_COVER_SIZE
+
 
 def test_extract_from_cover_no_file(client, vision_user_headers):
     """Test extraction with no file provided."""
@@ -40,6 +42,44 @@ def test_extract_from_cover_invalid_ext(client, vision_user_headers):
     response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=vision_user_headers)
     assert response.status_code == 400
     assert "Invalid file type" in response.json["error"]
+
+
+def test_read_bounded_within_limit():
+    """_read_bounded returns bytes when payload is within the limit."""
+    from app.api.scanner import _read_bounded
+
+    payload = b"hello"
+    assert _read_bounded(BytesIO(payload), len(payload)) == payload
+
+
+def test_read_bounded_exact_limit():
+    """_read_bounded returns bytes when payload is exactly at the limit."""
+    from app.api.scanner import _read_bounded
+
+    payload = b"x" * _MAX_COVER_SIZE
+    assert _read_bounded(BytesIO(payload), _MAX_COVER_SIZE) == payload
+
+
+def test_read_bounded_over_limit():
+    """_read_bounded returns None when payload exceeds the limit by one byte."""
+    from app.api.scanner import _read_bounded
+
+    payload = b"x" * (_MAX_COVER_SIZE + 1)
+    assert _read_bounded(BytesIO(payload), _MAX_COVER_SIZE) is None
+
+
+def test_extract_from_cover_oversized_body(client, vision_user_headers):
+    """Reject when actual payload exceeds limit even without a Content-Length header (413)."""
+    oversized_payload = b"x" * (_MAX_COVER_SIZE + 1)
+    data = {"cover": (BytesIO(oversized_payload), "test.jpg")}
+    response = client.post(
+        "/api/vision/extract",
+        data=data,
+        content_type="multipart/form-data",
+        headers=vision_user_headers,
+    )
+    assert response.status_code == 413
+    assert "File too large" in response.json["error"]
 
 
 @patch("app.api.scanner.Image.open")
