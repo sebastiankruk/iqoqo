@@ -37,11 +37,9 @@ test.describe("Snap Cover Workflow", () => {
     // 3. Switch to "Snap Cover" tab
     await page.click('button:has-text("Snap Cover")');
 
-    // 4. Click "Start Live Camera" (if not already active)
-    const startCameraButton = page.locator('button:has-text("Start Live Camera")');
-    if (await startCameraButton.isVisible()) {
-      await startCameraButton.click();
-    }
+    // 4. Click "Start Live Camera"
+    // (Playwright will automatically wait until the element is attached after the tab switch)
+    await page.click('button:has-text("Start Live Camera")');
 
     // 5. Click "Snap Live Frame"
     await page.click('button:has-text("Snap Live Frame")');
