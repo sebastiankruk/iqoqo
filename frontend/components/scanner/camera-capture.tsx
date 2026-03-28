@@ -32,14 +32,14 @@ import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 /** API response envelope returned by backend endpoints. */
@@ -91,7 +91,17 @@ interface CameraCaptureProps {
  * @param root0.confirmMessage - Confirmation message
  * @returns The rendered camera capture button element.
  */
-export function CameraCapture({ manifestationId, onUploadComplete, onExtractComplete, className, capture = "environment", label = "Snap Cover", icon, confirmTitle, confirmMessage }: CameraCaptureProps) {
+export function CameraCapture({
+  manifestationId,
+  onUploadComplete,
+  onExtractComplete,
+  className,
+  capture = "environment",
+  label = "Snap Cover",
+  icon,
+  confirmTitle,
+  confirmMessage,
+}: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,11 +122,15 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
     try {
       if (manifestationId) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
-        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
         if (onUploadComplete) onUploadComplete();
       } else {
         // Mode 2: OCR / Vision Metadata Extraction
-        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
         const envelope = response.data;
         if (envelope.success && envelope.data) {
           if (onExtractComplete) onExtractComplete(envelope.data, file);
@@ -133,16 +147,16 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
   };
 
   const handleClick = () => {
-      if (confirmTitle && confirmMessage) {
-          setConfirmOpen(true);
-      } else {
-          fileInputRef.current?.click();
-      }
+    if (confirmTitle && confirmMessage) {
+      setConfirmOpen(true);
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   const handleConfirmAction = () => {
-      setConfirmOpen(false);
-      fileInputRef.current?.click();
+    setConfirmOpen(false);
+    fileInputRef.current?.click();
   };
 
   return (
@@ -174,18 +188,18 @@ export function CameraCapture({ manifestationId, onUploadComplete, onExtractComp
       </button>
 
       {confirmTitle && (
-          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-                      <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-          </AlertDialog>
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

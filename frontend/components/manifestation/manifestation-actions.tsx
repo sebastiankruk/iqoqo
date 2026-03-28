@@ -43,7 +43,7 @@ import {
  * @param root0.manifestation - The manifestation
  * @returns {JSX.Element | null} The component or null if no profile
  */
-export function ManifestationActions({ manifestation }: { manifestation: Manifestation|CatalogEntry }) {
+export function ManifestationActions({ manifestation }: { manifestation: Manifestation | CatalogEntry }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();
   const qc = useQueryClient();
@@ -54,7 +54,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const [isRefetching, setIsRefetching] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isPending = manifestation.meta?.cover_status === 'pending';
+  const isPending = manifestation.meta?.cover_status === "pending";
 
   const { data: profile } = useProfile();
 
@@ -111,7 +111,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         if (!prev) return prev;
         return {
           ...prev,
-          meta: { ...(prev.meta || {}), cover_status: 'pending' }
+          meta: { ...(prev.meta || {}), cover_status: "pending" },
         };
       });
       toast.success("Cover regeneration started");
@@ -144,29 +144,29 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission('refetch:metadata') && (
+      {hasPermission("refetch:metadata") && (
         <button
           onClick={handleRefetch}
           disabled={isRefetching}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
-          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? 'animate-bounce' : ''}`} />
+          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
         </button>
       )}
 
-      {hasPermission('regenerate:cover') && (
+      {hasPermission("regenerate:cover") && (
         <button
           onClick={handleRegenerateClick}
           disabled={isPending || isRequesting}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
       )}
 
-      {hasPermission('upload:cover') && (
+      {hasPermission("upload:cover") && (
         <CameraCapture
           manifestationId={manifestation.id}
           onUploadComplete={() => {
@@ -176,12 +176,16 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           label={manifestation.cover_url ? "Replace Cover" : "Contribute Cover"}
           icon={<ImagePlus className="h-3.5 w-3.5" />}
           confirmTitle={manifestation.cover_url ? "Replace Existing Cover?" : undefined}
-          confirmMessage={manifestation.cover_url ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?" : undefined}
+          confirmMessage={
+            manifestation.cover_url
+              ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
+              : undefined
+          }
           className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
         />
       )}
 
-      {hasPermission('delete:manifestation') && (
+      {hasPermission("delete:manifestation") && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={isDeleting}
@@ -197,7 +201,8 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           <AlertDialogHeader>
             <AlertDialogTitle>Delete manifestation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this manifestation and all associated items across the system. This action cannot be undone.
+              This will permanently delete this manifestation and all associated items across the system. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -223,9 +228,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRegenerate}>
-              Regenerate
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

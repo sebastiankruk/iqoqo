@@ -113,11 +113,7 @@ describe("ItemCard", () => {
   });
 
   it("renders a cover image when coverUrl is provided in meta", () => {
-    render(
-      <ItemCard
-        item={makeItem({ meta: { cover_url: "https://example.com/cover.jpg" } })}
-      />,
-    );
+    render(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/cover.jpg" } })} />);
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");

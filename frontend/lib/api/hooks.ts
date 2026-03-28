@@ -17,14 +17,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type {
-  Item,
-  CatalogEntry,
-  DashboardStats,
-  IsbnMeta,
-  ApiResponse,
-  UserProfile,
-} from "@/types/frbr";
+import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile } from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -236,8 +229,7 @@ export function useManifestationWithPolling(initialData: Item) {
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    refetchInterval: (query) =>
-      query.state.data?.cover_status === 'pending' ? 3000 : false,
+    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 3000 : false),
   });
   return { item };
 }
@@ -260,7 +252,10 @@ export function useAddManualItem() {
   const qc = useQueryClient();
   return useMutation<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>({
     mutationFn: async (metadata: ManualItemPayload) => {
-      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/items/manual", metadata);
+      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
+        "/items/manual",
+        metadata
+      );
       return res.data;
     },
     onSuccess: () => {
@@ -354,7 +349,12 @@ export function useProfile() {
         return res;
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
-        if (message.includes("Token expired") || message.includes("Invalid token") || message.includes("Token missing") || message.includes("Invalid user ID format")) {
+        if (
+          message.includes("Token expired") ||
+          message.includes("Invalid token") ||
+          message.includes("Token missing") ||
+          message.includes("Invalid user ID format")
+        ) {
           await fetch("/api/auth/logout", { method: "POST" });
         }
         return null;

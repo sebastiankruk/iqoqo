@@ -15,15 +15,15 @@
 //
 // Auto-generated permissions for frontend
 export const ItemPermissions = {
-  REFETCH_METADATA: 'refetch:metadata' as const,
-  REGENERATE_COVER: 'regenerate:cover' as const,
-  DELETE_ITEM: 'delete:item' as const,
-  DELETE_MANIFESTATION: 'delete:manifestation' as const,
-  LLM_GENERATE_COVER: 'llm_generate:cover' as const,
-  LLM_GENERATE_METADATA: 'llm_generate:metadata' as const,
-  LLM_GENERATE_CLOUD: 'llm_generate:cloud' as const,
-  UPLOAD_COVER: 'upload:cover' as const,
+  REFETCH_METADATA: "refetch:metadata" as const,
+  REGENERATE_COVER: "regenerate:cover" as const,
+  DELETE_ITEM: "delete:item" as const,
+  DELETE_MANIFESTATION: "delete:manifestation" as const,
+  LLM_GENERATE_COVER: "llm_generate:cover" as const,
+  LLM_GENERATE_METADATA: "llm_generate:metadata" as const,
+  LLM_GENERATE_CLOUD: "llm_generate:cloud" as const,
+  UPLOAD_COVER: "upload:cover" as const,
 } as const;
 
 /** Item permission type */
-export type ItemPermission = typeof ItemPermissions[keyof typeof ItemPermissions];
+export type ItemPermission = (typeof ItemPermissions)[keyof typeof ItemPermissions];

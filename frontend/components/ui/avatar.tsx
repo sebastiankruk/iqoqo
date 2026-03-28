@@ -46,7 +46,7 @@ export function Avatar({ src, alt, size = 40, className, fallback }: AvatarProps
       className={cn("inline-flex items-center justify-center rounded-full overflow-hidden", className)}
       aria-hidden={src && !alt ? true : undefined}
       role={!src ? "img" : undefined}
-      aria-label={!src ? (alt || initials || "avatar") : undefined}
+      aria-label={!src ? alt || initials || "avatar" : undefined}
     >
       {src ? (
         <Image src={src} alt={alt || "avatar"} width={size} height={size} className="object-cover" />

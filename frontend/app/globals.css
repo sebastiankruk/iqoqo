@@ -14,8 +14,8 @@
 * You should have received a copy of the GNU Affero General Public License
 * along with this program.  If not, see <https://www.gnu.org/licenses/>
 */
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* Make Tailwind's dark: variant follow `.dark` class (next-themes) */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -233,7 +233,7 @@
     @apply bg-background text-foreground;
   }
   button,
-  [role='button'] {
+  [role="button"] {
     cursor: pointer;
   }
   html {

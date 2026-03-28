@@ -50,13 +50,23 @@ interface BottomSheetProps {
  * @param root0.onShowManualForm - Optional callback to show manual entry form
  * @returns {JSX.Element} The component
  */
-export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChange, onExtractComplete, onShowManualForm }: BottomSheetProps) {
+export function BottomSheet({
+  videoRef,
+  onFound,
+  onScannerStateChange,
+  onTabChange,
+  onExtractComplete,
+  onShowManualForm,
+}: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
-  const handleTabChange = useCallback((tabId: TabId) => {
-    setActiveTab(tabId);
-    if (onTabChange) onTabChange(tabId);
-  }, [onTabChange]);
+  const handleTabChange = useCallback(
+    (tabId: TabId) => {
+      setActiveTab(tabId);
+      if (onTabChange) onTabChange(tabId);
+    },
+    [onTabChange]
+  );
   const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
@@ -78,7 +88,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
       rafRef.current = 0;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
     const video = videoRef.current;
@@ -122,7 +132,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
         setIsSearching(false);
       }
     },
-    [onFound],
+    [onFound]
   );
 
   /* ── Start camera + ZXing scan loop (works in Safari, Firefox, Chrome) ── */
@@ -216,7 +226,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
       if (!ctx) throw new Error("Could not map camera feed");
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
       if (!blob) throw new Error("Failed to encode image");
 
       const file = new File([blob], "cover_snapshot.jpg", { type: "image/jpeg" });
@@ -224,8 +234,12 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
       formData.append("cover", file);
 
       const { apiClient } = await import("@/lib/api/client");
-      const response = await apiClient.post<{ success: boolean; data: { Title?: string; Authors?: string[] } | null; error?: string | null }>(`/vision/extract`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+      const response = await apiClient.post<{
+        success: boolean;
+        data: { Title?: string; Authors?: string[] } | null;
+        error?: string | null;
+      }>(`/vision/extract`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
       const envelope = response.data;
 
@@ -264,7 +278,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
       {/* Tabs */}
       <div className="flex justify-center px-6">
         <div className="inline-flex rounded-xl bg-secondary p-1">
-          {TABS.map((tab) => (
+          {TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id as TabId)}
@@ -282,9 +296,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
 
       {/* Content */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-        {error && (
-          <p className="text-center text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="text-center text-xs text-destructive">{error}</p>}
 
         {activeTab === "barcode" && (
           <>
@@ -303,9 +315,7 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
             </button>
 
             <p className="text-xs text-muted-foreground">
-              {scannerActive
-                ? "Scanning – point at barcode"
-                : "Tap to start camera"}
+              {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}
             </p>
           </>
         )}
@@ -357,25 +367,25 @@ export function BottomSheet({ videoRef, onFound, onScannerStateChange, onTabChan
         {activeTab === "manual" && (
           <div className="flex w-full flex-col">
             <form onSubmit={handleManualSearch} className="w-full">
-            <div className="relative">
-              <input
-                type="text"
-                value={manualIsbn}
-                onChange={(e) => setManualIsbn(e.target.value)}
-                placeholder="Enter ISBN or title..."
-                className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-              <button
-                type="submit"
-                disabled={isSearching || !manualIsbn}
-                className="absolute inset-y-0 right-3 flex items-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              {isSearching ? "Looking up…" : "Try ISBN: 978-0-553-38016-8"}
-            </p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={manualIsbn}
+                  onChange={e => setManualIsbn(e.target.value)}
+                  placeholder="Enter ISBN or title..."
+                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching || !manualIsbn}
+                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {isSearching ? "Looking up…" : "Try ISBN: 978-0-553-38016-8"}
+              </p>
             </form>
 
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">

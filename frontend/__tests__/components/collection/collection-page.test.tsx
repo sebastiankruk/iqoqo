@@ -89,9 +89,7 @@ vi.mock("@/components/collection/collection-grid", () => ({
    * @param {{ items: unknown[] }} props - Component props.
    * @returns {JSX.Element}
    */
-  CollectionGrid: ({ items }: { items: unknown[] }) => (
-    <div data-testid="collection-grid">{items.length} rendered</div>
-  ),
+  CollectionGrid: ({ items }: { items: unknown[] }) => <div data-testid="collection-grid">{items.length} rendered</div>,
 }));
 
 vi.mock("@/components/collection/mobile-filter-drawer", () => ({
@@ -336,7 +334,9 @@ describe("CollectionPage – Authentication & View Modes", () => {
     vi.clearAllMocks();
     mockUseItems.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useItems>);
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useManifestations>);
+    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useManifestations
+    >);
   });
 
   it("switches to Global Library manifestations via tabs when logged in", () => {

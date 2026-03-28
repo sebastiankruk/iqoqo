@@ -38,6 +38,7 @@ interface SuccessCardProps {
  * @param root0.isbn - The scanned ISBN
  * @param root0.meta - The metadata for the ISBN
  * @param root0.onDismiss - Callback to dismiss the card
+ * @param root0.snappedCover - Optional cover image captured by the user
  * @returns {JSX.Element} The component
  */
 export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCardProps) {
@@ -52,25 +53,22 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   const handleAdd = async () => {
     setAdding(true);
     try {
-      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(
-        `/item/${isbn}`,
-        meta
-      );
+      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, meta);
 
       if (snappedCover && res.data.manifestation_id) {
-          const coverFormData = new FormData();
-          coverFormData.append("cover", snappedCover);
-          try {
-              await apiClient.post(`/manifestations/${res.data.manifestation_id}/cover`, coverFormData, {
-                  headers: { "Content-Type": "multipart/form-data" }
-              });
-              toast.success(`"${meta.Title}" added with your custom cover!`);
-          } catch (e) {
-              console.error("Failed to upload snapped cover:", e);
-              toast.warning(`"${meta.Title}" added, but cover upload failed.`);
-          }
+        const coverFormData = new FormData();
+        coverFormData.append("cover", snappedCover);
+        try {
+          await apiClient.post(`/manifestations/${res.data.manifestation_id}/cover`, coverFormData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          toast.success(`"${meta.Title}" added with your custom cover!`);
+        } catch (e) {
+          console.error("Failed to upload snapped cover:", e);
+          toast.warning(`"${meta.Title}" added, but cover upload failed.`);
+        }
       } else {
-          toast.success(`"${meta.Title}" added to your library!`);
+        toast.success(`"${meta.Title}" added to your library!`);
       }
 
       await router.push(`/item/${res.data.item_id}`);
@@ -95,9 +93,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-chart-3">
               <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
             </span>
-            <span className="text-sm font-semibold text-foreground">
-              Book Found
-            </span>
+            <span className="text-sm font-semibold text-foreground">Book Found</span>
           </div>
           <button
             onClick={onDismiss}
@@ -112,13 +108,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
         <div className="flex gap-4 px-6 pb-5">
           <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg shadow-lg bg-secondary">
             {coverUrl ? (
-              <Image
-                src={coverUrl}
-                alt={meta.Title}
-                fill
-                unoptimized
-                className="h-full w-full object-cover"
-              />
+              <Image src={coverUrl} alt={meta.Title} fill unoptimized className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center">
                 <BookOpen className="h-8 w-8 text-muted-foreground/30" />
@@ -127,19 +117,11 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
           </div>
 
           <div className="flex min-w-0 flex-col justify-center">
-            <h3 className="font-serif text-lg font-bold leading-tight text-foreground">
-              {meta.Title}
-            </h3>
+            <h3 className="font-serif text-lg font-bold leading-tight text-foreground">{meta.Title}</h3>
             {meta.Authors && meta.Authors.length > 0 && (
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {meta.Authors.join(", ")}
-              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{meta.Authors.join(", ")}</p>
             )}
-            {isbn && (
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                ISBN: {isbn}
-              </p>
-            )}
+            {isbn && <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">ISBN: {isbn}</p>}
           </div>
         </div>
 
@@ -151,12 +133,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path
-                d="M9 3v12M3 9h12"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
+              <path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
             </svg>
             {adding ? "Adding…" : "Add to Library"}
           </button>

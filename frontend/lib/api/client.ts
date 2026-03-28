@@ -36,12 +36,9 @@ export const apiClient = axios.create({
 
 /** Unwrap the standard `{ success, data, error }` envelope. */
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const message: string =
-      error.response?.data?.error ??
-      error.message ??
-      "An unexpected error occurred";
+  response => response,
+  error => {
+    const message: string = error.response?.data?.error ?? error.message ?? "An unexpected error occurred";
     return Promise.reject(new Error(message));
   }
 );
@@ -66,8 +63,13 @@ export async function apiFetch<T>(path: string, params?: Record<string, unknown>
  *
  * @returns {Promise<{ works: number; manifestations: number; items: number; users: number }>} The statistics
  */
-export async function getGlobalStats(): Promise<{ works: number; manifestations: number; items: number; users: number }> {
-  return apiFetch('/stats/global');
+export async function getGlobalStats(): Promise<{
+  works: number;
+  manifestations: number;
+  items: number;
+  users: number;
+}> {
+  return apiFetch("/stats/global");
 }
 
 /**

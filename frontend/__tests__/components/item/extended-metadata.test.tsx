@@ -42,7 +42,7 @@ describe("ExtendedMetadata", () => {
       // These keys should be hidden by default logic in the component
       Title: "Hidden Title",
       Year: "2023",
-      cover_status: "ready"
+      cover_status: "ready",
     };
 
     render(<ExtendedMetadata meta={meta} />);

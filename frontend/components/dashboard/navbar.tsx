@@ -70,7 +70,7 @@ export function Navbar() {
     if (searchQuery.trim()) {
       router.push(`/collection?q=${encodeURIComponent(searchQuery.trim())}`);
     } else {
-      router.push('/collection');
+      router.push("/collection");
     }
   };
 
@@ -93,9 +93,7 @@ export function Navbar() {
               />
             </svg>
           </div>
-          <span className="font-serif text-xl font-bold tracking-tight">
-            iqoqo
-          </span>
+          <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
         </Link>
 
         {/* Search */}
@@ -106,7 +104,7 @@ export function Navbar() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search your collection..."
             className="h-9 w-full rounded-full border border-primary-foreground/15 bg-primary-foreground/10 pl-10 pr-4 text-sm text-primary-foreground placeholder-primary-foreground/40 outline-none transition-colors focus:border-accent focus:bg-primary-foreground/15 dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-white/60"
           />

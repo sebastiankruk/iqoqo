@@ -19,55 +19,55 @@
  * Network calls are not made – apiClient.get is spied on and mocked so we can
  * assert that the correct URL parameters are forwarded to the API.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // queryKeys – pure unit tests, no mocking required
 // ---------------------------------------------------------------------------
 
-describe('queryKeys.items', () => {
+describe("queryKeys.items", () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('produces a stable key without statuses', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
-    expect(queryKeys.items(1, 20)).toEqual(['items', 1, 20, '', '', '']);
+  it("produces a stable key without statuses", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.items(1, 20)).toEqual(["items", 1, 20, "", "", ""]);
   });
 
-  it('produces a stable key with a single status', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
-    expect(queryKeys.items(1, 10, ['reading'])).toEqual(['items', 1, 10, 'reading', '', '']);
+  it("produces a stable key with a single status", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.items(1, 10, ["reading"])).toEqual(["items", 1, 10, "reading", "", ""]);
   });
 
-  it('joins multiple statuses with a comma', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
-    expect(queryKeys.items(1, 10, ['reading', 'wish_list'])).toEqual(['items', 1, 10, 'reading,wish_list', '', '']);
+  it("joins multiple statuses with a comma", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.items(1, 10, ["reading", "wish_list"])).toEqual(["items", 1, 10, "reading,wish_list", "", ""]);
   });
 
-  it('treats an empty statuses array the same as undefined', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
-    expect(queryKeys.items(1, 20, [])).toEqual(['items', 1, 20, '', '', '']);
-    expect(queryKeys.items(1, 20, undefined)).toEqual(['items', 1, 20, '', '', '']);
+  it("treats an empty statuses array the same as undefined", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.items(1, 20, [])).toEqual(["items", 1, 20, "", "", ""]);
+    expect(queryKeys.items(1, 20, undefined)).toEqual(["items", 1, 20, "", "", ""]);
   });
 
-  it('produces different cache keys for different status combinations', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
-    const key1 = queryKeys.items(1, 20, ['reading']);
-    const key2 = queryKeys.items(1, 20, ['wish_list']);
-    const key3 = queryKeys.items(1, 20, ['reading', 'wish_list']);
+  it("produces different cache keys for different status combinations", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    const key1 = queryKeys.items(1, 20, ["reading"]);
+    const key2 = queryKeys.items(1, 20, ["wish_list"]);
+    const key3 = queryKeys.items(1, 20, ["reading", "wish_list"]);
     expect(key1).not.toEqual(key2);
     expect(key1).not.toEqual(key3);
     expect(key2).not.toEqual(key3);
   });
 
-  it('includes the query string in the cache key and separates caches by query', async () => {
-    const { queryKeys } = await import('@/lib/api/hooks');
+  it("includes the query string in the cache key and separates caches by query", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
     const emptyQueryKey = queryKeys.items(1, 20);
-    const nonEmptyQueryKey = queryKeys.items(1, 20, undefined, 'hobbit');
+    const nonEmptyQueryKey = queryKeys.items(1, 20, undefined, "hobbit");
 
-    expect(emptyQueryKey).toEqual(['items', 1, 20, '', '', '']);
-    expect(nonEmptyQueryKey).toEqual(['items', 1, 20, '', 'hobbit', '']);
+    expect(emptyQueryKey).toEqual(["items", 1, 20, "", "", ""]);
+    expect(nonEmptyQueryKey).toEqual(["items", 1, 20, "", "hobbit", ""]);
     expect(emptyQueryKey).not.toEqual(nonEmptyQueryKey);
   });
 });
@@ -76,47 +76,47 @@ describe('queryKeys.items', () => {
 // useItems – verifies the correct query params are forwarded to apiClient.get
 // ---------------------------------------------------------------------------
 
-describe('useItems query function', () => {
+describe("useItems query function", () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('omits the statuses param when no statuses are provided', async () => {
-    const { apiClient } = await import('@/lib/api/client');
-    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+  it("omits the statuses param when no statuses are provided", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
       data: { success: true, data: [], error: null, meta: { page: 1, limit: 20, total: 0, pages: 0 } },
     } as never);
 
-    const { queryKeys } = await import('@/lib/api/hooks');
+    const { queryKeys } = await import("@/lib/api/hooks");
 
     // Directly invoke the queryFn by reconstructing it (avoids needing React
     // to mount a component with QueryClientProvider).
-    const hooks = await import('@/lib/api/hooks');
+    const hooks = await import("@/lib/api/hooks");
     const hook = hooks.useItems;
 
     // We test the internal queryFn by calling apiClient.get via the spy and
     // checking the call arguments instead of mounting a full React tree.
     // This matches the pattern used in client.test.ts.
-    await apiClient.get('/items', { params: { page: 1, limit: 20 } });
+    await apiClient.get("/items", { params: { page: 1, limit: 20 } });
 
-    expect(getSpy).toHaveBeenCalledWith('/items', { params: { page: 1, limit: 20 } });
+    expect(getSpy).toHaveBeenCalledWith("/items", { params: { page: 1, limit: 20 } });
 
     void hook; // suppress unused variable warning
     void queryKeys; // suppress unused variable warning
   });
 
-  it('sends statuses as a comma-separated string', async () => {
-    const { apiClient } = await import('@/lib/api/client');
-    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+  it("sends statuses as a comma-separated string", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
       data: { success: true, data: [], error: null, meta: { page: 1, limit: 20, total: 0, pages: 0 } },
     } as never);
 
-    await apiClient.get('/items', {
-      params: { page: 1, limit: 20, statuses: 'reading,wish_list' },
+    await apiClient.get("/items", {
+      params: { page: 1, limit: 20, statuses: "reading,wish_list" },
     });
 
-    expect(getSpy).toHaveBeenCalledWith('/items', {
-      params: { page: 1, limit: 20, statuses: 'reading,wish_list' },
+    expect(getSpy).toHaveBeenCalledWith("/items", {
+      params: { page: 1, limit: 20, statuses: "reading,wish_list" },
     });
   });
 });

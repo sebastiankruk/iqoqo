@@ -36,7 +36,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 
-
 /**
  * Item actions component.
  *
@@ -55,7 +54,7 @@ export function ItemActions({ item }: { item: Item }) {
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
 
-  const isPending = item.cover_status === 'pending';
+  const isPending = item.cover_status === "pending";
 
   const { data: profile } = useProfile();
 
@@ -80,7 +79,7 @@ export function ItemActions({ item }: { item: Item }) {
         toast.success("Item removed from library");
         router.push("/collection");
       },
-      onError: (e) => toast.error(e.message),
+      onError: e => toast.error(e.message),
     });
   };
 
@@ -114,7 +113,7 @@ export function ItemActions({ item }: { item: Item }) {
         if (!prev) return prev;
         return {
           ...prev,
-          cover_status: 'pending'
+          cover_status: "pending",
         };
       });
       toast.success("Cover regeneration started");
@@ -147,29 +146,29 @@ export function ItemActions({ item }: { item: Item }) {
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission('refetch:metadata') && (
+      {hasPermission("refetch:metadata") && (
         <button
           onClick={handleRefetch}
           disabled={isRefetching}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
-          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? 'animate-bounce' : ''}`} />
+          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
         </button>
       )}
 
-      {hasPermission('regenerate:cover') && (
+      {hasPermission("regenerate:cover") && (
         <button
           onClick={handleRegenerateClick}
           disabled={isPending || isRequesting}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
       )}
 
-      {hasPermission('delete:item') && (
+      {hasPermission("delete:item") && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={deleteItem.isPending}
@@ -211,9 +210,7 @@ export function ItemActions({ item }: { item: Item }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRegenerate}>
-              Regenerate
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

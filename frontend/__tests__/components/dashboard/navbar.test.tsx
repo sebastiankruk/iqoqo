@@ -44,9 +44,7 @@ describe("Navbar", () => {
 
   it("renders a search input", () => {
     render(<Navbar />);
-    expect(
-      screen.getByPlaceholderText("Search your collection...")
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search your collection...")).toBeInTheDocument();
   });
 
   it("contains a link to the Collection page", () => {
@@ -62,7 +60,7 @@ describe("Navbar", () => {
     });
     render(<Navbar />);
     const links = screen.getAllByRole("link");
-    const scanLink = links.find((l) => l.getAttribute("href") === "/scan");
+    const scanLink = links.find(l => l.getAttribute("href") === "/scan");
     expect(scanLink).toBeDefined();
   });
 

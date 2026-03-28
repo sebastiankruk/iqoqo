@@ -42,9 +42,9 @@ function CollectionContent() {
   const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
   const initialSort = searchParams?.get("sort") || "title";
   const initialStatuses = searchParams?.get("statuses") || "";
-  const initialFilters: ActiveFilter[] = initialStatuses 
-      ? initialStatuses.split(",").map(s => ({ type: "status", value: s })) 
-      : [];
+  const initialFilters: ActiveFilter[] = initialStatuses
+    ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
+    : [];
   const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
   const initialQuery = searchParams?.get("q") ?? "";
 
@@ -77,19 +77,19 @@ function CollectionContent() {
     const params = new URLSearchParams();
     if (page > 1) params.set("page", page.toString());
     if (sortBy !== "title") params.set("sort", sortBy);
-    
-    const statuses = activeFilters.filter((f) => f.type === "status").map((f) => f.value);
+
+    const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
-    
+
     // Replace state blocks messy rapid history buildup while keeping deep link persistency active
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
 
   const statusFilters = useMemo(
-    () => activeFilters.filter((f) => f.type === "status").map((f) => f.value),
+    () => activeFilters.filter(f => f.type === "status").map(f => f.value),
     [activeFilters]
   );
 
@@ -102,11 +102,10 @@ function CollectionContent() {
     viewMode === "items" && isLoggedIn
   );
 
-
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
-    appliedQuery, 
+    appliedQuery,
     viewMode === "manifestations"
   );
 
@@ -125,20 +124,21 @@ function CollectionContent() {
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
     setPage(1);
-    setActiveFilters((prev) => {
-      const exists = prev.some((f) => f.type === filter.type && f.value === filter.value);
-      return exists
-        ? prev.filter((f) => !(f.type === filter.type && f.value === filter.value))
-        : [...prev, filter];
+    setActiveFilters(prev => {
+      const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
+      return exists ? prev.filter(f => !(f.type === filter.type && f.value === filter.value)) : [...prev, filter];
     });
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
     setPage(1);
-    setActiveFilters((prev) => prev.filter((f) => !(f.type === filter.type && f.value === filter.value)));
+    setActiveFilters(prev => prev.filter(f => !(f.type === filter.type && f.value === filter.value)));
   }, []);
 
-  const clearAll = useCallback(() => { setPage(1); setActiveFilters([]); }, []);
+  const clearAll = useCallback(() => {
+    setPage(1);
+    setActiveFilters([]);
+  }, []);
 
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
@@ -161,10 +161,14 @@ function CollectionContent() {
       const aa = a.authors?.[0] ?? "";
       const ab = b.authors?.[0] ?? "";
       switch (sortBy) {
-        case "title": return ta.localeCompare(tb);
-        case "title-desc": return tb.localeCompare(ta);
-        case "author": return aa.localeCompare(ab);
-        default: return 0;
+        case "title":
+          return ta.localeCompare(tb);
+        case "title-desc":
+          return tb.localeCompare(ta);
+        case "author":
+          return aa.localeCompare(ab);
+        default:
+          return 0;
       }
     });
     return items;
@@ -189,17 +193,27 @@ function CollectionContent() {
             {isLoggedIn && (
               <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
                 <button
-                  onClick={() => { setViewMode("items"); setPage(1); }}
+                  onClick={() => {
+                    setViewMode("items");
+                    setPage(1);
+                  }}
                   className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "items" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    viewMode === "items"
+                      ? "bg-primary text-primary-foreground shadow"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }`}
                 >
                   <BookOpen className="h-4 w-4" /> My Items
                 </button>
                 <button
-                  onClick={() => { setViewMode("manifestations"); setPage(1); }}
+                  onClick={() => {
+                    setViewMode("manifestations");
+                    setPage(1);
+                  }}
                   className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "manifestations" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    viewMode === "manifestations"
+                      ? "bg-primary text-primary-foreground shadow"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }`}
                 >
                   <LibraryIcon className="h-4 w-4" /> Global Library
@@ -208,7 +222,7 @@ function CollectionContent() {
             )}
 
             <form
-              onSubmit={(e) => {
+              onSubmit={e => {
                 e.preventDefault();
                 setPage(1);
                 setAppliedQuery(searchQuery);
@@ -219,7 +233,7 @@ function CollectionContent() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search title, author, or ISBN..."
                 className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -283,7 +297,7 @@ function CollectionContent() {
             {pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
                 >
@@ -293,7 +307,7 @@ function CollectionContent() {
                   Page {page} of {pages}
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                  onClick={() => setPage(p => Math.min(pages, p + 1))}
                   disabled={page === pages}
                   className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
                 >
@@ -323,7 +337,13 @@ function CollectionContent() {
  */
 export default function CollectionPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading collection...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <p className="text-muted-foreground">Loading collection...</p>
+        </div>
+      }
+    >
       <CollectionContent />
     </Suspense>
   );

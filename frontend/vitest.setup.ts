@@ -86,7 +86,12 @@ vi.mock("next/image", async () => {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     default: ({ src, alt, className, fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest }: any) => {
-      void fill; void sizes; void unoptimized; void priority; void placeholder; void blurDataURL;
+      void fill;
+      void sizes;
+      void unoptimized;
+      void priority;
+      void placeholder;
+      void blurDataURL;
       return createElement("img", { src, alt, className, ...rest });
     },
   };
@@ -112,7 +117,7 @@ vi.mock("sonner", () => ({
  * on logout) work in unit tests without a real QueryClientProvider wrapper.
  * All other exports (useQuery, useMutation, …) are forwarded to the real
  * library so per-test mocks of hooks like useProfile still work normally.  */
-vi.mock("@tanstack/react-query", async (importOriginal) => {
+vi.mock("@tanstack/react-query", async importOriginal => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   return {
     ...actual,
@@ -127,4 +132,3 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     }),
   };
 });
-

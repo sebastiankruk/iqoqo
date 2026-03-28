@@ -74,29 +74,29 @@ export default function ScanPage() {
     };
 
     addManualMutation.mutate(payload, {
-      onSuccess: async (response) => {
+      onSuccess: async response => {
         const item = response.data;
         if (item && snappedCover && item.manifestation_id) {
-            const coverFormData = new FormData();
-            coverFormData.append("cover", snappedCover);
-            try {
-                await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
-                    headers: { "Content-Type": "multipart/form-data" }
-                });
-                toast.success(`"${payload.Title}" added with your custom cover!`);
-            } catch (e) {
-                console.error("Failed to upload captured cover:", e);
-                toast.warning(`"${payload.Title}" added, but cover upload failed.`);
-            }
+          const coverFormData = new FormData();
+          coverFormData.append("cover", snappedCover);
+          try {
+            await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            toast.success(`"${payload.Title}" added with your custom cover!`);
+          } catch (e) {
+            console.error("Failed to upload captured cover:", e);
+            toast.warning(`"${payload.Title}" added, but cover upload failed.`);
+          }
         } else {
-            toast.success(`"${payload.Title}" added to your library!`);
+          toast.success(`"${payload.Title}" added to your library!`);
         }
 
         if (response.data?.item_id) {
           router.push(`/item/${response.data.item_id}`);
         }
       },
-      onError: (err) => {
+      onError: err => {
         toast.error((err as Error).message || "Failed to add item manually");
       },
     });
@@ -104,41 +104,101 @@ export default function ScanPage() {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
-      <video ref={videoRef} playsInline muted autoPlay aria-hidden="true" className="absolute inset-0 z-0 h-full w-full object-cover" />
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        aria-hidden="true"
+        className="absolute inset-0 z-0 h-full w-full object-cover"
+      />
 
       <TopBar />
-      {(!result && !showManual && scannerTab === "barcode") && <Viewfinder isScanning={scannerActive} />}
+      {!result && !showManual && scannerTab === "barcode" && <Viewfinder isScanning={scannerActive} />}
 
-      {!result && !showManual && <BottomSheet videoRef={videoRef} onFound={handleFound} onScannerStateChange={setScannerActive} onTabChange={setScannerTab} onExtractComplete={handleExtractComplete} onShowManualForm={() => setShowManual(true)} />}
-      {result && <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />}
+      {!result && !showManual && (
+        <BottomSheet
+          videoRef={videoRef}
+          onFound={handleFound}
+          onScannerStateChange={setScannerActive}
+          onTabChange={setScannerTab}
+          onExtractComplete={handleExtractComplete}
+          onShowManualForm={() => setShowManual(true)}
+        />
+      )}
+      {result && (
+        <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />
+      )}
 
       {showManual && (
         <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl p-6 pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold font-serif text-foreground">Manual Entry</h2>
-            <button onClick={() => setShowManual(false)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+            <button onClick={() => setShowManual(false)} className="text-muted-foreground hover:text-foreground">
+              Cancel
+            </button>
           </div>
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
             <div>
-              <label htmlFor="manual-title" className="text-sm font-medium text-foreground block mb-1">Title</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} id="manual-title" name="title" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. The Hobbit" />
+              <label htmlFor="manual-title" className="text-sm font-medium text-foreground block mb-1">
+                Title
+              </label>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                id="manual-title"
+                name="title"
+                required
+                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
+                placeholder="E.g. The Hobbit"
+              />
             </div>
             <div>
-              <label htmlFor="manual-author" className="text-sm font-medium text-foreground block mb-1">Author / Creator</label>
-              <input value={author} onChange={e => setAuthor(e.target.value)} id="manual-author" name="author" required className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="E.g. J.R.R. Tolkien" />
+              <label htmlFor="manual-author" className="text-sm font-medium text-foreground block mb-1">
+                Author / Creator
+              </label>
+              <input
+                value={author}
+                onChange={e => setAuthor(e.target.value)}
+                id="manual-author"
+                name="author"
+                required
+                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
+                placeholder="E.g. J.R.R. Tolkien"
+              />
             </div>
             <div>
-              <label htmlFor="manual-isbn" className="text-sm font-medium text-foreground block mb-1">ISBN (Optional)</label>
-              <input id="manual-isbn" name="isbn" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary" placeholder="978-..." />
+              <label htmlFor="manual-isbn" className="text-sm font-medium text-foreground block mb-1">
+                ISBN (Optional)
+              </label>
+              <input
+                id="manual-isbn"
+                name="isbn"
+                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
+                placeholder="978-..."
+              />
             </div>
             <div className="flex gap-4">
               <div className="flex-1">
-                <label htmlFor="manual-pubdate" className="text-sm font-medium text-foreground block mb-1">Publish Date</label>
-                <input type="date" id="manual-pubdate" name="pubdate" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                <label htmlFor="manual-pubdate" className="text-sm font-medium text-foreground block mb-1">
+                  Publish Date
+                </label>
+                <input
+                  type="date"
+                  id="manual-pubdate"
+                  name="pubdate"
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
               </div>
               <div className="flex-1">
-                <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">Format</label>
-                <select id="manual-format" name="format" className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary">
+                <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">
+                  Format
+                </label>
+                <select
+                  id="manual-format"
+                  name="format"
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
+                >
                   <option value="text">Book (Text)</option>
                   <option value="sound">CD/Vinyl</option>
                   <option value="video">DVD/BluRay</option>
@@ -147,10 +207,22 @@ export default function ScanPage() {
               </div>
             </div>
             <div>
-              <label htmlFor="manual-description" className="text-sm font-medium text-foreground block mb-1">Description (Optional)</label>
-              <textarea id="manual-description" name="description" rows={3} className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="Brief summary..."></textarea>
+              <label htmlFor="manual-description" className="text-sm font-medium text-foreground block mb-1">
+                Description (Optional)
+              </label>
+              <textarea
+                id="manual-description"
+                name="description"
+                rows={3}
+                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary resize-none"
+                placeholder="Brief summary..."
+              ></textarea>
             </div>
-            <button type="submit" disabled={addManualMutation.isPending} className="mt-2 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={addManualMutation.isPending}
+              className="mt-2 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
               {addManualMutation.isPending ? "Adding..." : "Add to Library"}
             </button>
           </form>

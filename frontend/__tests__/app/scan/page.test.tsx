@@ -41,17 +41,19 @@ vi.mock("@/components/scanner/bottom-sheet", () => ({
     <div data-testid="bottom-sheet">
       <button onClick={onShowManualForm}>Cannot find barcode? Enter Manually</button>
     </div>
-  )
+  ),
 }));
 vi.mock("@/components/scanner/success-card", () => ({ SuccessCard: () => <div data-testid="success-card" /> }));
 
 describe("ScanPage", () => {
-  afterEach(() => { vi.clearAllMocks(); });
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("renders scanner components initially", () => {
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: vi.fn(),
-      isPending: false
+      isPending: false,
     } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);
@@ -63,7 +65,7 @@ describe("ScanPage", () => {
   it("shows manual entry form when 'Enter Manually' is clicked", () => {
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: vi.fn(),
-      isPending: false
+      isPending: false,
     } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);
@@ -86,7 +88,7 @@ describe("ScanPage", () => {
     const mutateMock = vi.fn();
     vi.mocked(hooks.useAddManualItem).mockReturnValue({
       mutate: mutateMock,
-      isPending: false
+      isPending: false,
     } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
     render(<ScanPage />);

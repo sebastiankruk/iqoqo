@@ -37,12 +37,7 @@ export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
       {/* Viewfinder box */}
       <div className="relative h-[240px] w-[240px]">
         {/* Corner brackets */}
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox="0 0 240 240"
-          fill="none"
-          aria-hidden="true"
-        >
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 240 240" fill="none" aria-hidden="true">
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}
             stroke="white"

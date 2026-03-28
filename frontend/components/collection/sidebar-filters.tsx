@@ -46,7 +46,7 @@ const statusOptions: { value: string; label: string; dot: string }[] = [
  * @returns {boolean} Whether the filter is active
  */
 function isActive(filters: ActiveFilter[], type: string, value: string) {
-  return filters.some((f) => f.type === type && f.value === value);
+  return filters.some(f => f.type === type && f.value === value);
 }
 
 /**
@@ -76,15 +76,9 @@ function AccordionSection({
         className="flex w-full items-center justify-between py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
       >
         {title}
-        <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
-        />
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
       </button>
-      <div
-        className={`overflow-hidden transition-all ${
-          open ? "max-h-96 pb-3 opacity-100" : "max-h-0 opacity-0"
-        }`}
-      >
+      <div className={`overflow-hidden transition-all ${open ? "max-h-96 pb-3 opacity-100" : "max-h-0 opacity-0"}`}>
         {children}
       </div>
     </div>
@@ -100,12 +94,7 @@ function AccordionSection({
  * @param root0.statusCounts - The counts for each status
  * @param root0.disableStatus - Whether to disable the status filter
  * @returns {JSX.Element} The component*/
-export function SidebarFilters({
-  activeFilters,
-  onToggleFilter,
-  statusCounts,
-  disableStatus,
-}: SidebarFiltersProps) {
+export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, disableStatus }: SidebarFiltersProps) {
   return (
     <aside className="w-full">
       <div className="mb-4 flex items-center gap-2">
@@ -121,8 +110,16 @@ export function SidebarFilters({
             {statusOptions.map(({ value, label, dot }) => {
               const active = isActive(activeFilters, "status", value);
               return (
-                <label key={value} className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/5 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                  <input type="checkbox" checked={active} onChange={() => onToggleFilter({ type: "status", value })} className="h-3.5 w-3.5 rounded border-border accent-primary" />
+                <label
+                  key={value}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/5 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "status", value })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
                   <span className={`h-2 w-2 rounded-full ${dot}`} />
                   <span className="flex-1">{label}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[value] ?? 0}</span>

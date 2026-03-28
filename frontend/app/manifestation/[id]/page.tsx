@@ -68,7 +68,7 @@ export default function ManifestationPage() {
 
   const coverUrl = manifestation.cover_url
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${manifestation.cover_url}`
-    : manifestation.meta?.["cover_url"] as string | undefined;
+    : (manifestation.meta?.["cover_url"] as string | undefined);
 
   /**
    * Add the current manifestation to the user's collection when an ISBN is available.
@@ -139,15 +139,15 @@ export default function ManifestationPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Publisher</dt>
-                  <dd className="font-medium">{manifestation.meta?.Publisher as string || "Unknown"}</dd>
+                  <dd className="font-medium">{(manifestation.meta?.Publisher as string) || "Unknown"}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Year</dt>
-                  <dd className="font-medium">{manifestation.meta?.Year as string || "Unknown"}</dd>
+                  <dd className="font-medium">{(manifestation.meta?.Year as string) || "Unknown"}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Language</dt>
-                  <dd className="font-medium">{manifestation.meta?.Language as string || "Unknown"}</dd>
+                  <dd className="font-medium">{(manifestation.meta?.Language as string) || "Unknown"}</dd>
                 </div>
               </dl>
             </div>
@@ -161,12 +161,12 @@ export default function ManifestationPage() {
                       Already in your collection
                     </div>
                   ) : (
-                    <Button
-                      onClick={handleAddToCollection}
-                      disabled={isAdding || !manifestation.isbn13}
-                      size="sm"
-                    >
-                      {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
+                    <Button onClick={handleAddToCollection} disabled={isAdding || !manifestation.isbn13} size="sm">
+                      {isAdding ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <BookOpen className="mr-2 h-4 w-4" />
+                      )}
                       Add to My Collection
                     </Button>
                   )}
