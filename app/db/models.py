@@ -145,7 +145,9 @@ class Work(db.Model):  # type: ignore[name-defined]
     meta = db.Column(db.JSON, default={})
 
     # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and ("pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"):
+    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
+        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
+    ):
         fts_simple = db.Column(
             TSVECTOR(),
             db.Computed(
@@ -203,7 +205,9 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
 
     # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and ("pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"):
+    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
+        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
+    ):
         fts_simple = db.Column(
             TSVECTOR(),
             db.Computed(

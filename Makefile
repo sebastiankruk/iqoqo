@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend clean db-init db-seed db-export db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export db-stats build-frontend
 
 help:
 	@echo "Available targets:"
@@ -35,7 +35,8 @@ help:
 	@echo "  format-js      - Format JavaScript code (prettier)"
 	@echo "  test           - Run all tests (backend and frontend)"
 	@echo "  test-backend   - Run backend tests (pytest)"
-	@echo "  test-frontend  - Run frontend tests (Vitest)"
+	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
+	@echo "  test-e2e       - Run end-to-end tests (Playwright, requires running app)"
 	@echo "  build-frontend - Build Next.js production bundle"
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
@@ -92,6 +93,7 @@ lint-python:
 	@echo "Running ruff..."
 	.venv/bin/ruff check app/ tests/ scripts/
 	@echo "Running mypy..."
+	rm -rf .mypy_cache
 	.venv/bin/mypy app/ tests/
 	@echo "Running pylint..."
 	.venv/bin/pylint app/ tests/ scripts/
@@ -125,7 +127,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents"
+	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#frontend/playwright-report" "#frontend/test-results"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license
@@ -150,10 +152,14 @@ test-backend:
 	.venv/bin/pytest tests/
 
 test-frontend:
-	@echo "Running frontend tests..."
+	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && npm run test
 
-test: test-backend test-frontend
+test-e2e:
+	@echo "Running end-to-end tests (Playwright)..."
+	cd frontend && npx playwright test
+
+test: test-backend test-frontend test-e2e
 	@echo "All tests completed!"
 
 # Clean

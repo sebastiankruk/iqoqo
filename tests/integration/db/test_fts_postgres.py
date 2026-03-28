@@ -31,6 +31,13 @@ from app.db.models import Expression, Manifestation, Work
 @pytest.fixture(scope="module")
 def postgres_db():
     """Spin up a fresh PostgreSQL container for the duration of the module."""
+    try:
+        import docker  # noqa: PLC0415 – deferred to keep import fast when Docker absent
+
+        docker.from_env().ping()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pytest.skip("Docker is not available – skipping PostgreSQL integration tests.")
+
     with PostgresContainer("postgres:15-alpine") as postgres:
         os.environ["DATABASE_URL"] = postgres.get_connection_url()
         os.environ["ENABLE_FTS_TESTS"] = "true"
@@ -48,18 +55,12 @@ def test_fts_works_computation(postgres_db):
     """Verify that inserting a Work correctly populates fts_simple."""
     with postgres_db.app_context():
         # 1. Insert a Work
-        work = Work(
-            title="The Hobbit",
-            meta={"authors": "J.R.R. Tolkien"}
-        )
+        work = Work(title="The Hobbit", meta={"authors": "J.R.R. Tolkien"})
         db.session.add(work)
         db.session.commit()
 
         # 2. Query fts_simple directly using raw SQL to be sure
-        result = db.session.execute(
-            text("SELECT fts_simple FROM works WHERE id = :id"),
-            {"id": work.id}
-        ).fetchone()
+        result = db.session.execute(text("SELECT fts_simple FROM works WHERE id = :id"), {"id": work.id}).fetchone()
 
         assert result is not None
         fts_val = result[0]
@@ -68,9 +69,7 @@ def test_fts_works_computation(postgres_db):
         assert "tolkien" in fts_val.lower()
 
         # 3. Test search via tsquery
-        search_results = Work.query.filter(
-            text("fts_simple @@ to_tsquery('simple', 'hobbit & tolkien')")
-        ).all()
+        search_results = Work.query.filter(text("fts_simple @@ to_tsquery('simple', 'hobbit & tolkien')")).all()
         assert len(search_results) == 1
         assert search_results[0].title == "The Hobbit"
 
@@ -89,21 +88,13 @@ def test_fts_manifestations_computation(postgres_db):
 
         # 2. Insert Manifestation
         manifestation = Manifestation(
-            expression_id=expr.id,
-            isbn13="9780000000001",
-            meta={
-                "publisher": "Arktos",
-                "alt_title": "The Fourth Political Theory"
-            }
+            expression_id=expr.id, isbn13="9780000000001", meta={"publisher": "Arktos", "alt_title": "The Fourth Political Theory"}
         )
         db.session.add(manifestation)
         db.session.commit()
 
         # 3. Query fts_simple
-        result = db.session.execute(
-            text("SELECT fts_simple FROM manifestations WHERE id = :id"),
-            {"id": manifestation.id}
-        ).fetchone()
+        result = db.session.execute(text("SELECT fts_simple FROM manifestations WHERE id = :id"), {"id": manifestation.id}).fetchone()
 
         assert result is not None
         fts_val = result[0]
@@ -112,8 +103,6 @@ def test_fts_manifestations_computation(postgres_db):
         assert "fourth" in fts_val.lower()
 
         # 4. Search
-        search_results = Manifestation.query.filter(
-            text("fts_simple @@ to_tsquery('simple', 'arktos & fourth')")
-        ).all()
+        search_results = Manifestation.query.filter(text("fts_simple @@ to_tsquery('simple', 'arktos & fourth')")).all()
         assert len(search_results) == 1
         assert search_results[0].isbn13 == "9780000000001"

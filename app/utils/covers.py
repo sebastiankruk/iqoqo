@@ -170,9 +170,9 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
     # 2. Google Books (Search -> Thumbnail)
     gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
     try:
-        res = requests.get(gb_search, timeout=5).json()
-        if "items" in res:
-            thumb = res["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+        gb_data = requests.get(gb_search, timeout=5).json()
+        if "items" in gb_data:
+            thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
             if thumb:
                 # Get higher res
                 thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
@@ -316,7 +316,7 @@ def start_cover_processing(
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
-):
+) -> None:
     """Fires off the background thread."""
     thread = threading.Thread(
         target=process_cover_pipeline,

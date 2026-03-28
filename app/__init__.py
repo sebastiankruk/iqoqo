@@ -81,9 +81,14 @@ def create_app(config_class=Config, config_override=None):
                             app.config.get("CORS_ALLOW_HEADERS"),
                             default=["Content-Type", "Authorization"],
                         ),
+                        # Credential forwarding (cookies/Authorization) on cross-origin
+                        # requests requires an explicit operator opt-in via the
+                        # CORS_SUPPORTS_CREDENTIALS=true environment variable.
+                        # OAuth/federation deployments must set this explicitly; the
+                        # default remains False to avoid unintended CSRF exposure.
                         "supports_credentials": _coerce_bool(
                             app.config.get("CORS_SUPPORTS_CREDENTIALS"),
-                            default=True,  # Changed to True for OAuth sessions
+                            default=False,
                         ),
                     }
                 },

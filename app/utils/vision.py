@@ -91,10 +91,11 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
     can_use_cloud_llm = False
     if user_id:
+        user = None
         try:
             user = db.session.get(User, uuid.UUID(user_id))
         except ValueError:
-            pass
+            logger.debug("vision._extract_via_gemini: invalid user_id format %r, skipping permission check.", user_id)
 
         if user:
             can_use_cloud_llm = user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value)

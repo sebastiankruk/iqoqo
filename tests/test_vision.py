@@ -226,6 +226,7 @@ def test_parse_authors_comma_separated_string():
         "Genre": "",
     }
 
+
 @patch("app.utils.vision._extract_via_gemini")
 @patch("app.utils.vision._extract_via_ollama")
 @patch("app.utils.vision._extract_via_tesseract")

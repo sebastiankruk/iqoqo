@@ -7,3 +7,5 @@ dist/
 migrations/
 *.egg-info/
 __pycache__/
+frontend/playwright-report/
+frontend/test-results/

@@ -31,9 +31,11 @@ def test_extract_from_cover_global_llm_disabled(client, vision_user_headers):
         # In our implementation, Tesseract is a fallback. If ALL are disabled or fail, we get 503.
 
         # Mock all fallbacks to return None to simulate "disabled or failed"
-        with patch("app.utils.vision._extract_via_gemini") as mock_gemini, \
-             patch("app.utils.vision._extract_via_ollama") as mock_ollama, \
-             patch("app.utils.vision._extract_via_tesseract") as mock_tesseract:
+        with (
+            patch("app.utils.vision._extract_via_gemini") as mock_gemini,
+            patch("app.utils.vision._extract_via_ollama") as mock_ollama,
+            patch("app.utils.vision._extract_via_tesseract") as mock_tesseract,
+        ):
 
             mock_gemini.return_value = None
             mock_ollama.return_value = None
