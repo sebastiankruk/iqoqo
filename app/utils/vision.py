@@ -24,6 +24,7 @@ import re
 import time
 import uuid
 
+from app.config import Config
 from app.core.permissions import ItemPermissions
 from app.db.models import User, db
 
@@ -61,17 +62,28 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         A dict ``{"Title": str, "Subtitle": str, "Authors": [str, ...], ...}`` on success, or ``None``.
     """
     # 1. Try Gemini
-    result = _extract_via_gemini(image_bytes, mime_type, user_id)
-    if result:
-        return result
+    try:
+        result = _extract_via_gemini(image_bytes, mime_type, user_id)
+        if result:
+            return result
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Waterfall step 1 (Gemini) raised an exception: %s", e)
 
     # 2. Try Ollama Fallback
-    result = _extract_via_ollama(image_bytes)
-    if result:
-        return result
+    try:
+        result = _extract_via_ollama(image_bytes)
+        if result:
+            return result
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Waterfall step 2 (Ollama) raised an exception: %s", e)
 
     # 3. Try Tesseract OCR Fallback
-    return _extract_via_tesseract(image_bytes)
+    try:
+        return _extract_via_tesseract(image_bytes)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Waterfall step 3 (Tesseract) raised an exception: %s", e)
+
+    return None
 
 
 def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
@@ -87,8 +99,8 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         if user:
             can_use_cloud_llm = user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value)
 
-    if not can_use_cloud_llm:
-        logger.debug("Gemini execution skipped: user_id=%s lacks cloud LLM permission.", user_id or "Anonymous")
+    if not Config.ALLOW_LLM or not can_use_cloud_llm:
+        logger.debug("Gemini execution skipped: ALLOW_LLM=%s, cloud status=%s", Config.ALLOW_LLM, can_use_cloud_llm)
         return None
 
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -131,6 +143,10 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
 
 def _extract_via_ollama(image_bytes: bytes) -> dict | None:
+    if not Config.ALLOW_LLM:
+        logger.debug("Ollama vision extraction skipped: ALLOW_LLM is false.")
+        return None
+
     url = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
     model = os.environ.get("OLLAMA_VISION_MODEL", "llava")
 

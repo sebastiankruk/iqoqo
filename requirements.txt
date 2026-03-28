@@ -16,6 +16,7 @@ pytesseract>=0.3.10
 
 # Testing
 pytest
+testcontainers[postgresql]
 
 # Code Quality & Development Tools
 black

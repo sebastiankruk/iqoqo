@@ -17,7 +17,7 @@
 #
 
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.api.scanner import _MAX_COVER_SIZE
 
@@ -120,3 +120,39 @@ def test_extract_from_cover_failure(mock_extract, mock_image_open, client, visio
 
     assert response.status_code == 503
     assert "Vision extraction failed. All fallback methods" in response.json["error"]
+
+
+def test_extract_from_cover_oversized_header(client, vision_user_headers):
+    """Reject early if Content-Length header exceeds limit (413)."""
+    from unittest.mock import PropertyMock
+
+    with patch("flask.Request.content_length", new_callable=PropertyMock) as mock_cl:
+        mock_cl.return_value = _MAX_COVER_SIZE + 1
+
+        response = client.post(
+            "/api/vision/extract",
+            data={"cover": (BytesIO(b"small"), "test.jpg")},
+            content_type="multipart/form-data",
+            headers=vision_user_headers,
+        )
+
+        assert response.status_code == 413
+        assert "File too large" in response.json["error"]
+
+
+@patch("app.api.scanner.Image.open")
+def test_extract_from_cover_pil_verify_failure(mock_image_open, client, vision_user_headers):
+    """Reject if PIL.Image.verify fails (corrupt image)."""
+    mock_img = MagicMock()
+    mock_img.verify.side_effect = OSError("Corrupt image")
+    mock_image_open.return_value = mock_img
+
+    data = {"cover": (BytesIO(b"corrupt data"), "test.jpg")}
+    response = client.post(
+        "/api/vision/extract",
+        data=data,
+        content_type="multipart/form-data",
+        headers=vision_user_headers,
+    )
+    assert response.status_code == 400
+    assert "Invalid or corrupted image file" in response.json["error"]
