@@ -64,22 +64,22 @@ function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
 describe("ItemCard", () => {
   it("displays the item title", () => {
     render(<ItemCard item={makeItem()} />);
-    expect(screen.getByText("Dune")).toBeInTheDocument();
+    expect(screen.getAllByText("Dune").length).toBeGreaterThan(0);
   });
 
   it("displays the first author name", () => {
     render(<ItemCard item={makeItem()} />);
-    expect(screen.getByText("Frank Herbert")).toBeInTheDocument();
+    expect(screen.getAllByText("Frank Herbert").length).toBeGreaterThan(0);
   });
 
   it("falls back to 'Untitled' when title is missing", () => {
     render(<ItemCard item={makeItem({ title: undefined })} />);
-    expect(screen.getByText("Untitled")).toBeInTheDocument();
+    expect(screen.getAllByText("Untitled").length).toBeGreaterThan(0);
   });
 
   it("falls back to 'Unknown author' when authors is missing", () => {
     render(<ItemCard item={makeItem({ authors: undefined })} />);
-    expect(screen.getByText("Unknown author")).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown author").length).toBeGreaterThan(0);
   });
 
   it("links to the item detail page", () => {
@@ -113,11 +113,7 @@ describe("ItemCard", () => {
   });
 
   it("renders a cover image when coverUrl is provided in meta", () => {
-    render(
-      <ItemCard
-        item={makeItem({ meta: { cover_url: "https://example.com/cover.jpg" } })}
-      />,
-    );
+    render(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/cover.jpg" } })} />);
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");

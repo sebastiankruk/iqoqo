@@ -22,7 +22,7 @@ import type { ApiResponse } from "@/types/frbr";
  * @returns {Promise<Record<string, unknown>[]>} The users
  */
 export async function getUsers(): Promise<Record<string, unknown>[]> {
-  return apiFetch<Record<string, unknown>[]>('/v1/admin/users');
+  return apiFetch<Record<string, unknown>[]>("/v1/admin/users");
 }
 
 /**

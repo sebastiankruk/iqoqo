@@ -68,9 +68,10 @@ export default function RegisterPage() {
           </div>
 
           <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`}>
+            className="w-full"
+            variant="outline"
+            onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`)}
+          >
             Sign up with Google
           </Button>
 
@@ -87,7 +88,7 @@ export default function RegisterPage() {
                 placeholder="Display Name (Optional)"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={e => setDisplayName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -97,7 +98,7 @@ export default function RegisterPage() {
                 required
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -108,7 +109,7 @@ export default function RegisterPage() {
                 minLength={6}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
               />
             </div>
 
@@ -117,7 +118,7 @@ export default function RegisterPage() {
                 type="checkbox"
                 id="terms"
                 checked={acceptedTerms}
-                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                onChange={e => setAcceptedTerms(e.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
               <label htmlFor="terms" className="text-xs text-muted-foreground leading-snug">
@@ -128,11 +129,14 @@ export default function RegisterPage() {
                 and{" "}
                 <Link href="/legal/privacy" target="_blank" className="underline hover:text-primary">
                   Privacy Policy
-                </Link>.
+                </Link>
+                .
               </label>
             </div>
 
-            <Button type="submit" className="w-full" disabled={!acceptedTerms} variant="ghost">Sign Up</Button>
+            <Button type="submit" className="w-full" disabled={!acceptedTerms} variant="ghost">
+              Sign Up
+            </Button>
           </form>
 
           <div className="text-center text-sm">

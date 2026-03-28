@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -13,20 +14,5 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-permissions:
-  - name: refetch:metadata
-    description: "Allow refetching manifestation metadata"
-  - name: regenerate:cover
-    description: "Allow regenerating covers"
-  - name: delete:item
-    description: "Allow deletion of items"
-  - name: delete:manifestation
-    description: "Allow deletion of manifestations"
-  - name: llm_generate:cover
-    description: "Allow LLM to generate covers"
-  - name: llm_generate:metadata
-    description: "Allow LLM to extract metadata from cover image"
-  - name: llm_generate:cloud
-    description: "Allow LLM to generate content using cloud resources"
-  - name: upload:cover
-    description: "Allow uploading/contributing manifestation covers"
+export MODE="local"
+./run_dev.sh

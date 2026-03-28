@@ -25,13 +25,7 @@ import Link from "next/link";
  * @param root0.title - The title
  * @returns {JSX.Element} The component
  */
-export function HeroBanner({
-  coverUrl,
-  title,
-}: {
-  coverUrl?: string;
-  title?: string;
-}) {
+export function HeroBanner({ coverUrl, title }: { coverUrl?: string; title?: string }) {
   return (
     <div className="relative h-[200px] w-full overflow-hidden bg-primary dark:bg-[#040608]">
       {coverUrl && (
@@ -47,21 +41,12 @@ export function HeroBanner({
 
       {/* Breadcrumb */}
       <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-end px-6 pb-16">
-        <nav
-          className="flex items-center gap-2 text-xs text-primary-foreground/80"
-          aria-label="Breadcrumb"
-        >
-          <Link
-            href="/"
-            className="transition-colors hover:text-primary-foreground"
-          >
+        <nav className="flex items-center gap-2 text-xs text-primary-foreground/80" aria-label="Breadcrumb">
+          <Link href="/" className="transition-colors hover:text-primary-foreground">
             Library
           </Link>
           <span>/</span>
-          <Link
-            href="/collection"
-            className="transition-colors hover:text-primary-foreground"
-          >
+          <Link href="/collection" className="transition-colors hover:text-primary-foreground">
             Collection
           </Link>
           <span>/</span>

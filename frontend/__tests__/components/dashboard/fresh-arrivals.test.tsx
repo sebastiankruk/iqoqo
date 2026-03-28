@@ -83,9 +83,7 @@ describe("FreshArrivals", () => {
 
   it("renders the section heading", () => {
     render(<FreshArrivals />);
-    expect(
-      screen.getByRole("heading", { name: "Fresh Arrivals" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fresh Arrivals" })).toBeInTheDocument();
   });
 
   it("renders a 'View global library' link pointing to /collection?viewMode=manifestations", () => {
@@ -156,8 +154,6 @@ describe("FreshArrivals", () => {
 
   it("is wrapped in a landmark section for accessibility", () => {
     render(<FreshArrivals />);
-    expect(
-      screen.getByRole("region", { name: /recently added items/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /recently added items/i })).toBeInTheDocument();
   });
 });

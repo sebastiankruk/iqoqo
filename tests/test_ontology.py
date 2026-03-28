@@ -72,8 +72,8 @@ def _parse_item_status_from_ts(ts_source: str) -> frozenset[str]:
         raise ValueError("Could not locate 'ItemStatus' type alias in frbr.ts")
 
     union_body = match.group(1)
-    # Extract all double-quoted string literals from the union body
-    return frozenset(re.findall(r'"([^"]+)"', union_body))
+    # Extract all string literals from the union body (single or double quotes)
+    return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", union_body))
 
 
 # ---------------------------------------------------------------------------

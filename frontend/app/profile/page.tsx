@@ -94,7 +94,7 @@ export default function ProfilePage() {
   const handleUpdateName = async () => {
     try {
       await apiClient.put("/profile/", { display_name: editNameValue });
-      setProfile(prev => prev ? { ...prev, display_name: editNameValue } : null);
+      setProfile(prev => (prev ? { ...prev, display_name: editNameValue } : null));
       setIsEditingName(false);
       toast.success("Profile updated");
     } catch {
@@ -108,7 +108,9 @@ export default function ProfilePage() {
    */
 
   const handleDeleteAccount = async () => {
-    const confirmed = window.confirm("Are you absolutely sure? This will permanently delete your account, your library collection, and all your data. This cannot be undone.");
+    const confirmed = window.confirm(
+      "Are you absolutely sure? This will permanently delete your account, your library collection, and all your data. This cannot be undone."
+    );
     if (!confirmed) return;
 
     try {
@@ -130,7 +132,7 @@ export default function ProfilePage() {
     try {
       await apiClient.post("/profile/consent", {
         consent_type: type,
-        is_granted: !currentStatus
+        is_granted: !currentStatus,
       });
       setProfile(prev => {
         if (!prev) return null;
@@ -138,8 +140,8 @@ export default function ProfilePage() {
           ...prev,
           consents: {
             ...prev.consents,
-            [type]: !currentStatus
-          }
+            [type]: !currentStatus,
+          },
         };
       });
       toast.success("Privacy preferences updated");
@@ -155,7 +157,13 @@ export default function ProfilePage() {
       <Navbar />
       <main className="max-w-2xl mx-auto p-6 space-y-8">
         <div className="flex items-center space-x-4">
-          <Avatar src={profile.avatar_url} alt="Avatar" size={64} className="border" fallback={profile.email[0].toUpperCase()} />
+          <Avatar
+            src={profile.avatar_url}
+            alt="Avatar"
+            size={64}
+            className="border"
+            fallback={profile.email[0].toUpperCase()}
+          />
           <div>
             <h1 className="text-3xl font-bold">My Profile</h1>
             <p className="text-muted-foreground">{profile.email}</p>
@@ -172,16 +180,22 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={editNameValue}
-                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onChange={e => setEditNameValue(e.target.value)}
                     className="border rounded px-2 py-1 flex-1 text-sm bg-background"
                   />
-                  <Button size="sm" onClick={handleUpdateName}>Save</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)}>Cancel</Button>
+                  <Button size="sm" onClick={handleUpdateName}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)}>
+                    Cancel
+                  </Button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between mt-1">
                   <span>{profile.display_name || "N/A"}</span>
-                  <Button size="sm" variant="outline" onClick={() => setIsEditingName(true)}>Edit</Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingName(true)}>
+                    Edit
+                  </Button>
                 </div>
               )}
             </div>
@@ -191,7 +205,11 @@ export default function ProfilePage() {
         <div className="p-4 border rounded-lg bg-card space-y-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Privacy & Consents (GDPR)</h2>
-            <Link href="/legal/privacy" target="_blank" className="text-sm text-muted-foreground underline hover:text-primary">
+            <Link
+              href="/legal/privacy"
+              target="_blank"
+              className="text-sm text-muted-foreground underline hover:text-primary"
+            >
               Read Policy
             </Link>
           </div>
@@ -224,7 +242,9 @@ export default function ProfilePage() {
         </div>
 
         <div className="flex justify-between items-center pt-4">
-          <Button variant="outline" onClick={handleLogout}>Log Out</Button>
+          <Button variant="outline" onClick={handleLogout}>
+            Log Out
+          </Button>
 
           <div className="text-right">
             <Button variant="destructive" onClick={handleDeleteAccount}>

@@ -44,9 +44,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
     <section aria-label="Recently added items">
       <div className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="font-serif text-xl font-bold text-foreground">
-            Fresh Arrivals
-          </h2>
+          <h2 className="font-serif text-xl font-bold text-foreground">Fresh Arrivals</h2>
           <span className="hidden rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:inline-block">
             Latest
           </span>
@@ -65,10 +63,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
       {isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="w-36 shrink-0 sm:w-40"
-            >
+            <div key={i} className="w-36 shrink-0 sm:w-40">
               <div className="mb-3 aspect-[2/3] animate-pulse rounded-lg bg-muted shadow-md" />
               <div className="h-3 animate-pulse rounded bg-muted" />
               <div className="mt-1.5 h-2.5 w-2/3 animate-pulse rounded bg-muted" />
@@ -77,7 +72,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {items.map((item) => {
+          {items.map(item => {
             const coverUrl = item.cover_url
               ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_url}`
               : (item.meta?.["cover_url"] as string | undefined);
@@ -86,13 +81,8 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
             const isGenerated = item.cover_status === "ready" && !item.meta?.["cover_url"];
 
             return (
-              <Link
-                href={`/manifestation/${item.id}`}
-                key={item.id}
-                className="group w-36 shrink-0 sm:w-40"
-              >
+              <Link href={`/manifestation/${item.id}`} key={item.id} className="group w-36 shrink-0 sm:w-40">
                 <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-
                   {(isProcessing || item.cover_status === "pending") && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -119,9 +109,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
 
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
-                <h3 className="truncate text-sm font-semibold text-card-foreground">
-                  {item.title ?? "Untitled"}
-                </h3>
+                <h3 className="truncate text-sm font-semibold text-card-foreground">{item.title ?? "Untitled"}</h3>
                 <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                   <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
                   {item.authors?.[0] ?? "Unknown"}

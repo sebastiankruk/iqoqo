@@ -29,21 +29,21 @@ export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Protected routes – require authentication
-  const protectedRoutes = ['/profile'];
+  const protectedRoutes = ["/profile"];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
   // If they are on the login page but already logged in, send them to Discover
-  if (pathname.startsWith('/login')) {
+  if (pathname.startsWith("/login")) {
     if (isLoggedIn) {
-      return NextResponse.redirect(new URL('/profile', req.nextUrl));
+      return NextResponse.redirect(new URL("/profile", req.nextUrl));
     }
     return NextResponse.next();
   }
 
   // If they are NOT logged in AND trying to access a protected route, redirect to login
   if (!isLoggedIn && isProtectedRoute) {
-    const loginUrl = new URL('/login', req.nextUrl);
-    loginUrl.searchParams.set('callbackUrl', pathname);
+    const loginUrl = new URL("/login", req.nextUrl);
+    loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -53,5 +53,5 @@ export function proxy(req: NextRequest) {
 // The matcher defines which routes this middleware runs on.
 // This runs on everything EXCEPT /api, static files, and images.
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

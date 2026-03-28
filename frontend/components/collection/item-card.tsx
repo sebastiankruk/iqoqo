@@ -79,9 +79,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const coverUrl = itemCoverUrl
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemCoverUrl}`
     : isCatalog
-      ? (item as CatalogEntry).meta?.["cover_url"] as string | undefined
-      : ((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
-        ((item as Item).meta?.["cover_url"] as string | undefined);
+      ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
+      : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
+        ((item as Item).meta?.["cover_url"] as string | undefined));
 
   const hasLegacyCoverUrl = isCatalog
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])
@@ -96,42 +96,36 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
 
   if (variant === "horizontal") {
     return (
-        <Link
-            key={itemId}
-            href={targetHref}
-            className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div className="flex h-full p-5">
-              <div className="flex flex-1 flex-col justify-between">
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Book
-                    </span>
-                  </div>
-                  <h3 className="font-serif text-lg font-bold leading-snug text-card-foreground">
-                    {title}
-                  </h3>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {authors}
-                  </p>
-                  <div className="mt-3 flex items-center gap-2">
-                    {!isCatalog && (
-                      <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-                        {dotTitle}
-                      </span>
-                    )}
-                    {isCatalog && userOwns && (
-                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                        In Collection
-                      </span>
-                    )}
-                  </div>
-                </div>
+      <Link
+        key={itemId}
+        href={targetHref}
+        className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
+      >
+        <div className="flex h-full p-5">
+          <div className="flex flex-1 flex-col justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Book</span>
+              </div>
+              <h3 className="font-serif text-lg font-bold leading-snug text-card-foreground">{title}</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">{authors}</p>
+              <div className="mt-3 flex items-center gap-2">
+                {!isCatalog && (
+                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                    {dotTitle}
+                  </span>
+                )}
+                {isCatalog && userOwns && (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                    In Collection
+                  </span>
+                )}
               </div>
             </div>
-          </Link>
+          </div>
+        </div>
+      </Link>
     );
   }
 
@@ -140,11 +134,11 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         {/* Cover */}
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
-          {(isProcessing || coverStatus === 'pending') && (
+          {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="text-xs font-medium text-foreground">
-                {coverStatus === 'pending' ? 'Generating...' : 'Processing...'}
+                {coverStatus === "pending" ? "Generating..." : "Processing..."}
               </span>
             </div>
           )}
@@ -158,8 +152,10 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <BookOpen className="h-10 w-10 text-muted-foreground/30" />
+            <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
+              <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
+              <span className="text-xs text-muted-foreground line-clamp-2">{authors}</span>
+              <BookOpen className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
         </div>
@@ -167,19 +163,10 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         {/* Footer */}
         <div className="flex items-start gap-2 px-3 py-2.5">
           {/* Status dot */}
-          {!isCatalog && (
-            <span
-              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`}
-              title={dotTitle}
-            />
-          )}
+          {!isCatalog && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={dotTitle} />}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-snug text-foreground">
-              {title}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {authors}
-            </p>
+            <p className="truncate text-sm font-semibold leading-snug text-foreground">{title}</p>
+            <p className="truncate text-xs text-muted-foreground">{authors}</p>
 
             {isCatalog && userOwns && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">

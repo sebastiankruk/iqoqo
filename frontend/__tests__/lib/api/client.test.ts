@@ -45,13 +45,13 @@ describe("apiClient configuration", () => {
     // Next.js rewrite uses it server-side to forward to Flask.
     process.env.NEXT_PUBLIC_API_URL = "http://my-server:8080/api";
     const { apiClient } = await import("@/lib/api/client");
-    expect((apiClient.defaults.baseURL as string)).toBe("/api");
+    expect(apiClient.defaults.baseURL as string).toBe("/api");
   });
 
   it("uses /api regardless of whether NEXT_PUBLIC_API_URL is set", async () => {
     delete process.env.NEXT_PUBLIC_API_URL;
     const { apiClient } = await import("@/lib/api/client");
-    expect((apiClient.defaults.baseURL as string)).toBe("/api");
+    expect(apiClient.defaults.baseURL as string).toBe("/api");
   });
 
   it("sets Content-Type to application/json by default", async () => {

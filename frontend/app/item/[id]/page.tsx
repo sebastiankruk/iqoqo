@@ -44,11 +44,10 @@ function ItemDetail(props: { item: Item }) {
   const { item } = useManifestationWithPolling(initialItem);
   const router = useRouter();
 
-
   const coverUrl = item.cover_url
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${item.cover_url}`
-    : (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-      (item.meta?.["cover_url"] as string | undefined);
+    : ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
+      (item.meta?.["cover_url"] as string | undefined));
 
   return (
     <>
@@ -83,8 +82,7 @@ function ItemDetail(props: { item: Item }) {
             Back to collection
           </button>
           <p className="text-xs text-muted-foreground">
-            <span className="font-serif font-bold text-foreground">iqoqo</span>
-            {" "}&middot;{" "}The Library of Everything
+            <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; The Library of Everything
           </p>
         </footer>
       </div>
@@ -125,10 +123,7 @@ export default function ItemPage(props: Props) {
         <Navbar />
         <div className="flex flex-col items-center justify-center py-32">
           <p className="text-muted-foreground">Item not found.</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-4 text-sm font-medium text-accent hover:underline"
-          >
+          <button onClick={() => router.back()} className="mt-4 text-sm font-medium text-accent hover:underline">
             Back to collection
           </button>
         </div>

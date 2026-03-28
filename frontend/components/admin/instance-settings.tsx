@@ -60,7 +60,12 @@ export function InstanceSettings() {
     }
   };
 
-  if (loading) return <div className="p-4 flex justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading)
+    return (
+      <div className="p-4 flex justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-5 max-w-lg">
@@ -70,7 +75,7 @@ export function InstanceSettings() {
           type="text"
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           value={settings.instance_name ?? ""}
-          onChange={(e) => setSettings({ ...settings, instance_name: e.target.value })}
+          onChange={e => setSettings({ ...settings, instance_name: e.target.value })}
           placeholder="e.g., My Personal Library"
         />
       </div>
@@ -81,7 +86,7 @@ export function InstanceSettings() {
           type="text"
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           value={settings.amazon_affiliate_id ?? ""}
-          onChange={(e) => setSettings({ ...settings, amazon_affiliate_id: e.target.value })}
+          onChange={e => setSettings({ ...settings, amazon_affiliate_id: e.target.value })}
           placeholder="e.g., iqoqo-20"
         />
       </div>
@@ -91,7 +96,7 @@ export function InstanceSettings() {
         <select
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={String(settings.enable_federation ?? "false")}
-          onChange={(e) => setSettings({ ...settings, enable_federation: e.target.value })}
+          onChange={e => setSettings({ ...settings, enable_federation: e.target.value })}
         >
           <option value="true">Enabled</option>
           <option value="false">Disabled</option>

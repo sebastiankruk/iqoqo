@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from 'next/headers';
+import { cookies } from "next/headers";
 
 /**
  * Fetch data with authentication.
@@ -24,13 +24,13 @@ import { cookies } from 'next/headers';
  */
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const cookieStore = await cookies();
-  const token = cookieStore.get('iqoqo_session')?.value;
+  const token = cookieStore.get("iqoqo_session")?.value;
 
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  headers.set("Content-Type", "application/json");
 
   if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {

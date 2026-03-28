@@ -42,12 +42,17 @@ export function UserManagement() {
   useEffect(() => {
     getUsers()
       // Double cast via unknown to satisfy TypeScript's overlap rules
-      .then((data) => setUsers(data as unknown as AdminUser[]))
+      .then(data => setUsers(data as unknown as AdminUser[]))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="p-4 flex justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading)
+    return (
+      <div className="p-4 flex justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
     <div className="overflow-x-auto">
@@ -61,7 +66,7 @@ export function UserManagement() {
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => (
+          {users.map(u => (
             <tr key={u.id} className="border-b dark:border-white/10 hover:bg-accent/20 transition-colors">
               <td className="px-6 py-4 font-medium">{u.email}</td>
               <td className="px-6 py-4">{u.display_name}</td>

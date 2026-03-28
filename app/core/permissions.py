@@ -25,4 +25,6 @@ class ItemPermissions(Enum):
     DELETE_ITEM = "delete:item"
     DELETE_MANIFESTATION = "delete:manifestation"
     LLM_GENERATE_COVER = "llm_generate:cover"
+    LLM_GENERATE_METADATA = "llm_generate:metadata"
     LLM_GENERATE_CLOUD = "llm_generate:cloud"
+    UPLOAD_COVER = "upload:cover"

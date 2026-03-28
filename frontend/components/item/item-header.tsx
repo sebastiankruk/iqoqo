@@ -49,11 +49,7 @@ export function ItemHeader({ item }: { item: Item }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-        {authors.length > 0 && (
-          <span className="font-medium text-foreground">
-            {authors.join(", ")}
-          </span>
-        )}
+        {authors.length > 0 && <span className="font-medium text-foreground">{authors.join(", ")}</span>}
         {year && (
           <>
             <span className="text-border">&bull;</span>
@@ -76,7 +72,7 @@ export function ItemHeader({ item }: { item: Item }) {
 
       {tags.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {tags.map((tag) => (
+          {tags.map(tag => (
             <span
               key={tag}
               className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground"

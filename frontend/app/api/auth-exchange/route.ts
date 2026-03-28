@@ -14,8 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 // frontend/app/api/auth-exchange/route.ts
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 /**
  * Handle GET requests to exchange a short-lived token for a session cookie.
@@ -25,25 +25,25 @@ import { NextResponse } from 'next/server';
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const token = searchParams.get('token');
+  const token = searchParams.get("token");
 
   // Use our explicit environment variable as the base URL, fallback to request.url just in case
   const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || request.url;
 
   if (!token) {
-    return NextResponse.redirect(new URL('/login?error=MissingToken', baseUrl));
+    return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
   }
 
   // Set the HttpOnly cookie
   const cookieStore = await cookies();
-  cookieStore.set('iqoqo_session', token, {
+  cookieStore.set("iqoqo_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
   // Redirect to dashboard explicitly using the correct domain
-  return NextResponse.redirect(new URL('/', baseUrl));
+  return NextResponse.redirect(new URL("/", baseUrl));
 }

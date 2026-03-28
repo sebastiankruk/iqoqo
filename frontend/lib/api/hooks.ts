@@ -17,14 +17,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type {
-  Item,
-  CatalogEntry,
-  DashboardStats,
-  IsbnMeta,
-  ApiResponse,
-  UserProfile,
-} from "@/types/frbr";
+import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile } from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -209,13 +202,13 @@ export function useIsbnLookup(isbn: string, enabled = false) {
 /**
  * Custom hook to add a new item.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; manifestation_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
  */
 export function useAddItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ isbn, metadata }: { isbn: string; metadata?: IsbnMeta }) => {
-      const res = await apiClient.post<{ item_id: number }>(`/item/${isbn}`, metadata ?? {});
+      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, metadata ?? {});
       return res.data;
     },
     onSuccess: () => {
@@ -236,8 +229,7 @@ export function useManifestationWithPolling(initialData: Item) {
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    refetchInterval: (query) =>
-      query.state.data?.cover_status === 'pending' ? 3000 : false,
+    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 3000 : false),
   });
   return { item };
 }
@@ -246,18 +238,24 @@ type ManualItemPayload = {
   Title: string;
   Authors: string[];
   Format: string;
+  ISBN?: string;
+  PublicationDate?: string;
+  Description?: string;
 };
 
 /**
  * Custom hook to add a new item manually when ISBN is not available.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
  */
 export function useAddManualItem() {
   const qc = useQueryClient();
-  return useMutation<ApiResponse<{ item_id: number }>, Error, ManualItemPayload>({
+  return useMutation<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>({
     mutationFn: async (metadata: ManualItemPayload) => {
-      const res = await apiClient.post<ApiResponse<{ item_id: number }>>("/items/manual", metadata);
+      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
+        "/items/manual",
+        metadata
+      );
       return res.data;
     },
     onSuccess: () => {
@@ -351,7 +349,12 @@ export function useProfile() {
         return res;
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
-        if (message.includes("Token expired") || message.includes("Invalid token") || message.includes("Token missing") || message.includes("Invalid user ID format")) {
+        if (
+          message.includes("Token expired") ||
+          message.includes("Invalid token") ||
+          message.includes("Token missing") ||
+          message.includes("Invalid user ID format")
+        ) {
           await fetch("/api/auth/logout", { method: "POST" });
         }
         return null;
