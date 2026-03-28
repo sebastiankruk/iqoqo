@@ -19,12 +19,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from app.utils.vision import (
-    _extract_via_gemini,
-    _extract_via_ollama,
-    _extract_via_tesseract,
-    extract_metadata_from_cover,
-)
+from app.utils.vision import _extract_via_gemini, _extract_via_ollama, _extract_via_tesseract, extract_metadata_from_cover
 
 
 @patch("app.utils.vision._extract_via_ollama")
@@ -48,7 +43,7 @@ def test_extract_waterfall_missing_api_key(mock_tesseract, mock_ollama):
 def test_extract_waterfall_gemini_success(mock_tesseract, mock_ollama, mock_gemini):
     mock_gemini.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
 
-    result = extract_metadata_from_cover(b"test image")
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
 
     assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
     mock_gemini.assert_called_once()
@@ -63,7 +58,7 @@ def test_extract_waterfall_ollama_success(mock_tesseract, mock_ollama, mock_gemi
     mock_gemini.return_value = None
     mock_ollama.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
 
-    result = extract_metadata_from_cover(b"test image")
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
 
     assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
     mock_gemini.assert_called_once()
@@ -79,7 +74,7 @@ def test_extract_waterfall_tesseract_success(mock_tesseract, mock_ollama, mock_g
     mock_ollama.return_value = None
     mock_tesseract.return_value = {"Title": "Dune", "Authors": []}
 
-    result = extract_metadata_from_cover(b"test image")
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
 
     assert result == {"Title": "Dune", "Authors": []}
     mock_gemini.assert_called_once()
@@ -87,47 +82,85 @@ def test_extract_waterfall_tesseract_success(mock_tesseract, mock_ollama, mock_g
     mock_tesseract.assert_called_once()
 
 
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
 @patch("google.genai.Client", create=True)
-def test_extract_gemini_success(mock_client_class):
+def test_extract_gemini_success(mock_client_class, mock_record, mock_session):
     """Test successful extraction for Gemini."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
     mock_client = MagicMock()
     mock_client_class.return_value = mock_client
     mock_response = MagicMock()
     mock_response.text = '{"Title": "Dune", "Authors": ["Frank Herbert"]}'
     mock_client.models.generate_content.return_value = mock_response
 
-    result = _extract_via_gemini(b"test image", "image/jpeg")
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
 
-    assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
+    assert result == {
+        "Title": "Dune",
+        "Subtitle": "",
+        "Authors": ["Frank Herbert"],
+        "Publisher": "",
+        "Year": "",
+        "ISBN": "",
+        "Edition": "",
+        "Language": "",
+        "Genre": "",
+    }
 
 
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
 @patch("google.genai.Client", create=True)
-def test_extract_gemini_with_markdown_fences(mock_client_class):
+def test_extract_gemini_with_markdown_fences(mock_client_class, mock_record, mock_session):
     """Test successful extraction when model wraps the JSON in markdown code blocks."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
     mock_client = MagicMock()
     mock_client_class.return_value = mock_client
     mock_response = MagicMock()
     mock_response.text = '```json\n{"Title": "Dune 2", "Authors": ["Frank Herbert"]}\n```'
     mock_client.models.generate_content.return_value = mock_response
 
-    result = _extract_via_gemini(b"test image", "image/jpeg")
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
 
-    assert result == {"Title": "Dune 2", "Authors": ["Frank Herbert"]}
+    assert result == {
+        "Title": "Dune 2",
+        "Subtitle": "",
+        "Authors": ["Frank Herbert"],
+        "Publisher": "",
+        "Year": "",
+        "ISBN": "",
+        "Edition": "",
+        "Language": "",
+        "Genre": "",
+    }
 
 
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
 @patch("google.genai.Client", create=True)
-def test_extract_gemini_invalid_json(mock_client_class):
+def test_extract_gemini_invalid_json(mock_client_class, mock_record, mock_session):
     """Test handling of invalid JSON response."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
     mock_client = MagicMock()
     mock_client_class.return_value = mock_client
     mock_response = MagicMock()
     mock_response.text = "This is not JSON"
     mock_client.models.generate_content.return_value = mock_response
 
-    result = _extract_via_gemini(b"test image", "image/jpeg")
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
 
     assert result is None
 
@@ -140,7 +173,17 @@ def test_extract_ollama_success(mock_post):
 
     result = _extract_via_ollama(b"test image")
 
-    assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
+    assert result == {
+        "Title": "Dune",
+        "Subtitle": "",
+        "Authors": ["Frank Herbert"],
+        "Publisher": "",
+        "Year": "",
+        "ISBN": "",
+        "Edition": "",
+        "Language": "",
+        "Genre": "",
+    }
 
 
 @patch.dict("sys.modules", {"pytesseract": MagicMock(), "PIL": MagicMock(), "PIL.Image": MagicMock()})
@@ -152,3 +195,33 @@ def test_extract_tesseract_success():
     result = _extract_via_tesseract(b"test image")
 
     assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
+
+
+@patch("app.utils.vision.db.session")
+def test_extract_gemini_blocked_without_cloud_privilege(mock_session):
+    """Test that Gemini extraction returns None if user lacks cloud privilege, even with API key."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = False
+    mock_session.get.return_value = mock_user
+
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"}):
+        result = _extract_via_gemini(b"test", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
+        assert result is None
+
+
+def test_parse_authors_comma_separated_string():
+    """Test that _parse_json_response splits comma-separated author string."""
+    from app.utils.vision import _parse_json_response
+
+    res = _parse_json_response('{"Title": "Dune", "Authors": "Frank Herbert, Brian Herbert"}')
+    assert res == {
+        "Title": "Dune",
+        "Subtitle": "",
+        "Authors": ["Frank Herbert", "Brian Herbert"],
+        "Publisher": "",
+        "Year": "",
+        "ISBN": "",
+        "Edition": "",
+        "Language": "",
+        "Genre": "",
+    }

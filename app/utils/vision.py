@@ -22,15 +22,21 @@ import logging
 import os
 import re
 import time
+import uuid
+
+from app.core.permissions import ItemPermissions
+from app.db.models import User, db
 
 logger = logging.getLogger(__name__)
 
 PROMPT = (
     "You are a book cataloguing assistant. "
-    "Look at the book cover image and extract the book title and the author(s). "
+    "Look at the book cover image and extract the book metadata. "
     "Respond ONLY with a JSON object in this exact format, with no markdown fences or extra text:\n"
-    '{"Title": "<title>", "Authors": ["<author1>", "<author2>"]}\n'
-    "If you cannot determine the title or authors, use an empty string or empty list."
+    '{"Title": "<title>", "Subtitle": "<subtitle>", "Authors": ["<author1>", "<author2>"], '
+    '"Publisher": "<publisher>", "Year": "<year>", "ISBN": "<isbn>", '
+    '"Edition": "<edition>", "Language": "<language>", "Genre": "<genre>"}\n'
+    "If you cannot determine a field, use an empty string or empty list as appropriate."
 )
 
 
@@ -49,8 +55,10 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         image_bytes: Raw bytes of the cover image (JPEG, PNG, WebP supported).
         mime_type:   MIME type of the image, defaults to ``image/jpeg``.
 
+        can_use_cloud_llm: Whether to allow paid/cloud API usage.
+
     Returns:
-        A dict ``{"Title": str, "Authors": [str, ...]}`` on success, or ``None``.
+        A dict ``{"Title": str, "Subtitle": str, "Authors": [str, ...], ...}`` on success, or ``None``.
     """
     # 1. Try Gemini
     result = _extract_via_gemini(image_bytes, mime_type, user_id)
@@ -67,6 +75,22 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
 
 
 def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
+    """Extract book Title and Authors from a cover image using Gemini Vision API."""
+
+    can_use_cloud_llm = False
+    if user_id:
+        try:
+            user = db.session.get(User, uuid.UUID(user_id))
+        except ValueError:
+            pass
+
+        if user:
+            can_use_cloud_llm = user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value)
+
+    if not can_use_cloud_llm:
+        logger.debug("Gemini execution skipped: user_id=%s lacks cloud LLM permission.", user_id or "Anonymous")
+        return None
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         logger.warning("GEMINI_API_KEY not set – skipping Gemini vision extraction.")
@@ -181,12 +205,31 @@ def _parse_json_response(raw: str) -> dict | None:
         title = data.get("Title", "")
         authors = data.get("Authors", [])
 
+        # Extract new requested fields
+        subtitle = data.get("Subtitle", "")
+        publisher = data.get("Publisher", "")
+        year = data.get("Year", "")
+        isbn = data.get("ISBN", "")
+        edition = data.get("Edition", "")
+        language = data.get("Language", "")
+        genre = data.get("Genre", "")
+
         if not isinstance(title, str):
             title = str(title)
         if not isinstance(authors, list):
-            authors = [str(authors)] if authors else []
+            authors = [a.strip() for a in str(authors).split(",") if a.strip()] if authors else []
 
-        return {"Title": title.strip(), "Authors": [a.strip() for a in authors if a]}
+        return {
+            "Title": title.strip(),
+            "Subtitle": str(subtitle).strip(),
+            "Authors": [a.strip() for a in authors if a],
+            "Publisher": str(publisher).strip(),
+            "Year": str(year).strip(),
+            "ISBN": str(isbn).strip(),
+            "Edition": str(edition).strip(),
+            "Language": str(language).strip(),
+            "Genre": str(genre).strip(),
+        }
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         logger.error("Failed to parse JSON response: %s", e)
         return None

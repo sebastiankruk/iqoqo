@@ -21,6 +21,7 @@ import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
+  useProfile: vi.fn(() => ({ data: null })),
 }));
 
 vi.mock("sonner", () => ({
@@ -38,16 +39,18 @@ const mockItem = {
   meta: {},
   cover_url: "/cover.jpg",
   cover_status: "ready",
-  isbn: "9780544003415"
+  isbn: "9780544003415",
 } as unknown as Item;
 
 describe("ItemSidebar Component", () => {
-  afterEach(() => { vi.clearAllMocks(); });
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("renders correctly with item data", () => {
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: vi.fn(),
-      isPending: false
+      isPending: false,
     } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
@@ -59,7 +62,7 @@ describe("ItemSidebar Component", () => {
     const mutateMock = vi.fn();
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: mutateMock,
-      isPending: false
+      isPending: false,
     } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
@@ -67,9 +70,6 @@ describe("ItemSidebar Component", () => {
     fireEvent.change(select, { target: { value: "reading" } });
 
     expect(mutateMock).toHaveBeenCalledTimes(1);
-    expect(mutateMock).toHaveBeenCalledWith(
-      { status: "reading" },
-      expect.any(Object)
-    );
+    expect(mutateMock).toHaveBeenCalledWith({ status: "reading" }, expect.any(Object));
   });
 });

@@ -158,6 +158,7 @@ def extract_from_cover():
     mime_type = mime_map.get(ext, "image/jpeg")
 
     user_id = str(getattr(request, "user_id", ""))
+
     result = extract_metadata_from_cover(image_bytes, mime_type=mime_type, user_id=user_id)
 
     if result is None:
