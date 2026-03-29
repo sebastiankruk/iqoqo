@@ -67,6 +67,12 @@ make lint-css       # stylelint
 make lint-markdown  # markdownlint
 ```
 
+## Agent Collaboration & Memory
+
+- **Strict Adherence**: Always prioritize user-provided code snippets, text, or diffs found in the `private-notes/code/` directory. Do not deviate from or hallucinate modifications to provided code unless the user explicitly requests an alternative implementation.
+- **Copyright Headers**: Every new source file (.py, .ts, .tsx) MUST include the project's standard copyright header: `# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)` followed by the GPL header.
+- **Venv Context**: Always execute Python commands (flask, pytest, etc.) using the `.venv/bin/` directory or within a sourced virtual environment.
+
 ## Principles
 
 - **FRBR first** — no flat data models.

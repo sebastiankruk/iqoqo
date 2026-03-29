@@ -9,5 +9,7 @@ Do not proceed with any analysis, planning, or coding until you have fully loade
 - **Core Instructions:** Read `.github/copilot-instructions.md`
 - **Project Context:** You MUST list and scan the [.github/context/private-notes](file:///.github/context/private-notes:0:0-0:0) directory (including all subdirectories like `plan/`) BEFORE proposing any changes, to ensure you have the full context of the current development phase.
 - **Agent Definitions:** Review the agent personas and workflows in the `.github/agents/` directory.
+- **Provided Implementation**: If a task involves pre-written code snippets or diffs (usually in `.github/context/private-notes/code/`), you MUST use them as your primary source of truth.
+- **Venv Context**: Always execute Python commands from the `.venv/bin/` directory.
 
 Ensure all architectural decisions, code generation (Python/Flask backend, Next.js/React frontend), and database interactions comply strictly with the guidelines specified in these documents.
