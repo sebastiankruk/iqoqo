@@ -158,7 +158,7 @@ class Work(db.Model):  # type: ignore[name-defined]
         )
         __table_args__: tuple = (db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),)
     else:
-        fts_simple = db.Column(db.Text, nullable=True)
+        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
         __table_args__ = ()  # type: ignore[assignment]
 
     # Relationships
@@ -218,7 +218,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         )
         __table_args__: tuple = (db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),)
     else:
-        fts_simple = db.Column(db.Text, nullable=True)
+        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
         __table_args__ = ()  # type: ignore[assignment]
 
     def update_meta(self, **kwargs):
