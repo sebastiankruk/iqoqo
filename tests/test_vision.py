@@ -82,6 +82,7 @@ def test_extract_waterfall_tesseract_success(mock_tesseract, mock_ollama, mock_g
     mock_tesseract.assert_called_once()
 
 
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
 @patch("app.utils.vision.db.session")
 @patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
@@ -113,6 +114,7 @@ def test_extract_gemini_success(mock_client_class, mock_record, mock_session):
     }
 
 
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
 @patch("app.utils.vision.db.session")
 @patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
@@ -144,6 +146,7 @@ def test_extract_gemini_with_markdown_fences(mock_client_class, mock_record, moc
     }
 
 
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
 @patch("app.utils.vision.db.session")
 @patch("app.utils.llm_covers.record_telemetry")
 @patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
@@ -165,6 +168,7 @@ def test_extract_gemini_invalid_json(mock_client_class, mock_record, mock_sessio
     assert result is None
 
 
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
 @patch("requests.post")
 def test_extract_ollama_success(mock_post):
     mock_response = MagicMock()
@@ -197,6 +201,7 @@ def test_extract_tesseract_success():
     assert result == {"Title": "Dune", "Authors": ["Frank Herbert"]}
 
 
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
 @patch("app.utils.vision.db.session")
 def test_extract_gemini_blocked_without_cloud_privilege(mock_session):
     """Test that Gemini extraction returns None if user lacks cloud privilege, even with API key."""
