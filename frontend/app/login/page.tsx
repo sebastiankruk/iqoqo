@@ -60,9 +60,10 @@ export default function LoginPage() {
         <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
           <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
           <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => window.location.href = `/api/auth/login/google`}>
+            className="w-full"
+            variant="outline"
+            onClick={() => (window.location.href = `/api/auth/login/google`)}
+          >
             Sign in with Google
           </Button>
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
@@ -75,7 +76,7 @@ export default function LoginPage() {
               placeholder="Email"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
             />
             <input
               type="password"
@@ -83,16 +84,18 @@ export default function LoginPage() {
               placeholder="Password"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
             />
-            <Button type="submit" className="w-full" variant="ghost">Sign In</Button>
+            <Button type="submit" className="w-full" variant="ghost">
+              Sign In
+            </Button>
 
-          <div className="text-center text-sm pt-4">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-              Sign up
-            </Link>
-          </div>
+            <div className="text-center text-sm pt-4">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+                Sign up
+              </Link>
+            </div>
           </form>
         </div>
       </main>

@@ -13,10 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from __future__ import annotations
+
+import os
+import sys
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
@@ -98,6 +102,21 @@ class User(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
+    @classmethod
+    def list_llm_permissions(cls, user: User | None) -> dict[str, bool]:
+        if not user:
+            return {
+                "allow_generate_cover": False,
+                "allow_cloud_llm": False,
+            }
+
+        from app.core.permissions import ItemPermissions
+
+        return {
+            "allow_generate_cover": user.has_permission(ItemPermissions.LLM_GENERATE_COVER.value),
+            "allow_cloud_llm": user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value),
+        }
+
 
 class ConsentRecord(db.Model):  # type: ignore[name-defined]
     __tablename__ = "user_consents"
@@ -124,6 +143,23 @@ class Work(db.Model):  # type: ignore[name-defined]
     title = db.Column(db.String(1000), nullable=False)  # Increased from 255 to handle long titles
     # Flexible metadata (e.g., original_language, first_performance_date)
     meta = db.Column(db.JSON, default={})
+
+    # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
+    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
+        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
+    ):
+        fts_simple = db.Column(
+            TSVECTOR(),
+            db.Computed(
+                "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
+                persisted=True,
+            ),
+            nullable=True,
+        )
+        __table_args__: tuple = (db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),)
+    else:
+        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
+        __table_args__ = ()  # type: ignore[assignment]
 
     # Relationships
     expressions = db.relationship("Expression", backref="work", lazy=True)
@@ -168,6 +204,23 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     cover_url = db.Column(db.String(255), nullable=True)
     meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
 
+    # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
+    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
+        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
+    ):
+        fts_simple = db.Column(
+            TSVECTOR(),
+            db.Computed(
+                "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
+                persisted=True,
+            ),
+            nullable=True,
+        )
+        __table_args__: tuple = (db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),)
+    else:
+        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
+        __table_args__ = ()  # type: ignore[assignment]
+
     def update_meta(self, **kwargs):
         """Safely updates the meta JSON field."""
         meta = dict(self.meta) if self.meta else {}
@@ -203,9 +256,12 @@ class Item(db.Model):  # type: ignore[name-defined]
 class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     __tablename__ = "llm_telemetry"
     id = db.Column(db.Integer, primary_key=True)
-    provider = db.Column(db.String(50), unique=True, nullable=False)
+    provider = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.String(100), nullable=False)
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
+    total_duration_seconds = db.Column(db.Float, default=0.0)
+    __table_args__ = (db.UniqueConstraint("provider", "user_id", name="uq_provider_user"),)
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]

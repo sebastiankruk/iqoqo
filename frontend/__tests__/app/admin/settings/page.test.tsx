@@ -44,7 +44,9 @@ describe("AdminSettingsPage", () => {
   });
 
   it("shows a loading state initially", () => {
-    vi.mocked(useProfile).mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useProfile>);
+    vi.mocked(useProfile).mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<
+      typeof useProfile
+    >);
 
     render(<AdminSettingsPage />);
     expect(screen.queryByText("Admin Settings")).toBeNull();
@@ -53,7 +55,7 @@ describe("AdminSettingsPage", () => {
   it("redirects non-admin users to the home page", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: { id: "1", email: "user@test.com", roles: ["user"] } as unknown as UserProfile,
-      isLoading: false
+      isLoading: false,
     } as unknown as ReturnType<typeof useProfile>);
 
     render(<AdminSettingsPage />);
@@ -66,7 +68,7 @@ describe("AdminSettingsPage", () => {
   it("renders the admin dashboard and sidebar tabs for admin users", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: { id: "2", email: "admin@test.com", roles: ["admin"] } as unknown as UserProfile,
-      isLoading: false
+      isLoading: false,
     } as unknown as ReturnType<typeof useProfile>);
 
     render(<AdminSettingsPage />);

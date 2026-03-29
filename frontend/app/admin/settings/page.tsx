@@ -40,7 +40,12 @@ export default function AdminSettingsPage() {
     }
   }, [profile, isLoading, router]);
 
-  if (isLoading || !profile) return <div className="flex justify-center p-12"><Loader2 className="animate-spin h-8 w-8" /></div>;
+  if (isLoading || !profile)
+    return (
+      <div className="flex justify-center p-12">
+        <Loader2 className="animate-spin h-8 w-8" />
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,19 +59,19 @@ export default function AdminSettingsPage() {
             <nav className="flex flex-col gap-2">
               <button
                 onClick={() => setActiveTab("instance")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === 'instance' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
+                className={`text-left px-4 py-2 rounded-md ${activeTab === "instance" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
               >
                 Instance Settings
               </button>
               <button
                 onClick={() => setActiveTab("users")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === 'users' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
+                className={`text-left px-4 py-2 rounded-md ${activeTab === "users" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
               >
                 User Management
               </button>
               <button
                 onClick={() => setActiveTab("integrations")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === 'integrations' ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-primary-foreground/10'}`}
+                className={`text-left px-4 py-2 rounded-md ${activeTab === "integrations" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
               >
                 Integrations & Monetization
               </button>

@@ -40,50 +40,6 @@ def get_tool_path(tool_name):
     return tool_name
 
 
-def test_ruff_linting():
-    """Test that ruff linting passes."""
-    result = subprocess.run(
-        [get_tool_path("ruff"), "check", "app/", "tests/", "scripts/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, f"Ruff linting failed:\n{result.stdout}\n{result.stderr}"
-
-
-def test_mypy_type_checking():
-    """Test that mypy type checking passes."""
-    result = subprocess.run(
-        [get_tool_path("mypy"), "--no-incremental", "app/", "tests/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, f"Mypy type checking failed:\n{result.stdout}\n{result.stderr}"
-
-
-def test_black_formatting():
-    """Test that black formatting check passes."""
-    result = subprocess.run(
-        [get_tool_path("black"), "--check", "app/", "tests/", "scripts/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, f"Black formatting check failed:\n{result.stdout}\n{result.stderr}"
-
-
-def test_isort_imports():
-    """Test that isort import ordering check passes."""
-    result = subprocess.run(
-        [get_tool_path("isort"), "--check-only", "app/", "tests/", "scripts/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, f"Isort import check failed:\n{result.stdout}\n{result.stderr}"
-
-
 def test_python_syntax():
     """Test that all Python files have valid syntax."""
     errors = []

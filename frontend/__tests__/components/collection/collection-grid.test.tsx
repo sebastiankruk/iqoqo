@@ -63,9 +63,9 @@ describe("CollectionGrid", () => {
       makeItem(3, "Project Hail Mary", "Andy Weir"),
     ];
     render(<CollectionGrid items={items} />);
-    expect(screen.getByText("Dune")).toBeInTheDocument();
-    expect(screen.getByText("Recursion")).toBeInTheDocument();
-    expect(screen.getByText("Project Hail Mary")).toBeInTheDocument();
+    expect(screen.getAllByText("Dune").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Recursion").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Project Hail Mary").length).toBeGreaterThan(0);
   });
 
   it("does not show the empty-state when items are present", () => {

@@ -393,7 +393,7 @@ def add_item(isbn: str):
     db.session.add(item)
     db.session.commit()
 
-    return jsonify({"item_id": item.id})
+    return jsonify({"item_id": item.id, "manifestation_id": manifestation.id})
 
 
 @api_bp.route("/items/manual", methods=["POST"])
@@ -413,9 +413,11 @@ def add_item_manual():
     if isinstance(authors, str):
         authors = [authors]
     content_type = data.get("Format", "text")
+    isbn = data.get("ISBN")
+    pub_date_str = data.get("PublicationDate")
 
     try:
-        work = Work(title=title, meta={"authors": authors})
+        work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
         db.session.add(work)
         db.session.flush()
 
@@ -424,6 +426,15 @@ def add_item_manual():
         db.session.flush()
 
         manifestation = Manifestation(expression_id=expression.id, meta=data)
+        if isbn:
+            manifestation.isbn13 = str(isbn).replace("-", "").replace(" ", "").strip()
+        if pub_date_str:
+            from datetime import date
+
+            try:
+                manifestation.publication_date = date.fromisoformat(pub_date_str)
+            except (ValueError, TypeError):
+                pass
         db.session.add(manifestation)
         db.session.flush()
 
@@ -431,7 +442,7 @@ def add_item_manual():
         db.session.add(item)
         db.session.commit()
 
-        return jsonify({"success": True, "data": {"item_id": item.id}, "error": None})
+        return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)

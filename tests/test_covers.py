@@ -88,7 +88,7 @@ def test_fetch_external_api_cover_failure(mock_requests_get):
 def test_generate_cover_cloud_no_key():
     """Test that cloud gen returns None without API key."""
     with patch.dict("os.environ", {}, clear=True):
-        path = generate_cover_cloud("123", "Title", "Author")
+        path = generate_cover_cloud("123", "Title", "Author", "test-user")
         assert path is None
 
 
@@ -108,7 +108,7 @@ def test_generate_cover_cloud_success(tmp_path, app):
                     patch("app.utils.llm_covers.optimize_and_save_image"),
                     patch("app.utils.llm_covers.record_telemetry"),
                 ):
-                    result = generate_cover_cloud("123", "Title", "Author")
+                    result = generate_cover_cloud("123", "Title", "Author", "test-user")
                     assert result is not None
                     path, source = result
                     assert "123_dalle.jpg" in path

@@ -39,13 +39,10 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 text-center px-4 max-w-3xl">
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-          The Library of Everything
-        </h1>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">The Library of Everything</h1>
         <p className="text-xl text-muted-foreground mb-8">
-          iqoqo empowers you to create, share, and discover personal catalogs
-          of books, music, movies, and board games. Built on the open Semantic
-          Web, designed for a distributed future.
+          iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games.
+          Built on the open Semantic Web, designed for a distributed future.
         </p>
         <div className="flex gap-4 justify-center">
           <Button asChild variant="outline" size="sm">

@@ -77,9 +77,7 @@ export function MobileFilterDrawer({
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-              <span className="font-serif text-sm font-bold text-foreground">
-                Filters
-              </span>
+              <span className="font-serif text-sm font-bold text-foreground">Filters</span>
             </div>
             <button
               onClick={onClose}
@@ -91,11 +89,7 @@ export function MobileFilterDrawer({
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            <SidebarFilters
-              activeFilters={activeFilters}
-              onToggleFilter={onToggleFilter}
-              statusCounts={statusCounts}
-            />
+            <SidebarFilters activeFilters={activeFilters} onToggleFilter={onToggleFilter} statusCounts={statusCounts} />
           </div>
 
           <div className="border-t border-border p-4">

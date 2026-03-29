@@ -21,7 +21,7 @@ import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const merriweather = Merriweather({
   subsets: ["latin"],
@@ -36,8 +36,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "iqoqo – The Library of Everything",
-  description:
-    "Your personal library dashboard for books, games, music and collections",
+  description: "Your personal library dashboard for books, games, music and collections",
   icons: {
     icon: "/icon.svg",
     apple: "/apple-icon",
@@ -61,7 +60,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn(merriweather.variable, inter.variable, "font-sans", geist.variable)} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={cn(merriweather.variable, inter.variable, "font-sans", geist.variable)}
+      suppressHydrationWarning
+    >
       <head />
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>

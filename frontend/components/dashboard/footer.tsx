@@ -21,18 +21,17 @@
  * @returns {JSX.Element} The footer component
  */
 export function Footer() {
-  const uiVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
+  const uiVersion = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
 
   return (
-          <footer className="border-t border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-serif font-bold text-foreground">iqoqo</span>
-            {" "}&middot;{" "}The Library of Everything
-            {" "}&middot;{" "}{uiVersion}
-          </p>
-          <p className="text-xs text-muted-foreground">Your library, your rules.</p>
-        </div>
-      </footer>
+    <footer className="border-t border-border bg-card">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; The Library of Everything{" "}
+          &middot; {uiVersion}
+        </p>
+        <p className="text-xs text-muted-foreground">Your library, your rules.</p>
+      </div>
+    </footer>
   );
 }

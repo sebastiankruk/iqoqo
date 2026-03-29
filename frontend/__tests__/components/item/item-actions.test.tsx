@@ -36,15 +36,17 @@ const mockItem = {
   owner_id: "00000000-0000-0000-0000-000000000000",
   status: "available",
   meta: {},
-  cover_status: 'ready'
+  cover_status: "ready",
 } as unknown as Item;
 
-describe('ItemActions Component', () => {
-  afterEach(() => { vi.clearAllMocks(); });
+describe("ItemActions Component", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it('renders no buttons if user has no permissions', () => {
+  it("renders no buttons if user has no permissions", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
-      data: { id: "test-id", email: "test@example.com", permissions: [] }
+      data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
     render(<ItemActions item={mockItem} />);
@@ -54,9 +56,9 @@ describe('ItemActions Component', () => {
     expect(screen.queryByText(/Remove from library/i)).not.toBeInTheDocument();
   });
 
-  it('renders only permitted buttons', () => {
+  it("renders only permitted buttons", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
-      data: { id: "test-id", email: "test@example.com", permissions: ['delete:item'] }
+      data: { id: "test-id", email: "test@example.com", permissions: ["delete:item"] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
     render(<ItemActions item={mockItem} />);

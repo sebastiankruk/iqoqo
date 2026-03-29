@@ -19,6 +19,11 @@ FROM python:3.14-slim
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the requirements file into the container at /usr/src/app
 COPY requirements.txt ./
 

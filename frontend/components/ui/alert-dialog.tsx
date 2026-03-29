@@ -31,7 +31,10 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal;
  * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
-function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>) {
+function AlertDialogOverlay({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>) {
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
@@ -50,7 +53,10 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentPropsWithout
  * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
-function AlertDialogContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>) {
+function AlertDialogContent({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>) {
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
@@ -107,7 +113,10 @@ function AlertDialogTitle({ className, ...props }: React.ComponentPropsWithoutRe
  * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
-function AlertDialogDescription({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>) {
+function AlertDialogDescription({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>) {
   return <AlertDialogPrimitive.Description className={cn("text-sm text-muted-foreground", className)} {...props} />;
 }
 
@@ -118,7 +127,10 @@ function AlertDialogDescription({ className, ...props }: React.ComponentPropsWit
  * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
-function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>) {
+function AlertDialogAction({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>) {
   return (
     <AlertDialogPrimitive.Action
       className={cn(
@@ -137,7 +149,10 @@ function AlertDialogAction({ className, ...props }: React.ComponentPropsWithoutR
  * @param props.className - Additional CSS classes to apply.
  * @returns {JSX.Element} The component
  */
-function AlertDialogCancel({ className, ...props }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>) {
+function AlertDialogCancel({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel
       className={cn(

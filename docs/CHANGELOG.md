@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-03-28
+
+### Added
+
+- **Vision-based Metadata Extraction**: Added ability to extract `Title` and `Authors` from cover images via Gemini, Ollama (llava), or Tesseract OCR.
+- **New Endpoints**: Added `POST /api/vision/extract` for handling cover image uploads (max 10MB) and extraction.
+- **Full-Text Search**: Added PostgreSQL `TSVECTOR` columns (`fts_simple`) to `Work` and `Manifestation` for optimized searching.
+- **LLM Permissions & Telemetry**: Introduced granular RBAC permissions (`LLM_GENERATE_COVER`, `LLM_GENERATE_METADATA`, `LLM_GENERATE_CLOUD`), a global `ALLOW_LLM` feature flag, and per-user telemetry tracking (duration/cost).
+- **Manual Entry Extensions**: Added support for `ISBN` and `PublicationDate` when creating items manually.
+
+### Changed
+
+- **Proxy & CORS**: Updated `ProxyFix` to include `x_port=1` and enabled `supports_credentials=True` for OAuth sessions.
+- **Code Formatting**: Updated Prettier configuration to use double quotes (`singleQuote: false`).
+- **Dependencies**: Added `tesseract-ocr` system dependency to the Dockerfile.
+
 ## [0.0.7] - 2026-03-22
 
 ### Added

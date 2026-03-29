@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 
 
@@ -284,7 +284,11 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             manifestation.update_meta(cover_status="pending")
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-            start_cover_processing(manifestation.id, canonical_isbn, title, author)
+            user_id = getattr(request, "user_id", None)
+            user_id_str = str(user_id) if user_id else "anonymous"
+            user = db.session.get(User, user_id) if user_id else None
+            llm_permissions = User.list_llm_permissions(user)
+            start_cover_processing(manifestation.id, canonical_isbn, title, author, user_id_str, llm_permissions=llm_permissions)
         db.session.commit()
     else:
         manifestation.update_meta(**metadata)
@@ -396,7 +400,11 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     title = work.title if work else "Unknown Title"
     author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
 
-    start_cover_processing(manifestation.id, isbn, title, author, user_image_path=filepath)
+    user_id = getattr(request, "user_id", None)
+    user_id_str = str(user_id) if user_id else "anonymous"
+    user_obj = db.session.get(User, user_id) if user_id else None
+    llm_permissions = User.list_llm_permissions(user_obj)
+    start_cover_processing(manifestation.id, isbn, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath)
 
     return jsonify({"message": "Cover upload processing started"}), 202
 
@@ -418,7 +426,20 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     description = meta.get("Description", "")
     categories = meta.get("Categories", [])
     genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
-    start_cover_processing(manif.id, isbn, title, author, description=description, genre=genre)
+    user_id = getattr(request, "user_id", None)
+    user_id_str = str(user_id) if user_id else "anonymous"
+    user_obj = db.session.get(User, user_id) if user_id else None
+    llm_permissions = User.list_llm_permissions(user_obj)
+    start_cover_processing(
+        manif.id,
+        isbn,
+        title,
+        author,
+        user_id_str,
+        llm_permissions=llm_permissions,
+        description=description,
+        genre=genre,
+    )
 
     return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
 

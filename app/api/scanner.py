@@ -1,4 +1,4 @@
-"""Handles Barcode lookups"""
+"""Handles Barcode lookups and Vision-based metadata extraction."""
 
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
@@ -15,17 +15,52 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import io
+
 from flask import jsonify, request
+from PIL import Image
 
 from app.api.core import api_bp
-from app.api.decorators import require_auth
+from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
+from app.core.permissions import ItemPermissions
 from app.db.models import Item, Manifestation, db
+from app.utils.vision import extract_metadata_from_cover
+
+# Maximum allowed upload size for cover images (10 MB)
+_MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
+_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+
+def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
+    """Read at most *max_bytes* from *file_storage*.
+
+    Reads exactly ``max_bytes + 1`` bytes in a single call so that the result
+    fits in one allocation and we can detect an oversized payload without
+    buffering the whole stream first.
+
+    Returns:
+        The raw bytes when the payload is within the limit, or ``None`` when it
+        exceeds *max_bytes*.
+    """
+    buf = file_storage.read(max_bytes + 1)
+    return None if len(buf) > max_bytes else buf
 
 
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
 def scan_barcode():
+    """Scan a barcode and add the corresponding item to the authenticated user's collection.
+
+    Request body (JSON):
+        barcode (str): The ISBN or other barcode value to look up.
+
+    Returns:
+        201 – ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
+        400 – barcode missing or invalid
+        404 – barcode could not be resolved to a manifestation
+        503 – upstream network error during metadata lookup
+    """
     data = request.get_json()
     barcode = data.get("barcode")
 
@@ -33,7 +68,7 @@ def scan_barcode():
         return jsonify({"error": "Barcode is required"}), 400
 
     is_new_manifestation = False
-    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()
+    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()  # type: ignore[attr-defined]
 
     if not manifestation:
         try:
@@ -65,3 +100,95 @@ def scan_barcode():
         ),
         201,
     )
+
+
+@api_bp.route("/vision/extract", methods=["POST"])
+@require_auth
+@require_permission(ItemPermissions.LLM_GENERATE_METADATA)
+def extract_from_cover():
+    # pylint: disable=too-many-return-statements
+    """Extract book Title and Authors from an uploaded cover image using Gemini Vision.
+
+    Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
+    The image is passed to the Gemini Vision API which returns the title and
+    author(s) extracted from the cover artwork.
+
+    **Supported image types:** JPEG, PNG, WebP (max 10 MB).
+
+    **Setup:** Requires the ``GEMINI_API_KEY`` environment variable to be set.
+    See ``docs/COVERS_SETUP.md`` → *Vision-based Metadata Extraction* for details.
+
+    Request form fields:
+        cover (file): The cover image to analyse.
+
+    Returns:
+        200 – ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
+        400 – missing file, empty filename, invalid extension, oversized or corrupt image
+        401 – authentication required (handled by ``@require_auth``)
+        503 – Gemini API key not configured or upstream call failed
+    """
+    if "cover" not in request.files:
+        return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
+
+    file = request.files["cover"]
+    if not file.filename:
+        return jsonify({"success": False, "data": None, "error": "No selected file"}), 400
+
+    # --- Extension validation ---
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in _ALLOWED_EXTENSIONS:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": f"Invalid file type. Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
+                }
+            ),
+            400,
+        )
+
+    # --- Fast-path size guard (Content-Length header, when present and trustworthy) ---
+    if request.content_length and request.content_length > _MAX_COVER_SIZE:
+        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
+
+    # --- Capped streaming read (guards against missing / spoofed Content-Length) ---
+    # Reads at most _MAX_COVER_SIZE + 1 bytes in a single allocation; avoids the
+    # seek-to-end pattern which forces the full payload into the Werkzeug buffer
+    # before we can measure it, and also avoids a second file.read() later.
+    image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
+    if image_bytes is None:
+        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
+
+    # --- PIL content verification (uses already-read bytes — no second read) ---
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.verify()
+    except (OSError, SyntaxError):
+        return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
+
+    # --- Vision extraction ---
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+    mime_type = mime_map.get(ext, "image/jpeg")
+
+    user_id = str(getattr(request, "user_id", ""))
+
+    result = extract_metadata_from_cover(image_bytes, mime_type=mime_type, user_id=user_id)
+
+    if result is None:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": (
+                        "Vision extraction failed. "
+                        "All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. "
+                        "Please check the server logs."
+                    ),
+                }
+            ),
+            503,
+        )
+
+    return jsonify({"success": True, "data": result, "error": None}), 200

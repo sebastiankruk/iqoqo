@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 /**
  * Handle POST requests to logout by deleting the session cookie.
@@ -23,7 +23,7 @@ import { NextResponse } from 'next/server';
  */
 export async function POST() {
   const cookieStore = await cookies();
-  cookieStore.delete('iqoqo_session');
+  cookieStore.delete("iqoqo_session");
 
-  return NextResponse.json({ success: true, message: 'Logged out successfully' });
+  return NextResponse.json({ success: true, message: "Logged out successfully" });
 }

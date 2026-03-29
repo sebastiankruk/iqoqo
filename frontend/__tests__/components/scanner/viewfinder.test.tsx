@@ -48,11 +48,24 @@ describe("Viewfinder", () => {
     expect(paths).toHaveLength(4);
   });
 
-  it("renders the scanning-line div inside the viewfinder box", () => {
+  it("renders the scanning-line div inside the viewfinder box when isScanning is true (default)", () => {
     const { container } = render(<Viewfinder />);
     // The scan line bar has the distinctive bg-accent Tailwind class.
     // We cannot query by the Tailwind arbitrary-value class (brackets in selectors
     // are invalid), so we target the bg-accent helper class on the inner bar.
+    const scanBar = container.querySelector(".bg-accent");
+    expect(scanBar).not.toBeNull();
+  });
+
+  it("hides the scanning-line bar when isScanning={false}", () => {
+    const { container } = render(<Viewfinder isScanning={false} />);
+    // The animated bar element should be entirely absent from the DOM tree.
+    const scanBar = container.querySelector(".bg-accent");
+    expect(scanBar).toBeNull();
+  });
+
+  it("shows the scanning-line bar when isScanning={true} is passed explicitly", () => {
+    const { container } = render(<Viewfinder isScanning={true} />);
     const scanBar = container.querySelector(".bg-accent");
     expect(scanBar).not.toBeNull();
   });

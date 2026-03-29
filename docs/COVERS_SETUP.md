@@ -58,6 +58,53 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 *Note: Telemetry for estimated costs is tracked in the `llm_telemetry` database table.*
 
+## 2a. Vision-based Metadata Extraction
+
+iqoqo can extract a book's **Title** and **Authors** directly from a photo of its cover. This powers the **"Snap Cover"** button on the scan page — users can photograph a book and have its metadata filled in automatically.
+
+This feature uses a progressive fallback waterfall to ensure extraction:
+
+1. **Gemini API (Primary)**: High quality extraction.
+   - **Required:** The `GEMINI_API_KEY` environment variable. Uses the `gemini-2.0-flash` multimodal model.
+2. **Local Vision LLM via Ollama (Free local fallback)**: Used if Gemini is unavailable or fails. The `llava` model is highly recommended.
+   - **Required:** An Ollama instance. Set `OLLAMA_URL` (default: `http://localhost:11434`) and `OLLAMA_VISION_MODEL` (default: `llava`).
+   - **Setup:** `ollama pull llava`
+3. **Tesseract OCR (Basic offline fallback)**: Used when LLMs fail or aren't configured.
+   - **Required:** The `tesseract-ocr` host package and `pytesseract` Python dependency.
+   - **Setup (macOS):** `brew install tesseract`
+   - **Setup (Ubuntu/Docker):** `apt-get install tesseract-ocr` (included in the default Dockerfile)
+
+**API endpoint:** `POST /api/vision/extract` (requires authentication)
+
+| Field   | Type   | Description                                               |
+|---------|--------|-----------------------------------------------------------|
+| `cover` | `file` | The book cover photo (JPEG, PNG, or WebP, max **10 MB**). |
+
+**Successful response (HTTP 200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "Title": "Dune",
+    "Authors": ["Frank Herbert"]
+  },
+  "error": null
+}
+```
+
+**Error response when all extraction methods fail (HTTP 503):**
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs."
+}
+```
+
+> **Note:** The endpoint validates file type and size before contacting the Vision API. Only JPEG, PNG, and WebP uploads ≤ 10 MB are accepted.
+
 ## 3. Local AI Generation (Free)
 
 To use your own hardware for generation (Tier 4), iqoqo supports Stable Diffusion via the Automatic1111 WebUI API. This requires a dedicated GPU (Nvidia recommended, Apple Silicon supported) and at least 10GB of disk space.

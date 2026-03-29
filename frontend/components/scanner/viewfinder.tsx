@@ -16,9 +16,11 @@
 /**
  * Viewfinder overlay with corner brackets and animated scanning line.
  *
+ * @param {object} props The component props
+ * @param {boolean} [props.isScanning=true] Whether the line should animate
  * @returns {JSX.Element} The component
  */
-export function Viewfinder() {
+export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
   const bracketSize = 28;
   const strokeWidth = 3;
 
@@ -35,12 +37,7 @@ export function Viewfinder() {
       {/* Viewfinder box */}
       <div className="relative h-[240px] w-[240px]">
         {/* Corner brackets */}
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox="0 0 240 240"
-          fill="none"
-          aria-hidden="true"
-        >
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 240 240" fill="none" aria-hidden="true">
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}
             stroke="white"
@@ -72,9 +69,11 @@ export function Viewfinder() {
         </svg>
 
         {/* Scanning line */}
-        <div className="absolute inset-x-2 animate-[scan-line_2.5s_ease-in-out_infinite]">
-          <div className="h-0.5 w-full bg-accent shadow-[0_0_8px_hsl(24_100%_41%)]" />
-        </div>
+        {isScanning && (
+          <div className="absolute inset-x-2 animate-[scan-line_2.5s_ease-in-out_infinite]">
+            <div className="h-0.5 w-full bg-accent shadow-[0_0_8px_hsl(24_100%_41%)]" />
+          </div>
+        )}
       </div>
     </div>
   );

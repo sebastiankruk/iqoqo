@@ -73,15 +73,15 @@ function makeItem(id: number, status: ItemStatus, title: string): Item {
   };
 }
 
-const READING_ITEM  = makeItem(4, "reading",   "1984");
+const READING_ITEM = makeItem(4, "reading", "1984");
 const WISH_LIST_ITEM = makeItem(5, "wish_list", "Project Hail Mary");
 
 /** Items with statuses that should never appear in either section. */
 const IRRELEVANT_ITEMS: Item[] = [
   makeItem(1, "available", "The Martian"),
-  makeItem(2, "lent",      "Dune"),
-  makeItem(3, "lost",      "Fahrenheit 451"),
-  makeItem(6, "read",      "Brave New World"),
+  makeItem(2, "lent", "Dune"),
+  makeItem(3, "lost", "Fahrenheit 451"),
+  makeItem(6, "read", "Brave New World"),
 ];
 
 describe("CurrentContext", () => {
@@ -206,14 +206,12 @@ describe("CurrentContext", () => {
 
   // ── Items with irrelevant statuses are never shown ───────────────────────
 
-  it.each(IRRELEVANT_ITEMS.map((item) => [item.status, item.title as string]))(
+  it.each(IRRELEVANT_ITEMS.map(item => [item.status, item.title as string]))(
     "never renders items with status '%s' (%s)",
     (_status, title) => {
-      mockUseItems.mockReturnValue(
-        makeApiResponse([READING_ITEM, WISH_LIST_ITEM, ...IRRELEVANT_ITEMS]),
-      );
+      mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, WISH_LIST_ITEM, ...IRRELEVANT_ITEMS]));
       render(<CurrentContext />);
       expect(screen.queryByText(title)).not.toBeInTheDocument();
-    },
+    }
   );
 });

@@ -15,11 +15,13 @@
 //
 "use client";
 
-import type { ChangeEvent } from "react";
-import { Pencil, QrCode, BookOpen } from "lucide-react";
+import { ChangeEvent } from "react";
+import { Pencil, QrCode, BookOpen, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
-import { useUpdateItem } from "@/lib/api/hooks";
+import { useUpdateItem, useProfile } from "@/lib/api/hooks";
+import { CameraCapture } from "@/components/scanner/camera-capture";
+import { useRouter } from "next/navigation";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -53,8 +55,20 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     (item.meta?.["cover_url"] as string | undefined);
 
   const updateItem = useUpdateItem(item.id);
+  const { data: profile } = useProfile();
+  const hasUploadPermission = profile?.permissions?.includes("upload:cover");
 
-  const statusInfo = STATUS_LABELS[item.status] ?? { label: item.status, class: "bg-secondary text-foreground ring-border" };
+  const statusInfo = STATUS_LABELS[item.status] ?? {
+    label: item.status,
+    class: "bg-secondary text-foreground ring-border",
+  };
+  const router = useRouter();
+
+  const handleUploadComplete = () => {
+    toast.success("Cover uploaded and processing started!");
+    // Refresh to show 'processing' status
+    router.refresh();
+  };
 
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
@@ -62,7 +76,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       { status: newStatus },
       {
         onSuccess: () => toast.success(`Item status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
-        onError: (e) => toast.error((e as Error).message),
+        onError: e => toast.error((e as Error).message),
       }
     );
   };
@@ -77,8 +91,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       const response = await fetch(url, { method: "HEAD" });
 
       if (!response.ok) {
-      toast.error("Unable to generate QR code. Please try again later.");
-      return;
+        toast.error("Unable to generate QR code. Please try again later.");
+        return;
       }
 
       window.open(url, "_blank");
@@ -94,11 +108,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={coverUrl}
-              alt={item.title ?? "Cover"}
-              className="h-full w-full object-cover"
-            />
+            <img src={coverUrl} alt={item.title ?? "Cover"} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <BookOpen className="h-12 w-12 text-muted-foreground/30" />
@@ -116,11 +126,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       </span>
 
       {/* ISBN */}
-      {item.isbn && (
-        <p className="text-center text-xs text-muted-foreground">
-          ISBN: {item.isbn}
-        </p>
-      )}
+      {item.isbn && <p className="text-center text-xs text-muted-foreground">ISBN: {item.isbn}</p>}
 
       {/* Action buttons & Status Select */}
       <div className="flex w-full flex-col gap-2.5">
@@ -154,6 +160,22 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           <QrCode className="h-4 w-4" />
           Print QR Code
         </button>
+
+        {hasUploadPermission && (
+          <CameraCapture
+            manifestationId={item.manifestation_id}
+            onUploadComplete={handleUploadComplete}
+            label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
+            icon={<ImagePlus className="h-4 w-4 mr-2" />}
+            confirmTitle={item.cover_url ? "Replace Existing Cover?" : undefined}
+            confirmMessage={
+              item.cover_url
+                ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
+                : undefined
+            }
+            className="w-full [&>button]:w-full [&>button]:h-10 [&>button]:rounded-lg [&>button]:bg-accent/10 [&>button]:text-accent [&>button]:hover:bg-accent/20 [&>button]:border-none [&>button]:font-semibold [&>button]:text-xs"
+          />
+        )}
       </div>
 
       {/* FRBR quick info */}
@@ -162,9 +184,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           {item.expression && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Format</span>
-              <span className="text-xs font-semibold capitalize text-foreground">
-                {item.expression.content_type}
-              </span>
+              <span className="text-xs font-semibold capitalize text-foreground">{item.expression.content_type}</span>
             </div>
           )}
           {item.expression?.language && (
@@ -172,9 +192,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
               <div className="h-px bg-border" />
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Language</span>
-                <span className="text-xs font-semibold uppercase text-foreground">
-                  {item.expression.language}
-                </span>
+                <span className="text-xs font-semibold uppercase text-foreground">{item.expression.language}</span>
               </div>
             </>
           )}

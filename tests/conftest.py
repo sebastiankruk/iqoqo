@@ -97,3 +97,29 @@ def normal_user_headers(app):
 
         token = generate_internal_jwt(user)
         return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def vision_user_headers(app):
+    """Fixture to provide authorization headers for a user with vision extraction permission."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import Permission, Role, User, db
+
+    with app.app_context():
+        # Create permission
+        perm = Permission(name="llm_generate:metadata")
+        db.session.add(perm)
+
+        # Create role
+        vision_role = Role(name="vision_user")
+        vision_role.permissions.append(perm)
+        db.session.add(vision_role)
+
+        # Create user
+        user = User(email="vision_user@iqoqo.local", display_name="Vision User")
+        user.roles.append(vision_role)
+        db.session.add(user)
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+        return {"Authorization": f"Bearer {token}"}

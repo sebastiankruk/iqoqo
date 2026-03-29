@@ -14,12 +14,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import LoginPage from '@/app/login/page';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import LoginPage from "@/app/login/page";
 
-vi.mock('next/navigation', () => ({
+vi.mock("next/navigation", () => ({
   /**
    * Mock for useRouter.
    *
@@ -33,12 +33,13 @@ vi.mock('next/navigation', () => ({
  *
  * @returns {QueryClient} The query client instance.
  */
-const createTestQueryClient = () => new QueryClient({
-  defaultOptions: {
-    queries: { retry: false },
-    mutations: { retry: false },
-  },
-});
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
 
 /**
  * Renders a component wrapped in a QueryClientProvider.
@@ -48,24 +49,20 @@ const createTestQueryClient = () => new QueryClient({
  */
 const renderWithQueryClient = (component: React.ReactElement) => {
   const testQueryClient = createTestQueryClient();
-  return render(
-    <QueryClientProvider client={testQueryClient}>
-      {component}
-    </QueryClientProvider>
-  );
+  return render(<QueryClientProvider client={testQueryClient}>{component}</QueryClientProvider>);
 };
 
-describe('LoginPage', () => {
+describe("LoginPage", () => {
   let alertMock: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
-    process.env.NEXT_PUBLIC_API_URL = '/api';
+    process.env.NEXT_PUBLIC_API_URL = "/api";
 
-    Object.defineProperty(window, 'location', {
-      value: { href: '' },
-      writable: true
+    Object.defineProperty(window, "location", {
+      value: { href: "" },
+      writable: true,
     });
 
     // Fix: explicitly mock window.alert since it doesn't exist in jsdom by default
@@ -73,21 +70,21 @@ describe('LoginPage', () => {
     window.alert = alertMock;
   });
 
-  it('renders login form and Google SSO button', () => {
+  it("renders login form and Google SSO button", () => {
     renderWithQueryClient(<LoginPage />);
-    expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Sign In$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Sign in with Google/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sign In$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sign in with Google/i })).toBeInTheDocument();
   });
 
-  it('redirects to Google SSO when button is clicked', () => {
+  it("redirects to Google SSO when button is clicked", () => {
     renderWithQueryClient(<LoginPage />);
-    fireEvent.click(screen.getByRole('button', { name: /Sign in with Google/i }));
-    expect(window.location.href).toContain('/api/auth/login/google');
+    fireEvent.click(screen.getByRole("button", { name: /Sign in with Google/i }));
+    expect(window.location.href).toContain("/api/auth/login/google");
   });
 
-  it('handles successful local login and redirects', async () => {
+  it("handles successful local login and redirects", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
       /**
@@ -95,27 +92,27 @@ describe('LoginPage', () => {
        *
        * @returns {Promise<{token: string}>} The mocked json response.
        */
-      json: async () => ({ token: 'mock-jwt-token' }),
+      json: async () => ({ token: "mock-jwt-token" }),
     });
 
     renderWithQueryClient(<LoginPage />);
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@iqoqo.local' } });
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "test@iqoqo.local" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/auth/login'),
+        expect.stringContaining("/api/auth/login"),
         expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ email: 'test@iqoqo.local', password: 'password123' })
+          method: "POST",
+          body: JSON.stringify({ email: "test@iqoqo.local", password: "password123" }),
         })
       );
-      expect(window.location.href).toContain('/api/auth-exchange?token=mock-jwt-token');
+      expect(window.location.href).toContain("/api/auth-exchange?token=mock-jwt-token");
     });
   });
 
-  it('handles failed local login and shows alert', async () => {
+  it("handles failed local login and shows alert", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: false,
       /**
@@ -123,13 +120,13 @@ describe('LoginPage', () => {
        *
        * @returns {Promise<{error: string}>} The mocked json response.
        */
-      json: async () => ({ error: 'Invalid credentials' }),
+      json: async () => ({ error: "Invalid credentials" }),
     });
 
     renderWithQueryClient(<LoginPage />);
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'wrong@iqoqo.local' } });
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'wrong123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "wrong@iqoqo.local" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "wrong123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
       expect(alertMock).toHaveBeenCalledWith("Login failed");

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-"use client"
+"use client";
 
 import * as React from "react";
 import { SunMoon, Moon, Sun } from "lucide-react";
@@ -27,19 +27,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-
 /**
  * Theme mode toggle component.
  *
  * @returns {JSX.Element} The component
  */
 export function ModeToggle() {
-  const { setTheme, theme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
+  const { setTheme, theme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
   return (
     <DropdownMenu>
@@ -47,9 +46,9 @@ export function ModeToggle() {
         <Button variant="ghost" size="icon">
           {!mounted ? (
             <Sun className="h-[1.2rem] w-[1.2rem] opacity-0" />
-          ) : theme === 'system' ? (
+          ) : theme === "system" ? (
             <SunMoon className="h-[1.2rem] w-[1.2rem]" />
-          ) : theme === 'dark' ? (
+          ) : theme === "dark" ? (
             <Moon className="h-[1.2rem] w-[1.2rem]" />
           ) : (
             <Sun className="h-[1.2rem] w-[1.2rem]" />
@@ -63,5 +62,5 @@ export function ModeToggle() {
         <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
