@@ -52,7 +52,8 @@ test.describe("Snap Cover Workflow", () => {
     await expect(errorText).toBeVisible();
     await expect(errorText).toHaveClass(/text-destructive/);
 
-    // 8. Verify that "Manual Entry Form" is still accessible
+    // 8. Verify that "Manual Entry Form" is still accessible by switching to manual tab
+    await page.click('button:has-text("Manual Search")');
     const manualEntryButton = page.locator('button:has-text("Manual Entry Form")');
     await expect(manualEntryButton).toBeVisible();
   });
