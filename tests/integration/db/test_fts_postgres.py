@@ -44,8 +44,19 @@ def postgres_db():
 
         app = create_app()
         with app.app_context():
-            # Create all tables (this includes the Computed columns and GIN indices)
+            # Create all tables (this defaults to TEXT if models were loaded into sys.modules during generic SQLite tests)
             db.create_all()
+
+            # Forcibly create the TSVECTOR columns ignoring initial SQLAlchemy state
+            db.session.execute(text("ALTER TABLE works DROP COLUMN IF EXISTS fts_simple CASCADE"))
+            db.session.execute(text("ALTER TABLE works ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))) STORED"))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_works_fts ON works USING gin(fts_simple)"))
+
+            db.session.execute(text("ALTER TABLE manifestations DROP COLUMN IF EXISTS fts_simple CASCADE"))
+            db.session.execute(text("ALTER TABLE manifestations ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))) STORED"))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON manifestations USING gin(fts_simple)"))
+            db.session.commit()
+
             yield app
             db.session.remove()
             db.drop_all()

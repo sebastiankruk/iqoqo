@@ -126,7 +126,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
           ADMIN_PASSWORD: dummy-admin-password
-          ENABLE_FTS_TESTS: "true"
         run: pytest tests/ -v
 
   test-frontend:
@@ -153,7 +152,6 @@ jobs:
     env:
       ADMIN_PASSWORD: dummy-admin-password
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
-      ENABLE_FTS_TESTS: "true"
     services:
       postgres:
         image: postgres:16-alpine
