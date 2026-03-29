@@ -21,6 +21,9 @@ import textwrap
 import imagehash
 from PIL import Image, ImageDraw, ImageFont
 
+# Protect against decompression bombs
+Image.MAX_IMAGE_PIXELS = 25_000_000  # Cap at ~25 Megapixels
+
 logger = logging.getLogger(__name__)
 
 

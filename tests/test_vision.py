@@ -19,6 +19,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from app.utils.vision import _extract_via_gemini, _extract_via_ollama, _extract_via_tesseract, extract_metadata_from_cover
 
 
@@ -237,7 +239,7 @@ def test_parse_authors_comma_separated_string():
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_gemini_exception_falls_to_ollama(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that an exception in Gemini correctly triggers Ollama."""
-    mock_gemini.side_effect = Exception("Gemini is down")
+    mock_gemini.side_effect = RuntimeError("Gemini is down")
     mock_ollama.return_value = {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
 
     result = extract_metadata_from_cover(b"test image")
@@ -253,8 +255,6 @@ def test_extract_waterfall_gemini_exception_falls_to_ollama(mock_tesseract, mock
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_ollama_exception_falls_to_tesseract(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that an exception in Ollama correctly triggers Tesseract."""
-    import requests
-
     mock_gemini.return_value = None
     mock_ollama.side_effect = requests.exceptions.RequestException("Ollama connection failed")
     mock_tesseract.return_value = {"Title": "Tesseract Result", "Authors": []}
@@ -272,9 +272,9 @@ def test_extract_waterfall_ollama_exception_falls_to_tesseract(mock_tesseract, m
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_all_exception_returns_none(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that exceptions in all methods result in a None return."""
-    mock_gemini.side_effect = Exception("Gemini Error")
-    mock_ollama.side_effect = Exception("Ollama Error")
-    mock_tesseract.side_effect = Exception("Tesseract Error")
+    mock_gemini.side_effect = RuntimeError("Gemini Error")
+    mock_ollama.side_effect = requests.exceptions.RequestException("Ollama Error")
+    mock_tesseract.side_effect = RuntimeError("Tesseract Error")
 
     result = extract_metadata_from_cover(b"test image")
 

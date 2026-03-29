@@ -19,7 +19,13 @@ from functools import wraps
 import jwt
 from flask import current_app, jsonify, request
 
-from app.db.models import User, db
+from app.db.models import TokenBlocklist, User, db
+
+
+def _is_token_revoked(jti: str) -> bool:
+    if not jti:
+        return False
+    return db.session.query(TokenBlocklist.id).filter_by(jti=jti).first() is not None
 
 
 def require_auth(f):
@@ -36,6 +42,11 @@ def require_auth(f):
             return jsonify({"error": "Token missing"}), 401
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+
+            # Check blocklist
+            if _is_token_revoked(payload.get("jti")):
+                return jsonify({"error": "Token revoked"}), 401
+
             request.user_id = uuid.UUID(payload["sub"])
 
         except jwt.ExpiredSignatureError:
@@ -69,7 +80,7 @@ def require_permission(perm_name):
 
 def admin_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated_function(*args, **kwargs):  # pylint: disable=too-many-return-statements
         token = None
         if "Authorization" in request.headers:
             token = request.headers["Authorization"].split(" ")[1]
@@ -80,6 +91,11 @@ def admin_required(f):
             return jsonify({"success": False, "error": "Authentication required"}), 401
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+
+            # Check blocklist
+            if _is_token_revoked(payload.get("jti")):
+                return jsonify({"success": False, "error": "Token revoked"}), 401
+
             request.user_id = uuid.UUID(payload["sub"])
         except jwt.ExpiredSignatureError:
             return jsonify({"success": False, "error": "Token expired"}), 401

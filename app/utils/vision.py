@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+
 import base64
 import io
 import json
@@ -23,6 +24,9 @@ import os
 import re
 import time
 import uuid
+
+import requests
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import Config
 from app.core.permissions import ItemPermissions
@@ -42,31 +46,12 @@ PROMPT = (
 
 
 def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg", user_id: str | None = None) -> dict | None:
-    """Extract book Title and Authors from a cover image using a fallback waterfall.
-
-    The function attempts to extract metadata in the following order:
-    1. Gemini Vision API (Primary, high quality)
-    2. Local Ollama Vision API e.g., llava (Free, local fallback)
-    3. Tesseract OCR (Basic, offline text extraction)
-
-    Returns a dictionary with ``Title`` (str) and ``Authors`` (list[str]) when successful.
-    Returns ``None`` when all methods fail.
-
-    Args:
-        image_bytes: Raw bytes of the cover image (JPEG, PNG, WebP supported).
-        mime_type:   MIME type of the image, defaults to ``image/jpeg``.
-
-        can_use_cloud_llm: Whether to allow paid/cloud API usage.
-
-    Returns:
-        A dict ``{"Title": str, "Subtitle": str, "Authors": [str, ...], ...}`` on success, or ``None``.
-    """
     # 1. Try Gemini
     try:
         result = _extract_via_gemini(image_bytes, mime_type, user_id)
         if result:
             return result
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ValueError, TypeError, ConnectionError, TimeoutError, RuntimeError) as e:
         logger.error("Waterfall step 1 (Gemini) raised an exception: %s", e)
 
     # 2. Try Ollama Fallback
@@ -74,21 +59,30 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         result = _extract_via_ollama(image_bytes)
         if result:
             return result
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except requests.exceptions.RequestException as e:
         logger.error("Waterfall step 2 (Ollama) raised an exception: %s", e)
 
     # 3. Try Tesseract OCR Fallback
     try:
         return _extract_via_tesseract(image_bytes)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (OSError, ValueError, RuntimeError) as e:
         logger.error("Waterfall step 3 (Tesseract) raised an exception: %s", e)
 
     return None
 
 
-def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
-    """Extract book Title and Authors from a cover image using Gemini Vision API."""
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((ConnectionError, TimeoutError, RuntimeError)),
+    reraise=True,
+)
+def _call_gemini_api(client, model, contents):
+    """Helper to wrap API calls with Tenacity backoff"""
+    return client.models.generate_content(model=model, contents=contents)
 
+
+def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
     can_use_cloud_llm = False
     if user_id:
         user = None
@@ -116,15 +110,9 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         from google.genai import types  # type: ignore[import-untyped]
 
         client = genai.Client(api_key=api_key)
-
         start_time = time.time()
-        response = client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                PROMPT,
-            ],  # type: ignore[arg-type]
-        )
+
+        response = _call_gemini_api(client, "gemini-flash-latest", [types.Part.from_bytes(data=image_bytes, mime_type=mime_type), PROMPT])
 
         raw = response.text.strip() if response.text else ""
         result = _parse_json_response(raw)
@@ -137,10 +125,22 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
     except (ImportError, AttributeError) as e:
         logger.error("google-genai package is not installed or API surface changed: %s", e)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ValueError, TypeError, ConnectionError, TimeoutError, RuntimeError) as e:
         logger.error("Gemini vision extraction failed: %s", e)
 
     return None
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(requests.exceptions.RequestException),
+    reraise=True,
+)
+def _call_ollama_api(url, payload):
+    response = requests.post(f"{url}/api/generate", json=payload, timeout=30)
+    response.raise_for_status()
+    return response
 
 
 def _extract_via_ollama(image_bytes: bytes) -> dict | None:
@@ -152,13 +152,10 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
     model = os.environ.get("OLLAMA_VISION_MODEL", "llava")
 
     try:
-        import requests
-
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
         payload = {"model": model, "prompt": PROMPT, "images": [b64_image], "stream": False, "format": "json"}
 
-        response = requests.post(f"{url}/api/generate", json=payload, timeout=30)
-        response.raise_for_status()
+        response = _call_ollama_api(url, payload)
 
         data = response.json()
         raw = data.get("response", "").strip()
@@ -166,15 +163,12 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
 
     except ImportError:
         logger.error("requests library is missing for Ollama extraction.")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        import requests
-
+    except requests.exceptions.RequestException as e:
         msg = str(e)
-        if isinstance(e, requests.exceptions.RequestException):
-            err_resp = getattr(e, "response", None)
-            if err_resp is not None and getattr(err_resp, "status_code", None) == 404:
-                msg = f"Model '{model}' not found on Ollama. Run 'ollama pull {model}' to fix."
-        logger.error("Ollama vision extraction failed: %s", msg)
+        err_resp = getattr(e, "response", None)
+        if err_resp is not None and getattr(err_resp, "status_code", None) == 404:
+            msg = f"Model '{model}' not found on Ollama. Run 'ollama pull {model}' to fix."
+        logger.error("Ollama HTTP extraction failed: %s", msg)
 
     return None
 
@@ -201,7 +195,7 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
 
     except ImportError:
         logger.error("pytesseract or Pillow is not installed.")
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (OSError, ValueError, RuntimeError) as e:
         msg = str(e)
         if "tesseract is not installed" in msg:
             msg = "tesseract-ocr not found on host. On macOS, run 'brew install tesseract'."
@@ -214,8 +208,10 @@ def _parse_json_response(raw: str) -> dict | None:
     if not raw:
         return None
     try:
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
+        # String concatenation used here to prevent markdown UI renderer bugs
+        ticks = "`" * 3
+        raw = re.sub(r"^" + ticks + r"(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*" + ticks + r"$", "", raw)
 
         data = json.loads(raw)
 
