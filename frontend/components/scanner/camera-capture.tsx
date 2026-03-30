@@ -19,10 +19,10 @@
  * Operates in two modes depending on whether `manifestationId` is supplied:
  *
  * 1. **Cover upload** – posts the image to `/manifestations/:id/cover` and
- *    calls `onUploadComplete` on success.
+ * calls `onUploadComplete` on success.
  * 2. **Vision extraction** – posts the image to `/vision/extract` and calls
- *    `onExtractComplete` with the extracted `{ Title, Authors }` payload when
- *    the server returns `success: true`.
+ * `onExtractComplete` with the extracted `{ Title, Authors }` payload when
+ * the server returns `success: true`.
  *
  * @module components/scanner/camera-capture
  */
@@ -30,6 +30,7 @@
 
 import React, { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import {
   AlertDialog,
@@ -104,17 +105,10 @@ export function CameraCapture({
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    /**
-     * Handles the capture of an image file, uploads it as a cover, and triggers a callback upon completion.
-     *
-     * @param {React.ChangeEvent<HTMLInputElement>} event - The change event from the file input.
-     */
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const processFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
     formData.append("cover", file);
@@ -146,6 +140,22 @@ export function CameraCapture({
     }
   };
 
+  const handleCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      processFile(file);
+    } else {
+      toast.error("Please drop a valid image file.");
+    }
+  };
+
   const handleClick = () => {
     if (confirmTitle && confirmMessage) {
       setConfirmOpen(true);
@@ -160,7 +170,15 @@ export function CameraCapture({
   };
 
   return (
-    <div className={className}>
+    <div
+      className={`${className} ${isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : ""}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
       <input
         type="file"
         accept="image/*"

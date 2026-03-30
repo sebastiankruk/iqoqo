@@ -265,10 +265,11 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
     provider = db.Column(db.String(50), nullable=False)
     user_id = db.Column(db.String(100), nullable=False)
+    operation_type = db.Column(db.String(50), nullable=False, default="cover_generation")
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
     total_duration_seconds = db.Column(db.Float, default=0.0)
-    __table_args__ = (db.UniqueConstraint("provider", "user_id", name="uq_provider_user"),)
+    __table_args__ = (db.UniqueConstraint("provider", "user_id", "operation_type", name="uq_provider_user_op"),)
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]

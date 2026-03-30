@@ -17,7 +17,7 @@ import hashlib
 import io
 import logging
 import os
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import requests
@@ -40,6 +40,9 @@ os.makedirs(RAW_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
+
+# Managed thread pool for offloaded cover generation operations
+cover_executor = ThreadPoolExecutor(max_workers=4)
 
 
 def add_source_badge(filepath: str, source: str):
@@ -81,13 +84,13 @@ def add_source_badge(filepath: str, source: str):
         logger.error(f"Failed to apply badge overlay: {e}")
 
 
-def generate_fallback_cover(isbn: str, title: str, author: str) -> str | None:
+def generate_fallback_cover(identifier: str, title: str, author: str) -> str | None:
     """Tier 5: Generate a deterministic cover using Pillow."""
-    filename = f"{isbn}_generated.jpg"
+    filename = f"{identifier}_generated.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
 
-    # Deterministic background color based on ISBN hash
-    hash_obj = hashlib.md5(isbn.encode())
+    # Deterministic background color based on identifier hash
+    hash_obj = hashlib.md5(identifier.encode())
     bg_color = f"#{hash_obj.hexdigest()[:6]}"
 
     try:
@@ -111,7 +114,7 @@ def generate_fallback_cover(isbn: str, title: str, author: str) -> str | None:
         return None
 
 
-def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
+def fetch_external_api_cover(identifier: str) -> tuple[str, str] | None:
     """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success.
 
     This implementation streams responses with a maximum in-memory cap to avoid
@@ -141,13 +144,13 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
         if not is_valid_cover(content):
             return None
 
-        filename = f"{isbn}_{source_prefix}.jpg"
+        filename = f"{identifier}_{source_prefix}.jpg"
         filepath = os.path.join(COVERS_DIR, filename)
         optimize_and_save_image(content, filepath)
         return f"/static/covers/{filename}", source_name
 
     # 1. Open Library (Direct)
-    ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
+    ol_url = f"https://covers.openlibrary.org/b/isbn/{identifier}-L.jpg"
     try:
         response = requests.get(ol_url, stream=True, timeout=5)
         if response.status_code == 200:
@@ -168,7 +171,7 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
         pass
 
     # 2. Google Books (Search -> Thumbnail)
-    gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
+    gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{identifier}"
     try:
         gb_data = requests.get(gb_search, timeout=5).json()
         if "items" in gb_data:
@@ -187,9 +190,9 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
     return None
 
 
-def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
+def process_fast_cover(manifestation: Manifestation, identifier: str) -> bool:
     """Runs real-time (fast) lookups. Returns True if a cover was found."""
-    result = fetch_external_api_cover(isbn)
+    result = fetch_external_api_cover(identifier)
     if result:
         local_path, source = result
         manifestation.cover_url = local_path
@@ -201,7 +204,7 @@ def process_fast_cover(manifestation: Manifestation, isbn: str) -> bool:
 
 def process_cover_pipeline(
     manifestation_id: int,
-    isbn: str,
+    identifier: str,
     title: str,
     author: str,
     llm_permissions: dict[str, bool],
@@ -220,7 +223,7 @@ def process_cover_pipeline(
 
     If all tiers fail the existing cover_url is left unchanged so the
     frontend can show its book-icon placeholder rather than an empty or
-    low-quality fallback image.  cover_status is set to ``"failed"``.
+    low-quality fallback image.  cover_status is set to "failed".
 
     Can be invoked directly (e.g. from a CLI script) or via
     ``start_cover_processing`` which fires it in a background thread.
@@ -245,7 +248,7 @@ def process_cover_pipeline(
         # Tier 1: User Photo
         if user_image_path and os.path.exists(user_image_path):
             try:
-                filename = f"{isbn}_user.jpg"
+                filename = f"{identifier}_user.jpg"
                 dest_path = os.path.join(COVERS_DIR, filename)
 
                 # Normalize/compress the user-provided image before storing it
@@ -265,26 +268,20 @@ def process_cover_pipeline(
 
         # Tier 2: External APIs
         if not local_cover_url:
-            result = fetch_external_api_cover(isbn)
+            result = fetch_external_api_cover(identifier)
             if result:
                 local_cover_url, source = result
 
         # Tier 3/4: LLM Generation
-        # Two-layer guard: ALLOW_LLM must be True in Config (operator opt-in)
-        # AND the calling user must hold the llm_generate:cover permission
-        # (passed in as allow_llm from the API layer).  Both must be satisfied
-        # so that neither a misconfigured .env nor a rogue role alone can
-        # trigger paid cloud API calls.
         allow_generate_cover = Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover", False)
         if not local_cover_url and allow_generate_cover:
             result = fetch_llm_cover(
-                isbn, title, author, user_id, description, genre, allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False)
+                identifier, title, author, user_id, description, genre, allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False)
             )
             if result:
                 local_cover_url, source = result
 
         # Update DB
-        # Force SQLAlchemy to detect change in JSON field
         from typing import Any
 
         updates: dict[str, Any] = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
@@ -295,12 +292,10 @@ def process_cover_pipeline(
             manifestation.cover_url = local_cover_url
             updates["cover_source"] = source
             updates["cover_status"] = "ready"
-            logger.info("Cover processed for %s: %s", isbn, source)
+            logger.info("Cover processed for %s: %s", identifier, source)
         else:
-            # All tiers failed — leave cover_url as-is so the frontend shows
-            # a book-icon placeholder rather than an empty or text-only image.
             updates["cover_status"] = "failed"
-            logger.warning("Cover generation failed for %s: no cover produced, leaving existing", isbn)
+            logger.warning("Cover generation failed for %s: no cover produced, leaving existing", identifier)
 
         manifestation.update_meta(**updates)
         db.session.commit()
@@ -308,7 +303,7 @@ def process_cover_pipeline(
 
 def start_cover_processing(
     manifestation_id: int,
-    isbn: str,
+    identifier: str,
     title: str,
     author: str,
     user_id: str = "system",
@@ -317,22 +312,19 @@ def start_cover_processing(
     description: str = "",
     genre: str = "",
 ) -> None:
-    """Fires off the background thread."""
-    thread = threading.Thread(
-        target=process_cover_pipeline,
-        kwargs={
-            "manifestation_id": manifestation_id,
-            "isbn": isbn,
-            "title": title,
-            "author": author,
-            "user_id": user_id,
-            "llm_permissions": llm_permissions,
-            "user_image_path": user_image_path,
-            "description": description,
-            "genre": genre,
-        },
+    """Fires off the background executor."""
+    cover_executor.submit(
+        process_cover_pipeline,
+        manifestation_id,
+        identifier,
+        title,
+        author,
+        llm_permissions or {},
+        user_id,
+        user_image_path,
+        description,
+        genre,
     )
-    thread.start()
 
 
 def rebind_orphaned_covers() -> int:
@@ -345,32 +337,29 @@ def rebind_orphaned_covers() -> int:
     """
     orphans_rebound = 0
 
-    # 1. Get books without covers
-    # Note: This query assumes we are in an app context
     books_missing_covers = Manifestation.query.filter((Manifestation.cover_url.is_(None)) | (Manifestation.cover_url == "")).all()
 
     if not books_missing_covers:
         logger.info("No books found missing covers.")
         return 0
 
-    # 2. List files
     try:
         files = os.listdir(COVERS_DIR)
     except OSError as e:
         logger.error(f"Failed to list covers directory: {e}")
         return 0
 
-    # 3. Match
     for book in books_missing_covers:
-        if not book.isbn13:
+        # Check against ISBN, EAN or UPC
+        identifier = book.isbn13 or book.ean or book.upc
+        if not identifier:
             continue
 
-        # Find files starting with ISBN
-        candidates = [f for f in files if f.startswith(book.isbn13) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        # Find files starting with identifier
+        candidates = [f for f in files if f.startswith(identifier) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
 
         if candidates:
-            # Sort candidates to pick the "best" one if multiple exist
-            # Priority: user > api > generated
+
             def sort_key(f):
                 if "_user" in f:
                     return 0
@@ -381,17 +370,15 @@ def rebind_orphaned_covers() -> int:
             candidates.sort(key=sort_key)
             best_match = candidates[0]
 
-            # Update DB
             book.cover_url = f"/static/covers/{best_match}"
 
-            # Update meta status
             updates = {"cover_status": "ready"}
             if not (book.meta and "cover_source" in book.meta):
                 updates["cover_source"] = "rebind"
             book.update_meta(**updates)
 
             orphans_rebound += 1
-            logger.info(f"Rebound cover for ISBN {book.isbn13}: {best_match}")
+            logger.info(f"Rebound cover for identifier {identifier}: {best_match}")
 
     if orphans_rebound > 0:
         db.session.commit()

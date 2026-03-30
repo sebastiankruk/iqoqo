@@ -387,9 +387,9 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"error": "Invalid or corrupted image file"}), 400
 
     manifestation = db.get_or_404(Manifestation, manifestation_id)
-    isbn = manifestation.isbn13 or f"item_{manifestation_id}"
+    identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
 
-    filename = secure_filename(f"{isbn}_raw.jpg")
+    filename = secure_filename(f"{identifier}_raw.jpg")
     filepath = os.path.join(RAW_DIR, filename)
     file.save(filepath)
 
@@ -404,7 +404,9 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
-    start_cover_processing(manifestation.id, isbn, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath)
+    start_cover_processing(
+        manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
+    )
 
     return jsonify({"message": "Cover upload processing started"}), 202
 
@@ -420,7 +422,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
-    isbn = manif.isbn13 or str(manif.id)
+    identifier = manif.isbn13 or manif.ean or manif.upc or str(manif.id)
 
     meta = manif.meta or {}
     description = meta.get("Description", "")
@@ -432,7 +434,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     llm_permissions = User.list_llm_permissions(user_obj)
     start_cover_processing(
         manif.id,
-        isbn,
+        identifier,
         title,
         author,
         user_id_str,
