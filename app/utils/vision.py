@@ -26,7 +26,12 @@ import time
 import uuid
 
 import requests
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.config import Config
 from app.core.permissions import ItemPermissions
@@ -46,13 +51,63 @@ PROMPT = (
 
 
 def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg", user_id: str | None = None) -> dict | None:
+    """Extract book metadata from a cover image using a waterfall of vision backends.
+
+    This is the public entry point used by API handlers to obtain structured metadata from
+    a single cover image. The function tries multiple backends in sequence and returns
+    the first successful result:
+
+    1. Gemini Vision (cloud LLM) — used only when Config.ALLOW_LLM is true, a valid
+       ``user_id`` is provided, and the associated user has the
+       ``ItemPermissions.LLM_GENERATE_CLOUD`` permission. If Gemini is unavailable, fails,
+       or returns no usable data, the function falls through to the next step.
+    2. Ollama Vision — used when Config.ALLOW_LLM is true and a local Ollama instance is
+       reachable. Network errors or invalid responses cause the function to fall through
+       to the next step.
+    3. Tesseract OCR — used as a final, local-only fallback that performs OCR on the
+       image and heuristically derives a title and list of authors from the text.
+
+    Parameters
+    ----------
+    image_bytes:
+        Raw bytes of the cover image.
+    mime_type:
+        MIME type of the image (for example ``"image/jpeg"`` or ``"image/png"``). This is
+        passed through to backends that require it (such as Gemini Vision).
+    user_id:
+        Optional string UUID of the requesting user. When provided, it is used to check
+        whether the caller is allowed to use cloud LLM backends; if omitted or invalid,
+        cloud-only steps are skipped and local fallbacks are used instead.
+
+    Returns
+    -------
+    dict | None
+        A dictionary containing the extracted metadata, or ``None`` if no backend could
+        produce a result. When successful, the dictionary will typically contain some or
+        all of the following keys (depending on the backend and what could be inferred):
+
+        - ``"Title"`` (str)
+        - ``"Subtitle"`` (str)
+        - ``"Authors"`` (list[str])
+        - ``"Publisher"`` (str)
+        - ``"Year"`` (str)
+        - ``"ISBN"`` (str)
+        - ``"Edition"`` (str)
+        - ``"Language"`` (str)
+        - ``"Genre"`` (str)
+
+    Notes
+    -----
+    Backend-specific exceptions are logged and swallowed; this function itself does not
+    raise on backend failure and instead returns ``None`` when all steps are exhausted.
+    """
     # 1. Try Gemini
     try:
         result = _extract_via_gemini(image_bytes, mime_type, user_id)
         if result:
             return result
     except (ValueError, TypeError, ConnectionError, TimeoutError, RuntimeError) as e:
-        logger.error("Waterfall step 1 (Gemini) raised an exception: %s", e)
+        logger.debug("Waterfall: Gemini failed, trying Ollama... (%s)", e)
 
     # 2. Try Ollama Fallback
     try:
@@ -60,13 +115,13 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         if result:
             return result
     except requests.exceptions.RequestException as e:
-        logger.error("Waterfall step 2 (Ollama) raised an exception: %s", e)
+        logger.debug("Waterfall: Ollama failed, trying Tesseract... (%s)", e)
 
     # 3. Try Tesseract OCR Fallback
     try:
         return _extract_via_tesseract(image_bytes)
     except (OSError, ValueError, RuntimeError) as e:
-        logger.error("Waterfall step 3 (Tesseract) raised an exception: %s", e)
+        logger.error("Waterfall: Tesseract failed: %s", e)
 
     return None
 
@@ -161,8 +216,6 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
         raw = data.get("response", "").strip()
         return _parse_json_response(raw)
 
-    except ImportError:
-        logger.error("requests library is missing for Ollama extraction.")
     except requests.exceptions.RequestException as e:
         msg = str(e)
         err_resp = getattr(e, "response", None)

@@ -22,7 +22,7 @@ from flask import current_app, jsonify, request
 from app.db.models import TokenBlocklist, User, db
 
 
-def _is_token_revoked(jti: str) -> bool:
+def _is_token_revoked(jti: str | None) -> bool:
     if not jti:
         return False
     return db.session.query(TokenBlocklist.id).filter_by(jti=jti).first() is not None
