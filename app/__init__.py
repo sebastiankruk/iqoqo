@@ -16,6 +16,7 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
+from PIL import Image
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import blueprints
@@ -25,6 +26,9 @@ from app.api.profile import profile_bp
 
 from .config import Config
 from .db import db
+
+# Protect against decompression bombs globally
+Image.MAX_IMAGE_PIXELS = 25_000_000
 
 
 def _coerce_bool(value, default=False):
