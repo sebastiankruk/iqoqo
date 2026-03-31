@@ -25,9 +25,14 @@ const statusDotColor: Record<ItemStatus, string> = {
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
+  ordered: "bg-amber-400",
+  damaged: "bg-orange-600",
   reading: "bg-green-500",
   read: "bg-blue-500",
   unread: "bg-purple-500",
+  listening: "bg-teal-500",
+  listened: "bg-cyan-500",
+  want_to_listen: "bg-sky-400",
 };
 
 const statusDotTitle: Record<ItemStatus, string> = {
@@ -35,9 +40,14 @@ const statusDotTitle: Record<ItemStatus, string> = {
   wish_list: "On Wish List",
   lent: "Lent Out",
   lost: "Lost",
+  ordered: "Ordered",
+  damaged: "Damaged",
   reading: "Reading",
   read: "Read",
   unread: "Unread",
+  listening: "Listening",
+  listened: "Listened",
+  want_to_listen: "Want to Listen",
 };
 
 /** Props for ItemCard component */

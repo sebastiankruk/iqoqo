@@ -29,8 +29,13 @@ const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = 
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
   wish_list: { label: "On Wish List", class: "bg-primary/10 text-primary ring-primary/20" },
+  ordered: { label: "Ordered", class: "bg-amber-50 text-amber-700 ring-amber-200" },
+  damaged: { label: "Damaged", class: "bg-orange-100 text-orange-800 ring-orange-300" },
   read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
   unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
+  listening: { label: "Listening...", class: "bg-teal-50 text-teal-700 ring-teal-200" },
+  listened: { label: "Listened", class: "bg-cyan-50 text-cyan-700 ring-cyan-200" },
+  want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
 };
 
 /** Props for ItemSidebar component */

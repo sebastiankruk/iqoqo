@@ -67,6 +67,12 @@ def create_app(config_class=Config, config_override=None):
     db.init_app(app)
     _ = Migrate(app, db)
 
+    # Ensure all model modules are imported so SQLAlchemy's mapper registry
+    # is fully populated before db.create_all() or Alembic autogenerate runs.
+    from app.db import import_models  # noqa: E402
+
+    import_models()
+
     # Configure CORS from config
     cors_enabled = _coerce_bool(app.config.get("CORS_ENABLED"), default=False)
     if cors_enabled:

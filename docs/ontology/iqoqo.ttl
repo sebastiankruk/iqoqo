@@ -16,5 +16,54 @@
 # iqoqo custom ontology
 @prefix : <https://iqoqo.org/ontology#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
 
-: a owl:Ontology .
+: a owl:Ontology ;
+    rdfs:label "iqoqo Ontology" ;
+    rdfs:comment "Custom ontology for the iqoqo Library of Everything." .
+
+# ---------------------------------------------------------------------------
+# FRBR Group 1 entities (mapped to catalog.* tables)
+# ---------------------------------------------------------------------------
+
+:Work a owl:Class ;
+    rdfs:subClassOf frbroo:F1_Work ;
+    rdfs:label "Work" ;
+    rdfs:comment "An abstract intellectual or artistic creation (catalog.works)." .
+
+:Expression a owl:Class ;
+    rdfs:subClassOf frbroo:F2_Expression ;
+    rdfs:label "Expression" ;
+    rdfs:comment "A specific realization of a Work (catalog.expressions)." .
+
+:Manifestation a owl:Class ;
+    rdfs:subClassOf frbroo:F3_Manifestation_Product_Type ;
+    rdfs:label "Manifestation" ;
+    rdfs:comment "A physical or digital embodiment of an Expression (catalog.manifestations)." .
+
+:Item a owl:Class ;
+    rdfs:subClassOf frbroo:F5_Item ;
+    rdfs:label "Item" ;
+    rdfs:comment "A single exemplar of a Manifestation owned by a user (catalog.items)." .
+
+# ---------------------------------------------------------------------------
+# Audio / event-based extensions (v0.1.3)
+# ---------------------------------------------------------------------------
+
+:Contributor a owl:Class ;
+    rdfs:label "Contributor" ;
+    rdfs:comment "A person (F10) or organization (F11) that contributes to Works or Expressions (catalog.contributors)." .
+
+:WorkContribution a owl:Class ;
+    rdfs:label "WorkContribution" ;
+    rdfs:comment "FRBRoo Composition Event — links a Contributor to a Work with a creative role (catalog.work_contributions)." .
+
+:ExpressionContribution a owl:Class ;
+    rdfs:label "ExpressionContribution" ;
+    rdfs:comment "FRBRoo Performance Event — links a Contributor to an Expression with a performance role (catalog.expression_contributions)." .
+
+:WorkPart a owl:Class ;
+    rdfs:subClassOf frbroo:F15_Complex_Work ;
+    rdfs:label "WorkPart" ;
+    rdfs:comment "FRBRoo F15 Complex Work — models box-set / anthology containment between Works (catalog.work_parts)." .
