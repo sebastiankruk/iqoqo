@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend
 
 help:
 	@echo "Available targets:"
@@ -41,10 +41,11 @@ help:
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
 	@echo "Database targets:"
-	@echo "  db-init        - Initialize database with seed data"
-	@echo "  db-seed        - Load seed data into existing database"
-	@echo "  db-export      - Export database to data/backup.json"
-	@echo "  db-stats       - Show database statistics"
+	@echo "  db-init       - Initialize database with seed data"
+	@echo "  db-seed       - Load seed data into existing database"
+	@echo "  db-export     - Export database to data/backup.json"
+	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
+	@echo "  db-stats      - Show database statistics"
 
 # Development targets
 init:
@@ -185,6 +186,11 @@ db-export:
 		app = create_app(); \
 		with app.app_context(): DataManager.export_to_file('data/backup.json')"
 	@echo "Export complete: data/backup.json"
+
+docker-backup:
+	@echo "Creating full backup in Docker..."
+	@docker compose exec web python scripts/backup.py
+	@echo "Backup complete! Check the ./exports folder on your host."
 
 db-stats:
 	@echo "Database statistics:"

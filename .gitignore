@@ -37,7 +37,7 @@ node_modules/
 # Data - exclude personal data exports but keep seed examples
 data/*.json
 !data/seed_example.json
-iqoqo_backup*.json
+iqoqo_backup*.*
 
 # Virtual Env
 .venv*
