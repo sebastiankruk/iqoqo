@@ -61,13 +61,17 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isPending && manifestation.id) {
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
+    };
   }, [isPending, manifestation.id, qc]);
 
   if (!profile) return null;

@@ -40,7 +40,9 @@ def upgrade():
     # Add operation_type column if missing
     if "operation_type" not in columns_llm:
         with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
-            batch_op.add_column(sa.Column("operation_type", sa.String(length=50), nullable=True, server_default="cover_generation"))
+            batch_op.add_column(
+                sa.Column("operation_type", sa.String(length=50), nullable=True, server_default=sa.text("'cover_generation'"))
+            )
 
         # Ensure existing rows have a sensible default
         op.execute("UPDATE llm_telemetry SET operation_type = 'cover_generation' WHERE operation_type IS NULL")
@@ -53,7 +55,7 @@ def upgrade():
                 nullable=False,
                 existing_nullable=True,
                 server_default=None,
-                existing_server_default="cover_generation",
+                existing_server_default=sa.text("'cover_generation'"),
             )
 
     # Reconcile unique constraints: replace old provider-user constraint with provider-user-operation_type
@@ -69,7 +71,7 @@ def upgrade():
             batch_op.drop_constraint("uq_provider_user", type_="unique")
         # create new composite constraint if absent
         if "uq_provider_user_op" not in uq_names:
-            batch_op.create_unique_constraint("uq_provider_user_op", ["provider", "user_id", "operation_type"]) 
+            batch_op.create_unique_constraint("uq_provider_user_op", ["provider", "user_id", "operation_type"])
 
 
 def downgrade():

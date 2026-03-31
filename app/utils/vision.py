@@ -26,12 +26,7 @@ import time
 import uuid
 
 import requests
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import Config
 from app.core.permissions import ItemPermissions
@@ -174,7 +169,7 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
         if result and user_id:
             duration = time.time() - start_time
-            record_telemetry("gemini", user_id, duration)
+            record_telemetry("gemini", user_id, duration, operation_type="metadata_extraction")
 
         return result
 

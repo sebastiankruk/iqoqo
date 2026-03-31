@@ -60,13 +60,17 @@ export function ItemActions({ item }: { item: Item }) {
 
   // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isPending) {
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
       }, 3000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
+    };
   }, [isPending, item.id, qc]);
 
   if (!profile) return null;

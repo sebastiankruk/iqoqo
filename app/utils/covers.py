@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import atexit
 import hashlib
 import io
 import logging
@@ -43,6 +44,7 @@ MIN_COVER_FILE_SIZE = 1000  # ~1 KB
 
 # Managed thread pool for offloaded cover generation operations
 cover_executor = ThreadPoolExecutor(max_workers=4)
+atexit.register(cover_executor.shutdown, wait=False)
 
 
 def add_source_badge(filepath: str, source: str):
@@ -114,13 +116,20 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
         return None
 
 
-def fetch_external_api_cover(identifier: str) -> tuple[str, str] | None:
+def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
     """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success.
 
     This implementation streams responses with a maximum in-memory cap to avoid
     memory bloat from malicious or misconfigured endpoints. It delegates image
     integrity and placeholder detection to is_valid_cover().
+
+    Args:
+        identifier: Used for filename generation (may be ISBN, EAN, or UPC).
+        isbn: If provided, used for ISBN-specific API lookups (OpenLibrary, Google Books).
+              Falls back to ``identifier`` when not set, which will cause those lookups
+              to fail gracefully for non-ISBN barcodes.
     """
+    isbn_for_lookup = isbn or identifier
 
     def process_response(response, source_prefix: str, source_name: str) -> tuple[str, str] | None:
         """Helper to safely stream, size-cap, and validate external cover images."""
@@ -150,7 +159,7 @@ def fetch_external_api_cover(identifier: str) -> tuple[str, str] | None:
         return f"/static/covers/{filename}", source_name
 
     # 1. Open Library (Direct)
-    ol_url = f"https://covers.openlibrary.org/b/isbn/{identifier}-L.jpg"
+    ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
     try:
         response = requests.get(ol_url, stream=True, timeout=5)
         if response.status_code == 200:
@@ -171,7 +180,7 @@ def fetch_external_api_cover(identifier: str) -> tuple[str, str] | None:
         pass
 
     # 2. Google Books (Search -> Thumbnail)
-    gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{identifier}"
+    gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
     try:
         gb_data = requests.get(gb_search, timeout=5).json()
         if "items" in gb_data:
@@ -268,7 +277,7 @@ def process_cover_pipeline(
 
         # Tier 2: External APIs
         if not local_cover_url:
-            result = fetch_external_api_cover(identifier)
+            result = fetch_external_api_cover(identifier, isbn=manifestation.isbn13)
             if result:
                 local_cover_url, source = result
 
