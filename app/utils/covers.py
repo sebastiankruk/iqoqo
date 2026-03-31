@@ -105,7 +105,7 @@ def generate_fallback_cover(isbn: str, title: str, author: str) -> str | None:
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format="JPEG")
         optimize_and_save_image(img_byte_arr.getvalue(), filepath)
-        return f"/static/covers/{filename}"
+        return f"{Config.COVERS_BASE_URL}/{filename}"
     except (OSError, ValueError) as e:
         logger.error(f"Fallback generation failed: {e}")
         return None
@@ -144,7 +144,7 @@ def fetch_external_api_cover(isbn: str) -> tuple[str, str] | None:
         filename = f"{isbn}_{source_prefix}.jpg"
         filepath = os.path.join(COVERS_DIR, filename)
         optimize_and_save_image(content, filepath)
-        return f"/static/covers/{filename}", source_name
+        return f"{Config.COVERS_BASE_URL}/{filename}", source_name
 
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
@@ -255,7 +255,7 @@ def process_cover_pipeline(
                 # Remove the temporary upload file once it has been processed
                 os.remove(user_image_path)
 
-                local_cover_url = f"/static/covers/{filename}"
+                local_cover_url = f"{Config.COVERS_BASE_URL}/{filename}"
                 source = "user_photo"
             except (OSError, ValueError) as e:
                 logger.error(f"Failed to process user image: {e}")
@@ -382,7 +382,7 @@ def rebind_orphaned_covers() -> int:
             best_match = candidates[0]
 
             # Update DB
-            book.cover_url = f"/static/covers/{best_match}"
+            book.cover_url = f"{Config.COVERS_BASE_URL}/{best_match}"
 
             # Update meta status
             updates = {"cover_status": "ready"}

@@ -61,6 +61,9 @@ class Config:
     # When False, LLM tiers are never invoked regardless of user permissions.
     ALLOW_LLM: bool = os.environ.get("ALLOW_LLM", "false").lower() in {"true", "1", "yes"}
 
+    # Base URL for static cover image serving mapping
+    COVERS_BASE_URL = os.environ.get("COVERS_BASE_URL", "/static/covers")
+
     @staticmethod
     def _get_version():
         """Resolve application version from environment or pyproject.toml.
