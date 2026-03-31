@@ -104,21 +104,23 @@ def upgrade():
         sa.PrimaryKeyConstraint("user_id", "role_id"),
     )
 
+    # Seed default roles if they don't exist
+    op.execute("INSERT INTO roles (name) VALUES ('user'), ('admin') ON CONFLICT DO NOTHING")
+
+    # Seed a legacy system user to own orphan items
+    legacy_user_id = '00000000-0000-4000-a000-000000000000'
+    op.execute(
+        f"INSERT INTO users (id, email, display_name, is_active, created_at) "
+        f"VALUES ('{legacy_user_id}', 'legacy@iqoqo.cc', 'Legacy System User', true, now()) "
+        f"ON CONFLICT DO NOTHING"
+    )
+
     # Safe migration for items owner_id to UUID
     with op.batch_alter_table("items", schema=None) as batch_op:
         batch_op.add_column(sa.Column("new_owner_id", sa.UUID(), nullable=True))
 
-    default_uuid = str(uuid.uuid4())
-    op.execute(
-        f"""
-        UPDATE items
-        SET new_owner_id = CASE
-            WHEN owner_id ~ '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}}$'
-            THEN owner_id::uuid
-            ELSE '{default_uuid}'::uuid
-        END
-    """
-    )
+    # Assign all existing items to the legacy user
+    op.execute(f"UPDATE items SET new_owner_id = '{legacy_user_id}'::uuid")
 
     with op.batch_alter_table("items", schema=None) as batch_op:
         batch_op.alter_column("new_owner_id", nullable=False)
