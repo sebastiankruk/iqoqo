@@ -37,13 +37,11 @@ services:
       sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
     env_file:
       - ${ENV_FILE:-.env}
-    volumes:
-      - ./exports:/usr/src/app/exports
-      - ./app/static/covers:/usr/src/app/app/static/covers
     depends_on:
       db:
         condition: service_healthy
     volumes:
+      - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers
 
   frontend:
