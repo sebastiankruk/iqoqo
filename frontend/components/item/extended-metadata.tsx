@@ -38,6 +38,11 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const description = meta["Description"] as string | undefined;
   const categories = (meta["Categories"] as string[] | undefined) ?? [];
 
+  // Audio specific metadata
+  const format = meta.format as string | undefined;
+  const isAudio = format && ["LP", "45", "EP", "CD", "CD-EP", "Audiobook"].includes(format);
+  const trackList = meta.track_list as Array<{ position: string; title: string; duration_seconds: number }> | undefined;
+
   // Filter out internal keys and keys already displayed elsewhere
   const hiddenKeys = new Set([
     "Title",
@@ -52,10 +57,18 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "Year",
     "Pages",
     "Subtitle",
+    "track_list",
+    "additional_images",
+    "format",
+    "label",
+    "catalog_number",
+    "matrix_number",
+    "pressing_number",
+    "disc_count",
   ]);
   const extraKeys = Object.keys(meta).filter(k => !hiddenKeys.has(k) && typeof meta[k] !== "object");
 
-  if (!description && categories.length === 0 && extraKeys.length === 0) return null;
+  if (!description && categories.length === 0 && !isAudio && !trackList && extraKeys.length === 0) return null;
 
   return (
     <div className="space-y-4 py-4">
@@ -74,6 +87,65 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
       {description && (
         <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
           <p>{description}</p>
+        </div>
+      )}
+
+      {/* Audio Specific Details */}
+      {isAudio && (
+        <div className="rounded-lg border bg-card/50 p-4 shadow-sm">
+          <h3 className="font-semibold text-lg mb-4 text-foreground">Release Information</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            {Boolean(meta.label) && (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Label</span>
+                <span className="font-medium">{meta.label as string}</span>
+              </div>
+            )}
+            {Boolean(meta.catalog_number) && (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Catalog #</span>
+                <span className="font-medium">{meta.catalog_number as string}</span>
+              </div>
+            )}
+            {Boolean(meta.matrix_number) && (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Matrix #</span>
+                <span className="font-medium">{meta.matrix_number as string}</span>
+              </div>
+            )}
+            {Boolean(meta.disc_count) && (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Discs</span>
+                <span className="font-medium">{meta.disc_count as number}</span>
+              </div>
+            )}
+            {format && (
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Format</span>
+                <span className="font-medium">{format}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tracklist Table */}
+      {trackList && trackList.length > 0 && (
+        <div className="rounded-lg border bg-card/50 p-4 shadow-sm">
+          <h3 className="font-semibold text-lg mb-4 text-foreground">Tracklist</h3>
+          <div className="divide-y border-t border-muted">
+            {trackList.map(track => (
+              <div key={track.position} className="py-2 flex justify-between text-sm items-center hover:bg-muted/30 px-2 rounded-sm transition-colors">
+                <div className="flex gap-4">
+                  <span className="text-muted-foreground w-8 font-mono">{track.position}</span>
+                  <span className="font-medium">{track.title}</span>
+                </div>
+                <span className="text-muted-foreground font-mono">
+                  {Math.floor(track.duration_seconds / 60)}:{(track.duration_seconds % 60).toString().padStart(2, "0")}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

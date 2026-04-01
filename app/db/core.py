@@ -38,6 +38,12 @@ from . import db
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+# In test environments (pytest), default to non-Postgres (no schemas/FTS) unless
+# FTS tests are explicitly enabled. This ensures tests run correctly on SQLite
+# even if DATABASE_URL is set in the environment.
+if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
+    _USE_PG = False
+
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
 #: FK prefix — ``"catalog."`` in PostgreSQL, ``""`` in SQLite.

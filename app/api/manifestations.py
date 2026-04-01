@@ -16,12 +16,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from flask import Response, current_app, jsonify, request
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
@@ -29,6 +31,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
+from app.utils.images import save_upload_image
 
 
 @api_bp.route("/manifestations", methods=["GET"])
@@ -409,6 +412,46 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     )
 
     return jsonify({"message": "Cover upload processing started"}), 202
+
+
+@api_bp.route("/manifestations/<int:id>/images", methods=["POST"])
+@require_auth
+@require_permission("edit:manifestation")
+def upload_manifestation_image(id: int) -> tuple[Response, int]:
+    """Upload an additional image (inlay, disc, back) for a manifestation."""
+    manifestation = db.session.get(Manifestation, id)
+    if not manifestation:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    if "image" not in request.files:
+        return jsonify({"success": False, "error": "No image provided"}), 400
+
+    file = request.files["image"]
+    image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
+
+    # Save the file to gallery folder
+    filename = secure_filename(f"manifestation_{id}_{image_label}_{file.filename}")
+    image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+
+    # Update JSONB meta field
+    meta = dict(manifestation.meta or {})
+    additional_images = meta.get("additional_images", [])
+    additional_images.append({
+        "url": image_url,
+        "label": image_label,
+        "added_at": datetime.now(UTC).isoformat()
+    })
+    meta["additional_images"] = additional_images
+    manifestation.meta = meta
+
+    # SQLAlchemy requires this to detect JSON mutations if we didn't re-assign,
+    # but since we did manifestation.meta = meta above, it might be redundant.
+    # Still, good practice for JSONB.
+    flag_modified(manifestation, "meta")
+
+    db.session.commit()
+
+    return jsonify({"success": True, "data": meta["additional_images"]}), 201
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])

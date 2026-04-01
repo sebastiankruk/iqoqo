@@ -34,9 +34,11 @@ logger = logging.getLogger(__name__)
 
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers")
+GALLERY_DIR = os.path.join(Config.BASE_DIR, "app", "static", "gallery")
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
+os.makedirs(GALLERY_DIR, exist_ok=True)
 
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB

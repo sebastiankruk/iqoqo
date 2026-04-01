@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
@@ -143,11 +144,34 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           disabled={updateItem.isPending}
           className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
         >
-          {Object.entries(STATUS_LABELS).map(([key, info]) => (
-            <option key={key} value={key} className="text-foreground bg-card">
-              {info.label}
-            </option>
-          ))}
+          <optgroup label="Availability & Condition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["available", "lent", "damaged", "lost"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Reading Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["unread", "reading", "read", "want_to_read"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Listening Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["want_to_listen", "listening", "listened"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Acquisition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["wish_list", "ordered"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
         </select>
 
         {onEdit && (
@@ -181,6 +205,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             }
             className="w-full [&>button]:w-full [&>button]:h-10 [&>button]:rounded-lg [&>button]:bg-accent/10 [&>button]:text-accent [&>button]:hover:bg-accent/20 [&>button]:border-none [&>button]:font-semibold [&>button]:text-xs"
           />
+        )}
+
+        {hasUploadPermission && (
+          <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
         )}
       </div>
 

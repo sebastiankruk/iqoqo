@@ -61,7 +61,12 @@ def admin_headers(app):
 
     with app.app_context():
         # Create permissions
-        perms = [Permission(name="regenerate:cover"), Permission(name="refetch:metadata"), Permission(name="delete:item")]
+        perms = [
+            Permission(name="regenerate:cover"),
+            Permission(name="refetch:metadata"),
+            Permission(name="delete:item"),
+            Permission(name="edit:manifestation"),
+        ]
         db.session.add_all(perms)
 
         # Create admin role
