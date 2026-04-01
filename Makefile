@@ -86,7 +86,7 @@ stop:
 		echo "No frontend PID file found (.frontend.pid); skipping frontend stop."; \
 	fi
 	@echo "Stopping database containers..."
-	@docker-compose stop
+	@docker compose stop
 	@echo "Development environment stopped."
 
 # Linting targets
@@ -189,7 +189,7 @@ db-export:
 
 docker-backup:
 	@echo "Creating full backup in Docker..."
-	@docker compose exec web python scripts/backup.py
+	@docker compose exec -T web python scripts/backup.py
 	@echo "Backup complete! Check the ./exports folder on your host."
 
 db-stats:

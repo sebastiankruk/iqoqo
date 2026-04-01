@@ -76,8 +76,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
   const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
-  const timestamp = tMeta?.cover_status_updated_at 
-    ? new Date(tMeta.cover_status_updated_at as string).getTime() 
+  const updatedAt = tMeta?.["cover_status_updated_at"];
+  const timestamp = typeof updatedAt === "string" 
+    ? new Date(updatedAt).getTime() 
     : "";
 
   const coverUrl = itemCoverUrl

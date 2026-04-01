@@ -66,8 +66,9 @@ export default function ManifestationPage() {
     );
   }
 
-  const timestamp = manifestation.meta?.cover_status_updated_at 
-    ? new Date(manifestation.meta.cover_status_updated_at as string).getTime() 
+  const updatedAt = manifestation.meta?.["cover_status_updated_at"];
+  const timestamp = typeof updatedAt === "string" 
+    ? new Date(updatedAt).getTime() 
     : "";
   const coverUrl = manifestation.cover_url
     ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${manifestation.cover_url}${timestamp ? `?t=${timestamp}` : ""}`

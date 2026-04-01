@@ -34,11 +34,11 @@ cd iqoqo
 cp .env.example .env
 
 # Start with Docker Compose
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 
 # Initialize database
-docker-compose exec web flask db upgrade
+docker compose exec web flask db upgrade
 
 # Access at http://localhost:3000 (Frontend) and http://localhost:5000 (API)
 ```
