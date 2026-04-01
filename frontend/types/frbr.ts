@@ -98,6 +98,7 @@ export type ItemStatus =
   | "reading"
   | "read"
   | "unread"
+  | "want_to_read"
   | "listening"
   | "listened"
   | "want_to_listen";

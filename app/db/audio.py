@@ -32,16 +32,13 @@ Audio-specific ``Manifestation.meta`` keys are documented in
 from __future__ import annotations
 
 import os
-import sys
 
 from . import db
 
 # ---------------------------------------------------------------------------
 # Schema selector — mirrors the logic in app.db.core
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-    "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-)
+_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
 _CATALOG: str | None = "catalog" if _USE_PG else None
 _CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""
 
@@ -110,13 +107,16 @@ class Contributor(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "contributors"
-    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
+    __table_args__ = (
+        db.UniqueConstraint("name", "type", name="uq_contributor_name_type"),
+        *(({"schema": _CATALOG},) if _CATALOG else ()),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(500), nullable=False, index=True)
     #: 'person' | 'organization'
     type = db.Column(db.String(20), nullable=False, default="person")
-    meta = db.Column(db.JSON, default={})
+    meta = db.Column(db.JSON, default=dict)
 
     # Relationships
     work_contributions = db.relationship("WorkContribution", backref="contributor", lazy="dynamic")

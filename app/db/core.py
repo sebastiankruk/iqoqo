@@ -37,9 +37,7 @@ from . import db
 # Use the "catalog" PostgreSQL schema in production.  SQLite (used in tests)
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-    "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-)
+_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
 #: FK prefix — ``"catalog."`` in PostgreSQL, ``""`` in SQLite.
@@ -63,6 +61,7 @@ ITEM_STATUSES: tuple[str, ...] = (
     "reading",
     "read",
     "unread",
+    "want_to_read",
     "listening",
     "listened",
     "want_to_listen",
@@ -81,7 +80,7 @@ class Work(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(1000), nullable=False)
-    meta = db.Column(db.JSON, default={})
+    meta = db.Column(db.JSON, default=dict)
 
     # Full-text search column for PostgreSQL (production only; skipped in SQLite tests)
     if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
@@ -137,7 +136,7 @@ class Expression(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id"), nullable=False)
     content_type = db.Column(db.String(50))  # e.g., 'text', 'sound', 'notated_music', 'video'
     language = db.Column(db.String(10))  # BCP-47 language tag, e.g., 'en', 'pl'
-    meta = db.Column(db.JSON, default={})
+    meta = db.Column(db.JSON, default=dict)
 
     # Relationships
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True)
@@ -165,7 +164,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     publisher = db.Column(db.String(500))
     publication_date = db.Column(db.Date)
     cover_url = db.Column(db.String(255), nullable=True)
-    meta = db.Column(db.JSON, default={})
+    meta = db.Column(db.JSON, default=dict)
 
     # Full-text search column for PostgreSQL (production only; skipped in SQLite tests)
     if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
@@ -219,4 +218,4 @@ class Item(db.Model):  # type: ignore[name-defined]
 
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    meta = db.Column(db.JSON, default={})
+    meta = db.Column(db.JSON, default=dict)

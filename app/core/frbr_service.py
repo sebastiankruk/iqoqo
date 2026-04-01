@@ -185,13 +185,20 @@ def get_or_create_contributor(name: str, contributor_type: str = "person") -> Co
     Returns:
         The existing or newly created :class:`~app.db.audio.Contributor`.
     """
-    contributor = Contributor.query.filter_by(name=name).first()
+    from sqlalchemy.exc import IntegrityError
+
+    contributor = Contributor.query.filter_by(name=name, type=contributor_type).first()
     if contributor:
         return contributor  # type: ignore[no-any-return]
-    contributor = Contributor(name=name, type=contributor_type)
-    db.session.add(contributor)
-    db.session.commit()
-    return contributor
+
+    try:
+        contributor = Contributor(name=name, type=contributor_type)
+        db.session.add(contributor)
+        db.session.commit()
+        return contributor
+    except IntegrityError:
+        db.session.rollback()
+        return Contributor.query.filter_by(name=name, type=contributor_type).first()  # type: ignore[no-any-return]
 
 
 def add_work_contribution(

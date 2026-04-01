@@ -33,6 +33,7 @@ const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = 
   damaged: { label: "Damaged", class: "bg-orange-100 text-orange-800 ring-orange-300" },
   read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
   unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
+  want_to_read: { label: "Want to Read", class: "bg-primary/10 text-primary ring-primary/20" },
   listening: { label: "Listening...", class: "bg-teal-50 text-teal-700 ring-teal-200" },
   listened: { label: "Listened", class: "bg-cyan-50 text-cyan-700 ring-cyan-200" },
   want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
