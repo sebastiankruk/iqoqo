@@ -156,4 +156,85 @@ test.describe("Audio Media Workflow", () => {
     
     await expect(page.getByText(/Upload [a-z]+ image/i)).toBeVisible();
   });
+
+  test("should lookup and add an audio CD via generic scanner endpoint using UPC", async ({ page }) => {
+    // 0. Mock User Profile and Config
+    await page.route("**/api/profile**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { id: "test-user", permissions: [] },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: {} }),
+      });
+    });
+
+    // 1. Mock the new GET /lookup/:barcode endpoint (for 12-digit CD UPC)
+    const testBarcode = "074646493524";
+    await page.route(`**/api/lookup/${testBarcode}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            Title: "Kind of Blue",
+            Authors: ["Miles Davis"],
+            Format: "audio",
+            barcode: testBarcode,
+          },
+        }),
+      });
+    });
+
+    // 2. Mock the unified POST /scan endpoint
+    await page.route("**/api/scan", async (route) => {
+      const postData = route.request().postDataJSON();
+      expect(postData.barcode).toBe(testBarcode);
+
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            item_id: 2,
+            manifestation_id: 103,
+            title: "Kind of Blue",
+            is_new_manifestation: true,
+          },
+        }),
+      });
+    });
+
+    // 3. Navigate to the scanner page
+    await page.goto("/scan");
+
+    // 4. Use the Manual Search tab
+    await page.getByText("Manual Search").click();
+
+    // 5. Submit 12-digit UPC (validates updated frontend regex rules)
+    await page.fill('input[placeholder="Enter barcode or title..."]', testBarcode);
+    await page.locator('button[type="submit"]').click();
+
+    // 6. Verify the Success Card renders parsed audio metadata
+    await expect(page.getByText("Item Found")).toBeVisible();
+    await expect(page.getByText("Kind of Blue")).toBeVisible();
+    await expect(page.getByText("Miles Davis")).toBeVisible();
+
+    // 7. Submit the generic "Add to Library" action
+    await page.getByRole("button", { name: "Add to Library" }).click();
+
+    // 8. Expect routing to newly ingested item details page
+    await expect(page).toHaveURL(/.*\/item\/2/);
+  });
 });

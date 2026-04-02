@@ -155,7 +155,7 @@ export interface DashboardStats {
   items_read: number;
 }
 
-/** ISBN metadata */
+/** Barcode lookup metadata (books and audio) */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
@@ -163,6 +163,8 @@ export interface IsbnMeta {
   Year?: string;
   Language?: string;
   "ISBN-13"?: string;
+  Format?: string;
+  format?: string;
 }
 
 /** User profile */

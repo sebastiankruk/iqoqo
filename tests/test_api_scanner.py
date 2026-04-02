@@ -156,3 +156,73 @@ def test_extract_from_cover_pil_verify_failure(mock_image_open, client, vision_u
     )
     assert response.status_code == 400
     assert "Invalid or corrupted image file" in response.json["error"]
+
+
+# =====================================================================
+# UNIFIED BARCODE LOOKUP API TESTS
+# =====================================================================
+
+@patch("app.api.scanner.fetch_isbn_metadata")
+@patch("app.api.scanner.fetch_discogs_metadata")
+def test_lookup_barcode_book_isbn(mock_discogs, mock_isbn, client, normal_user_headers):
+    """Test looking up a standard 13-digit ISBN correctly bypasses audio fetchers."""
+    mock_isbn.return_value = {"Title": "Neuromancer", "Format": "book"}
+
+    # 978 prefix guarantees book routing
+    response = client.get("/api/lookup/9780441013593", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["Title"] == "Neuromancer"
+    mock_isbn.assert_called_once()
+    mock_discogs.assert_not_called()
+
+
+@patch("app.api.scanner.fetch_isbn_metadata")
+@patch("app.api.scanner.fetch_discogs_metadata")
+def test_lookup_barcode_audio_upc(mock_discogs, mock_isbn, client, normal_user_headers):
+    """Test looking up a standard 12-digit UPC uses audio fetchers first."""
+    mock_discogs.return_value = {"Title": "Kind of Blue", "Format": "audio"}
+
+    response = client.get("/api/lookup/074646493524", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["Title"] == "Kind of Blue"
+    mock_discogs.assert_called_once()
+
+
+# =====================================================================
+# UNIFIED SCAN INGESTION API TESTS
+# =====================================================================
+
+@patch("app.api.scanner.IngestService.ingest_audio_from_barcode")
+def test_scan_barcode_creates_audio_item(mock_ingest_audio, client, normal_user_headers, app):
+    """Test scan endpoint correctly processes audio format hint."""
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 999
+    mock_manifestation.title = "Dark Side of the Moon"
+    mock_ingest_audio.return_value = mock_manifestation
+
+    payload = {"barcode": "077774600125", "format": "audio"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["manifestation_id"] == 999
+    assert response.json["data"]["title"] == "Dark Side of the Moon"
+    mock_ingest_audio.assert_called_once_with("077774600125")
+
+
+@patch("app.api.scanner.IngestService.ingest_from_isbn")
+def test_scan_barcode_creates_book_item(mock_ingest_book, client, normal_user_headers, app):
+    """Test scan endpoint correctly processes book format hint."""
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 888
+    mock_manifestation.title = "Dune"
+    mock_ingest_book.return_value = mock_manifestation
+
+    payload = {"barcode": "9780441013593", "format": "book"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["manifestation_id"] == 888
+    assert response.json["data"]["title"] == "Dune"
+    mock_ingest_book.assert_called_once_with("9780441013593")
