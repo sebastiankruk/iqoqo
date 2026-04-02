@@ -108,12 +108,11 @@ export function CameraCapture({
   icon,
   confirmTitle,
   confirmMessage,
-  format: initialFormat = "book",
+  format = "book",
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [format, setFormat] = useState<MediaFormat>(initialFormat);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
@@ -198,25 +197,6 @@ export function CameraCapture({
         className="hidden"
       />
       <div className="flex flex-col gap-4">
-        {/* Format Toggle (Only show if not uploading a specifically existing manifestation) */}
-        {!manifestation_id && (
-          <div className="flex justify-center">
-            <div className="inline-flex rounded-lg bg-secondary p-1">
-              {(["book", "cd", "vinyl"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFormat(f)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all ${
-                    format === f ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-background/50"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <button
           onClick={handleClick}

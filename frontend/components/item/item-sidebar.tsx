@@ -202,7 +202,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
         {hasUploadPermission && (
           <CameraCapture
-            manifestationId={item.manifestation_id}
+            manifestation_id={item.manifestation_id}
+            format={format as import("@/components/scanner/camera-capture").MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
             icon={<ImagePlus className="h-4 w-4 mr-2" />}

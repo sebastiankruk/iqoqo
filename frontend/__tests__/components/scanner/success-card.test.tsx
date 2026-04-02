@@ -152,6 +152,7 @@ describe("SuccessCard", () => {
     expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
     expect(screen.getByText("077774600125")).toBeInTheDocument();
     expect(screen.getByText("Audio Media")).toBeInTheDocument();
+    expect(screen.getByText("AUDIO")).toBeInTheDocument(); // Uppercase check
   });
 
   it("shows a warning when no standard identifier is found", () => {

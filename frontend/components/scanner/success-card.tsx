@@ -51,7 +51,8 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
 
   // Normalize metadata for display
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
-  const authorDisplay = meta.author || (meta.authors && meta.authors.length > 0 ? meta.authors.join(", ") : "Unknown Artist/Author");
+  const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
+  const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
   const coverUrl = meta.cover_url || "/file.svg";
 
   const format = meta.format || meta.Format || "book";
@@ -96,7 +97,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
       <Card className="w-full max-w-2xl mx-auto overflow-hidden shadow-2xl border-green-500/30 bg-card/95 backdrop-blur-md">
-        <CardHeader className="bg-green-500/10 pb-4 flex flex-row items-center justify-between">
+        <CardHeader className="bg-green-500/10 py-3 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
               <Check className="h-5 w-5" />
@@ -153,8 +154,8 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                 <div className="font-mono text-xs break-all">{identifier}</div>
                 {format && (
                   <>
-                    <div className="text-muted-foreground font-semibold">Format</div>
-                    <div className="capitalize">{format}</div>
+                  <div className="text-muted-foreground font-semibold">Format</div>
+                  <div>{format.toUpperCase()}</div>
                   </>
                 )}
               </div>

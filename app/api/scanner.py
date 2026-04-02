@@ -115,16 +115,26 @@ def scan_barcode():
 
     if not manifestation:
         try:
-            if format_hint == "audio":
+            # Handle both 'audio' generic hint AND specific 'cd'/'vinyl' formats
+            is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
+            
+            if is_audio_hint:
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
-            elif format_hint == "book":
+            elif format_hint == "book" or format_hint == "text":
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
-                # Auto-fallback strategy
-                try:
-                    manifestation = IngestService.ingest_from_isbn(barcode)
-                except ValueError:
-                    manifestation = IngestService.ingest_audio_from_barcode(barcode)
+                # Auto-fallback strategy: try ISBN first for 10/13 digits, otherwise audio
+                is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
+                if is_isbn_like:
+                    try:
+                        manifestation = IngestService.ingest_from_isbn(barcode)
+                    except ValueError:
+                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
+                else:
+                    try:
+                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
+                    except ValueError:
+                        manifestation = IngestService.ingest_from_isbn(barcode)
 
             is_new_manifestation = True
         except ValueError as e:
@@ -147,6 +157,8 @@ def scan_barcode():
                 "success": True,
                 "data": {
                     "message": "Item successfully added to your collection",
+                    "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
+                    "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
                     "item_id": new_item.id,
                     "manifestation_id": manifestation.id,
                     "title": (
