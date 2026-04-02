@@ -194,7 +194,15 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
         __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
 
+    @property
+    def title(self) -> str:
+        """Convenience property to get the manifestation title from expression/work."""
+        if self.expression and self.expression.work:
+            return self.expression.work.title or "Untitled"
+        return self.meta.get("title") or self.meta.get("Title") or "Untitled"
+
     def update_meta(self, **kwargs) -> None:
+
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}
         meta.update(kwargs)

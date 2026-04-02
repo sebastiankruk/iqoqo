@@ -15,11 +15,11 @@
 //
 "use client";
 
-import { Calendar, BookOpen, Tag } from "lucide-react";
+import { Calendar, BookOpen, Tag, ListMusic } from "lucide-react";
 import type { Item } from "@/types/frbr";
 
 /**
- * Title, authors, year, page count, and tag badges for an item.
+ * Title, authors, year, page/track count, and tag badges for an item.
  *
  * @param root0 - The props object
  * @param root0.item - The item
@@ -30,7 +30,13 @@ export function ItemHeader({ item }: { item: Item }) {
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
   const year = meta["Year"] as string | undefined;
+
+  const format = (meta["format"] as string | undefined) ?? "book";
+  const isAudio = format === "audio" || format === "cd" || format === "vinyl";
+
   const pages = meta["Pages"] as string | undefined;
+  const tracks = meta["Tracks"] as string | undefined;
+
   const authors = work?.authors ?? item.authors ?? [];
 
   return (
@@ -59,12 +65,21 @@ export function ItemHeader({ item }: { item: Item }) {
             </span>
           </>
         )}
-        {pages && (
+        {!isAudio && pages && (
           <>
             <span className="text-border">&bull;</span>
             <span className="flex items-center gap-1">
               <BookOpen className="h-3.5 w-3.5" />
               {pages} pages
+            </span>
+          </>
+        )}
+        {isAudio && tracks && (
+          <>
+            <span className="text-border">&bull;</span>
+            <span className="flex items-center gap-1">
+              <ListMusic className="h-3.5 w-3.5" />
+              {tracks} tracks
             </span>
           </>
         )}
@@ -88,3 +103,4 @@ export function ItemHeader({ item }: { item: Item }) {
     </div>
   );
 }
+

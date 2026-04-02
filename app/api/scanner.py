@@ -54,28 +54,45 @@ def scan_barcode():
 
     Request body (JSON):
         barcode (str): The ISBN or other barcode value to look up.
+        format (str): Optional hint ('audio' or 'book').
 
     Returns:
-        201 – ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
+        201 – {"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}
         400 – barcode missing or invalid
         404 – barcode could not be resolved to a manifestation
         503 – upstream network error during metadata lookup
     """
     data = request.get_json()
     barcode = data.get("barcode")
+    format_hint = data.get("format")  # Optional: 'audio' or 'book'
 
     if not barcode:
         return jsonify({"error": "Barcode is required"}), 400
 
     is_new_manifestation = False
-    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()  # type: ignore[attr-defined]
+
+    # Check both ISBN and generic barcode metadata fields
+    manifestation = Manifestation.query.filter(
+        (Manifestation.meta.op("->>")("isbn") == barcode) |
+        (Manifestation.meta.op("->>")("barcode") == barcode)
+    ).first()
 
     if not manifestation:
         try:
-            manifestation = IngestService.ingest_from_isbn(barcode)
+            if format_hint == "audio":
+                manifestation = IngestService.ingest_audio_from_barcode(barcode)
+            elif format_hint == "book":
+                manifestation = IngestService.ingest_from_isbn(barcode)
+            else:
+                # Auto-fallback strategy
+                try:
+                    manifestation = IngestService.ingest_from_isbn(barcode)
+                except ValueError:
+                    manifestation = IngestService.ingest_audio_from_barcode(barcode)
+
             is_new_manifestation = True
         except ValueError as e:
-            return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
+            return jsonify({"error": f"Invalid barcode or not found: {str(e)}"}), 400
         except ConnectionError as e:
             return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -100,6 +117,7 @@ def scan_barcode():
         ),
         201,
     )
+
 
 
 @api_bp.route("/vision/extract", methods=["POST"])
