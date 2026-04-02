@@ -88,6 +88,11 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   // `cover_url` and `cover_status` exist on both Item and CatalogEntry
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
+  const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
+  const updatedAt = tMeta?.["cover_status_updated_at"];
+  const timestamp = typeof updatedAt === "string"
+    ? new Date(updatedAt).getTime()
+    : "";
 
   const coverUrl = getCoverUrl(itemCoverUrl || undefined) || (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)

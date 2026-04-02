@@ -61,14 +61,24 @@ with app.app_context():
         db.session.commit()
         print(f"Created admin user: {admin_email}")
 
-    # 4. Migrate items to Admin UUID
+    # 4. Migrate items to Admin UUID (including those of the legacy system user)
     legacy_items = Item.query.all()
     migrated = 0
+    LEGACY_USER_ID = "00000000-0000-4000-a000-000000000000"
+
     for item in legacy_items:
-        # Check if owner_id is not already a valid UUID
+        # Check if owner_id is not already a valid non-legacy UUID
+        owner_id_str = str(item.owner_id)
+        should_migrate = False
         try:
-            uuid.UUID(str(item.owner_id))
-        except ValueError:
+            if owner_id_str == LEGACY_USER_ID:
+                should_migrate = True
+            else:
+                uuid.UUID(owner_id_str)
+        except (ValueError, TypeError):
+            should_migrate = True
+
+        if should_migrate and item.owner_id != admin_user.id:
             item.owner_id = admin_user.id
             migrated += 1
 

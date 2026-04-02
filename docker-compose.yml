@@ -45,6 +45,9 @@ services:
       - "${WEB_PORT:-5000}:5000"
     env_file:
       - .env
+    volumes:
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
     depends_on:
       db:
         condition: service_healthy

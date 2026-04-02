@@ -55,7 +55,7 @@ To run with Docker Compose (includes backend and database):
 
 ```bash
 # From project root
-docker-compose up frontend
+docker compose up frontend
 ```
 
 ## Project Structure

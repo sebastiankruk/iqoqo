@@ -594,7 +594,7 @@ Audio-specific keys that **may** be stored in `Manifestation.meta`:
 ./run_dev.sh
 
 # Or separately:
-docker-compose up -d db                 # PostgreSQL
+docker compose up -d db                 # PostgreSQL
 flask --app run run                      # API on :5000
 cd frontend && npm run dev              # React on :3000
 ```

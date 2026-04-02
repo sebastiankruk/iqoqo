@@ -67,7 +67,11 @@ export default function ManifestationPage() {
     );
   }
 
-  const coverUrl = getCoverUrl(manifestation.cover_url || undefined) || (manifestation.meta?.["cover_url"] as string | undefined);
+  const updatedAt = manifestation.meta?.["cover_status_updated_at"];
+  const timestamp = typeof updatedAt === "string"
+    ? new Date(updatedAt).getTime()
+    : "";
+  const coverUrl = getCoverUrl(manifestation.cover_url || undefined, timestamp) || (manifestation.meta?.["cover_url"] as string | undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
   /**
