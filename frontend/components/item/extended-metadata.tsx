@@ -81,16 +81,22 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "disc_count",
   ]);
 
-  const extraKeys = Object.keys(meta).filter(
-    k => !hiddenKeys.has(k) &&
-    !k.toLowerCase().includes("cover") &&
-    !k.toLowerCase().includes("image") &&
-    meta[k] !== null &&
-    meta[k] !== undefined &&
-    meta[k] !== "" &&
-    String(meta[k]).toLowerCase() !== "unknown" &&
-    typeof meta[k] !== "object"
-  );
+  const extraKeys = Object.entries(meta)
+    .filter(([key, value]) => {
+      // 1. Exclude specific internal or redundant keys
+      const excludedKeys = ['id', 'manifestation_id', 'cover_url', 'image', 'cover_status', 'cover'];
+      if (excludedKeys.includes(key.toLowerCase()) || hiddenKeys.has(key)) return false;
+
+      // 2. Filter out non-displayable/redundant values
+      const val = String(value).toLowerCase();
+      if (!value || val === 'unknown' || val === 'n/a' || val === 'none' || val === '') return false;
+      
+      // 3. Filter out format/title keys if already shown in main UI
+      if (['title', 'format'].includes(key.toLowerCase())) return false;
+
+      return typeof value !== "object";
+    })
+    .map(([key]) => key);
 
   if (!description && categories.length === 0 && !isAudio && !trackList && extraKeys.length === 0) return null;
 

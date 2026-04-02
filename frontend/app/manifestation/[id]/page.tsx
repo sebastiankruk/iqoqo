@@ -68,15 +68,14 @@ export default function ManifestationPage() {
   }
 
   const coverUrl = getCoverUrl(manifestation.cover_url || undefined) || (manifestation.meta?.["cover_url"] as string | undefined);
+  const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
   /**
-   * Add the current manifestation to the user's collection when an ISBN is available.
+   * Add the current manifestation to the user's collection.
    * @returns {void}
    */
   const handleAddToCollection = () => {
-    if (manifestation.isbn13) {
-      addItem({ isbn: manifestation.isbn13 });
-    }
+    addItem({ manifestation_id: manifestation.id });
   };
 
   return (
@@ -105,7 +104,8 @@ export default function ManifestationPage() {
             {!coverUrl && (
               <div className="mt-4">
                 <CameraCapture
-                  manifestationId={manifestation.id}
+                  manifestation_id={manifestation.id}
+                  format={(manifestation.meta?.format as "book" | "cd" | "vinyl") || "book"}
                   onUploadComplete={() => {
                     toast.success("Cover contributed! Processing started.");
                     router.refresh();
@@ -132,22 +132,34 @@ export default function ManifestationPage() {
             <div className="space-y-3 pt-6 border-t border-border">
               <h2 className="text-lg font-semibold">Publication Details</h2>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">ISBN-13</dt>
-                  <dd className="font-medium">{manifestation.isbn13 || "N/A"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Publisher</dt>
-                  <dd className="font-medium">{(manifestation.meta?.Publisher as string) || "Unknown"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Year</dt>
-                  <dd className="font-medium">{(manifestation.meta?.Year as string) || "Unknown"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Language</dt>
-                  <dd className="font-medium">{(manifestation.meta?.Language as string) || "Unknown"}</dd>
-                </div>
+                {manifestation.isbn13 && (
+                  <div>
+                    <dt className="text-muted-foreground">ISBN-13</dt>
+                    <dd className="font-medium text-foreground">{String(manifestation.isbn13)}</dd>
+                  </div>
+                )}
+                {!!(manifestation.meta?.Publisher &&
+                  manifestation.meta.Publisher !== "Unknown" &&
+                  manifestation.meta.Publisher !== "N/A") && (
+                    <div>
+                      <dt className="text-muted-foreground">Publisher</dt>
+                      <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
+                    </div>
+                  )}
+                {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
+                  <div>
+                    <dt className="text-muted-foreground">Year</dt>
+                    <dd className="font-medium text-foreground">{String(resolved_year)}</dd>
+                  </div>
+                )}
+                {!!(manifestation.meta?.Language &&
+                  manifestation.meta.Language !== "Unknown" &&
+                  manifestation.meta.Language !== "N/A") && (
+                    <div>
+                      <dt className="text-muted-foreground">Language</dt>
+                      <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
+                    </div>
+                  )}
               </dl>
             </div>
 
@@ -160,7 +172,7 @@ export default function ManifestationPage() {
                       Already in your collection
                     </div>
                   ) : (
-                    <Button onClick={handleAddToCollection} disabled={isAdding || !manifestation.isbn13} size="sm">
+                    <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
                       {isAdding ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -168,9 +180,6 @@ export default function ManifestationPage() {
                       )}
                       Add to My Collection
                     </Button>
-                  )}
-                  {!manifestation.isbn13 && !manifestation.user_owns && (
-                    <p className="mt-2 text-xs text-destructive">Cannot be added automatically (No ISBN available).</p>
                   )}
                 </div>
 

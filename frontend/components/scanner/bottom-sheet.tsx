@@ -36,6 +36,7 @@ interface BottomSheetProps {
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
+  format?: "book" | "cd" | "vinyl";
 }
 
 /**
@@ -48,6 +49,7 @@ interface BottomSheetProps {
  * @param root0.onTabChange - Optional callback when the bottom sheet tab changes
  * @param root0.onExtractComplete - Optional callback when cover metadata is extracted
  * @param root0.onShowManualForm - Optional callback to show manual entry form
+ * @param root0.format - The current media format (book, cd, vinyl)
  * @returns {JSX.Element} The component
  */
 export function BottomSheet({
@@ -57,6 +59,7 @@ export function BottomSheet({
   onTabChange,
   onExtractComplete,
   onShowManualForm,
+  format = "book",
 }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
@@ -204,14 +207,46 @@ export function BottomSheet({
     setIsUploadingCover(true);
     setError(null);
     try {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+
+      // Calculate crop dimensions based on format
+      let targetWidth = sourceWidth;
+      let targetHeight = sourceHeight;
+      const isAudio = format === "cd" || format === "vinyl";
+
+      if (isAudio) {
+        // 1:1 Aspect Ratio
+        const size = Math.min(sourceWidth, sourceHeight);
+        targetWidth = size;
+        targetHeight = size;
+      } else {
+        // 2:3 Aspect Ratio (Book)
+        const possibleHeightByWidth = (sourceWidth * 3) / 2;
+        const possibleWidthByHeight = (sourceHeight * 2) / 3;
+
+        if (possibleHeightByWidth <= sourceHeight) {
+          targetWidth = sourceWidth;
+          targetHeight = possibleHeightByWidth;
+        } else {
+          targetWidth = possibleWidthByHeight;
+          targetHeight = sourceHeight;
+        }
+      }
+
+      const startX = (sourceWidth - targetWidth) / 2;
+      const startY = (sourceHeight - targetHeight) / 2;
+
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not map camera feed");
 
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      // Draw cropped area
+      ctx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
+      
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
       if (!blob) throw new Error("Failed to encode image");
 
       const file = new File([blob], "cover_snapshot.jpg", { type: "image/jpeg" });
@@ -236,7 +271,7 @@ export function BottomSheet({
     } finally {
       setIsUploadingCover(false);
     }
-  }, [videoRef, onExtractComplete]);
+  }, [videoRef, onExtractComplete, format]);
 
   /* Cleanup on unmount */
   useEffect(() => {

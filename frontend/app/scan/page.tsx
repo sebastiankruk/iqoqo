@@ -39,6 +39,7 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
+  const [activeFormat, setActiveFormat] = useState<"book" | "cd" | "vinyl">("book");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -114,7 +115,31 @@ export default function ScanPage() {
       />
 
       <TopBar />
-      {!result && !showManual && scannerTab === "barcode" && <Viewfinder isScanning={scannerActive} />}
+      
+      {/* Format Toggle */}
+      {!result && !showManual && (
+        <div className="absolute top-20 inset-x-0 z-30 flex justify-center">
+          <div className="inline-flex rounded-full bg-black/40 backdrop-blur-md p-1 border border-white/10">
+            {(["book", "cd", "vinyl"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setActiveFormat(f)}
+                className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                  activeFormat === f 
+                    ? "bg-primary text-primary-foreground" 
+                    : "text-white/70 hover:text-white"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!result && !showManual && scannerTab === "barcode" && (
+        <Viewfinder isScanning={scannerActive} format={activeFormat} />
+      )}
 
       {!result && !showManual && (
         <BottomSheet
@@ -124,6 +149,7 @@ export default function ScanPage() {
           onTabChange={setScannerTab}
           onExtractComplete={handleExtractComplete}
           onShowManualForm={() => setShowManual(true)}
+          format={activeFormat}
         />
       )}
       {result && (

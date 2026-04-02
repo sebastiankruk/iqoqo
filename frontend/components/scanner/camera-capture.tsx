@@ -77,6 +77,8 @@ interface CameraCaptureProps {
   confirmTitle?: string;
   /** Confirmation message */
   confirmMessage?: string;
+  /** Initial media format */
+  format?: MediaFormat;
 }
 
 /**
@@ -93,6 +95,7 @@ interface CameraCaptureProps {
  * @param root0.icon - Optional icon component
  * @param root0.confirmTitle - If set, shows a confirmation dialog before opening the camera
  * @param root0.confirmMessage - Confirmation message
+ * @param root0.format - Initial media format
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
@@ -105,11 +108,12 @@ export function CameraCapture({
   icon,
   confirmTitle,
   confirmMessage,
+  format: initialFormat = "book",
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [format, setFormat] = useState<MediaFormat>("book");
+  const [format, setFormat] = useState<MediaFormat>(initialFormat);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
