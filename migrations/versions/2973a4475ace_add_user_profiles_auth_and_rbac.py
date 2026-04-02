@@ -107,7 +107,10 @@ def upgrade():
     # Seed default roles if they don't exist
     op.execute("INSERT INTO roles (name) VALUES ('user'), ('admin') ON CONFLICT DO NOTHING")
 
-    # Seed a legacy system user to own orphan items
+    # Seed a legacy system user to own orphan items during the transition to UUID-based ownership.
+    # IMPORTANT: Existing items are assigned to this user by default to satisfy NOT NULL constraints. 
+    # To recover these items and assign them to a real administrator, run `python scripts/init_auth.py`
+    # after applying this migration.
     legacy_user_id = '00000000-0000-4000-a000-000000000000'
     op.execute(
         f"INSERT INTO users (id, email, display_name, is_active, created_at) "
