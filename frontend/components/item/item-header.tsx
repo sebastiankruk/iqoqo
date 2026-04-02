@@ -72,7 +72,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         {/* Status Pills immediately below image on mobile */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <Badge variant="default" className="capitalize px-3 py-1 text-xs font-semibold tracking-wide">
-            {item.status.replace("_", " ")}
+            {item.status?.replace("_", " ") ?? "Unknown"}
           </Badge>
           {isAudio && (
             <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
@@ -135,12 +135,14 @@ export function ItemHeader({ item }: ItemHeaderProps) {
               <span className="font-semibold">{year}</span>
             </div>
           )}
-          {Boolean(meta["pages"] || meta["tracks"]) && (
+          {Boolean(meta["pages"] || meta["Pages"] || meta["tracks"] || meta["Tracks"]) && (
             <div className="space-y-1">
               <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
                 {isAudio ? "Tracks" : "Pages"}
               </span>
-              <span className="font-semibold">{String(meta["tracks"] || meta["pages"])}</span>
+              <span className="font-semibold">
+                {String(meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"])}
+              </span>
             </div>
           )}
         </div>

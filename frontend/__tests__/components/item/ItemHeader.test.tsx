@@ -15,9 +15,21 @@
 //
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ItemHeader } from "@/components/item/item-header";
 import type { Item } from "@/types/frbr";
+
+// Mock sub-components to avoid complex context requirements
+vi.mock("@/components/item/item-actions", () => ({
+  ItemActions: () => <div data-testid="item-actions" />,
+}));
+
+// Mock Next.js navigation
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
 
 const mockItem: Item = {
   id: 1,
