@@ -40,6 +40,13 @@ export interface Expression {
   meta?: Record<string, unknown>;
 }
 
+/** Additional image attached to a manifestation (e.g., disc, inlay). */
+export interface AdditionalImage {
+  url: string;
+  label: "front" | "back" | "disc" | "inlay" | "box" | "other" | string;
+  added_at: string;
+}
+
 /**
  * The physical embodiment of an expression of a work.
  * E.g., A specific 2004 paperback edition of "The Lord of the Rings" by a specific publisher.
@@ -51,7 +58,21 @@ export interface Manifestation {
   publisher?: string;
   year?: number;
   cover_url?: string | null;
-  meta: Record<string, unknown>;
+  meta: {
+    additional_images?: AdditionalImage[];
+    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | string;
+    catalog_number?: string;
+    pressing_number?: string;
+    matrix_number?: string;
+    label?: string;
+    disc_count?: number;
+    track_list?: Array<{
+      position: string;
+      title: string;
+      duration_seconds: number;
+    }>;
+    [key: string]: unknown;
+  };
 }
 
 /** * Global Catalog Entry DTO (Returned by /manifestations).
@@ -88,7 +109,20 @@ export interface Item {
 }
 
 /** Item status type */
-export type ItemStatus = "available" | "lent" | "lost" | "wish_list" | "reading" | "read" | "unread";
+export type ItemStatus =
+  | "available"
+  | "lent"
+  | "lost"
+  | "wish_list"
+  | "ordered"
+  | "damaged"
+  | "reading"
+  | "read"
+  | "unread"
+  | "want_to_read"
+  | "listening"
+  | "listened"
+  | "want_to_listen";
 
 /** API Response envelope */
 export interface ApiResponse<T> {
@@ -121,14 +155,22 @@ export interface DashboardStats {
   items_read: number;
 }
 
-/** ISBN metadata */
+/** Barcode lookup metadata (books and audio) */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
+  title?: string;
+  author?: string;
+  authors?: string[];
   Publisher?: string;
   Year?: string;
   Language?: string;
   "ISBN-13"?: string;
+  Format?: string;
+  format?: string;
+  barcode?: string;
+  isbn?: string;
+  cover_url?: string;
 }
 
 /** User profile */

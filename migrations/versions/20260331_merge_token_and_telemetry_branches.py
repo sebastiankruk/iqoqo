@@ -13,19 +13,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from flask_sqlalchemy import SQLAlchemy
+"""Merge token_blocklist and operation_type branches
 
-db = SQLAlchemy()
+Revision ID: 20260331_merge_token_and_telemetry_branches
+Revises: d2be8499d439, 20260330_add_operation_type_to_llm_telemetry
+Create Date: 2026-03-31 10:00:00.000000
+
+"""
+
+from alembic import op  # noqa: F401
+
+# revision identifiers, used by Alembic.
+revision = "20260331_merge_token_and_telemetry_branches"
+down_revision = ("d2be8499d439", "20260330_add_operation_type_to_llm_telemetry")
+branch_labels = None
+depends_on = None
 
 
-def import_models() -> None:
-    """Import all model modules so SQLAlchemy's mapper registry is populated.
+def upgrade():
+    """Merge point — no schema changes."""
 
-    Call this once after ``db`` has been bound to the Flask app (i.e. inside
-    ``create_app``).  ``db.create_all()`` and Alembic autogenerate both need
-    every model class to have been imported before they inspect the metadata.
-    """
-    # Order matters: auth / settings have no cross-module FKs, so they can be
-    # imported first.  core.py references auth (users.id FK on Item), and
-    # audio.py references core (works.id / expressions.id FKs).
-    from app.db import auth, settings, core, audio  # noqa: F401, I001 # isort: skip
+
+def downgrade():
+    """Merge point — no schema changes."""

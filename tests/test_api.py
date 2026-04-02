@@ -88,7 +88,12 @@ def admin_headers(app):
     """Fixture to provide authorization headers for an admin user."""
     with app.app_context():
         # Create permissions
-        perms = [Permission(name="regenerate:cover"), Permission(name="refetch:metadata"), Permission(name="delete:item")]
+        perms = [
+            Permission(name="regenerate:cover"),
+            Permission(name="refetch:metadata"),
+            Permission(name="delete:item"),
+            Permission(name="upload:cover"),
+        ]
         db.session.add_all(perms)
 
         # Create admin role
@@ -421,14 +426,14 @@ def test_vision_extract_api_unavailable(mock_extract, client, vision_user_header
 
 
 @patch("app.api.manifestations.start_cover_processing")
-def test_upload_cover(mock_start, client, sample_book, normal_user_headers):
+def test_upload_cover(mock_start, client, sample_book, admin_headers):
     """POST /api/manifestations/<id>/cover returns 202 on success."""
     from io import BytesIO
 
     jpeg_bytes = _make_minimal_jpeg()
     response = client.post(
         f"/api/manifestations/{sample_book.id}/cover",
-        headers=normal_user_headers,
+        headers=admin_headers,
         data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
         content_type="multipart/form-data",
     )

@@ -1,0 +1,163 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+"""Authentication and RBAC models (public schema)."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy.dialects.postgresql import UUID
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from . import db
+
+# ---------------------------------------------------------------------------
+# RBAC association tables
+# ---------------------------------------------------------------------------
+
+user_roles = db.Table(
+    "user_roles",
+    db.Column("user_id", UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_permissions = db.Table(
+    "role_permissions",
+    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("permission_id", db.Integer, db.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+
+
+class TokenBlocklist(db.Model):  # type: ignore[name-defined]
+    """JWT token revocation blocklist."""
+
+    __tablename__ = "token_blocklist"
+
+    id = db.Column(db.Integer, primary_key=True)
+    jti = db.Column(db.String(36), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+
+# ---------------------------------------------------------------------------
+# RBAC
+# ---------------------------------------------------------------------------
+
+
+class Permission(db.Model):  # type: ignore[name-defined]
+    """A granular permission that can be assigned to roles."""
+
+    __tablename__ = "permissions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(255))
+
+
+class Role(db.Model):  # type: ignore[name-defined]
+    """A named role that aggregates permissions."""
+
+    __tablename__ = "roles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    permissions = db.relationship("Permission", secondary=role_permissions, lazy="selectin")
+
+
+class User(db.Model):  # type: ignore[name-defined]
+    """
+    Application user.  Supports local password auth as well as Google OAuth.
+    """
+
+    __tablename__ = "users"
+
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    display_name = db.Column(db.String(100))
+    avatar_url = db.Column(db.String(500), nullable=True)
+    google_id = db.Column(db.String(255), unique=True, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    last_login = db.Column(db.DateTime, nullable=True)
+    visibility = db.Column(db.String(20), default="private")
+
+    roles = db.relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
+    items = db.relationship("Item", backref="owner", lazy="dynamic")
+    consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")
+
+    def set_password(self, password: str) -> None:
+        """Hash and store a new password."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        """Return True if *password* matches the stored hash."""
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
+
+    def has_permission(self, permission_name: str) -> bool:
+        """Return True if the user holds *permission_name* through any role."""
+        for role in self.roles:  # type: ignore[attr-defined]
+            for perm in role.permissions:  # type: ignore[attr-defined]
+                if perm.name == permission_name:
+                    return True
+        return False
+
+    def to_dict(self) -> dict:
+        """Serialize core user fields for API responses and tests."""
+        return {
+            "id": str(self.id) if self.id else None,
+            "email": self.email,
+            "display_name": self.display_name,
+            "avatar_url": self.avatar_url,
+            "visibility": self.visibility,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @classmethod
+    def list_llm_permissions(cls, user: User | None) -> dict[str, bool]:
+        """Return a dict of LLM-related permissions for *user*."""
+        if not user:
+            return {
+                "allow_generate_cover": False,
+                "allow_cloud_llm": False,
+            }
+
+        from app.core.permissions import ItemPermissions
+
+        return {
+            "allow_generate_cover": user.has_permission(ItemPermissions.LLM_GENERATE_COVER.value),
+            "allow_cloud_llm": user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value),
+        }
+
+
+class ConsentRecord(db.Model):  # type: ignore[name-defined]
+    """GDPR consent record for a user."""
+
+    __tablename__ = "user_consents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    consent_type = db.Column(db.String(50), nullable=False, index=True)
+    is_granted = db.Column(db.Boolean, nullable=False)
+    policy_version = db.Column(db.String(50), nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(UTC))

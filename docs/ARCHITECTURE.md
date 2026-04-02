@@ -514,19 +514,78 @@ a typed error when `success` is `false`.
 
 ### Item Status Values
 
-The `Item.status` column accepts exactly these values.  The canonical Python
-definition is `ITEM_STATUSES` in `app/db/models.py`; the TypeScript mirror is
-`ItemStatus` in `frontend/types/frbr.ts`.  The cross-subsystem contract is
+The `Item.status` column accepts exactly these values. The canonical Python
+definition is `ITEM_STATUSES` in `app/db/core.py`; the TypeScript mirror is
+`ItemStatus` in `frontend/types/frbr.ts`. The cross-subsystem contract is
 enforced by `tests/test_ontology.py`.
 
-| Status      | Meaning              |
-| ----------- | -------------------- |
-| `available` | On your shelf        |
-| `lent`      | Lent to a friend     |
-| `lost`      | Cannot be located    |
-| `wish_list` | Want to acquire      |
-| `reading`   | Currently being read |
-| `read`      | Finished reading     |
+| Status           | Meaning                                    | Media     |
+| ---------------- | ------------------------------------------ | --------- |
+| `available`      | On your shelf, ready to use                | All       |
+| `lent`           | Lent to a friend                           | All       |
+| `lost`           | Cannot be located                          | All       |
+| `wish_list`      | Want to acquire (owned or not)             | All       |
+| `ordered`        | Purchased, awaiting delivery               | All       |
+| `damaged`        | Physically damaged copy                    | All       |
+| `reading`        | Currently being read                       | Text      |
+| `read`           | Finished reading                           | Text      |
+| `unread`         | Never opened                               | Text      |
+| `listening`      | Currently playing / listening to           | Audio     |
+| `listened`       | Finished listening                         | Audio     |
+| `want_to_listen` | On audio wishlist (do not own yet)         | Audio     |
+
+### Database Schema Layout
+
+Tables are split across two PostgreSQL schemas:
+
+| Schema   | Tables                                                                 |
+| -------- | ---------------------------------------------------------------------- |
+| `public` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`,     |
+|          | `token_blocklist`, `user_consents`, `llm_telemetry`,                   |
+|          | `instance_settings`, `alembic_version`                                 |
+| `catalog`| `works`, `expressions`, `manifestations`, `items`,                     |
+|          | `contributors`, `work_contributions`,                                  |
+|          | `expression_contributions`, `work_parts`                               |
+
+### Model File Structure
+
+Model classes are split into domain-focused modules under `app/db/`:
+
+| File          | Contents                                                                     |
+| ------------- | ---------------------------------------------------------------------------- |
+| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`              |
+| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`               |
+| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`,     |
+|               | `MANIFESTATION_AUDIO_META_KEYS`                                              |
+| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                           |
+| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work          |
+
+### Audio / Music Metadata (FRBRoo Event-Based)
+
+For audio media (CDs, Vinyls, Audiobooks) the FRBR hierarchy is extended
+with FRBRoo event-based contributor tables in the `catalog` schema:
+
+```text
+Contributor  ←── WorkContribution  ←── Work          (Composition Event)
+Contributor  ←── ExpressionContribution ←── Expression  (Performance Event)
+Work  ←── WorkPart ←── Work                           (F15 Complex Work — box sets)
+```
+
+Valid `WorkContribution.role` values: `composer`, `lyricist`, `author`, `playwright`, `arranger`
+
+Valid `ExpressionContribution.role` values: `performer`, `conductor`, `narrator`, `band`, `director`, `ensemble`
+
+Audio-specific keys that **may** be stored in `Manifestation.meta`:
+
+| Key               | Type          | Description                                                        |
+| ----------------- | ------------- | ------------------------------------------------------------------ |
+| `catalog_number`  | string        | Record-label catalog number (e.g. `"ECM 1064"`)                    |
+| `pressing_number` | string        | Specific pressing identifier                                       |
+| `matrix_number`   | string        | Vinyl run-out groove / lacquer ID                                  |
+| `label`           | string        | Record label name (e.g. `"Blue Note"`)                             |
+| `format`          | string        | Physical format: `LP`, `45`, `EP`, `CD`, `CD-EP`, …                |
+| `disc_count`      | integer       | Number of discs in a multi-disc release                            |
+| `track_list`      | list          | `[{"position": "A1", "title": "…", "duration_seconds": 210}]`      |
 
 ### Local Development
 

@@ -56,13 +56,16 @@ interface ExtractedMetadata {
   Authors?: string[];
 }
 
+/** Supported media formats for the scanner. */
+export type MediaFormat = "book" | "cd" | "vinyl";
+
 interface CameraCaptureProps {
   /** If set, the component uploads the image as a cover for this manifestation. */
-  manifestationId?: number;
+  manifestation_id?: number;
   /** Called after a successful cover upload (mode 1). */
   onUploadComplete?: () => void;
-  /** Called with extracted metadata after a successful vision extraction (mode 2). */
-  onExtractComplete?: (data: ExtractedMetadata, file: File) => void;
+  /** Called with extracted metadata after vision extraction (mode 2). */
+  onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat) => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -74,6 +77,8 @@ interface CameraCaptureProps {
   confirmTitle?: string;
   /** Confirmation message */
   confirmMessage?: string;
+  /** Initial media format */
+  format?: MediaFormat;
 }
 
 /**
@@ -81,7 +86,7 @@ interface CameraCaptureProps {
  * vision-based metadata extraction, depending on the `manifestationId` prop.
  *
  * @param root0 - Component props.
- * @param root0.manifestationId - If set, uploads the image as a cover for this manifestation.
+ * @param root0.manifestation_id - If set, uploads the image as a cover for this manifestation.
  * @param root0.onUploadComplete - Called after a successful cover upload (mode 1).
  * @param root0.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
  * @param root0.className - Optional CSS class name applied to the wrapper div.
@@ -90,10 +95,11 @@ interface CameraCaptureProps {
  * @param root0.icon - Optional icon component
  * @param root0.confirmTitle - If set, shows a confirmation dialog before opening the camera
  * @param root0.confirmMessage - Confirmation message
+ * @param root0.format - Initial media format
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
-  manifestationId,
+  manifestation_id,
   onUploadComplete,
   onExtractComplete,
   className,
@@ -102,6 +108,7 @@ export function CameraCapture({
   icon,
   confirmTitle,
   confirmMessage,
+  format = "book",
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -112,11 +119,12 @@ export function CameraCapture({
     setUploading(true);
     const formData = new FormData();
     formData.append("cover", file);
+    formData.append("format", format);
 
     try {
-      if (manifestationId) {
+      if (manifestation_id) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
-        await apiClient.post(`/manifestations/${manifestationId}/cover`, formData, {
+        await apiClient.post(`/manifestations/${manifestation_id}/cover`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         if (onUploadComplete) onUploadComplete();
@@ -127,12 +135,13 @@ export function CameraCapture({
         });
         const envelope = response.data;
         if (envelope.success && envelope.data) {
-          if (onExtractComplete) onExtractComplete(envelope.data, file);
+          if (onExtractComplete) onExtractComplete(envelope.data, file, format);
         } else {
-          console.error("Vision extraction failed:", envelope.error ?? "Unknown error");
+          toast.error(envelope.error ?? "Vision extraction failed");
         }
       }
     } catch (error) {
+      toast.error("Failed to process cover image");
       console.error("Failed to process cover image", error);
     } finally {
       setUploading(false);
@@ -187,23 +196,26 @@ export function CameraCapture({
         onChange={handleCapture}
         className="hidden"
       />
-      <button
-        onClick={handleClick}
-        disabled={uploading}
-        className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
-      >
-        {uploading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            {icon || <Camera className="mr-2 h-4 w-4" />}
-            {label}
-          </>
-        )}
-      </button>
+      <div className="flex flex-col gap-4">
+
+        <button
+          onClick={handleClick}
+          disabled={uploading}
+          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              {icon || <Camera className="mr-2 h-4 w-4" />}
+              {label}
+            </>
+          )}
+        </button>
+      </div>
 
       {confirmTitle && (
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

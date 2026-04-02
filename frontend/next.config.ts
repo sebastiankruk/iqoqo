@@ -72,6 +72,26 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "covers.openlibrary.org",
       },
+      {
+        protocol: "https",
+        hostname: "i.discogs.com",
+      },
+      {
+        protocol: "https",
+        hostname: "coverartarchive.org",
+      },
+      {
+        protocol: "https",
+        hostname: "img.discogs.com",
+      },
+      {
+        protocol: "https",
+        hostname: "archive.org",
+      },
+      {
+        protocol: "https",
+        hostname: "images.sk-static.com",
+      },
     ],
   },
 };

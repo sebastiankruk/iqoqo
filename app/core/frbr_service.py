@@ -17,7 +17,9 @@
 #
 from typing import Any
 
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
+from app.db.core import Expression, Item, Manifestation, Work
+from app.db.models import db
 
 
 def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
@@ -170,3 +172,110 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
     manifestation = create_manifestation(expression_id=expression.id, isbn13=isbn, publisher=publisher, meta=metadata)
 
     return manifestation
+
+
+def get_or_create_contributor(name: str, contributor_type: str = "person") -> Contributor:
+    """
+    Get an existing contributor by name, or create a new one.
+
+    Args:
+        name: Display name of the contributor.
+        contributor_type: ``'person'`` or ``'organization'``.
+
+    Returns:
+        The existing or newly created :class:`~app.db.audio.Contributor`.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    contributor = Contributor.query.filter_by(name=name, type=contributor_type).first()
+    if contributor:
+        return contributor  # type: ignore[no-any-return]
+
+    try:
+        contributor = Contributor(name=name, type=contributor_type)
+        db.session.add(contributor)
+        db.session.commit()
+        return contributor
+    except IntegrityError:
+        db.session.rollback()
+        return Contributor.query.filter_by(name=name, type=contributor_type).first()  # type: ignore[no-any-return]
+
+
+def add_work_contribution(
+    work_id: int,
+    contributor_id: int,
+    role: str,
+    sequence: int = 0,
+) -> WorkContribution:
+    """
+    Link a contributor to a Work with a creative role (Composition Event).
+
+    Args:
+        work_id: ID of the parent :class:`~app.db.core.Work`.
+        contributor_id: ID of the :class:`~app.db.audio.Contributor`.
+        role: Creative role (see :data:`~app.db.audio.WORK_CONTRIBUTION_ROLES`).
+        sequence: Display order when multiple contributors share the same role.
+
+    Returns:
+        The created :class:`~app.db.audio.WorkContribution`.
+    """
+    contribution = WorkContribution(
+        work_id=work_id,
+        contributor_id=contributor_id,
+        role=role,
+        sequence=sequence,
+    )
+    db.session.add(contribution)
+    db.session.commit()
+    return contribution
+
+
+def add_expression_contribution(
+    expression_id: int,
+    contributor_id: int,
+    role: str,
+    sequence: int = 0,
+) -> ExpressionContribution:
+    """
+    Link a contributor to an Expression with a performance role (Performance Event).
+
+    Args:
+        expression_id: ID of the parent :class:`~app.db.core.Expression`.
+        contributor_id: ID of the :class:`~app.db.audio.Contributor`.
+        role: Performance role (see :data:`~app.db.audio.EXPRESSION_CONTRIBUTION_ROLES`).
+        sequence: Display order when multiple contributors share the same role.
+
+    Returns:
+        The created :class:`~app.db.audio.ExpressionContribution`.
+    """
+    contribution = ExpressionContribution(
+        expression_id=expression_id,
+        contributor_id=contributor_id,
+        role=role,
+        sequence=sequence,
+    )
+    db.session.add(contribution)
+    db.session.commit()
+    return contribution
+
+
+def create_work_part(container_work_id: int, part_work_id: int, sequence: int = 0) -> WorkPart:
+    """
+    Declare that a Work is a part of a container Work (F15 Complex Work).
+
+    Args:
+        container_work_id: ID of the box-set or anthology :class:`~app.db.core.Work`.
+        part_work_id: ID of the member :class:`~app.db.core.Work`.
+        sequence: Display order of the part within the container.
+
+    Returns:
+        The created :class:`~app.db.audio.WorkPart`.
+    """
+    work_part = WorkPart(
+        container_work_id=container_work_id,
+        part_work_id=part_work_id,
+        sequence=sequence,
+    )
+    db.session.add(work_part)
+    db.session.commit()
+    return work_part

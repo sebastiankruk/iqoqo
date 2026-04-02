@@ -396,6 +396,25 @@ def add_item(isbn: str):
     return jsonify({"item_id": item.id, "manifestation_id": manifestation.id})
 
 
+@api_bp.route("/manifestations/<int:manifestation_id>/add", methods=["POST"])
+@require_auth
+def add_item_by_manifestation(manifestation_id: int):
+    """Add a new item to the user collection by manifestation ID (no ISBN required)."""
+    user_id = getattr(request, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    db.session.add(item)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+
+
 @api_bp.route("/items/manual", methods=["POST"])
 @require_auth
 def add_item_manual():

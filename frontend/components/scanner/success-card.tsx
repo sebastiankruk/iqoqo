@@ -17,13 +17,16 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, X, BookOpen } from "lucide-react";
+import { Check, X, Plus, Disc, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { IsbnMeta } from "@/types/frbr";
+import type { IsbnMeta, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { isAudioMedia } from "@/lib/utils";
 
-/** Props for SuccessCard component */
 interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
@@ -32,46 +35,71 @@ interface SuccessCardProps {
 }
 
 /**
- * Slide-up result card shown after a successful barcode scan.
+ * SuccessCard component shown after a successful scan.
+ * Displays item metadata and provides an option to add it to the library.
  *
- * @param root0 - The props object
- * @param root0.isbn - The scanned ISBN
- * @param root0.meta - The metadata for the ISBN
- * @param root0.onDismiss - Callback to dismiss the card
- * @param root0.snappedCover - Optional cover image captured by the user
+ * @param props - Component props
+ * @param props.isbn - The barcode that was scanned
+ * @param props.meta - The metadata found for the barcode
+ * @param props.onDismiss - Function to call when the card is dismissed
+ * @param props.snappedCover - Optional file of a cover snapped from video
  * @returns {JSX.Element} The component
  */
 export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
-  /**
-   * Handles adding the found book to the user's library.
-   * Sets the `adding` state to true during the process and shows a toast notification
-   * for success or failure. Redirects to the item's detail page on success.
-   */
+  // Normalize metadata for display
+  const title = meta.title || meta.Title || meta.format || "Unknown Title";
+  const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
+  const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
+  const coverUrl = meta.cover_url || "/file.svg";
+
+  const format = meta.format || meta.Format || "book";
+  const isAudio = isAudioMedia(format) || !!meta.barcode;
+  const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
+  const isMissingID = identifier === "No ID Available";
+
   const handleAdd = async () => {
+    if (isMissingID) {
+      toast.error("Standard barcode required to add to collection.");
+      return;
+    }
     setAdding(true);
     try {
-      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, meta);
+      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
+        barcode: identifier,
+        format: format,
+      });
 
-      if (snappedCover && res.data.manifestation_id) {
+      const responseData = res.data;
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.error || "Failed to ingest item");
+      }
+
+      const data = responseData.data;
+
+      if (snappedCover && data.manifestation_id) {
         const coverFormData = new FormData();
         coverFormData.append("cover", snappedCover);
         try {
-          await apiClient.post(`/manifestations/${res.data.manifestation_id}/cover`, coverFormData, {
+          await apiClient.post(`/manifestations/${data.manifestation_id}/cover`, coverFormData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          toast.success(`"${meta.Title}" added with your custom cover!`);
+          toast.success(`"${title}" added with your custom cover!`);
         } catch (e) {
           console.error("Failed to upload snapped cover:", e);
-          toast.warning(`"${meta.Title}" added, but cover upload failed.`);
+          toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        toast.success(`"${meta.Title}" added to your library!`);
+        toast.success(`"${title}" added to your library!`);
       }
 
-      await router.push(`/item/${res.data.item_id}`);
+      if (data.item_id) {
+        router.push(`/item/${data.item_id}`);
+      } else {
+        onDismiss();
+      }
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {
@@ -79,72 +107,102 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
     }
   };
 
-  const coverUrl: string | null = null; // Future: resolve cover from ISBN
-
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-      {/* Gradient backdrop */}
-      <div className="absolute inset-x-0 -top-24 h-24 bg-gradient-to-t from-black/60 to-transparent" />
-
-      <div className="relative rounded-t-3xl bg-card shadow-[0_-12px_48px_rgba(0,0,0,0.3)]">
-        {/* Success header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-chart-3">
-              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-            </span>
-            <span className="text-sm font-semibold text-foreground">Book Found</span>
+    <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
+      <Card className="w-full max-w-2xl mx-auto overflow-hidden shadow-2xl border-green-500/30 bg-card/95 backdrop-blur-md">
+        <CardHeader className="bg-green-500/10 py-3 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
+              <Check className="h-5 w-5" />
+            </div>
+            <h2 className="text-xl font-bold font-serif">Successfully Found!</h2>
           </div>
-          <button
-            onClick={onDismiss}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary transition-colors hover:bg-muted"
-            aria-label="Dismiss result"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
+          <Button variant="ghost" size="icon" onClick={onDismiss} className="rounded-full" aria-label="Close">
+            <X className="h-5 w-5" />
+          </Button>
+        </CardHeader>
 
-        {/* Book info */}
-        <div className="flex gap-4 px-6 pb-5">
-          <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg shadow-lg bg-secondary">
-            {coverUrl ? (
-              <Image src={coverUrl} alt={meta.Title} fill unoptimized className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <BookOpen className="h-8 w-8 text-muted-foreground/30" />
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Dynamic Cover Art Aspect Ratio */}
+            <div className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
+              {coverUrl && coverUrl !== "/file.svg" ? (
+                <Image
+                  src={coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl}
+                  alt={title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  unoptimized={coverUrl.startsWith("http")}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground/40">
+                    {isAudio ? <Disc className="h-12 w-12" /> : <BookOpen className="h-12 w-12" />}
+                    <span className="text-xs font-bold uppercase tracking-widest font-serif">iQoQo</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col flex-1 gap-4">
+              <div className="space-y-2">
+                <Badge variant="secondary" className="w-fit mb-2">
+                  {isAudio ? 'Audio Media' : 'Book / Text'}
+                </Badge>
+                <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
+                <p className="text-lg text-muted-foreground">{authorDisplay}</p>
               </div>
-            )}
-          </div>
 
-          <div className="flex min-w-0 flex-col justify-center">
-            <h3 className="font-serif text-lg font-bold leading-tight text-foreground">{meta.Title}</h3>
-            {meta.Authors && meta.Authors.length > 0 && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{meta.Authors.join(", ")}</p>
-            )}
-            {isbn && <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">ISBN: {isbn}</p>}
-          </div>
-        </div>
+              {isMissingID && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
+                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection, but manual cleanup may be required.
+                </div>
+              )}
 
-        {/* Action buttons */}
-        <div className="flex gap-3 border-t border-border px-6 py-4">
-          <button
-            onClick={handleAdd}
-            disabled={adding}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-            {adding ? "Adding…" : "Add to Library"}
-          </button>
-          <button
-            onClick={onDismiss}
-            className="flex items-center justify-center rounded-xl border border-border bg-card px-5 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
-          >
-            Dismiss
-          </button>
-        </div>
-      </div>
+              <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
+                <div className="text-muted-foreground font-semibold flex items-center gap-2">
+                  Identifier
+                </div>
+                <div className="font-mono text-xs break-all">{identifier}</div>
+                {format && (
+                  <>
+                  <div className="text-muted-foreground font-semibold">Format</div>
+                  <div>{format.toUpperCase()}</div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
+                 <Button
+                   className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                   variant="default"
+                   disabled={adding}
+                   onClick={handleAdd}
+                   aria-label="Add to Collection"
+                 >
+                   {adding ? (
+                     "Adding..."
+                   ) : (
+                     <>
+                       <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                       Add to Collection
+                     </>
+                   )}
+                 </Button>
+                 <Button
+                   variant="outline"
+                   className="flex-1 min-w-[140px] h-12 rounded-xl"
+                   onClick={onDismiss}
+                   aria-label="Scan Another"
+                 >
+                   Scan Another
+                 </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
