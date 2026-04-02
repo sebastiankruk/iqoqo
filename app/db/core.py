@@ -38,6 +38,12 @@ from . import db
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+# In test environments (pytest), default to non-Postgres (no schemas/FTS) unless
+# FTS tests are explicitly enabled. This ensures tests run correctly on SQLite
+# even if DATABASE_URL is set in the environment.
+if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
+    _USE_PG = False
+
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
 #: FK prefix — ``"catalog."`` in PostgreSQL, ``""`` in SQLite.
@@ -188,9 +194,29 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
         __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
 
+    @property
+    def title(self) -> str:
+        """Convenience property to get the manifestation title from expression/work."""
+        if self.expression and self.expression.work:
+            return self.expression.work.title or "Untitled"
+        return self.meta.get("title") or self.meta.get("Title") or "Untitled"
+
+    @property
+    def author(self) -> str | None:
+        """Convenience property to get the primary author/artist name."""
+        if self.expression and self.expression.work:
+            work = self.expression.work
+            authors = work.meta.get("authors", []) if work.meta else []
+            if authors:
+                return authors[0]
+        if self.meta:
+            return self.meta.get("author") or self.meta.get("authors", [None])[0] or self.meta.get("Artist")
+        return None
+
     def update_meta(self, **kwargs) -> None:
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}
+
         meta.update(kwargs)
         self.meta = meta
 

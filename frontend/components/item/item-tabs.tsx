@@ -30,6 +30,8 @@ type TabId = (typeof TABS)[number]["id"];
 
 /* ── Details tab ─────────────────────────────────────────────────────────── */
 
+import { ExtendedMetadata } from "./extended-metadata";
+
 /**
  * Details tab component.
  *
@@ -38,63 +40,36 @@ type TabId = (typeof TABS)[number]["id"];
  * @returns {JSX.Element}
  */
 function DetailsTab({ item }: { item: Item }) {
-  const meta = item.manifestation_meta ?? {};
-  const description = (meta["description"] as string | undefined) ?? (meta["Description"] as string | undefined);
-
-  const fields = [
-    { label: "Publisher", value: meta["Publisher"] as string | undefined },
-    { label: "ISBN-13", value: item.isbn },
-    { label: "Language", value: item.expression?.language },
-    { label: "Format", value: item.expression?.content_type },
-    { label: "Year", value: meta["Year"] as string | undefined },
-  ].filter(f => f.value);
+  const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
 
   return (
     <div className="flex flex-col gap-6">
-      {description && (
-        <div>
-          <h4 className="mb-2 font-serif text-sm font-bold text-foreground">Synopsis</h4>
-          <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
-        </div>
-      )}
-
-      {fields.length > 0 && (
-        <div>
-          <h4 className="mb-3 font-serif text-sm font-bold text-foreground">Publication Details</h4>
-          <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-            {fields.map(({ label, value }) => (
-              <div key={label} className="flex flex-col gap-0.5">
-                <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
-                <dd className="text-sm font-medium text-foreground">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
+      {/* Rich metadata including audio tracklists */}
+      <ExtendedMetadata meta={meta} />
 
       {/* FRBR hierarchy info */}
-      <div>
+      <div className="border-t pt-6">
         <h4 className="mb-3 font-serif text-sm font-bold text-foreground">FRBR Hierarchy</h4>
-        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
           {item.work && (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
-              <dd className="text-sm font-medium text-foreground">#{item.work.id}</dd>
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
+              <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
             </div>
           )}
           {item.expression && (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Expression ID</dt>
-              <dd className="text-sm font-medium text-foreground">#{item.expression.id}</dd>
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Exp ID</dt>
+              <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
             </div>
           )}
           <div className="flex flex-col gap-0.5">
-            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Manifestation ID</dt>
-            <dd className="text-sm font-medium text-foreground">#{item.manifestation_id}</dd>
+            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manif ID</dt>
+            <dd className="text-sm font-mono text-foreground">#{item.manifestation_id}</dd>
           </div>
           <div className="flex flex-col gap-0.5">
-            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
-            <dd className="text-sm font-medium text-foreground">#{item.id}</dd>
+            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
+            <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
           </div>
         </dl>
       </div>

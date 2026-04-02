@@ -34,7 +34,7 @@ export function TopBar() {
         </Link>
 
         <div className="flex flex-col items-center">
-          <span className="font-serif text-base font-bold tracking-tight text-white">Scan ISBN or Cover</span>
+          <h1 className="text-base font-bold tracking-tight text-white sm:text-lg">Scan Barcode or Cover</h1>
           <span className="mt-0.5 text-[11px] text-white/50">Position item within the frame</span>
         </div>
 

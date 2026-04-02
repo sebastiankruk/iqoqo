@@ -36,6 +36,7 @@ interface BottomSheetProps {
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
+  format?: "book" | "cd" | "vinyl";
 }
 
 /**
@@ -48,6 +49,7 @@ interface BottomSheetProps {
  * @param root0.onTabChange - Optional callback when the bottom sheet tab changes
  * @param root0.onExtractComplete - Optional callback when cover metadata is extracted
  * @param root0.onShowManualForm - Optional callback to show manual entry form
+ * @param root0.format - The current media format (book, cd, vinyl)
  * @returns {JSX.Element} The component
  */
 export function BottomSheet({
@@ -57,6 +59,7 @@ export function BottomSheet({
   onTabChange,
   onExtractComplete,
   onShowManualForm,
+  format = "book",
 }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
@@ -99,34 +102,30 @@ export function BottomSheet({
     if (onScannerStateChange) onScannerStateChange(false);
   }, [videoRef, onScannerStateChange]);
 
-  /* ── ISBN API lookup ── */
-  const lookupIsbn = useCallback(
-    /**
-     * Looks up ISBN metadata and calls the onFound callback.
-     *
-     * @param {string} rawIsbn - Raw ISBN input (may contain hyphens/spaces).
-     * @returns {Promise<void>} Resolves when lookup completes.
-     */
-    async (rawIsbn: string) => {
-      if (!rawIsbn) return;
-      const isbn = rawIsbn.replace(/[^0-9Xx]/g, "").toUpperCase();
-      const isValidIsbn = /^\d{9}[\dX]$/.test(isbn) || /^\d{13}$/.test(isbn);
+  /* ── Barcode API lookup ── */
+  const lookupBarcode = useCallback(
+    async (rawBarcode: string) => {
+      if (!rawBarcode) return;
+      const barcode = rawBarcode.replace(/[^0-9Xx]/g, "").toUpperCase();
+      // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)
+      const isValidBarcode = /^\d{8,13}[\dX]?$/.test(barcode);
 
-      if (!isValidIsbn) {
-        setError("Please enter a valid ISBN-10 or ISBN-13.");
+      if (!isValidBarcode) {
+        setError("Please enter a valid barcode (8-13 characters).");
         return;
       }
       setIsSearching(true);
       setError(null);
       try {
-        const { apiClient } = await import("@/lib/api/client");
-        const res = await apiClient.get<IsbnMeta>(`/isbn/${isbn}`);
-        onFound(isbn, res.data);
+        const { apiFetch } = await import("@/lib/api/client");
+        // Using generic lookup instead of purely ISBN lookup
+        const data = await apiFetch<IsbnMeta>(`/lookup/${barcode}`);
+        onFound(barcode, data);
       } catch (e: unknown) {
         if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
           setError(e.message);
         } else {
-          setError("Could not look up this ISBN. Please try again.");
+          setError("Could not look up this barcode. Please try again.");
         }
       } finally {
         setIsSearching(false);
@@ -135,34 +134,24 @@ export function BottomSheet({
     [onFound]
   );
 
-  /* ── Start camera + ZXing scan loop (works in Safari, Firefox, Chrome) ── */
-  /**
-   * Starts the camera and initiates the barcode scanning process.
-   */
+  /* ── Start camera + ZXing scan loop ── */
   const startScanner = useCallback(async () => {
     setError(null);
     const video = videoRef.current;
     if (!video) return;
 
     try {
-      /* getUserMedia – { ideal } not { exact } so desktop Safari doesn't reject */
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
 
       streamRef.current = stream;
       video.srcObject = stream;
-      /* playsInline + muted on the <video> element (set in page.tsx) satisfies Safari autoplay */
       await video.play();
       setScannerActive(true);
       if (onScannerStateChange) onScannerStateChange(true);
 
-      /* Lazy-load ZXing – pure JS, works in all browsers */
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const { BarcodeFormat, DecodeHintType } = await import("@zxing/library");
 
@@ -189,10 +178,10 @@ export function BottomSheet({
           try {
             const result = reader.decodeFromCanvas(canvas);
             stopScanner();
-            lookupIsbn(result.getText());
+            lookupBarcode(result.getText());
             return;
           } catch {
-            /* NotFoundException – no barcode in this frame, keep looping */
+            /* Keep looping */
           }
         }
 
@@ -204,9 +193,8 @@ export function BottomSheet({
       setError((e as Error).message ?? "Camera unavailable");
       stopScanner();
     }
-  }, [videoRef, lookupIsbn, stopScanner, onScannerStateChange]);
+  }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange]);
 
-  /* Stop scanner only if manual mode is entered */
   useEffect(() => {
     if (activeTab === "manual") stopScanner();
   }, [activeTab, stopScanner]);
@@ -219,14 +207,46 @@ export function BottomSheet({
     setIsUploadingCover(true);
     setError(null);
     try {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+
+      // Calculate crop dimensions based on format
+      let targetWidth = sourceWidth;
+      let targetHeight = sourceHeight;
+      const isAudio = format === "cd" || format === "vinyl";
+
+      if (isAudio) {
+        // 1:1 Aspect Ratio
+        const size = Math.min(sourceWidth, sourceHeight);
+        targetWidth = size;
+        targetHeight = size;
+      } else {
+        // 2:3 Aspect Ratio (Book)
+        const possibleHeightByWidth = (sourceWidth * 3) / 2;
+        const possibleWidthByHeight = (sourceHeight * 2) / 3;
+
+        if (possibleHeightByWidth <= sourceHeight) {
+          targetWidth = sourceWidth;
+          targetHeight = possibleHeightByWidth;
+        } else {
+          targetWidth = possibleWidthByHeight;
+          targetHeight = sourceHeight;
+        }
+      }
+
+      const startX = (sourceWidth - targetWidth) / 2;
+      const startY = (sourceHeight - targetHeight) / 2;
+
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not map camera feed");
 
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      // Draw cropped area
+      ctx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
+      
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
       if (!blob) throw new Error("Failed to encode image");
 
       const file = new File([blob], "cover_snapshot.jpg", { type: "image/jpeg" });
@@ -238,44 +258,34 @@ export function BottomSheet({
         success: boolean;
         data: { Title?: string; Authors?: string[] } | null;
         error?: string | null;
-      }>(`/vision/extract`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      }>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      
       const envelope = response.data;
-
       if (envelope.success && envelope.data) {
         if (onExtractComplete) onExtractComplete(envelope.data, file);
       } else {
         setError(envelope.error ?? "Failed to extract metadata");
       }
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message);
-      else setError("Could not snap cover");
+      setError(e instanceof Error ? e.message : "Could not snap cover");
     } finally {
       setIsUploadingCover(false);
     }
-  }, [videoRef, onExtractComplete]);
+  }, [videoRef, onExtractComplete, format]);
 
   /* Cleanup on unmount */
   useEffect(() => {
-    return () => {
-      stopScanner();
-    };
+    return () => { stopScanner(); };
   }, [stopScanner]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupIsbn(manualIsbn);
+    lookupBarcode(manualIsbn);
   };
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 flex h-[40%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
-      {/* Drag handle */}
-      <div className="flex justify-center pt-3 pb-2">
-        <div className="h-1 w-10 rounded-full bg-border" />
-      </div>
-
-      {/* Tabs */}
+      <div className="flex justify-center pt-3 pb-2"><div className="h-1 w-10 rounded-full bg-border" /></div>
       <div className="flex justify-center px-6">
         <div className="inline-flex rounded-xl bg-secondary p-1">
           {TABS.map(tab => (
@@ -283,9 +293,7 @@ export function BottomSheet({
               key={tab.id}
               onClick={() => handleTabChange(tab.id as TabId)}
               className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                activeTab === tab.id
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                activeTab === tab.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
@@ -294,73 +302,39 @@ export function BottomSheet({
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
         {error && <p className="text-center text-xs text-destructive">{error}</p>}
 
         {activeTab === "barcode" && (
           <>
-            {/* Capture button */}
-            <button
-              onClick={scannerActive ? undefined : startScanner}
-              disabled={isSearching}
-              className="group relative flex items-center justify-center"
-              aria-label={scannerActive ? "Scanning…" : "Start camera"}
-            >
+            <button onClick={scannerActive ? undefined : startScanner} disabled={isSearching} className="group relative flex items-center justify-center">
               <span className="absolute h-[76px] w-[76px] rounded-full border-[3px] border-primary/30 animate-[pulse-ring_2s_ease-in-out_infinite]" />
               <span className="absolute h-[68px] w-[68px] rounded-full border-[3px] border-primary" />
               <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-active:scale-90">
                 <Camera className={`h-6 w-6 ${scannerActive ? "animate-pulse" : ""}`} />
               </span>
             </button>
-
-            <p className="text-xs text-muted-foreground">
-              {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}
-            </p>
+            <p className="text-xs text-muted-foreground">{scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}</p>
           </>
         )}
 
         {activeTab === "cover" && (
           <div className="flex w-full flex-col gap-4">
             {!scannerActive ? (
-              <button
-                onClick={startScanner}
-                className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground hover:bg-primary/90 shadow-sm"
-              >
+              <button onClick={startScanner} className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-sm">
                 <Camera className="mr-2 h-5 w-5" /> Start Live Camera
               </button>
             ) : (
-              <button
-                onClick={handleSnapFromVideo}
-                disabled={isUploadingCover}
-                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground hover:bg-primary/90 shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50"
-              >
-                {isUploadingCover ? (
-                  <span className="animate-pulse">Analyzing frame...</span>
-                ) : (
-                  <>
-                    <Camera className="mr-2 h-5 w-5" /> Snap Live Frame
-                  </>
-                )}
+              <button onClick={handleSnapFromVideo} disabled={isUploadingCover} className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50">
+                {isUploadingCover ? <span className="animate-pulse">Analyzing frame...</span> : <><Camera className="mr-2 h-5 w-5" /> Snap Live Frame</>}
               </button>
             )}
-
             <div className="relative flex w-full items-center py-1">
               <div className="flex-grow border-t border-border"></div>
               <span className="mx-4 flex-shrink-0 text-xs text-muted-foreground uppercase tracking-widest">or</span>
               <div className="flex-grow border-t border-border"></div>
             </div>
-
-            <CameraCapture
-              capture={false}
-              label="Upload from Gallery"
-              icon={<ImagePlus className="mr-2 h-5 w-5" />}
-              onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
-              className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
-            />
-            <p className="px-2 pt-2 text-center text-[0.7rem] text-muted-foreground leading-tight">
-              Snap a frame from the live video feed or upload an existing image.
-            </p>
+            <CameraCapture capture={false} label="Upload from Gallery" icon={<ImagePlus className="mr-2 h-5 w-5" />} onExtractComplete={(data, file) => onExtractComplete?.(data, file)} className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent" />
           </div>
         )}
 
@@ -368,34 +342,15 @@ export function BottomSheet({
           <div className="flex w-full flex-col">
             <form onSubmit={handleManualSearch} className="w-full">
               <div className="relative">
-                <input
-                  type="text"
-                  value={manualIsbn}
-                  onChange={e => setManualIsbn(e.target.value)}
-                  placeholder="Enter ISBN or title..."
-                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  type="submit"
-                  disabled={isSearching || !manualIsbn}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-                >
+                <input type="text" value={manualIsbn} onChange={e => setManualIsbn(e.target.value)} placeholder="Enter barcode or title..." className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2" />
+                <button type="submit" disabled={isSearching || !manualIsbn} className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground">
                   <Search className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                {isSearching ? "Looking up…" : "Try ISBN: 978-0-553-38016-8"}
-              </p>
+              <p className="mt-2 text-center text-xs text-muted-foreground">{isSearching ? "Looking up…" : "Try ISBN or UPC"}</p>
             </form>
-
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
-              <span className="mb-3 text-xs text-muted-foreground">Or enter full metadata manually</span>
-              <button
-                type="button"
-                onClick={onShowManualForm}
-                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 transition-colors"
-                aria-label="Enter details manually"
-              >
+              <button type="button" onClick={onShowManualForm} className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80">
                 Manual Entry Form
               </button>
             </div>

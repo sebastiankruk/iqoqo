@@ -27,6 +27,8 @@ Covers:
 
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 
+import io
+
 import pytest
 
 from app.db.audio import (
@@ -387,3 +389,43 @@ class TestConstants:
     def test_audio_meta_key_is_snake_case(self, key):
         """Each audio meta key uses snake_case (no spaces, no hyphens)."""
         assert " " not in key and "-" not in key, f"Key {key!r} should be snake_case"
+
+
+class TestManifestationImages:
+    """Tests for secondary image uploads and persistence."""
+
+    def test_upload_additional_image(self, app, client, admin_headers):
+        """Manifestation.meta['additional_images'] stores labels and URLs correctly."""
+
+        with app.app_context():
+            # 1. Create a test manifestation
+            w = Work(title="Images Test")
+            db.session.add(w)
+            db.session.flush()
+            e = Expression(work_id=w.id, content_type="sound", language="en")
+            db.session.add(e)
+            db.session.flush()
+            m = Manifestation(expression_id=e.id, isbn13="9780000000000")
+            db.session.add(m)
+            db.session.commit()
+            m_id = m.id
+
+        # 2. Upload an image via API
+        # 1x1 valid PNG
+        img_content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        data = {"image": (io.BytesIO(img_content), "disc.jpg"), "label": "disc"}
+
+        res = client.post(f"/api/manifestations/{m_id}/images", data=data, content_type="multipart/form-data", headers=admin_headers)
+
+        assert res.status_code == 201
+        assert res.json["success"] is True
+        images = res.json["data"]
+        assert len(images) == 1
+        assert images[0]["label"] == "disc"
+        assert "disc.jpg" in images[0]["url"]
+
+        # 3. Verify in DB
+        with app.app_context():
+            manif = db.session.get(Manifestation, m_id)
+            assert "additional_images" in manif.meta
+            assert manif.meta["additional_images"][0]["label"] == "disc"
