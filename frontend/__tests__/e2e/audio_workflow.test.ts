@@ -27,7 +27,7 @@ test.describe("Audio Media Workflow", () => {
           data: {
             id: "test-user-id",
             email: "test@iqoqo.local",
-            permissions: ["upload:cover", "edit:item"]
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"]
           }
         })
       });
