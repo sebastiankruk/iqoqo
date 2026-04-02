@@ -17,11 +17,15 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, X, BookOpen } from "lucide-react";
+import { Check, X, Plus, Disc, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { IsbnMeta, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { isAudioMedia } from "@/lib/utils";
 
 interface SuccessCardProps {
   isbn: string;
@@ -45,12 +49,18 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
+  const title = meta.Title || meta.format || "Unknown Title";
+  const authors = meta.Authors || [];
+  const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
+  const coverUrl = meta.cover_url || "/file.svg"; // Fallback for preview
+
+  const format = meta.Format || meta.format || "book";
+  const isAudio = isAudioMedia(format);
+  const identifier = isbn || "No ID Available";
+
   const handleAdd = async () => {
     setAdding(true);
     try {
-      // Use the unified format-agnostic scanner endpoint
-      const format = meta.Format || meta.format || undefined;
-      
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(`/scan`, {
         barcode: isbn,
         format: format
@@ -65,16 +75,16 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
           await apiClient.post(`/manifestations/${data.manifestation_id}/cover`, coverFormData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          toast.success(`"${meta.Title}" added with your custom cover!`);
+          toast.success(`"${title}" added with your custom cover!`);
         } catch (e) {
           console.error("Failed to upload snapped cover:", e);
-          toast.warning(`"${meta.Title}" added, but cover upload failed.`);
+          toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        toast.success(`"${meta.Title}" added to your library!`);
+        toast.success(`"${title}" added to your library!`);
       }
 
-      await router.push(`/item/${data.item_id}`);
+      router.push(`/item/${data.item_id}`);
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {
@@ -82,57 +92,95 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
     }
   };
 
-  const coverUrl: string | null = null;
-
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-      <div className="absolute inset-x-0 -top-24 h-24 bg-gradient-to-t from-black/60 to-transparent" />
-      <div className="relative rounded-t-3xl bg-card shadow-[0_-12px_48px_rgba(0,0,0,0.3)]">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-chart-3">
-              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-            </span>
-            <span className="text-sm font-semibold text-foreground">Item Found</span>
+    <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
+      <Card className="w-full max-w-2xl mx-auto overflow-hidden shadow-2xl border-green-500/30 bg-card/95 backdrop-blur-md">
+        <CardHeader className="bg-green-500/10 pb-4 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
+              <Check className="h-5 w-5" />
+            </div>
+            <h2 className="text-xl font-bold font-serif">Successfully Found!</h2>
           </div>
-          <button onClick={onDismiss} className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary hover:bg-muted">
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
+          <Button variant="ghost" size="icon" onClick={onDismiss} className="rounded-full" aria-label="Close">
+            <X className="h-5 w-5" />
+          </Button>
+        </CardHeader>
 
-        <div className="flex gap-4 px-6 pb-5">
-          <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg shadow-lg bg-secondary">
-            {coverUrl ? (
-              <Image src={coverUrl} alt={meta.Title} fill unoptimized className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <div className="flex flex-col items-center gap-1.5 text-muted-foreground/30">
-                  <BookOpen className="h-8 w-8" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">iQoQo</span>
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Dynamic Cover Art Aspect Ratio */}
+            <div className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
+              {coverUrl && coverUrl !== "/file.svg" ? (
+                <Image
+                  src={coverUrl}
+                  alt={title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground/40">
+                    {isAudio ? <Disc className="h-12 w-12" /> : <BookOpen className="h-12 w-12" />}
+                    <span className="text-xs font-bold uppercase tracking-widest font-serif">iQoQo</span>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            <div className="flex flex-col flex-1 gap-4">
+              <div className="space-y-2">
+                <Badge variant="secondary" className="w-fit mb-2">
+                  {isAudio ? 'Audio Media' : 'Book / Text'}
+                </Badge>
+                <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
+                <p className="text-lg text-muted-foreground">{authorDisplay}</p>
               </div>
-            )}
-          </div>
 
-          <div className="flex min-w-0 flex-col justify-center">
-            <h3 className="font-serif text-lg font-bold leading-tight text-foreground">{meta.Title}</h3>
-            {meta.Authors && meta.Authors.length > 0 && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{meta.Authors.join(", ")}</p>
-            )}
-            {isbn && <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Barcode: {isbn}</p>}
-          </div>
-        </div>
+              <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
+                <div className="text-muted-foreground font-semibold flex items-center gap-2">
+                  Identifier
+                </div>
+                <div className="font-mono text-xs break-all">{identifier}</div>
+                {format && (
+                  <>
+                    <div className="text-muted-foreground font-semibold">Format</div>
+                    <div className="capitalize">{format}</div>
+                  </>
+                )}
+              </div>
 
-        <div className="flex gap-3 border-t border-border px-6 py-4">
-          <button onClick={handleAdd} disabled={adding} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
-            {adding ? "Adding…" : "Add to Library"}
-          </button>
-          <button onClick={onDismiss} className="flex items-center justify-center rounded-xl border border-border bg-card px-5 py-3.5 text-sm font-semibold hover:bg-secondary">
-            Dismiss
-          </button>
-        </div>
-      </div>
+              <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
+                 <Button
+                   className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                   variant="default"
+                   disabled={adding}
+                   onClick={handleAdd}
+                   aria-label="Add to Collection"
+                 >
+                   {adding ? (
+                     "Adding..."
+                   ) : (
+                     <>
+                       <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                       Add to Collection
+                     </>
+                   )}
+                 </Button>
+                 <Button
+                   variant="outline"
+                   className="flex-1 min-w-[140px] h-12 rounded-xl"
+                   onClick={onDismiss}
+                   aria-label="Scan Another"
+                 >
+                   Scan Another
+                 </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -6,6 +6,15 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 
 import logging
 import os
@@ -13,6 +22,7 @@ import os
 import requests
 
 logger = logging.getLogger(__name__)
+
 
 def fetch_discogs_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from Discogs.
@@ -31,10 +41,7 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
         return None
 
     url = f"https://api.discogs.com/database/search?barcode={barcode}&type=release"
-    headers = {
-        "User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )",
-        "Authorization": f"Discogs token={token}"
-    }
+    headers = {"User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )", "Authorization": f"Discogs token={token}"}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)
@@ -59,14 +66,7 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
         formats = release.get("format", [])
         media_format = "vinyl" if "Vinyl" in formats else "cd" if "CD" in formats else "audio"
 
-        return {
-            "title": title,
-            "author": artist,
-            "publisher": publisher,
-            "cover_url": cover_url,
-            "format": media_format,
-            "language": "en"
-        }
+        return {"title": title, "author": artist, "publisher": publisher, "cover_url": cover_url, "format": media_format, "language": "en"}
     except requests.RequestException as e:
         logger.error(f"Failed to fetch Discogs metadata for {barcode}: {e}")
         return None

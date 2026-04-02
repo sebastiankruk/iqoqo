@@ -458,11 +458,7 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
 
     meta = dict(manifestation.meta or {})
     additional_images = meta.get("additional_images", [])
-    additional_images.append({
-        "url": image_url,
-        "label": image_label,
-        "added_at": datetime.now(UTC).isoformat()
-    })
+    additional_images.append({"url": image_url, "label": image_label, "added_at": datetime.now(UTC).isoformat()})
     meta["additional_images"] = additional_images
     manifestation.meta = meta
 

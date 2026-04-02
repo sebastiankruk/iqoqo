@@ -74,7 +74,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {items.map(item => {
-            const coverUrl = getCoverUrl(item.cover_url) || (item.meta?.["cover_url"] as string | undefined);
+            const coverUrl = getCoverUrl(item.cover_url ?? undefined) || (item.meta?.["cover_url"] as string | undefined);
 
             const isProcessing = item.cover_status === "processing";
             const isGenerated = item.cover_status === "ready" && !item.meta?.["cover_url"];

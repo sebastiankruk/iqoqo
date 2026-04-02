@@ -17,6 +17,7 @@
 #
 from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
 from app.db.models import Expression, Manifestation, Work, db
+from app.utils.covers import start_cover_processing
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
@@ -29,10 +30,14 @@ class IngestService:
         if not meta:
             raise ValueError("ISBN metadata not found in external services.")
 
+        # Normalize common fields securely
+        title = meta.get("title") or meta.get("Title") or "Unknown Title"
+        author_name = meta.get("author") or meta.get("authors", [None])[0] or meta.get("Artist")
+        cover_url = meta.get("cover_url") or meta.get("cover") or meta.get("thumbnail")
+
         # Create FRBR hierarchy
-        author_name = meta.get("author")
         work_meta = {"authors": [author_name]} if author_name else {}
-        work = Work(title=meta.get("title"), meta=work_meta)
+        work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
 
@@ -43,12 +48,28 @@ class IngestService:
         expression = Expression(work=work, language=meta.get("language", "en"), content_type="text")
         db.session.add(expression)
 
+        # Build normalized meta for frontend
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "isbn": isbn,
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher"),
+            }
+        )
+
         manifestation = Manifestation(
             expression=expression,
-            meta={"isbn": isbn, "cover_url": meta.get("cover_url"), "publisher": meta.get("publisher")},
+            meta=man_meta,
         )
         db.session.add(manifestation)
         db.session.commit()
+
+        # Trigger background processing to secure the cover natively
+        start_cover_processing(manifestation_id=manifestation.id, identifier=isbn, title=title, author=author_name or "")
 
         return manifestation
 
@@ -60,10 +81,14 @@ class IngestService:
         if not meta:
             raise ValueError("Audio metadata not found in external services.")
 
+        # Normalize keys that might come back differently from MusicBrainz/Discogs
+        title = meta.get("title") or meta.get("Title") or "Unknown Title"
+        author_name = meta.get("author") or meta.get("artist") or meta.get("Artist")
+        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+
         # Create FRBR hierarchy
-        author_name = meta.get("author")
         work_meta = {"authors": [author_name]} if author_name else {}
-        work = Work(title=meta.get("title"), meta=work_meta)
+        work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
 
@@ -75,17 +100,28 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_expression_contribution(expression.id, contributor.id, "performer")
 
-        manifestation = Manifestation(
-            expression=expression,
-
-            meta={
+        # Build normalized meta for frontend
+        man_meta = meta.copy()
+        man_meta.update(
+            {
                 "barcode": barcode,
                 "format": meta.get("format", "audio"),
-                "cover_url": meta.get("cover_url"),
-                "publisher": meta.get("publisher"),
-            },
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,  # The background task will catch this and download it
+                "publisher": meta.get("publisher") or meta.get("label"),
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
         )
         db.session.add(manifestation)
         db.session.commit()
+
+        # Trigger background processing so covers.py intercepts the URL and saves locally
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
 
         return manifestation

@@ -412,20 +412,10 @@ class TestManifestationImages:
 
         # 2. Upload an image via API
         # 1x1 valid PNG
-        img_content = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-        )
-        data = {
-            "image": (io.BytesIO(img_content), "disc.jpg"),
-            "label": "disc"
-        }
+        img_content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        data = {"image": (io.BytesIO(img_content), "disc.jpg"), "label": "disc"}
 
-        res = client.post(
-            f"/api/manifestations/{m_id}/images",
-            data=data,
-            content_type="multipart/form-data",
-            headers=admin_headers
-        )
+        res = client.post(f"/api/manifestations/{m_id}/images", data=data, content_type="multipart/form-data", headers=admin_headers)
 
         assert res.status_code == 201
         assert res.json["success"] is True

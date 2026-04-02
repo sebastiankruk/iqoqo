@@ -41,7 +41,6 @@ def serve_gallery_image(filename: str):
     return send_from_directory(GALLERY_DIR, filename)
 
 
-
 @api_bp.route("/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})

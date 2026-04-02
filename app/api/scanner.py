@@ -34,10 +34,12 @@ from app.utils.vision import extract_metadata_from_cover
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
 _ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
+
 def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
     """Read at most *max_bytes* from *file_storage*."""
     buf = file_storage.read(max_bytes + 1)
     return None if len(buf) > max_bytes else buf
+
 
 @api_bp.route("/lookup/<barcode>", methods=["GET"])
 @require_auth
@@ -46,12 +48,14 @@ def lookup_barcode_preview(barcode: str):
     # Check DB first
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
-        (Manifestation.meta["isbn"].as_string() == barcode) |
-        (Manifestation.meta["barcode"].as_string() == barcode)
+        (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
     ).first()
 
-    if manifestation and manifestation.meta and manifestation.meta.get("Title"):
-        return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
+    if manifestation and manifestation.meta:
+        # Check normalized vs legacy titles in meta
+        title = manifestation.meta.get("title") or manifestation.meta.get("Title")
+        if title:
+            return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
 
     # Try external sources
     meta = None
@@ -67,7 +71,7 @@ def lookup_barcode_preview(barcode: str):
         try:
             # Try Audio sources for UPC/EAN
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
 
         # Fallback to book in case it's a non-standard ISBN prefix
@@ -79,7 +83,16 @@ def lookup_barcode_preview(barcode: str):
     if not meta:
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
+    # Ensure frontend gets normalized keys for preview
+    if "title" not in meta and "Title" in meta:
+        meta["title"] = meta["Title"]
+    if "cover_url" not in meta and "thumb" in meta:
+        meta["cover_url"] = meta["thumb"]
+    if "author" not in meta and "artist" in meta:
+        meta["author"] = meta["artist"]
+
     return jsonify({"success": True, "data": meta, "error": None}), 200
+
 
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
@@ -97,8 +110,7 @@ def scan_barcode():
     # Check both ISBN and generic barcode metadata fields
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
-        (Manifestation.meta["isbn"].as_string() == barcode) |
-        (Manifestation.meta["barcode"].as_string() == barcode)
+        (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
     ).first()
 
     if not manifestation:
@@ -119,7 +131,7 @@ def scan_barcode():
             return jsonify({"error": f"Invalid barcode or not found: {str(e)}"}), 400
         except ConnectionError as e:
             return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-except
             return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:
@@ -137,7 +149,9 @@ def scan_barcode():
                     "message": "Item successfully added to your collection",
                     "item_id": new_item.id,
                     "manifestation_id": manifestation.id,
-                    "title": manifestation.title,
+                    "title": (
+                        manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
+                    ),
                     "is_new_manifestation": is_new_manifestation,
                 },
                 "error": None,
@@ -145,6 +159,7 @@ def scan_barcode():
         ),
         201,
     )
+
 
 @api_bp.route("/vision/extract", methods=["POST"])
 @require_auth

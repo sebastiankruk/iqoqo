@@ -21,28 +21,42 @@ from app.core.ingest import IngestService
 
 
 def test_fetch_audio_metadata_success(app):
+    # Mocking messy external keys (e.g. from Discogs/MusicBrainz)
     mock_response = {
-        "title": "Dark Side of the Moon",
-        "author": "Pink Floyd",
-        "publisher": "Harvest",
-        "cover_url": "https://coverartarchive.org/release/1234/front",
-        "format": "audio"
+        "Title": "Dark Side of the Moon",  # Uppercase
+        "artist": "Pink Floyd",  # artist instead of author
+        "label": "Harvest",  # label instead of publisher
+        "thumb": "https://coverartarchive.org/release/1234/front",  # thumb instead of cover_url
+        "format": "audio",
     }
 
-    with patch('app.core.ingest.fetch_audio_metadata', return_value=mock_response), \
-         patch('app.core.ingest.fetch_discogs_metadata', return_value=None):
+    with (
+        patch("app.core.ingest.fetch_audio_metadata", return_value=mock_response),
+        patch("app.core.ingest.fetch_discogs_metadata", return_value=None),
+    ):
         with app.app_context():
             manifestation = IngestService.ingest_audio_from_barcode("5099902987613")
 
+            # Assert object properties mapped successfully
             assert manifestation.title == "Dark Side of the Moon"
+
+            # Assert meta payload has normalized standard keys for the UI
             assert manifestation.meta["format"] == "audio"
             assert manifestation.meta["barcode"] == "5099902987613"
+            assert manifestation.meta["title"] == "Dark Side of the Moon"
+            assert manifestation.meta["author"] == "Pink Floyd"
+            assert manifestation.meta["cover_url"] == "https://coverartarchive.org/release/1234/front"
+            assert manifestation.meta["publisher"] == "Harvest"
+
+            # Assert FRBR contribution merged successfully
             assert "Pink Floyd" in manifestation.expression.work.meta["authors"]
 
 
 def test_fetch_audio_metadata_not_found(app):
-    with patch('app.core.ingest.fetch_audio_metadata', return_value=None), \
-         patch('app.core.ingest.fetch_discogs_metadata', return_value=None):
+    with (
+        patch("app.core.ingest.fetch_audio_metadata", return_value=None),
+        patch("app.core.ingest.fetch_discogs_metadata", return_value=None),
+    ):
         with app.app_context():
             try:
                 IngestService.ingest_audio_from_barcode("00000000000")

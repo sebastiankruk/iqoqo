@@ -165,6 +165,7 @@ export interface IsbnMeta {
   "ISBN-13"?: string;
   Format?: string;
   format?: string;
+  cover_url?: string;
 }
 
 /** User profile */

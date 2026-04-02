@@ -59,6 +59,7 @@ def add_source_badge(filepath: str, source: str):
         "user_photo": ("U", "blue"),
         "api_openlibrary": ("D", "gray"),  # Download
         "api_google_books": ("D", "gray"),
+        "api_direct_download": ("C", "teal"),  # CD/Audio direct download
         "llm_gemini": ("G", "purple"),
         "llm_openai": ("O", "green"),
         "llm_local_stable_diffusion": ("L", "orange"),
@@ -101,8 +102,6 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
         img = Image.new("RGB", (400, 600), color=bg_color)
         d = ImageDraw.Draw(img)
 
-        # Use default font, in production load a TTF
-        # font = ImageFont.truetype("arial.ttf", 24)
         font = ImageFont.load_default()
 
         # Simple text wrapping logic could be added here
@@ -118,19 +117,42 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
         return None
 
 
+def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[str, str] | None:
+    """Securely downloads a direct image URL to the local filesystem."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, stream=True, timeout=10, headers=headers)
+        if response.status_code == 200:
+            downloaded = bytearray()
+            for chunk in response.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                downloaded.extend(chunk)
+                if len(downloaded) > MAX_COVER_FILE_SIZE:
+                    logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
+                    return None
+
+            if len(downloaded) < MIN_COVER_FILE_SIZE:
+                return None
+
+            content = bytes(downloaded)
+            if not is_valid_cover(content):
+                return None
+
+            filename = f"{identifier}_ext.jpg"
+            filepath = os.path.join(COVERS_DIR, filename)
+            optimize_and_save_image(content, filepath)
+            return f"/static/covers/{filename}", source_name
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(f"Error fetching direct URL {url}: {e}")
+
+    return None
+
+
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
-    """Tier 2: Try OpenLibrary then Google Books. Returns (path, source) tuple on success.
-
-    This implementation streams responses with a maximum in-memory cap to avoid
-    memory bloat from malicious or misconfigured endpoints. It delegates image
-    integrity and placeholder detection to is_valid_cover().
-
-    Args:
-        identifier: Used for filename generation (may be ISBN, EAN, or UPC).
-        isbn: If provided, used for ISBN-specific API lookups (OpenLibrary, Google Books).
-              Falls back to ``identifier`` when not set, which will cause those lookups
-              to fail gracefully for non-ISBN barcodes.
-    """
+    """Tier 2 fallback: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
     isbn_for_lookup = isbn or identifier
 
     def process_response(response, source_prefix: str, source_name: str) -> tuple[str, str] | None:
@@ -146,12 +168,9 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
                 return None
 
         if len(downloaded) < MIN_COVER_FILE_SIZE:
-            # Too small to be a valid cover
             return None
 
         content = bytes(downloaded)
-
-        # Validate the image payload (includes pHash/junk detection in is_valid_cover)
         if not is_valid_cover(content):
             return None
 
@@ -165,7 +184,6 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
     try:
         response = requests.get(ol_url, stream=True, timeout=5)
         if response.status_code == 200:
-            # Fast-fail using header when present and trustworthy
             try:
                 header_len_raw = response.headers.get("content-length")
                 if header_len_raw is not None:
@@ -188,7 +206,6 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
         if "items" in gb_data:
             thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
             if thumb:
-                # Get higher res
                 thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
                 img_res = requests.get(thumb, stream=True, timeout=10)
                 if img_res.status_code == 200:
@@ -207,7 +224,6 @@ def process_fast_cover(manifestation: Manifestation, identifier: str) -> bool:
     if result:
         local_path, source = result
         manifestation.cover_url = local_path
-        # Force SQLAlchemy to detect change in JSON field
         manifestation.update_meta(cover_source=source, cover_status="ready")
         return True
     return False
@@ -223,21 +239,15 @@ def process_cover_pipeline(
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
+    _tag: str = "",  # pylint: disable=unused-argument
 ):
     """
-    The single cover-generation pipeline (Chain of Responsibility).
-
+    The single cover-generation pipeline.
     Tiers:
-      1. User photo (if provided)
+      1. User photo
+      1.5 Direct URL Download (intercepts external hotlinks from MusicBrainz/Discogs)
       2. External APIs (OpenLibrary, Google Books)
-      3/4. LLM generation (local SD → Gemini → OpenAI)
-
-    If all tiers fail the existing cover_url is left unchanged so the
-    frontend can show its book-icon placeholder rather than an empty or
-    low-quality fallback image.  cover_status is set to "failed".
-
-    Can be invoked directly (e.g. from a CLI script) or via
-    ``start_cover_processing`` which fires it in a background thread.
+      3/4. LLM generation
     """
     from flask import current_app, has_app_context
 
@@ -262,11 +272,9 @@ def process_cover_pipeline(
                 filename = f"{identifier}_user.jpg"
                 dest_path = os.path.join(COVERS_DIR, filename)
 
-                # Normalize/compress the user-provided image before storing it
                 with open(user_image_path, "rb") as upload_file:
                     image_bytes = upload_file.read()
                 optimize_and_save_image(image_bytes, dest_path)
-                # Remove the temporary upload file once it has been processed
                 os.remove(user_image_path)
 
                 local_cover_url = f"/static/covers/{filename}"
@@ -277,11 +285,21 @@ def process_cover_pipeline(
                 db.session.commit()
                 return
 
-        # Tier 2: External APIs
+        # Tier 1.5 & Tier 2: Direct Hotlinks & External APIs
         if not local_cover_url:
-            result = fetch_external_api_cover(identifier, isbn=manifestation.isbn13)
-            if result:
-                local_cover_url, source = result
+            existing_url = manifestation.meta.get("cover_url") if manifestation.meta else None
+
+            # Intercept existing external URLs and download them locally
+            if existing_url and str(existing_url).startswith("http"):
+                result = download_direct_url(identifier, existing_url, "api_direct_download")
+                if result:
+                    local_cover_url, source = result
+
+            # Fallback to book API fetchers
+            if not local_cover_url:
+                result = fetch_external_api_cover(identifier, isbn=manifestation.isbn13)
+                if result:
+                    local_cover_url, source = result
 
         # Tier 3/4: LLM Generation
         allow_generate_cover = Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover", False)
@@ -306,7 +324,7 @@ def process_cover_pipeline(
             logger.info("Cover processed for %s: %s", identifier, source)
         else:
             updates["cover_status"] = "failed"
-            logger.warning("Cover generation failed for %s: no cover produced, leaving existing", identifier)
+            logger.warning("Cover generation failed for %s", identifier)
 
         manifestation.update_meta(**updates)
         db.session.commit()
@@ -339,19 +357,11 @@ def start_cover_processing(
 
 
 def rebind_orphaned_covers() -> int:
-    """
-    Scans the covers directory for images that match books (Manifestations)
-    with missing covers, and links them.
-
-    Returns:
-        int: The number of covers rebound.
-    """
+    """Scans the covers directory for images that match books with missing covers."""
     orphans_rebound = 0
-
     books_missing_covers = Manifestation.query.filter((Manifestation.cover_url.is_(None)) | (Manifestation.cover_url == "")).all()
 
     if not books_missing_covers:
-        logger.info("No books found missing covers.")
         return 0
 
     try:
@@ -361,12 +371,10 @@ def rebind_orphaned_covers() -> int:
         return 0
 
     for book in books_missing_covers:
-        # Check against ISBN, EAN or UPC
         identifier = book.isbn13 or book.ean or book.upc
         if not identifier:
             continue
 
-        # Find files starting with identifier
         candidates = [f for f in files if f.startswith(identifier) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
 
         if candidates:
@@ -374,9 +382,11 @@ def rebind_orphaned_covers() -> int:
             def sort_key(f):
                 if "_user" in f:
                     return 0
-                if "_ol" in f or "_gb" in f:
+                if "_ext" in f:
                     return 1
-                return 2
+                if "_ol" in f or "_gb" in f:
+                    return 2
+                return 3
 
             candidates.sort(key=sort_key)
             best_match = candidates[0]
@@ -389,7 +399,6 @@ def rebind_orphaned_covers() -> int:
             book.update_meta(**updates)
 
             orphans_rebound += 1
-            logger.info(f"Rebound cover for identifier {identifier}: {best_match}")
 
     if orphans_rebound > 0:
         db.session.commit()

@@ -6,12 +6,22 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 
 import logging
 
 import requests
 
 logger = logging.getLogger(__name__)
+
 
 def fetch_audio_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from MusicBrainz.
@@ -23,9 +33,7 @@ def fetch_audio_metadata(barcode: str) -> dict | None:
         dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
     """
     url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
-    headers = {
-        "User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )"
-    }
+    headers = {"User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )"}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)
@@ -58,7 +66,7 @@ def fetch_audio_metadata(barcode: str) -> dict | None:
             "publisher": publisher,
             "cover_url": cover_url,
             "format": "audio",
-            "language": "en"  # Defaulting, as MusicBrainz language tags are complex
+            "language": "en",  # Defaulting, as MusicBrainz language tags are complex
         }
     except requests.RequestException as e:
         logger.error(f"Failed to fetch audio metadata for {barcode}: {e}")

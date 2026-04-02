@@ -28,6 +28,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import type { IsbnMeta } from "@/types/frbr";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
@@ -79,21 +80,21 @@ describe("SuccessCard", () => {
 
   it("shows an 'Item Found' success header", () => {
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
-    expect(screen.getByText("Item Found")).toBeInTheDocument();
+    expect(screen.getByText("Successfully Found!")).toBeInTheDocument();
   });
 
   it("calls onDismiss when the header X button is clicked", () => {
     const onDismiss = vi.fn();
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={onDismiss} />);
     // Testing the UI interaction of clicking the close icon button
-    fireEvent.click(screen.getByRole("button", { name: "" }) as HTMLElement); 
+    fireEvent.click(screen.getByRole("button", { name: "Close" })); 
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
   it("calls onDismiss when the bottom Dismiss button is clicked", () => {
     const onDismiss = vi.fn();
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={onDismiss} />);
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan Another" }));
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
@@ -101,7 +102,7 @@ describe("SuccessCard", () => {
     mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 99, manifestation_id: 100 } } });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
     
-    fireEvent.click(screen.getByRole("button", { name: /add to library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
     
     await waitFor(() => {
       // Assert that we correctly call the unified endpoint with barcode and format
@@ -118,7 +119,7 @@ describe("SuccessCard", () => {
     mockApiPost.mockRejectedValueOnce(new Error("Network error"));
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
     
-    fireEvent.click(screen.getByRole("button", { name: /add to library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
     
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Network error");
@@ -127,6 +128,33 @@ describe("SuccessCard", () => {
 
   it("displays the barcode under the title", () => {
     render(<SuccessCard isbn="074646493524" meta={SAMPLE_META} onDismiss={vi.fn()} />);
-    expect(screen.getByText(/barcode: 074646493524/i)).toBeInTheDocument();
+    expect(screen.getByText("074646493524")).toBeInTheDocument();
+  });
+
+  it("renders correctly with audio barcode fallback", () => {
+    const meta = {
+      Title: "Dark Side of the Moon",
+      Authors: ["Pink Floyd"],
+      format: "audio",
+    };
+
+    render(<SuccessCard isbn="077774600125" meta={meta as IsbnMeta} onDismiss={vi.fn()} />);
+
+    expect(screen.getByText("Dark Side of the Moon")).toBeInTheDocument();
+    expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
+    expect(screen.getByText("077774600125")).toBeInTheDocument();
+    expect(screen.getByText("Audio Media")).toBeInTheDocument();
+  });
+
+  it("applies correct aspect ratio classes based on format", () => {
+    const { container: audioContainer } = render(
+      <SuccessCard isbn="123" meta={{ format: "audio" } as IsbnMeta} onDismiss={vi.fn()} />
+    );
+    expect(audioContainer.querySelector(".aspect-square")).toBeInTheDocument();
+
+    const { container: bookContainer } = render(
+      <SuccessCard isbn="123" meta={{ format: "book" } as IsbnMeta} onDismiss={vi.fn()} />
+    );
+    expect(bookContainer.querySelector(".aspect-\\[2\\/3\\]")).toBeInTheDocument();
   });
 });
