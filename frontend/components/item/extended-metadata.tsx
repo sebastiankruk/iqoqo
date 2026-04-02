@@ -19,6 +19,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { isAudioMedia } from "@/lib/utils";
 
 /** Props for ExtendedMetadata component */
 interface ExtendedMetadataProps {
@@ -39,9 +40,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const categories = (meta["Categories"] as string[] | undefined) ?? [];
 
   // Audio specific metadata
-  const format = meta.format as string | undefined;
-  const isAudio = format && ["LP", "45", "EP", "CD", "CD-EP", "Audiobook"].includes(format);
-  const trackList = meta.track_list as Array<{ position: string; title: string; duration_seconds: number }> | undefined;
+  const format = meta["format"] as string | undefined;
+  const isAudio = isAudioMedia(format);
+  const trackList = meta["track_list"] as Array<{ position: string; title: string; duration_seconds: number }> | undefined;
 
   // Filter out internal keys and keys already displayed elsewhere
   const hiddenKeys = new Set([
@@ -95,28 +96,28 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
         <div className="rounded-lg border bg-card/50 p-4 shadow-sm">
           <h3 className="font-semibold text-lg mb-4 text-foreground">Release Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            {Boolean(meta.label) && (
+            {Boolean(meta["label"]) && (
               <div className="flex flex-col">
                 <span className="text-muted-foreground">Label</span>
-                <span className="font-medium">{meta.label as string}</span>
+                <span className="font-medium">{meta["label"] as string}</span>
               </div>
             )}
-            {Boolean(meta.catalog_number) && (
+            {Boolean(meta["catalog_number"]) && (
               <div className="flex flex-col">
                 <span className="text-muted-foreground">Catalog #</span>
-                <span className="font-medium">{meta.catalog_number as string}</span>
+                <span className="font-medium">{meta["catalog_number"] as string}</span>
               </div>
             )}
-            {Boolean(meta.matrix_number) && (
+            {Boolean(meta["matrix_number"]) && (
               <div className="flex flex-col">
                 <span className="text-muted-foreground">Matrix #</span>
-                <span className="font-medium">{meta.matrix_number as string}</span>
+                <span className="font-medium">{meta["matrix_number"] as string}</span>
               </div>
             )}
-            {Boolean(meta.disc_count) && (
+            {Boolean(meta["disc_count"]) && (
               <div className="flex flex-col">
                 <span className="text-muted-foreground">Discs</span>
-                <span className="font-medium">{meta.disc_count as number}</span>
+                <span className="font-medium">{meta["disc_count"] as number}</span>
               </div>
             )}
             {format && (

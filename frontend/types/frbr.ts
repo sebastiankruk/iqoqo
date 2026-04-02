@@ -43,7 +43,7 @@ export interface Expression {
 /** Additional image attached to a manifestation (e.g., disc, inlay). */
 export interface AdditionalImage {
   url: string;
-  label: "front" | "back" | "disc" | "inlay" | "box" | "other";
+  label: "front" | "back" | "disc" | "inlay" | "box" | "other" | string;
   added_at: string;
 }
 

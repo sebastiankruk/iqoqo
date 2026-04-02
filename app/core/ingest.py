@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from app.core.frbr_service import add_work_contribution, get_or_create_contributor
+from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
 from app.db.models import Expression, Manifestation, Work, db
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
@@ -40,7 +40,7 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "author")
 
-        expression = Expression(work=work, language=meta.get("language", "en"))
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="text")
         db.session.add(expression)
 
         manifestation = Manifestation(
@@ -67,15 +67,17 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="sound")
+        db.session.add(expression)
+        db.session.flush()
+
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            add_work_contribution(work.id, contributor.id, "artist")
-
-        expression = Expression(work=work, language=meta.get("language", "en"))
-        db.session.add(expression)
+            add_expression_contribution(expression.id, contributor.id, "performer")
 
         manifestation = Manifestation(
             expression=expression,
+
             meta={
                 "barcode": barcode,
                 "format": meta.get("format", "audio"),

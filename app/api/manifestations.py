@@ -414,12 +414,13 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     return jsonify({"message": "Cover upload processing started"}), 202
 
 
-@api_bp.route("/manifestations/<int:id>/images", methods=["POST"])
+@api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
 @require_auth
 @require_permission("edit:manifestation")
-def upload_manifestation_image(id: int) -> tuple[Response, int]:
+def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
+    # pylint: disable=too-many-return-statements
     """Upload an additional image (inlay, disc, back) for a manifestation."""
-    manifestation = db.session.get(Manifestation, id)
+    manifestation = db.session.get(Manifestation, manifestation_id)
     if not manifestation:
         return jsonify({"success": False, "error": "Manifestation not found"}), 404
 
@@ -427,13 +428,34 @@ def upload_manifestation_image(id: int) -> tuple[Response, int]:
         return jsonify({"success": False, "error": "No image provided"}), 400
 
     file = request.files["image"]
+    if not file.filename:
+        return jsonify({"success": False, "error": "No selected file"}), 400
+
+    # Validation
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
+        return jsonify({"success": False, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    max_size = 10 * 1024 * 1024
+    if request.content_length and request.content_length > max_size:
+        return jsonify({"success": False, "error": "File too large. Max size: 10MB"}), 413
+
     image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
 
-    # Save the file to gallery folder
-    filename = secure_filename(f"manifestation_{id}_{image_label}_{file.filename}")
-    image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+    try:
+        # PIL Content check
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+
+        # Save and optimize
+        filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
+        image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+    except (OSError, SyntaxError):
+        return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
     # Update JSONB meta field
+
     meta = dict(manifestation.meta or {})
     additional_images = meta.get("additional_images", [])
     additional_images.append({

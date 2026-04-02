@@ -396,8 +396,6 @@ class TestManifestationImages:
 
     def test_upload_additional_image(self, app, client, admin_headers):
         """Manifestation.meta['additional_images'] stores labels and URLs correctly."""
-        from app.db.core import Expression, Manifestation, Work
-        from app.db.models import db
 
         with app.app_context():
             # 1. Create a test manifestation

@@ -25,3 +25,16 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * Checks if a given media format string represents an audio-based manifestation.
+ *
+ * @param format - The format string to check (e.g., "CD", "Vinyl", "Audiobook")
+ * @returns {boolean} True if the format is audio-based
+ */
+export function isAudioMedia(format: string | undefined): boolean {
+  if (!format) return false;
+  const audioFormats = new Set(["audio", "cd", "vinyl", "lp", "ep", "45", "audiobook", "cd-ep", "sacd"]);
+  return audioFormats.has(format.toLowerCase());
+}
+

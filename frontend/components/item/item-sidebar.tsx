@@ -16,13 +16,14 @@
 "use client";
 
 import { ChangeEvent } from "react";
-import { Pencil, QrCode, BookOpen, ImagePlus } from "lucide-react";
+import { Pencil, QrCode, BookOpen, Disc, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
+import { isAudioMedia } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -63,7 +64,16 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
-  const hasUploadPermission = profile?.permissions?.includes("upload:cover");
+  const permissions = profile?.permissions ?? [];
+  const hasUploadPermission = permissions.includes("upload:cover");
+  const hasEditPermission = permissions.includes("edit:manifestation");
+
+  // Media type detection
+  const format = (item.manifestation_meta?.["format"] as string | undefined) ??
+                 (item.meta?.["format"] as string | undefined) ?? "book";
+  const isAudio = isAudioMedia(format);
+  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
+  const MediaIcon = isAudio ? Disc : BookOpen;
 
   const statusInfo = STATUS_LABELS[item.status] ?? {
     label: item.status,
@@ -110,15 +120,15 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   return (
     <div className="flex flex-col items-center gap-5">
-      {/* Book cover */}
+      {/* Book/Audio cover */}
       <div className="-mt-28 w-full max-w-[220px]">
-        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary">
+        <div className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}>
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={item.title ?? "Cover"} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <BookOpen className="h-12 w-12 text-muted-foreground/30" />
+              <MediaIcon className="h-12 w-12 text-muted-foreground/30" />
             </div>
           )}
         </div>
@@ -207,7 +217,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           />
         )}
 
-        {hasUploadPermission && (
+        {hasEditPermission && (
           <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
         )}
       </div>

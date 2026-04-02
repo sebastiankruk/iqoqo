@@ -73,9 +73,10 @@ def scan_barcode():
 
     # Check both ISBN and generic barcode metadata fields
     manifestation = Manifestation.query.filter(
-        (Manifestation.meta.op("->>")("isbn") == barcode) |
-        (Manifestation.meta.op("->>")("barcode") == barcode)
+        (Manifestation.meta["isbn"].as_string() == barcode) |
+        (Manifestation.meta["barcode"].as_string() == barcode)
     ).first()
+
 
     if not manifestation:
         try:

@@ -19,6 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Disc, Loader2 } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
+import { isAudioMedia } from "@/lib/utils";
 
 const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
@@ -108,7 +109,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
     : (((item as Item).manifestation_meta?.["format"] as string | undefined) ??
       ((item as Item).meta?.["format"] as string | undefined));
 
-  const isAudio = format === "audio" || format === "cd" || format === "vinyl";
+  const isAudio = isAudioMedia(format);
   const MediaIcon = isAudio ? Disc : BookOpen;
   const mediaLabel = isAudio ? "Audio" : "Book";
   const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";

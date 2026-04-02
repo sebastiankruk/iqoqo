@@ -17,6 +17,7 @@
 
 import { Calendar, BookOpen, Tag, ListMusic } from "lucide-react";
 import type { Item } from "@/types/frbr";
+import { isAudioMedia } from "@/lib/utils";
 
 /**
  * Title, authors, year, page/track count, and tag badges for an item.
@@ -32,7 +33,7 @@ export function ItemHeader({ item }: { item: Item }) {
   const year = meta["Year"] as string | undefined;
 
   const format = (meta["format"] as string | undefined) ?? "book";
-  const isAudio = format === "audio" || format === "cd" || format === "vinyl";
+  const isAudio = isAudioMedia(format);
 
   const pages = meta["Pages"] as string | undefined;
   const tracks = meta["Tracks"] as string | undefined;
