@@ -19,7 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Disc, Loader2 } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl } from "@/lib/utils";
 
 const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
@@ -89,12 +89,10 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
 
-  const coverUrl = itemCoverUrl
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemCoverUrl}`
-    : isCatalog
+  const coverUrl = getCoverUrl(itemCoverUrl || undefined) || (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
       : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
-        ((item as Item).meta?.["cover_url"] as string | undefined));
+        ((item as Item).meta?.["cover_url"] as string | undefined)));
 
   const hasLegacyCoverUrl = isCatalog
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])
@@ -204,4 +202,3 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
     </Link>
   );
 }
-

@@ -21,6 +21,7 @@ import { BookOpen, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
+import { getCoverUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 import { CameraCapture } from "@/components/scanner/camera-capture";
@@ -66,9 +67,7 @@ export default function ManifestationPage() {
     );
   }
 
-  const coverUrl = manifestation.cover_url
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${manifestation.cover_url}`
-    : (manifestation.meta?.["cover_url"] as string | undefined);
+  const coverUrl = getCoverUrl(manifestation.cover_url || undefined) || (manifestation.meta?.["cover_url"] as string | undefined);
 
   /**
    * Add the current manifestation to the user's collection when an ISBN is available.

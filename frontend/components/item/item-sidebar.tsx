@@ -23,7 +23,7 @@ import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -56,9 +56,8 @@ interface ItemSidebarProps {
  * @returns {JSX.Element} The component
  */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
   const coverUrl =
-    (item.cover_url ? `${apiBase}${item.cover_url}` : undefined) ??
+    getCoverUrl(item.cover_url || undefined) ??
     (item.manifestation_meta?.["cover_url"] as string | undefined) ??
     (item.meta?.["cover_url"] as string | undefined);
 
@@ -101,8 +100,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   /**
    * Handles generating and opening the QR code for the item.
    */
-
   const handleQrCode = async () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
     const url = `${apiBase}/qrcode/${item.id}`;
     try {
       const response = await fetch(url, { method: "HEAD" });

@@ -34,7 +34,7 @@ RUN npm ci
 COPY . .
 
 # Build-time env vars (non-secret; overridden at runtime via env or docker --env)
-ARG NEXT_PUBLIC_API_URL=http://localhost:5000
+ARG NEXT_PUBLIC_API_URL=/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG APP_VERSION=prod
 ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION

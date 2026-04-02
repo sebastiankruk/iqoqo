@@ -37,4 +37,37 @@ export function isAudioMedia(format: string | undefined): boolean {
   const audioFormats = new Set(["audio", "cd", "vinyl", "lp", "ep", "45", "audiobook", "cd-ep", "sacd"]);
   return audioFormats.has(format.toLowerCase());
 }
+/**
+ * Resolves an API or static resource URL.
+ * In a browser context, it defaults to a relative path (e.g., "/api") to stay same-origin.
+ * On the server, it prefers an internal FLASK_API_URL absolute path.
+ *
+ * @param path - The relative path or endpoint (e.g., "/static/covers/123.jpg" or "/items")
+ * @param isServer - Set to true when running server-side (e.g., SSR or API routes)
+ * @returns {string} The fully resolved URL
+ */
+export function resolveApiUrl(path: string, isServer = false): string {
+  if (path.startsWith("http")) return path;
 
+  // Server-side fetch requires an absolute URL.
+  // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
+  const apiBase = isServer
+    ? (process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api")
+    : (process.env.NEXT_PUBLIC_API_URL || "/api");
+
+  const cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${cleanBase}${cleanPath}`;
+}
+
+/**
+ * Resolves a cover URL using the generic resolveApiUrl logic.
+ *
+ * @param path - The cover path (e.g., "/static/covers/123.jpg")
+ * @returns {string | undefined} Resolved URL
+ */
+export function getCoverUrl(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  return resolveApiUrl(path);
+}

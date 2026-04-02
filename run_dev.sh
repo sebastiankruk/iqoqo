@@ -197,7 +197,9 @@ if [ -d "frontend" ]; then
     (cd frontend && \
      NEXT_PUBLIC_API_URL="/api" \
      FLASK_API_URL="http://127.0.0.1:${WEB_PORT}/api" \
+     NEXT_PUBLIC_FRONTEND_URL="${NEXT_PUBLIC_FRONTEND_URL}" \
      NEXTAUTH_URL="${NEXTAUTH_URL}" \
+     AUTH_URL="${AUTH_URL}" \
      AUTH_TRUST_HOST="${AUTH_TRUST_HOST}" \
      NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" \
      npm run dev) &
