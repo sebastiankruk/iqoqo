@@ -55,7 +55,12 @@ export function resolveApiUrl(path: string, isServer = false): string {
     ? (process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api")
     : (process.env.NEXT_PUBLIC_API_URL || "/api");
 
-  const cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+  // Ensure apiBase is absolute if isServer is true
+  let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+  if (isServer && !cleanBase.startsWith("http")) {
+    cleanBase = `http://127.0.0.1:5000${cleanBase}`;
+  }
+
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
 
   return `${cleanBase}${cleanPath}`;

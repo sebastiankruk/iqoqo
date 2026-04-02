@@ -66,6 +66,7 @@ def admin_headers(app):
             Permission(name="refetch:metadata"),
             Permission(name="delete:item"),
             Permission(name="edit:manifestation"),
+            Permission(name="upload:cover"),
         ]
         db.session.add_all(perms)
 

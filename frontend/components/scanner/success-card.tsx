@@ -61,14 +61,23 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   const isMissingID = identifier === "No ID Available";
 
   const handleAdd = async () => {
+    if (isMissingID) {
+      toast.error("Standard barcode required to add to collection.");
+      return;
+    }
     setAdding(true);
     try {
-      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(`/scan`, {
+      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
         barcode: identifier,
-        format: format
+        format: format,
       });
-      const data = res.data.data;
-      if (!data) throw new Error(res.data.error || "Failed to ingest item");
+
+      const responseData = res.data;
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.error || "Failed to ingest item");
+      }
+
+      const data = responseData.data;
 
       if (snappedCover && data.manifestation_id) {
         const coverFormData = new FormData();
@@ -86,7 +95,11 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
         toast.success(`"${title}" added to your library!`);
       }
 
-      router.push(`/item/${data.item_id}`);
+      if (data.item_id) {
+        router.push(`/item/${data.item_id}`);
+      } else {
+        onDismiss();
+      }
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {

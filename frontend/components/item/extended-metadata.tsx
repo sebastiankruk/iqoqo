@@ -36,6 +36,8 @@ interface ExtendedMetadataProps {
 export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  if (!meta) return null;
+
   const description = (meta["description"] as string | undefined) || (meta["Description"] as string | undefined);
   const categories = ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
 

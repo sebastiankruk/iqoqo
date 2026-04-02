@@ -20,7 +20,7 @@ import io
 from flask import jsonify, request
 from PIL import Image
 
-from app.api.core import api_bp
+from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import ItemPermissions
@@ -98,7 +98,10 @@ def lookup_barcode_preview(barcode: str):
 @require_auth
 def scan_barcode():
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
     barcode = data.get("barcode")
     format_hint = data.get("format")  # Optional: 'audio' or 'book'
 
@@ -117,7 +120,6 @@ def scan_barcode():
         try:
             # Handle both 'audio' generic hint AND specific 'cd'/'vinyl' formats
             is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
-            
             if is_audio_hint:
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
             elif format_hint == "book" or format_hint == "text":

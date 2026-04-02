@@ -164,7 +164,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
       {hasPermission("upload:cover") && (
         <CameraCapture
-          manifestationId={manifestation.id}
+          manifestation_id={manifestation.id}
           onUploadComplete={() => {
             toast.success("Cover uploaded and processing started!");
             router.refresh();

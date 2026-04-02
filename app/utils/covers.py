@@ -123,23 +123,23 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
-        response = requests.get(url, stream=True, timeout=10, headers=headers)
-        if response.status_code == 200:
-            downloaded = bytearray()
-            for chunk in response.iter_content(chunk_size=8192):
-                if not chunk:
-                    continue
-                downloaded.extend(chunk)
-                if len(downloaded) > MAX_COVER_FILE_SIZE:
-                    logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
+        with requests.get(url, stream=True, timeout=10, headers=headers) as response:
+            if response.status_code == 200:
+                downloaded = bytearray()
+                for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    downloaded.extend(chunk)
+                    if len(downloaded) > MAX_COVER_FILE_SIZE:
+                        logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
+                        return None
+
+                if len(downloaded) < MIN_COVER_FILE_SIZE:
                     return None
 
-            if len(downloaded) < MIN_COVER_FILE_SIZE:
-                return None
-
-            content = bytes(downloaded)
-            if not is_valid_cover(content):
-                return None
+                content = bytes(downloaded)
+                if not is_valid_cover(content):
+                    return None
 
             filename = f"{identifier}_ext.jpg"
             filepath = os.path.join(COVERS_DIR, filename)
@@ -182,36 +182,37 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
     try:
-        response = requests.get(ol_url, stream=True, timeout=5)
-        if response.status_code == 200:
-            try:
-                header_len_raw = response.headers.get("content-length")
-                if header_len_raw is not None:
-                    header_len = int(header_len_raw)
-                    if 0 < header_len < MIN_COVER_FILE_SIZE:
-                        return None
-            except (TypeError, ValueError):
-                pass
+        with requests.get(ol_url, stream=True, timeout=5) as response:
+            if response.status_code == 200:
+                try:
+                    header_len_raw = response.headers.get("content-length")
+                    if header_len_raw is not None:
+                        header_len = int(header_len_raw)
+                        if 0 < header_len < MIN_COVER_FILE_SIZE:
+                            return None
+                except (TypeError, ValueError):
+                    pass
 
-            res = process_response(response, "ol", "api_openlibrary")
-            if res:
-                return res
+                res = process_response(response, "ol", "api_openlibrary")
+                if res:
+                    return res
     except (requests.RequestException, OSError, ValueError, TypeError):
         pass
 
     # 2. Google Books (Search -> Thumbnail)
     gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
     try:
-        gb_data = requests.get(gb_search, timeout=5).json()
-        if "items" in gb_data:
-            thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
-            if thumb:
-                thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
-                img_res = requests.get(thumb, stream=True, timeout=10)
-                if img_res.status_code == 200:
-                    processed = process_response(img_res, "gb", "api_google_books")
-                    if processed:
-                        return processed
+        with requests.get(gb_search, timeout=5) as gb_res:
+            gb_data = gb_res.json()
+            if "items" in gb_data:
+                thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+                if thumb:
+                    thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
+                    with requests.get(thumb, stream=True, timeout=10) as img_res:
+                        if img_res.status_code == 200:
+                            processed = process_response(img_res, "gb", "api_google_books")
+                            if processed:
+                                return processed
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
 

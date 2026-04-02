@@ -56,8 +56,9 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"content-length": "5000"}
-    mock_resp.iter_content = lambda chunk_size: [b"x" * 1500]
-    mock_requests_get.return_value = mock_resp
+    mock_resp.iter_content.return_value = [b"x" * 1500]
+    mock_resp.content = b"x" * 1500
+    mock_requests_get.return_value.__enter__.return_value = mock_resp
 
     def fake_optimize(image_bytes: bytes, filepath: str) -> None:
         """Write a placeholder file so the existence check passes."""
@@ -160,7 +161,7 @@ def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.iter_content.return_value = [b"a" * MIN_COVER_FILE_SIZE]
-    mock_get.return_value = mock_response
+    mock_get.return_value.__enter__.return_value = mock_response
 
     result = download_direct_url("123456789", "http://example.com/cover.jpg", "api_direct_download")
 
@@ -178,7 +179,7 @@ def test_download_direct_url_too_large(mock_get):
     mock_response.status_code = 200
     # Simulate an oversized stream
     mock_response.iter_content.return_value = [b"a" * (MAX_COVER_FILE_SIZE + 10)]
-    mock_get.return_value = mock_response
+    mock_get.return_value.__enter__.return_value = mock_response
 
     result = download_direct_url("123456789", "http://example.com/huge.jpg", "api_direct_download")
 
@@ -191,7 +192,7 @@ def test_download_direct_url_too_small(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.iter_content.return_value = [b"a" * (MIN_COVER_FILE_SIZE - 10)]
-    mock_get.return_value = mock_response
+    mock_get.return_value.__enter__.return_value = mock_response
 
     result = download_direct_url("123456789", "http://example.com/tiny.jpg", "api_direct_download")
 

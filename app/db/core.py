@@ -201,6 +201,18 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
             return self.expression.work.title or "Untitled"
         return self.meta.get("title") or self.meta.get("Title") or "Untitled"
 
+    @property
+    def author(self) -> str | None:
+        """Convenience property to get the primary author/artist name."""
+        if self.expression and self.expression.work:
+            work = self.expression.work
+            authors = work.meta.get("authors", []) if work.meta else []
+            if authors:
+                return authors[0]
+        if self.meta:
+            return self.meta.get("author") or self.meta.get("authors", [None])[0] or self.meta.get("Artist")
+        return None
+
     def update_meta(self, **kwargs) -> None:
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}

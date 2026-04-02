@@ -362,6 +362,8 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
+@require_auth
+@require_permission("upload:cover")
 def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -437,7 +439,11 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"success": False, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
 
     max_size = 10 * 1024 * 1024
-    if request.content_length and request.content_length > max_size:
+    file.seek(0, os.SEEK_END)
+    actual_size = file.tell()
+    file.seek(0)
+
+    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
         return jsonify({"success": False, "error": "File too large. Max size: 10MB"}), 413
 
     image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
