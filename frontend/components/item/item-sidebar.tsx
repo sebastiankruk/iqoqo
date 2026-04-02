@@ -23,7 +23,7 @@ import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
-import { isAudioMedia, getCoverUrl } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -56,8 +56,10 @@ interface ItemSidebarProps {
  * @returns {JSX.Element} The component
  */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
+  const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
+
   const coverUrl =
-    getCoverUrl(item.cover_url || undefined) ??
+    getCoverUrl(item.cover_url || undefined, timestamp) ??
     (item.manifestation_meta?.["cover_url"] as string | undefined) ??
     (item.meta?.["cover_url"] as string | undefined);
 

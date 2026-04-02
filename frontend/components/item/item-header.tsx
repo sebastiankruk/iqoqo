@@ -19,7 +19,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { ItemActions } from "./item-actions";
 import type { Item } from "@/types/frbr";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
 
 interface ItemHeaderProps {
@@ -41,11 +41,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const title = work?.title ?? item.title ?? "Untitled";
   const authorDisplay = work?.authors?.join(", ") ?? item.authors?.join(", ") ?? "Unknown Artist/Author";
 
+  const timestamp = getCoverTimestamp(meta);
+
   // Normalize cover URL handling for both external and local static paths
-  const rawCoverUrl = item.cover_url || (meta["cover_url"] as string | undefined) || "/file.svg";
-  const coverUrl = rawCoverUrl.startsWith("/static")
-    ? `${process.env.NEXT_PUBLIC_API_URL || ""}${rawCoverUrl}`
-    : rawCoverUrl;
+  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || 
+                  (meta["cover_url"] as string | undefined) || 
+                  "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);

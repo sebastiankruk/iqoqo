@@ -25,7 +25,7 @@ import { ItemHeader } from "@/components/item/item-header";
 import { ItemActions } from "@/components/item/item-actions";
 import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
-import { getCoverUrl } from "@/lib/utils";
+import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
 
 /** Page props for the Item page. */
@@ -45,7 +45,9 @@ function ItemDetail(props: { item: Item }) {
   const { item } = useManifestationWithPolling(initialItem);
   const router = useRouter();
 
-  const coverUrl = getCoverUrl(item.cover_url || undefined) || ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
+  const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
+
+  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined));
 
   return (

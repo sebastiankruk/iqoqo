@@ -19,7 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Disc, Loader2 } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
-import { isAudioMedia, getCoverUrl } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
@@ -89,12 +89,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
   const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
-  const updatedAt = tMeta?.["cover_status_updated_at"];
-  const timestamp = typeof updatedAt === "string"
-    ? new Date(updatedAt).getTime()
-    : "";
+  const timestamp = getCoverTimestamp(tMeta);
 
-  const coverUrl = getCoverUrl(itemCoverUrl || undefined) || (isCatalog
+  const coverUrl = getCoverUrl(itemCoverUrl || undefined, timestamp) || (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
       : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
         ((item as Item).meta?.["cover_url"] as string | undefined)));

@@ -21,7 +21,7 @@ import { BookOpen, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
-import { getCoverUrl } from "@/lib/utils";
+import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 import { CameraCapture } from "@/components/scanner/camera-capture";
@@ -67,10 +67,7 @@ export default function ManifestationPage() {
     );
   }
 
-  const updatedAt = manifestation.meta?.["cover_status_updated_at"];
-  const timestamp = typeof updatedAt === "string"
-    ? new Date(updatedAt).getTime()
-    : "";
+  const timestamp = getCoverTimestamp(manifestation.meta);
   const coverUrl = getCoverUrl(manifestation.cover_url || undefined, timestamp) || (manifestation.meta?.["cover_url"] as string | undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
