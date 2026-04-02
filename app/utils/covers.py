@@ -125,22 +125,24 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         with requests.get(url, stream=True, timeout=10, headers=headers) as response:
-            if response.status_code == 200:
-                downloaded = bytearray()
-                for chunk in response.iter_content(chunk_size=8192):
-                    if not chunk:
-                        continue
-                    downloaded.extend(chunk)
-                    if len(downloaded) > MAX_COVER_FILE_SIZE:
-                        logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
-                        return None
+            if response.status_code != 200:
+                return None
 
-                if len(downloaded) < MIN_COVER_FILE_SIZE:
+            downloaded = bytearray()
+            for chunk in response.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                downloaded.extend(chunk)
+                if len(downloaded) > MAX_COVER_FILE_SIZE:
+                    logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
                     return None
 
-                content = bytes(downloaded)
-                if not is_valid_cover(content):
-                    return None
+            if len(downloaded) < MIN_COVER_FILE_SIZE:
+                return None
+
+            content = bytes(downloaded)
+            if not is_valid_cover(content):
+                return None
 
             filename = f"{identifier}_ext.jpg"
             filepath = os.path.join(COVERS_DIR, filename)
@@ -148,6 +150,8 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
             return f"/static/covers/{filename}", source_name
     except (requests.RequestException, OSError, ValueError, TypeError) as e:
         logger.error(f"Error fetching direct URL {url}: {e}")
+    return None
+
 
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
     """Tier 2 fallback: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""

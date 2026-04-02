@@ -207,10 +207,21 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         if self.expression and self.expression.work:
             work = self.expression.work
             authors = work.meta.get("authors", []) if work.meta else []
-            if authors:
-                return authors[0]
+            if authors and isinstance(authors, list):
+                val = authors[0]
+                if isinstance(val, str):
+                    return val
         if self.meta:
-            return self.meta.get("author") or self.meta.get("authors", [None])[0] or self.meta.get("Artist")
+            auth = self.meta.get("author")
+            if isinstance(auth, str):
+                return auth
+            authors_list = self.meta.get("authors", [])
+            # In Python, we can't assume what's in the list, so check it's a string
+            if isinstance(authors_list, list) and authors_list and isinstance(authors_list[0], str):
+                return authors_list[0]
+            artist = self.meta.get("Artist")
+            if isinstance(artist, str):
+                return artist
         return None
 
     def update_meta(self, **kwargs) -> None:

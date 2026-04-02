@@ -50,14 +50,16 @@ class IngestService:
 
         # Merge raw meta with explicit standard keys for the UI
         man_meta = meta.copy()
-        man_meta.update({
-            "isbn": isbn,
-            "title": title,
-            "author": author_name,
-            "authors": [author_name] if author_name else [],
-            "cover_url": cover_url,
-            "publisher": meta.get("publisher"),
-        })
+        man_meta.update(
+            {
+                "isbn": isbn,
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher"),
+            }
+        )
 
         manifestation = Manifestation(
             expression=expression,
@@ -67,12 +69,7 @@ class IngestService:
         db.session.commit()
 
         # Trigger background processing to secure the cover natively
-        start_cover_processing(
-            manifestation_id=manifestation.id,
-            identifier=isbn,
-            title=title,
-            author=author_name or ""
-        )
+        start_cover_processing(manifestation_id=manifestation.id, identifier=isbn, title=title, author=author_name or "")
 
         return manifestation
 
@@ -105,15 +102,17 @@ class IngestService:
 
         # Merge raw meta with explicit standard keys for the UI
         man_meta = meta.copy()
-        man_meta.update({
-            "barcode": barcode,
-            "format": meta.get("format", "audio"),
-            "title": title,
-            "author": author_name,
-            "authors": [author_name] if author_name else [],
-            "cover_url": cover_url,
-            "publisher": meta.get("publisher") or meta.get("label"),
-        })
+        man_meta.update(
+            {
+                "barcode": barcode,
+                "format": meta.get("format", "audio"),
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher") or meta.get("label"),
+            }
+        )
 
         manifestation = Manifestation(
             expression=expression,
@@ -123,12 +122,5 @@ class IngestService:
         db.session.commit()
 
         # Trigger background processing so covers.py intercepts the URL and saves locally
-        start_cover_processing(
-            manifestation_id=manifestation.id,
-            identifier=barcode,
-            title=title,
-            author=author_name or ""
-        )
-
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
         return manifestation
-

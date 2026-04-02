@@ -97,6 +97,7 @@ def lookup_barcode_preview(barcode: str):
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
 def scan_barcode():
+    # pylint: disable=too-many-return-statements
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -122,7 +123,7 @@ def scan_barcode():
             is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
             if is_audio_hint:
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
-            elif format_hint == "book" or format_hint == "text":
+            elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
                 # Auto-fallback strategy: try ISBN first for 10/13 digits, otherwise audio
@@ -167,10 +168,14 @@ def scan_barcode():
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
                     "author": (
-                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0] if manifestation.meta else manifestation.author
+                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0]
+                        if manifestation.meta
+                        else manifestation.author
                     ),
                     "cover_url": (
-                        manifestation.meta.get("cover_url") or manifestation.meta.get("thumb") if manifestation.meta else manifestation.cover_url
+                        manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
+                        if manifestation.meta
+                        else manifestation.cover_url
                     ),
                     "is_new_manifestation": is_new_manifestation,
                 },
