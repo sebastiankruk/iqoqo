@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { cookies } from "next/headers";
+import { resolveApiUrl } from "@/lib/utils";
 
 /**
  * Fetch data with authentication.
@@ -33,7 +34,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+  const res = await fetch(resolveApiUrl(endpoint, true), {
     ...options,
     headers,
   });

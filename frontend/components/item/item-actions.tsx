@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, RefreshCw, CloudDownload } from "lucide-react";
 import { toast } from "sonner";
@@ -47,32 +47,36 @@ export function ItemActions({ item }: { item: Item }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();
   const deleteItem = useDeleteItem();
-  const qc = useQueryClient(); // Add this to access the React Query cache!
+  const qc = useQueryClient();
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
 
-  const isPending = item.cover_status === "pending";
+  const isPending = item.cover_status === "pending" || item.meta?.cover_status === "pending";
 
   const { data: profile } = useProfile();
 
-  // If there is no authenticated profile, don't render administrative actions
+  // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    if (isPending) {
+      interval = setInterval(() => {
+        qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
+      }, 3000);
+    }
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
+    };
+  }, [isPending, item.id, qc]);
+
   if (!profile) return null;
 
-  // Helper to check user permissions safely
-  /**
-   * Check if the current profile includes a permission.
-   * @param {string} perm - Permission to check.
-   * @returns {boolean}
-   */
   const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
-  /**
-   * Execute the confirmed delete action for the current item.
-   * @returns {void}
-   */
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
       onSuccess: () => {
@@ -83,11 +87,6 @@ export function ItemActions({ item }: { item: Item }) {
     });
   };
 
-  /**
-   * Handles the click event for regenerating the cover.
-   * If a cover already exists, it opens a confirmation dialog.
-   * Otherwise, it directly calls the regeneration function.
-   */
   const handleRegenerateClick = () => {
     const hasCover = !!(item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]);
     if (hasCover) {
@@ -97,18 +96,12 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
-  /**
-   * Initiates the cover regeneration process for the item.
-   *
-   * @returns {Promise<void>} A promise that resolves when the regeneration is scheduled.
-   */
   const handleRegenerate = async () => {
     if (!item.manifestation_id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
     try {
       await regenerateCover.mutateAsync(item.manifestation_id);
-      // Tell React Query to update the cache for this specific item
       qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
         if (!prev) return prev;
         return {
@@ -125,11 +118,6 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
-  /**
-   * Handles refetching metadata for the item.
-   *
-   * @returns {Promise<void>} A promise that resolves when the metadata is refetched.
-   */
   const handleRefetch = async () => {
     if (!item.manifestation_id) return;
     setIsRefetching(true);

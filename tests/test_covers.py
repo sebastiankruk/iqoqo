@@ -21,7 +21,15 @@ import pytest
 import requests
 from PIL import Image
 
-from app.utils.covers import fetch_external_api_cover, generate_fallback_cover
+from app.db.models import Manifestation
+from app.utils.covers import (
+    MAX_COVER_FILE_SIZE,
+    MIN_COVER_FILE_SIZE,
+    download_direct_url,
+    fetch_external_api_cover,
+    generate_fallback_cover,
+    process_cover_pipeline,
+)
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import generate_cover_cloud
 
@@ -48,8 +56,9 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"content-length": "5000"}
-    mock_resp.iter_content = lambda chunk_size: [b"x" * 1500]
-    mock_requests_get.return_value = mock_resp
+    mock_resp.iter_content.return_value = [b"x" * 1500]
+    mock_resp.content = b"x" * 1500
+    mock_requests_get.return_value.__enter__.return_value = mock_resp
 
     def fake_optimize(image_bytes: bytes, filepath: str) -> None:
         """Write a placeholder file so the existence check passes."""
@@ -66,13 +75,13 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 
                 # Also mock imagehash.phash so the hashing step doesn't try to inspect the fake image
                 with patch("app.utils.images.imagehash.phash", return_value=MagicMock()):
-                    result = fetch_external_api_cover("9780123456789")
+                    result = fetch_external_api_cover("9780553380163")
 
                     assert result is not None
                 path, source = result
-                assert path == "/static/covers/9780123456789_ol.jpg"
+                assert path == "/static/covers/9780553380163_ol.jpg"
                 assert source == "api_openlibrary"
-                assert (tmp_path / "9780123456789_ol.jpg").exists()
+                assert (tmp_path / "9780553380163_ol.jpg").exists()
                 # Verify URL
                 args, _ = mock_requests_get.call_args
                 assert "covers.openlibrary.org" in args[0]
@@ -81,7 +90,7 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 def test_fetch_external_api_cover_failure(mock_requests_get):
     """Test API failure returns None."""
     mock_requests_get.side_effect = requests.RequestException("Connection error")
-    path = fetch_external_api_cover("0000000000")
+    path = fetch_external_api_cover("9780553380163")
     assert path is None
 
 
@@ -140,3 +149,71 @@ def test_is_valid_cover_accepts_valid_png_over_1kb():
 
     # The valid, sufficiently large image should be accepted
     assert is_valid_cover(image_bytes) is True
+
+
+@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.is_valid_cover")
+@patch("app.utils.covers.optimize_and_save_image")
+def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
+    """Test successful direct URL download."""
+    mock_is_valid.return_value = True
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.iter_content.return_value = [b"a" * MIN_COVER_FILE_SIZE]
+    mock_get.return_value.__enter__.return_value = mock_response
+
+    result = download_direct_url("123456789", "http://example.com/cover.jpg", "api_direct_download")
+
+    assert result is not None
+    local_path, source = result
+    assert "123456789_ext.jpg" in local_path
+    assert source == "api_direct_download"
+    mock_optimize.assert_called_once()
+
+
+@patch("app.utils.covers.requests.get")
+def test_download_direct_url_too_large(mock_get):
+    """Test rejection of oversized payloads."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    # Simulate an oversized stream
+    mock_response.iter_content.return_value = [b"a" * (MAX_COVER_FILE_SIZE + 10)]
+    mock_get.return_value.__enter__.return_value = mock_response
+
+    result = download_direct_url("123456789", "http://example.com/huge.jpg", "api_direct_download")
+
+    assert result is None
+
+
+@patch("app.utils.covers.requests.get")
+def test_download_direct_url_too_small(mock_get):
+    """Test rejection of too-small payloads (often 1x1 tracking pixels)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.iter_content.return_value = [b"a" * (MIN_COVER_FILE_SIZE - 10)]
+    mock_get.return_value.__enter__.return_value = mock_response
+
+    result = download_direct_url("123456789", "http://example.com/tiny.jpg", "api_direct_download")
+
+    assert result is None
+
+
+@patch("app.utils.covers.download_direct_url")
+@patch("app.utils.covers.db.session.get")
+def test_process_cover_pipeline_intercepts_external_url(mock_db_get, mock_download, app):
+    """Test that the pipeline downloads an existing external URL from meta."""
+    mock_manifestation = MagicMock(spec=Manifestation)
+    mock_manifestation.meta = {"cover_url": "http://discogs.com/cover.jpg"}
+    mock_manifestation.isbn13 = None
+    mock_db_get.return_value = mock_manifestation
+
+    mock_download.return_value = ("/static/covers/123_ext.jpg", "api_direct_download")
+
+    with app.app_context():
+        process_cover_pipeline(
+            manifestation_id=1, identifier="123", title="Test", author="Author", llm_permissions={"allow_generate_cover": False}
+        )
+
+    mock_download.assert_called_once_with("123", "http://discogs.com/cover.jpg", "api_direct_download")
+    assert mock_manifestation.cover_url == "/static/covers/123_ext.jpg"

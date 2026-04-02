@@ -25,3 +25,76 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * Checks if a given media format string represents an audio-based manifestation.
+ *
+ * @param format - The format string to check (e.g., "CD", "Vinyl", "Audiobook")
+ * @returns {boolean} True if the format is audio-based
+ */
+export function isAudioMedia(format: string | undefined): boolean {
+  if (!format) return false;
+  const audioFormats = new Set(["audio", "cd", "vinyl", "lp", "ep", "45", "audiobook", "cd-ep", "sacd"]);
+  return audioFormats.has(format.toLowerCase());
+}
+/**
+ * Extracts a numeric timestamp from metadata for cache-busting.
+ *
+ * @param meta - Primary metadata object (e.g., manifestation_meta)
+ * @param fallbackMeta - Secondary metadata object (e.g., item.meta)
+ * @returns {number | ""} The timestamp as number or empty string if not found
+ */
+export function getCoverTimestamp(
+  meta?: Record<string, unknown> | null,
+  fallbackMeta?: Record<string, unknown> | null
+): number | "" {
+  const updatedAt = meta?.["cover_status_updated_at"] ?? fallbackMeta?.["cover_status_updated_at"];
+  return typeof updatedAt === "string" ? new Date(updatedAt).getTime() : "";
+}
+
+/**
+ * Resolves an API or static resource URL.
+ * In a browser context, it defaults to a relative path (e.g., "/api") to stay same-origin.
+ * On the server, it prefers an internal FLASK_API_URL absolute path.
+ *
+ * @param path - The relative path or endpoint (e.g., "/static/covers/123.jpg" or "/items")
+ * @param isServer - Set to true when running server-side (e.g., SSR or API routes)
+ * @returns {string} The fully resolved URL
+ */
+export function resolveApiUrl(path: string, isServer = false): string {
+  if (path.startsWith("http")) return path;
+
+  // Server-side fetch requires an absolute URL.
+  // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
+  const apiBase = isServer
+    ? (process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api")
+    : (process.env.NEXT_PUBLIC_API_URL || "/api");
+
+  // Ensure apiBase is absolute if isServer is true
+  let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+  if (isServer && !cleanBase.startsWith("http")) {
+    cleanBase = `http://127.0.0.1:5000${cleanBase}`;
+  }
+
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${cleanBase}${cleanPath}`;
+}
+
+/**
+ * Resolves a cover URL using the generic resolveApiUrl logic.
+ * Supports optional cache-busting timestamp.
+ *
+ * @param path - The cover path (e.g., "/static/covers/123.jpg")
+ * @param timestamp - Optional timestamp for cache busting
+ * @returns {string | undefined} Resolved URL
+ */
+export function getCoverUrl(path: string | undefined, timestamp?: number | string): string | undefined {
+  if (!path) return undefined;
+  const url = resolveApiUrl(path);
+  if (timestamp) {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}t=${timestamp}`;
+  }
+  return url;
+}

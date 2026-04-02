@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, RefreshCw, CloudDownload, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
@@ -37,11 +37,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 /**
- * Manifestation actions component.
+ * Renders a set of action buttons for a manifestation or catalog entry.
+ * Includes functionality for refetching metadata, regenerating covers, contributing covers, and deleting the manifestation.
  *
- * @param root0 - The props object
- * @param root0.manifestation - The manifestation
- * @returns {JSX.Element | null} The component or null if no profile
+ * @param {Object} props - The component props.
+ * @param {Manifestation | CatalogEntry} props.manifestation - The manifestation or catalog entry to provide actions for.
+ * @returns {JSX.Element | null} The rendered action buttons or null if the user profile is not loaded.
  */
 export function ManifestationActions({ manifestation }: { manifestation: Manifestation | CatalogEntry }) {
   const router = useRouter();
@@ -58,15 +59,25 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   const { data: profile } = useProfile();
 
+  // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    if (isPending && manifestation.id) {
+      interval = setInterval(() => {
+        qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
+      }, 3000);
+    }
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
+    };
+  }, [isPending, manifestation.id, qc]);
+
   if (!profile) return null;
 
   const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
-  /**
-   * Handles the confirmation of manifestation deletion.
-   *
-   * @returns {Promise<void>} A promise that resolves when the manifestation is deleted.
-   */
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
@@ -82,11 +93,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
-  /**
-   * Handles the click event for regenerating the cover.
-   * If a cover already exists, it opens a confirmation dialog.
-   * Otherwise, it directly calls the regeneration function.
-   */
   const handleRegenerateClick = () => {
     const hasCover = !!(manifestation.cover_url || manifestation.meta?.["cover_url"]);
     if (hasCover) {
@@ -96,11 +102,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
-  /**
-   * Initiates the cover regeneration process for the manifestation.
-   *
-   * @returns {Promise<void>} A promise that resolves when the regeneration is scheduled.
-   */
   const handleRegenerate = async () => {
     if (!manifestation.id) return;
     setIsRequesting(true);
@@ -123,11 +124,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
-  /**
-   * Handles refetching metadata for the manifestation.
-   *
-   * @returns {Promise<void>} A promise that resolves when the metadata is refetched.
-   */
   const handleRefetch = async () => {
     if (!manifestation.id) return;
     setIsRefetching(true);
@@ -168,7 +164,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
       {hasPermission("upload:cover") && (
         <CameraCapture
-          manifestationId={manifestation.id}
+          manifestation_id={manifestation.id}
           onUploadComplete={() => {
             toast.success("Cover uploaded and processing started!");
             router.refresh();

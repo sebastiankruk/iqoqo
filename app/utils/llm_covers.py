@@ -43,7 +43,7 @@ PRICING = {
 }
 
 
-def record_telemetry(provider: str, user_id: str, duration: float):
+def record_telemetry(provider: str, user_id: str, duration: float, operation_type: str = "cover_generation"):
     """Updates telemetry after a successful generation.
 
     Records per-user telemetry and accumulates total processing duration.
@@ -52,9 +52,9 @@ def record_telemetry(provider: str, user_id: str, duration: float):
 
     for attempt in range(2):
         try:
-            stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id).first()
+            stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id, operation_type=operation_type).first()
             if not stat:
-                stat = LLMTelemetry(provider=provider, user_id=user_id)
+                stat = LLMTelemetry(provider=provider, user_id=user_id, operation_type=operation_type)
                 stat.images_generated = 0
                 stat.estimated_cost_usd = 0.0
                 stat.total_duration_seconds = 0.0
@@ -84,9 +84,9 @@ def record_telemetry(provider: str, user_id: str, duration: float):
             break
 
 
-def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
+def save_image(image_data: bytes, identifier: str, suffix: str) -> str:
     """Helper to save binary image data to disk."""
-    filename = f"{isbn}_{suffix}.jpg"
+    filename = f"{identifier}_{suffix}.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
     return f"{Config.COVERS_BASE_URL}/{filename}"
@@ -102,7 +102,7 @@ def build_context(description: str, genre: str) -> str:
 
 
 def generate_cover_cloud(
-    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
 ) -> tuple[str, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -133,9 +133,9 @@ def generate_cover_cloud(
         img_response = requests.get(image_url, timeout=30)
 
         if img_response.status_code == 200:
-            path = save_image(img_response.content, isbn, "dalle")
+            path = save_image(img_response.content, identifier, "dalle")
             duration = time.time() - start_time
-            record_telemetry("openai", user_id, duration)
+            record_telemetry("openai", user_id, duration, "cover_generation")
             return path, "llm_openai"
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
         logger.error(f"Cloud LLM Gen failed: {e}")
@@ -144,7 +144,7 @@ def generate_cover_cloud(
 
 
 def generate_cover_gemini(
-    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
 ) -> tuple[str, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -171,9 +171,9 @@ def generate_cover_gemini(
             if candidate.content and candidate.content.parts:
                 inline_data = candidate.content.parts[0].inline_data
                 if inline_data and inline_data.data:
-                    path = save_image(inline_data.data, isbn, "gemini")
+                    path = save_image(inline_data.data, identifier, "gemini")
                     duration = time.time() - start_time
-                    record_telemetry("gemini", user_id, duration)
+                    record_telemetry("gemini", user_id, duration, "cover_generation")
                     return path, "llm_gemini"
 
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
@@ -183,7 +183,7 @@ def generate_cover_gemini(
 
 
 def generate_cover_local(
-    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
 ) -> tuple[str, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
@@ -209,14 +209,14 @@ def generate_cover_local(
         if response.status_code == 200:
             r = response.json()
             image_data = base64.b64decode(r["images"][0])
-            path = save_image(image_data, isbn, "localsd")
+            path = save_image(image_data, identifier, "localsd")
 
             # Overlay typography
             full_path = os.path.join(COVERS_DIR, os.path.basename(path))
             add_text_overlay(full_path, title, author)
 
             duration = time.time() - start_time
-            record_telemetry("local", user_id, duration)
+            record_telemetry("local", user_id, duration, "cover_generation")
             return path, "llm_local_stable_diffusion"
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Local SD Gen failed: {e}")
@@ -225,11 +225,11 @@ def generate_cover_local(
 
 
 def fetch_llm_cover(
-    isbn: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", allow_cloud_llm: bool = False
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", allow_cloud_llm: bool = False
 ) -> tuple[str, str] | None:
     """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
-    result = generate_cover_local(isbn, title, author, user_id, description, genre)
+    result = generate_cover_local(identifier, title, author, user_id, description, genre)
     if result:
         return result
 
@@ -239,11 +239,11 @@ def fetch_llm_cover(
         return None
 
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(isbn, title, author, user_id, description, genre)
+        result = generate_cover_gemini(identifier, title, author, user_id, description, genre)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(isbn, title, author, user_id, description, genre)
+        return generate_cover_cloud(identifier, title, author, user_id, description, genre)
 
     return None

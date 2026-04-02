@@ -16,12 +16,14 @@
 "use client";
 
 import { ChangeEvent } from "react";
-import { Pencil, QrCode, BookOpen, ImagePlus } from "lucide-react";
+import { Pencil, QrCode, BookOpen, Disc, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -29,8 +31,14 @@ const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = 
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
   wish_list: { label: "On Wish List", class: "bg-primary/10 text-primary ring-primary/20" },
+  ordered: { label: "Ordered", class: "bg-amber-50 text-amber-700 ring-amber-200" },
+  damaged: { label: "Damaged", class: "bg-orange-100 text-orange-800 ring-orange-300" },
   read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
   unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
+  want_to_read: { label: "Want to Read", class: "bg-primary/10 text-primary ring-primary/20" },
+  listening: { label: "Listening...", class: "bg-teal-50 text-teal-700 ring-teal-200" },
+  listened: { label: "Listened", class: "bg-cyan-50 text-cyan-700 ring-cyan-200" },
+  want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
 };
 
 /** Props for ItemSidebar component */
@@ -48,15 +56,25 @@ interface ItemSidebarProps {
  * @returns {JSX.Element} The component
  */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+  const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
+
   const coverUrl =
-    (item.cover_url ? `${apiBase}${item.cover_url}` : undefined) ??
+    getCoverUrl(item.cover_url || undefined, timestamp) ??
     (item.manifestation_meta?.["cover_url"] as string | undefined) ??
     (item.meta?.["cover_url"] as string | undefined);
 
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
-  const hasUploadPermission = profile?.permissions?.includes("upload:cover");
+  const permissions = profile?.permissions ?? [];
+  const hasUploadPermission = permissions.includes("upload:cover");
+  const hasEditPermission = permissions.includes("edit:manifestation");
+
+  // Media type detection
+  const format = (item.manifestation_meta?.["format"] as string | undefined) ??
+                 (item.meta?.["format"] as string | undefined) ?? "book";
+  const isAudio = isAudioMedia(format);
+  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
+  const MediaIcon = isAudio ? Disc : BookOpen;
 
   const statusInfo = STATUS_LABELS[item.status] ?? {
     label: item.status,
@@ -84,8 +102,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   /**
    * Handles generating and opening the QR code for the item.
    */
-
   const handleQrCode = async () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
     const url = `${apiBase}/qrcode/${item.id}`;
     try {
       const response = await fetch(url, { method: "HEAD" });
@@ -103,15 +121,15 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   return (
     <div className="flex flex-col items-center gap-5">
-      {/* Book cover */}
+      {/* Book/Audio cover */}
       <div className="-mt-28 w-full max-w-[220px]">
-        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary">
+        <div className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}>
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={item.title ?? "Cover"} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <BookOpen className="h-12 w-12 text-muted-foreground/30" />
+              <MediaIcon className="h-12 w-12 text-muted-foreground/30" />
             </div>
           )}
         </div>
@@ -137,11 +155,34 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           disabled={updateItem.isPending}
           className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
         >
-          {Object.entries(STATUS_LABELS).map(([key, info]) => (
-            <option key={key} value={key} className="text-foreground bg-card">
-              {info.label}
-            </option>
-          ))}
+          <optgroup label="Availability & Condition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["available", "lent", "damaged", "lost"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Reading Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["unread", "reading", "read", "want_to_read"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Listening Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["want_to_listen", "listening", "listened"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Acquisition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+            {["wish_list", "ordered"].map(key => (
+              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+              </option>
+            ))}
+          </optgroup>
         </select>
 
         {onEdit && (
@@ -163,7 +204,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
         {hasUploadPermission && (
           <CameraCapture
-            manifestationId={item.manifestation_id}
+            manifestation_id={item.manifestation_id}
+            format={format as import("@/components/scanner/camera-capture").MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
             icon={<ImagePlus className="h-4 w-4 mr-2" />}
@@ -175,6 +217,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             }
             className="w-full [&>button]:w-full [&>button]:h-10 [&>button]:rounded-lg [&>button]:bg-accent/10 [&>button]:text-accent [&>button]:hover:bg-accent/20 [&>button]:border-none [&>button]:font-semibold [&>button]:text-xs"
           />
+        )}
+
+        {hasEditPermission && (
+          <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
         )}
       </div>
 

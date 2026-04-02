@@ -202,14 +202,30 @@ export function useIsbnLookup(isbn: string, enabled = false) {
 /**
  * Custom hook to add a new item.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; manifestation_id: number }, Error, { isbn: string; metadata?: IsbnMeta }>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; manifestation_id: number }, Error, { isbn?: string; manifestation_id?: number; metadata?: IsbnMeta }>} Mutation result
  */
 export function useAddItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ isbn, metadata }: { isbn: string; metadata?: IsbnMeta }) => {
-      const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, metadata ?? {});
-      return res.data;
+    mutationFn: async ({
+      isbn,
+      manifestation_id,
+      metadata,
+    }: {
+      isbn?: string;
+      manifestation_id?: number;
+      metadata?: IsbnMeta;
+    }) => {
+      if (manifestation_id) {
+        const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
+          `/manifestations/${manifestation_id}/add`
+        );
+        return res.data.data!;
+      } else if (isbn) {
+        const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(`/item/${isbn}`, metadata ?? {});
+        return res.data;
+      }
+      throw new Error("Either isbn or manifestation_id must be provided");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats });

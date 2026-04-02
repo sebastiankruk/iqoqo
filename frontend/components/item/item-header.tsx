@@ -15,76 +15,144 @@
 //
 "use client";
 
-import { Calendar, BookOpen, Tag } from "lucide-react";
+import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
+import { ItemActions } from "./item-actions";
 import type { Item } from "@/types/frbr";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
+
+interface ItemHeaderProps {
+  item: Item;
+}
 
 /**
- * Title, authors, year, page count, and tag badges for an item.
+ * Responsive item header component.
  *
- * @param root0 - The props object
- * @param root0.item - The item
+ * @param props - Component props
+ * @param props.item - The item to display
  * @returns {JSX.Element} The component
  */
-export function ItemHeader({ item }: { item: Item }) {
+export function ItemHeader({ item }: ItemHeaderProps) {
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
-  const year = meta["Year"] as string | undefined;
-  const pages = meta["Pages"] as string | undefined;
-  const authors = work?.authors ?? item.authors ?? [];
+
+  const title = work?.title ?? item.title ?? "Untitled";
+  const authorDisplay = work?.authors?.join(", ") ?? item.authors?.join(", ") ?? "Unknown Artist/Author";
+
+  const timestamp = getCoverTimestamp(meta);
+
+  // Normalize cover URL handling for both external and local static paths
+  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || 
+                  (meta["cover_url"] as string | undefined) || 
+                  "/file.svg";
+
+  const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
+  const isAudio = isAudioMedia(format);
+  const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
+  const publisher = (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
+  const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-balance font-serif text-2xl font-bold leading-tight text-foreground sm:text-3xl">
-            {work?.title ?? item.title ?? "Untitled"}
-          </h1>
-          {!!meta["Subtitle"] && (
-            <h2 className="font-serif text-base font-light text-muted-foreground sm:text-lg">
-              {meta["Subtitle"] as string}
-            </h2>
+    <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
+      {/* Cover Image stacks at top on mobile, ensuring no collision with actions below */}
+      <div className={`w-full md:w-1/3 lg:w-1/4 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
+        <Image
+          src={coverUrl}
+          alt={`Cover of ${title}`}
+          fill
+          className="object-cover"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
+          priority
+          unoptimized={coverUrl.startsWith("http")}
+        />
+      </div>
+
+      <div className="flex flex-col flex-1 w-full">
+        {/* Status Pills immediately below image on mobile */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <Badge variant="default" className="capitalize px-3 py-1 text-xs font-semibold tracking-wide">
+            {item.status?.replace("_", " ") ?? "Unknown"}
+          </Badge>
+          {isAudio && (
+            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+              <Disc className="h-3 w-3" />
+              CD / Audio
+            </Badge>
+          )}
+          {!isAudio && (
+            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+              <BookOpen className="h-3 w-3" />
+              Book
+            </Badge>
           )}
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-        {authors.length > 0 && <span className="font-medium text-foreground">{authors.join(", ")}</span>}
-        {year && (
-          <>
-            <span className="text-border">&bull;</span>
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              {year}
-            </span>
-          </>
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {tags.map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                <Tag className="h-2.5 w-2.5" />
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
-        {pages && (
-          <>
-            <span className="text-border">&bull;</span>
-            <span className="flex items-center gap-1">
-              <BookOpen className="h-3.5 w-3.5" />
-              {pages} pages
-            </span>
-          </>
-        )}
-      </div>
 
-      {tags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {tags.map(tag => (
-            <span
-              key={tag}
-              className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground"
-            >
-              <Tag className="h-3 w-3" />
-              {tag}
-            </span>
-          ))}
+        {/* Core details */}
+        <div className="space-y-2 mb-6">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight">
+            {title}
+          </h1>
+          <h2 className="text-xl md:text-2xl text-muted-foreground font-medium">
+            {authorDisplay}
+          </h2>
         </div>
-      )}
 
-      <div className="h-px bg-border" />
+        {/* Quick Meta block */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-muted/30 p-5 rounded-2xl mb-8 border border-border/50">
+          {identifier && (
+            <div className="space-y-1">
+              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">Identifier</span>
+              <span className="font-mono text-xs">{identifier}</span>
+            </div>
+          )}
+          {publisher && (
+            <div className="space-y-1">
+              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                {isAudio ? "Label" : "Publisher"}
+              </span>
+              <span className="font-semibold">{publisher}</span>
+            </div>
+          )}
+          {year && (
+            <div className="space-y-1">
+              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                <Calendar className="h-2.5 w-2.5" />
+                Released
+              </span>
+              <span className="font-semibold">{year}</span>
+            </div>
+          )}
+          {Boolean(meta["pages"] || meta["Pages"] || meta["tracks"] || meta["Tracks"]) && (
+            <div className="space-y-1">
+              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                {isAudio ? "Tracks" : "Pages"}
+              </span>
+              <span className="font-semibold">
+                {String(meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"])}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons push to the bottom */}
+        <div className="mt-auto pt-6 border-t border-border/50">
+          <ItemActions item={item} />
+        </div>
+      </div>
     </div>
   );
 }

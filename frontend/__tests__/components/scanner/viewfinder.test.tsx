@@ -50,9 +50,7 @@ describe("Viewfinder", () => {
 
   it("renders the scanning-line div inside the viewfinder box when isScanning is true (default)", () => {
     const { container } = render(<Viewfinder />);
-    // The scan line bar has the distinctive bg-accent Tailwind class.
-    // We cannot query by the Tailwind arbitrary-value class (brackets in selectors
-    // are invalid), so we target the bg-accent helper class on the inner bar.
+    // The scan line bar has the distinctive bg-accent
     const scanBar = container.querySelector(".bg-accent");
     expect(scanBar).not.toBeNull();
   });
@@ -68,5 +66,17 @@ describe("Viewfinder", () => {
     const { container } = render(<Viewfinder isScanning={true} />);
     const scanBar = container.querySelector(".bg-accent");
     expect(scanBar).not.toBeNull();
+  });
+
+  it("adjusts height for book format (vertical)", () => {
+    const { getByTestId } = render(<Viewfinder format="book" />);
+    const box = getByTestId("viewfinder-box");
+    expect(box.getAttribute("style")).toContain("height: 360px");
+  });
+
+  it("adjusts height for audio format (square)", () => {
+    const { getByTestId } = render(<Viewfinder format="cd" />);
+    const box = getByTestId("viewfinder-box");
+    expect(box.getAttribute("style")).toContain("height: 240px");
   });
 });
