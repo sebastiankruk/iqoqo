@@ -37,7 +37,7 @@ pip install -r requirements.txt
 npm install
 
 # Initialize database (first time only)
-docker-compose up -d db
+docker compose up -d db
 .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
 ```
 
@@ -344,7 +344,7 @@ Include:
 - Expected behavior
 - Actual behavior
 - Environment (OS, Python version, Docker version)
-- Relevant logs (from `flask run` or `docker-compose logs`)
+- Relevant logs (from `flask run` or `docker compose logs`)
 
 ### Feature Requests
 

@@ -26,8 +26,8 @@ export APP_VERSION="${VERSION:-0}.dev"
 
 # 1. Start Database
 echo "Checking database status..."
-if command -v docker-compose &> /dev/null; then
-    if ! docker-compose up -d db; then
+if docker compose version &> /dev/null; then
+    if ! docker compose up -d db; then
         echo "Docker command failed. Checking for Colima..."
         if command -v colima &> /dev/null; then
             if colima status &> /dev/null; then
@@ -58,14 +58,14 @@ if command -v docker-compose &> /dev/null; then
                     fi
                 fi
             fi
-            docker-compose up -d db || exit 1
+            docker compose up -d db || exit 1
         else
             echo "Error: Docker is not running. Please start Docker."
             exit 1
         fi
     fi
 else
-    echo "Warning: docker-compose not found. Please ensure your PostgreSQL database is running."
+    echo "Warning: docker compose not found. Please ensure your PostgreSQL database is running."
 fi
 
 # 1b. Load environment variables

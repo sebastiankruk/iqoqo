@@ -89,7 +89,7 @@ def save_image(image_data: bytes, isbn: str, suffix: str) -> str:
     filename = f"{isbn}_{suffix}.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
-    return f"/static/covers/{filename}"
+    return f"{Config.COVERS_BASE_URL}/{filename}"
 
 
 def build_context(description: str, genre: str) -> str:
