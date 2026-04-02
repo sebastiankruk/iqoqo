@@ -30,7 +30,7 @@ class IngestService:
         if not meta:
             raise ValueError("ISBN metadata not found in external services.")
 
-        # Normalize common fields securely
+        # Normalize common fields
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
         author_name = meta.get("author") or meta.get("authors", [None])[0] or meta.get("Artist")
         cover_url = meta.get("cover_url") or meta.get("cover") or meta.get("thumbnail")
@@ -48,18 +48,16 @@ class IngestService:
         expression = Expression(work=work, language=meta.get("language", "en"), content_type="text")
         db.session.add(expression)
 
-        # Build normalized meta for frontend
+        # Merge raw meta with explicit standard keys for the UI
         man_meta = meta.copy()
-        man_meta.update(
-            {
-                "isbn": isbn,
-                "title": title,
-                "author": author_name,
-                "authors": [author_name] if author_name else [],
-                "cover_url": cover_url,
-                "publisher": meta.get("publisher"),
-            }
-        )
+        man_meta.update({
+            "isbn": isbn,
+            "title": title,
+            "author": author_name,
+            "authors": [author_name] if author_name else [],
+            "cover_url": cover_url,
+            "publisher": meta.get("publisher"),
+        })
 
         manifestation = Manifestation(
             expression=expression,
@@ -69,7 +67,12 @@ class IngestService:
         db.session.commit()
 
         # Trigger background processing to secure the cover natively
-        start_cover_processing(manifestation_id=manifestation.id, identifier=isbn, title=title, author=author_name or "")
+        start_cover_processing(
+            manifestation_id=manifestation.id,
+            identifier=isbn,
+            title=title,
+            author=author_name or ""
+        )
 
         return manifestation
 
@@ -100,19 +103,17 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_expression_contribution(expression.id, contributor.id, "performer")
 
-        # Build normalized meta for frontend
+        # Merge raw meta with explicit standard keys for the UI
         man_meta = meta.copy()
-        man_meta.update(
-            {
-                "barcode": barcode,
-                "format": meta.get("format", "audio"),
-                "title": title,
-                "author": author_name,
-                "authors": [author_name] if author_name else [],
-                "cover_url": cover_url,  # The background task will catch this and download it
-                "publisher": meta.get("publisher") or meta.get("label"),
-            }
-        )
+        man_meta.update({
+            "barcode": barcode,
+            "format": meta.get("format", "audio"),
+            "title": title,
+            "author": author_name,
+            "authors": [author_name] if author_name else [],
+            "cover_url": cover_url,
+            "publisher": meta.get("publisher") or meta.get("label"),
+        })
 
         manifestation = Manifestation(
             expression=expression,
@@ -122,6 +123,12 @@ class IngestService:
         db.session.commit()
 
         # Trigger background processing so covers.py intercepts the URL and saves locally
-        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        start_cover_processing(
+            manifestation_id=manifestation.id,
+            identifier=barcode,
+            title=title,
+            author=author_name or ""
+        )
 
         return manifestation
+

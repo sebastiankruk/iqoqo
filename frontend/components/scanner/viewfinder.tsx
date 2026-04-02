@@ -18,9 +18,22 @@
  *
  * @param {object} props The component props
  * @param {boolean} [props.isScanning=true] Whether the line should animate
+ * @param {"book" | "cd" | "vinyl"} [props.format="book"] Media format for aspect ratio
  * @returns {JSX.Element} The component
  */
-export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
+export function Viewfinder({
+  isScanning = true,
+  format = "book",
+}: {
+  isScanning?: boolean;
+  format?: "book" | "cd" | "vinyl";
+}) {
+  const isAudio = format === "cd" || format === "vinyl";
+
+  // Dimensions: Books are vertical 2:3, CDs/Vinyls are square 1:1
+  const width = 240;
+  const height = isAudio ? 240 : 360;
+
   const bracketSize = 28;
   const strokeWidth = 3;
 
@@ -28,16 +41,25 @@ export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
     <div className="absolute inset-0 flex items-center justify-center">
       {/* Darkened overlay with transparent cutout */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-x-0 top-0 bottom-1/2 mb-[120px] bg-black/50" />
-        <div className="absolute inset-x-0 top-1/2 bottom-0 mt-[120px] bg-black/50" />
-        <div className="absolute top-1/2 bottom-1/2 left-0 -mt-[120px] -mb-[120px] w-[calc(50%-120px)] bg-black/50" />
-        <div className="absolute top-1/2 bottom-1/2 right-0 -mt-[120px] -mb-[120px] w-[calc(50%-120px)] bg-black/50" />
+        <div className={`absolute inset-x-0 top-0 bottom-1/2 mb-[${height / 2}px] bg-black/60`} />
+        <div className={`absolute inset-x-0 top-1/2 bottom-0 mt-[${height / 2}px] bg-black/60`} />
+        <div
+          className={`absolute top-1/2 bottom-1/2 left-0 -mt-[${height / 2}px] -mb-[${height / 2}px] w-[calc(50%-${width / 2}px)] bg-black/60`}
+        />
+        <div
+          className={`absolute top-1/2 bottom-1/2 right-0 -mt-[${height / 2}px] -mb-[${height / 2}px] w-[calc(50%-${width / 2}px)] bg-black/60`}
+        />
       </div>
 
       {/* Viewfinder box */}
-      <div className="relative h-[240px] w-[240px]">
+      <div style={{ width, height }} className="relative" data-testid="viewfinder-box">
         {/* Corner brackets */}
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 240 240" fill="none" aria-hidden="true">
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox={`0 0 ${width} ${height}`}
+          fill="none"
+          aria-hidden="true"
+        >
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}
             stroke="white"
@@ -46,21 +68,21 @@ export function Viewfinder({ isScanning = true }: { isScanning?: boolean }) {
             strokeLinejoin="round"
           />
           <path
-            d={`M ${240 - bracketSize} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${strokeWidth / 2} L ${240 - strokeWidth / 2} ${bracketSize}`}
+            d={`M ${width - bracketSize} ${strokeWidth / 2} L ${width - strokeWidth / 2} ${strokeWidth / 2} L ${width - strokeWidth / 2} ${bracketSize}`}
             stroke="white"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
-            d={`M ${strokeWidth / 2} ${240 - bracketSize} L ${strokeWidth / 2} ${240 - strokeWidth / 2} L ${bracketSize} ${240 - strokeWidth / 2}`}
+            d={`M ${strokeWidth / 2} ${height - bracketSize} L ${strokeWidth / 2} ${height - strokeWidth / 2} L ${bracketSize} ${height - strokeWidth / 2}`}
             stroke="white"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
-            d={`M ${240 - bracketSize} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - strokeWidth / 2} L ${240 - strokeWidth / 2} ${240 - bracketSize}`}
+            d={`M ${width - bracketSize} ${height - strokeWidth / 2} L ${width - strokeWidth / 2} ${height - strokeWidth / 2} L ${width - strokeWidth / 2} ${height - bracketSize}`}
             stroke="white"
             strokeWidth={strokeWidth}
             strokeLinecap="round"

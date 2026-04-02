@@ -159,12 +159,17 @@ export interface DashboardStats {
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
+  title?: string;
+  author?: string;
+  authors?: string[];
   Publisher?: string;
   Year?: string;
   Language?: string;
   "ISBN-13"?: string;
   Format?: string;
   format?: string;
+  barcode?: string;
+  isbn?: string;
   cover_url?: string;
 }
 

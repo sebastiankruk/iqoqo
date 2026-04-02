@@ -49,20 +49,21 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
-  const title = meta.Title || meta.format || "Unknown Title";
-  const authors = meta.Authors || [];
-  const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
-  const coverUrl = meta.cover_url || "/file.svg"; // Fallback for preview
+  // Normalize metadata for display
+  const title = meta.title || meta.Title || meta.format || "Unknown Title";
+  const authorDisplay = meta.author || (meta.authors && meta.authors.length > 0 ? meta.authors.join(", ") : "Unknown Artist/Author");
+  const coverUrl = meta.cover_url || "/file.svg";
 
-  const format = meta.Format || meta.format || "book";
-  const isAudio = isAudioMedia(format);
-  const identifier = isbn || "No ID Available";
+  const format = meta.format || meta.Format || "book";
+  const isAudio = isAudioMedia(format) || !!meta.barcode;
+  const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
+  const isMissingID = identifier === "No ID Available";
 
   const handleAdd = async () => {
     setAdding(true);
     try {
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(`/scan`, {
-        barcode: isbn,
+        barcode: identifier,
         format: format
       });
       const data = res.data.data;
@@ -113,11 +114,12 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
             <div className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
               {coverUrl && coverUrl !== "/file.svg" ? (
                 <Image
-                  src={coverUrl}
+                  src={coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl}
                   alt={title}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 33vw"
+                  unoptimized={coverUrl.startsWith("http")}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center">
@@ -137,6 +139,12 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
                 <p className="text-lg text-muted-foreground">{authorDisplay}</p>
               </div>
+
+              {isMissingID && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
+                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection, but manual cleanup may be required.
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
                 <div className="text-muted-foreground font-semibold flex items-center gap-2">

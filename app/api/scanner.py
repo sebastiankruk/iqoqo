@@ -84,12 +84,12 @@ def lookup_barcode_preview(barcode: str):
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
     # Ensure frontend gets normalized keys for preview
-    if "title" not in meta and "Title" in meta:
-        meta["title"] = meta["Title"]
-    if "cover_url" not in meta and "thumb" in meta:
-        meta["cover_url"] = meta["thumb"]
-    if "author" not in meta and "artist" in meta:
-        meta["author"] = meta["artist"]
+    if "title" not in meta:
+        meta["title"] = meta.get("Title") or "Unknown Title"
+    if "cover_url" not in meta:
+        meta["cover_url"] = meta.get("thumb") or meta.get("cover")
+    if "author" not in meta:
+        meta["author"] = meta.get("artist") or meta.get("Artist") or meta.get("authors", [None])[0]
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -103,7 +103,7 @@ def scan_barcode():
     format_hint = data.get("format")  # Optional: 'audio' or 'book'
 
     if not barcode:
-        return jsonify({"error": "Barcode is required"}), 400
+        return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
 
     is_new_manifestation = False
 
@@ -128,14 +128,14 @@ def scan_barcode():
 
             is_new_manifestation = True
         except ValueError as e:
-            return jsonify({"error": f"Invalid barcode or not found: {str(e)}"}), 400
+            return jsonify({"success": False, "data": None, "error": f"Invalid barcode or not found: {str(e)}"}), 400
         except ConnectionError as e:
-            return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
+            return jsonify({"success": False, "data": None, "error": f"Network error while fetching metadata: {str(e)}"}), 503
         except Exception as e:  # pylint: disable=broad-except
-            return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
+            return jsonify({"success": False, "data": None, "error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:
-        return jsonify({"error": "Could not resolve barcode"}), 404
+        return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
     new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")
     db.session.add(new_item)
@@ -151,6 +151,12 @@ def scan_barcode():
                     "manifestation_id": manifestation.id,
                     "title": (
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
+                    ),
+                    "author": (
+                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0] if manifestation.meta else manifestation.author
+                    ),
+                    "cover_url": (
+                        manifestation.meta.get("cover_url") or manifestation.meta.get("thumb") if manifestation.meta else manifestation.cover_url
                     ),
                     "is_new_manifestation": is_new_manifestation,
                 },

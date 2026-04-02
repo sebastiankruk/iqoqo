@@ -40,9 +40,14 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
   const title = work?.title ?? item.title ?? "Untitled";
   const authorDisplay = work?.authors?.join(", ") ?? item.authors?.join(", ") ?? "Unknown Artist/Author";
-  const coverUrl = item.cover_url || (meta["cover_url"] as string | undefined) || "/file.svg";
 
-  const format = (meta["format"] as string | undefined) ?? "book";
+  // Normalize cover URL handling for both external and local static paths
+  const rawCoverUrl = item.cover_url || (meta["cover_url"] as string | undefined) || "/file.svg";
+  const coverUrl = rawCoverUrl.startsWith("/static")
+    ? `${process.env.NEXT_PUBLIC_API_URL || ""}${rawCoverUrl}`
+    : rawCoverUrl;
+
+  const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);
   const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
   const publisher = (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
@@ -50,7 +55,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
-      {/* Cover Image stacks at top on mobile */}
+      {/* Cover Image stacks at top on mobile, ensuring no collision with actions below */}
       <div className={`w-full md:w-1/3 lg:w-1/4 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
         <Image
           src={coverUrl}
@@ -59,6 +64,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           className="object-cover"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
           priority
+          unoptimized={coverUrl.startsWith("http")}
         />
       </div>
 
@@ -69,13 +75,13 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {item.status.replace("_", " ")}
           </Badge>
           {isAudio && (
-            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
+            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
               <Disc className="h-3 w-3" />
-              Audio
+              CD / Audio
             </Badge>
           )}
           {!isAudio && (
-            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
+            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
               <BookOpen className="h-3 w-3" />
               Book
             </Badge>

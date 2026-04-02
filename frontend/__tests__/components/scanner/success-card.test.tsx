@@ -46,12 +46,15 @@ const mockApiPost = vi.mocked(apiClient.post);
 const mockToastSuccess = vi.mocked(toast.success);
 const mockToastError = vi.mocked(toast.error);
 
-const SAMPLE_META = {
+const SAMPLE_META: IsbnMeta = {
   Title: "Dune",
   Authors: ["Frank Herbert"],
+  title: "Dune",
+  author: "Frank Herbert",
   Publisher: "Chilton Books",
   Year: "1965",
   "ISBN-13": "9780441013593",
+  isbn: "9780441013593",
   format: "book"
 };
 
@@ -102,10 +105,12 @@ describe("SuccessCard", () => {
     mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 99, manifestation_id: 100 } } });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
     
+    // Explicitly clear mock to avoid interference from earlier renders in this file
+    mockApiPost.mockClear();
+    
     fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
     
     await waitFor(() => {
-      // Assert that we correctly call the unified endpoint with barcode and format
       expect(mockApiPost).toHaveBeenCalledWith("/scan", { 
         barcode: "9780441013593", 
         format: "book" 
@@ -132,18 +137,33 @@ describe("SuccessCard", () => {
   });
 
   it("renders correctly with audio barcode fallback", () => {
-    const meta = {
+    const meta: IsbnMeta = {
       Title: "Dark Side of the Moon",
       Authors: ["Pink Floyd"],
+      title: "Dark Side of the Moon",
+      author: "Pink Floyd",
       format: "audio",
+      barcode: "077774600125"
     };
 
-    render(<SuccessCard isbn="077774600125" meta={meta as IsbnMeta} onDismiss={vi.fn()} />);
+    render(<SuccessCard isbn="077774600125" meta={meta} onDismiss={vi.fn()} />);
 
     expect(screen.getByText("Dark Side of the Moon")).toBeInTheDocument();
     expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
     expect(screen.getByText("077774600125")).toBeInTheDocument();
     expect(screen.getByText("Audio Media")).toBeInTheDocument();
+  });
+
+  it("shows a warning when no standard identifier is found", () => {
+    const meta: IsbnMeta = {
+      Title: "Generic Item",
+      Authors: ["Unknown"],
+      format: "book"
+    };
+
+    render(<SuccessCard isbn="" meta={meta} onDismiss={vi.fn()} />);
+
+    expect(screen.getByText(/no standard ISBN\/Barcode found/i)).toBeInTheDocument();
   });
 
   it("applies correct aspect ratio classes based on format", () => {

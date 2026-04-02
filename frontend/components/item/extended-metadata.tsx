@@ -83,9 +83,12 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
 
   const extraKeys = Object.keys(meta).filter(
     k => !hiddenKeys.has(k) &&
+    !k.toLowerCase().includes("cover") &&
+    !k.toLowerCase().includes("image") &&
     meta[k] !== null &&
     meta[k] !== undefined &&
     meta[k] !== "" &&
+    String(meta[k]).toLowerCase() !== "unknown" &&
     typeof meta[k] !== "object"
   );
 
