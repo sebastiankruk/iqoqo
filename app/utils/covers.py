@@ -28,6 +28,7 @@ from app.config import Config
 from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
+from app.utils.isbn import canonicalize_isbn
 from app.utils.llm_covers import fetch_llm_cover
 
 logger = logging.getLogger(__name__)
@@ -145,15 +146,16 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
             filepath = os.path.join(COVERS_DIR, filename)
             optimize_and_save_image(content, filepath)
             return f"/static/covers/{filename}", source_name
-    except Exception as e:  # pylint: disable=broad-except
+    except (requests.RequestException, OSError, ValueError, TypeError) as e:
         logger.error(f"Error fetching direct URL {url}: {e}")
-
-    return None
-
 
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
     """Tier 2 fallback: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
-    isbn_for_lookup = isbn or identifier
+    # Only perform lookup if we have a valid ISBN (EAN/UPC barcodes fail on these APIs)
+    isbn_for_lookup = canonicalize_isbn(isbn or identifier)
+    if not isbn_for_lookup:
+        logger.debug("Skipping External API lookup (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
+        return None
 
     def process_response(response, source_prefix: str, source_name: str) -> tuple[str, str] | None:
         """Helper to safely stream, size-cap, and validate external cover images."""

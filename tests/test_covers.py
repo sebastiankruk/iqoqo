@@ -75,13 +75,13 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 
                 # Also mock imagehash.phash so the hashing step doesn't try to inspect the fake image
                 with patch("app.utils.images.imagehash.phash", return_value=MagicMock()):
-                    result = fetch_external_api_cover("9780123456789")
+                    result = fetch_external_api_cover("9780553380163")
 
                     assert result is not None
                 path, source = result
-                assert path == "/static/covers/9780123456789_ol.jpg"
+                assert path == "/static/covers/9780553380163_ol.jpg"
                 assert source == "api_openlibrary"
-                assert (tmp_path / "9780123456789_ol.jpg").exists()
+                assert (tmp_path / "9780553380163_ol.jpg").exists()
                 # Verify URL
                 args, _ = mock_requests_get.call_args
                 assert "covers.openlibrary.org" in args[0]
@@ -90,7 +90,7 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 def test_fetch_external_api_cover_failure(mock_requests_get):
     """Test API failure returns None."""
     mock_requests_get.side_effect = requests.RequestException("Connection error")
-    path = fetch_external_api_cover("0000000000")
+    path = fetch_external_api_cover("9780553380163")
     assert path is None
 
 
