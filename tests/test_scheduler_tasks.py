@@ -28,9 +28,13 @@ def test_scheduler_initialized(app):
     # Ensure scheduler is initialized for this test despite being in TESTING mode
     from app.core.scheduler import init_scheduler
     app.config["SCHEDULER_AUTOSTART"] = True
-    init_scheduler(app)
+    try:
+        init_scheduler(app)
 
-    assert scheduler.running is True
-    job = scheduler.get_job("daily_backup")
-    assert job is not None
-    assert job.trigger is not None
+        assert scheduler.running is True
+        job = scheduler.get_job("daily_backup")
+        assert job is not None
+        assert job.trigger is not None
+    finally:
+        if scheduler.running:
+            scheduler.shutdown(wait=False)

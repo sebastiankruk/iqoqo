@@ -24,8 +24,8 @@ def run_scheduled_backup():
         from scripts.backup import create_export
         create_export(current_app)
         logger.info("Scheduled backup job completed successfully.")
-    except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
-        logger.error(f"Scheduled backup job failed: {e}")
+    except Exception:  # pylint: disable=broad-exception-caught # noqa: BLE001
+        logger.exception("Scheduled backup job failed.")
 
 
 def init_scheduler(app):

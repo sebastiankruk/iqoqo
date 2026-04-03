@@ -36,8 +36,8 @@ def create_export(app=None):
         app = create_app()
     with app.app_context():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Allow configuration via env var
-        export_base_dir = os.environ.get("BACKUP_DIR", os.path.join(Config.BASE_DIR, "exports"))
+        # Prioritize app config over env var for backup destination
+        export_base_dir = app.config.get("BACKUP_DIR") or os.environ.get("BACKUP_DIR", os.path.join(Config.BASE_DIR, "exports"))
         backup_dir_name = f"iqoqo_backup_{timestamp}"
         export_dir = os.path.join(export_base_dir, backup_dir_name)
 
