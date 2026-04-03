@@ -32,6 +32,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -200,7 +201,7 @@ export function CameraCapture({
 
   return (
     <div
-      className={`w-full ${className} ${
+      className={`w-full ${className ?? ""} ${
         isDesktopMode 
           ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " + (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
           : (isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : "")
@@ -215,7 +216,7 @@ export function CameraCapture({
       <input
         type="file"
         accept="image/*"
-        {...(capture !== false && hasCamera ? { capture } : {})}
+        {...(capture !== false && hasCamera !== false ? { capture } : {})}
         ref={fileInputRef}
         onChange={handleCapture}
         className="hidden"
@@ -232,24 +233,25 @@ export function CameraCapture({
               or click to browse files
             </p>
           </div>
-          <button
+          <Button
             onClick={handleClick}
             disabled={uploading}
-            className="mt-2 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="mt-2"
           >
             {uploading ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
             ) : (
               "Browse Files"
             )}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col gap-4 w-full">
-          <button
+          <Button
             onClick={handleClick}
             disabled={uploading}
-            className="inline-flex w-full items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+            variant="outline"
+            className="w-full"
           >
             {uploading ? (
               <>
@@ -262,7 +264,7 @@ export function CameraCapture({
                 {label}
               </>
             )}
-          </button>
+          </Button>
         </div>
       )}
 

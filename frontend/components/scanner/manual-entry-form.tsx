@@ -23,6 +23,7 @@
 import React, { useState } from "react";
 import { Save, X } from "lucide-react";
 import type { MediaFormat } from "@/components/scanner/camera-capture";
+import { Button } from "@/components/ui/button";
 
 /** Data structure for manual entry */
 export interface ManualEntryData {
@@ -81,7 +82,14 @@ export function ManualEntryForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    setFormData((prev) => {
+      const key = name as keyof ManualEntryData;
+      if (key === "format") {
+        return { ...prev, format: value as MediaFormat };
+      }
+      return { ...prev, [key]: value };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,13 +106,15 @@ export function ManualEntryForm({
     <div className="flex w-full flex-col bg-card px-6 py-4">
       <div className="mb-4 flex items-center justify-between border-b border-border pb-4">
         <h3 className="text-lg font-semibold tracking-tight text-foreground">Manual Item Entry</h3>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onCancel}
           aria-label="Close manual entry"
-          className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="rounded-full"
         >
           <X className="h-5 w-5" />
-        </button>
+        </Button>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -188,14 +198,23 @@ export function ManualEntryForm({
           </div>
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={isSubmitting || !formData.title}
-          className="mt-4 flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+          className="mt-4 w-full"
         >
-          <Save className="mr-2 h-5 w-5" />
-          {isSubmitting ? "Saving..." : "Save Manual Entry"}
-        </button>
+          {isSubmitting ? (
+            <>
+              <Save className="mr-2 h-5 w-5 animate-pulse" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-5 w-5" />
+              Save Manual Entry
+            </>
+          )}
+        </Button>
       </form>
     </div>
   );

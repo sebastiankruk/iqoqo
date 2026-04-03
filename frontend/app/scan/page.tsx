@@ -69,12 +69,23 @@ export default function ScanPage() {
   }, []);
 
   const handleManualSubmit = async (data: ManualEntryData) => {
+    // Format authors to be a clean list without empty strings
+    const authors = data.authors 
+      ? data.authors.split(",").map(a => a.trim()).filter(Boolean)
+      : ["Unknown"];
+
+    // If only a year is provided, convert to YYYY-01-01 for backend compatibility
+    let explicitDate = data.year || undefined;
+    if (explicitDate && /^\d{4}$/.test(explicitDate)) {
+      explicitDate = `${explicitDate}-01-01`;
+    }
+
     const payload = {
       Title: data.title || "Unknown",
-      Authors: data.authors ? data.authors.split(",").map(a => a.trim()) : ["Unknown"],
+      Authors: authors.length > 0 ? authors : ["Unknown"],
       Format: data.format === "book" ? "text" : "sound", // Map UI format to API format
       ISBN: data.identifier || undefined,
-      PublicationDate: data.year || undefined,
+      PublicationDate: explicitDate,
       Publisher: data.publisher || undefined,
     };
 
