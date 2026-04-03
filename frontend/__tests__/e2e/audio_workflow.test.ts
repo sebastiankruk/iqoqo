@@ -39,7 +39,7 @@ test.describe("Audio Media Workflow", () => {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { federation_enabled: false, version: "0.2.0" }
+          data: { federation_enabled: false, version: "0.3.0" }
         })
       });
     });
@@ -112,7 +112,7 @@ test.describe("Audio Media Workflow", () => {
     await page.goto("/item/1");
 
     // 4. Verify Audio Metadata rendering in ExtendedMetadata (usually in a tab or below header)
-    // Based on ItemTabs default, it might be in the "Details" tab. 
+    // Based on ItemTabs default, it might be in the "Details" tab.
     // We assume it's visible or we click the tab if needed.
     await expect(page.getByText("Release Information")).toBeVisible();
     await expect(page.getByText("Label", { exact: true }).first()).toBeVisible();
@@ -127,11 +127,11 @@ test.describe("Audio Media Workflow", () => {
     // 6. Verify Categorized Status Dropdown in Sidebar
     const statusSelect = page.locator('select[aria-label="Item status"]');
     await expect(statusSelect).toBeVisible();
-    
+
     // Check for optgroup labels
     const listeningGroup = page.locator('optgroup[label="Listening Progress"]');
     await expect(listeningGroup).toBeAttached();
-    
+
     // 7. Update status to "Listening"
     await page.route("**/api/items/1", async (route) => {
       if (route.request().method() === "PATCH" || route.request().method() === "PUT") {
@@ -142,7 +142,7 @@ test.describe("Audio Media Workflow", () => {
         });
       }
     });
-    
+
     await statusSelect.selectOption("listening");
     await expect(page.getByText(/status updated/i)).toBeVisible();
 
@@ -150,12 +150,12 @@ test.describe("Audio Media Workflow", () => {
     // The section might take a moment to appear as profile loads
     const uploaderSection = page.getByText("Additional Scans");
     await expect(uploaderSection).toBeVisible({ timeout: 10000 });
-    
+
     const labelSelect = page.locator("select").filter({ hasText: "Disc / Vinyl" });
     await expect(labelSelect).toBeVisible();
-    
+
     await expect(page.getByText(/Upload [a-z]+ image/i)).toBeVisible();
-    
+
     // 9. Verify NO redundant format toggle (Book/CD/Vinyl) on the item page
     // It should be hidden because manifestation_id is passed to CameraCapture
     await expect(page.locator('button:has-text("BOOK")')).not.toBeVisible();
