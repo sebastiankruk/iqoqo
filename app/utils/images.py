@@ -19,7 +19,7 @@ import os
 import textwrap
 
 import imagehash
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +86,10 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 def optimize_and_save_image(image_bytes: bytes, filepath: str):
     """Converts image to JPEG, resizes to max 1024x1024, sets 85% quality."""
     try:
-        with Image.open(io.BytesIO(image_bytes)) as img:
-            out: Image.Image = img.convert("RGB")
+        with Image.open(io.BytesIO(image_bytes)) as raw_img:
+            # Fix EXIF rotation before processing
+            transposed_img = ImageOps.exif_transpose(raw_img)
+            out: Image.Image = transposed_img.convert("RGB")
             out.thumbnail((1024, 1024))
             out.save(filepath, "JPEG", quality=85)
     except (OSError, ValueError):
@@ -104,8 +106,10 @@ def add_text_overlay(
 ):
     """Overlays title, author, and branding text onto an existing image."""
     try:
-        with Image.open(filepath) as img:
-            converted: Image.Image = img.convert("RGB")
+        with Image.open(filepath) as raw_img:
+            # Fix EXIF orientation before overlaying text
+            transposed_img = ImageOps.exif_transpose(raw_img)
+            converted: Image.Image = transposed_img.convert("RGB")
             draw = ImageDraw.Draw(converted)
             width, height = converted.size
 

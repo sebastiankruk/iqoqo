@@ -73,6 +73,17 @@ test.describe('Item Acquisition and Collection Workflow', () => {
         })
       );
 
+      // Mock item details for the final redirect
+      await page.route('**/api/items/123', route =>
+        route.fulfill({
+          status: 200,
+          json: {
+            success: true,
+            data: { id: 123, title: 'Test Book', manifestation_meta: { format: 'book' } }
+          }
+        })
+      );
+
       // Execute Workflow
       // 1. Switch to Manual Search tab
       await page.getByRole('button', { name: 'Manual Search' }).click();
@@ -110,7 +121,7 @@ test.describe('Item Acquisition and Collection Workflow', () => {
       await page.getByRole('button', { name: 'Snap Cover' }).click();
 
       const fileChooserPromise = page.waitForEvent('filechooser');
-      await page.getByRole('button', { name: 'Upload from Gallery' }).click();
+      await page.getByRole('button', { name: 'Browse Files' }).click();
       const fileChooser = await fileChooserPromise;
       await fileChooser.setFiles({
         name: 'vinyl_cover.jpg',
@@ -119,7 +130,7 @@ test.describe('Item Acquisition and Collection Workflow', () => {
       });
 
       // Verify Extraction (should transition to Manual Entry form in ScanPage)
-      await expect(page.getByText('Manual Entry')).toBeVisible();
+      await expect(page.getByText('Manual Item Entry')).toBeVisible();
       await expect(page.locator('input[name="title"]')).toHaveValue('Dark Side of the Moon');
 
       // Mock Manual Add
@@ -134,7 +145,7 @@ test.describe('Item Acquisition and Collection Workflow', () => {
       );
 
       // Submit Form
-      await page.getByRole('button', { name: 'Add to Library' }).click();
+      await page.getByRole('button', { name: 'Save Manual Entry' }).click();
 
       // Verify Redirect to Item Page
       await expect(page).toHaveURL(/.*\/item\/789/);
@@ -207,7 +218,7 @@ test.describe('Item Acquisition and Collection Workflow', () => {
       await page.getByRole('button', { name: 'Snap Live Frame' }).click();
 
       // Verify Result (Manual Entry form)
-      await expect(page.getByText('Manual Entry')).toBeVisible();
+      await expect(page.getByText('Manual Item Entry')).toBeVisible();
       await expect(page.locator('input[name="title"]')).toHaveValue('Dune');
     });
   });

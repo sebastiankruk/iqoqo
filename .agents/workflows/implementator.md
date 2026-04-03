@@ -14,18 +14,13 @@ User provides an implementation plan (with code or diffs) and requests implement
 
 ## Required Inputs
 
-- `target_branch`: The branch name where changes will be committed.
 - `implementation_plan`: The specific code changes, diffs, or instructions provided by the user.
-
-## Pre-Flight Check
-
-- **Branch Verification**: Check if the `target_branch` was provided by the user in the prompt. If it was NOT provided, **HALT** and prompt the human: *"Please provide the target branch name for this implementation before I proceed."*
 
 ## Execution Steps
 
 ### 1. Strict Implementation
 
-- Ensure you are on the `target_branch` (create and checkout if it does not exist using `git checkout -b <target_branch>`).
+- Ensure you are on the desired branch (usually the current branch).
 - Invoke the **`implementation-export`** skill (or direct file manipulation tools).
 - Apply the provided `implementation_plan` exactly as specified using the appropriate file replacement tools.
 - **Strict Constraint**: Apply changes without "extra creativity". Do not refactor, clean up, or hallucinate improvements outside of the provided plan.
@@ -41,18 +36,19 @@ User provides an implementation plan (with code or diffs) and requests implement
 
 - Stage all modified files (`git add .`).
 - Commit the changes using conventional commit formats describing the implemented feature/fix.
-- Push the `target_branch` to the remote repository (`git push -u origin <target_branch>`).
-- **Create PR**: Utilize **GitHub MCP tools** or the **`gh` CLI** (e.g., `gh pr create --title "<Title>" --body "<Plan Summary>" --base main`) to create the Pull Request.
+- Push the current branch to the remote repository (`git push -u origin $(git branch --show-current)`).
+- **CRITICAL**: Provide a clear PR **Title** and **Body** to the human (Body = Summary of changes from the plan).
+- **DO NOT** create the Pull Request yourself unless explicitly asked.
 
 ### 4. Copilot Review Integration
 
-- **Request Review**: Use the **GitHub MCP tools** or **`gh` CLI** to request a Copilot review (e.g., triggering a comment like `gh pr comment -b "@github-actions copilot review"` or adding the appropriate reviewer/label).
-- Wait for and retrieve the review comments (e.g., `gh pr view --comments`).
+- **ASK HUMAN to Request Review**
+- Wait for Human to tell to  retrieve the review comments from given PR `#NUMBER`
 - **Analysis**: Parse the Copilot feedback for actionable code changes.
 
 ### 5. Review Resolution & Final QA
 
-- If changes are required by the review, invoke the **`implementation-export`** skill to apply the fixes exactly as requested.
+- If changes are required by the review - double check their correctness and feasibility - prepare plan to address them
 - Run `make lint` and `make test` again.
-- Once green, commit and push the fixes to the `target_branch`.
+- Once green, commit and push the fixes to the current branch.
 - Inform the user that the PR is open, reviewed, fixed, and all checks are passing.
