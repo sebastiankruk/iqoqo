@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
     """
     Load known junk cover pHashes from the environment.
-    Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     """
     raw_value = os.getenv("IQOQO_KNOWN_JUNK_PHASHES", "")
     hashes: set[imagehash.ImageHash] = set()
@@ -228,3 +228,18 @@ def add_text_overlay(
             converted.save(filepath, "JPEG", quality=85)
     except (OSError, ValueError) as e:
         logger.error(f"Error adding text overlay: {e}")
+
+
+def save_upload_image(file, subfolder: str = "gallery", filename: str | None = None) -> str:
+    """Saves an uploaded image file, optimizes it, and returns the public URL."""
+    from app.utils.covers import COVERS_DIR, GALLERY_DIR
+
+    base_dir = COVERS_DIR if subfolder == "covers" else GALLERY_DIR
+    target_filename = filename or file.filename
+    filepath = os.path.join(base_dir, target_filename)
+
+    # Save and optimize
+    optimize_and_save_image(file.read(), filepath)
+
+    # Return public URL
+    return f"/static/{subfolder}/{target_filename}"

@@ -16,12 +16,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from flask import Response, current_app, jsonify, request
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
@@ -29,6 +31,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
+from app.utils.images import save_upload_image
 
 
 @api_bp.route("/manifestations", methods=["GET"])
@@ -359,6 +362,8 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
+@require_auth
+@require_permission("upload:cover")
 def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -387,9 +392,9 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"error": "Invalid or corrupted image file"}), 400
 
     manifestation = db.get_or_404(Manifestation, manifestation_id)
-    isbn = manifestation.isbn13 or f"item_{manifestation_id}"
+    identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
 
-    filename = secure_filename(f"{isbn}_raw.jpg")
+    filename = secure_filename(f"{identifier}_raw.jpg")
     filepath = os.path.join(RAW_DIR, filename)
     file.save(filepath)
 
@@ -404,9 +409,73 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
-    start_cover_processing(manifestation.id, isbn, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath)
+    start_cover_processing(
+        manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
+    )
 
     return jsonify({"message": "Cover upload processing started"}), 202
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
+@require_auth
+@require_permission("edit:manifestation")
+def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
+    # pylint: disable=too-many-return-statements
+    """Upload an additional image (inlay, disc, back) for a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    if "image" not in request.files:
+        return jsonify({"success": False, "error": "No image provided"}), 400
+
+    file = request.files["image"]
+    if not file.filename:
+        return jsonify({"success": False, "error": "No selected file"}), 400
+
+    # Validation
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
+        return jsonify({"success": False, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    max_size = 10 * 1024 * 1024
+    file.seek(0, os.SEEK_END)
+    actual_size = file.tell()
+    file.seek(0)
+
+    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
+        return jsonify({"success": False, "error": "File too large. Max size: 10MB"}), 413
+
+    image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
+
+    try:
+        # PIL Content check
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+
+        # Save and optimize
+        filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
+        image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+    except (OSError, SyntaxError):
+        return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
+
+    # Update JSONB meta field
+
+    meta = dict(manifestation.meta or {})
+    additional_images = meta.get("additional_images", [])
+    additional_images.append({"url": image_url, "label": image_label, "added_at": datetime.now(UTC).isoformat()})
+    meta["additional_images"] = additional_images
+    manifestation.meta = meta
+
+    # SQLAlchemy requires this to detect JSON mutations if we didn't re-assign,
+    # but since we did manifestation.meta = meta above, it might be redundant.
+    # Still, good practice for JSONB.
+    flag_modified(manifestation, "meta")
+
+    db.session.commit()
+
+    return jsonify({"success": True, "data": meta["additional_images"]}), 201
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
@@ -420,7 +489,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
-    isbn = manif.isbn13 or str(manif.id)
+    identifier = manif.isbn13 or manif.ean or manif.upc or str(manif.id)
 
     meta = manif.meta or {}
     description = meta.get("Description", "")
@@ -432,7 +501,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     llm_permissions = User.list_llm_permissions(user_obj)
     start_cover_processing(
         manif.id,
-        isbn,
+        identifier,
         title,
         author,
         user_id_str,

@@ -30,6 +30,9 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "iqoqo-default-secret-key-32-chars-at-least")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
 
+    # Protect against huge payload attacks
+    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16 MB max
+
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console

@@ -13,9 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import logging
+
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
+from PIL import Image
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import blueprints
@@ -25,6 +28,9 @@ from app.api.profile import profile_bp
 
 from .config import Config
 from .db import db
+
+# Protect against decompression bombs globally
+Image.MAX_IMAGE_PIXELS = 25_000_000
 
 
 def _coerce_bool(value, default=False):
@@ -50,6 +56,13 @@ def _coerce_list(value, default=None):
 
 
 def create_app(config_class=Config, config_override=None):
+    # Configure logging early
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        force=True,
+    )
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -62,6 +75,12 @@ def create_app(config_class=Config, config_override=None):
     # Initialize database and migrations
     db.init_app(app)
     _ = Migrate(app, db)
+
+    # Ensure all model modules are imported so SQLAlchemy's mapper registry
+    # is fully populated before db.create_all() or Alembic autogenerate runs.
+    from app.db import import_models  # noqa: E402
+
+    import_models()
 
     # Configure CORS from config
     cors_enabled = _coerce_bool(app.config.get("CORS_ENABLED"), default=False)

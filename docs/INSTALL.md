@@ -547,7 +547,7 @@ The following endpoints are available for data management:
   - Check what's using the port: `sudo lsof -i :5432` (database) or `sudo lsof -i :5000` (default `WEB_PORT`, or your configured port, e.g., `:5001`)
   - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
   - `./run_dev.sh` automatically kills stale processes on `WEB_PORT` and `3000` at startup
-  - Restart the services: `docker-compose down && docker-compose up -d`
+  - Restart the services: `docker compose down && docker compose up -d`
 
 - **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds to port 5000 (the default `WEB_PORT` when not overridden) on macOS Monterey and later. Set `WEB_PORT=5001` (or any other free port) in your `.env` to move Flask off port 5000:
 
@@ -557,7 +557,7 @@ The following endpoints are available for data management:
 
 #### Docker Issues
 
-- **Permission denied errors**: If you need to use `sudo` with Docker commands, prefix all `docker` and `docker-compose` commands with `sudo`:
+- **Permission denied errors**: If you need to use `sudo` with Docker commands, prefix all `docker` and `docker compose` commands with `sudo`:
 
   ```bash
   sudo docker compose up -d
@@ -567,8 +567,8 @@ The following endpoints are available for data management:
 - **Container won't start**: Check the logs for errors:
 
   ```bash
-  docker-compose logs web
-  docker-compose logs db
+  docker compose logs web
+  docker compose logs db
   ```
 
 - **Database initialization fails**: Make sure the database container is fully started before running migrations:
@@ -603,9 +603,9 @@ The following endpoints are available for data management:
 
   ```bash
   # Wait for database to be ready
-  docker-compose up -d db
+  docker compose up -d db
   sleep 5
-  docker-compose exec web flask db upgrade
+  docker compose exec web flask db upgrade
   ```
 
 ## Running the Application
@@ -616,7 +616,7 @@ To run the Flask development server:
 
 ```bash
 # Make sure the database is running
-docker-compose up -d db
+docker compose up -d db
 
 # Run the development server using the project's virtual environment
 .venv/bin/flask run
@@ -635,7 +635,7 @@ To run the Flask development server:
 
 ```bash
 # Make sure the database is running
-docker-compose up -d db
+docker compose up -d db
 
 # Run the development server
 ./run_dev.sh
@@ -654,7 +654,7 @@ The application will be available at `http://localhost:5000`.
 For production deployments, use Docker Compose to run the full stack. See [Option B: Full Docker Deployment](#option-b-full-docker-deployment-production) above for complete instructions.
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Access the application at `http://localhost:{WEB_PORT}` (default: 5000, or 8000 if you changed it in `.env`).

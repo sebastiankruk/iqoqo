@@ -17,17 +17,24 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, Disc, Loader2 } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const statusDotColor: Record<ItemStatus, string> = {
   available: "bg-chart-3",
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
+  ordered: "bg-amber-400",
+  damaged: "bg-orange-600",
   reading: "bg-green-500",
   read: "bg-blue-500",
   unread: "bg-purple-500",
+  want_to_read: "bg-primary",
+  listening: "bg-teal-500",
+  listened: "bg-cyan-500",
+  want_to_listen: "bg-sky-400",
 };
 
 const statusDotTitle: Record<ItemStatus, string> = {
@@ -35,9 +42,15 @@ const statusDotTitle: Record<ItemStatus, string> = {
   wish_list: "On Wish List",
   lent: "Lent Out",
   lost: "Lost",
+  ordered: "Ordered",
+  damaged: "Damaged",
   reading: "Reading",
   read: "Read",
   unread: "Unread",
+  want_to_read: "Want to Read",
+  listening: "Listening",
+  listened: "Listened",
+  want_to_listen: "Want to Listen",
 };
 
 /** Props for ItemCard component */
@@ -75,13 +88,13 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   // `cover_url` and `cover_status` exist on both Item and CatalogEntry
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
+  const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
+  const timestamp = getCoverTimestamp(tMeta);
 
-  const coverUrl = itemCoverUrl
-    ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}${itemCoverUrl}`
-    : isCatalog
+  const coverUrl = getCoverUrl(itemCoverUrl || undefined, timestamp) || (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
       : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
-        ((item as Item).meta?.["cover_url"] as string | undefined));
+        ((item as Item).meta?.["cover_url"] as string | undefined)));
 
   const hasLegacyCoverUrl = isCatalog
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])
@@ -89,6 +102,17 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
 
   const isProcessing = coverStatus === "processing";
   const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
+
+  // Media type detection
+  const format = isCatalog
+    ? ((item as CatalogEntry).meta?.["format"] as string | undefined)
+    : (((item as Item).manifestation_meta?.["format"] as string | undefined) ??
+      ((item as Item).meta?.["format"] as string | undefined));
+
+  const isAudio = isAudioMedia(format);
+  const MediaIcon = isAudio ? Disc : BookOpen;
+  const mediaLabel = isAudio ? "Audio" : "Book";
+  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
 
   // TypeScript allows accessing `title` and `authors` because they are defined on both types in the union
   const title = item.title ?? "Untitled";
@@ -105,8 +129,8 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
           <div className="flex flex-1 flex-col justify-between">
             <div>
               <div className="mb-2 flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Book</span>
+                <MediaIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{mediaLabel}</span>
               </div>
               <h3 className="font-serif text-lg font-bold leading-snug text-card-foreground">{title}</h3>
               <p className="mt-0.5 text-sm text-muted-foreground">{authors}</p>
@@ -133,7 +157,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
     <Link href={targetHref} className="group block">
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         {/* Cover */}
-        <div className="relative aspect-[2/3] w-full overflow-hidden bg-secondary">
+        <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -155,7 +179,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
             <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
               <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
               <span className="text-xs text-muted-foreground line-clamp-2">{authors}</span>
-              <BookOpen className="mt-4 h-6 w-6 text-muted-foreground/30" />
+              <MediaIcon className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
         </div>

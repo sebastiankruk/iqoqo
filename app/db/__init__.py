@@ -16,3 +16,16 @@
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+def import_models() -> None:
+    """Import all model modules so SQLAlchemy's mapper registry is populated.
+
+    Call this once after ``db`` has been bound to the Flask app (i.e. inside
+    ``create_app``).  ``db.create_all()`` and Alembic autogenerate both need
+    every model class to have been imported before they inspect the metadata.
+    """
+    # Order matters: auth / settings have no cross-module FKs, so they can be
+    # imported first.  core.py references auth (users.id FK on Item), and
+    # audio.py references core (works.id / expressions.id FKs).
+    from app.db import auth, settings, core, audio  # noqa: F401, I001 # isort: skip

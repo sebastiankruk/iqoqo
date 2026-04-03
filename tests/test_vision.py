@@ -16,8 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import json
 import os
 from unittest.mock import MagicMock, patch
+
+import requests
 
 from app.utils.vision import _extract_via_gemini, _extract_via_ollama, _extract_via_tesseract, extract_metadata_from_cover
 
@@ -237,7 +240,7 @@ def test_parse_authors_comma_separated_string():
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_gemini_exception_falls_to_ollama(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that an exception in Gemini correctly triggers Ollama."""
-    mock_gemini.side_effect = Exception("Gemini is down")
+    mock_gemini.side_effect = RuntimeError("Gemini is down")
     mock_ollama.return_value = {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
 
     result = extract_metadata_from_cover(b"test image")
@@ -253,8 +256,6 @@ def test_extract_waterfall_gemini_exception_falls_to_ollama(mock_tesseract, mock
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_ollama_exception_falls_to_tesseract(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that an exception in Ollama correctly triggers Tesseract."""
-    import requests
-
     mock_gemini.return_value = None
     mock_ollama.side_effect = requests.exceptions.RequestException("Ollama connection failed")
     mock_tesseract.return_value = {"Title": "Tesseract Result", "Authors": []}
@@ -272,13 +273,47 @@ def test_extract_waterfall_ollama_exception_falls_to_tesseract(mock_tesseract, m
 @patch("app.utils.vision._extract_via_tesseract")
 def test_extract_waterfall_all_exception_returns_none(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that exceptions in all methods result in a None return."""
-    mock_gemini.side_effect = Exception("Gemini Error")
-    mock_ollama.side_effect = Exception("Ollama Error")
-    mock_tesseract.side_effect = Exception("Tesseract Error")
+    mock_gemini.side_effect = RuntimeError("Gemini Error")
+    mock_ollama.side_effect = requests.exceptions.RequestException("Ollama Error")
+    mock_tesseract.side_effect = RuntimeError("Tesseract Error")
 
     result = extract_metadata_from_cover(b"test image")
 
     assert result is None
-    assert mock_gemini.called
-    assert mock_ollama.called
-    assert mock_tesseract.called
+
+
+@patch("app.utils.vision._extract_via_gemini")
+@patch("app.utils.vision._extract_via_ollama")
+@patch("app.utils.vision._extract_via_tesseract")
+def test_extract_waterfall_gemini_api_error_falls_to_ollama(mock_tesseract, mock_ollama, mock_gemini):
+    """Verify that a 3rd party API exception in Gemini correctly triggers Ollama."""
+
+    class FakeAPIError(Exception):
+        pass
+
+    mock_gemini.side_effect = FakeAPIError("Gemini API Error")
+    mock_ollama.return_value = {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
+
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+
+    assert result == {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
+    mock_gemini.assert_called_once()
+    mock_ollama.assert_called_once()
+    mock_tesseract.assert_not_called()
+
+
+@patch("app.utils.vision._extract_via_gemini")
+@patch("app.utils.vision._extract_via_ollama")
+@patch("app.utils.vision._extract_via_tesseract")
+def test_extract_waterfall_ollama_json_decode_error_falls_to_tesseract(mock_tesseract, mock_ollama, mock_gemini):
+    """Verify that an invalid JSON response from Ollama falls back to Tesseract."""
+    mock_gemini.return_value = None
+    mock_ollama.side_effect = json.JSONDecodeError("Expecting value", "doc", 0)
+    mock_tesseract.return_value = {"Title": "Tesseract Result", "Authors": []}
+
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+
+    assert result == {"Title": "Tesseract Result", "Authors": []}
+    mock_gemini.assert_called_once()
+    mock_ollama.assert_called_once()
+    mock_tesseract.assert_called_once()

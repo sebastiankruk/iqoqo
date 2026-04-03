@@ -136,24 +136,31 @@ grant_privileges() {
         -v "app_user=${POSTGRES_USER}" <<'SQL'
 -- Database-level access
 SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'app_db', :'app_user') \gexec;
--- Schema-level access
+-- public schema access (auth, settings, alembic)
 SELECT format('GRANT ALL ON SCHEMA public TO %I', :'app_user') \gexec;
--- Current tables & sequences
 SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I', :'app_user') \gexec;
 SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_user') \gexec;
--- Future tables & sequences
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
--- Transfer ownership of every existing table to the application role so that
--- Alembic can run DDL statements (ALTER TABLE, DROP TABLE, etc.).
--- We build the DO block as a string so the psql variable :app_user is
--- interpolated before execution.
+-- catalog schema access (FRBR + audio tables)
+SELECT format('CREATE SCHEMA IF NOT EXISTS catalog') \gexec;
+SELECT format('GRANT ALL ON SCHEMA catalog TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA catalog TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA catalog TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+-- Transfer ownership of every existing table in both schemas to the application role
+-- so that Alembic can run DDL statements (ALTER TABLE, DROP TABLE, etc.).
 SELECT format($$
 DO $do$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
-        EXECUTE format('ALTER TABLE public.%%I OWNER TO %%I', r.tablename, %L);
+    FOR r IN
+        SELECT schemaname, tablename
+        FROM pg_tables
+        WHERE schemaname IN ('public', 'catalog')
+    LOOP
+        EXECUTE format('ALTER TABLE %I.%I OWNER TO %%I', r.schemaname, r.tablename, %L);
     END LOOP;
 END $do$;
 $$, :'app_user') \gexec;

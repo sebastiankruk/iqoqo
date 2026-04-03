@@ -20,11 +20,14 @@ import io
 from flask import jsonify, request
 from PIL import Image
 
-from app.api.core import api_bp
+from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import ItemPermissions
 from app.db.models import Item, Manifestation, db
+from app.utils.discogs import fetch_discogs_metadata
+from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
+from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -36,8 +39,8 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
     """Read at most *max_bytes* from *file_storage*.
 
     Reads exactly ``max_bytes + 1`` bytes in a single call so that the result
-    fits in one allocation and we can detect an oversized payload without
-    buffering the whole stream first.
+        fits in one allocation and we can detect an oversized payload without
+        buffering the whole stream first.
 
     Returns:
         The raw bytes when the payload is within the limit, or ``None`` when it
@@ -47,42 +50,124 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
     return None if len(buf) > max_bytes else buf
 
 
+@api_bp.route("/lookup/<barcode>", methods=["GET"])
+@require_auth
+def lookup_barcode_preview(barcode: str):
+    """Generic barcode lookup for preview (books and audio)."""
+    # Check DB first
+    # pylint: disable=singleton-comparison
+    manifestation = Manifestation.query.filter(
+        (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
+    ).first()
+
+    if manifestation and manifestation.meta:
+        # Check normalized vs legacy titles in meta
+        title = manifestation.meta.get("title") or manifestation.meta.get("Title")
+        if title:
+            return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
+
+    # Try external sources
+    meta = None
+
+    # Simple heuristic: 978/979 or 10 digits strongly implies a book
+    is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
+
+    if is_book:
+        canonical = canonicalize_isbn(barcode)
+        if canonical:
+            meta = fetch_isbn_metadata(canonical)
+    else:
+        try:
+            # Try Audio sources for UPC/EAN
+            meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+        # Fallback to book in case it's a non-standard ISBN prefix
+        if not meta:
+            canonical = canonicalize_isbn(barcode)
+            if canonical:
+                meta = fetch_isbn_metadata(canonical)
+
+    if not meta:
+        return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
+
+    # Ensure frontend gets normalized keys for preview
+    if "title" not in meta:
+        meta["title"] = meta.get("Title") or "Unknown Title"
+    if "cover_url" not in meta:
+        meta["cover_url"] = meta.get("thumb") or meta.get("cover")
+    if "author" not in meta:
+        meta["author"] = meta.get("artist") or meta.get("Artist") or meta.get("authors", [None])[0]
+
+    return jsonify({"success": True, "data": meta, "error": None}), 200
+
+
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
 def scan_barcode():
+    # pylint: disable=too-many-return-statements
     """Scan a barcode and add the corresponding item to the authenticated user's collection.
 
     Request body (JSON):
         barcode (str): The ISBN or other barcode value to look up.
 
     Returns:
-        201 – ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
-        400 – barcode missing or invalid
-        404 – barcode could not be resolved to a manifestation
-        503 – upstream network error during metadata lookup
+        201 - ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
+        400 - barcode missing or invalid
+        404 - barcode could not be resolved to a manifestation
+        503 - upstream network error during metadata lookup
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
     barcode = data.get("barcode")
+    format_hint = data.get("format")  # Optional: 'audio' or 'book'
 
     if not barcode:
-        return jsonify({"error": "Barcode is required"}), 400
+        return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
 
     is_new_manifestation = False
-    manifestation = Manifestation.query.filter(Manifestation.meta.op("->>")("isbn") == barcode).first()  # type: ignore[attr-defined]
+
+    # Check both ISBN and generic barcode metadata fields
+    # pylint: disable=singleton-comparison
+    manifestation = Manifestation.query.filter(
+        (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
+    ).first()
 
     if not manifestation:
         try:
-            manifestation = IngestService.ingest_from_isbn(barcode)
+            # Handle both 'audio' generic hint AND specific 'cd'/'vinyl' formats
+            is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
+            if is_audio_hint:
+                manifestation = IngestService.ingest_audio_from_barcode(barcode)
+            elif format_hint in ("book", "text"):
+                manifestation = IngestService.ingest_from_isbn(barcode)
+            else:
+                # Auto-fallback strategy: try ISBN first for 10/13 digits, otherwise audio
+                is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
+                if is_isbn_like:
+                    try:
+                        manifestation = IngestService.ingest_from_isbn(barcode)
+                    except ValueError:
+                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
+                else:
+                    try:
+                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
+                    except ValueError:
+                        manifestation = IngestService.ingest_from_isbn(barcode)
+
             is_new_manifestation = True
         except ValueError as e:
-            return jsonify({"error": f"Invalid barcode or ISBN: {str(e)}"}), 400
+            return jsonify({"success": False, "data": None, "error": f"Invalid barcode or not found: {str(e)}"}), 400
         except ConnectionError as e:
-            return jsonify({"error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            return jsonify({"error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
+            return jsonify({"success": False, "data": None, "error": f"Network error while fetching metadata: {str(e)}"}), 503
+        except Exception as e:  # pylint: disable=broad-except
+            return jsonify({"success": False, "data": None, "error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:
-        return jsonify({"error": "Could not resolve barcode"}), 404
+        return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
     new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")
     db.session.add(new_item)
@@ -91,11 +176,29 @@ def scan_barcode():
     return (
         jsonify(
             {
-                "message": "Item successfully added to your collection",
-                "item_id": new_item.id,
-                "manifestation_id": manifestation.id,
-                "title": manifestation.title,
-                "is_new_manifestation": is_new_manifestation,
+                "success": True,
+                "data": {
+                    "message": "Item successfully added to your collection",
+                    "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
+                    "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
+                    "item_id": new_item.id,
+                    "manifestation_id": manifestation.id,
+                    "title": (
+                        manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
+                    ),
+                    "author": (
+                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0]
+                        if manifestation.meta
+                        else manifestation.author
+                    ),
+                    "cover_url": (
+                        manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
+                        if manifestation.meta
+                        else manifestation.cover_url
+                    ),
+                    "is_new_manifestation": is_new_manifestation,
+                },
+                "error": None,
             }
         ),
         201,
@@ -106,8 +209,7 @@ def scan_barcode():
 @require_auth
 @require_permission(ItemPermissions.LLM_GENERATE_METADATA)
 def extract_from_cover():
-    # pylint: disable=too-many-return-statements
-    """Extract book Title and Authors from an uploaded cover image using Gemini Vision.
+    """Extract metadata from a cover image.
 
     Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
     The image is passed to the Gemini Vision API which returns the title and
@@ -122,11 +224,12 @@ def extract_from_cover():
         cover (file): The cover image to analyse.
 
     Returns:
-        200 – ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
-        400 – missing file, empty filename, invalid extension, oversized or corrupt image
-        401 – authentication required (handled by ``@require_auth``)
-        503 – Gemini API key not configured or upstream call failed
+        200 - ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
+        400 - missing file, empty filename, invalid extension, oversized or corrupt image
+        401 - authentication required (handled by ``@require_auth``)
+        503 - Gemini API key not configured or upstream call failed
     """
+    # pylint: disable=too-many-return-statements
     if "cover" not in request.files:
         return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
 
@@ -134,7 +237,6 @@ def extract_from_cover():
     if not file.filename:
         return jsonify({"success": False, "data": None, "error": "No selected file"}), 400
 
-    # --- Extension validation ---
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in _ALLOWED_EXTENSIONS:
         return (
@@ -148,26 +250,19 @@ def extract_from_cover():
             400,
         )
 
-    # --- Fast-path size guard (Content-Length header, when present and trustworthy) ---
     if request.content_length and request.content_length > _MAX_COVER_SIZE:
         return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
 
-    # --- Capped streaming read (guards against missing / spoofed Content-Length) ---
-    # Reads at most _MAX_COVER_SIZE + 1 bytes in a single allocation; avoids the
-    # seek-to-end pattern which forces the full payload into the Werkzeug buffer
-    # before we can measure it, and also avoids a second file.read() later.
     image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
     if image_bytes is None:
         return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
 
-    # --- PIL content verification (uses already-read bytes — no second read) ---
     try:
         img = Image.open(io.BytesIO(image_bytes))
         img.verify()
     except (OSError, SyntaxError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
-    # --- Vision extraction ---
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
 

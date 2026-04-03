@@ -15,13 +15,15 @@
 #
 
 import os
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, current_app, jsonify, redirect, request
+from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Role, User, db
+from app.db.models import Role, TokenBlocklist, User, db
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 oauth = OAuth()
@@ -42,6 +44,7 @@ def init_oauth(app):
 def generate_internal_jwt(user: User) -> str:
     payload = {
         "sub": str(user.id),
+        "jti": str(uuid.uuid4()),  # Unique ID for revocation
         "email": user.email,
         "roles": [role.name for role in user.roles],  # type: ignore[attr-defined]
         "exp": datetime.now(UTC) + timedelta(days=7),  # matches the session cookie lifetime
@@ -156,5 +159,24 @@ def local_register():
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
-    """Log out the current user. Token is cleared on the client side."""
+    """Log out the current user by revoking their token."""
+    token = None
+    if "Authorization" in request.headers:
+        token = request.headers["Authorization"].split(" ")[1]
+    elif "iqoqo_session" in request.cookies:
+        token = request.cookies.get("iqoqo_session")
+
+    if token:
+        try:
+            payload = pyjwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+            jti = payload.get("jti")
+            if jti:
+                db.session.add(TokenBlocklist(jti=jti))
+                db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            # Already revoked, treat as success (idempotent)
+        except pyjwt.PyJWTError:
+            pass  # Token is invalid or expired anyway
+
     return jsonify({"message": "Logged out successfully"}), 200

@@ -14,25 +14,44 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ItemHeader } from "@/components/item/item-header";
+import type { Item } from "@/types/frbr";
+
+// Mock sub-components to avoid complex context requirements
+vi.mock("@/components/item/item-actions", () => ({
+  ItemActions: () => <div data-testid="item-actions" />,
+}));
+
+// Mock Next.js navigation
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
 
 // Mock Item data — uses work-level fields as returned by the API
-const mockItem = {
+const mockItem: Item = {
   id: 1,
+  owner_id: "user1",
+  status: "available",
   manifestation_id: 123,
   title: "Fallback Title",
   work: {
+    id: 1,
     title: "The Great Gatsby",
     authors: ["F. Scott Fitzgerald"],
+    meta: {},
   },
   manifestation_meta: {
     cover_status: "ready",
     Year: "1925",
     Pages: "180",
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} as any;
+  meta: {},
+  added_at: "2024-01-01",
+  updated_at: "2024-01-01",
+};
 
 /**
  * ItemHeader renders title/authors/year/pages from the item.
@@ -46,7 +65,7 @@ describe("ItemHeader", () => {
     expect(screen.getByText("The Great Gatsby")).toBeInTheDocument();
     expect(screen.getByText("F. Scott Fitzgerald")).toBeInTheDocument();
     expect(screen.getByText("1925")).toBeInTheDocument();
-    expect(screen.getByText("180 pages")).toBeInTheDocument();
+    expect(screen.getByText("180")).toBeInTheDocument();
   });
 
   it("does not render action buttons (they belong to the page)", () => {

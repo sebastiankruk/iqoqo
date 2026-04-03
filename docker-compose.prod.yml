@@ -41,7 +41,9 @@ services:
       db:
         condition: service_healthy
     volumes:
+      - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
 
   frontend:
     build:

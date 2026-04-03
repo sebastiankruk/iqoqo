@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-03
+
+### Added
+
+- **Audio Support**: Full support for Vinyls, CDs, and Audiobooks via FRBRoo Event-Based Modeling.
+- **Multiple Scans**: Added a secondary image upload system to manifestations (Disc, Inlay, Box, Back Cover).
+- **Audio UI**: Item views now dynamically render `Tracklists`, `Matrix Numbers`, `Pressing IDs`, and `Labels` for supported media types.
+- **Categorized Statuses**: Reorganized the item status dropdown into functional categories (Availability, Reading, Listening, Acquisition) for better collection management.
+- **New Item Statuses**: Added `Damaged`, `Listening`, `Listened`, `Ordered`, and `Lost` to the canonical status list.
+- **E2E Acquisition Tests**: New Playwright test suite covering Book, CD, and Vinyl ingestion via ISBN lookup, barcode scanning, and cover art analysis.
+
+### Changed
+
+- **Vision Waterfall**: Hardened exception handling to ensure robust fallback from Gemini to local backends (Ollama, Tesseract) during API or network failures.
+- **UI Refinement**: Updated `ItemSidebar` to include the `MultiImageUploader` and categorized status selection.
+- **Infrastructure**: Added `GALLERY_DIR` for storing secondary manifestation scans.
+
 ## [0.1.0] - 2026-03-28
 
 ### Added

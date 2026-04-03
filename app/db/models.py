@@ -13,265 +13,32 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from __future__ import annotations
+"""Re-export shim for backward compatibility.
 
-import os
-import sys
-import uuid
-from datetime import UTC, datetime
+All model definitions have been split into domain-specific modules:
 
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
-from werkzeug.security import check_password_hash, generate_password_hash
+- :mod:`app.db.auth`     — User, Role, Permission, TokenBlocklist, ConsentRecord
+- :mod:`app.db.core`     — Work, Expression, Manifestation, Item, ITEM_STATUSES
+- :mod:`app.db.audio`    — Contributor, WorkContribution, ExpressionContribution,
+                            WorkPart, MANIFESTATION_AUDIO_META_KEYS
+- :mod:`app.db.settings` — LLMTelemetry, InstanceSettings
 
-from . import db
+Existing imports of the form ``from app.db.models import Work`` continue to
+work unchanged thanks to this shim.
+"""
 
-#: Canonical list of allowed Item statuses.  This is the single source of truth
-#: on the Python side; the TypeScript ``ItemStatus`` union in
-#: ``frontend/types/frbr.ts`` must stay in sync with these values.
-ITEM_STATUSES: tuple[str, ...] = ("available", "lent", "lost", "wish_list", "reading", "read", "unread")
-
-# RBAC Association Tables
-
-user_roles = db.Table(
-    "user_roles",
-    db.Column("user_id", UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+from app.db.audio import (  # noqa: F401
+    EXPRESSION_CONTRIBUTION_ROLES,
+    MANIFESTATION_AUDIO_META_KEYS,
+    WORK_CONTRIBUTION_ROLES,
+    Contributor,
+    ExpressionContribution,
+    WorkContribution,
+    WorkPart,
 )
+from app.db.auth import ConsentRecord, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
+from app.db.core import ITEM_STATUSES, Expression, Item, Manifestation, Work  # noqa: F401
+from app.db.settings import InstanceSettings, LLMTelemetry  # noqa: F401
 
-role_permissions = db.Table(
-    "role_permissions",
-    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("permission_id", db.Integer, db.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
-)
-
-
-class Permission(db.Model):  # type: ignore[name-defined]
-    __tablename__ = "permissions"
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    description = db.Column(db.String(255))
-
-
-class Role(db.Model):  # type: ignore[name-defined]
-    __tablename__ = "roles"
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    permissions = db.relationship("Permission", secondary=role_permissions, lazy="selectin")
-
-
-class User(db.Model):  # type: ignore[name-defined]
-    __tablename__ = "users"
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=True)
-    display_name = db.Column(db.String(100))
-    avatar_url = db.Column(db.String(500), nullable=True)  # Increased from 255 to handle long URLs
-    google_id = db.Column(db.String(255), unique=True, nullable=True)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
-    last_login = db.Column(db.DateTime, nullable=True)
-    visibility = db.Column(db.String(20), default="private")
-
-    roles = db.relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
-    items = db.relationship("Item", backref="owner", lazy="dynamic")
-    consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")
-
-    def set_password(self, password: str):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password: str) -> bool:
-        if not self.password_hash:
-            return False
-        return check_password_hash(self.password_hash, password)
-
-    def has_permission(self, permission_name: str) -> bool:
-        for role in self.roles:  # type: ignore[attr-defined]
-            for perm in role.permissions:  # type: ignore[attr-defined]
-                if perm.name == permission_name:
-                    return True
-        return False
-
-    def to_dict(self):
-        """Serialize core user fields for API responses and tests."""
-        return {
-            "id": str(self.id) if self.id else None,
-            "email": self.email,
-            "display_name": self.display_name,
-            "avatar_url": self.avatar_url,
-            "visibility": self.visibility,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-    @classmethod
-    def list_llm_permissions(cls, user: User | None) -> dict[str, bool]:
-        if not user:
-            return {
-                "allow_generate_cover": False,
-                "allow_cloud_llm": False,
-            }
-
-        from app.core.permissions import ItemPermissions
-
-        return {
-            "allow_generate_cover": user.has_permission(ItemPermissions.LLM_GENERATE_COVER.value),
-            "allow_cloud_llm": user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value),
-        }
-
-
-class ConsentRecord(db.Model):  # type: ignore[name-defined]
-    __tablename__ = "user_consents"
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    consent_type = db.Column(db.String(50), nullable=False, index=True)
-    is_granted = db.Column(db.Boolean, nullable=False)
-    policy_version = db.Column(db.String(50), nullable=False)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
-
-
-# ... FRBR models (Work, Expression, Manifestation, LLMTelemetry)
-
-
-class Work(db.Model):  # type: ignore[name-defined]
-    """
-    FRBR Group 1: Work
-    A distinct intellectual or artistic creation.
-    e.g., "The Hobbit" (the story itself, regardless of language).
-    """
-
-    __tablename__ = "works"
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(1000), nullable=False)  # Increased from 255 to handle long titles
-    # Flexible metadata (e.g., original_language, first_performance_date)
-    meta = db.Column(db.JSON, default={})
-
-    # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-    ):
-        fts_simple = db.Column(
-            TSVECTOR(),
-            db.Computed(
-                "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
-                persisted=True,
-            ),
-            nullable=True,
-        )
-        __table_args__: tuple = (db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),)
-    else:
-        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
-        __table_args__ = ()  # type: ignore[assignment]
-
-    # Relationships
-    expressions = db.relationship("Expression", backref="work", lazy=True)
-
-
-class Expression(db.Model):  # type: ignore[name-defined]
-    """
-    FRBR Group 1: Expression
-    The intellectual realization of a work.
-    e.g., The English text of The Hobbit, or the German translation.
-    """
-
-    __tablename__ = "expressions"
-    id = db.Column(db.Integer, primary_key=True)
-    work_id = db.Column(db.Integer, db.ForeignKey("works.id"), nullable=False)
-    content_type = db.Column(db.String(50))  # e.g., 'text', 'sound', 'notated_music'
-    language = db.Column(db.String(10))  # e.g., 'en', 'pl'
-    meta = db.Column(db.JSON, default={})
-
-    # Relationships
-    manifestations = db.relationship("Manifestation", backref="expression", lazy=True)
-
-
-class Manifestation(db.Model):  # type: ignore[name-defined]
-    """
-    FRBR Group 1: Manifestation
-    The physical or digital embodiment of an expression.
-    e.g., The 1937 Allen & Unwin Hardcover edition.
-    """
-
-    __tablename__ = "manifestations"
-    id = db.Column(db.Integer, primary_key=True)
-    expression_id = db.Column(db.Integer, db.ForeignKey("expressions.id"), nullable=False)
-
-    # Identifiers
-    isbn13 = db.Column(db.String(13), index=True, unique=True)
-    upc = db.Column(db.String(12), index=True)
-    ean = db.Column(db.String(13), index=True)
-
-    publisher = db.Column(db.String(500))  # Increased from 255 for long publisher names
-    publication_date = db.Column(db.Date)
-    cover_url = db.Column(db.String(255), nullable=True)
-    meta = db.Column(db.JSON, default={})  # Stores cover images, page count, dimensions
-
-    # Full-text search column for PostgreSQL (production only, breaks SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-    ):
-        fts_simple = db.Column(
-            TSVECTOR(),
-            db.Computed(
-                "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
-                persisted=True,
-            ),
-            nullable=True,
-        )
-        __table_args__: tuple = (db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),)
-    else:
-        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
-        __table_args__ = ()  # type: ignore[assignment]
-
-    def update_meta(self, **kwargs):
-        """Safely updates the meta JSON field."""
-        meta = dict(self.meta) if self.meta else {}
-        meta.update(kwargs)
-        self.meta = meta
-
-    # Relationships
-    items = db.relationship("Item", backref="manifestation", lazy=True)
-
-
-class Item(db.Model):  # type: ignore[name-defined]
-    """
-    FRBR Group 1: Item
-    A single exemplar of a manifestation.
-    e.g., The specific book on your shelf.
-    """
-
-    __tablename__ = "items"
-    id = db.Column(db.Integer, primary_key=True)
-    manifestation_id = db.Column(db.Integer, db.ForeignKey("manifestations.id"), nullable=False)
-
-    # User ownership data
-    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-
-    status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
-    condition = db.Column(db.String(50))
-
-    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    meta = db.Column(db.JSON, default={})  # Custom tags, notes, location on shelf
-
-
-class LLMTelemetry(db.Model):  # type: ignore[name-defined]
-    __tablename__ = "llm_telemetry"
-    id = db.Column(db.Integer, primary_key=True)
-    provider = db.Column(db.String(50), nullable=False)
-    user_id = db.Column(db.String(100), nullable=False)
-    images_generated = db.Column(db.Integer, default=0)
-    estimated_cost_usd = db.Column(db.Float, default=0.0)
-    total_duration_seconds = db.Column(db.Float, default=0.0)
-    __table_args__ = (db.UniqueConstraint("provider", "user_id", name="uq_provider_user"),)
-
-
-class InstanceSettings(db.Model):  # type: ignore[name-defined]
-    """
-    Stores global configuration for the iqoqo instance (e.g., federation toggles,
-    affiliate links, default language).
-    """
-
-    __tablename__ = "instance_settings"
-    id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    value = db.Column(db.JSON, nullable=False)
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+# db is imported here so that ``from app.db.models import db`` also continues to work.
+from . import db  # noqa: F401
