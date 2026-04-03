@@ -34,7 +34,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
+      sh -c "python scripts/fix_alembic.py && flask db upgrade && gunicorn --bind 0.0.0.0:5000 run:app"
     env_file:
       - ${ENV_FILE:-.env}
     depends_on:
