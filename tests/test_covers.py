@@ -160,6 +160,7 @@ def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
 
     mock_response = MagicMock()
     mock_response.status_code = 200
+    mock_response.headers = {"content-length": str(MIN_COVER_FILE_SIZE)}
     mock_response.iter_content.return_value = [b"a" * MIN_COVER_FILE_SIZE]
     mock_get.return_value.__enter__.return_value = mock_response
 
