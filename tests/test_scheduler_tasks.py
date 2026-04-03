@@ -27,6 +27,7 @@ def test_scheduler_initialized(app):
     """Verify that APScheduler is running and daily_backup is registered."""
     # Ensure scheduler is initialized for this test despite being in TESTING mode
     from app.core.scheduler import init_scheduler
+
     app.config["SCHEDULER_AUTOSTART"] = True
     try:
         init_scheduler(app)

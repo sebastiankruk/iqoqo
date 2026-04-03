@@ -47,4 +47,5 @@ Use this workflow when asked to "Review and finalize PR <number>" or prepare a b
 
    - Commit all changes with standard conventional commits.
    - Push changes to the remote repository.
+   - **Post-Push Interaction**: Respond to all addressed review comments on GitHub with a summary of the fix. If possible, resolve the corresponding discussion threads to maintain a clean PR state.
    - Generate a "Manual Testing Guide" artifact documenting what was changed and step-by-step instructions on how a human should verify this branch.
