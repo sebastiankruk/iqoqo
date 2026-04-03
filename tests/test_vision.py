@@ -281,6 +281,7 @@ def test_extract_waterfall_all_exception_returns_none(mock_tesseract, mock_ollam
 
     assert result is None
 
+
 @patch("app.utils.vision._extract_via_gemini")
 @patch("app.utils.vision._extract_via_ollama")
 @patch("app.utils.vision._extract_via_tesseract")

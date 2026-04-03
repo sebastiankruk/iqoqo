@@ -120,51 +120,46 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
 
 def download_direct_url(identifier: str, url: str, source_name: str, suffix: str = "ext") -> tuple[str, str] | None:
     """Securely downloads a direct image URL to the local filesystem."""
+    res = None
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         with requests.get(url, stream=True, timeout=10, headers=headers) as response:
-            if response.status_code != 200:
-                return None
+            if response.status_code == 200:
+                # Fast fail on known bad sizes if header is present
+                try:
+                    header_len_raw = response.headers.get("content-length")
+                    if header_len_raw is not None:
+                        header_len = int(header_len_raw)
+                        if 0 < header_len < MIN_COVER_FILE_SIZE:
+                            return None
+                except (TypeError, ValueError):
+                    pass
 
-            # Fast fail on known bad sizes if header is present
-            try:
-                header_len_raw = response.headers.get("content-length")
-                if header_len_raw is not None:
-                    header_len = int(header_len_raw)
-                    if 0 < header_len < MIN_COVER_FILE_SIZE:
+                logger.debug(f"Downloading cover for {identifier} from URL {url}.")
+
+                downloaded = bytearray()
+                for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    downloaded.extend(chunk)
+                    if len(downloaded) > MAX_COVER_FILE_SIZE:
+                        logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
                         return None
-            except (TypeError, ValueError):
-                pass
 
-            logger.debug(f"Downloading cover for {identifier} from URL {url}.")
+                if len(downloaded) >= MIN_COVER_FILE_SIZE:
+                    content = bytes(downloaded)
+                    if is_valid_cover(content):
+                        logger.info(f"Cover for {identifier} downloaded successfully from URL {url}.")
 
-            downloaded = bytearray()
-            for chunk in response.iter_content(chunk_size=8192):
-                if not chunk:
-                    continue
-                downloaded.extend(chunk)
-                if len(downloaded) > MAX_COVER_FILE_SIZE:
-                    logger.warning(f"Direct URL {url} exceeded limits. Aborting.")
-                    return None
-
-            if len(downloaded) < MIN_COVER_FILE_SIZE:
-                return None
-
-            content = bytes(downloaded)
-            if not is_valid_cover(content):
-                return None
-
-            logger.info(f"Cover for {identifier} downloaded successfully from URL {url}.")
-
-            filename = f"{identifier}_{suffix}.jpg"
-            filepath = os.path.join(COVERS_DIR, filename)
-            optimize_and_save_image(content, filepath)
-            return f"{Config.COVERS_BASE_URL}/{filename}", source_name
+                        filename = f"{identifier}_{suffix}.jpg"
+                        filepath = os.path.join(COVERS_DIR, filename)
+                        optimize_and_save_image(content, filepath)
+                        res = f"{Config.COVERS_BASE_URL}/{filename}", source_name
     except (requests.RequestException, OSError, ValueError, TypeError) as e:
         logger.error(f"Error fetching direct URL {url}: {e}")
-    return None
+    return res
 
 
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
