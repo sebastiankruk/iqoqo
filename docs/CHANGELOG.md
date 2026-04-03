@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Vision Waterfall**: Hardened exception handling to ensure robust fallback from Gemini to local backends (Ollama, Tesseract) during API or network failures.
-
 - **UI Refinement**: Updated `ItemSidebar` to include the `MultiImageUploader` and categorized status selection.
 - **Infrastructure**: Added `GALLERY_DIR` for storing secondary manifestation scans.
 
