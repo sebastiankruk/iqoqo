@@ -13,14 +13,20 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+/**
+ * The scan page for capturing barcodes, covers, and manual entry.
+ *
+ * @module app/scan/page
+ */
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import type { FormEvent } from "react";
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
+import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
+import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -62,16 +68,14 @@ export default function ScanPage() {
     toast.success("Cover metadata extracted! Please review.");
   }, []);
 
-  const handleManualSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+  const handleManualSubmit = async (data: ManualEntryData) => {
     const payload = {
-      Title: formData.get("title")?.toString() || "Unknown",
-      Authors: [formData.get("author")?.toString() || "Unknown"],
-      Format: formData.get("format")?.toString() || "text",
-      ISBN: formData.get("isbn")?.toString() || undefined,
-      PublicationDate: formData.get("pubdate")?.toString() || undefined,
-      Description: formData.get("description")?.toString() || undefined,
+      Title: data.title || "Unknown",
+      Authors: data.authors ? data.authors.split(",").map(a => a.trim()) : ["Unknown"],
+      Format: data.format === "book" ? "text" : "sound", // Map UI format to API format
+      ISBN: data.identifier || undefined,
+      PublicationDate: data.year || undefined,
+      Publisher: data.publisher || undefined,
     };
 
     addManualMutation.mutate(payload, {
@@ -157,101 +161,14 @@ export default function ScanPage() {
       )}
 
       {showManual && (
-        <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl p-6 pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold font-serif text-foreground">Manual Entry</h2>
-            <button onClick={() => setShowManual(false)} className="text-muted-foreground hover:text-foreground">
-              Cancel
-            </button>
-          </div>
-          <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="manual-title" className="text-sm font-medium text-foreground block mb-1">
-                Title
-              </label>
-              <input
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                id="manual-title"
-                name="title"
-                required
-                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
-                placeholder="E.g. The Hobbit"
-              />
-            </div>
-            <div>
-              <label htmlFor="manual-author" className="text-sm font-medium text-foreground block mb-1">
-                Author / Creator
-              </label>
-              <input
-                value={author}
-                onChange={e => setAuthor(e.target.value)}
-                id="manual-author"
-                name="author"
-                required
-                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
-                placeholder="E.g. J.R.R. Tolkien"
-              />
-            </div>
-            <div>
-              <label htmlFor="manual-isbn" className="text-sm font-medium text-foreground block mb-1">
-                ISBN (Optional)
-              </label>
-              <input
-                id="manual-isbn"
-                name="isbn"
-                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
-                placeholder="978-..."
-              />
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label htmlFor="manual-pubdate" className="text-sm font-medium text-foreground block mb-1">
-                  Publish Date
-                </label>
-                <input
-                  type="date"
-                  id="manual-pubdate"
-                  name="pubdate"
-                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary text-foreground"
-                />
-              </div>
-              <div className="flex-1">
-                <label htmlFor="manual-format" className="text-sm font-medium text-foreground block mb-1">
-                  Format
-                </label>
-                <select
-                  id="manual-format"
-                  name="format"
-                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="text">Book (Text)</option>
-                  <option value="sound">CD/Vinyl</option>
-                  <option value="video">DVD/BluRay</option>
-                  <option value="game">Board Game</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label htmlFor="manual-description" className="text-sm font-medium text-foreground block mb-1">
-                Description (Optional)
-              </label>
-              <textarea
-                id="manual-description"
-                name="description"
-                rows={3}
-                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Brief summary..."
-              ></textarea>
-            </div>
-            <button
-              type="submit"
-              disabled={addManualMutation.isPending}
-              className="mt-2 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              {addManualMutation.isPending ? "Adding..." : "Add to Library"}
-            </button>
-          </form>
+        <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
+          <ManualEntryForm 
+            onSubmit={handleManualSubmit}
+            onCancel={() => setShowManual(false)}
+            initialTitle={title}
+            initialAuthors={author}
+            initialFormat={activeFormat}
+          />
         </div>
       )}
     </div>

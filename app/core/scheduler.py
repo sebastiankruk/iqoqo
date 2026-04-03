@@ -22,6 +22,7 @@ def run_scheduled_backup():
         from flask import current_app
 
         from scripts.backup import create_export
+
         create_export(current_app)
         logger.info("Scheduled backup job completed successfully.")
     except Exception:  # pylint: disable=broad-exception-caught # noqa: BLE001
@@ -51,13 +52,15 @@ def init_scheduler(app):
             trigger="cron",
             hour=app.config.get("BACKUP_CRON_HOUR", "3"),
             minute=app.config.get("BACKUP_CRON_MINUTE", "0"),
-            replace_existing=True
+            replace_existing=True,
         )
 
         scheduler.start()
-        logger.info("APScheduler initialized and started. Backup scheduled at %s:%s.",
-                    app.config.get("BACKUP_CRON_HOUR", "3"),
-                    app.config.get("BACKUP_CRON_MINUTE", "0"))
+        logger.info(
+            "APScheduler initialized and started. Backup scheduled at %s:%s.",
+            app.config.get("BACKUP_CRON_HOUR", "3"),
+            app.config.get("BACKUP_CRON_MINUTE", "0"),
+        )
     except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
         # Handle cases where scheduler might have started between the check and start()
         if "already running" in str(e).lower():

@@ -28,8 +28,8 @@
  */
 "use client";
 
-import React, { useRef, useState } from "react";
-import { Camera, Loader2 } from "lucide-react";
+import React, { useRef, useState, useEffect } from "react";
+import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import {
@@ -83,19 +83,19 @@ interface CameraCaptureProps {
 
 /**
  * A camera/file-capture button that either uploads a cover image or triggers
- * vision-based metadata extraction, depending on the `manifestationId` prop.
+ * vision-based metadata extraction, depending on the `manifestation_id` prop.
  *
- * @param root0 - Component props.
- * @param root0.manifestation_id - If set, uploads the image as a cover for this manifestation.
- * @param root0.onUploadComplete - Called after a successful cover upload (mode 1).
- * @param root0.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
- * @param root0.className - Optional CSS class name applied to the wrapper div.
- * @param root0.capture - Whether to force the camera or omit for gallery
- * @param root0.label - Label for the button
- * @param root0.icon - Optional icon component
- * @param root0.confirmTitle - If set, shows a confirmation dialog before opening the camera
- * @param root0.confirmMessage - Confirmation message
- * @param root0.format - Initial media format
+ * @param props - Component props.
+ * @param props.manifestation_id - If set, uploads the image as a cover for this manifestation.
+ * @param props.onUploadComplete - Called after a successful cover upload (mode 1).
+ * @param props.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
+ * @param props.className - Optional CSS class name applied to the wrapper div.
+ * @param props.capture - Whether to force the camera or omit for gallery
+ * @param props.label - Label for the button
+ * @param props.icon - Optional icon component
+ * @param props.confirmTitle - If set, shows a confirmation dialog before opening the camera
+ * @param props.confirmMessage - Confirmation message
+ * @param props.format - Initial media format
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
@@ -113,7 +113,24 @@ export function CameraCapture({
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if a physical camera is available
+  useEffect(() => {
+    let mounted = true;
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        const videoInputs = devices.filter((d) => d.kind === "videoinput");
+        if (mounted) setHasCamera(videoInputs.length > 0);
+      }).catch(() => {
+        if (mounted) setHasCamera(false);
+      });
+    } else {
+      setHasCamera(false);
+    }
+    return () => { mounted = false; };
+  }, []);
 
   const processFile = async (file: File) => {
     setUploading(true);
@@ -178,9 +195,16 @@ export function CameraCapture({
     fileInputRef.current?.click();
   };
 
+  // Determine if we should show the drag & drop standard layout (desktop / no camera)
+  const isDesktopMode = hasCamera === false || capture === false;
+
   return (
     <div
-      className={`${className} ${isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : ""}`}
+      className={`w-full ${className} ${
+        isDesktopMode 
+          ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " + (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
+          : (isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : "")
+      }`}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -191,31 +215,56 @@ export function CameraCapture({
       <input
         type="file"
         accept="image/*"
-        {...(capture !== false ? { capture } : {})}
+        {...(capture !== false && hasCamera ? { capture } : {})}
         ref={fileInputRef}
         onChange={handleCapture}
         className="hidden"
       />
-      <div className="flex flex-col gap-4">
-
-        <button
-          onClick={handleClick}
-          disabled={uploading}
-          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              {icon || <Camera className="mr-2 h-4 w-4" />}
-              {label}
-            </>
-          )}
-        </button>
-      </div>
+      
+      {isDesktopMode ? (
+        <div className="flex flex-col items-center justify-center gap-3 text-center">
+          <UploadCloud className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`} />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">
+              Drag & Drop cover image here
+            </p>
+            <p className="text-xs text-muted-foreground">
+              or click to browse files
+            </p>
+          </div>
+          <button
+            onClick={handleClick}
+            disabled={uploading}
+            className="mt-2 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {uploading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+            ) : (
+              "Browse Files"
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 w-full">
+          <button
+            onClick={handleClick}
+            disabled={uploading}
+            className="inline-flex w-full items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                {icon || <Camera className="mr-2 h-4 w-4" />}
+                {label}
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {confirmTitle && (
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
