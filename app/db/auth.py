@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import uuid
 from datetime import UTC, datetime
 
@@ -26,19 +28,31 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 
 # ---------------------------------------------------------------------------
+# Schema selector
+# ---------------------------------------------------------------------------
+_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
+    _USE_PG = False
+
+_AUTH: str | None = "auth" if _USE_PG else None
+_AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
+
+# ---------------------------------------------------------------------------
 # RBAC association tables
 # ---------------------------------------------------------------------------
 
 user_roles = db.Table(
     "user_roles",
-    db.Column("user_id", UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("user_id", UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("role_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}roles.id", ondelete="CASCADE"), primary_key=True),
+    schema=_AUTH,
 )
 
 role_permissions = db.Table(
     "role_permissions",
-    db.Column("role_id", db.Integer, db.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("permission_id", db.Integer, db.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("role_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}roles.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("permission_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}permissions.id", ondelete="CASCADE"), primary_key=True),
+    schema=_AUTH,
 )
 
 
@@ -51,6 +65,7 @@ class TokenBlocklist(db.Model):  # type: ignore[name-defined]
     """JWT token revocation blocklist."""
 
     __tablename__ = "token_blocklist"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
 
     id = db.Column(db.Integer, primary_key=True)
     jti = db.Column(db.String(36), nullable=False, index=True)
@@ -66,6 +81,7 @@ class Permission(db.Model):  # type: ignore[name-defined]
     """A granular permission that can be assigned to roles."""
 
     __tablename__ = "permissions"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False, index=True)
@@ -76,6 +92,7 @@ class Role(db.Model):  # type: ignore[name-defined]
     """A named role that aggregates permissions."""
 
     __tablename__ = "roles"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False, index=True)
@@ -88,6 +105,7 @@ class User(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "users"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
@@ -154,9 +172,10 @@ class ConsentRecord(db.Model):  # type: ignore[name-defined]
     """GDPR consent record for a user."""
 
     __tablename__ = "user_consents"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False)
     consent_type = db.Column(db.String(50), nullable=False, index=True)
     is_granted = db.Column(db.Boolean, nullable=False)
     policy_version = db.Column(db.String(50), nullable=False)

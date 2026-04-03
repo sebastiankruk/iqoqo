@@ -23,7 +23,7 @@ from . import db
 
 
 class LLMTelemetry(db.Model):  # type: ignore[name-defined]
-    """Tracks LLM API usage per provider, user, and operation type."""
+    """Tracks individual LLM API executions per provider, user, and operation type."""
 
     __tablename__ = "llm_telemetry"
 
@@ -34,8 +34,9 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
     total_duration_seconds = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
-    __table_args__ = (db.UniqueConstraint("provider", "user_id", "operation_type", name="uq_provider_user_op"),)
+    __table_args__ = (db.UniqueConstraint("provider", "user_id", "operation_type", "created_at", name="uq_provider_user_op_time"),)
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]

@@ -56,3 +56,7 @@ app/static/archive/covers/*
 covers.tar.gz
 app/static/uploads/raw_covers/*
 app/static/uploads/covers/*
+
+# Testing
+test-results/
+playwright-report/

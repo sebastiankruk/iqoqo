@@ -41,7 +41,7 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
         return None
 
     url = f"https://api.discogs.com/database/search?barcode={barcode}&type=release"
-    headers = {"User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )", "Authorization": f"Discogs token={token}"}
+    headers = {"User-Agent": "iqoqo/0.3.0 ( dev@kruk.me )", "Authorization": f"Discogs token={token}"}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)

@@ -124,6 +124,7 @@ def test_backup_creation(app, tmp_path):
     ):
 
         mock_export.return_value = {"test": "data"}
+        app.config["BACKUP_DIR"] = str(tmp_path)
 
         create_export(app=app)
 

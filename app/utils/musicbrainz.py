@@ -33,7 +33,7 @@ def fetch_audio_metadata(barcode: str) -> dict | None:
         dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
     """
     url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
-    headers = {"User-Agent": "iqoqo/0.2.0 ( dev@kruk.me )"}
+    headers = {"User-Agent": "iqoqo/0.3.0 ( dev@kruk.me )"}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)
