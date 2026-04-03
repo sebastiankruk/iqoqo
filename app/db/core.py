@@ -13,13 +13,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-"""Core FRBR hierarchy models (catalog schema).
+"""This module contains the core bibliographic models based on the FRBR ontology:
+- :class:`Work` (catalog schema)
+- :class:`Expression` (catalog schema)
+- :class:`Manifestation` (catalog schema)
+- :class:`Item` (inventory schema)
 
-FRBR Group 1 entities:
-  Work → Expression → Manifestation → Item
-
-All four tables live in the ``catalog`` PostgreSQL schema, keeping them
-logically separated from the auth/settings tables in ``public``.
+The hierarchy follows the Work -> Expression -> Manifestation -> Item structure.
+Note that while most bibliographic data resides in the ``catalog`` schema,
+individual ``Item`` records reside in the ``inventory`` schema and reference
+user ownership in the ``auth`` schema.
 """
 
 from __future__ import annotations

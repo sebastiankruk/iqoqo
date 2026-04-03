@@ -32,21 +32,50 @@ depends_on = None
 
 
 def upgrade():
-    """Add created_at column to llm_telemetry and populate existing rows."""
+    """Add created_at column and transition to uq_provider_user_op_time constraint."""
     # 1. Add column allowing NULLs first
     with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
         batch_op.add_column(sa.Column('created_at', sa.DateTime(), nullable=True))
 
-    # 2. Update existing rows with current UTC timestamp
-    # Using CURRENT_TIMESTAMP for portability; in Postgres it maps to NOW()
-    op.execute("UPDATE llm_telemetry SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+    # 2. Update existing rows with UTC timestamp
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            sa.text(
+                "UPDATE llm_telemetry "
+                "SET created_at = TIMEZONE('UTC', CURRENT_TIMESTAMP) "
+                "WHERE created_at IS NULL"
+            )
+        )
+    else:
+        op.execute(
+            sa.text("UPDATE llm_telemetry SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+        )
 
     # 3. Alter column to disallow NULLs
     with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
         batch_op.alter_column('created_at', nullable=False)
 
+    # 4. Migrate unique constraints
+    with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
+        # Drop old summary-style constraint
+        batch_op.drop_constraint("uq_provider_user_op", type_="unique")
+        # Create new log-style constraint including timestamp
+        batch_op.create_unique_constraint(
+            "uq_provider_user_op_time", 
+            ["provider", "user_id", "operation_type", "created_at"]
+        )
+
 
 def downgrade():
-    """Remove created_at column from llm_telemetry."""
+    """Revert telemetry constraints and remove created_at column."""
     with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
+        # Remove new constraint
+        batch_op.drop_constraint("uq_provider_user_op_time", type_="unique")
+        # Recreate old constraint (Note: this may fail if duplicate logs exist)
+        batch_op.create_unique_constraint(
+            "uq_provider_user_op", 
+            ["provider", "user_id", "operation_type"]
+        )
+        # Drop created_at column
         batch_op.drop_column('created_at')

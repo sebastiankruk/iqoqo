@@ -44,44 +44,24 @@ PRICING = {
 
 
 def record_telemetry(provider: str, user_id: str, duration: float, operation_type: str = "cover_generation"):
-    """Updates telemetry after a successful generation.
+    """Records a new telemetry entry after a successful LLM operation.
 
-    Records per-user telemetry and accumulates total processing duration.
+    Each execution is recorded as a separate row to provide a full audit trail.
     """
-    from sqlalchemy.exc import IntegrityError
-
-    for attempt in range(2):
-        try:
-            stat = LLMTelemetry.query.filter_by(provider=provider, user_id=user_id, operation_type=operation_type).first()
-            if not stat:
-                stat = LLMTelemetry(provider=provider, user_id=user_id, operation_type=operation_type)
-                stat.images_generated = 0
-                stat.estimated_cost_usd = 0.0
-                stat.total_duration_seconds = 0.0
-                db.session.add(stat)
-
-            if stat.images_generated is None:
-                stat.images_generated = 0
-            stat.images_generated += 1
-
-            if stat.estimated_cost_usd is None:
-                stat.estimated_cost_usd = 0.0
-            stat.estimated_cost_usd += PRICING.get(provider, 0.0)
-
-            if stat.total_duration_seconds is None:
-                stat.total_duration_seconds = 0.0
-            stat.total_duration_seconds += duration
-
-            db.session.commit()
-            break
-        except IntegrityError:
-            db.session.rollback()
-            if attempt == 1:
-                logger.error("Failed to record telemetry after 2 attempts due to concurrent inserts.")
-        except (RuntimeError, ValueError, TypeError) as e:
-            logger.error("Failed to record telemetry: %s", e)
-            db.session.rollback()
-            break
+    try:
+        stat = LLMTelemetry(
+            provider=provider,
+            user_id=user_id,
+            operation_type=operation_type,
+            images_generated=1,
+            estimated_cost_usd=PRICING.get(provider, 0.0),
+            total_duration_seconds=duration,
+        )
+        db.session.add(stat)
+        db.session.commit()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Failed to record telemetry: %s", e)
+        db.session.rollback()
 
 
 def save_image(image_data: bytes, identifier: str, suffix: str) -> str:
