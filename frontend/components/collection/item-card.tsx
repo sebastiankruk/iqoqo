@@ -91,7 +91,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
   const timestamp = getCoverTimestamp(tMeta);
 
-  const coverUrl = getCoverUrl(itemCoverUrl || undefined, timestamp) || (isCatalog
+  const coverUrl =
+    getCoverUrl(itemCoverUrl || undefined, timestamp) ||
+    (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
       : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
         ((item as Item).meta?.["cover_url"] as string | undefined)));

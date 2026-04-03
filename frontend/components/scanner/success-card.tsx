@@ -125,10 +125,14 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Dynamic Cover Art Aspect Ratio */}
-            <div className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
+            <div
+              className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? "aspect-square" : "aspect-[2/3]"}`}
+            >
               {coverUrl && coverUrl !== "/file.svg" ? (
                 <Image
-                  src={coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl}
+                  src={
+                    coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl
+                  }
                   alt={title}
                   fill
                   className="object-cover"
@@ -148,7 +152,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
             <div className="flex flex-col flex-1 gap-4">
               <div className="space-y-2">
                 <Badge variant="secondary" className="w-fit mb-2">
-                  {isAudio ? 'Audio Media' : 'Book / Text'}
+                  {isAudio ? "Audio Media" : "Book / Text"}
                 </Badge>
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
                 <p className="text-lg text-muted-foreground">{authorDisplay}</p>
@@ -156,48 +160,47 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
 
               {isMissingID && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
-                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection, but manual cleanup may be required.
+                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection,
+                  but manual cleanup may be required.
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
-                <div className="text-muted-foreground font-semibold flex items-center gap-2">
-                  Identifier
-                </div>
+                <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
                 <div className="font-mono text-xs break-all">{identifier}</div>
                 {format && (
                   <>
-                  <div className="text-muted-foreground font-semibold">Format</div>
-                  <div>{format.toUpperCase()}</div>
+                    <div className="text-muted-foreground font-semibold">Format</div>
+                    <div>{format.toUpperCase()}</div>
                   </>
                 )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
-                 <Button
-                   className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                   variant="default"
-                   disabled={adding}
-                   onClick={handleAdd}
-                   aria-label="Add to Collection"
-                 >
-                   {adding ? (
-                     "Adding..."
-                   ) : (
-                     <>
-                       <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                       Add to Collection
-                     </>
-                   )}
-                 </Button>
-                 <Button
-                   variant="outline"
-                   className="flex-1 min-w-[140px] h-12 rounded-xl"
-                   onClick={onDismiss}
-                   aria-label="Scan Another"
-                 >
-                   Scan Another
-                 </Button>
+                <Button
+                  className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                  variant="default"
+                  disabled={adding}
+                  onClick={handleAdd}
+                  aria-label="Add to Collection"
+                >
+                  {adding ? (
+                    "Adding..."
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                      Add to Collection
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[140px] h-12 rounded-xl"
+                  onClick={onDismiss}
+                  aria-label="Scan Another"
+                >
+                  Scan Another
+                </Button>
               </div>
             </div>
           </div>

@@ -245,7 +245,7 @@ export function BottomSheet({
 
       // Draw cropped area
       ctx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
-      
+
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
       if (!blob) throw new Error("Failed to encode image");
 
@@ -259,7 +259,7 @@ export function BottomSheet({
         data: { Title?: string; Authors?: string[] } | null;
         error?: string | null;
       }>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
-      
+
       const envelope = response.data;
       if (envelope.success && envelope.data) {
         if (onExtractComplete) onExtractComplete(envelope.data, file);
@@ -275,7 +275,9 @@ export function BottomSheet({
 
   /* Cleanup on unmount */
   useEffect(() => {
-    return () => { stopScanner(); };
+    return () => {
+      stopScanner();
+    };
   }, [stopScanner]);
 
   const handleManualSearch = (e: React.FormEvent) => {
@@ -285,7 +287,9 @@ export function BottomSheet({
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 flex h-[40%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
-      <div className="flex justify-center pt-3 pb-2"><div className="h-1 w-10 rounded-full bg-border" /></div>
+      <div className="flex justify-center pt-3 pb-2">
+        <div className="h-1 w-10 rounded-full bg-border" />
+      </div>
       <div className="flex justify-center px-6">
         <div className="inline-flex rounded-xl bg-secondary p-1">
           {TABS.map(tab => (
@@ -293,7 +297,9 @@ export function BottomSheet({
               key={tab.id}
               onClick={() => handleTabChange(tab.id as TabId)}
               className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                activeTab === tab.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                activeTab === tab.id
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
@@ -307,26 +313,45 @@ export function BottomSheet({
 
         {activeTab === "barcode" && (
           <>
-            <button onClick={scannerActive ? undefined : startScanner} disabled={isSearching} className="group relative flex items-center justify-center">
+            <button
+              onClick={scannerActive ? undefined : startScanner}
+              disabled={isSearching}
+              className="group relative flex items-center justify-center"
+            >
               <span className="absolute h-[76px] w-[76px] rounded-full border-[3px] border-primary/30 animate-[pulse-ring_2s_ease-in-out_infinite]" />
               <span className="absolute h-[68px] w-[68px] rounded-full border-[3px] border-primary" />
               <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-active:scale-90">
                 <Camera className={`h-6 w-6 ${scannerActive ? "animate-pulse" : ""}`} />
               </span>
             </button>
-            <p className="text-xs text-muted-foreground">{scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}</p>
+            <p className="text-xs text-muted-foreground">
+              {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}
+            </p>
           </>
         )}
 
         {activeTab === "cover" && (
           <div className="flex w-full flex-col gap-4">
             {!scannerActive ? (
-              <button onClick={startScanner} className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-sm">
+              <button
+                onClick={startScanner}
+                className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-sm"
+              >
                 <Camera className="mr-2 h-5 w-5" /> Start Live Camera
               </button>
             ) : (
-              <button onClick={handleSnapFromVideo} disabled={isUploadingCover} className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50">
-                {isUploadingCover ? <span className="animate-pulse">Analyzing frame...</span> : <><Camera className="mr-2 h-5 w-5" /> Snap Live Frame</>}
+              <button
+                onClick={handleSnapFromVideo}
+                disabled={isUploadingCover}
+                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50"
+              >
+                {isUploadingCover ? (
+                  <span className="animate-pulse">Analyzing frame...</span>
+                ) : (
+                  <>
+                    <Camera className="mr-2 h-5 w-5" /> Snap Live Frame
+                  </>
+                )}
               </button>
             )}
             <div className="relative flex w-full items-center py-1">
@@ -334,7 +359,13 @@ export function BottomSheet({
               <span className="mx-4 flex-shrink-0 text-xs text-muted-foreground uppercase tracking-widest">or</span>
               <div className="flex-grow border-t border-border"></div>
             </div>
-            <CameraCapture capture={false} label="Upload from Gallery" icon={<ImagePlus className="mr-2 h-5 w-5" />} onExtractComplete={(data, file) => onExtractComplete?.(data, file)} className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent" />
+            <CameraCapture
+              capture={false}
+              label="Upload from Gallery"
+              icon={<ImagePlus className="mr-2 h-5 w-5" />}
+              onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
+              className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
+            />
           </div>
         )}
 
@@ -342,15 +373,31 @@ export function BottomSheet({
           <div className="flex w-full flex-col">
             <form onSubmit={handleManualSearch} className="w-full">
               <div className="relative">
-                <input type="text" value={manualIsbn} onChange={e => setManualIsbn(e.target.value)} placeholder="Enter barcode or title..." className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2" />
-                <button type="submit" disabled={isSearching || !manualIsbn} className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground">
+                <input
+                  type="text"
+                  value={manualIsbn}
+                  onChange={e => setManualIsbn(e.target.value)}
+                  placeholder="Enter barcode or title..."
+                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching || !manualIsbn}
+                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
+                >
                   <Search className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-2 text-center text-xs text-muted-foreground">{isSearching ? "Looking up…" : "Try ISBN or UPC"}</p>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {isSearching ? "Looking up…" : "Try ISBN or UPC"}
+              </p>
             </form>
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
-              <button type="button" onClick={onShowManualForm} className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80">
+              <button
+                type="button"
+                onClick={onShowManualForm}
+                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
+              >
                 Manual Entry Form
               </button>
             </div>

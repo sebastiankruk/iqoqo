@@ -121,16 +121,21 @@ export function CameraCapture({
   useEffect(() => {
     let mounted = true;
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then((devices) => {
-        const videoInputs = devices.filter((d) => d.kind === "videoinput");
-        if (mounted) setHasCamera(videoInputs.length > 0);
-      }).catch(() => {
-        if (mounted) setHasCamera(false);
-      });
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then(devices => {
+          const videoInputs = devices.filter(d => d.kind === "videoinput");
+          if (mounted) setHasCamera(videoInputs.length > 0);
+        })
+        .catch(() => {
+          if (mounted) setHasCamera(false);
+        });
     } else {
       setHasCamera(false);
     }
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const processFile = async (file: File) => {
@@ -202,11 +207,14 @@ export function CameraCapture({
   return (
     <div
       className={`w-full ${className ?? ""} ${
-        isDesktopMode 
-          ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " + (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
-          : (isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : "")
+        isDesktopMode
+          ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " +
+            (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
+          : isDragging
+            ? "ring-2 ring-primary ring-offset-2 rounded-md"
+            : ""
       }`}
-      onDragOver={(e) => {
+      onDragOver={e => {
         e.preventDefault();
         setIsDragging(true);
       }}
@@ -221,25 +229,21 @@ export function CameraCapture({
         onChange={handleCapture}
         className="hidden"
       />
-      
+
       {isDesktopMode ? (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
-          <UploadCloud className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`} />
+          <UploadCloud
+            className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`}
+          />
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">
-              Drag & Drop cover image here
-            </p>
-            <p className="text-xs text-muted-foreground">
-              or click to browse files
-            </p>
+            <p className="text-sm font-medium">Drag & Drop cover image here</p>
+            <p className="text-xs text-muted-foreground">or click to browse files</p>
           </div>
-          <Button
-            onClick={handleClick}
-            disabled={uploading}
-            className="mt-2"
-          >
+          <Button onClick={handleClick} disabled={uploading} className="mt-2">
             {uploading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+              </>
             ) : (
               "Browse Files"
             )}
@@ -247,12 +251,7 @@ export function CameraCapture({
         </div>
       ) : (
         <div className="flex flex-col gap-4 w-full">
-          <Button
-            onClick={handleClick}
-            disabled={uploading}
-            variant="outline"
-            className="w-full"
-          >
+          <Button onClick={handleClick} disabled={uploading} variant="outline" className="w-full">
             {uploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

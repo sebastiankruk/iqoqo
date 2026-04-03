@@ -15,11 +15,11 @@ describe("ManualEntryForm", () => {
     const mockCancel = vi.fn();
 
     render(
-      <ManualEntryForm 
-        onSubmit={mockSubmit} 
-        onCancel={mockCancel} 
-        initialIdentifier="9780131103627" 
-        initialFormat="book" 
+      <ManualEntryForm
+        onSubmit={mockSubmit}
+        onCancel={mockCancel}
+        initialIdentifier="9780131103627"
+        initialFormat="book"
       />
     );
 
@@ -35,21 +35,21 @@ describe("ManualEntryForm", () => {
     render(<ManualEntryForm onSubmit={mockSubmit} onCancel={mockCancel} />);
 
     // Fill required field
-    fireEvent.change(screen.getByLabelText(/Title \*/i), { 
-      target: { value: "The C Programming Language" } 
+    fireEvent.change(screen.getByLabelText(/Title \*/i), {
+      target: { value: "The C Programming Language" },
     });
-    
+
     // Fill optional fields
-    fireEvent.change(screen.getByLabelText(/Author\(s\)/i), { 
-      target: { value: "Brian W. Kernighan, Dennis M. Ritchie" } 
+    fireEvent.change(screen.getByLabelText(/Author\(s\)/i), {
+      target: { value: "Brian W. Kernighan, Dennis M. Ritchie" },
     });
-    fireEvent.change(screen.getByLabelText(/Publisher/i), { 
-      target: { value: "Prentice Hall" } 
+    fireEvent.change(screen.getByLabelText(/Publisher/i), {
+      target: { value: "Prentice Hall" },
     });
 
     const submitBtn = screen.getByRole("button", { name: /Save Manual Entry/i });
     expect(submitBtn).not.toBeDisabled();
-    
+
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -59,7 +59,7 @@ describe("ManualEntryForm", () => {
         identifier: "",
         publisher: "Prentice Hall",
         year: "",
-        format: "book"
+        format: "book",
       });
     });
   });

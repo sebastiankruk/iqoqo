@@ -29,8 +29,7 @@ vi.mock("@/lib/api/hooks", () => ({
 const mockInvalidateQueries = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: vi.fn(() => ({ setQueryData: vi.fn(), invalidateQueries: mockInvalidateQueries }),
-  ),
+  useQueryClient: vi.fn(() => ({ setQueryData: vi.fn(), invalidateQueries: mockInvalidateQueries })),
 }));
 
 const mockItem = {
@@ -86,11 +85,15 @@ describe("ItemActions Component", () => {
 
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
 
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["item", pendingItem.id] });
 
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
   });
 
@@ -101,7 +104,9 @@ describe("ItemActions Component", () => {
 
     render(<ItemActions item={mockItem} />);
 
-    act(() => { vi.advanceTimersByTime(9000); });
+    act(() => {
+      vi.advanceTimersByTime(9000);
+    });
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
 
@@ -113,13 +118,17 @@ describe("ItemActions Component", () => {
     const pendingItem = { ...mockItem, cover_status: "pending" } as unknown as Item;
     const { rerender } = render(<ItemActions item={pendingItem} />);
 
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
 
     // Cover becomes ready - rerender with updated prop
     rerender(<ItemActions item={mockItem} />);
 
-    act(() => { vi.advanceTimersByTime(6000); });
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
     // Should remain at 1 call since polling stopped
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
   });

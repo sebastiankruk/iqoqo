@@ -15,6 +15,9 @@ Authlib>=1.6.9
 PyJWT>=2.12.0
 pytesseract>=0.3.10
 tenacity==8.*
+opencv-python-headless==4.9.*
+numpy==1.26.*
+
 
 # Testing
 pytest

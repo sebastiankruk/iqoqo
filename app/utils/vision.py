@@ -31,6 +31,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from app.config import Config
 from app.core.permissions import ItemPermissions
 from app.db.models import User, db
+from app.utils.images import smart_crop_and_warp
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,9 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     Backend-specific exceptions are logged and swallowed; this function itself does not
     raise on backend failure and instead returns ``None`` when all steps are exhausted.
     """
+    # 0. Smart crop and warp before analysis to improve accuracy
+    image_bytes = smart_crop_and_warp(image_bytes)
+
     # 1. Try Gemini
     try:
         result = _extract_via_gemini(image_bytes, mime_type, user_id)

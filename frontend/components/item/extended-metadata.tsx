@@ -39,12 +39,15 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   if (!meta) return null;
 
   const description = (meta["description"] as string | undefined) || (meta["Description"] as string | undefined);
-  const categories = ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
+  const categories =
+    ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
 
   // Audio specific metadata
-  const format = (meta["format"] as string | undefined);
+  const format = meta["format"] as string | undefined;
   const isAudio = isAudioMedia(format);
-  const trackList = meta["track_list"] as Array<{ position: string; title: string; duration_seconds: number }> | undefined;
+  const trackList = meta["track_list"] as
+    | Array<{ position: string; title: string; duration_seconds: number }>
+    | undefined;
 
   // Filter out internal keys and keys already displayed in the main header
   const hiddenKeys = new Set([
@@ -86,15 +89,15 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const extraKeys = Object.entries(meta)
     .filter(([key, value]) => {
       // 1. Exclude specific internal or redundant keys
-      const excludedKeys = ['id', 'manifestation_id', 'cover_url', 'image', 'cover_status', 'cover'];
+      const excludedKeys = ["id", "manifestation_id", "cover_url", "image", "cover_status", "cover"];
       if (excludedKeys.includes(key.toLowerCase()) || hiddenKeys.has(key)) return false;
 
       // 2. Filter out non-displayable/redundant values
       const val = String(value).toLowerCase();
-      if (!value || val === 'unknown' || val === 'n/a' || val === 'none' || val === '') return false;
-      
+      if (!value || val === "unknown" || val === "n/a" || val === "none" || val === "") return false;
+
       // 3. Filter out format/title keys if already shown in main UI
-      if (['title', 'format'].includes(key.toLowerCase())) return false;
+      if (["title", "format"].includes(key.toLowerCase())) return false;
 
       return typeof value !== "object";
     })
@@ -129,7 +132,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
             {Boolean(meta["label"] || meta["publisher"]) && (
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Label / Publisher</span>
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Label / Publisher
+                </span>
                 <span className="font-semibold">{String(meta["label"] || meta["publisher"])}</span>
               </div>
             )}
@@ -141,7 +146,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
             )}
             {Boolean(meta["matrix_number"] || meta["Matrix / Runout"]) && (
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Matrix / Runout</span>
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Matrix / Runout
+                </span>
                 <span className="font-mono text-xs">{String(meta["matrix_number"] || meta["Matrix / Runout"])}</span>
               </div>
             )}
@@ -153,7 +160,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
             )}
             {format && (
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Media Format</span>
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Media Format
+                </span>
                 <span className="font-semibold uppercase">{format}</span>
               </div>
             )}
@@ -167,14 +176,20 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
           <h3 className="font-bold text-lg mb-4 text-foreground font-serif">Tracklist</h3>
           <div className="divide-y border-t border-muted/60">
             {trackList.map(track => (
-              <div key={track.position} className="py-3 flex justify-between text-sm items-center hover:bg-muted/30 px-3 -mx-3 rounded-lg transition-colors group">
+              <div
+                key={track.position}
+                className="py-3 flex justify-between text-sm items-center hover:bg-muted/30 px-3 -mx-3 rounded-lg transition-colors group"
+              >
                 <div className="flex gap-4">
-                  <span className="text-muted-foreground/60 w-8 font-mono group-hover:text-primary transition-colors">{track.position}</span>
+                  <span className="text-muted-foreground/60 w-8 font-mono group-hover:text-primary transition-colors">
+                    {track.position}
+                  </span>
                   <span className="font-semibold">{track.title}</span>
                 </div>
                 {track.duration_seconds > 0 && (
                   <span className="text-muted-foreground font-mono text-xs">
-                    {Math.floor(track.duration_seconds / 60)}:{(track.duration_seconds % 60).toString().padStart(2, "0")}
+                    {Math.floor(track.duration_seconds / 60)}:
+                    {(track.duration_seconds % 60).toString().padStart(2, "0")}
                   </span>
                 )}
               </div>
@@ -192,7 +207,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
             className="w-full justify-between h-10 hover:bg-muted/20"
             onClick={() => setIsExpanded(!isExpanded)}
           >
-            <span className="font-bold text-xs uppercase tracking-widest text-muted-foreground">Additional Details</span>
+            <span className="font-bold text-xs uppercase tracking-widest text-muted-foreground">
+              Additional Details
+            </span>
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
 
@@ -200,7 +217,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 text-sm bg-background/50 rounded-lg mt-2 border border-border/40">
               {extraKeys.map(key => (
                 <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
-                  <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">{key.replace(/_/g, ' ')}</dt>
+                  <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
+                    {key.replace(/_/g, " ")}
+                  </dt>
                   <dd className="font-medium text-foreground break-words">{String(meta[key])}</dd>
                 </div>
               ))}
