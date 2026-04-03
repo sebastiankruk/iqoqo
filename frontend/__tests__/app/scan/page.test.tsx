@@ -78,9 +78,9 @@ describe("ScanPage", () => {
     fireEvent.click(toggleButton);
 
     // Form should appear
-    expect(screen.getByText(/Manual Entry/i)).toBeInTheDocument();
+    expect(screen.getByText(/Manual Item Entry/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Title/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Author \/ Creator/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Author\(s\)/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Format/i)).toBeInTheDocument();
   });
 
@@ -98,16 +98,16 @@ describe("ScanPage", () => {
 
     // Fill out form
     fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Test Title" } });
-    fireEvent.change(screen.getByLabelText(/Author \/ Creator/i), { target: { value: "Test Author" } });
-    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "sound" } });
+    fireEvent.change(screen.getByLabelText(/Author\(s\)/i), { target: { value: "Test Author" } });
+    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "cd" } });
 
     // Submit form
-    fireEvent.click(screen.getByText(/Add to Library/i));
+    fireEvent.click(screen.getByText(/Save Manual Entry/i));
 
     // Assert mutate was called
     expect(mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith(
-      { Title: "Test Title", Authors: ["Test Author"], Format: "sound" },
+      expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "sound" }),
       expect.any(Object)
     );
   });

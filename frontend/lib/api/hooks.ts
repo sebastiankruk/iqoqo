@@ -256,6 +256,7 @@ type ManualItemPayload = {
   Format: string;
   ISBN?: string;
   PublicationDate?: string;
+  Publisher?: string;
   Description?: string;
 };
 

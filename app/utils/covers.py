@@ -13,18 +13,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-import atexit
 import hashlib
 import io
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
 from app.config import Config
+from app.core.tasks import submit_task
 from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
@@ -44,10 +43,6 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
-
-# Managed thread pool for offloaded cover generation operations
-cover_executor = ThreadPoolExecutor(max_workers=4)
-atexit.register(cover_executor.shutdown, wait=False)
 
 
 def add_source_badge(filepath: str, source: str):
@@ -323,8 +318,8 @@ def start_cover_processing(
     description: str = "",
     genre: str = "",
 ) -> None:
-    """Fires off the background executor."""
-    cover_executor.submit(
+    """Fires off the background executor using the centralized task pool."""
+    submit_task(
         process_cover_pipeline,
         manifestation_id,
         identifier,

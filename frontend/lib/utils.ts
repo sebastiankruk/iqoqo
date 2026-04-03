@@ -64,19 +64,24 @@ export function getCoverTimestamp(
 export function resolveApiUrl(path: string, isServer = false): string {
   if (path.startsWith("http")) return path;
 
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
   // Server-side fetch requires an absolute URL.
   // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
-  const apiBase = isServer
-    ? (process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api")
-    : (process.env.NEXT_PUBLIC_API_URL || "/api");
-
-  // Ensure apiBase is absolute if isServer is true
-  let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
-  if (isServer && !cleanBase.startsWith("http")) {
-    cleanBase = `http://127.0.0.1:5000${cleanBase}`;
+  if (isServer) {
+    const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api";
+    let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+    if (!cleanBase.startsWith("http")) {
+      cleanBase = `http://127.0.0.1:5000${cleanBase}`;
+    }
+    return `${cleanBase}${cleanPath}`;
   }
 
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  // Browser-side (or SSR-rendered for the browser) always prefers relative "/api"
+  // to support tunnels/proxies where "localhost" is not resolvable.
+  const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+  const apiBase = publicApiUrl.startsWith("http") ? "/api" : publicApiUrl;
+  const cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
 
   return `${cleanBase}${cleanPath}`;
 }

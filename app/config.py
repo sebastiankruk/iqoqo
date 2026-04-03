@@ -64,6 +64,11 @@ class Config:
     # When False, LLM tiers are never invoked regardless of user permissions.
     ALLOW_LLM: bool = os.environ.get("ALLOW_LLM", "false").lower() in {"true", "1", "yes"}
 
+    # Scheduled Backups Configuration
+    BACKUP_CRON_HOUR = os.environ.get("BACKUP_CRON_HOUR", "3")
+    BACKUP_CRON_MINUTE = os.environ.get("BACKUP_CRON_MINUTE", "0")
+    BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE_DIR, "exports"))
+
     # Base URL for static cover image serving mapping
     COVERS_BASE_URL = os.environ.get("COVERS_BASE_URL", "/static/covers")
 
