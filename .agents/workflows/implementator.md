@@ -42,17 +42,17 @@ User provides an implementation plan (with code or diffs) and requests implement
 - Stage all modified files (`git add .`).
 - Commit the changes using conventional commit formats describing the implemented feature/fix.
 - Push the `target_branch` to the remote repository (`git push -u origin <target_branch>`).
-- **Create PR**: Utilize **GitHub MCP tools** or the **`gh` CLI** (e.g., `gh pr create --title "<Title>" --body "<Plan Summary>" --base main`) to create the Pull Request.
+- **DO NOT Create PR yourself**: but provide: title and body=Plan Summary.
 
 ### 4. Copilot Review Integration
 
-- **Request Review**: Use the **GitHub MCP tools** or **`gh` CLI** to request a Copilot review (e.g., triggering a comment like `gh pr comment -b "@github-actions copilot review"` or adding the appropriate reviewer/label).
-- Wait for and retrieve the review comments (e.g., `gh pr view --comments`).
+- **ASK HUMAN to Request Review**
+- Wait for Human to tell to  retrieve the review comments from given PR `#NUMBER`
 - **Analysis**: Parse the Copilot feedback for actionable code changes.
 
 ### 5. Review Resolution & Final QA
 
-- If changes are required by the review, invoke the **`implementation-export`** skill to apply the fixes exactly as requested.
+- If changes are required by the review - double check their correctness and feasibility - prepare plan to address them
 - Run `make lint` and `make test` again.
 - Once green, commit and push the fixes to the `target_branch`.
 - Inform the user that the PR is open, reviewed, fixed, and all checks are passing.
