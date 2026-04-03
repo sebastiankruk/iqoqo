@@ -34,9 +34,16 @@ if [ -z "$APP_VERSION" ]; then
     export APP_VERSION="${VERSION:-prod}"
 fi
 
+# Optional: Stop previous instances if requested
+if [[ "$*" == *"--clean"* ]]; then
+    echo "🧹 Stopping and removing previous production instances..."
+    docker compose -f docker-compose.prod.yml down --remove-orphans
+fi
+
 # 2. Build and Start Services
 echo "🚀 Starting iqoqo production deployment (Version: $APP_VERSION)..."
 docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
 
 echo "✅ Deployment successful!"
+echo "   Note: It may take a moment for the database to be ready and migrations to complete."
 echo "🌍 Nginx is listening on port ${NGINX_PORT:-8000}"
