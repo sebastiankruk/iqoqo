@@ -48,7 +48,7 @@
     rdfs:comment "A single exemplar of a Manifestation owned by a user (catalog.items)." .
 
 # ---------------------------------------------------------------------------
-# Audio / event-based extensions (v0.1.3)
+# Audio / event-based extensions (v0.2.0)
 # ---------------------------------------------------------------------------
 
 :Contributor a owl:Class ;

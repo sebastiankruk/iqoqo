@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 import jwt as pyjwt
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, current_app, jsonify, redirect, request
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Role, TokenBlocklist, User, db
 
@@ -172,6 +173,9 @@ def logout():
             if jti:
                 db.session.add(TokenBlocklist(jti=jti))
                 db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            # Already revoked, treat as success (idempotent)
         except pyjwt.PyJWTError:
             pass  # Token is invalid or expired anyway
 

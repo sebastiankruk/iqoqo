@@ -1,4 +1,4 @@
-# Setting Up Covers Generation Infrastructure
+# Cover Generation & Retrieval Setup
 
 iqoqo utilizes a multi-tiered fallback system to ensure every item in your distributed catalog has high-quality, normalized cover art. This guide explains how to configure external providers and local AI models.
 

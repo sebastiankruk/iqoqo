@@ -14,8 +14,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-import json
-
 import pytest
 
 from app.db.models import Role, TokenBlocklist, User, db
@@ -32,7 +30,7 @@ def setup_security_context(app):
         db.session.commit()
 
 
-def test_logout_revokes_token(client):
+def test_logout_revokes_token(app, client):
     # 1. Register and Login to get a token
     client.post("/api/auth/register", json={"email": "security@iqoqo.local", "password": "password123", "display_name": "Security User"})
     login_resp = client.post("/api/auth/login", json={"email": "security@iqoqo.local", "password": "password123"})
@@ -49,10 +47,9 @@ def test_logout_revokes_token(client):
     assert b"Logged out successfully" in logout_resp.data
 
     # 4. Verify JTI is in blocklist
-    # In a real JWT, we'd decode it to find JTI, but here we check DB directly
-    # assuming the logout logic successfully added it.
-    blocklisted = TokenBlocklist.query.all()
-    assert len(blocklisted) > 0
+    with app.app_context():
+        blocklisted = TokenBlocklist.query.all()
+        assert len(blocklisted) > 0
 
     # 5. Verify token NO LONGER works
     prof_resp_revoked = client.get("/api/profile/", headers=headers)
@@ -77,13 +74,14 @@ def test_logout_idempotency(client):
     assert b"Logged out successfully" in resp2.data
 
 
-def test_admin_required_rejects_revoked_token(client):
+def test_admin_required_rejects_revoked_token(app, client):
     # 1. Create admin user
     client.post("/api/auth/register", json={"email": "admin@iqoqo.local", "password": "password123"})
-    user = User.query.filter_by(email="admin@iqoqo.local").first()
-    admin_role = Role.query.filter_by(name="admin").first()
-    user.roles.append(admin_role)
-    db.session.commit()
+    with app.app_context():
+        user = User.query.filter_by(email="admin@iqoqo.local").first()
+        admin_role = Role.query.filter_by(name="admin").first()
+        user.roles.append(admin_role)
+        db.session.commit()
 
     # 2. Login
     login_resp = client.post("/api/auth/login", json={"email": "admin@iqoqo.local", "password": "password123"})
