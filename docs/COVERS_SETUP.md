@@ -1,4 +1,26 @@
+# Setting Up Covers Generation Infrastructure
+
 iqoqo utilizes a multi-tiered fallback system to ensure every item in your distributed catalog has high-quality, normalized cover art. This guide explains how to configure external providers and local AI models.
+
+* [The Pipeline Tiers](#the-pipeline-tiers)
+* [Rate Limiting \& Storage](#rate-limiting--storage)
+* [Cover Badges](#cover-badges)
+* [1. External Metadata APIs](#1-external-metadata-apis)
+* [2. Cloud AI Generation (Paid)](#2-cloud-ai-generation-paid)
+  * [OpenAI (DALL-E 3)](#openai-dall-e-3)
+  * [Google Gemini (Imagen 3)](#google-gemini-imagen-3)
+* [2a. Vision-based Metadata Extraction](#2a-vision-based-metadata-extraction)
+* [3. Local AI Generation (Free)](#3-local-ai-generation-free)
+  * [Step 1: Install Prerequisites](#step-1-install-prerequisites)
+  * [Step 2: Clone the Repository](#step-2-clone-the-repository)
+  * [Step 3: Enable the API \& Launch](#step-3-enable-the-api--launch)
+    * [For Windows](#for-windows)
+    * [For Mac / Linux](#for-mac--linux)
+  * [Step 4: Connect iqoqo](#step-4-connect-iqoqo)
+  * [Filtering Junk / Placeholder Covers](#filtering-junk--placeholder-covers)
+* [4. Batch Processing](#4-batch-processing)
+* [5. Troubleshooting](#5-troubleshooting)
+* [6. Importing Covers to a Remote iqoqo Instance](#6-importing-covers-to-a-remote-iqoqo-instance)
 
 ## The Pipeline Tiers
 
@@ -23,26 +45,6 @@ Because iqoqo now proactively downloads covers from MusicBrainz/Discogs (Tier 2)
 ## Cover Badges
 
 To maintain transparency in the catalog, downloaded or generated images receive a discrete badge in the bottom right corner (e.g., a Teal "C" for Direct Downloads, a Gray "D" for OpenLibrary).
-
-* [The Pipeline Tiers](#the-pipeline-tiers)
-* [Rate Limiting \& Storage](#rate-limiting--storage)
-* [Cover Badges](#cover-badges)
-* [1. External Metadata APIs](#1-external-metadata-apis)
-* [2. Cloud AI Generation (Paid)](#2-cloud-ai-generation-paid)
-  * [OpenAI (DALL-E 3)](#openai-dall-e-3)
-  * [Google Gemini (Imagen 3)](#google-gemini-imagen-3)
-* [2a. Vision-based Metadata Extraction](#2a-vision-based-metadata-extraction)
-* [3. Local AI Generation (Free)](#3-local-ai-generation-free)
-  * [Step 1: Install Prerequisites](#step-1-install-prerequisites)
-  * [Step 2: Clone the Repository](#step-2-clone-the-repository)
-  * [Step 3: Enable the API \& Launch](#step-3-enable-the-api--launch)
-    * [For Windows](#for-windows)
-    * [For Mac / Linux](#for-mac--linux)
-  * [Step 4: Connect iqoqo](#step-4-connect-iqoqo)
-  * [🛡️ Filtering Junk / Placeholder Covers](#️-filtering-junk--placeholder-covers)
-* [4. Batch Processing](#4-batch-processing)
-* [5. Troubleshooting](#5-troubleshooting)
-* [6. Importing Covers to a Remote iqoqo Instance](#6-importing-covers-to-a-remote-iqoqo-instance)
 
 ## 1. External Metadata APIs
 
@@ -188,7 +190,7 @@ Add the following to your iqoqo `.env` file:
 LOCAL_SD_URL=http://localhost:7860
 ```
 
-### 🛡️ Filtering Junk / Placeholder Covers
+### Filtering Junk / Placeholder Covers
 
 Some external metadata APIs (like OpenLibrary or Google Books) occasionally return generic "No Image Available" placeholder images instead of an HTTP error. To prevent these from polluting your library, iqoqo uses perceptual hashing (`pHash`) to detect and reject them automatically, allowing the system to fall back to generating a custom LLM cover.
 
@@ -208,7 +210,7 @@ Because different regions and APIs have different placeholder images, you can de
 3. This will output a hash string like `e1e1e1e1e1e1e1e1`. Add this to your `.env`:
 
     ```bash
-    IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     ```
 
 ## 4. Batch Processing

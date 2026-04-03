@@ -17,7 +17,6 @@
 
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { ItemActions } from "./item-actions";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
@@ -44,8 +43,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const timestamp = getCoverTimestamp(meta);
 
   // Normalize cover URL handling for both external and local static paths
-  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || 
-                  (meta["cover_url"] as string | undefined) || 
+  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) ||
+                  (meta["cover_url"] as string | undefined) ||
                   "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
@@ -148,10 +147,6 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           )}
         </div>
 
-        {/* Action Buttons push to the bottom */}
-        <div className="mt-auto pt-6 border-t border-border/50">
-          <ItemActions item={item} />
-        </div>
       </div>
     </div>
   );

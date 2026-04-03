@@ -55,6 +55,11 @@ const nextConfig: NextConfig = {
   // optimization per provider once URLs are stabilised; unoptimized prop is
   // used in the component until then.
   images: {
+    localPatterns: [
+      {
+        pathname: "/api/static/**",
+      },
+    ],
     remotePatterns: [
       {
         protocol: "https",

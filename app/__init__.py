@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import logging
+
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -54,6 +56,13 @@ def _coerce_list(value, default=None):
 
 
 def create_app(config_class=Config, config_override=None):
+    # Configure logging early
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        force=True,
+    )
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
