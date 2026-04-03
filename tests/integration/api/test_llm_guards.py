@@ -36,7 +36,6 @@ def test_extract_from_cover_global_llm_disabled(client, vision_user_headers):
             patch("app.utils.vision._extract_via_ollama") as mock_ollama,
             patch("app.utils.vision._extract_via_tesseract") as mock_tesseract,
         ):
-
             mock_gemini.return_value = None
             mock_ollama.return_value = None
             mock_tesseract.return_value = None

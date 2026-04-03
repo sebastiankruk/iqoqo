@@ -245,7 +245,7 @@ def test_stats_accuracy(app, sample_data):
         for i in range(3):
             sample_copy = json.loads(json.dumps(sample_data))
             sample_copy["works"][0]["id"] = i + 1
-            sample_copy["works"][0]["title"] = f"Book {i+1}"
+            sample_copy["works"][0]["title"] = f"Book {i + 1}"
             sample_copy["expressions"][0]["id"] = i + 1
             sample_copy["expressions"][0]["work_id"] = i + 1
             sample_copy["manifestations"][0]["id"] = i + 1

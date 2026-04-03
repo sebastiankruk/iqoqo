@@ -122,7 +122,6 @@ def test_backup_creation(app, tmp_path):
         patch("app.config.Config.BASE_DIR", str(tmp_path)),
         patch("app.core.data_manager.DataManager.export_all") as mock_export,
     ):
-
         mock_export.return_value = {"test": "data"}
         app.config["BACKUP_DIR"] = str(tmp_path)
 
@@ -145,7 +144,6 @@ def test_restore_covers(app, tmp_path):
         z.writestr("covers/c.jpg", b"image data")
 
     with patch("app.config.Config.BASE_DIR", str(tmp_path)):
-
         # Create target dir
         (tmp_path / "app" / "static" / "covers").mkdir(parents=True, exist_ok=True)
 

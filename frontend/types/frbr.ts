@@ -60,7 +60,7 @@ export interface Manifestation {
   cover_url?: string | null;
   meta: {
     additional_images?: AdditionalImage[];
-    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | string;
+    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | "Blu-ray" | "DVD" | "VHS" | "Board Game" | string;
     catalog_number?: string;
     pressing_number?: string;
     matrix_number?: string;
@@ -71,6 +71,20 @@ export interface Manifestation {
       title: string;
       duration_seconds: number;
     }>;
+    // Video-specific
+    resolution?: string;
+    aspect_ratio?: string;
+    video_format?: string;
+    audio_formats?: string[];
+    region_code?: string;
+    run_time_minutes?: number;
+    // Game-specific
+    min_players?: number;
+    max_players?: number;
+    playtime_minutes?: number;
+    min_age?: number;
+    game_mechanics?: string[];
+    designer?: string;
     [key: string]: unknown;
   };
 }

@@ -50,7 +50,9 @@ def get_url():
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and object.schema is not None and object.schema != "public":
+    # Allow tables in the specific schemas managed by iqoqo
+    allowed_schemas = ["public", "catalog", "inventory", "auth"]
+    if type_ == "table" and object.schema is not None and object.schema not in allowed_schemas:
         return False
     return True
 
