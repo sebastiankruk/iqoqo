@@ -101,7 +101,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         result = _extract_via_gemini(image_bytes, mime_type, user_id)
         if result:
             return result
-    except (ValueError, TypeError, ConnectionError, TimeoutError, RuntimeError) as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.debug("Waterfall: Gemini failed, trying Ollama... (%s)", e)
 
     # 2. Try Ollama Fallback
@@ -109,7 +109,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         result = _extract_via_ollama(image_bytes)
         if result:
             return result
-    except requests.exceptions.RequestException as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.debug("Waterfall: Ollama failed, trying Tesseract... (%s)", e)
 
     # 3. Try Tesseract OCR Fallback
@@ -175,7 +175,7 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
     except (ImportError, AttributeError) as e:
         logger.error("google-genai package is not installed or API surface changed: %s", e)
-    except (ValueError, TypeError, ConnectionError, TimeoutError, RuntimeError) as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Gemini vision extraction failed: %s", e)
 
     return None

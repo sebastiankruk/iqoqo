@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -279,6 +280,39 @@ def test_extract_waterfall_all_exception_returns_none(mock_tesseract, mock_ollam
     result = extract_metadata_from_cover(b"test image")
 
     assert result is None
-    assert mock_gemini.called
-    assert mock_ollama.called
-    assert mock_tesseract.called
+
+@patch("app.utils.vision._extract_via_gemini")
+@patch("app.utils.vision._extract_via_ollama")
+@patch("app.utils.vision._extract_via_tesseract")
+def test_extract_waterfall_gemini_api_error_falls_to_ollama(mock_tesseract, mock_ollama, mock_gemini):
+    """Verify that a 3rd party API exception in Gemini correctly triggers Ollama."""
+
+    class FakeAPIError(Exception):
+        pass
+
+    mock_gemini.side_effect = FakeAPIError("Gemini API Error")
+    mock_ollama.return_value = {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
+
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+
+    assert result == {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
+    mock_gemini.assert_called_once()
+    mock_ollama.assert_called_once()
+    mock_tesseract.assert_not_called()
+
+
+@patch("app.utils.vision._extract_via_gemini")
+@patch("app.utils.vision._extract_via_ollama")
+@patch("app.utils.vision._extract_via_tesseract")
+def test_extract_waterfall_ollama_json_decode_error_falls_to_tesseract(mock_tesseract, mock_ollama, mock_gemini):
+    """Verify that an invalid JSON response from Ollama falls back to Tesseract."""
+    mock_gemini.return_value = None
+    mock_ollama.side_effect = json.JSONDecodeError("Expecting value", "doc", 0)
+    mock_tesseract.return_value = {"Title": "Tesseract Result", "Authors": []}
+
+    result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+
+    assert result == {"Title": "Tesseract Result", "Authors": []}
+    mock_gemini.assert_called_once()
+    mock_ollama.assert_called_once()
+    mock_tesseract.assert_called_once()
