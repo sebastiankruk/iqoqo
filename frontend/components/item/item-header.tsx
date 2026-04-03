@@ -43,8 +43,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const timestamp = getCoverTimestamp(meta);
 
   // Normalize cover URL handling for both external and local static paths
-  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || 
-                  (meta["cover_url"] as string | undefined) || 
+  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) ||
+                  (meta["cover_url"] as string | undefined) ||
                   "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
