@@ -78,6 +78,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
 
+  /**
+   * Handles the confirmation of manifestation deletion.
+   *
+   * @returns {Promise<void>} A promise that resolves when the manifestation is deleted.
+   */
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
@@ -93,6 +98,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
+  /**
+   * Handles the click event for regenerating the cover.
+   * If a cover already exists, it opens a confirmation dialog.
+   * Otherwise, it directly calls the regeneration function.
+   */
   const handleRegenerateClick = () => {
     const hasCover = !!(manifestation.cover_url || manifestation.meta?.["cover_url"]);
     if (hasCover) {
@@ -102,6 +112,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
+  /**
+   * Initiates the cover regeneration process for the manifestation.
+   *
+   * @returns {Promise<void>} A promise that resolves when the regeneration is scheduled.
+   */
   const handleRegenerate = async () => {
     if (!manifestation.id) return;
     setIsRequesting(true);
@@ -124,6 +139,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
+  /**
+   * Handles refetching metadata for the manifestation.
+   *
+   * @returns {Promise<void>} A promise that resolves when the metadata is refetched.
+   */
   const handleRefetch = async () => {
     if (!manifestation.id) return;
     setIsRefetching(true);
