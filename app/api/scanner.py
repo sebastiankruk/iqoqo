@@ -36,7 +36,16 @@ _ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 
 def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
-    """Read at most *max_bytes* from *file_storage*."""
+    """Read at most *max_bytes* from *file_storage*.
+
+    Reads exactly ``max_bytes + 1`` bytes in a single call so that the result
+        fits in one allocation and we can detect an oversized payload without
+        buffering the whole stream first.
+
+    Returns:
+        The raw bytes when the payload is within the limit, or ``None`` when it
+        exceeds *max_bytes*.
+    """
     buf = file_storage.read(max_bytes + 1)
     return None if len(buf) > max_bytes else buf
 
@@ -98,7 +107,17 @@ def lookup_barcode_preview(barcode: str):
 @require_auth
 def scan_barcode():
     # pylint: disable=too-many-return-statements
-    """Scan a barcode and add the corresponding item to the authenticated user's collection."""
+    """Scan a barcode and add the corresponding item to the authenticated user's collection.
+
+    Request body (JSON):
+        barcode (str): The ISBN or other barcode value to look up.
+
+    Returns:
+        201 - ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
+        400 - barcode missing or invalid
+        404 - barcode could not be resolved to a manifestation
+        503 - upstream network error during metadata lookup
+    """
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()
@@ -190,7 +209,26 @@ def scan_barcode():
 @require_auth
 @require_permission(ItemPermissions.LLM_GENERATE_METADATA)
 def extract_from_cover():
-    """Extract metadata from a cover image."""
+    """Extract metadata from a cover image.
+
+    Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
+    The image is passed to the Gemini Vision API which returns the title and
+    author(s) extracted from the cover artwork.
+
+    **Supported image types:** JPEG, PNG, WebP (max 10 MB).
+
+    **Setup:** Requires the ``GEMINI_API_KEY`` environment variable to be set.
+    See ``docs/COVERS_SETUP.md`` → *Vision-based Metadata Extraction* for details.
+
+    Request form fields:
+        cover (file): The cover image to analyse.
+
+    Returns:
+        200 - ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
+        400 - missing file, empty filename, invalid extension, oversized or corrupt image
+        401 - authentication required (handled by ``@require_auth``)
+        503 - Gemini API key not configured or upstream call failed
+    """
     # pylint: disable=too-many-return-statements
     if "cover" not in request.files:
         return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
