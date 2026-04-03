@@ -138,7 +138,7 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
             except (TypeError, ValueError):
                 pass
 
-            logger.info(f"Downloading cover for {identifier} from URL {url}.")
+            logger.debug(f"Downloading cover for {identifier} from URL {url}.")
 
             downloaded = bytearray()
             for chunk in response.iter_content(chunk_size=8192):
@@ -175,36 +175,34 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
         logger.debug("Skipping External API lookup (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
         return None
 
+    res = None
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
     res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
-    if res:
-        return res
 
-    # 2. Google Books (Search -> Thumbnail)
-    gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
-    try:
-        with requests.get(gb_search, timeout=5) as gb_res:
-            if gb_res.status_code == 200:
-                gb_data = gb_res.json()
-                if "items" in gb_data:
-                    thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
-                    if thumb:
-                        thumb = thumb.replace("http:", "https:")
+    if not res:
+        # 2. Google Books (Search -> Thumbnail)
+        gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
+        try:
+            with requests.get(gb_search, timeout=5) as gb_res:
+                if gb_res.status_code == 200:
+                    gb_data = gb_res.json()
+                    if "items" in gb_data:
+                        thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+                        if thumb:
+                            thumb = thumb.replace("http:", "https:")
 
-                        # Try high-res first (zoom=0)
-                        thumb_high_res = thumb.replace("zoom=1", "zoom=0")
-                        res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
-                        if res:
-                            return res
+                            # Try high-res first (zoom=0)
+                            thumb_high_res = thumb.replace("zoom=1", "zoom=0")
+                            res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
 
-                        # Fallback to original (zoom=1) if high-res failed validation
-                        if thumb_high_res != thumb:
-                            return download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
-    except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
-        pass
+                            # Fallback to original (zoom=1) if high-res failed validation
+                            if not res and thumb_high_res != thumb:
+                                res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
+        except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
+            pass
 
-    return None
+    return res
 
 
 def process_fast_cover(manifestation: Manifestation, identifier: str) -> bool:
