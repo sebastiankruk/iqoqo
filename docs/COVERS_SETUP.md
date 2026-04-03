@@ -210,7 +210,7 @@ Because different regions and APIs have different placeholder images, you can de
 3. This will output a hash string like `e1e1e1e1e1e1e1e1`. Add this to your `.env`:
 
     ```bash
-    IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     ```
 
 ## 4. Batch Processing

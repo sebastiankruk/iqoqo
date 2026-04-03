@@ -118,7 +118,7 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
         return None
 
 
-def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[str, str] | None:
+def download_direct_url(identifier: str, url: str, source_name: str, suffix: str = "ext") -> tuple[str, str] | None:
     """Securely downloads a direct image URL to the local filesystem."""
     try:
         headers = {
@@ -127,6 +127,18 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
         with requests.get(url, stream=True, timeout=10, headers=headers) as response:
             if response.status_code != 200:
                 return None
+
+            # Fast fail on known bad sizes if header is present
+            try:
+                header_len_raw = response.headers.get("content-length")
+                if header_len_raw is not None:
+                    header_len = int(header_len_raw)
+                    if 0 < header_len < MIN_COVER_FILE_SIZE:
+                        return None
+            except (TypeError, ValueError):
+                pass
+
+            logger.info(f"Downloading cover for {identifier} from URL {url}.")
 
             downloaded = bytearray()
             for chunk in response.iter_content(chunk_size=8192):
@@ -144,10 +156,12 @@ def download_direct_url(identifier: str, url: str, source_name: str) -> tuple[st
             if not is_valid_cover(content):
                 return None
 
-            filename = f"{identifier}_ext.jpg"
+            logger.info(f"Cover for {identifier} downloaded successfully from URL {url}.")
+
+            filename = f"{identifier}_{suffix}.jpg"
             filepath = os.path.join(COVERS_DIR, filename)
             optimize_and_save_image(content, filepath)
-            return f"/static/covers/{filename}", source_name
+            return f"{Config.COVERS_BASE_URL}/{filename}", source_name
     except (requests.RequestException, OSError, ValueError, TypeError) as e:
         logger.error(f"Error fetching direct URL {url}: {e}")
     return None
@@ -161,64 +175,32 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
         logger.debug("Skipping External API lookup (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
         return None
 
-    def process_response(response, source_prefix: str, source_name: str) -> tuple[str, str] | None:
-        """Helper to safely stream, size-cap, and validate external cover images."""
-        downloaded = bytearray()
-
-        for chunk in response.iter_content(chunk_size=8192):
-            if not chunk:
-                continue
-            downloaded.extend(chunk)
-            if len(downloaded) > MAX_COVER_FILE_SIZE:
-                logger.warning(f"Cover payload from {source_name} exceeded {MAX_COVER_FILE_SIZE} bytes. Aborting.")
-                return None
-
-        if len(downloaded) < MIN_COVER_FILE_SIZE:
-            return None
-
-        content = bytes(downloaded)
-        if not is_valid_cover(content):
-            return None
-
-        filename = f"{identifier}_{source_prefix}.jpg"
-        filepath = os.path.join(COVERS_DIR, filename)
-        optimize_and_save_image(content, filepath)
-        return f"{Config.COVERS_BASE_URL}/{filename}", source_name
-
     # 1. Open Library (Direct)
     ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
-    try:
-        with requests.get(ol_url, stream=True, timeout=5) as response:
-            if response.status_code == 200:
-                try:
-                    header_len_raw = response.headers.get("content-length")
-                    if header_len_raw is not None:
-                        header_len = int(header_len_raw)
-                        if 0 < header_len < MIN_COVER_FILE_SIZE:
-                            return None
-                except (TypeError, ValueError):
-                    pass
-
-                res = process_response(response, "ol", "api_openlibrary")
-                if res:
-                    return res
-    except (requests.RequestException, OSError, ValueError, TypeError):
-        pass
+    res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+    if res:
+        return res
 
     # 2. Google Books (Search -> Thumbnail)
     gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
     try:
         with requests.get(gb_search, timeout=5) as gb_res:
-            gb_data = gb_res.json()
-            if "items" in gb_data:
-                thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
-                if thumb:
-                    thumb = thumb.replace("zoom=1", "zoom=0").replace("http:", "https:")
-                    with requests.get(thumb, stream=True, timeout=10) as img_res:
-                        if img_res.status_code == 200:
-                            processed = process_response(img_res, "gb", "api_google_books")
-                            if processed:
-                                return processed
+            if gb_res.status_code == 200:
+                gb_data = gb_res.json()
+                if "items" in gb_data:
+                    thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+                    if thumb:
+                        thumb = thumb.replace("http:", "https:")
+
+                        # Try high-res first (zoom=0)
+                        thumb_high_res = thumb.replace("zoom=1", "zoom=0")
+                        res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
+                        if res:
+                            return res
+
+                        # Fallback to original (zoom=1) if high-res failed validation
+                        if thumb_high_res != thumb:
+                            return download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
         pass
 
