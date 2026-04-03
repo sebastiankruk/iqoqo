@@ -16,7 +16,7 @@
 "use client";
 
 import { ChangeEvent } from "react";
-import { Pencil, QrCode, BookOpen, Disc, ImagePlus } from "lucide-react";
+import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
@@ -101,7 +101,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   /**
    * Handles generating and opening the QR code for the item.
+   * TODO: Implementation for QR code printing is not ready yet.
    */
+  /*
   const handleQrCode = async () => {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
     const url = `${apiBase}/qrcode/${item.id}`;
@@ -118,6 +120,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       toast.error("Failed to contact QR code service. Please check your connection and try again.");
     }
   };
+  */
 
   return (
     <div className="flex flex-col items-center gap-5">
@@ -194,6 +197,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             Edit Metadata
           </button>
         )}
+        {/* Print QR Code - Hidden until implementation is ready */}
+        {/*
         <button
           onClick={handleQrCode}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
@@ -201,6 +206,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           <QrCode className="h-4 w-4" />
           Print QR Code
         </button>
+        */}
 
         {hasUploadPermission && (
           <CameraCapture
