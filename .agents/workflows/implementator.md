@@ -37,7 +37,8 @@ User provides an implementation plan (with code or diffs) and requests implement
 - Stage all modified files (`git add .`).
 - Commit the changes using conventional commit formats describing the implemented feature/fix.
 - Push the current branch to the remote repository (`git push -u origin $(git branch --show-current)`).
-- **DO NOT Create PR yourself**: but provide: title and body=Plan Summary.
+- **CRITICAL**: Provide a clear PR **Title** and **Body** to the human (Body = Summary of changes from the plan).
+- **DO NOT** create the Pull Request yourself unless explicitly asked.
 
 ### 4. Copilot Review Integration
 
