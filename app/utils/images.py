@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
     """
     Load known junk cover pHashes from the environment.
-    Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000"
+    Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     """
     raw_value = os.getenv("IQOQO_KNOWN_JUNK_PHASHES", "")
     hashes: set[imagehash.ImageHash] = set()

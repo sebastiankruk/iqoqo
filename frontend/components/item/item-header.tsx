@@ -17,7 +17,6 @@
 
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { ItemActions } from "./item-actions";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
@@ -148,10 +147,6 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           )}
         </div>
 
-        {/* Action Buttons push to the bottom */}
-        <div className="mt-auto pt-6 border-t border-border/50">
-          <ItemActions item={item} />
-        </div>
       </div>
     </div>
   );
