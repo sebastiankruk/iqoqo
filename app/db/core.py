@@ -49,6 +49,16 @@ _CATALOG: str | None = "catalog" if _USE_PG else None
 #: FK prefix — ``"catalog."`` in PostgreSQL, ``""`` in SQLite.
 _CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""
 
+#: The PostgreSQL schema name for inventory tables, or ``None`` for SQLite.
+_INVENTORY: str | None = "inventory" if _USE_PG else None
+#: FK prefix — ``"inventory."`` in PostgreSQL, ``""`` in SQLite.
+_INVENTORY_PFX: str = f"{_INVENTORY}." if _INVENTORY else ""
+
+#: The PostgreSQL schema name for auth tables, or ``None`` for SQLite.
+_AUTH: str | None = "auth" if _USE_PG else None
+#: FK prefix — ``"auth."`` in PostgreSQL, ``""`` in SQLite.
+_AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
+
 #: Canonical list of allowed Item statuses.  This is the single source of truth
 #: on the Python side; the TypeScript ``ItemStatus`` union in
 #: ``frontend/types/frbr.ts`` must stay in sync with these values.
@@ -244,11 +254,11 @@ class Item(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "items"
-    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
 
     id = db.Column(db.Integer, primary_key=True)
     manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id"), nullable=False)
-    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
     condition = db.Column(db.String(50))

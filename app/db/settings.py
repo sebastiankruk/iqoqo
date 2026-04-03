@@ -34,6 +34,7 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
     total_duration_seconds = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     __table_args__ = (db.UniqueConstraint("provider", "user_id", "operation_type", name="uq_provider_user_op"),)
 
