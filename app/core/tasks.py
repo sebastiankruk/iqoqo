@@ -10,8 +10,12 @@
 import atexit
 import logging
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +30,17 @@ _task_results: dict = {}
 # Lazily cached Flask app reference — set on first submit_task call.
 # This allows tasks.py to remain import-time free of Flask so it can be
 # imported before the app is fully constructed.
-_flask_app: Optional[object] = None
+_flask_app: "Flask | None" = None
 
 
-def _get_flask_app() -> Optional[object]:
+def _get_flask_app() -> "Flask | None":
     """Return the current Flask application if one is running."""
     global _flask_app  # pylint: disable=global-statement
     if _flask_app is not None:
         return _flask_app
     try:
         from flask import current_app  # pylint: disable=import-outside-toplevel
-        _flask_app = current_app._get_current_object()  # pylint: disable=protected-access
+        _flask_app = current_app._get_current_object()  # type: ignore[attr-defined] # pylint: disable=protected-access
     except RuntimeError:
         # No application context (e.g. during tests without app context)
         pass
@@ -52,7 +56,7 @@ def shutdown_executor() -> None:
 atexit.register(shutdown_executor)
 
 
-def _task_wrapper(task_id: str, app: Optional[object], func: Callable, *args, **kwargs) -> None:
+def _task_wrapper(task_id: str, app: "Flask | None", func: Callable, *args, **kwargs) -> None:
     """Wraps the target function to record its outcome.
 
     Pushes a Flask application context when one is available so that
@@ -62,7 +66,7 @@ def _task_wrapper(task_id: str, app: Optional[object], func: Callable, *args, **
     _task_results[task_id] = {"status": "processing"}
     try:
         if app is not None:
-            with app.app_context():  # type: ignore[union-attr]
+            with app.app_context():
                 result = func(*args, **kwargs)
         else:
             result = func(*args, **kwargs)

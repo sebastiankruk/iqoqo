@@ -59,10 +59,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   const { data: profile } = useProfile();
 
-  // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
+  // Poll server state every 3s while cover is pending OR processing
+  const isProcessing = isPending || manifestation.meta?.cover_status === "processing";
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
-    if (isPending && manifestation.id) {
+    if (isProcessing && manifestation.id) {
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
@@ -72,7 +73,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         clearInterval(interval);
       }
     };
-  }, [isPending, manifestation.id, qc]);
+  }, [isProcessing, manifestation.id, qc]);
 
   if (!profile) return null;
 
@@ -187,7 +188,11 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           manifestation_id={manifestation.id}
           onUploadComplete={() => {
             toast.success("Cover uploaded and processing started!");
-            router.refresh();
+            // Optimistically mark as processing so the polling loop kicks in automatically
+            qc.setQueryData(queryKeys.manifestation(manifestation.id!), (prev: Manifestation | undefined) => {
+              if (!prev) return prev;
+              return { ...prev, meta: { ...(prev.meta || {}), cover_status: "processing" } };
+            });
           }}
           label={manifestation.cover_url ? "Replace Cover" : "Contribute Cover"}
           icon={<ImagePlus className="h-3.5 w-3.5" />}

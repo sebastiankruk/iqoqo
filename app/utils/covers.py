@@ -26,7 +26,7 @@ from app.config import Config
 from app.core.tasks import submit_task
 from app.db import db
 from app.db.models import Manifestation
-from app.utils.images import is_valid_cover, optimize_and_save_image
+from app.utils.images import is_valid_cover, optimize_and_save_image, smart_crop_and_warp
 from app.utils.isbn import canonicalize_isbn
 from app.utils.llm_covers import fetch_llm_cover
 
@@ -251,6 +251,12 @@ def process_cover_pipeline(
 
                 with open(user_image_path, "rb") as upload_file:
                     image_bytes = upload_file.read()
+
+                # Apply smart crop and perspective warp before saving
+                ext = user_image_path.rsplit(".", 1)[-1].lower() if "." in user_image_path else "jpg"
+                mime_type = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+                image_bytes, _ = smart_crop_and_warp(image_bytes, mime_type)
+
                 optimize_and_save_image(image_bytes, dest_path)
                 os.remove(user_image_path)
 

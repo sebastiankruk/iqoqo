@@ -127,20 +127,32 @@ def smart_crop_and_warp(image_bytes: bytes, original_mime_type: str = "image/jpe
 
         # Sort by area, keep largest
         contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
-        screen_cnt = None
+        screen_cnt: np.ndarray | None = None
 
         for c in contours:
             peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-            # Find the first contour with exactly 4 points
-            if len(approx) == 4:
-                screen_cnt = approx
+            # Try progressively looser approximations to find 4 points (handles rounded corners)
+            for eps in [0.02, 0.04, 0.06]:
+                approx = cv2.approxPolyDP(c, eps * peri, True)
+                if len(approx) == 4:
+                    screen_cnt = approx
+                    break
+            if screen_cnt is not None:
                 break
 
+        if screen_cnt is None and contours:  # Fallback to bounding box of largest contour
+            largest_c = contours[0]
+            if cv2.contourArea(largest_c) > (img.shape[0] * img.shape[1] * 0.1):  # Only if it's decently large
+                rotated_rect = cv2.minAreaRect(largest_c)
+                box = cv2.boxPoints(rotated_rect)
+                screen_cnt = box.astype(np.int32)
+
         if screen_cnt is None:
+            logger.warning("Smart crop failed to find a valid rectangular contour.")
             return image_bytes, original_mime_type  # Fallback if no rectangle found
 
         # Perspective Transform Setup
+        assert screen_cnt is not None
         pts = screen_cnt.reshape(4, 2)
         rect = np.zeros((4, 2), dtype="float32")
 
