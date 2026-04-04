@@ -70,8 +70,11 @@ export default function ScanPage() {
 
   const handleManualSubmit = async (data: ManualEntryData) => {
     // Format authors to be a clean list without empty strings
-    const authors = data.authors 
-      ? data.authors.split(",").map(a => a.trim()).filter(Boolean)
+    const authors = data.authors
+      ? data.authors
+          .split(",")
+          .map(a => a.trim())
+          .filter(Boolean)
       : ["Unknown"];
 
     // If only a year is provided, convert to YYYY-01-01 for backend compatibility
@@ -125,24 +128,22 @@ export default function ScanPage() {
         playsInline
         muted
         autoPlay
-        aria-hidden="true"
+        suppressHydrationWarning
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
 
       <TopBar />
-      
+
       {/* Format Toggle */}
       {!result && !showManual && (
         <div className="absolute top-20 inset-x-0 z-30 flex justify-center">
           <div className="inline-flex rounded-full bg-black/40 backdrop-blur-md p-1 border border-white/10">
-            {(["book", "cd", "vinyl"] as const).map((f) => (
+            {(["book", "cd", "vinyl"] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setActiveFormat(f)}
                 className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  activeFormat === f 
-                    ? "bg-primary text-primary-foreground" 
-                    : "text-white/70 hover:text-white"
+                  activeFormat === f ? "bg-primary text-primary-foreground" : "text-white/70 hover:text-white"
                 }`}
               >
                 {f}
@@ -173,7 +174,7 @@ export default function ScanPage() {
 
       {showManual && (
         <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
-          <ManualEntryForm 
+          <ManualEntryForm
             onSubmit={handleManualSubmit}
             onCancel={() => setShowManual(false)}
             initialTitle={title}

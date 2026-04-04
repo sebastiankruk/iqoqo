@@ -43,9 +43,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const timestamp = getCoverTimestamp(meta);
 
   // Normalize cover URL handling for both external and local static paths
-  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) ||
-                  (meta["cover_url"] as string | undefined) ||
-                  "/file.svg";
+  const coverUrl =
+    getCoverUrl(item.cover_url || undefined, timestamp) || (meta["cover_url"] as string | undefined) || "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);
@@ -56,7 +55,9 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
       {/* Cover Image stacks at top on mobile, ensuring no collision with actions below */}
-      <div className={`w-full md:w-1/3 lg:w-1/4 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? 'aspect-square' : 'aspect-[2/3]'}`}>
+      <div
+        className={`w-full md:w-1/3 lg:w-1/4 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? "aspect-square" : "aspect-[2/3]"}`}
+      >
         <Image
           src={coverUrl}
           alt={`Cover of ${title}`}
@@ -75,13 +76,19 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {item.status?.replace("_", " ") ?? "Unknown"}
           </Badge>
           {isAudio && (
-            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
+            >
               <Disc className="h-3 w-3" />
               CD / Audio
             </Badge>
           )}
           {!isAudio && (
-            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
+            >
               <BookOpen className="h-3 w-3" />
               Book
             </Badge>
@@ -92,7 +99,10 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {tags.map(tag => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+              >
                 <Tag className="h-2.5 w-2.5" />
                 {tag}
               </span>
@@ -105,16 +115,16 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight">
             {title}
           </h1>
-          <h2 className="text-xl md:text-2xl text-muted-foreground font-medium">
-            {authorDisplay}
-          </h2>
+          <h2 className="text-xl md:text-2xl text-muted-foreground font-medium">{authorDisplay}</h2>
         </div>
 
         {/* Quick Meta block */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-muted/30 p-5 rounded-2xl mb-8 border border-border/50">
           {identifier && (
             <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">Identifier</span>
+              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                Identifier
+              </span>
               <span className="font-mono text-xs">{identifier}</span>
             </div>
           )}
@@ -146,7 +156,6 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

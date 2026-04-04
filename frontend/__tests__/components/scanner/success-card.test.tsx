@@ -55,7 +55,7 @@ const SAMPLE_META: IsbnMeta = {
   Year: "1965",
   "ISBN-13": "9780441013593",
   isbn: "9780441013593",
-  format: "book"
+  format: "book",
 };
 
 describe("SuccessCard", () => {
@@ -90,7 +90,7 @@ describe("SuccessCard", () => {
     const onDismiss = vi.fn();
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={onDismiss} />);
     // Testing the UI interaction of clicking the close icon button
-    fireEvent.click(screen.getByRole("button", { name: "Close" })); 
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
@@ -104,16 +104,16 @@ describe("SuccessCard", () => {
   it("calls apiClient.post to /scan and shows success toast when 'Add to Library' succeeds", async () => {
     mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 99, manifestation_id: 100 } } });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
-    
+
     // Explicitly clear mock to avoid interference from earlier renders in this file
     mockApiPost.mockClear();
-    
+
     fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
-    
+
     await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith("/scan", { 
-        barcode: "9780441013593", 
-        format: "book" 
+      expect(mockApiPost).toHaveBeenCalledWith("/scan", {
+        barcode: "9780441013593",
+        format: "book",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your library!');
       expect(mockPush).toHaveBeenCalledWith("/item/99");
@@ -123,9 +123,9 @@ describe("SuccessCard", () => {
   it("shows an error toast when 'Add to Library' fails", async () => {
     mockApiPost.mockRejectedValueOnce(new Error("Network error"));
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
-    
+
     fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
-    
+
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Network error");
     });
@@ -143,7 +143,7 @@ describe("SuccessCard", () => {
       title: "Dark Side of the Moon",
       author: "Pink Floyd",
       format: "audio",
-      barcode: "077774600125"
+      barcode: "077774600125",
     };
 
     render(<SuccessCard isbn="077774600125" meta={meta} onDismiss={vi.fn()} />);
@@ -159,7 +159,7 @@ describe("SuccessCard", () => {
     const meta: IsbnMeta = {
       Title: "Generic Item",
       Authors: ["Unknown"],
-      format: "book"
+      format: "book",
     };
 
     render(<SuccessCard isbn="" meta={meta} onDismiss={vi.fn()} />);

@@ -18,14 +18,15 @@ import { test, expect } from "@playwright/test";
 test.describe("Snap Cover Workflow", () => {
   test("should display 503 error message when vision extraction fails", async ({ page }) => {
     // 1. Mock the API response to return 503
-    await page.route("**/api/vision/extract", async (route) => {
+    await page.route("**/api/vision/extract", async route => {
       await route.fulfill({
         status: 503,
         contentType: "application/json",
         body: JSON.stringify({
           success: false,
           data: null,
-          error: "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
+          error:
+            "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
         }),
       });
     });
@@ -48,7 +49,7 @@ test.describe("Snap Cover Workflow", () => {
     // await expect(page.locator('text=Analyzing frame...')).toBeVisible();
 
     // 7. Assert that the error message is displayed
-    const errorText = page.locator('text=Vision extraction failed. All fallback methods');
+    const errorText = page.locator("text=Vision extraction failed. All fallback methods");
     await expect(errorText).toBeVisible();
     await expect(errorText).toHaveClass(/text-destructive/);
 

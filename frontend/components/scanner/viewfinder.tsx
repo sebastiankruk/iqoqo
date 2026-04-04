@@ -41,28 +41,22 @@ export function Viewfinder({
     <div className="absolute inset-0 flex items-center justify-center">
       {/* Darkened overlay with transparent cutout */}
       <div className="pointer-events-none absolute inset-0">
-        <div 
-          className="absolute inset-x-0 top-0 bg-black/60" 
-          style={{ bottom: `calc(50% + ${height / 2}px)` }} 
-        />
-        <div 
-          className="absolute inset-x-0 bottom-0 bg-black/60" 
-          style={{ top: `calc(50% + ${height / 2}px)` }} 
-        />
+        <div className="absolute inset-x-0 top-0 bg-black/60" style={{ bottom: `calc(50% + ${height / 2}px)` }} />
+        <div className="absolute inset-x-0 bottom-0 bg-black/60" style={{ top: `calc(50% + ${height / 2}px)` }} />
         <div
           className="absolute top-1/2 bottom-1/2 left-0 bg-black/60"
-          style={{ 
-            marginTop: `-${height / 2}px`, 
+          style={{
+            marginTop: `-${height / 2}px`,
             marginBottom: `-${height / 2}px`,
-            width: `calc(50% - ${width / 2}px)` 
+            width: `calc(50% - ${width / 2}px)`,
           }}
         />
         <div
           className="absolute top-1/2 bottom-1/2 right-0 bg-black/60"
-          style={{ 
-            marginTop: `-${height / 2}px`, 
+          style={{
+            marginTop: `-${height / 2}px`,
             marginBottom: `-${height / 2}px`,
-            width: `calc(50% - ${width / 2}px)` 
+            width: `calc(50% - ${width / 2}px)`,
           }}
         />
       </div>
@@ -74,7 +68,7 @@ export function Viewfinder({
           className="absolute inset-0 h-full w-full"
           viewBox={`0 0 ${width} ${height}`}
           fill="none"
-          aria-hidden="true"
+          role="presentation"
         >
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}

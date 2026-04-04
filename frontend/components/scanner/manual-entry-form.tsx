@@ -82,8 +82,8 @@ export function ManualEntryForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    setFormData((prev) => {
+
+    setFormData(prev => {
       const key = name as keyof ManualEntryData;
       if (key === "format") {
         return { ...prev, format: value as MediaFormat };
@@ -106,20 +106,16 @@ export function ManualEntryForm({
     <div className="flex w-full flex-col bg-card px-6 py-4">
       <div className="mb-4 flex items-center justify-between border-b border-border pb-4">
         <h3 className="text-lg font-semibold tracking-tight text-foreground">Manual Item Entry</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onCancel}
-          aria-label="Close manual entry"
-          className="rounded-full"
-        >
+        <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close manual entry" className="rounded-full">
           <X className="h-5 w-5" />
         </Button>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label htmlFor="manual-format" className="text-sm font-medium text-foreground">Format</label>
+          <label htmlFor="manual-format" className="text-sm font-medium text-foreground">
+            Format
+          </label>
           <select
             id="manual-format"
             name="format"
@@ -134,7 +130,9 @@ export function ManualEntryForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="manual-title" className="text-sm font-medium text-foreground">Title *</label>
+          <label htmlFor="manual-title" className="text-sm font-medium text-foreground">
+            Title *
+          </label>
           <input
             id="manual-title"
             required
@@ -148,7 +146,9 @@ export function ManualEntryForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="manual-authors" className="text-sm font-medium text-foreground">Author(s)</label>
+          <label htmlFor="manual-authors" className="text-sm font-medium text-foreground">
+            Author(s)
+          </label>
           <input
             id="manual-authors"
             type="text"
@@ -161,7 +161,9 @@ export function ManualEntryForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="manual-identifier" className="text-sm font-medium text-foreground">ISBN / UPC</label>
+          <label htmlFor="manual-identifier" className="text-sm font-medium text-foreground">
+            ISBN / UPC
+          </label>
           <input
             id="manual-identifier"
             type="text"
@@ -175,7 +177,9 @@ export function ManualEntryForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
-            <label htmlFor="manual-publisher" className="text-sm font-medium text-foreground">Publisher</label>
+            <label htmlFor="manual-publisher" className="text-sm font-medium text-foreground">
+              Publisher
+            </label>
             <input
               id="manual-publisher"
               type="text"
@@ -186,7 +190,9 @@ export function ManualEntryForm({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="manual-year" className="text-sm font-medium text-foreground">Year</label>
+            <label htmlFor="manual-year" className="text-sm font-medium text-foreground">
+              Year
+            </label>
             <input
               id="manual-year"
               type="text"
@@ -198,11 +204,7 @@ export function ManualEntryForm({
           </div>
         </div>
 
-        <Button
-          type="submit"
-          disabled={isSubmitting || !formData.title}
-          className="mt-4 w-full"
-        >
+        <Button type="submit" disabled={isSubmitting || !formData.title} className="mt-4 w-full">
           {isSubmitting ? (
             <>
               <Save className="mr-2 h-5 w-5 animate-pulse" />
