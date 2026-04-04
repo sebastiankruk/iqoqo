@@ -81,3 +81,39 @@ def test_board_game_container_aggregation(app):
         assert agg.aggregated_work.title == "Learn to Play Guide"
         assert agg.component_name == "Rulebook"
         assert agg.aggregated_type == "work"
+
+
+def test_board_game_invalid_aggregation(app):
+    """Test that invalid ContainerAggregation states are rejected by DB constraint."""
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        # 1. Setup Container
+        box_work = Work(title="Catan")
+        db.session.add(box_work)
+        db.session.flush()
+
+        # 2. Try to add invalid (both NULL)
+        invalid_null = ContainerAggregation(container_work_id=box_work.id, aggregated_type="work", component_name="Invalid")
+        db.session.add(invalid_null)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+        # 3. Setup Work and Item for "both NOT NULL" test
+        rulebook = Work(title="Catan Rules")
+        db.session.add(rulebook)
+        db.session.flush()
+
+        # 4. Try to add invalid (both NOT NULL)
+        invalid_both = ContainerAggregation(
+            container_work_id=box_work.id,
+            aggregated_type="work",
+            aggregated_work_id=rulebook.id,
+            aggregated_item_id=1,  # Should be NULL for type 'work'
+            component_name="Invalid Both",
+        )
+        db.session.add(invalid_both)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()

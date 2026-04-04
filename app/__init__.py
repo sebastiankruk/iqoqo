@@ -117,7 +117,8 @@ def create_app(config_class=Config, config_override=None):
     init_oauth(app)
 
     # Initialize background task scheduler
-    init_scheduler(app)
+    if app.config.get("SCHEDULER_AUTOSTART"):
+        init_scheduler(app)
 
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)

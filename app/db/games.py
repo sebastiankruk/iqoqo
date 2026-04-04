@@ -34,6 +34,11 @@ class ContainerAggregation(db.Model):  # type: ignore[name-defined]
     __tablename__ = "container_aggregations"
     __table_args__ = (
         db.Index("ix_container_aggregations_container_work_id", "container_work_id"),
+        db.CheckConstraint(
+            "(aggregated_type = 'work' AND aggregated_work_id IS NOT NULL AND aggregated_item_id IS NULL) OR "
+            "(aggregated_type = 'item' AND aggregated_item_id IS NOT NULL AND aggregated_work_id IS NULL)",
+            name="ck_container_aggregation_type_match",
+        ),
         *(({"schema": _CATALOG},) if _CATALOG else ()),
     )
 
