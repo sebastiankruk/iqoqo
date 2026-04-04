@@ -172,6 +172,7 @@ fi
 
 # 3. Run database migrations
 echo "Running database migrations..."
+python scripts/fix_alembic.py
 flask db upgrade
 echo "Migrations complete."
 

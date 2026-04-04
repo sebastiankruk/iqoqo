@@ -48,12 +48,19 @@ if [ -z "$APP_VERSION" ]; then
     export APP_VERSION="${VERSION:-preview}"
 fi
 
+# Optional: Stop previous instances if requested
+if [[ "$*" == *"--clean"* ]]; then
+    echo "🧹 Stopping and removing previous preview instances..."
+    docker compose -p iqoqo-preview -f docker-compose.prod.yml --env-file "$ENV_FILE" down --remove-orphans
+fi
+
 # Start containers using base + preview overrides
 echo "🚀 Starting iqoqo preview deployment (Version: $APP_VERSION)..."
 docker compose -p iqoqo-preview -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --build
 
-# Optional: Run database migrations for the preview DB
-# docker exec -it iqoqo_backend_preview alembic upgrade head
+# We no longer need the manual migration command here as the 'web' service handles it on startup
+# with the 'python scripts/fix_alembic.py && flask db upgrade' command.
 
 echo "✅ Preview environment started successfully!"
+echo "   Note: It may take a moment for the database to be ready and migrations to complete."
 echo "🌐 Local access: http://localhost:8081"
