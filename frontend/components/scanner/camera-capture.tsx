@@ -202,8 +202,8 @@ export function CameraCapture({
       const message = error instanceof Error ? error.message : "Failed to process cover image";
       toast.error(message);
       console.error("Failed to process cover image", error);
-      setUploading(false);
     } finally {
+      setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
