@@ -152,22 +152,64 @@ export function CameraCapture({
         });
         if (onUploadComplete) onUploadComplete();
       } else {
-        // Mode 2: OCR / Vision Metadata Extraction
-        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, {
+        // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
+        const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         const envelope = response.data;
-        if (envelope.success && envelope.data) {
-          if (onExtractComplete) onExtractComplete(envelope.data, file, format);
+
+        if (envelope.success && envelope.data?.task_id) {
+          const taskId = envelope.data.task_id;
+          let attempts = 0;
+          const maxAttempts = 30; // 60 seconds total (2s interval)
+
+          const poll = async () => {
+            if (attempts >= maxAttempts) {
+              toast.error("Extraction timed out. Please try again or use manual entry.");
+              setUploading(false);
+              return;
+            }
+
+            try {
+              const pollRes = await apiClient.get<ApiEnvelope<ExtractedMetadata>>(`/vision/extract/${taskId}`);
+              const pollData = pollRes.data;
+
+              if (pollData.success && !("status" in (pollData.data || {}))) {
+                // Task completed with result
+                if (onExtractComplete && pollData.data) {
+                  onExtractComplete(pollData.data, file, format);
+                }
+                setUploading(false);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } else if (pollData.success && (pollData.data as any)?.status) {
+                // Still processing
+                attempts++;
+                setTimeout(poll, 2000);
+              } else {
+                toast.error(pollData.error ?? "Vision extraction failed");
+                setUploading(false);
+              }
+            } catch (err: unknown) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const msg = (err as any)?.response?.data?.error || (err as Error)?.message || "Polling failed";
+              toast.error(msg);
+              setUploading(false);
+            }
+          };
+
+          setTimeout(poll, 1000); // Start polling after 1s
         } else {
-          toast.error(envelope.error ?? "Vision extraction failed");
+          toast.error(envelope.error ?? "Failed to start vision extraction");
+          setUploading(false);
         }
       }
-    } catch (error) {
-      toast.error("Failed to process cover image");
+    } catch (error: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = (error as any)?.response?.data?.error || (error as Error)?.message || "Failed to process cover image";
+      toast.error(msg);
       console.error("Failed to process cover image", error);
-    } finally {
       setUploading(false);
+    } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };

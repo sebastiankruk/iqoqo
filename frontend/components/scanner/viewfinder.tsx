@@ -68,7 +68,7 @@ export function Viewfinder({
           className="absolute inset-0 h-full w-full"
           viewBox={`0 0 ${width} ${height}`}
           fill="none"
-          aria-hidden="true"
+          role="presentation"
         >
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}

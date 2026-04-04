@@ -385,12 +385,12 @@ def test_vision_extract_corrupted_image(client, vision_user_headers):
     assert "Invalid or corrupted image" in data["error"]
 
 
-@patch("app.api.scanner.extract_metadata_from_cover")
-def test_vision_extract_success(mock_extract, client, vision_user_headers):
-    """POST /api/vision/extract returns extracted metadata on success."""
+@patch("app.api.scanner.submit_task")
+def test_vision_extract_success(mock_submit, client, vision_user_headers):
+    """POST /api/vision/extract returns 202 on success."""
     from io import BytesIO
 
-    mock_extract.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
+    mock_submit.return_value = "test-task-id"
 
     jpeg_bytes = _make_minimal_jpeg()
     response = client.post(
@@ -399,25 +399,21 @@ def test_vision_extract_success(mock_extract, client, vision_user_headers):
         data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
         content_type="multipart/form-data",
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json
     assert data["success"] is True
-    assert data["data"]["Title"] == "Dune"
-    assert data["data"]["Authors"] == ["Frank Herbert"]
+    assert data["data"]["task_id"] == "test-task-id"
     assert data["error"] is None
 
 
-@patch("app.api.scanner.extract_metadata_from_cover", return_value=None)
-def test_vision_extract_api_unavailable(mock_extract, client, vision_user_headers):
-    """POST /api/vision/extract returns 503 when the Vision API is unavailable."""
-    from io import BytesIO
+@patch("app.api.scanner.get_task_result")
+def test_vision_extract_api_unavailable(mock_get_result, client, vision_user_headers):
+    """GET /api/vision/extract/<id> returns 503 when the Vision API fails."""
+    mock_get_result.return_value = {"status": "failed", "error": "Vision extraction failed. All fallback methods"}
 
-    jpeg_bytes = _make_minimal_jpeg()
-    response = client.post(
-        "/api/vision/extract",
+    response = client.get(
+        "/api/vision/extract/test-task-id",
         headers=vision_user_headers,
-        data={"cover": (BytesIO(jpeg_bytes), "cover.jpg")},
-        content_type="multipart/form-data",
     )
     assert response.status_code == 503
     data = response.json

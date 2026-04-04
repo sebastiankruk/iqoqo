@@ -24,6 +24,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import ItemPermissions
+from app.core.tasks import get_task_result, submit_task
 from app.db.models import Item, Manifestation, db
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
@@ -209,27 +210,12 @@ def scan_barcode():
 @require_auth
 @require_permission(ItemPermissions.LLM_GENERATE_METADATA)
 def extract_from_cover():
-    """Extract metadata from a cover image.
-
-    Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
-    The image is passed to the Gemini Vision API which returns the title and
-    author(s) extracted from the cover artwork.
-
-    **Supported image types:** JPEG, PNG, WebP (max 10 MB).
-
-    **Setup:** Requires the ``GEMINI_API_KEY`` environment variable to be set.
-    See ``docs/COVERS_SETUP.md`` → *Vision-based Metadata Extraction* for details.
-
-    Request form fields:
-        cover (file): The cover image to analyse.
+    # pylint: disable=too-many-return-statements
+    """Submit a cover image for asynchronous metadata extraction.
 
     Returns:
-        200 - ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
-        400 - missing file, empty filename, invalid extension, oversized or corrupt image
-        401 - authentication required (handled by ``@require_auth``)
-        503 - Gemini API key not configured or upstream call failed
+        202 - ``{"success": true, "data": {"task_id": str}, "error": null}``
     """
-    # pylint: disable=too-many-return-statements
     if "cover" not in request.files:
         return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
 
@@ -265,25 +251,42 @@ def extract_from_cover():
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-
     user_id = str(getattr(request, "user_id", ""))
 
-    result = extract_metadata_from_cover(image_bytes, mime_type=mime_type, user_id=user_id)
+    # Dispatch to background task queue
+    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)
 
-    if result is None:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": (
-                        "Vision extraction failed. "
-                        "All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. "
-                        "Please check the server logs."
-                    ),
-                }
-            ),
-            503,
-        )
+    return jsonify({"success": True, "data": {"task_id": task_id}, "error": None}), 202
 
-    return jsonify({"success": True, "data": result, "error": None}), 200
+
+@api_bp.route("/vision/extract/<task_id>", methods=["GET"])
+@require_auth
+def get_extract_status(task_id: str):
+    """Poll for the status of an asynchronous cover extraction task."""
+    result = get_task_result(task_id)
+
+    if not result:
+        return jsonify({"success": False, "data": None, "error": "Task not found"}), 404
+
+    if result["status"] == "completed":
+        data = result["result"]
+        if data is None:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": "Vision extraction failed. Fallback methods unconfigured or failed.",
+                    }
+                ),
+                503,
+            )
+        return jsonify({"success": True, "data": data, "error": None}), 200
+
+    if result["status"] == "failed":
+        # 503 is used to indicate that all vision fallbacks failed/were unavailable
+        status_code = 503 if "Vision extraction failed" in str(result.get("error", "")) else 500
+        return jsonify({"success": False, "data": None, "error": result["error"]}), status_code
+
+    # Task is pending or processing
+    return jsonify({"success": True, "data": {"status": result["status"]}, "error": None}), 202

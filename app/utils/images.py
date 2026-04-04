@@ -104,8 +104,13 @@ def smart_crop_and_warp(image_bytes: bytes, original_mime_type: str = "image/jpe
         tuple[bytes, str]: (image_bytes, mime_type)
     """
     try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # 1. Read with PIL to handle EXIF rotation before CV2 processing
+        with Image.open(io.BytesIO(image_bytes)) as pil_img_raw:
+            pil_img = ImageOps.exif_transpose(pil_img_raw)
+            if pil_img.mode != "RGB":
+                pil_img = pil_img.convert("RGB")
+            # 2. Convert to CV2 format (BGR)
+            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
         if img is None:
             return image_bytes, original_mime_type
@@ -337,8 +342,8 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
     target_filename = filename or file.filename
     filepath = os.path.join(base_dir, target_filename)
 
-    # Save and optimize. Apply smart crop only for user uploads (gallery/scanner input).
-    optimize_and_save_image(file.read(), filepath, apply_smart_crop=subfolder == "gallery")
+    # Save and optimize. Apply smart crop for both gallery and covers uploads.
+    optimize_and_save_image(file.read(), filepath, apply_smart_crop=subfolder in ("gallery", "covers"))
 
     # Return public URL
     return f"/static/{subfolder}/{target_filename}"

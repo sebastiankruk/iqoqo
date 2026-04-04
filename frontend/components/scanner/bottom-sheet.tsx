@@ -16,9 +16,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search, ImagePlus } from "lucide-react";
+import { Camera, Search, ImagePlus, Zap, ZapOff, Loader2 } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import { toast } from "sonner";
 
 const TABS = [
   { id: "barcode", label: "Barcode" },
@@ -78,6 +79,7 @@ export function BottomSheet({
   const rafRef = useRef<number>(0);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const barcodeEnabledRef = useRef<boolean>(true);
+  const [torchOn, setTorchOn] = useState(false);
 
   // Sync ref with state
   useEffect(() => {
@@ -99,8 +101,33 @@ export function BottomSheet({
       video.srcObject = null;
     }
     setScannerActive(false);
+    setTorchOn(false);
     if (onScannerStateChange) onScannerStateChange(false);
   }, [videoRef, onScannerStateChange]);
+
+  /* ── Toggle Torch (Flashlight) ── */
+  const toggleTorch = useCallback(async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (track) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const capabilities = track.getCapabilities() as any;
+        if (capabilities.torch !== undefined) {
+          await track.applyConstraints({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            advanced: [{ torch: !torchOn }] as any
+          });
+          setTorchOn(!torchOn);
+        } else {
+          toast.error("Flashlight is not supported on this device.");
+        }
+      } catch (err) {
+        console.error("Failed to toggle torch", err);
+        toast.error("Could not toggle flashlight.");
+      }
+    }
+  }, [torchOn]);
 
   /* ── Barcode API lookup ── */
   const lookupBarcode = useCallback(
@@ -266,8 +293,14 @@ export function BottomSheet({
       } else {
         setError(envelope.error ?? "Failed to extract metadata");
       }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Could not snap cover");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.message || "Could not snap cover";
+      if (msg.includes("500") || msg.includes("Network Error") || msg.includes("socket hang up")) {
+        setError("Server error during extraction. Please try again or use manual entry.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsUploadingCover(false);
     }
@@ -312,22 +345,39 @@ export function BottomSheet({
         {error && <p className="text-center text-xs text-destructive">{error}</p>}
 
         {activeTab === "barcode" && (
-          <>
-            <button
-              onClick={scannerActive ? undefined : startScanner}
-              disabled={isSearching}
-              className="group relative flex items-center justify-center"
-            >
-              <span className="absolute h-[76px] w-[76px] rounded-full border-[3px] border-primary/30 animate-[pulse-ring_2s_ease-in-out_infinite]" />
-              <span className="absolute h-[68px] w-[68px] rounded-full border-[3px] border-primary" />
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-active:scale-90">
-                <Camera className={`h-6 w-6 ${scannerActive ? "animate-pulse" : ""}`} />
-              </span>
-            </button>
+          <div className="flex w-full flex-col items-center gap-4">
+            <div className="relative flex w-full items-center justify-center">
+              <button
+                onClick={scannerActive ? undefined : startScanner}
+                disabled={isSearching}
+                className="group relative flex items-center justify-center"
+              >
+                <span className="absolute h-[76px] w-[76px] rounded-full border-[3px] border-primary/30 animate-[pulse-ring_2s_ease-in-out_infinite]" />
+                <span className="absolute h-[68px] w-[68px] rounded-full border-[3px] border-primary" />
+                <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-active:scale-90">
+                  <Camera className={`h-6 w-6 ${scannerActive ? "animate-pulse" : ""}`} />
+                </span>
+              </button>
+
+              {/* Torch Button positioned to the right of the camera button */}
+              {scannerActive && (
+                <button
+                  onClick={toggleTorch}
+                  className="absolute right-8 flex h-12 w-12 items-center justify-center rounded-full bg-secondary shadow-lg border border-border transition-colors active:scale-95 z-10"
+                  aria-label="Toggle Flashlight"
+                >
+                  {torchOn ? (
+                    <Zap className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  ) : (
+                    <ZapOff className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </button>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}
             </p>
-          </>
+          </div>
         )}
 
         {activeTab === "cover" && (
@@ -343,10 +393,13 @@ export function BottomSheet({
               <button
                 onClick={handleSnapFromVideo}
                 disabled={isUploadingCover}
-                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-50"
+                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-80 transition-all"
               >
                 {isUploadingCover ? (
-                  <span className="animate-pulse">Analyzing frame...</span>
+                  <>
+                    <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                    <span>Extracting... This may take a moment</span>
+                  </>
                 ) : (
                   <>
                     <Camera className="mr-2 h-5 w-5" /> Snap Live Frame

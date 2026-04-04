@@ -52,11 +52,23 @@ def test_extract_from_cover_global_llm_disabled(client, vision_user_headers):
                     headers=vision_user_headers,
                 )
 
-                assert response.status_code == 503
-                assert "Vision extraction failed" in response.json["error"]
+                assert response.status_code == 202
+                task_id = response.json["data"]["task_id"]
+
+                # Now poll for the result, which should be 503 (since all fallbacks return None)
+                import time
+
+                max_polls = 10
+                for _ in range(max_polls):
+                    poll_response = client.get(f"/api/vision/extract/{task_id}", headers=vision_user_headers)
+                    if poll_response.status_code != 202:
+                        break
+                    time.sleep(0.1)
+
+                assert poll_response.status_code == 503
+                assert "Vision extraction failed" in poll_response.json["error"]
 
                 # Verify Gemini and Ollama were NOT even called if ALLOW_LLM is False
-                # (Wait, our implementation calls extract_metadata_from_cover which calls them)
-                # Let's check the logs or the mock calls.
-                mock_gemini.assert_called_once()  # It's called but should skip internal logic
-                mock_ollama.assert_called_once()  # It's called but should skip internal logic
+                # (In extract_metadata_from_cover, Gemini and Ollama check Config.ALLOW_LLM)
+                mock_gemini.assert_called_once()
+                mock_ollama.assert_called_once()

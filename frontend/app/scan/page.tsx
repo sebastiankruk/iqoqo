@@ -128,7 +128,7 @@ export default function ScanPage() {
         playsInline
         muted
         autoPlay
-        aria-hidden="true"
+        suppressHydrationWarning
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
 
