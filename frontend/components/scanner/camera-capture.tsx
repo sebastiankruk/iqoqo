@@ -133,6 +133,38 @@ export function CameraCapture({
     return () => { mounted = false; };
   }, []);
 
+  const startPolling = async (taskId: string) => {
+    const maxRetries = 30; // 30 retries * 2s = 60s max
+    const { apiClient: pollClient } = await import("@/lib/api/client");
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(`/vision/extract/${taskId}`);
+        const env = response.data;
+        
+        if (env.success && env.data) {
+          // Check if data is the result (has Title) or just status
+          if ("Title" in env.data) {
+            return env.data;
+          }
+          const data = env.data as { status: string };
+          if (data.status === "failed") {
+            throw new Error(env.error || "Vision extraction failed");
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("Vision extraction failed")) {
+          throw err;
+        }
+        // Other network errors - just retry
+      }
+      
+      // Wait 2 seconds before next poll
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    throw new Error("Task timed out. Please try again or enter manually.");
+  };
+
   const processFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
@@ -147,19 +179,23 @@ export function CameraCapture({
         });
         if (onUploadComplete) onUploadComplete();
       } else {
-        // Mode 2: OCR / Vision Metadata Extraction
-        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, {
+        // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
+        const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        
         const envelope = response.data;
-        if (envelope.success && envelope.data) {
-          if (onExtractComplete) onExtractComplete(envelope.data, file, format);
+        if (envelope.success && envelope.data?.task_id) {
+          // Transition to polling
+          const result = await startPolling(envelope.data.task_id);
+          if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
-          toast.error(envelope.error ?? "Vision extraction failed");
+          toast.error(envelope.error ?? "Vision extraction submission failed");
         }
       }
     } catch (error) {
-      toast.error("Failed to process cover image");
+      const message = error instanceof Error ? error.message : "Failed to process cover image";
+      toast.error(message);
       console.error("Failed to process cover image", error);
     } finally {
       setUploading(false);

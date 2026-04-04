@@ -253,18 +253,44 @@ export function BottomSheet({
       const formData = new FormData();
       formData.append("cover", file);
 
-      const { apiClient } = await import("@/lib/api/client");
-      const response = await apiClient.post<{
+      const { apiClient: extractionClient } = await import("@/lib/api/client");
+      const submitResponse = await extractionClient.post<{
         success: boolean;
-        data: { Title?: string; Authors?: string[] } | null;
+        data: { task_id: string } | null;
         error?: string | null;
       }>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
       
-      const envelope = response.data;
-      if (envelope.success && envelope.data) {
-        if (onExtractComplete) onExtractComplete(envelope.data, file);
+      const submission = submitResponse.data;
+      if (submission.success && submission.data?.task_id) {
+        // Polling loop
+        const taskId = submission.data.task_id;
+        const maxRetries = 30;
+        let result = null;
+
+        for (let i = 0; i < maxRetries; i++) {
+          const pollResponse = await extractionClient.get<import("@/types/frbr").ApiResponse<{ Title?: string; Authors?: string[]; status?: string }>>(
+            `/vision/extract/${taskId}`
+          );
+          const env = pollResponse.data;
+          if (env.success && env.data) {
+            if ("Title" in env.data) {
+              result = env.data as { Title: string; Authors: string[] };
+              break;
+            }
+            if (env.data.status === "failed") {
+              throw new Error(env.error || "Vision extraction failed");
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        if (result) {
+          if (onExtractComplete) onExtractComplete(result, file);
+        } else {
+          throw new Error("Task timed out. Please try again.");
+        }
       } else {
-        setError(envelope.error ?? "Failed to extract metadata");
+        setError(submission.error ?? "Failed to extract metadata");
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not snap cover");
