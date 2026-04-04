@@ -11,8 +11,6 @@
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-#
 import base64
 import binascii
 import logging
@@ -21,6 +19,7 @@ import time
 
 import requests
 from openai import OpenAI
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
 from app.core.permissions import ItemPermissions
@@ -59,7 +58,7 @@ def record_telemetry(provider: str, user_id: str, duration: float, operation_typ
         )
         db.session.add(stat)
         db.session.commit()
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except SQLAlchemyError as e:
         logger.error("Failed to record telemetry: %s", e)
         db.session.rollback()
 

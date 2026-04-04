@@ -4,6 +4,15 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 
 """Integration tests for Video and Board Game FRBRoo ontology expansions."""
 
@@ -81,3 +90,39 @@ def test_board_game_container_aggregation(app):
         assert agg.aggregated_work.title == "Learn to Play Guide"
         assert agg.component_name == "Rulebook"
         assert agg.aggregated_type == "work"
+
+
+def test_board_game_invalid_aggregation(app):
+    """Test that invalid ContainerAggregation states are rejected by DB constraint."""
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        # 1. Setup Container
+        box_work = Work(title="Catan")
+        db.session.add(box_work)
+        db.session.flush()
+
+        # 2. Try to add invalid (both NULL)
+        invalid_null = ContainerAggregation(container_work_id=box_work.id, aggregated_type="work", component_name="Invalid")
+        db.session.add(invalid_null)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+        # 3. Setup Work and Item for "both NOT NULL" test
+        rulebook = Work(title="Catan Rules")
+        db.session.add(rulebook)
+        db.session.flush()
+
+        # 4. Try to add invalid (both NOT NULL)
+        invalid_both = ContainerAggregation(
+            container_work_id=box_work.id,
+            aggregated_type="work",
+            aggregated_work_id=rulebook.id,
+            aggregated_item_id=1,  # Should be NULL for type 'work'
+            component_name="Invalid Both",
+        )
+        db.session.add(invalid_both)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
