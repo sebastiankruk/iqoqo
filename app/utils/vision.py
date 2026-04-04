@@ -98,7 +98,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     raise on backend failure and instead returns ``None`` when all steps are exhausted.
     """
     # 0. Smart crop and warp before analysis to improve accuracy
-    image_bytes = smart_crop_and_warp(image_bytes)
+    image_bytes, mime_type = smart_crop_and_warp(image_bytes, mime_type)
 
     # 1. Try Gemini
     try:

@@ -40,7 +40,9 @@ def create_test_image_with_rectangle():
 def test_smart_crop_and_warp_success():
     """Tests that a clear rectangle is detected and warped properly."""
     raw_bytes = create_test_image_with_rectangle()
-    cropped_bytes = smart_crop_and_warp(raw_bytes)
+    cropped_bytes, mime_type = smart_crop_and_warp(raw_bytes, "image/png")
+
+    assert mime_type == "image/jpeg"
 
     # Decode and check dimensions
     nparr = np.frombuffer(cropped_bytes, np.uint8)
@@ -52,34 +54,38 @@ def test_smart_crop_and_warp_success():
     assert cropped_bytes != raw_bytes
 
 
-def test_smart_crop_fallback_on_noise():
-    """Tests that if no clear rectangle exists, original image is returned."""
-    # Create pure noise
-    img = np.random.randint(0, 256, (200, 200, 3), dtype=np.uint8)
+def test_smart_crop_fallback_on_solid_color():
+    """Tests that if no clear rectangle exists (solid color), original image and mime are returned."""
+    # Create pure black image (no edges)
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
     _, buffer = cv2.imencode(".jpg", img)
     raw_bytes = buffer.tobytes()
 
-    cropped_bytes = smart_crop_and_warp(raw_bytes)
+    cropped_bytes, mime_type = smart_crop_and_warp(raw_bytes, "image/jpeg")
     assert cropped_bytes == raw_bytes
+    assert mime_type == "image/jpeg"
 
 
-def test_optimize_and_save_image_with_exif_rotation(tmp_path):
-    """Tests that EXIF rotation is applied correctly."""
-    filepath = tmp_path / "test_exif.jpg"
+def test_optimize_and_save_image_normalization(tmp_path):
+    """
+    Tests that optimize_and_save_image correctly saves, resizes, and normalizes
+    images to JPEG format.
+    """
+    filepath = tmp_path / "test_norm.jpg"
 
-    # Create image
-    img = Image.new("RGB", (200, 100), color="blue")
+    # Create a small PNG image
+    img = Image.new("RGB", (2000, 1000), color="blue")
 
     buffer = io.BytesIO()
-    img.save(buffer, format="JPEG")
+    img.save(buffer, format="PNG")
 
-    # We test that the function executes without error.
-    # Proper EXIF testing requires a real EXIF-payload which is complex to mock without piexif.
+    # We test that the function executes without error, resizes, and saves as JPEG.
     optimize_and_save_image(buffer.getvalue(), str(filepath), apply_smart_crop=False)
 
     # Check it saved
     assert filepath.exists()
 
-    # Verify thumbnail constraints
+    # Verify thumbnail constraints and JPEG normalization
     with Image.open(filepath) as out_img:
+        assert out_img.format == "JPEG"
         assert max(out_img.size) <= 1024

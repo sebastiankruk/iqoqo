@@ -96,6 +96,7 @@ No schema migrations are required for this release. The `unread` status is a new
 - **Telemetry Hardening**: Refactored `LLMTelemetry` to handle high-concurrency event logging with non-blocking database indexes.
 - **Scanner Fallbacks**: Added a `ManualEntryForm` UX to handle scenarios where barcode/ISBN lookups timeout or return no results.
 - **Desktop Scanner UX**: `CameraCapture` now detects available media devices. If no rear camera is detected (e.g., Desktop), it automatically defaults to a clean Drag & Drop file uploader UI.
+- **Smart Image Handling**: Integrated `OpenCV` to automatically detect, crop, and perspective-warp (fix skew) media covers from smartphone photos.
 
 ### Changed
 

@@ -87,18 +87,28 @@ def is_valid_cover(image_bytes: bytes) -> bool:
         return False
 
 
-def smart_crop_and_warp(image_bytes: bytes) -> bytes:
+def smart_crop_and_warp(image_bytes: bytes, original_mime_type: str = "image/jpeg") -> tuple[bytes, str]:
     """
-    Detects the largest rectangular document/cover in the image, crops it,
-    and applies a perspective transform to flatten it.
-    Returns original bytes if detection fails.
+    Detect the largest rectangular document or cover in the image, crop it,
+    and apply a perspective transform to flatten it.
+
+    On successful detection and transformation, the returned image is
+    re-encoded as JPEG bytes. This means the output format is normalized to
+    JPEG and may differ from the input format.
+
+    If the image cannot be decoded, no suitable rectangular contour is found,
+    or processing fails for any reason, the original input bytes are returned
+    unchanged.
+
+    Returns:
+        tuple[bytes, str]: (image_bytes, mime_type)
     """
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img is None:
-            return image_bytes
+            return image_bytes, original_mime_type
 
         # Grayscale, blur, edge detection
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -108,7 +118,7 @@ def smart_crop_and_warp(image_bytes: bytes) -> bytes:
         # Find contours
         contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
-            return image_bytes
+            return image_bytes, original_mime_type
 
         # Sort by area, keep largest
         contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
@@ -123,7 +133,7 @@ def smart_crop_and_warp(image_bytes: bytes) -> bytes:
                 break
 
         if screen_cnt is None:
-            return image_bytes  # Fallback if no rectangle found
+            return image_bytes, original_mime_type  # Fallback if no rectangle found
 
         # Perspective Transform Setup
         pts = screen_cnt.reshape(4, 2)
@@ -157,19 +167,19 @@ def smart_crop_and_warp(image_bytes: bytes) -> bytes:
         # Convert back to jpeg bytes
         is_success, buffer = cv2.imencode(".jpg", warped, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
         if is_success:
-            return buffer.tobytes()
+            return buffer.tobytes(), "image/jpeg"
 
-        return image_bytes
+        return image_bytes, original_mime_type
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.warning(f"Smart crop failed, falling back to original image: {e}")
-        return image_bytes
+        return image_bytes, original_mime_type
 
 
 def optimize_and_save_image(image_bytes: bytes, filepath: str, apply_smart_crop: bool = False):
     """Converts image to JPEG, applies smart crop (optional), fixes EXIF, resizes to max 1024x1024."""
     try:
         if apply_smart_crop:
-            image_bytes = smart_crop_and_warp(image_bytes)
+            image_bytes, _ = smart_crop_and_warp(image_bytes)
 
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
             # Fix rotation based on EXIF data before doing anything else
