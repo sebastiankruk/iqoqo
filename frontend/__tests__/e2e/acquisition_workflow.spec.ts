@@ -243,11 +243,15 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       // 1. Switch to Snap Cover tab
       await page.getByRole("button", { name: "Snap Cover" }).click();
 
-      // 2. Start Live Camera
-      await page.getByRole("button", { name: "Start Live Camera" }).click();
-
-      // 3. Capture snapshot
-      await page.getByRole("button", { name: "Snap Live Frame" }).click();
+      // 2. Trigger file chooser via the primary Snap Cover button
+      const fileChooserPromise = page.waitForEvent("filechooser");
+      await page.getByRole("button", { name: "Snap Cover" }).nth(1).click();
+      const fileChooser = await fileChooserPromise;
+      await fileChooser.setFiles({
+        name: "dune_cover.jpg",
+        mimeType: "image/jpeg",
+        buffer: Buffer.from("fake-image-data"),
+      });
 
       // Verify Result (Manual Entry form)
       await expect(page.getByText("Manual Item Entry")).toBeVisible({ timeout: 15000 });

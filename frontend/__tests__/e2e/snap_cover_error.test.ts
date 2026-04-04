@@ -76,17 +76,18 @@ test.describe("Snap Cover Workflow", () => {
     // 3. Switch to "Snap Cover" tab
     await page.click('button:has-text("Snap Cover")');
 
-    // 4. Click "Start Live Camera"
-    // (Playwright will automatically wait until the element is attached after the tab switch)
-    await page.click('button:has-text("Start Live Camera")');
+    // 4. Trigger file chooser via the primary Snap Cover button
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    // The tab button is first, the CameraCapture button is second
+    await page.getByRole("button", { name: "Snap Cover" }).nth(1).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles({
+      name: "test_cover.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from("fake-image-data"),
+    });
 
-    // 5. Click "Snap Live Frame"
-    await page.click('button:has-text("Snap Live Frame")');
-
-    // 6. Verify "Analyzing frame..." loading state (optional but good)
-    // await expect(page.locator('text=Analyzing frame...')).toBeVisible();
-
-    // 7. Assert that the error message is displayed
+    // 5. Assert that the error message is displayed after polling fails
     const errorText = page.locator("text=Vision extraction failed. All fallback methods");
     await expect(errorText).toBeVisible();
     await expect(errorText).toHaveClass(/text-destructive/);

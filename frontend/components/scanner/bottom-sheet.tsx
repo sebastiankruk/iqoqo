@@ -16,7 +16,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search, ImagePlus, Zap, ZapOff, Loader2 } from "lucide-react";
+import { Camera, Search, ImagePlus, Zap, ZapOff } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { toast } from "sonner";
@@ -77,7 +77,6 @@ export function BottomSheet({
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const barcodeEnabledRef = useRef<boolean>(true);
   const [torchOn, setTorchOn] = useState(false);
 
@@ -226,111 +225,6 @@ export function BottomSheet({
     if (activeTab === "manual") stopScanner();
   }, [activeTab, stopScanner]);
 
-  /* Capture snapshot directly from live video feed */
-  const handleSnapFromVideo = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || !streamRef.current) return;
-
-    setIsUploadingCover(true);
-    setError(null);
-    try {
-      const sourceWidth = video.videoWidth;
-      const sourceHeight = video.videoHeight;
-
-      // Calculate crop dimensions based on format
-      let targetWidth = sourceWidth;
-      let targetHeight = sourceHeight;
-      const isAudio = format === "cd" || format === "vinyl";
-
-      if (isAudio) {
-        // 1:1 Aspect Ratio
-        const size = Math.min(sourceWidth, sourceHeight);
-        targetWidth = size;
-        targetHeight = size;
-      } else {
-        // 2:3 Aspect Ratio (Book)
-        const possibleHeightByWidth = (sourceWidth * 3) / 2;
-        const possibleWidthByHeight = (sourceHeight * 2) / 3;
-
-        if (possibleHeightByWidth <= sourceHeight) {
-          targetWidth = sourceWidth;
-          targetHeight = possibleHeightByWidth;
-        } else {
-          targetWidth = possibleWidthByHeight;
-          targetHeight = sourceHeight;
-        }
-      }
-
-      const startX = (sourceWidth - targetWidth) / 2;
-      const startY = (sourceHeight - targetHeight) / 2;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Could not map camera feed");
-
-      // Draw cropped area
-      ctx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
-
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
-      if (!blob) throw new Error("Failed to encode image");
-
-      const file = new File([blob], "cover_snapshot.jpg", { type: "image/jpeg" });
-      const formData = new FormData();
-      formData.append("cover", file);
-
-      const { apiClient: extractionClient } = await import("@/lib/api/client");
-      const submitResponse = await extractionClient.post<{
-        success: boolean;
-        data: { task_id: string } | null;
-        error?: string | null;
-      }>(`/vision/extract`, formData, { headers: { "Content-Type": "multipart/form-data" } });
-      const submission = submitResponse.data;
-      if (submission.success && submission.data?.task_id) {
-        // Polling loop
-        const taskId = submission.data.task_id;
-        const maxRetries = 30;
-        let result = null;
-
-        for (let i = 0; i < maxRetries; i++) {
-          const pollResponse = await extractionClient.get<import("@/types/frbr").ApiResponse<{ Title?: string; Authors?: string[]; status?: string }>>(
-            `/vision/extract/${taskId}`
-          );
-          const env = pollResponse.data;
-          if (env.success && env.data) {
-            if ("Title" in env.data) {
-              result = env.data as { Title: string; Authors: string[] };
-              break;
-            }
-            if (env.data.status === "failed") {
-              throw new Error(env.error || "Vision extraction failed");
-            }
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-
-        if (result) {
-          if (onExtractComplete) onExtractComplete(result, file);
-        } else {
-          throw new Error("Task timed out. Please try again.");
-        }
-      } else {
-        setError(submission.error ?? "Failed to extract metadata");
-      }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || "Could not snap cover";
-      if (msg.includes("500") || msg.includes("Network Error") || msg.includes("socket hang up")) {
-        setError("Server error during extraction. Please try again or use manual entry.");
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setIsUploadingCover(false);
-    }
-  }, [videoRef, onExtractComplete, format]);
-
   /* Cleanup on unmount */
   useEffect(() => {
     return () => {
@@ -406,44 +300,28 @@ export function BottomSheet({
         )}
 
         {activeTab === "cover" && (
-          <div className="flex w-full flex-col gap-4">
-            {!scannerActive ? (
-              <button
-                onClick={startScanner}
-                className="flex w-full items-center justify-center rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-sm"
-              >
-                <Camera className="mr-2 h-5 w-5" /> Start Live Camera
-              </button>
-            ) : (
-              <button
-                onClick={handleSnapFromVideo}
-                disabled={isUploadingCover}
-                className="flex w-full items-center justify-center rounded-xl bg-primary py-4 font-semibold text-primary-foreground shadow-md ring-2 ring-primary/20 ring-offset-2 disabled:opacity-80 transition-all"
-              >
-                {isUploadingCover ? (
-                  <>
-                    <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                    <span>Extracting... This may take a moment</span>
-                  </>
-                ) : (
-                  <>
-                    <Camera className="mr-2 h-5 w-5" /> Snap Live Frame
-                  </>
-                )}
-              </button>
-            )}
-            <div className="relative flex w-full items-center py-1">
-              <div className="flex-grow border-t border-border"></div>
-              <span className="mx-4 flex-shrink-0 text-xs text-muted-foreground uppercase tracking-widest">or</span>
-              <div className="flex-grow border-t border-border"></div>
-            </div>
+          <div className="flex w-full flex-col gap-3">
+            {/* Primary action: camera (opens native picker on mobile) */}
+            <CameraCapture
+              capture="environment"
+              label="Snap Cover"
+              icon={<Camera className="mr-2 h-5 w-5" />}
+              onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
+              format={format}
+              className="flex w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80"
+            />
+
+            {/* Secondary: gallery-only upload */}
             <CameraCapture
               capture={false}
               label="Upload from Gallery"
-              icon={<ImagePlus className="mr-2 h-5 w-5" />}
+              icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
-              className="flex w-full justify-center [&>button]:h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
+              format={format}
+              className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />
+
+            {error && <p className="text-center text-xs text-destructive">{error}</p>}
           </div>
         )}
 
