@@ -83,7 +83,7 @@ def _parse_item_status_from_ts(ts_source: str) -> frozenset[str]:
 
 def test_frbr_ts_exists() -> None:
     """Verify that the TypeScript types file is present on disk."""
-    assert FRBR_TS.exists(), f"Expected TypeScript types file at {FRBR_TS}. " "Has the frontend directory been moved?"
+    assert FRBR_TS.exists(), f"Expected TypeScript types file at {FRBR_TS}. Has the frontend directory been moved?"
 
 
 def test_item_status_ontology_in_sync() -> None:
@@ -103,11 +103,9 @@ def test_item_status_ontology_in_sync() -> None:
 
     messages: list[str] = []
     if only_in_python:
-        messages.append(
-            f"Statuses present in ITEM_STATUSES (Python) but missing from " f"ItemStatus (TypeScript): {sorted(only_in_python)}"
-        )
+        messages.append(f"Statuses present in ITEM_STATUSES (Python) but missing from ItemStatus (TypeScript): {sorted(only_in_python)}")
     if only_in_ts:
-        messages.append(f"Statuses present in ItemStatus (TypeScript) but missing from " f"ITEM_STATUSES (Python): {sorted(only_in_ts)}")
+        messages.append(f"Statuses present in ItemStatus (TypeScript) but missing from ITEM_STATUSES (Python): {sorted(only_in_ts)}")
 
     assert not messages, "\n".join(messages)
 

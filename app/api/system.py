@@ -105,7 +105,7 @@ def export_data():
         output = BytesIO()
         output.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
         output.seek(0)
-        return send_file(output, mimetype="application/json", as_attachment=True, download_name=f'iqoqo_export_{data["exported_at"]}.json')
+        return send_file(output, mimetype="application/json", as_attachment=True, download_name=f"iqoqo_export_{data['exported_at']}.json")
     except (OSError, ValueError, TypeError) as e:
         return jsonify({"error": str(e)}), 500
 

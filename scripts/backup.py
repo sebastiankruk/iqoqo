@@ -22,9 +22,6 @@ import shutil
 import sys
 from datetime import datetime
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from app import create_app
 from app.config import Config
 from app.core.data_manager import DataManager
@@ -67,4 +64,6 @@ def create_export(app=None):
 
 
 if __name__ == "__main__":
+    # Add project root to path
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     create_export()

@@ -430,6 +430,28 @@ This moves unused images to an archive folder.
 
 - **Configuration:** Set `COVERS_ARCHIVE_DIR` env var to customize the archive location (default: `app/static/archive/covers`).
 
+### Video / Film Metadata (FRBRoo Event-Based)
+
+For video media (Blu-Rays, DVDs, VHS) the FRBR hierarchy leverages the existing Audio contributor models for Creation and Performance, but adds Publication events:
+
+```text
+Contributor  ←── ManifestationContribution  ←── Manifestation    (Publication Event)
+```
+
+Valid `ManifestationContribution.role` values: `studio`, `distributor`, `producer`, `network`.
+Video-specific keys in `Manifestation.meta`: `resolution`, `aspect_ratio`, `video_format`, `audio_formats`, `run_time_minutes`.
+
+### Board Game Metadata (FRBRoo Container Work)
+
+Board games are modeled as an F16 Container Work (the Box) which aggregates distinct components:
+
+```text
+Work (The Box)  ←── ContainerAggregation  ──→ Work (Rulebook / Scenarios)
+Work (The Box)  ←── ContainerAggregation  ──→ Item (Game Board / Pieces / Meeples)
+```
+
+Game-specific keys in `Manifestation.meta`: `min_players`, `max_players`, `playtime_minutes`, `min_age`, `game_mechanics`, `designer`.
+
 ## 🌐 Frontend Architecture (Phase 2)
 
 iqoqo uses a **decoupled** architecture where the Flask application serves only JSON
@@ -439,7 +461,7 @@ in `frontend/`.
 ### Technology Stack
 
 | Layer        | Technology                             | Notes                          |
-| ------------ | -------------------------------------- | ------------------------------ |
+|--------------|----------------------------------------|--------------------------------|
 | Framework    | Next.js 16 (App Router)                | SSR + RSC hybrid               |
 | Language     | TypeScript 5                           | Strict mode                    |
 | Styling      | Tailwind CSS v4                        | CSS-based `@theme` config      |
@@ -455,7 +477,7 @@ All design tokens live in `frontend/app/globals.css` as CSS custom properties ma
 into Tailwind v4 via `@theme inline`.
 
 | Token                | Value                           | Usage                  |
-| -------------------- | ------------------------------- | ---------------------- |
+|----------------------|---------------------------------|------------------------|
 | `--color-primary`    | Deep Indigo `hsl(210 29% 24%)`  | Nav, headings, CTA     |
 | `--color-accent`     | Library Clay `hsl(24 100% 41%)` | Accent, badges         |
 | `--color-background` | Warm Paper `hsl(43 50% 98%)`    | Page background        |
@@ -519,46 +541,49 @@ definition is `ITEM_STATUSES` in `app/db/core.py`; the TypeScript mirror is
 `ItemStatus` in `frontend/types/frbr.ts`. The cross-subsystem contract is
 enforced by `tests/test_ontology.py`.
 
-| Status           | Meaning                                    | Media     |
-| ---------------- | ------------------------------------------ | --------- |
-| `available`      | On your shelf, ready to use                | All       |
-| `lent`           | Lent to a friend                           | All       |
-| `lost`           | Cannot be located                          | All       |
-| `wish_list`      | Want to acquire (owned or not)             | All       |
-| `ordered`        | Purchased, awaiting delivery               | All       |
-| `damaged`        | Physically damaged copy                    | All       |
-| `reading`        | Currently being read                       | Text      |
-| `read`           | Finished reading                           | Text      |
-| `unread`         | Never opened                               | Text      |
-| `listening`      | Currently playing / listening to           | Audio     |
-| `listened`       | Finished listening                         | Audio     |
-| `want_to_listen` | On audio wishlist (do not own yet)         | Audio     |
+| Status           | Meaning                            | Media |
+|------------------|------------------------------------|-------|
+| `available`      | On your shelf, ready to use        | All   |
+| `lent`           | Lent to a friend                   | All   |
+| `lost`           | Cannot be located                  | All   |
+| `wish_list`      | Want to acquire (owned or not)     | All   |
+| `ordered`        | Purchased, awaiting delivery       | All   |
+| `damaged`        | Physically damaged copy            | All   |
+| `reading`        | Currently being read               | Text  |
+| `read`           | Finished reading                   | Text  |
+| `unread`         | Never opened                       | Text  |
+| `listening`      | Currently playing / listening to   | Audio |
+| `listened`       | Finished listening                 | Audio |
+| `want_to_listen` | On audio wishlist (do not own yet) | Audio |
 
 ### Database Schema Layout
 
 Tables are split across two PostgreSQL schemas:
 
-| Schema   | Tables                                                                 |
-| -------- | ---------------------------------------------------------------------- |
-| `public` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`,     |
-|          | `token_blocklist`, `user_consents`, `llm_telemetry`,                   |
-|          | `instance_settings`, `alembic_version`                                 |
-| `catalog`| `works`, `expressions`, `manifestations`, `items`,                     |
-|          | `contributors`, `work_contributions`,                                  |
-|          | `expression_contributions`, `work_parts`                               |
+| Schema    | Tables                                                             |
+|-----------|--------------------------------------------------------------------|
+| `public`  | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, |
+|           | `token_blocklist`, `user_consents`, `llm_telemetry`,               |
+|           | `instance_settings`, `alembic_version`                             |
+| `catalog` | `works`, `expressions`, `manifestations`, `items`,                 |
+|           | `contributors`, `work_contributions`,                              |
+|           | `expression_contributions`, `manifestation_contributions`,         |
+|           | `work_parts`, `container_aggregations`                             |
 
 ### Model File Structure
 
 Model classes are split into domain-focused modules under `app/db/`:
 
-| File          | Contents                                                                     |
-| ------------- | ---------------------------------------------------------------------------- |
-| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`              |
-| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`               |
-| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`,     |
-|               | `MANIFESTATION_AUDIO_META_KEYS`                                              |
-| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                           |
-| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work          |
+| File          | Contents                                                                 |
+|---------------|--------------------------------------------------------------------------|
+| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`          |
+| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`           |
+| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, |
+|               | `MANIFESTATION_AUDIO_META_KEYS`                                          |
+| `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`             |
+| `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                   |
+| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                       |
+| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work      |
 
 ### Audio / Music Metadata (FRBRoo Event-Based)
 
@@ -577,15 +602,15 @@ Valid `ExpressionContribution.role` values: `performer`, `conductor`, `narrator`
 
 Audio-specific keys that **may** be stored in `Manifestation.meta`:
 
-| Key               | Type          | Description                                                        |
-| ----------------- | ------------- | ------------------------------------------------------------------ |
-| `catalog_number`  | string        | Record-label catalog number (e.g. `"ECM 1064"`)                    |
-| `pressing_number` | string        | Specific pressing identifier                                       |
-| `matrix_number`   | string        | Vinyl run-out groove / lacquer ID                                  |
-| `label`           | string        | Record label name (e.g. `"Blue Note"`)                             |
-| `format`          | string        | Physical format: `LP`, `45`, `EP`, `CD`, `CD-EP`, …                |
-| `disc_count`      | integer       | Number of discs in a multi-disc release                            |
-| `track_list`      | list          | `[{"position": "A1", "title": "…", "duration_seconds": 210}]`      |
+| Key               | Type    | Description                                                   |
+|-------------------|---------|---------------------------------------------------------------|
+| `catalog_number`  | string  | Record-label catalog number (e.g. `"ECM 1064"`)               |
+| `pressing_number` | string  | Specific pressing identifier                                  |
+| `matrix_number`   | string  | Vinyl run-out groove / lacquer ID                             |
+| `label`           | string  | Record label name (e.g. `"Blue Note"`)                        |
+| `format`          | string  | Physical format: `LP`, `45`, `EP`, `CD`, `CD-EP`, …           |
+| `disc_count`      | integer | Number of discs in a multi-disc release                       |
+| `track_list`      | list    | `[{"position": "A1", "title": "…", "duration_seconds": 210}]` |
 
 ### Local Development
 

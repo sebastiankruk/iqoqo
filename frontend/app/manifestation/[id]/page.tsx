@@ -68,7 +68,9 @@ export default function ManifestationPage() {
   }
 
   const timestamp = getCoverTimestamp(manifestation.meta);
-  const coverUrl = getCoverUrl(manifestation.cover_url || undefined, timestamp) || (manifestation.meta?.["cover_url"] as string | undefined);
+  const coverUrl =
+    getCoverUrl(manifestation.cover_url || undefined, timestamp) ||
+    (manifestation.meta?.["cover_url"] as string | undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
   /**
@@ -139,28 +141,32 @@ export default function ManifestationPage() {
                     <dd className="font-medium text-foreground">{String(manifestation.isbn13)}</dd>
                   </div>
                 )}
-                {!!(manifestation.meta?.Publisher &&
+                {!!(
+                  manifestation.meta?.Publisher &&
                   manifestation.meta.Publisher !== "Unknown" &&
-                  manifestation.meta.Publisher !== "N/A") && (
-                    <div>
-                      <dt className="text-muted-foreground">Publisher</dt>
-                      <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
-                    </div>
-                  )}
+                  manifestation.meta.Publisher !== "N/A"
+                ) && (
+                  <div>
+                    <dt className="text-muted-foreground">Publisher</dt>
+                    <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
+                  </div>
+                )}
                 {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
                   <div>
                     <dt className="text-muted-foreground">Year</dt>
                     <dd className="font-medium text-foreground">{String(resolved_year)}</dd>
                   </div>
                 )}
-                {!!(manifestation.meta?.Language &&
+                {!!(
+                  manifestation.meta?.Language &&
                   manifestation.meta.Language !== "Unknown" &&
-                  manifestation.meta.Language !== "N/A") && (
-                    <div>
-                      <dt className="text-muted-foreground">Language</dt>
-                      <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
-                    </div>
-                  )}
+                  manifestation.meta.Language !== "N/A"
+                ) && (
+                  <div>
+                    <dt className="text-muted-foreground">Language</dt>
+                    <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
 

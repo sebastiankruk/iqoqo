@@ -47,7 +47,9 @@ function ItemDetail(props: { item: Item }) {
 
   const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
 
-  const coverUrl = getCoverUrl(item.cover_url || undefined, timestamp) || ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
+  const coverUrl =
+    getCoverUrl(item.cover_url || undefined, timestamp) ||
+    ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined));
 
   return (

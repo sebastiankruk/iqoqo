@@ -35,7 +35,8 @@ test.describe("Snap Cover Workflow", () => {
         body: JSON.stringify({
           success: false,
           data: null,
-          error: "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
+          error:
+            "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
         }),
       });
     });
@@ -86,7 +87,7 @@ test.describe("Snap Cover Workflow", () => {
     // await expect(page.locator('text=Analyzing frame...')).toBeVisible();
 
     // 7. Assert that the error message is displayed
-    const errorText = page.locator('text=Vision extraction failed. All fallback methods');
+    const errorText = page.locator("text=Vision extraction failed. All fallback methods");
     await expect(errorText).toBeVisible();
     await expect(errorText).toHaveClass(/text-destructive/);
 

@@ -93,33 +93,56 @@ def test_extract_from_cover_invalid_image(mock_image_open, client, vision_user_h
 
 
 @patch("app.api.scanner.Image.open")
-@patch("app.api.scanner.extract_metadata_from_cover")
-def test_extract_from_cover_success(mock_extract, mock_image_open, client, vision_user_headers):
-    """Test successful image content extraction."""
+@patch("app.api.scanner.submit_task")
+def test_extract_from_cover_success(mock_submit, mock_image_open, client, vision_user_headers):
+    """Test successful image content extraction submission."""
     mock_image_open.return_value.verify.return_value = None
-    mock_extract.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
+    mock_submit.return_value = "test-task-id"
 
     data = {"cover": (BytesIO(b"dummy_data"), "test.jpg")}
     response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=vision_user_headers)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert response.json["success"] is True
+    assert response.json["data"]["task_id"] == "test-task-id"
+
+
+def test_get_extract_status_not_found(client, vision_user_headers):
+    """Test polling for a non-existent task."""
+    response = client.get("/api/vision/extract/invalid-id", headers=vision_user_headers)
+    assert response.status_code == 404
+    assert response.json["error"] == "Task not found"
+
+
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_processing(mock_get_result, client, vision_user_headers):
+    """Test polling for a task that is still processing."""
+    mock_get_result.return_value = {"status": "processing"}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 202
+    assert response.json["data"]["status"] == "processing"
+
+
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_completed(mock_get_result, client, vision_user_headers):
+    """Test polling for a completed task."""
+    mock_get_result.return_value = {"status": "completed", "result": {"Title": "Dune", "Authors": ["Frank Herbert"]}}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 200
     assert response.json["data"]["Title"] == "Dune"
     assert response.json["data"]["Authors"] == ["Frank Herbert"]
 
 
-@patch("app.api.scanner.Image.open")
-@patch("app.api.scanner.extract_metadata_from_cover")
-def test_extract_from_cover_failure(mock_extract, mock_image_open, client, vision_user_headers):
-    """Test missing or failing vision extraction."""
-    mock_image_open.return_value.verify.return_value = None
-    mock_extract.return_value = None
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_failed(mock_get_result, client, vision_user_headers):
+    """Test polling for a failed task."""
+    mock_get_result.return_value = {"status": "failed", "error": "Gemini API error"}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 500
+    assert response.json["error"] == "Gemini API error"
 
-    data = {"cover": (BytesIO(b"dummy_data"), "test.jpg")}
-    response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=vision_user_headers)
 
-    assert response.status_code == 503
-    assert "Vision extraction failed. All fallback methods" in response.json["error"]
+# Note: test_extract_from_cover_failure is removed as failure now happens during polling or background processing.
 
 
 def test_extract_from_cover_oversized_header(client, vision_user_headers):

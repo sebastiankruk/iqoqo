@@ -34,10 +34,7 @@ interface MultiImageUploaderProps {
  * @param root0.onUploadComplete - Callback when upload finishes
  * @returns {JSX.Element} The uploader UI
  */
-export function MultiImageUploader({
-  manifestationId,
-  onUploadComplete,
-}: MultiImageUploaderProps) {
+export function MultiImageUploader({ manifestationId, onUploadComplete }: MultiImageUploaderProps) {
   const [label, setLabel] = useState<"front" | "back" | "disc" | "inlay" | "box" | "other">("disc");
   const [isUploading, setIsUploading] = useState(false);
 
@@ -100,11 +97,7 @@ export function MultiImageUploader({
           disabled={isUploading}
           className="w-full h-8 text-[11px] font-semibold flex items-center justify-center gap-2 border-dashed"
         >
-          {isUploading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <CopyPlus className="h-3 w-3" />
-          )}
+          {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CopyPlus className="h-3 w-3" />}
           {isUploading ? "Uploading..." : `Upload ${label} image`}
         </Button>
       </div>

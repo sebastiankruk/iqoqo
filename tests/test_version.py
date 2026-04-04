@@ -34,4 +34,4 @@ def test_versions_are_in_sync() -> None:
         package_data = json.load(f)
         js_version = package_data["version"]
 
-    assert py_version == js_version, f"Version mismatch: pyproject.toml has {py_version}, " f"but package.json has {js_version}."
+    assert py_version == js_version, f"Version mismatch: pyproject.toml has {py_version}, but package.json has {js_version}."

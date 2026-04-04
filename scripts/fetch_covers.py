@@ -54,7 +54,7 @@ def run_batch(batch_limit=None, force=False, app=None):
                     else "Unknown Author"
                 )
 
-                print(f"[{index+1}/{len(missing_covers)}] Processing: {title} ({isbn})")
+                print(f"[{index + 1}/{len(missing_covers)}] Processing: {title} ({isbn})")
 
                 try:
                     # Catch individual item failures so the batch continues

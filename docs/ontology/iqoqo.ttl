@@ -57,13 +57,27 @@
 
 :WorkContribution a owl:Class ;
     rdfs:label "WorkContribution" ;
-    rdfs:comment "FRBRoo Composition Event — links a Contributor to a Work with a creative role (catalog.work_contributions)." .
+    rdfs:comment "FRBRoo Composition Event — links a Contributor to a Work with a creative role (e.g. Director, Composer) (catalog.work_contributions)." .
 
 :ExpressionContribution a owl:Class ;
     rdfs:label "ExpressionContribution" ;
-    rdfs:comment "FRBRoo Performance Event — links a Contributor to an Expression with a performance role (catalog.expression_contributions)." .
+    rdfs:comment "FRBRoo Performance Event — links a Contributor to an Expression with a performance role (e.g. Actor, Band) (catalog.expression_contributions)." .
+
+:ManifestationContribution a owl:Class ;
+    rdfs:label "ManifestationContribution" ;
+    rdfs:comment "FRBRoo Publication Event — links a Contributor to a Manifestation with a publication role (e.g. Studio, Network) (catalog.manifestation_contributions)." .
+
+# ---------------------------------------------------------------------------
+# Complex / Container Work extensions (Board Games / Box Sets)
+# ---------------------------------------------------------------------------
 
 :WorkPart a owl:Class ;
     rdfs:subClassOf frbroo:F15_Complex_Work ;
     rdfs:label "WorkPart" ;
     rdfs:comment "FRBRoo F15 Complex Work — models box-set / anthology containment between Works (catalog.work_parts)." .
+
+:ContainerAggregation a owl:Class ;
+    rdfs:subClassOf frbroo:F16_Container_Work ;
+    rdfs:label "ContainerAggregation" ;
+    rdfs:comment "FRBRoo F16 Container Work — models board game box aggregating rulebooks (Works) and pieces/boards (Items) (catalog.container_aggregations)." .
+
