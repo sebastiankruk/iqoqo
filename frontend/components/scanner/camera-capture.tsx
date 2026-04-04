@@ -138,6 +138,38 @@ export function CameraCapture({
     };
   }, []);
 
+  const startPolling = async (taskId: string) => {
+    const maxRetries = 30; // 30 retries * 2s = 60s max
+    const { apiClient: pollClient } = await import("@/lib/api/client");
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(`/vision/extract/${taskId}`);
+        const env = response.data;
+        
+        if (env.success && env.data) {
+          // Check if data is the result (has Title) or just status
+          if ("Title" in env.data) {
+            return env.data;
+          }
+          const data = env.data as { status: string };
+          if (data.status === "failed") {
+            throw new Error(env.error || "Vision extraction failed");
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("Vision extraction failed")) {
+          throw err;
+        }
+        // Other network errors - just retry
+      }
+      
+      // Wait 2 seconds before next poll
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    throw new Error("Task timed out. Please try again or enter manually.");
+  };
+
   const processFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
@@ -156,57 +188,19 @@ export function CameraCapture({
         const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        
         const envelope = response.data;
-
         if (envelope.success && envelope.data?.task_id) {
-          const taskId = envelope.data.task_id;
-          let attempts = 0;
-          const maxAttempts = 30; // 60 seconds total (2s interval)
-
-          const poll = async () => {
-            if (attempts >= maxAttempts) {
-              toast.error("Extraction timed out. Please try again or use manual entry.");
-              setUploading(false);
-              return;
-            }
-
-            try {
-              const pollRes = await apiClient.get<ApiEnvelope<ExtractedMetadata>>(`/vision/extract/${taskId}`);
-              const pollData = pollRes.data;
-
-              if (pollData.success && !("status" in (pollData.data || {}))) {
-                // Task completed with result
-                if (onExtractComplete && pollData.data) {
-                  onExtractComplete(pollData.data, file, format);
-                }
-                setUploading(false);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              } else if (pollData.success && (pollData.data as any)?.status) {
-                // Still processing
-                attempts++;
-                setTimeout(poll, 2000);
-              } else {
-                toast.error(pollData.error ?? "Vision extraction failed");
-                setUploading(false);
-              }
-            } catch (err: unknown) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const msg = (err as any)?.response?.data?.error || (err as Error)?.message || "Polling failed";
-              toast.error(msg);
-              setUploading(false);
-            }
-          };
-
-          setTimeout(poll, 1000); // Start polling after 1s
+          // Transition to polling
+          const result = await startPolling(envelope.data.task_id);
+          if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
-          toast.error(envelope.error ?? "Failed to start vision extraction");
-          setUploading(false);
+          toast.error(envelope.error ?? "Vision extraction submission failed");
         }
       }
-    } catch (error: unknown) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const msg = (error as any)?.response?.data?.error || (error as Error)?.message || "Failed to process cover image";
-      toast.error(msg);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to process cover image";
+      toast.error(message);
       console.error("Failed to process cover image", error);
       setUploading(false);
     } finally {

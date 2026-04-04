@@ -24,7 +24,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
     });
 
     // 2. Mock user authentication state (matching useProfile hook)
-    await page.route("**/api/profile/", route =>
+    await page.route('**/api/profile**', route =>
       route.fulfill({
         status: 200,
         json: {
@@ -39,7 +39,17 @@ test.describe("Item Acquisition and Collection Workflow", () => {
         },
       })
     );
-    await page.goto("/scan");
+
+    await page.route('**/api/config**', route =>
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: { federation_enabled: false, version: '0.3.0' }
+        }
+      })
+    );
+    await page.goto('/scan');
   });
 
   test.describe("Desktop Web View", () => {
@@ -104,9 +114,19 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await expect(page).toHaveURL(/.*\/item\/123/);
     });
 
-    test("Acquire Vinyl via Uploaded Cover and Contribute Cover", async ({ page }) => {
-      // Match the vision extraction endpoint
-      await page.route("**/api/vision/extract", route =>
+    test('Acquire Vinyl via Uploaded Cover and Contribute Cover', async ({ page }) => {
+      // Match the vision extraction endpoint (Asynchronous)
+      await page.route('**/api/vision/extract', route => {
+        if (route.request().method() === 'POST') {
+          return route.fulfill({
+            status: 202,
+            json: { success: true, data: { task_id: 'test-task-vinyl' } }
+          });
+        }
+        return route.continue();
+      });
+
+      await page.route('**/api/vision/extract/test-task-vinyl', route =>
         route.fulfill({
           status: 200,
           json: {
@@ -130,8 +150,8 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       });
 
       // Verify Extraction (should transition to Manual Entry form in ScanPage)
-      await expect(page.getByText("Manual Item Entry")).toBeVisible();
-      await expect(page.locator('input[name="title"]')).toHaveValue("Dark Side of the Moon");
+      await expect(page.getByText("Manual Item Entry")).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('input[name="title"]')).toHaveValue('Dark Side of the Moon');
 
       // Mock Manual Add
       await page.route("**/api/items/manual", route =>
@@ -198,9 +218,19 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       // complex canvas manipulation, we'll assume the scanner works if the state transitions.
     });
 
-    test("Acquire Book via Live Camera Cover Scan", async ({ page }) => {
-      // Mock Vision API
-      await page.route("**/api/vision/extract", route =>
+    test('Acquire Book via Live Camera Cover Scan', async ({ page }) => {
+      // Match the vision extraction endpoint (Asynchronous)
+      await page.route('**/api/vision/extract', route => {
+        if (route.request().method() === 'POST') {
+          return route.fulfill({
+            status: 202,
+            json: { success: true, data: { task_id: 'test-task-mobile' } }
+          });
+        }
+        return route.continue();
+      });
+
+      await page.route('**/api/vision/extract/test-task-mobile', route =>
         route.fulfill({
           status: 200,
           json: {
@@ -220,8 +250,8 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await page.getByRole("button", { name: "Snap Live Frame" }).click();
 
       // Verify Result (Manual Entry form)
-      await expect(page.getByText("Manual Item Entry")).toBeVisible();
-      await expect(page.locator('input[name="title"]')).toHaveValue("Dune");
+      await expect(page.getByText("Manual Item Entry")).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('input[name="title"]')).toHaveValue('Dune');
     });
   });
 });

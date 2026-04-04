@@ -17,8 +17,18 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Snap Cover Workflow", () => {
   test("should display 503 error message when vision extraction fails", async ({ page }) => {
-    // 1. Mock the API response to return 503
-    await page.route("**/api/vision/extract", async route => {
+    // 1. Mock the API response (Asynchronous)
+    await page.route("**/api/vision/extract", async (route) => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({
+          status: 202,
+          json: { success: true, data: { task_id: 'test-task-fail' } }
+        });
+      }
+      return route.continue();
+    });
+
+    await page.route("**/api/vision/extract/test-task-fail", async (route) => {
       await route.fulfill({
         status: 503,
         contentType: "application/json",
@@ -31,7 +41,35 @@ test.describe("Snap Cover Workflow", () => {
       });
     });
 
-    // 2. Navigate to the scan page (mocking auth if necessary, assuming dev mode/bypass)
+    // Mock user authentication state
+    await page.route("**/api/profile**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"]
+          }
+        })
+      });
+    });
+
+    // Mock config
+    await page.route("**/api/config**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "0.3.0" }
+        })
+      });
+    });
+
+    // 2. Navigate to the scan page
     // We might need to set a JWT token in localStorage if the page requires it
     await page.goto("/scan");
 
