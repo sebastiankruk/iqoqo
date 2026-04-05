@@ -17,10 +17,12 @@
 #
 from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
 from app.db.models import Expression, Manifestation, Work, db
+from app.utils.bgg import fetch_bgg_metadata
 from app.utils.covers import start_cover_processing
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
+from app.utils.tmdb import fetch_video_metadata
 
 
 class IngestService:
@@ -122,5 +124,100 @@ class IngestService:
         db.session.commit()
 
         # Trigger background processing so covers.py intercepts the URL and saves locally
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        return manifestation
+
+    @staticmethod
+    def ingest_video_from_barcode(barcode: str) -> Manifestation:
+        meta = fetch_video_metadata(barcode)
+
+        if not meta:
+            raise ValueError("Video metadata not found in external services.")
+
+        title = meta.get("title") or meta.get("Title") or "Unknown Title"
+        author_name = meta.get("author") or meta.get("director") or meta.get("Director")
+        cover_url = meta.get("cover_url")
+
+        work_meta = {"authors": [author_name]} if author_name else {}
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="video")
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "person")
+            add_expression_contribution(expression.id, contributor.id, "director")
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": barcode,
+                "format": meta.get("format", "video"),
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher"),
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        return manifestation
+
+    @staticmethod
+    def ingest_game_from_barcode(barcode: str) -> Manifestation:
+        meta = fetch_bgg_metadata(barcode)
+
+        if not meta:
+            raise ValueError("Board game metadata not found in external services.")
+
+        title = meta.get("title") or meta.get("Title") or "Unknown Title"
+        author_name = meta.get("author") or meta.get("designer")
+        cover_url = meta.get("cover_url")
+        mechanics = meta.get("Mechanics", [])
+
+        work_meta = {"authors": [author_name], "mechanics": mechanics} if author_name else {"mechanics": mechanics}
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="game")
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "person")
+            add_work_contribution(work.id, contributor.id, "designer")
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": barcode,
+                "format": meta.get("format", "game"),
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "mechanics": mechanics,
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
         start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
         return manifestation

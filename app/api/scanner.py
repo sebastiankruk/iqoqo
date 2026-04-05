@@ -26,9 +26,11 @@ from app.core.ingest import IngestService
 from app.core.permissions import ItemPermissions
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Item, Manifestation, db
+from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
+from app.utils.tmdb import fetch_video_metadata
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -54,7 +56,9 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
 @api_bp.route("/lookup/<barcode>", methods=["GET"])
 @require_auth
 def lookup_barcode_preview(barcode: str):
-    """Generic barcode lookup for preview (books and audio)."""
+    """Generic barcode lookup for preview (books, audio, video, games)."""
+    format_hint = request.args.get("format")
+
     # Check DB first
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
@@ -62,18 +66,19 @@ def lookup_barcode_preview(barcode: str):
     ).first()
 
     if manifestation and manifestation.meta:
-        # Check normalized vs legacy titles in meta
         title = manifestation.meta.get("title") or manifestation.meta.get("Title")
         if title:
             return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
 
-    # Try external sources
     meta = None
-
-    # Simple heuristic: 978/979 or 10 digits strongly implies a book
     is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
 
-    if is_book:
+    # Route based on format hint first, fallback to heuristics
+    if format_hint in ("video", "dvd", "bluray", "movie"):
+        meta = fetch_video_metadata(barcode)
+    elif format_hint in ("game", "boardgame"):
+        meta = fetch_bgg_metadata(barcode)
+    elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
@@ -84,11 +89,15 @@ def lookup_barcode_preview(barcode: str):
         except Exception:  # pylint: disable=broad-except
             pass
 
-        # Fallback to book in case it's a non-standard ISBN prefix
+        # Fallback to book if audio fails
         if not meta:
             canonical = canonicalize_isbn(barcode)
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
+
+        # Final fallback to video/game if all else fails
+        if not meta:
+            meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
     if not meta:
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
@@ -108,30 +117,19 @@ def lookup_barcode_preview(barcode: str):
 @require_auth
 def scan_barcode():
     # pylint: disable=too-many-return-statements
-    """Scan a barcode and add the corresponding item to the authenticated user's collection.
-
-    Request body (JSON):
-        barcode (str): The ISBN or other barcode value to look up.
-
-    Returns:
-        201 - ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
-        400 - barcode missing or invalid
-        404 - barcode could not be resolved to a manifestation
-        503 - upstream network error during metadata lookup
-    """
+    """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()
 
     barcode = data.get("barcode")
-    format_hint = data.get("format")  # Optional: 'audio' or 'book'
+    format_hint = data.get("format")
 
     if not barcode:
         return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
 
     is_new_manifestation = False
 
-    # Check both ISBN and generic barcode metadata fields
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
         (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
@@ -139,14 +137,16 @@ def scan_barcode():
 
     if not manifestation:
         try:
-            # Handle both 'audio' generic hint AND specific 'cd'/'vinyl' formats
-            is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
-            if is_audio_hint:
+            if format_hint in ("audio", "cd", "vinyl", "sound"):
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
+            elif format_hint in ("video", "dvd", "bluray", "movie"):
+                manifestation = IngestService.ingest_video_from_barcode(barcode)
+            elif format_hint in ("game", "boardgame"):
+                manifestation = IngestService.ingest_game_from_barcode(barcode)
             elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
-                # Auto-fallback strategy: try ISBN first for 10/13 digits, otherwise audio
+                # Auto-fallback strategy
                 is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
                 if is_isbn_like:
                     try:
@@ -157,7 +157,10 @@ def scan_barcode():
                     try:
                         manifestation = IngestService.ingest_audio_from_barcode(barcode)
                     except ValueError:
-                        manifestation = IngestService.ingest_from_isbn(barcode)
+                        try:
+                            manifestation = IngestService.ingest_video_from_barcode(barcode)
+                        except ValueError:
+                            manifestation = IngestService.ingest_from_isbn(barcode)
 
             is_new_manifestation = True
         except ValueError as e:
