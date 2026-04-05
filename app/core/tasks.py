@@ -40,7 +40,10 @@ def _get_flask_app() -> "Flask | None":
         return _flask_app
     try:
         from flask import current_app  # pylint: disable=import-outside-toplevel
-        _flask_app = current_app._get_current_object()  # type: ignore[attr-defined] # pylint: disable=protected-access
+
+        _flask_app = (
+            current_app._get_current_object()
+        )  # type: ignore[attr-defined] # pylint: disable=protected-access
     except RuntimeError:
         # No application context (e.g. during tests without app context)
         pass
@@ -56,7 +59,9 @@ def shutdown_executor() -> None:
 atexit.register(shutdown_executor)
 
 
-def _task_wrapper(task_id: str, app: "Flask | None", func: Callable, *args, **kwargs) -> None:
+def _task_wrapper(
+    task_id: str, app: "Flask | None", func: Callable, *args, **kwargs
+) -> None:
     """Wraps the target function to record its outcome.
 
     Pushes a Flask application context when one is available so that
