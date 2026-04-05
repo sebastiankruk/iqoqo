@@ -80,7 +80,7 @@ describe("ScanPage", () => {
     // Form should appear
     expect(screen.getByText(/Manual Item Entry/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Title/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Author\(s\)/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Creator\(s\)/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Format/i)).toBeInTheDocument();
   });
 
@@ -98,8 +98,8 @@ describe("ScanPage", () => {
 
     // Fill out form
     fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Test Title" } });
-    fireEvent.change(screen.getByLabelText(/Author\(s\)/i), { target: { value: "Test Author" } });
-    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "cd" } });
+    fireEvent.change(screen.getByLabelText(/Creator\(s\)/i), { target: { value: "Test Author" } });
+    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "audio" } });
 
     // Submit form
     fireEvent.click(screen.getByText(/Save Manual Entry/i));

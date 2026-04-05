@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Disc, Loader2 } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
@@ -53,7 +53,6 @@ const statusDotTitle: Record<ItemStatus, string> = {
   want_to_listen: "Want to Listen",
 };
 
-/** Props for ItemCard component */
 interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
@@ -72,20 +71,15 @@ interface ItemCardProps {
 export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
   const isCatalog = isManifestationView;
 
-  // Narrow types safely instead of using 'any'
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
-
   const status = isCatalog ? undefined : (item as Item).status;
   const userOwns = isCatalog ? (item as CatalogEntry).user_owns : true;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
-
-  // Dynamic linking based on view context
   const targetHref = isCatalog ? `/manifestation/${manifestationId}` : `/item/${itemId}`;
 
-  // `cover_url` and `cover_status` exist on both Item and CatalogEntry
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
   const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
@@ -105,25 +99,25 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const isProcessing = coverStatus === "processing";
   const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
 
-  // Media type detection
   const format = isCatalog
     ? ((item as CatalogEntry).meta?.["format"] as string | undefined)
     : (((item as Item).manifestation_meta?.["format"] as string | undefined) ??
       ((item as Item).meta?.["format"] as string | undefined));
 
   const isAudio = isAudioMedia(format);
-  const MediaIcon = isAudio ? Disc : BookOpen;
-  const mediaLabel = isAudio ? "Audio" : "Book";
-  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
+  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
 
-  // TypeScript allows accessing `title` and `authors` because they are defined on both types in the union
+  const MediaIcon = isAudio ? Disc : isVideo ? Film : isBoardGame ? Dices : BookOpen;
+  const mediaLabel = isAudio ? "Audio" : isVideo ? "Video" : isBoardGame ? "Board Game" : "Book";
+  const aspectClass = isAudio || isBoardGame ? "aspect-square" : "aspect-[2/3]";
+
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";
 
   if (variant === "horizontal") {
     return (
       <Link
-        key={itemId}
         href={targetHref}
         className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
       >
@@ -158,7 +152,6 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   return (
     <Link href={targetHref} className="group block">
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
-        {/* Cover */}
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
@@ -180,20 +173,15 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
           ) : (
             <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
               <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
-              <span className="text-xs text-muted-foreground line-clamp-2">{authors}</span>
               <MediaIcon className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="flex items-start gap-2 px-3 py-2.5">
-          {/* Status dot */}
           {!isCatalog && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={dotTitle} />}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-snug text-foreground">{title}</p>
             <p className="truncate text-xs text-muted-foreground">{authors}</p>
-
             {isCatalog && userOwns && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
