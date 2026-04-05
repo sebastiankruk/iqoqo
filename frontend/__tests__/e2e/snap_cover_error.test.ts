@@ -17,41 +17,77 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Snap Cover Workflow", () => {
   test("should display 503 error message when vision extraction fails", async ({ page }) => {
-    // 1. Mock the API response to return 503
+    // 1. Mock the API response (Asynchronous)
     await page.route("**/api/vision/extract", async (route) => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({
+          status: 202,
+          json: { success: true, data: { task_id: 'test-task-fail' } }
+        });
+      }
+      return route.continue();
+    });
+
+    await page.route("**/api/vision/extract/test-task-fail", async (route) => {
       await route.fulfill({
         status: 503,
         contentType: "application/json",
         body: JSON.stringify({
           success: false,
           data: null,
-          error: "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
+          error:
+            "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs.",
         }),
       });
     });
 
-    // 2. Navigate to the scan page (mocking auth if necessary, assuming dev mode/bypass)
-    // We might need to set a JWT token in localStorage if the page requires it
+    // Mock user authentication state
+    await page.route("**/api/profile**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"]
+          }
+        })
+      });
+    });
+
+    // Mock config
+    await page.route("**/api/config**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "0.3.0" }
+        })
+      });
+    });
+
+    // 2. Navigate to the scan page
     await page.goto("/scan");
 
     // 3. Switch to "Snap Cover" tab
     await page.click('button:has-text("Snap Cover")');
 
-    // 4. Click "Start Live Camera"
-    // (Playwright will automatically wait until the element is attached after the tab switch)
-    await page.click('button:has-text("Start Live Camera")');
+    // 4. Trigger file upload directly via the input element
+    // This avoids issues with UI conditional rendering (Desktop vs Mobile buttons)
+    await page.setInputFiles('input[type="file"]', {
+      name: "test_cover.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from("fake-image-data"),
+    });
 
-    // 5. Click "Snap Live Frame"
-    await page.click('button:has-text("Snap Live Frame")');
-
-    // 6. Verify "Analyzing frame..." loading state (optional but good)
-    // await expect(page.locator('text=Analyzing frame...')).toBeVisible();
-
-    // 7. Assert that the error message is displayed
-    const errorText = page.locator('text=Vision extraction failed. All fallback methods');
+    // 5. Assert that the error message is displayed after polling fails
+    const errorText = page.locator("text=Vision extraction failed. All fallback methods");
     await expect(errorText).toBeVisible();
 
-    // 8. Verify that "Manual Entry Form" is still accessible by switching to manual tab
+    // 6. Verify that "Manual Entry Form" is still accessible by switching to manual tab
     await page.click('button:has-text("Manual Search")');
     const manualEntryButton = page.locator('button:has-text("Manual Entry Form")');
     await expect(manualEntryButton).toBeVisible();
