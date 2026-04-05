@@ -249,4 +249,3 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
 
     # Return public URL
     return f"/static/{subfolder}/{target_filename}"
- 

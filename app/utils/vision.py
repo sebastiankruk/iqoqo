@@ -295,4 +295,3 @@ def _parse_json_response(raw: str) -> dict | None:
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         logger.error("Failed to parse JSON response: %s", e)
         return None
- 

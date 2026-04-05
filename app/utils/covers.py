@@ -252,10 +252,6 @@ def process_cover_pipeline(
                 with open(user_image_path, "rb") as upload_file:
                     image_bytes = upload_file.read()
 
-                # Apply smart crop and perspective warp before saving
-                ext = user_image_path.rsplit(".", 1)[-1].lower() if "." in user_image_path else "jpg"
-                mime_type = {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
-                
                 optimize_and_save_image(image_bytes, dest_path)
                 os.remove(user_image_path)
 

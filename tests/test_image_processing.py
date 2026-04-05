@@ -15,6 +15,7 @@
 #
 # pylint: disable=no-member
 import io
+
 from PIL import Image
 
 from app.utils.images import optimize_and_save_image
@@ -43,4 +44,3 @@ def test_optimize_and_save_image_normalization(tmp_path):
     with Image.open(filepath) as out_img:
         assert out_img.format == "JPEG"
         assert max(out_img.size) <= 1024
- 
