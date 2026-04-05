@@ -31,7 +31,6 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from app.config import Config
 from app.core.permissions import ItemPermissions
 from app.db.models import User, db
-from app.utils.images import smart_crop_and_warp
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +52,14 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     a single cover image. The function tries multiple backends in sequence and returns
     the first successful result:
 
-    1. Gemini Vision (cloud LLM) — used only when Config.ALLOW_LLM is true, a valid
+    1. Gemini Vision (cloud LLM) -- used only when Config.ALLOW_LLM is true, a valid
        ``user_id`` is provided, and the associated user has the
        ``ItemPermissions.LLM_GENERATE_CLOUD`` permission. If Gemini is unavailable, fails,
        or returns no usable data, the function falls through to the next step.
-    2. Ollama Vision — used when Config.ALLOW_LLM is true and a local Ollama instance is
+    2. Ollama Vision -- used when Config.ALLOW_LLM is true and a local Ollama instance is
        reachable. Network errors or invalid responses cause the function to fall through
        to the next step.
-    3. Tesseract OCR — used as a final, local-only fallback that performs OCR on the
+    3. Tesseract OCR -- used as a final, local-only fallback that performs OCR on the
        image and heuristically derives a title and list of authors from the text.
 
     Parameters
@@ -97,8 +96,6 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     Backend-specific exceptions are logged and swallowed; this function itself does not
     raise on backend failure and instead returns ``None`` when all steps are exhausted.
     """
-    # 0. Smart crop and warp before analysis to improve accuracy
-    image_bytes, mime_type = smart_crop_and_warp(image_bytes, mime_type)
 
     # 1. Try Gemini
     try:
@@ -298,3 +295,4 @@ def _parse_json_response(raw: str) -> dict | None:
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         logger.error("Failed to parse JSON response: %s", e)
         return None
+ 

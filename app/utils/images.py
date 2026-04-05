@@ -20,9 +20,7 @@ import logging
 import os
 import textwrap
 
-import cv2
 import imagehash
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 logger = logging.getLogger(__name__)
@@ -87,117 +85,9 @@ def is_valid_cover(image_bytes: bytes) -> bool:
         return False
 
 
-def smart_crop_and_warp(image_bytes: bytes, original_mime_type: str = "image/jpeg") -> tuple[bytes, str]:
-    """
-    Detect the largest rectangular document or cover in the image, crop it,
-    and apply a perspective transform to flatten it.
-
-    On successful detection and transformation, the returned image is
-    re-encoded as JPEG bytes. This means the output format is normalized to
-    JPEG and may differ from the input format.
-
-    If the image cannot be decoded, no suitable rectangular contour is found,
-    or processing fails for any reason, the original input bytes are returned
-    unchanged.
-
-    Returns:
-        tuple[bytes, str]: (image_bytes, mime_type)
-    """
+def optimize_and_save_image(image_bytes: bytes, filepath: str):
+    """Converts image to JPEG, fixes EXIF, resizes to max 1024x1024."""
     try:
-        # 1. Read with PIL to handle EXIF rotation before CV2 processing
-        with Image.open(io.BytesIO(image_bytes)) as pil_img_raw:
-            pil_img = ImageOps.exif_transpose(pil_img_raw)
-            if pil_img.mode != "RGB":
-                pil_img = pil_img.convert("RGB")
-            # 2. Convert to CV2 format (BGR)
-            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-
-        if img is None:
-            return image_bytes, original_mime_type
-
-        # Grayscale, blur, edge detection
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edged = cv2.Canny(blurred, 75, 200)
-
-        # Find contours
-        contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return image_bytes, original_mime_type
-
-        # Sort by area, keep largest
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
-        screen_cnt: np.ndarray | None = None
-
-        for c in contours:
-            peri = cv2.arcLength(c, True)
-            # Try progressively looser approximations to find 4 points (handles rounded corners)
-            for eps in [0.02, 0.04, 0.06]:
-                approx = cv2.approxPolyDP(c, eps * peri, True)
-                if len(approx) == 4:
-                    screen_cnt = approx
-                    break
-            if screen_cnt is not None:
-                break
-
-        if screen_cnt is None and contours:  # Fallback to bounding box of largest contour
-            largest_c = contours[0]
-            if cv2.contourArea(largest_c) > (img.shape[0] * img.shape[1] * 0.1):  # Only if it's decently large
-                rotated_rect = cv2.minAreaRect(largest_c)
-                box = cv2.boxPoints(rotated_rect)
-                screen_cnt = box.astype(np.int32)
-
-        if screen_cnt is None:
-            logger.warning("Smart crop failed to find a valid rectangular contour.")
-            return image_bytes, original_mime_type  # Fallback if no rectangle found
-
-        # Perspective Transform Setup
-        assert screen_cnt is not None
-        pts = screen_cnt.reshape(4, 2)
-        rect = np.zeros((4, 2), dtype="float32")
-
-        # Top-left has smallest sum, Bottom-right has largest sum
-        s = pts.sum(axis=1)
-        rect[0] = pts[np.argmin(s)]
-        rect[2] = pts[np.argmax(s)]
-
-        # Top-right has smallest diff, Bottom-left has largest diff
-        diff = np.diff(pts, axis=1)
-        rect[1] = pts[np.argmin(diff)]
-        rect[3] = pts[np.argmax(diff)]
-
-        tl, tr, br, bl = rect
-
-        width_a = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-        width_b = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-        max_width = max(int(width_a), int(width_b))
-
-        height_a = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-        height_b = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-        max_height = max(int(height_a), int(height_b))
-
-        dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype="float32")
-
-        matrix = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(img, matrix, (max_width, max_height))
-
-        # Convert back to jpeg bytes
-        is_success, buffer = cv2.imencode(".jpg", warped, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
-        if is_success:
-            return buffer.tobytes(), "image/jpeg"
-
-        return image_bytes, original_mime_type
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.warning(f"Smart crop failed, falling back to original image: {e}")
-        return image_bytes, original_mime_type
-
-
-def optimize_and_save_image(image_bytes: bytes, filepath: str, apply_smart_crop: bool = False):
-    """Converts image to JPEG, applies smart crop (optional), fixes EXIF, resizes to max 1024x1024."""
-    try:
-        if apply_smart_crop:
-            image_bytes, _ = smart_crop_and_warp(image_bytes)
-
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
             # Fix rotation based on EXIF data before doing anything else
             transposed_img = ImageOps.exif_transpose(raw_img)
@@ -354,8 +244,9 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
     target_filename = filename or file.filename
     filepath = os.path.join(base_dir, target_filename)
 
-    # Save and optimize. Apply smart crop for both gallery and covers uploads.
-    optimize_and_save_image(file.read(), filepath, apply_smart_crop=subfolder in ("gallery", "covers"))
+    # Save and optimize.
+    optimize_and_save_image(file.read(), filepath)
 
     # Return public URL
     return f"/static/{subfolder}/{target_filename}"
+ 
