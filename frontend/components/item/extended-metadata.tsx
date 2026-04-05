@@ -20,8 +20,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { isAudioMedia } from "@/lib/utils";
+import { ExtendedMetadataVideo } from "./extended-metadata-video";
+import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 
-/** Props for ExtendedMetadata component */
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
 }
@@ -42,14 +43,15 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const categories =
     ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
 
-  // Audio specific metadata
   const format = meta["format"] as string | undefined;
   const isAudio = isAudioMedia(format);
+  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+
   const trackList = meta["track_list"] as
     | Array<{ position: string; title: string; duration_seconds: number }>
     | undefined;
 
-  // Filter out internal keys and keys already displayed in the main header
   const hiddenKeys = new Set([
     "title",
     "Title",
@@ -84,30 +86,50 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "matrix_number",
     "pressing_number",
     "disc_count",
+    "min_players",
+    "max_players",
+    "playing_time",
+    "playtime",
+    "min_playtime",
+    "max_playtime",
+    "mechanics",
+    "cast",
+    "directors",
+    "runtime",
+    "MinPlayers",
+    "MaxPlayers",
+    "PlayTime",
+    "Mechanics",
+    "Cast",
+    "Director",
+    "Runtime",
   ]);
 
   const extraKeys = Object.entries(meta)
     .filter(([key, value]) => {
-      // 1. Exclude specific internal or redundant keys
       const excludedKeys = ["id", "manifestation_id", "cover_url", "image", "cover_status", "cover"];
       if (excludedKeys.includes(key.toLowerCase()) || hiddenKeys.has(key)) return false;
 
-      // 2. Filter out non-displayable/redundant values
       const val = String(value).toLowerCase();
       if (!value || val === "unknown" || val === "n/a" || val === "none" || val === "") return false;
-
-      // 3. Filter out format/title keys if already shown in main UI
-      if (["title", "format"].includes(key.toLowerCase())) return false;
 
       return typeof value !== "object";
     })
     .map(([key]) => key);
 
-  if (!description && categories.length === 0 && !isAudio && !trackList && extraKeys.length === 0) return null;
+  if (
+    !description &&
+    categories.length === 0 &&
+    !isAudio &&
+    !isVideo &&
+    !isBoardGame &&
+    !trackList &&
+    extraKeys.length === 0
+  )
+    return null;
 
   return (
     <div className="space-y-4 py-4">
-      {/* Always Visible: Categories */}
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {categories.map(cat => (
@@ -118,14 +140,15 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
         </div>
       )}
 
-      {/* Always Visible: Description */}
       {description && (
         <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground bg-muted/20 p-4 rounded-xl border border-border/40">
           <p>{description}</p>
         </div>
       )}
 
-      {/* Audio Specific Details */}
+      {isVideo && <ExtendedMetadataVideo meta={meta} />}
+      {isBoardGame && <ExtendedMetadataBoardGame meta={meta} />}
+
       {isAudio && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
           <h3 className="font-bold text-lg text-foreground font-serif">Release Information</h3>
@@ -170,7 +193,6 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
         </div>
       )}
 
-      {/* Tracklist Table */}
       {trackList && trackList.length > 0 && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm">
           <h3 className="font-bold text-lg mb-4 text-foreground font-serif">Tracklist</h3>
@@ -198,7 +220,6 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
         </div>
       )}
 
-      {/* Collapsible: Raw Metadata */}
       {extraKeys.length > 0 && (
         <div className="border rounded-xl p-2 bg-muted/10">
           <Button

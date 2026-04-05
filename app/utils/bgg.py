@@ -68,12 +68,14 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
         cover_url = img_elem.text if img_elem is not None else None
 
         mechanics = [link.attrib.get("value") for link in item.findall("link[@type='boardgamemechanic']")]
+        designers = [link.attrib.get("value") for link in item.findall("link[@type='boardgamedesigner']")]
 
         return {
             "Title": title,
             "Description": description,
             "cover_url": cover_url,
             "Mechanics": mechanics,
+            "Designers": designers,
             "Format": "game",
             "Source": "BGG",
         }

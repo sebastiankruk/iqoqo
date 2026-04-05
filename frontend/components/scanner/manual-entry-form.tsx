@@ -22,45 +22,39 @@
 
 import React, { useState } from "react";
 import { Save, X } from "lucide-react";
-import type { MediaFormat } from "@/components/scanner/camera-capture";
 import { Button } from "@/components/ui/button";
 
-/** Data structure for manual entry */
+export type ManualEntryFormat = "book" | "audio" | "video" | "boardgame";
+
 export interface ManualEntryData {
   title: string;
   authors: string;
-  identifier: string; // ISBN, UPC, etc.
+  identifier: string;
   publisher: string;
   year: string;
-  format: MediaFormat;
+  format: ManualEntryFormat;
 }
 
 interface ManualEntryFormProps {
-  /** Callback for form submission */
   onSubmit: (data: ManualEntryData) => Promise<void>;
-  /** Callback for cancellation */
   onCancel: () => void;
-  /** Initial identifier (ISBN/UPC) */
   initialIdentifier?: string;
-  /** Initial media format */
-  initialFormat?: MediaFormat;
-  /** Initial title if already partially known (e.g. from OCR) */
+  initialFormat?: ManualEntryFormat;
   initialTitle?: string;
-  /** Initial authors if already partially known */
   initialAuthors?: string;
 }
 
 /**
  * A form component for manually entering item metadata.
  *
- * @param props - Component props.
+ * @param props - Component props
  * @param props.onSubmit - Callback for form submission
  * @param props.onCancel - Callback for cancellation
  * @param props.initialIdentifier - Initial identifier (ISBN/UPC)
  * @param props.initialFormat - Initial media format
  * @param props.initialTitle - Initial title if already partially known
  * @param props.initialAuthors - Initial authors if already partially known
- * @returns {JSX.Element} The rendered form element.
+ * @returns {JSX.Element} The rendered form element
  */
 export function ManualEntryForm({
   onSubmit,
@@ -82,14 +76,7 @@ export function ManualEntryForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-
-    setFormData(prev => {
-      const key = name as keyof ManualEntryData;
-      if (key === "format") {
-        return { ...prev, format: value as MediaFormat };
-      }
-      return { ...prev, [key]: value };
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,8 +111,9 @@ export function ManualEntryForm({
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="book">Book</option>
-            <option value="cd">CD</option>
-            <option value="vinyl">Vinyl</option>
+            <option value="audio">Audio (CD/Vinyl)</option>
+            <option value="video">Video (DVD/Blu-Ray)</option>
+            <option value="boardgame">Board Game</option>
           </select>
         </div>
 
@@ -147,7 +135,7 @@ export function ManualEntryForm({
 
         <div className="flex flex-col gap-1">
           <label htmlFor="manual-authors" className="text-sm font-medium text-foreground">
-            Author(s)
+            Creator(s)
           </label>
           <input
             id="manual-authors"
@@ -155,14 +143,14 @@ export function ManualEntryForm({
             name="authors"
             value={formData.authors}
             onChange={handleChange}
-            placeholder="Comma separated (e.g. J.R.R. Tolkien)"
+            placeholder="Comma separated (e.g. Director, Author)"
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
         <div className="flex flex-col gap-1">
           <label htmlFor="manual-identifier" className="text-sm font-medium text-foreground">
-            ISBN / UPC
+            Identifier (ISBN/UPC)
           </label>
           <input
             id="manual-identifier"
@@ -178,7 +166,7 @@ export function ManualEntryForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label htmlFor="manual-publisher" className="text-sm font-medium text-foreground">
-              Publisher
+              Publisher/Label
             </label>
             <input
               id="manual-publisher"

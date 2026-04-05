@@ -1,0 +1,111 @@
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
+import { test, expect } from "@playwright/test";
+
+test.describe("Video Media Ingestion Workflow", () => {
+  test("should allow user to scan a DVD barcode and add to collection", async ({ page }) => {
+    // 0. Mock User Profile and Config
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "0.3.0" },
+        }),
+      });
+    });
+
+    // 1. Mock the lookup endpoint for DVD barcode (TMDB)
+    const testBarcode = "883929153526";
+    await page.route(`**/api/lookup/${testBarcode}`, async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            Title: "Inception",
+            Format: "video",
+            barcode: testBarcode,
+            meta: {
+              directors: ["Christopher Nolan"],
+              cast: ["Leonardo DiCaprio", "Joseph Gordon-Levitt", "Elliot Page"],
+            },
+          },
+        }),
+      });
+    });
+
+    // 2. Mock the unified POST /scan endpoint
+    await page.route("**/api/scan", async route => {
+      const postData = route.request().postDataJSON();
+      expect(postData.barcode).toBe(testBarcode);
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            item_id: 1,
+            manifestation_id: 100,
+            barcode: testBarcode,
+            title: "Inception",
+            message: "Successfully added to your collection",
+          },
+        }),
+      });
+    });
+
+    // 3. Navigate to the scanner page
+    await page.goto("/scan");
+
+    // 4. Verify scanner page loads
+    await expect(page.getByText("Scan Barcode")).toBeVisible();
+
+    // 5. Enter barcode for a DVD
+    const barcodeInput = page.locator('input[name="barcode"]');
+    await barcodeInput.fill(testBarcode);
+    await page.getByRole("button", { name: "Search" }).click();
+
+    // 6. Verify TMDB metadata displayed (title and cast)
+    await expect(page.getByText("Inception")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Christopher Nolan")).toBeVisible();
+    await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
+
+    // 7. Click Add to Collection
+    await page.getByRole("button", { name: "Add to Collection" }).click();
+
+    // 8. Verify success message
+    await expect(page.getByText("Successfully added to your collection")).toBeVisible();
+  });
+});
