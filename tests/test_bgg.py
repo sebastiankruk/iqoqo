@@ -47,3 +47,33 @@ def test_fetch_bgg_metadata_success(mock_get):
     assert result["cover_url"] == "http://bgg.com/image.jpg"
     assert "Trading" in result["Mechanics"]
     assert result["Format"] == "game"
+
+
+@patch("app.utils.bgg.requests.get")
+def test_fetch_bgg_metadata_with_designers(mock_get):
+    """Test that BGG metadata includes designer information."""
+    # Mock search endpoint response
+    mock_search_resp = MagicMock()
+    mock_search_resp.content = b'<?xml version="1.0" encoding="utf-8"?><items><item id="13"></item></items>'
+
+    # Mock details endpoint response with designers
+    mock_thing_resp = MagicMock()
+    mock_thing_resp.content = b"""<?xml version="1.0" encoding="utf-8"?>
+    <items>
+        <item id="13">
+            <name type="primary" value="Catan" />
+            <description>Trading and building game</description>
+            <link type="boardgamemechanic" value="Trading" />
+            <link type="boardgamemechanic" value="Hexagon Grid" />
+            <link type="boardgamedesigner" value="Klaus Teuber" />
+        </item>
+    </items>"""
+
+    mock_get.side_effect = [mock_search_resp, mock_thing_resp]
+
+    result = fetch_bgg_metadata("Catan")
+
+    assert result["Title"] == "Catan"
+    assert "Trading" in result["Mechanics"]
+    assert "Hexagon Grid" in result["Mechanics"]
+    assert "Klaus Teuber" in result.get("Designers", [])

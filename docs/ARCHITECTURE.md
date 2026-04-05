@@ -351,11 +351,11 @@ responsible for all outbound HTTP calls to book metadata providers.
 
 1. **Canonicalize** — `canonicalize_isbn(raw)` validates and normalises any
    ISBN-10 or ISBN-13 input (hyphens, spaces, mixed case) into a standard
-   13-digit string.  Returns `None` for invalid input.
+   13-digit string. Returns `None` for invalid input.
 2. **Google Books API** — queried first; fast, high availability, no API key
    required for low-volume usage.
 3. **Open Library Books API** — fallback; broader language coverage and fully
-   open data.  Same retry/timeout policy.
+   open data. Same retry/timeout policy.
 
 ### Retry and timeout policy
 
@@ -388,16 +388,18 @@ lookups of the same ISBN are served from the local database.
 - **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
 
 ## Authentication and Authorization (v0.1.0)
+
 Iqoqo uses a hybrid authentication approach suitable for distributed deployments:
 
 1. **SSO / Local Identity**: Users can register via standard email/password or use Google SSO (via Authlib).
 2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT and redirects the browser to the Next.js Backend-For-Frontend (BFF) route (`/api/auth-exchange`). That route handler catches the token and stores it securely in an `HttpOnly` cookie.
 3. **Next.js Auth Guard (current behavior)**: A small helper used by protected routes (for example, `/collection`, `/profile`) checks for the presence of the auth cookie set by the BFF route before rendering pages. JWT signature and expiry verification are enforced on the Python backend; the Next.js layer currently treats the cookie as an opaque session token. A future iteration may introduce Edge middleware using `jose` for full client-side verification.
 4. **RBAC**: The database implements an RBAC matrix (`Role`, `Permission`, `user_roles`). Backend API endpoints are protected using `@require_auth` and `@require_permission` decorators.
-    > **Frontend RBAC and UI State:**
-    > To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions.
-    >
-    > **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
+
+   > **Frontend RBAC and UI State:**
+   > To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions.
+   >
+   > **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
 
 5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
 
@@ -452,6 +454,42 @@ Work (The Box)  ←── ContainerAggregation  ──→ Item (Game Board / Pie
 
 Game-specific keys in `Manifestation.meta`: `min_players`, `max_players`, `playtime_minutes`, `min_age`, `game_mechanics`, `designer`.
 
+### 5. F16 Container Work (Board Games)
+
+**Database**: `catalog.container_aggregations` table (linking `works` and `items`)
+
+For board games, iqoqo extends the basic FRBR hierarchy using the **FRBRoo F16 Container Work** pattern. A board game box is a container that holds multiple disparate items and works.
+
+**Examples**:
+
+- The "Catan" base game box.
+- Inside the box: The Rulebook (F1 Work), The Game Board (F5 Item), 15 Road pieces (F5 Items).
+
+**Attributes (`container_aggregations`)**:
+
+- `container_work_id` - Foreign key to the main game's Work.
+- `aggregated_type` - Type of component ('work' or 'item').
+- `aggregated_work_id` / `aggregated_item_id` - Link to the specific rulebook or physical piece.
+- `component_name` - "Red Meeples", "Main Board", etc.
+- `quantity` - Number of identical pieces.
+
+**Key Principle**: The main board game is an F16 Container. Its mechanics, min/max players, and playtime are stored in the Manifestation's `meta` JSON. The physical pieces and rulebooks are aggregated into this container, allowing users to track missing components.
+
+```python
+# Board Game as a Container
+game_work = Work(title="Catan", meta={"categories": ["Board Game"]})
+
+# Aggregating a rulebook
+rulebook_work = Work(title="Catan Almanac")
+aggregation1 = ContainerAggregation(
+    container_work_id=game_work.id,
+    aggregated_type='work',
+    aggregated_work_id=rulebook_work.id,
+    component_name="Almanac",
+    quantity=1
+)
+```
+
 ## 🌐 Frontend Architecture (Phase 2)
 
 iqoqo uses a **decoupled** architecture where the Flask application serves only JSON
@@ -461,7 +499,7 @@ in `frontend/`.
 ### Technology Stack
 
 | Layer        | Technology                             | Notes                          |
-|--------------|----------------------------------------|--------------------------------|
+| ------------ | -------------------------------------- | ------------------------------ |
 | Framework    | Next.js 16 (App Router)                | SSR + RSC hybrid               |
 | Language     | TypeScript 5                           | Strict mode                    |
 | Styling      | Tailwind CSS v4                        | CSS-based `@theme` config      |
@@ -477,7 +515,7 @@ All design tokens live in `frontend/app/globals.css` as CSS custom properties ma
 into Tailwind v4 via `@theme inline`.
 
 | Token                | Value                           | Usage                  |
-|----------------------|---------------------------------|------------------------|
+| -------------------- | ------------------------------- | ---------------------- |
 | `--color-primary`    | Deep Indigo `hsl(210 29% 24%)`  | Nav, headings, CTA     |
 | `--color-accent`     | Library Clay `hsl(24 100% 41%)` | Accent, badges         |
 | `--color-background` | Warm Paper `hsl(43 50% 98%)`    | Page background        |
@@ -520,14 +558,17 @@ The frontend communicates with Flask via a standardised JSON envelope:
 // Every endpoint returns this shape
 {
   "success": true,
-  "data": { /* entity or list */ },
-  "error": null,           // string when success=false
-  "meta": {               // present on paginated endpoints only
+  "data": {
+    /* entity or list */
+  },
+  "error": null, // string when success=false
+  "meta": {
+    // present on paginated endpoints only
     "page": 1,
     "limit": 20,
     "total": 1562,
-    "pages": 79
-  }
+    "pages": 79,
+  },
 }
 ```
 
@@ -542,7 +583,7 @@ definition is `ITEM_STATUSES` in `app/db/core.py`; the TypeScript mirror is
 enforced by `tests/test_ontology.py`.
 
 | Status           | Meaning                            | Media |
-|------------------|------------------------------------|-------|
+| ---------------- | ---------------------------------- | ----- |
 | `available`      | On your shelf, ready to use        | All   |
 | `lent`           | Lent to a friend                   | All   |
 | `lost`           | Cannot be located                  | All   |
@@ -561,7 +602,7 @@ enforced by `tests/test_ontology.py`.
 Tables are split across two PostgreSQL schemas:
 
 | Schema    | Tables                                                             |
-|-----------|--------------------------------------------------------------------|
+| --------- | ------------------------------------------------------------------ |
 | `public`  | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, |
 |           | `token_blocklist`, `user_consents`, `llm_telemetry`,               |
 |           | `instance_settings`, `alembic_version`                             |
@@ -575,7 +616,7 @@ Tables are split across two PostgreSQL schemas:
 Model classes are split into domain-focused modules under `app/db/`:
 
 | File          | Contents                                                                 |
-|---------------|--------------------------------------------------------------------------|
+| ------------- | ------------------------------------------------------------------------ |
 | `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`          |
 | `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`           |
 | `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, |
@@ -603,7 +644,7 @@ Valid `ExpressionContribution.role` values: `performer`, `conductor`, `narrator`
 Audio-specific keys that **may** be stored in `Manifestation.meta`:
 
 | Key               | Type    | Description                                                   |
-|-------------------|---------|---------------------------------------------------------------|
+| ----------------- | ------- | ------------------------------------------------------------- |
 | `catalog_number`  | string  | Record-label catalog number (e.g. `"ECM 1064"`)               |
 | `pressing_number` | string  | Specific pressing identifier                                  |
 | `matrix_number`   | string  | Vinyl run-out groove / lacquer ID                             |
