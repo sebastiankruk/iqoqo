@@ -18,7 +18,7 @@
  *
  * @param {object} props The component props
  * @param {boolean} [props.isScanning=true] Whether the line should animate
- * @param {"book" | "cd" | "vinyl"} [props.format="book"] Media format for aspect ratio
+ * @param {"book" | "cd" | "vinyl" | "audio" | "video" | "boardgame"} [props.format="book"] Media format for aspect ratio
  * @returns {JSX.Element} The component
  */
 export function Viewfinder({
@@ -26,13 +26,14 @@ export function Viewfinder({
   format = "book",
 }: {
   isScanning?: boolean;
-  format?: "book" | "cd" | "vinyl";
+  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
 }) {
-  const isAudio = format === "cd" || format === "vinyl";
+  const isAudio = format === "cd" || format === "vinyl" || format === "audio";
+  const isSquare = isAudio || format === "video" || format === "boardgame";
 
-  // Dimensions: Books are vertical 2:3, CDs/Vinyls are square 1:1
+  // Dimensions: Books are vertical 2:3, others (CDs/Vinyls/Video/BoardGame) are square 1:1
   const width = 240;
-  const height = isAudio ? 240 : 360;
+  const height = isSquare ? 240 : 360;
 
   const bracketSize = 28;
   const strokeWidth = 3;

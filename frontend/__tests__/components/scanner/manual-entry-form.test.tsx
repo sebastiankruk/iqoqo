@@ -40,7 +40,7 @@ describe("ManualEntryForm", () => {
     });
 
     // Fill optional fields
-    fireEvent.change(screen.getByLabelText(/Author\(s\)/i), {
+    fireEvent.change(screen.getByLabelText(/Creator\(s\)/i), {
       target: { value: "Brian W. Kernighan, Dennis M. Ritchie" },
     });
     fireEvent.change(screen.getByLabelText(/Publisher/i), {

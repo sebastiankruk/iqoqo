@@ -32,6 +32,16 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { IsbnMeta } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { BookOpen, Disc, Film, Dices } from "lucide-react";
+
+const MEDIA_FORMATS = [
+  { id: "book", label: "Book", icon: BookOpen },
+  { id: "audio", label: "Audio", icon: Disc },
+  { id: "video", label: "Video", icon: Film },
+  { id: "boardgame", label: "Board Game", icon: Dices },
+] as const;
+
+export type ScanFormat = (typeof MEDIA_FORMATS)[number]["id"];
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -45,7 +55,7 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
-  const [activeFormat, setActiveFormat] = useState<"book" | "cd" | "vinyl">("book");
+  const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -69,7 +79,6 @@ export default function ScanPage() {
   }, []);
 
   const handleManualSubmit = async (data: ManualEntryData) => {
-    // Format authors to be a clean list without empty strings
     const authors = data.authors
       ? data.authors
           .split(",")
@@ -77,16 +86,20 @@ export default function ScanPage() {
           .filter(Boolean)
       : ["Unknown"];
 
-    // If only a year is provided, convert to YYYY-01-01 for backend compatibility
     let explicitDate = data.year || undefined;
     if (explicitDate && /^\d{4}$/.test(explicitDate)) {
       explicitDate = `${explicitDate}-01-01`;
     }
 
+    let apiFormat = "text";
+    if (data.format === "audio") apiFormat = "sound";
+    if (data.format === "video") apiFormat = "moving image";
+    if (data.format === "boardgame") apiFormat = "three-dimensional object";
+
     const payload = {
       Title: data.title || "Unknown",
       Authors: authors.length > 0 ? authors : ["Unknown"],
-      Format: data.format === "book" ? "text" : "sound", // Map UI format to API format
+      Format: apiFormat,
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
       Publisher: data.publisher || undefined,
@@ -134,19 +147,21 @@ export default function ScanPage() {
 
       <TopBar />
 
-      {/* Format Toggle */}
       {!result && !showManual && (
-        <div className="absolute top-20 inset-x-0 z-30 flex justify-center">
-          <div className="inline-flex rounded-full bg-black/40 backdrop-blur-md p-1 border border-white/10">
-            {(["book", "cd", "vinyl"] as const).map(f => (
+        <div className="absolute top-20 inset-x-0 z-30 flex justify-center px-4">
+          <div className="inline-flex rounded-2xl bg-black/60 backdrop-blur-md p-1 border border-white/10 gap-1 w-full max-w-sm justify-between">
+            {MEDIA_FORMATS.map(({ id, label, icon: Icon }) => (
               <button
-                key={f}
-                onClick={() => setActiveFormat(f)}
-                className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  activeFormat === f ? "bg-primary text-primary-foreground" : "text-white/70 hover:text-white"
+                key={id}
+                onClick={() => setActiveFormat(id)}
+                className={`flex flex-col items-center justify-center flex-1 py-2 px-1 rounded-xl transition-all ${
+                  activeFormat === id
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
                 }`}
               >
-                {f}
+                <Icon className="w-5 h-5 mb-1" />
+                <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
               </button>
             ))}
           </div>

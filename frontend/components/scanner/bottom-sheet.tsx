@@ -37,7 +37,7 @@ interface BottomSheetProps {
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
-  format?: "book" | "cd" | "vinyl";
+  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
 }
 
 /**
@@ -63,6 +63,14 @@ export function BottomSheet({
   format = "book",
 }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
+
+  const formatToApiParam = (fmt?: string): string => {
+    if (fmt === "video") return "video";
+    if (fmt === "boardgame") return "boardgame";
+    if (fmt === "audio") return "audio";
+    if (fmt === "book") return "book";
+    return "";
+  };
 
   const handleTabChange = useCallback(
     (tabId: TabId) => {
@@ -115,7 +123,7 @@ export function BottomSheet({
         if (capabilities.torch !== undefined) {
           await track.applyConstraints({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            advanced: [{ torch: !torchOn }] as any
+            advanced: [{ torch: !torchOn }] as any,
           });
           setTorchOn(!torchOn);
         } else {
@@ -144,8 +152,9 @@ export function BottomSheet({
       setError(null);
       try {
         const { apiFetch } = await import("@/lib/api/client");
-        // Using generic lookup instead of purely ISBN lookup
-        const data = await apiFetch<IsbnMeta>(`/lookup/${barcode}`);
+        const formatParam = formatToApiParam(format);
+        const url = formatParam ? `/lookup/${barcode}?format=${formatParam}` : `/lookup/${barcode}`;
+        const data = await apiFetch<IsbnMeta>(url);
         onFound(barcode, data);
       } catch (e: unknown) {
         if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
@@ -157,7 +166,7 @@ export function BottomSheet({
         setIsSearching(false);
       }
     },
-    [onFound]
+    [onFound, format]
   );
 
   /* ── Start camera + ZXing scan loop ── */
