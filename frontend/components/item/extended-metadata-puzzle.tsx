@@ -22,6 +22,13 @@ interface ExtendedMetadataPuzzleProps {
   meta: Record<string, unknown>;
 }
 
+/**
+ * Extended metadata component for puzzle items.
+ *
+ * @param props - Component props
+ * @param props.meta - The metadata record
+ * @returns {JSX.Element} The component
+ */
 export function ExtendedMetadataPuzzle({ meta }: ExtendedMetadataPuzzleProps) {
   const pieceCount = meta["piece_count"] as number | string | undefined;
   const dimensions = meta["dimensions"] as string | undefined;
