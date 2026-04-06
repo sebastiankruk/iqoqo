@@ -78,13 +78,26 @@ def lookup_barcode_preview(barcode: str):
         meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
         meta = fetch_bgg_metadata(barcode)
+    elif format_hint in ("audio", "cd", "vinyl", "sound"):
+        try:
+            meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
+        except Exception:  # pylint: disable=broad-except
+            pass
     elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
+
+        # Fallback to audio if book fails
+        if not meta:
+            try:
+                meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
+            except Exception:  # pylint: disable=broad-except
+                pass
     else:
+        # No format hint: auto-fallback strategy for non-ISBN barcodes
+        # Try audio sources first (UPC/EAN codes commonly map to audio)
         try:
-            # Try Audio sources for UPC/EAN
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
         except Exception:  # pylint: disable=broad-except
             pass

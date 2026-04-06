@@ -185,7 +185,7 @@ test.describe("Audio Media Workflow", () => {
 
     // 1. Mock the new GET /lookup/:barcode endpoint (for 12-digit CD UPC)
     const testBarcode = "074646493524";
-    await page.route(`**/api/lookup/${testBarcode}?format=audio`, async route => {
+    await page.route("**/api/lookup/074646493524*", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
