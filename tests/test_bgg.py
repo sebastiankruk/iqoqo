@@ -46,7 +46,7 @@ def test_fetch_bgg_metadata_success(mock_get):
     assert result["Title"] == "Catan"
     assert result["cover_url"] == "http://bgg.com/image.jpg"
     assert "Trading" in result["Mechanics"]
-    assert result["Format"] == "game"
+    assert result["Format"] == "boardgame"
 
 
 @patch("app.utils.bgg.requests.get")

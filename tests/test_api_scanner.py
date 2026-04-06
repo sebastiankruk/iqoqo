@@ -277,7 +277,7 @@ def test_lookup_barcode_video_tmdb(mock_tmdb, client, normal_user_headers):
 @patch("app.api.scanner.fetch_bgg_metadata")
 def test_lookup_barcode_boardgame_bgg(mock_bgg, client, normal_user_headers):
     """Test looking up game format."""
-    mock_bgg.return_value = {"Title": "Catan", "Format": "game"}
+    mock_bgg.return_value = {"Title": "Catan", "Format": "boardgame"}
     response = client.get("/api/lookup/54321?format=game", headers=normal_user_headers)
 
     assert response.status_code == 200
