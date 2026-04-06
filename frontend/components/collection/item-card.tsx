@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Disc, Loader2, Film, Dices } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
@@ -107,10 +107,11 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const isAudio = isAudioMedia(format);
   const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
   const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
 
-  const MediaIcon = isAudio ? Disc : isVideo ? Film : isBoardGame ? Dices : BookOpen;
-  const mediaLabel = isAudio ? "Audio" : isVideo ? "Video" : isBoardGame ? "Board Game" : "Book";
-  const aspectClass = isAudio || isBoardGame ? "aspect-square" : "aspect-[2/3]";
+  const MediaIcon = isAudio ? Disc : isVideo ? Film : isBoardGame ? Dices : isPuzzle ? Puzzle : BookOpen;
+  const mediaLabel = isAudio ? "Audio" : isVideo ? "Video" : isBoardGame ? "Board Game" : isPuzzle ? "Puzzle" : "Book";
+  const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";

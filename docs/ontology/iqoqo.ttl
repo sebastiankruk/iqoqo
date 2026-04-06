@@ -81,3 +81,17 @@
     rdfs:label "ContainerAggregation" ;
     rdfs:comment "FRBRoo F16 Container Work — models board game box aggregating rulebooks (Works) and pieces/boards (Items) (catalog.container_aggregations)." .
 
+# ---------------------------------------------------------------------------
+# Jigsaw Puzzle extensions (v0.3.0)
+# ---------------------------------------------------------------------------
+
+:Artwork a owl:Class ;
+    rdfs:subClassOf :Work ;
+    rdfs:label "Artwork" ;
+    rdfs:comment "The original illustration or artwork used for a puzzle." .
+
+:JigsawPuzzleCut a owl:Class ;
+    rdfs:subClassOf :Manifestation ;
+    rdfs:label "JigsawPuzzleCut" ;
+    rdfs:comment "A specific manufacturer's cut of an artwork as a jigsaw puzzle." .
+

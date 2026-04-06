@@ -31,6 +31,7 @@ from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import fetch_video_metadata
+from app.utils.upc import fetch_upc_metadata
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -78,6 +79,8 @@ def lookup_barcode_preview(barcode: str):
         meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
         meta = fetch_bgg_metadata(barcode)
+    elif format_hint in ("puzzle", "jigsaw"):
+        meta = fetch_upc_metadata(barcode)
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
         try:
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
@@ -156,6 +159,8 @@ def scan_barcode():
                 manifestation = IngestService.ingest_video_from_barcode(barcode)
             elif format_hint in ("game", "boardgame"):
                 manifestation = IngestService.ingest_game_from_barcode(barcode)
+            elif format_hint in ("puzzle", "jigsaw"):
+                manifestation = IngestService.ingest_from_isbn(barcode)
             elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
