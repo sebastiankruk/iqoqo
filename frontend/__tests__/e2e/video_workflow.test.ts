@@ -86,32 +86,54 @@ test.describe("Video Media Ingestion Workflow", () => {
       });
     });
 
-    // 3. Navigate to the scanner page
+    // 3. Mock the target Item page to prevent ECONNREFUSED on redirect
+    await page.route("**/api/items/1**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: 1,
+            manifestation: {
+              id: 100,
+              title: "Inception",
+              format: "video"
+            }
+          }
+        })
+      });
+    });
+
+    // 4. Navigate to the scanner page
     await page.goto("/scan");
 
-    // 4. Verify scanner page loads
+    // 5. Verify scanner page loads
     await expect(page.getByText("Scan Barcode or Cover")).toBeVisible();
 
-    // 5. Select the Video format from the top pill menu
+    // 6. Select the Video format from the top pill menu
     await page.getByRole("button", { name: "Video" }).click();
 
-    // 6. Switch to the Manual Search tab
+    // 7. Switch to the Manual Search tab
     await page.getByRole("button", { name: "Manual Search" }).click();
 
-    // 7. Enter barcode for a DVD
+    // 8. Enter barcode for a DVD
     const barcodeInput = page.getByPlaceholder("Enter barcode or title...");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 
-    // 8. Verify TMDB metadata displayed (title and cast)
+    // 9. Verify TMDB metadata displayed (title and cast)
     await expect(page.getByText("Inception")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Christopher Nolan")).toBeVisible();
     await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
 
-    // 9. Click Add to Collection
+    // 10. Click Add to Collection
     await page.getByRole("button", { name: "Add to Collection" }).click();
 
-    // 10. Verify success message
-    await expect(page.getByText("Successfully added to your collection")).toBeVisible();
+    // 11. Verify dynamic success message toast
+    await expect(page.getByText(/"Inception" added to your library!/i)).toBeVisible();
+
+    // 12. Verify the application redirected to the newly created item
+    await expect(page).toHaveURL(/.*\/item\/1/);
   });
 });
