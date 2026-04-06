@@ -48,3 +48,70 @@ test.describe("Video Media Ingestion Workflow", () => {
     const testBarcode = "883929153526";
     await page.route(`**/api/lookup/${testBarcode}`, async route => {
       await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            Title: "Inception",
+            Format: "video",
+            barcode: testBarcode,
+            meta: {
+              directors: ["Christopher Nolan"],
+              cast: ["Leonardo DiCaprio", "Joseph Gordon-Levitt", "Elliot Page"],
+            },
+          },
+        }),
+      });
+    });
+
+    // 2. Mock the unified POST /scan endpoint
+    await page.route("**/api/scan", async route => {
+      const postData = route.request().postDataJSON();
+      expect(postData.barcode).toBe(testBarcode);
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            item_id: 1,
+            manifestation_id: 100,
+            barcode: testBarcode,
+            title: "Inception",
+            message: "Successfully added to your collection",
+          },
+        }),
+      });
+    });
+
+    // 3. Navigate to the scanner page
+    await page.goto("/scan");
+
+    // 4. Verify scanner page loads
+    await expect(page.getByText("Scan Barcode or Cover")).toBeVisible();
+
+    // 5. Select the Video format from the top pill menu
+    await page.getByRole("button", { name: "Video" }).click();
+
+    // 6. Switch to the Manual Search tab
+    await page.getByRole("button", { name: "Manual Search" }).click();
+
+    // 7. Enter barcode for a DVD
+    const barcodeInput = page.getByPlaceholder("Enter barcode or title...");
+    await barcodeInput.fill(testBarcode);
+    await barcodeInput.press("Enter");
+
+    // 8. Verify TMDB metadata displayed (title and cast)
+    await expect(page.getByText("Inception")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Christopher Nolan")).toBeVisible();
+    await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
+
+    // 9. Click Add to Collection
+    await page.getByRole("button", { name: "Add to Collection" }).click();
+
+    // 10. Verify success message
+    await expect(page.getByText("Successfully added to your collection")).toBeVisible();
+  });
+});
