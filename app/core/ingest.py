@@ -182,16 +182,16 @@ class IngestService:
             raise ValueError("Board game metadata not found in external services.")
 
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
-        author_name = meta.get("author") or meta.get("designer")
+        author_name = meta.get("author") or meta.get("designer") or (meta.get("Designers", [None])[0] if meta.get("Designers") else None)
         cover_url = meta.get("cover_url")
-        mechanics = meta.get("Mechanics", [])
+        mechanics = meta.get("Mechanics", []) or meta.get("mechanics", [])
 
         work_meta = {"authors": [author_name], "mechanics": mechanics} if author_name else {"mechanics": mechanics}
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="game")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="boardgame")
         db.session.add(expression)
         db.session.flush()
 
@@ -203,7 +203,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", "game"),
+                "format": meta.get("format", meta.get("Format", "boardgame")),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],

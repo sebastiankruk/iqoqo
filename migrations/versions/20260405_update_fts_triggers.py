@@ -16,7 +16,7 @@
 """Add FTS triggers for video and board games
 
 Revision ID: 20260405_fts_video_games
-Revises: 20260331_add_audio_event_model
+Revises: 08ac7a22bd8c
 Create Date: 2026-04-05 22:00:00.000000
 
 Adds Full-Text Search (FTS) support for video and board games by:
@@ -31,7 +31,7 @@ Adds Full-Text Search (FTS) support for video and board games by:
 from alembic import op
 
 revision = "20260405_fts_video_games"
-down_revision = "20260331_add_audio_event_model"
+down_revision = "08ac7a22bd8c"
 branch_labels = None
 depends_on = None
 
@@ -48,8 +48,13 @@ def upgrade():
             NEW.search_vector := to_tsvector('simple',
                 coalesce(NEW.title, '') || ' ' ||
                 coalesce(NEW.meta->>'authors', '') || ' ' ||
+                coalesce(NEW.meta->>'author', '') || ' ' ||
                 coalesce(NEW.meta->>'directors', '') || ' ' ||
+                coalesce(NEW.meta->>'Director', '') || ' ' ||
                 coalesce(NEW.meta->>'cast', '') || ' ' ||
+                coalesce(NEW.meta->>'Cast', '') || ' ' ||
+                coalesce(NEW.meta->>'mechanics', '') || ' ' ||
+                coalesce(NEW.meta->>'Mechanics', '') || ' ' ||
                 coalesce(NEW.meta->>'game_mechanics', '')
             );
             RETURN NEW;

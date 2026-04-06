@@ -76,7 +76,9 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
             "cover_url": cover_url,
             "Mechanics": mechanics,
             "Designers": designers,
-            "Format": "game",
+            "author": designers[0] if designers else None,
+            "Format": "boardgame",
+            "format": "boardgame",
             "Source": "BGG",
         }
     except (requests.RequestException, ET.ParseError) as e:

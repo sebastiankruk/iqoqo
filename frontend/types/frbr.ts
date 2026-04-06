@@ -169,7 +169,7 @@ export interface DashboardStats {
   items_read: number;
 }
 
-/** Barcode lookup metadata (books and audio) */
+/** Barcode lookup metadata (books, audio, video, games) */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
@@ -185,6 +185,16 @@ export interface IsbnMeta {
   barcode?: string;
   isbn?: string;
   cover_url?: string;
+  directors?: string[];
+  Director?: string[];
+  cast?: string[];
+  Cast?: string[];
+  mechanics?: string[];
+  Mechanics?: string[];
+  game_mechanics?: string[];
+  Description?: string;
+  description?: string;
+  meta?: Record<string, unknown>;
 }
 
 /** User profile */

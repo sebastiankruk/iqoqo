@@ -29,9 +29,11 @@ _READ_TIMEOUT: int = 45
 
 
 def fetch_video_metadata(query: str) -> dict[str, Any] | None:
-    """Fetch video metadata from TMDB.
+    """Fetch video metadata from TMDB using a movie title search.
 
-    Supports searching by EAN/UPC or title.
+    The ``query`` value is passed directly to TMDB's ``/search/movie`` endpoint,
+    so this function supports title-based lookups only. It does not resolve
+    UPC, EAN, or other barcode identifiers.
     """
     api_key = os.environ.get("TMDB_API_KEY")
     if not api_key:

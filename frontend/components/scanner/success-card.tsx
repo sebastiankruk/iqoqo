@@ -59,15 +59,29 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
   const isAudio = isAudioMedia(format);
   const isVideo = format === "video" || format === "dvd" || format === "bluray";
   const isGame = format === "boardgame" || format === "game";
-  
+
   const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
   const isMissingID = identifier === "No ID Available";
 
   // Extract extended meta attributes for video/games
-  const extendedMeta = (meta as any).meta || {};
-  const directors: string[] = (meta as any).directors || extendedMeta.directors || [];
-  const cast: string[] = (meta as any).cast || extendedMeta.cast || [];
-  const mechanics: string[] = (meta as any).game_mechanics || extendedMeta.game_mechanics || extendedMeta.Mechanics || [];
+  const extendedMeta = (meta.meta as Record<string, unknown>) || {};
+  const directors: string[] = Array.isArray(meta.directors)
+    ? meta.directors
+    : Array.isArray(extendedMeta.directors)
+      ? extendedMeta.directors
+      : [];
+  const cast: string[] = Array.isArray(meta.cast)
+    ? meta.cast
+    : Array.isArray(extendedMeta.cast)
+      ? extendedMeta.cast
+      : [];
+  const mechanics: string[] = Array.isArray(meta.game_mechanics)
+    ? meta.game_mechanics
+    : Array.isArray(extendedMeta.game_mechanics)
+      ? extendedMeta.game_mechanics
+      : Array.isArray(extendedMeta.mechanics)
+        ? extendedMeta.mechanics
+        : [];
 
   let formatDisplay = "Book / Text";
   if (isVideo) formatDisplay = "Video Media";
@@ -139,10 +153,14 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Dynamic Cover Art Aspect Ratio */}
-            <div className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? 'aspect-square' : isVideo ? 'aspect-[2/3]' : 'aspect-[2/3]'}`}>
+            <div
+              className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? "aspect-square" : isVideo ? "aspect-[2/3]" : "aspect-[2/3]"}`}
+            >
               {coverUrl && coverUrl !== "/file.svg" ? (
                 <Image
-                  src={coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl}
+                  src={
+                    coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl
+                  }
                   alt={title}
                   fill
                   className="object-cover"
@@ -152,7 +170,15 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground/40">
-                    {isAudio ? <Disc className="h-12 w-12" /> : isVideo ? <Film className="h-12 w-12" /> : isGame ? <Gamepad2 className="h-12 w-12" /> : <BookOpen className="h-12 w-12" />}
+                    {isAudio ? (
+                      <Disc className="h-12 w-12" />
+                    ) : isVideo ? (
+                      <Film className="h-12 w-12" />
+                    ) : isGame ? (
+                      <Gamepad2 className="h-12 w-12" />
+                    ) : (
+                      <BookOpen className="h-12 w-12" />
+                    )}
                     <span className="text-xs font-bold uppercase tracking-widest font-serif">iQoQo</span>
                   </div>
                 </div>
@@ -165,9 +191,9 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                   {formatDisplay}
                 </Badge>
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
-                
+
                 {authors.length > 0 && <p className="text-lg text-muted-foreground">{authorDisplay}</p>}
-                
+
                 {/* Extended Metadata Display */}
                 {directors.length > 0 && (
                   <p className="text-sm text-muted-foreground">
@@ -188,48 +214,47 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
 
               {isMissingID && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
-                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection, but manual cleanup may be required.
+                  <strong>Warning:</strong> No standard ISBN/Barcode found. You can still add this to your collection,
+                  but manual cleanup may be required.
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
-                <div className="text-muted-foreground font-semibold flex items-center gap-2">
-                  Identifier
-                </div>
+                <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
                 <div className="font-mono text-xs break-all">{identifier}</div>
                 {format && (
                   <>
-                  <div className="text-muted-foreground font-semibold">Format</div>
-                  <div>{format.toUpperCase()}</div>
+                    <div className="text-muted-foreground font-semibold">Format</div>
+                    <div>{format.toUpperCase()}</div>
                   </>
                 )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
-                 <Button
-                   className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                   variant="default"
-                   disabled={adding}
-                   onClick={handleAdd}
-                   aria-label="Add to Collection"
-                 >
-                   {adding ? (
-                     "Adding..."
-                   ) : (
-                     <>
-                       <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                       Add to Collection
-                     </>
-                   )}
-                 </Button>
-                 <Button
-                   variant="outline"
-                   className="flex-1 min-w-[140px] h-12 rounded-xl"
-                   onClick={onDismiss}
-                   aria-label="Scan Another"
-                 >
-                   Scan Another
-                 </Button>
+                <Button
+                  className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                  variant="default"
+                  disabled={adding}
+                  onClick={handleAdd}
+                  aria-label="Add to Collection"
+                >
+                  {adding ? (
+                    "Adding..."
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                      Add to Collection
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[140px] h-12 rounded-xl"
+                  onClick={onDismiss}
+                  aria-label="Scan Another"
+                >
+                  Scan Another
+                </Button>
               </div>
             </div>
           </div>

@@ -169,7 +169,7 @@ export default function ScanPage() {
       )}
 
       {!result && !showManual && scannerTab === "barcode" && (
-        <Viewfinder isScanning={scannerActive} format={activeFormat as "book" | "cd" | "vinyl"} />
+        <Viewfinder isScanning={scannerActive} format={activeFormat} />
       )}
 
       {!result && !showManual && (
@@ -180,7 +180,7 @@ export default function ScanPage() {
           onTabChange={setScannerTab}
           onExtractComplete={handleExtractComplete}
           onShowManualForm={() => setShowManual(true)}
-          format={activeFormat as "book" | "cd" | "vinyl"}
+          format={activeFormat}
         />
       )}
       {result && (

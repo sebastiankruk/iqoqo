@@ -58,7 +58,7 @@ interface ExtractedMetadata {
 }
 
 /** Supported media formats for the scanner. */
-export type MediaFormat = "book" | "cd" | "vinyl";
+export type MediaFormat = "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
 
 interface CameraCaptureProps {
   /** If set, the component uploads the image as a cover for this manifestation. */
@@ -141,12 +141,14 @@ export function CameraCapture({
   const startPolling = async (taskId: string) => {
     const maxRetries = 30; // 30 retries * 2s = 60s max
     const { apiClient: pollClient } = await import("@/lib/api/client");
-    
+
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(`/vision/extract/${taskId}`);
+        const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(
+          `/vision/extract/${taskId}`
+        );
         const env = response.data;
-        
+
         if (env.success && env.data) {
           // Check if data is the result (has Title) or just status
           if ("Title" in env.data) {
@@ -163,7 +165,7 @@ export function CameraCapture({
         }
         // Other network errors - just retry
       }
-      
+
       // Wait 2 seconds before next poll
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
@@ -188,7 +190,7 @@ export function CameraCapture({
         const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        
+
         const envelope = response.data;
         if (envelope.success && envelope.data?.task_id) {
           // Transition to polling
