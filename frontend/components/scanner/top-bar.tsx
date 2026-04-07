@@ -24,6 +24,9 @@ interface TopBarProps {
   currentFormat?: ScanFormat;
   setFormat?: (format: ScanFormat) => void;
   onCancel?: () => void;
+  hasFlash?: boolean;
+  isFlashOn?: boolean;
+  onToggleFlash?: () => void;
 }
 
 /**
@@ -32,7 +35,14 @@ interface TopBarProps {
  * @param {TopBarProps} props - The component props
  * @returns {JSX.Element} The component
  */
-export function TopBar({ currentFormat, setFormat, onCancel }: TopBarProps) {
+export function TopBar({
+  currentFormat,
+  setFormat,
+  onCancel,
+  hasFlash,
+  isFlashOn,
+  onToggleFlash,
+}: TopBarProps) {
 
   return (
     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
@@ -51,12 +61,19 @@ export function TopBar({ currentFormat, setFormat, onCancel }: TopBarProps) {
           <span className="mt-0.5 text-[11px] text-white/50">Position barcode or cover within the frame</span>
         </div>
 
-        <button
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/20"
-          aria-label="Toggle flash"
-        >
-          <Zap className="h-5 w-5 text-white" />
-        </button>
+        {hasFlash ? (
+          <button
+            onClick={onToggleFlash}
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+              isFlashOn ? "bg-primary text-primary-foreground" : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+            aria-label="Toggle flash"
+          >
+            <Zap className={`h-5 w-5 ${isFlashOn ? "fill-current" : ""}`} />
+          </button>
+        ) : (
+          <div className="h-10 w-10" />
+        )}
       </div>
 
       {setFormat && (

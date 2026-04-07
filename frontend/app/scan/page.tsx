@@ -48,6 +48,8 @@ export default function ScanPage() {
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
   const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -122,6 +124,10 @@ export default function ScanPage() {
     });
   };
 
+  const handleToggleTorch = useCallback(() => {
+    setTorchOn(prev => !prev);
+  }, []);
+
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
       <video
@@ -133,7 +139,13 @@ export default function ScanPage() {
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
 
-      <TopBar currentFormat={activeFormat} setFormat={f => setActiveFormat(f as ScanFormat)} />
+      <TopBar
+        currentFormat={activeFormat}
+        setFormat={f => setActiveFormat(f as ScanFormat)}
+        hasFlash={hasTorch}
+        isFlashOn={torchOn}
+        onToggleFlash={handleToggleTorch}
+      />
 
       {!result && !showManual && scannerTab === "barcode" && (
         <Viewfinder isScanning={scannerActive} format={activeFormat} />
@@ -148,6 +160,8 @@ export default function ScanPage() {
           onExtractComplete={handleExtractComplete}
           onShowManualForm={() => setShowManual(true)}
           format={activeFormat}
+          torchOn={torchOn}
+          onTorchCapabilityFound={setHasTorch}
         />
       )}
       {result && (
