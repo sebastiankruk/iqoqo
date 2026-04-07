@@ -23,9 +23,57 @@ from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import fetch_video_metadata
+from app.utils.upc import fetch_upc_metadata
 
 
 class IngestService:
+    @staticmethod
+    def ingest_puzzle_from_barcode(barcode: str) -> Manifestation:
+        meta = fetch_upc_metadata(barcode)
+
+        if not meta:
+            raise ValueError("Puzzle metadata not found in external services.")
+
+        title = meta.get("title") or "Unknown Puzzle"
+        author_name = meta.get("manufacturer") or meta.get("brand") or "Unknown Manufacturer"
+        cover_url = meta.get("cover_url")
+
+        work_meta = {"authors": [author_name]} if author_name else {}
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type="three-dimensional object")
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "organization")
+            add_work_contribution(work.id, contributor.id, "manufacturer")
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": barcode,
+                "format": "puzzle",
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher") or author_name,
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        return manifestation
+
     @staticmethod
     def ingest_from_isbn(isbn: str) -> Manifestation:
         meta = fetch_isbn_metadata(isbn)

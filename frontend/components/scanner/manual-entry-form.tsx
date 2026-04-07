@@ -24,7 +24,7 @@ import React, { useState } from "react";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type ManualEntryFormat = "book" | "audio" | "video" | "boardgame";
+export type ManualEntryFormat = "book" | "audio" | "video" | "boardgame" | "puzzle";
 
 export interface ManualEntryData {
   title: string;
@@ -114,6 +114,7 @@ export function ManualEntryForm({
             <option value="audio">Audio (CD/Vinyl)</option>
             <option value="video">Video (DVD/Blu-Ray)</option>
             <option value="boardgame">Board Game</option>
+            <option value="puzzle">Jigsaw Puzzle</option>
           </select>
         </div>
 

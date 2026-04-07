@@ -160,7 +160,7 @@ def scan_barcode():
             elif format_hint in ("game", "boardgame"):
                 manifestation = IngestService.ingest_game_from_barcode(barcode)
             elif format_hint in ("puzzle", "jigsaw"):
-                manifestation = IngestService.ingest_from_isbn(barcode)
+                manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
             elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:

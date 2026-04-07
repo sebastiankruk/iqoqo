@@ -16,6 +16,7 @@
 """Universal UPC/EAN metadata fetcher for retail items like Puzzles."""
 
 import logging
+import os
 
 import requests
 
@@ -24,9 +25,16 @@ logger = logging.getLogger(__name__)
 
 def fetch_upc_metadata(barcode: str) -> dict | None:
     """Fetch product metadata using a universal UPC API (e.g., UPCitemdb)."""
+    api_key = os.getenv("UPC_ITEM_DB_KEY")
     try:
-        url = f"https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}"
-        response = requests.get(url, timeout=5)
+        if api_key:
+            url = f"https://api.upcitemdb.com/prod/v1/lookup?upc={barcode}"
+            response = requests.get(url, headers={"user_key": api_key, "Accept": "application/json"}, timeout=5)
+        else:
+            # Fallback to trial endpoint (no key required, limited rate)
+            url = f"https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}"
+            response = requests.get(url, timeout=5)
+
         if response.status_code == 200:
             data = response.json()
             if data.get("items") and len(data["items"]) > 0:

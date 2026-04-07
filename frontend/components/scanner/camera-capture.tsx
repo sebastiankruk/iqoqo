@@ -58,7 +58,7 @@ interface ExtractedMetadata {
 }
 
 /** Supported media formats for the scanner. */
-export type MediaFormat = "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
+export type MediaFormat = "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame" | "puzzle";
 
 interface CameraCaptureProps {
   /** If set, the component uploads the image as a cover for this manifestation. */
