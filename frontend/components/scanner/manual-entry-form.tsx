@@ -24,7 +24,8 @@ import React, { useState } from "react";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type ManualEntryFormat = "book" | "audio" | "video" | "boardgame" | "puzzle";
+import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
+import { MEDIA_REGISTRY } from "@/lib/media";
 
 export interface ManualEntryData {
   title: string;
@@ -32,14 +33,14 @@ export interface ManualEntryData {
   identifier: string;
   publisher: string;
   year: string;
-  format: ManualEntryFormat;
+  format: ScanFormat;
 }
 
 interface ManualEntryFormProps {
   onSubmit: (data: ManualEntryData) => Promise<void>;
   onCancel: () => void;
   initialIdentifier?: string;
-  initialFormat?: ManualEntryFormat;
+  initialFormat?: ScanFormat;
   initialTitle?: string;
   initialAuthors?: string;
 }
@@ -76,7 +77,7 @@ export function ManualEntryForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value as ScanFormat }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,11 +111,11 @@ export function ManualEntryForm({
             onChange={handleChange}
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="book">Book</option>
-            <option value="audio">Audio (CD/Vinyl)</option>
-            <option value="video">Video (DVD/Blu-Ray)</option>
-            <option value="boardgame">Board Game</option>
-            <option value="puzzle">Jigsaw Puzzle</option>
+            {SCAN_FORMATS.map(f => (
+              <option key={f} value={f}>
+                {MEDIA_REGISTRY[f].label}
+              </option>
+            ))}
           </select>
         </div>
 

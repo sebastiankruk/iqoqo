@@ -30,10 +30,9 @@ import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { IsbnMeta } from "@/types/frbr";
+import type { IsbnMeta, ScanFormat } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
-
-export type ScanFormat = "book" | "audio" | "video" | "boardgame" | "puzzle";
+import { mapFormatToApi } from "@/lib/media";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -83,11 +82,7 @@ export default function ScanPage() {
       explicitDate = `${explicitDate}-01-01`;
     }
 
-    let apiFormat = "text";
-    if (data.format === "audio") apiFormat = "sound";
-    if (data.format === "video") apiFormat = "moving image";
-    if (data.format === "boardgame") apiFormat = "three-dimensional object";
-    if ((data.format as string) === "puzzle") apiFormat = "three-dimensional object";
+    const apiFormat = mapFormatToApi(data.format);
 
     const payload = {
       Title: data.title || "Unknown",

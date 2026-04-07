@@ -15,12 +15,14 @@
 //
 "use client";
 
-import { ArrowLeft, Zap, Book, Disc, Film, Dices, Puzzle } from "lucide-react";
+import { ArrowLeft, Zap } from "lucide-react";
 import Link from "next/link";
+import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
+import { MEDIA_REGISTRY } from "@/lib/media";
 
 interface TopBarProps {
-  currentFormat?: string;
-  setFormat?: (format: string) => void;
+  currentFormat?: ScanFormat;
+  setFormat?: (format: ScanFormat) => void;
   onCancel?: () => void;
 }
 
@@ -31,13 +33,6 @@ interface TopBarProps {
  * @returns {JSX.Element} The component
  */
 export function TopBar({ currentFormat, setFormat, onCancel }: TopBarProps) {
-  const formats = [
-    { id: "book", icon: Book, label: "Book" },
-    { id: "audio", icon: Disc, label: "Audio" },
-    { id: "video", icon: Film, label: "Video" },
-    { id: "boardgame", icon: Dices, label: "Game" },
-    { id: "puzzle", icon: Puzzle, label: "Puzzle" },
-  ];
 
   return (
     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
@@ -67,20 +62,24 @@ export function TopBar({ currentFormat, setFormat, onCancel }: TopBarProps) {
       {setFormat && (
         <div className="flex justify-center bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5">
           <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {formats.map(f => (
-              <button
-                key={f.id}
-                onClick={() => setFormat(f.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
-                  currentFormat === f.id
-                    ? "bg-primary text-primary-foreground border-primary shadow-lg"
-                    : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <f.icon className="h-3.5 w-3.5" />
-                <span className="text-xs font-bold uppercase tracking-wider">{f.label}</span>
-              </button>
-            ))}
+            {SCAN_FORMATS.map(f => {
+              const meta = MEDIA_REGISTRY[f];
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFormat(f)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                    currentFormat === f
+                      ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                      : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">{meta.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

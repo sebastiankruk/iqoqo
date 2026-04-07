@@ -87,6 +87,33 @@ ITEM_STATUSES: tuple[str, ...] = (
 )
 
 
+class MediaCategory:
+    """High-level media categories based on the FRBR content_type."""
+
+    TEXT = "text"
+    SOUND = "sound"
+    VIDEO = "moving image"
+    GAME = "boardgame"
+    OBJECT = "three-dimensional object"
+    MUSIC = "notated_music"
+
+    ALL = (TEXT, SOUND, VIDEO, GAME, OBJECT, MUSIC)
+
+
+class MediaFormat:
+    """User-friendly media formats (display/scanning labels)."""
+
+    BOOK = "book"
+    CD = "cd"
+    VINYL = "vinyl"
+    AUDIO = "audio"
+    VIDEO = "video"
+    BOARDGAME = "boardgame"
+    PUZZLE = "puzzle"
+
+    ALL = (BOOK, CD, VINYL, AUDIO, VIDEO, BOARDGAME, PUZZLE)
+
+
 class Work(db.Model):  # type: ignore[name-defined]
     """
     FRBR Group 1: Work.

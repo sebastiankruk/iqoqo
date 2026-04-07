@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
+from app.db.core import MediaCategory, MediaFormat
 from app.db.models import Expression, Manifestation, Work, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.covers import start_cover_processing
@@ -43,7 +44,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="three-dimensional object")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.OBJECT)
         db.session.add(expression)
         db.session.flush()
 
@@ -55,7 +56,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": "puzzle",
+                "format": MediaFormat.PUZZLE,
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -95,7 +96,7 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "author")
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="text")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.TEXT)
         db.session.add(expression)
 
         # Merge raw meta with explicit standard keys for the UI
@@ -142,7 +143,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="sound")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.SOUND)
         db.session.add(expression)
         db.session.flush()
 
@@ -155,7 +156,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", "audio"),
+                "format": meta.get("format", MediaFormat.AUDIO),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -191,7 +192,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="video")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.VIDEO)
         db.session.add(expression)
         db.session.flush()
 
@@ -203,7 +204,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", "video"),
+                "format": meta.get("format", MediaFormat.VIDEO),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -239,7 +240,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="boardgame")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.GAME)
         db.session.add(expression)
         db.session.flush()
 
@@ -251,7 +252,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", meta.get("Format", "boardgame")),
+                "format": meta.get("format", meta.get("Format", MediaFormat.BOARDGAME)),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
