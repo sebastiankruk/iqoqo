@@ -69,14 +69,15 @@ export function TopBar({ currentFormat, setFormat, onCancel }: TopBarProps) {
                 <button
                   key={f}
                   onClick={() => setFormat(f)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                  title={meta.label}
+                  className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
                     currentFormat === f
                       ? "bg-primary text-primary-foreground border-primary shadow-lg"
                       : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="text-xs font-bold uppercase tracking-wider">{meta.label}</span>
+                  <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
                 </button>
               );
             })}

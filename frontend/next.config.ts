@@ -59,6 +59,12 @@ const nextConfig: NextConfig = {
       {
         pathname: "/api/static/**",
       },
+      {
+        pathname: "/*.png",
+      },
+      {
+        pathname: "/*.svg",
+      },
     ],
     remotePatterns: [
       {
