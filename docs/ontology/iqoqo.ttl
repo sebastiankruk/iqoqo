@@ -95,3 +95,65 @@
     rdfs:label "JigsawPuzzleCut" ;
     rdfs:comment "A specific manufacturer's cut of an artwork as a jigsaw puzzle." .
 
+# ---------------------------------------------------------------------------
+# Media vocabulary (v0.3.0)
+# Aligns with MediaCategory and MediaFormat in app/db/core.py (Python)
+# and MEDIA_FORMATS / SCAN_FORMATS in frontend/types/frbr.ts (TypeScript).
+# See also: tests/test_ontology.py for the cross-subsystem contract tests.
+# ---------------------------------------------------------------------------
+
+:MediaCategory a owl:Class ;
+    rdfs:label "MediaCategory" ;
+    rdfs:comment "High-level FRBR content_type category stored on catalog.expressions.content_type." .
+
+:MediaCategoryText a :MediaCategory ;
+    rdfs:label "text" ;
+    rdfs:comment "Text-based works (books, articles). Maps to Expression.content_type = 'text'." .
+
+:MediaCategorySound a :MediaCategory ;
+    rdfs:label "sound" ;
+    rdfs:comment "Sound-based works (CDs, vinyl). Maps to Expression.content_type = 'sound'." .
+
+:MediaCategoryVideo a :MediaCategory ;
+    rdfs:label "moving image" ;
+    rdfs:comment "Moving image works (films, DVDs, Blu-rays). Maps to Expression.content_type = 'moving image'." .
+
+:MediaCategoryGame a :MediaCategory ;
+    rdfs:label "boardgame" ;
+    rdfs:comment "Board game works. Maps to Expression.content_type = 'boardgame'." .
+
+:MediaCategoryObject a :MediaCategory ;
+    rdfs:label "three-dimensional object" ;
+    rdfs:comment "Three-dimensional objects (jigsaw puzzles). Maps to Expression.content_type = 'three-dimensional object'." .
+
+:MediaFormat a owl:Class ;
+    rdfs:label "MediaFormat" ;
+    rdfs:comment "User-facing media format slug stored in Manifestation.meta.format. A sub-format may map to a parent MediaCategory." .
+
+:MediaFormatBook a :MediaFormat ;
+    rdfs:label "book" ;
+    rdfs:comment "Printed book. Maps to MediaCategory 'text'." .
+
+:MediaFormatCD a :MediaFormat ;
+    rdfs:label "cd" ;
+    rdfs:comment "Audio Compact Disc. Maps to MediaCategory 'sound'. Sub-format of 'audio'." .
+
+:MediaFormatVinyl a :MediaFormat ;
+    rdfs:label "vinyl" ;
+    rdfs:comment "Vinyl record (LP/EP/45). Maps to MediaCategory 'sound'. Sub-format of 'audio'." .
+
+:MediaFormatAudio a :MediaFormat ;
+    rdfs:label "audio" ;
+    rdfs:comment "Generic audio (scanner-level grouping for CD/Vinyl). Maps to MediaCategory 'sound'." .
+
+:MediaFormatVideo a :MediaFormat ;
+    rdfs:label "video" ;
+    rdfs:comment "Video release (DVD, Blu-ray, VHS). Maps to MediaCategory 'moving image'." .
+
+:MediaFormatBoardgame a :MediaFormat ;
+    rdfs:label "boardgame" ;
+    rdfs:comment "Board game. Maps to MediaCategory 'boardgame'." .
+
+:MediaFormatPuzzle a :MediaFormat ;
+    rdfs:label "puzzle" ;
+    rdfs:comment "Jigsaw puzzle. Maps to MediaCategory 'three-dimensional object'." .
