@@ -19,7 +19,9 @@ Unlike "flat" catalogs, iqoqo is built on the **FRBR (Functional Requirements fo
 - **Backend:** Python 3.14+ / Flask
 - **Database:** PostgreSQL (with Full-Text Search and JSONB)
 - **Ontology:** RDFLib / FRBR
+- **Computer Vision:** OpenCV / NumPy (Optional/Experimental)
 - **Deployment:** Docker & Docker Compose
+- **Networking:** Cloudflare Tunnel (for dev-server sharing)
 
 ## 🚀 Quick Start
 
