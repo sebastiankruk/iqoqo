@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-04-03
+
+### Added
+
+- **Ontology Expansion**: Support for Video (Film, Series) and Board Games via FRBRoo `ManifestationContribution` (Studio/Distributor) and `ContainerAggregation` (Box Contents).
+- **Background Tasks**: Centralized APScheduler for recurring maintenance (e.g., daily automated backups).
+- **Navigation UX**: Added "View in My Collection" button to manifestation details, allowing users to jump directly to their owned items.
+- **Telemetry Hardening**: Refactored `LLMTelemetry` to handle high-concurrency event logging with non-blocking database indexes.
+- **Scanner Fallbacks**: Added a `ManualEntryForm` UX to handle scenarios where barcode/ISBN lookups timeout or return no results.
+- **Desktop Scanner UX**: `CameraCapture` now detects available media devices. If no rear camera is detected (e.g., Desktop), it automatically defaults to a clean Drag & Drop file uploader UI.
+
+### Changed
+
+- **Scheduler Gating**: Background tasks are now gated by `SCHEDULER_AUTOSTART` to prevent side effects in CLI and test environments.
+- **Backup Script**: Isolated `sys.path` mutations to prevent environment pollution when the backup module is imported.
+
+### Fixed
+
+- **Manifestation Ownership**: Implemented `@optional_auth` decorator for `/manifestations` endpoints to correctly detect `user_owns` status for authenticated users.
+- **Image Rotation**: Applied `PIL.ImageOps.exif_transpose` within the image processing pipeline to automatically fix the 90-degree rotation bug caused by smartphone EXIF metadata tags during cover uploads.
+
+### Documentation
+
+- **Backups**: Documented the Scheduled Backups system and environment configuration in `docs/ARCHITECTURE.md`.
+
+### Database Migrations
+
+- Introduced multi-schema architecture (`catalog`, `inventory`, `auth`).
+- Added DB-level `CheckConstraint` to `ContainerAggregation` to ensure data integrity of board game components.
+
 ## [0.2.0] - 2026-04-03
 
 ### Added
@@ -84,30 +116,3 @@ No schema migrations are required for this release. The `unread` status is a new
 ### Changed
 
 - Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
-
-## [Unreleased]
-
-## [0.3.0] - 2026-04-03
-
-### Added
-
-- **Ontology Expansion**: Support for Video (Film, Series) and Board Games via FRBRoo `ManifestationContribution` (Studio/Distributor) and `ContainerAggregation` (Box Contents).
-- **Background Tasks**: Centralized APScheduler for recurring maintenance (e.g., daily automated backups).
-- **Telemetry Hardening**: Refactored `LLMTelemetry` to handle high-concurrency event logging with non-blocking database indexes.
-- **Scanner Fallbacks**: Added a `ManualEntryForm` UX to handle scenarios where barcode/ISBN lookups timeout or return no results.
-- **Desktop Scanner UX**: `CameraCapture` now detects available media devices. If no rear camera is detected (e.g., Desktop), it automatically defaults to a clean Drag & Drop file uploader UI.
-- **Smart Image Handling**: Applied `PIL.ImageOps.exif_transpose` within the image processing pipeline to automatically fix the 90-degree rotation bug caused by smartphone EXIF metadata tags during cover uploads.
-
-### Changed
-
-- **Scheduler Gating**: Background tasks are now gated by `SCHEDULER_AUTOSTART` to prevent side effects in CLI and test environments.
-- **Backup Script**: Isolated `sys.path` mutations to prevent environment pollution when the backup module is imported.
-
-### Fixed
-
-- **Image Rotation**: Applied `PIL.ImageOps.exif_transpose` within the image processing pipeline to automatically fix the 90-degree rotation bug caused by smartphone EXIF metadata tags during cover uploads.
-
-### Database Migrations
-
-- Introduced multi-schema architecture (`catalog`, `inventory`, `auth`).
-- Added DB-level `CheckConstraint` to `ContainerAggregation` to ensure data integrity of board game components.

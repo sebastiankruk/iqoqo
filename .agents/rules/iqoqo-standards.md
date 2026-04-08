@@ -15,9 +15,11 @@ description: "Global coding standards and architectural rules for the iqoqo proj
 
 - **Domain First:** This is a "Library of Everything" built on the FRBR (Functional Requirements for Bibliographic Records) ontology. Always respect the Work -> Expression -> Manifestation -> Item hierarchy.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
+- **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
 - **Do Not Hallucinate Metadata:** If an external service (e.g., ISBN lookup) fails, fail gracefully. Do not generate fake book covers or ISBNs.
 
 ## Python Backend (Flask)
+- **Engine:** Use Python 3.14+ exclusively.
 
 - **Typing:** Use strict Python type hints (`typing` module) for all function signatures and return types.
 - **ORM:** Use SQLAlchemy 2.0 style syntax (e.g., `select()`, `session.execute()`). Avoid legacy `Query` usage.
@@ -28,9 +30,9 @@ description: "Global coding standards and architectural rules for the iqoqo proj
 
 ## Frontend (Next.js / TypeScript)
 
-- **Framework:** Use Next.js App Router (`app/` directory). Do not use the legacy `pages/` router.
+- **Framework:** Use Next.js 16+ App Router (`app/` directory). Do not use the legacy `pages/` router.
 - **Components:** Write functional components using React hooks. Do not use class components.
-- **Styling:** Use Tailwind CSS exclusively. Use Shadcn UI for standard components (found in `components/ui/`). Do not write raw CSS unless necessary.
+- **Styling:** Use Tailwind CSS v4 exclusively. Use Shadcn UI for standard components (found in `components/ui/`). Do not write raw CSS unless necessary.
 - **State Management:** Keep state as local as possible. Prefer Server Components where interactivity is not required.
 
 ## Documentation & Markdown
