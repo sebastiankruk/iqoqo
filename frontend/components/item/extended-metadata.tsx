@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { isAudioMedia } from "@/lib/utils";
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
+import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
@@ -47,6 +48,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
   const isAudio = isAudioMedia(format);
   const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
   const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
 
   const trackList = meta["track_list"] as
     | Array<{ position: string; title: string; duration_seconds: number }>
@@ -103,6 +105,11 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "Cast",
     "Director",
     "Runtime",
+    "piece_count",
+    "dimensions",
+    "artist",
+    "manufacturer",
+    "puzzle_type",
   ]);
 
   const extraKeys = Object.entries(meta)
@@ -123,6 +130,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     !isAudio &&
     !isVideo &&
     !isBoardGame &&
+    !isPuzzle &&
     !trackList &&
     extraKeys.length === 0
   )
@@ -148,6 +156,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
 
       {isVideo && <ExtendedMetadataVideo meta={meta} />}
       {isBoardGame && <ExtendedMetadataBoardGame meta={meta} />}
+      {isPuzzle && <ExtendedMetadataPuzzle meta={meta} />}
 
       {isAudio && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

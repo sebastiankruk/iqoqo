@@ -31,6 +31,7 @@ from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import fetch_video_metadata
+from app.utils.upc import fetch_upc_metadata
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -78,6 +79,8 @@ def lookup_barcode_preview(barcode: str):
         meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
         meta = fetch_bgg_metadata(barcode)
+    elif format_hint in ("puzzle", "jigsaw"):
+        meta = fetch_upc_metadata(barcode)
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
         try:
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
@@ -121,7 +124,9 @@ def lookup_barcode_preview(barcode: str):
     if "cover_url" not in meta:
         meta["cover_url"] = meta.get("thumb") or meta.get("cover")
     if "author" not in meta:
-        meta["author"] = meta.get("artist") or meta.get("Artist") or meta.get("authors", [None])[0]
+        meta["author"] = (
+            meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
+        )
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -156,6 +161,8 @@ def scan_barcode():
                 manifestation = IngestService.ingest_video_from_barcode(barcode)
             elif format_hint in ("game", "boardgame"):
                 manifestation = IngestService.ingest_game_from_barcode(barcode)
+            elif format_hint in ("puzzle", "jigsaw"):
+                manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
             elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:

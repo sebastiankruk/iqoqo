@@ -224,7 +224,10 @@ test.describe("Audio Media Workflow", () => {
     // 3. Navigate to the scanner page
     await page.goto("/scan");
 
-    // 4. Use the Manual Search tab
+    // 4. Select the Audio format first
+    await page.getByRole("button", { name: "CD" }).click();
+
+    // 5. Use the Manual Search tab
     await page.getByText("Manual Search").click();
 
     // 5. Submit 12-digit UPC (validates updated frontend regex rules)
@@ -237,9 +240,9 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByText("Miles Davis")).toBeVisible();
     await expect(page.getByText("AUDIO", { exact: true })).toBeVisible(); // JS transformation check
 
-    // 7. Verify NO redundant format toggle in the scanner snap section
-    await expect(page.getByRole("button", { name: "BOOK" })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "CD" })).not.toBeVisible();
+    // 7. Verify the Audio format is active (selected) in the scanner header
+    // The CD button should be highlighted as the active format
+    await expect(page.getByRole("button", { name: "CD" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
     await page.getByRole("button", { name: "Add to Collection" }).click();

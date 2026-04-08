@@ -18,7 +18,7 @@
 import { ChangeEvent } from "react";
 import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
-import type { Item } from "@/types/frbr";
+import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
@@ -227,7 +227,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         {hasUploadPermission && (
           <CameraCapture
             manifestation_id={item.manifestation_id}
-            format={format as import("@/components/scanner/camera-capture").MediaFormat}
+            format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
             icon={<ImagePlus className="h-4 w-4 mr-2" />}

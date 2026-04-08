@@ -39,11 +39,12 @@ from app.db.audio import (  # noqa: F401
     WorkPart,
 )
 from app.db.auth import ConsentRecord, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
-from app.db.core import ITEM_STATUSES, Expression, Item, Manifestation, Work  # noqa: F401
+from app.db.core import ITEM_STATUSES, Expression, Item, Manifestation, MediaCategory, MediaFormat, Work  # noqa: F401
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401
+from app.db.puzzle import MANIFESTATION_PUZZLE_META_KEYS  # noqa: F401
 from app.db.settings import InstanceSettings, LLMTelemetry  # noqa: F401
 
-# --- New Video & Games Expansions ---
+# --- New Video, Games & Puzzle Expansions ---
 from app.db.video import (  # noqa: F401
     EXPRESSION_VIDEO_ROLES,
     MANIFESTATION_VIDEO_META_KEYS,

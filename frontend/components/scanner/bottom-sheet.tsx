@@ -16,10 +16,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search, ImagePlus, Zap, ZapOff } from "lucide-react";
+import { Camera, Search, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { CameraCapture } from "@/components/scanner/camera-capture";
-import { toast } from "sonner";
 
 const TABS = [
   { id: "barcode", label: "Barcode" },
@@ -37,7 +36,9 @@ interface BottomSheetProps {
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
-  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
+  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame" | "puzzle";
+  torchOn?: boolean;
+  onTorchCapabilityFound?: (hasTorch: boolean) => void;
 }
 
 /**
@@ -51,6 +52,8 @@ interface BottomSheetProps {
  * @param root0.onExtractComplete - Optional callback when cover metadata is extracted
  * @param root0.onShowManualForm - Optional callback to show manual entry form
  * @param root0.format - The current media format (book, cd, vinyl)
+ * @param root0.torchOn - Whether the flashlight should be on
+ * @param root0.onTorchCapabilityFound - Callback when flashlight capability is detected
  * @returns {JSX.Element} The component
  */
 export function BottomSheet({
@@ -61,12 +64,15 @@ export function BottomSheet({
   onExtractComplete,
   onShowManualForm,
   format = "book",
+  torchOn = false,
+  onTorchCapabilityFound,
 }: BottomSheetProps) {
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
   const formatToApiParam = (fmt?: string): string => {
     if (fmt === "video") return "video";
     if (fmt === "boardgame") return "boardgame";
+    if (fmt === "puzzle") return "puzzle";
     if (fmt === "audio") return "audio";
     if (fmt === "book") return "book";
     return "";
@@ -86,7 +92,6 @@ export function BottomSheet({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const barcodeEnabledRef = useRef<boolean>(true);
-  const [torchOn, setTorchOn] = useState(false);
 
   // Sync ref with state
   useEffect(() => {
@@ -108,32 +113,32 @@ export function BottomSheet({
       video.srcObject = null;
     }
     setScannerActive(false);
-    setTorchOn(false);
     if (onScannerStateChange) onScannerStateChange(false);
-  }, [videoRef, onScannerStateChange]);
+    if (onTorchCapabilityFound) onTorchCapabilityFound(false);
+  }, [videoRef, onScannerStateChange, onTorchCapabilityFound]);
 
-  /* ── Toggle Torch (Flashlight) ── */
-  const toggleTorch = useCallback(async () => {
-    if (!streamRef.current) return;
-    const track = streamRef.current.getVideoTracks()[0];
-    if (track) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const capabilities = track.getCapabilities() as any;
-        if (capabilities.torch !== undefined) {
-          await track.applyConstraints({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            advanced: [{ torch: !torchOn }] as any,
-          });
-          setTorchOn(!torchOn);
-        } else {
-          toast.error("Flashlight is not supported on this device.");
+  /** Apply Torch (Flashlight) constraints when the [torchOn] state changes. */
+  useEffect(() => {
+    /** Internal function to apply media constraints to the active tracks. */
+    async function applyTorch() {
+      if (!streamRef.current) return;
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const capabilities = (track.getCapabilities?.() as any) || {};
+          if (capabilities.torch !== undefined) {
+            await track.applyConstraints({
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              advanced: [{ torch: torchOn }] as any,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to apply torch constraints", err);
         }
-      } catch (err) {
-        console.error("Failed to toggle torch", err);
-        toast.error("Could not toggle flashlight.");
       }
     }
+    applyTorch();
   }, [torchOn]);
 
   /* ── Barcode API lookup ── */
@@ -187,6 +192,20 @@ export function BottomSheet({
       setScannerActive(true);
       if (onScannerStateChange) onScannerStateChange(true);
 
+      const track = stream.getVideoTracks()[0];
+      if (track && onTorchCapabilityFound) {
+        // Detect torch support by attempting to apply a no-op constraint.
+        // Checking capabilities alone can return torch=true on devices where
+        // the constraint silently fails (e.g. front cameras on iOS/Android).
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await track.applyConstraints({ advanced: [{ torch: false }] as any });
+          onTorchCapabilityFound(true);
+        } catch {
+          onTorchCapabilityFound(false);
+        }
+      }
+
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const { BarcodeFormat, DecodeHintType } = await import("@zxing/library");
 
@@ -228,7 +247,7 @@ export function BottomSheet({
       setError((e as Error).message ?? "Camera unavailable");
       stopScanner();
     }
-  }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange]);
+  }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange, onTorchCapabilityFound]);
 
   useEffect(() => {
     if (activeTab === "manual") stopScanner();
@@ -286,21 +305,6 @@ export function BottomSheet({
                   <Camera className={`h-6 w-6 ${scannerActive ? "animate-pulse" : ""}`} />
                 </span>
               </button>
-
-              {/* Torch Button positioned to the right of the camera button */}
-              {scannerActive && (
-                <button
-                  onClick={toggleTorch}
-                  className="absolute right-8 flex h-12 w-12 items-center justify-center rounded-full bg-secondary shadow-lg border border-border transition-colors active:scale-95 z-10"
-                  aria-label="Toggle Flashlight"
-                >
-                  {torchOn ? (
-                    <Zap className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                  ) : (
-                    <ZapOff className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </button>
-              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}

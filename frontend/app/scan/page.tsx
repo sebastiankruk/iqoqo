@@ -30,18 +30,9 @@ import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { IsbnMeta } from "@/types/frbr";
+import type { IsbnMeta, ScanFormat } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
-import { BookOpen, Disc, Film, Dices } from "lucide-react";
-
-const MEDIA_FORMATS = [
-  { id: "book", label: "Book", icon: BookOpen },
-  { id: "audio", label: "Audio", icon: Disc },
-  { id: "video", label: "Video", icon: Film },
-  { id: "boardgame", label: "Board Game", icon: Dices },
-] as const;
-
-export type ScanFormat = (typeof MEDIA_FORMATS)[number]["id"];
+import { mapFormatToApi } from "@/lib/media";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -57,6 +48,8 @@ export default function ScanPage() {
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
   const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -91,10 +84,7 @@ export default function ScanPage() {
       explicitDate = `${explicitDate}-01-01`;
     }
 
-    let apiFormat = "text";
-    if (data.format === "audio") apiFormat = "sound";
-    if (data.format === "video") apiFormat = "moving image";
-    if (data.format === "boardgame") apiFormat = "three-dimensional object";
+    const apiFormat = mapFormatToApi(data.format);
 
     const payload = {
       Title: data.title || "Unknown",
@@ -134,6 +124,10 @@ export default function ScanPage() {
     });
   };
 
+  const handleToggleTorch = useCallback(() => {
+    setTorchOn(prev => !prev);
+  }, []);
+
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
       <video
@@ -145,28 +139,13 @@ export default function ScanPage() {
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
 
-      <TopBar />
-
-      {!result && !showManual && (
-        <div className="absolute top-20 inset-x-0 z-30 flex justify-center px-4">
-          <div className="inline-flex rounded-2xl bg-black/60 backdrop-blur-md p-1 border border-white/10 gap-1 w-full max-w-sm justify-between">
-            {MEDIA_FORMATS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveFormat(id)}
-                className={`flex flex-col items-center justify-center flex-1 py-2 px-1 rounded-xl transition-all ${
-                  activeFormat === id
-                    ? "bg-primary text-primary-foreground shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                <Icon className="w-5 h-5 mb-1" />
-                <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <TopBar
+        currentFormat={activeFormat}
+        setFormat={f => setActiveFormat(f as ScanFormat)}
+        hasFlash={hasTorch}
+        isFlashOn={torchOn}
+        onToggleFlash={handleToggleTorch}
+      />
 
       {!result && !showManual && scannerTab === "barcode" && (
         <Viewfinder isScanning={scannerActive} format={activeFormat} />
@@ -181,6 +160,8 @@ export default function ScanPage() {
           onExtractComplete={handleExtractComplete}
           onShowManualForm={() => setShowManual(true)}
           format={activeFormat}
+          torchOn={torchOn}
+          onTorchCapabilityFound={setHasTorch}
         />
       )}
       {result && (

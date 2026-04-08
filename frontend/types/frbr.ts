@@ -138,6 +138,14 @@ export type ItemStatus =
   | "listened"
   | "want_to_listen";
 
+/** Standard media formats used across the app */
+export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;
+export type MediaFormat = (typeof MEDIA_FORMATS)[number];
+
+/** High-level categories for scanning and manual entry */
+export const SCAN_FORMATS = ["book", "audio", "video", "boardgame", "puzzle"] as const;
+export type ScanFormat = (typeof SCAN_FORMATS)[number];
+
 /** API Response envelope */
 export interface ApiResponse<T> {
   success: boolean;

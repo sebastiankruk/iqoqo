@@ -13,12 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import { getMediaMetadata } from "@/lib/media";
+import { MediaFormat, ScanFormat } from "@/types/frbr";
+
 /**
  * Viewfinder overlay with corner brackets and animated scanning line.
  *
  * @param {object} props The component props
  * @param {boolean} [props.isScanning=true] Whether the line should animate
- * @param {"book" | "cd" | "vinyl" | "audio" | "video" | "boardgame"} [props.format="book"] Media format for aspect ratio
+ * @param {MediaFormat | ScanFormat} [props.format="book"] Media format for aspect ratio
  * @returns {JSX.Element} The component
  */
 export function Viewfinder({
@@ -26,14 +29,13 @@ export function Viewfinder({
   format = "book",
 }: {
   isScanning?: boolean;
-  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame";
+  format?: MediaFormat | ScanFormat;
 }) {
-  const isAudio = format === "cd" || format === "vinyl" || format === "audio";
-  const isSquare = isAudio || format === "video" || format === "boardgame";
+  const metadata = getMediaMetadata(format);
 
   // Dimensions: Books are vertical 2:3, others (CDs/Vinyls/Video/BoardGame) are square 1:1
   const width = 240;
-  const height = isSquare ? 240 : 360;
+  const height = width / metadata.aspectRatio;
 
   const bracketSize = 28;
   const strokeWidth = 3;

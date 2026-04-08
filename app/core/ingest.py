@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
+from app.db.core import MediaCategory, MediaFormat
 from app.db.models import Expression, Manifestation, Work, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.covers import start_cover_processing
@@ -23,9 +24,59 @@ from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import fetch_video_metadata
+from app.utils.upc import fetch_upc_metadata
 
 
 class IngestService:
+    @staticmethod
+    def ingest_puzzle_from_barcode(barcode: str) -> Manifestation:
+        meta = fetch_upc_metadata(barcode)
+
+        if not meta:
+            raise ValueError("Puzzle metadata not found in external services.")
+
+        title = meta.get("title") or "Unknown Puzzle"
+        author_name = meta.get("manufacturer") or meta.get("brand") or "Unknown Manufacturer"
+        cover_url = meta.get("cover_url")
+
+        work_meta = {"authors": [author_name]} if author_name else {}
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.OBJECT)
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            get_or_create_contributor(author_name, "organization")
+            # Note: "manufacturer" is not a supported WorkContribution role,
+            # so we keep manufacturer info in manifestation metadata instead.
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": barcode,
+                "format": MediaFormat.PUZZLE,
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "publisher": meta.get("publisher") or author_name,
+                "manufacturer": author_name,
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        return manifestation
+
     @staticmethod
     def ingest_from_isbn(isbn: str) -> Manifestation:
         meta = fetch_isbn_metadata(isbn)
@@ -47,7 +98,7 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "author")
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="text")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.TEXT)
         db.session.add(expression)
 
         # Merge raw meta with explicit standard keys for the UI
@@ -94,7 +145,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="sound")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.SOUND)
         db.session.add(expression)
         db.session.flush()
 
@@ -107,7 +158,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", "audio"),
+                "format": meta.get("format", MediaFormat.AUDIO),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -143,7 +194,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="video")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.VIDEO)
         db.session.add(expression)
         db.session.flush()
 
@@ -155,7 +206,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", "video"),
+                "format": meta.get("format", MediaFormat.VIDEO),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -191,7 +242,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type="boardgame")
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.GAME)
         db.session.add(expression)
         db.session.flush()
 
@@ -203,7 +254,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", meta.get("Format", "boardgame")),
+                "format": meta.get("format", meta.get("Format", MediaFormat.BOARDGAME)),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],

@@ -4,7 +4,7 @@
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {
-    "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
+    "lint": "npm run lint:md",
     "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'"
   },
   "devDependencies": {
