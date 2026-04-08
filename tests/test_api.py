@@ -436,3 +436,27 @@ def test_upload_cover(mock_start, client, sample_book, admin_headers):
     assert response.status_code == 202
     assert response.json["message"] == "Cover upload processing started"
     mock_start.assert_called_once()
+
+def test_manifestation_user_owns_authenticated(client, sample_book):
+    """Test that retrieving a manifestation correctly returns user_owns=True if logged in and user owns it."""
+    from app.api.auth import generate_internal_jwt
+    # First add a user and item
+    with client.application.app_context():
+        test_user = User(email="owns_tester@iqoqo.local", display_name="Ownership Tester")
+        db.session.add(test_user)
+        db.session.flush()
+        item = Item(manifestation_id=sample_book.id, owner_id=test_user.id)
+        db.session.add(item)
+        db.session.commit()
+        token = generate_internal_jwt(test_user)
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Test authenticated endpoint calculates user_owns True
+    response = client.get(f"/api/manifestations/{sample_book.id}", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json["data"]["user_owns"] is True
+
+    # 2. Test unauthenticated endpoint calculates user_owns False
+    response = client.get(f"/api/manifestations/{sample_book.id}")
+    assert response.status_code == 200
+    assert response.json["data"]["user_owns"] is False

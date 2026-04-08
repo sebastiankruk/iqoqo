@@ -28,13 +28,14 @@ from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image
 
 
 @api_bp.route("/manifestations", methods=["GET"])
+@optional_auth
 def get_manifestations() -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     page_param = request.args.get("page", "1")
@@ -170,6 +171,7 @@ def get_manifestations() -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+@optional_auth
 def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
