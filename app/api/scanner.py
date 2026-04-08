@@ -274,7 +274,7 @@ def extract_from_cover():
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    user_id = str(getattr(request, "user_id", ""))
+    user_id = getattr(request, "user_id", None)
 
     # Dispatch to background task queue
     task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)
@@ -286,8 +286,8 @@ def extract_from_cover():
 @require_auth
 def get_extract_status(task_id: str):
     """Poll for the status of an asynchronous cover extraction task."""
-    user_id = str(getattr(request, "user_id", ""))
-    result = get_task_result(task_id, user_id=user_id if user_id else None)
+    user_id = getattr(request, "user_id", None)
+    result = get_task_result(task_id, user_id=user_id)
 
     if not result:
         return jsonify({"success": False, "data": None, "error": "Task not found"}), 404
