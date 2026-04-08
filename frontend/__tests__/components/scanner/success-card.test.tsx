@@ -178,4 +178,39 @@ describe("SuccessCard", () => {
     );
     expect(bookContainer.querySelector(".aspect-\\[2\\/3\\]")).toBeInTheDocument();
   });
+
+  it("renders board game player count", () => {
+    const meta: IsbnMeta = {
+      Title: "Catan",
+      Authors: [],
+      format: "boardgame",
+      min_players: 3,
+      max_players: 4,
+    };
+
+    render(<SuccessCard isbn="681706704" meta={meta} onDismiss={vi.fn()} />);
+
+    expect(screen.getByText("Catan")).toBeInTheDocument();
+    expect(screen.getByText("3-4 players")).toBeInTheDocument();
+    expect(screen.getByText("Board Game")).toBeInTheDocument();
+  });
+
+  it("renders video metadata with directors and cast", () => {
+    const meta: IsbnMeta = {
+      Title: "Inception",
+      Authors: [],
+      format: "video",
+      directors: ["Christopher Nolan"],
+      cast: ["Leonardo DiCaprio", "Joseph Gordon-Levitt"],
+      runtime: 148,
+    };
+
+    render(<SuccessCard isbn="883929153526" meta={meta} onDismiss={vi.fn()} />);
+
+    expect(screen.getByText("Inception")).toBeInTheDocument();
+    expect(screen.getByText(/Director:/)).toBeInTheDocument();
+    expect(screen.getByText(/Cast:/)).toBeInTheDocument();
+    expect(screen.getByText("148 min")).toBeInTheDocument();
+    expect(screen.getByText("Video Media")).toBeInTheDocument();
+  });
 });
