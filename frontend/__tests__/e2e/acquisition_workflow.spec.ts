@@ -84,12 +84,20 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       );
 
       // Mock item details for the final redirect
-      await page.route("**/api/items/123", route =>
+      await page.route("**/api/items/123", async route =>
         route.fulfill({
           status: 200,
           json: {
             success: true,
-            data: { id: 123, title: "Test Book", manifestation_meta: { format: "book" } },
+            data: {
+              id: 123,
+              title: "Test Book",
+              manifestation: {
+                id: 456,
+                title: "Test Book",
+                format: "book",
+              },
+            },
           },
         })
       );
@@ -171,17 +179,20 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await expect(page).toHaveURL(/.*\/item\/789/);
 
       // Mock item details for the sidebar
-      await page.route("**/api/items/789", route =>
+      await page.route("**/api/items/789", async route =>
         route.fulfill({
           status: 200,
           json: {
             success: true,
             data: {
               id: 789,
-              manifestation_id: 101,
               title: "Dark Side of the Moon",
               status: "available",
-              manifestation_meta: { format: "vinyl" },
+              manifestation: {
+                id: 101,
+                title: "Dark Side of the Moon",
+                format: "vinyl",
+              },
             },
           },
         })

@@ -109,7 +109,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await page.goto("/scan");
 
     // 5. Verify scanner page loads
-    await expect(page.getByText("Scan Barcode or Cover")).toBeVisible();
+    await expect(page.getByText("Tap to start camera")).toBeVisible();
 
     // 6. Select the Video format from the top pill menu
     await page.getByRole("button", { name: "Video" }).click();

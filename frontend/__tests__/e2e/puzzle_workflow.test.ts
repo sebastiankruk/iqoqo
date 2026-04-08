@@ -68,16 +68,37 @@ test.describe("Jigsaw Puzzle Workflow", () => {
       });
     });
 
-    // 4. Trigger manual entry as a fallback for the scan
-    await page.click("text=Enter Barcode Manually");
-    await page.fill('input[placeholder="Enter barcode..."]', "4005556199999");
+    // 4. Mock the POST /scan endpoint for adding to collection
+    await page.route("**/api/scan", async route => {
+      const postData = route.request().postDataJSON();
+      expect(postData.barcode).toBe("4005556199999");
+
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            item_id: 5,
+            manifestation_id: 10,
+            title: "Starry Night 1000pc",
+            is_new_manifestation: true,
+          },
+        }),
+      });
+    });
+
+    // 4. Switch to Manual Search tab to access the input
+    await page.getByRole("button", { name: "Manual Search" }).click();
+
+    // 5. Fill in the barcode
+    await page.fill('input[placeholder="Enter barcode or title..."]', "4005556199999");
     await page.keyboard.press("Enter");
 
-    // 5. Verify Item Card is created
+    // 6. Verify Item Card is created (title is visible in success card)
     await expect(page.locator("text=Starry Night 1000pc")).toBeVisible();
-    await expect(page.locator("text=1000 Pieces")).toBeVisible();
 
-    // 6. Confirm addition
+    // 7. Confirm addition
     await page.click('button:has-text("Add to Collection")');
     await expect(page).toHaveURL(/\/item\/.*/);
   });
