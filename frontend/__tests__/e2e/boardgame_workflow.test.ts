@@ -46,14 +46,14 @@ test.describe("Board Game Ingestion Workflow", () => {
 
     // 1. Mock the lookup endpoint for board game barcode (BGG)
     const testBarcode = "681706704";
-    await page.route(`**/api/lookup/${testBarcode}?format=game`, async route => {
+    await page.route(`**/api/lookup/${testBarcode}?format=boardgame`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
           data: {
-            title: "Catan",
+            Title: "Catan",
             Format: "game",
             barcode: testBarcode,
             meta: {
@@ -140,7 +140,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page).toHaveURL(/.*\/item\/2/);
   });
 
-  test("should allow user to search board game by title", async ({ page }) => {
+  test("should allow user to search board game by barcode", async ({ page }) => {
     // 0. Mock User Profile and Config
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
@@ -168,22 +168,23 @@ test.describe("Board Game Ingestion Workflow", () => {
       });
     });
 
-    // 1. Mock the lookup endpoint for board game title search
-    await page.route("**/api/lookup/Carcassonne?format=game", async route => {
+    // 1. Mock the lookup endpoint for board game barcode
+    const testBarcode = "4005556199998";
+    await page.route(`**/api/lookup/${testBarcode}?format=boardgame`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
           data: {
-            title: "Carcassonne",
+            Title: "Carcassonne",
             Format: "game",
+            barcode: testBarcode,
             meta: {
               min_players: 2,
               max_players: 5,
               mechanics: ["Tile Placement", "Drafting"],
               playing_time: 45,
-              designers: ["Klaus Reiner"],
             },
           },
         }),
@@ -216,9 +217,9 @@ test.describe("Board Game Ingestion Workflow", () => {
     // 5. Switch to Manual Search
     await page.getByRole("button", { name: "Manual Search" }).click();
 
-    // 6. Enter board game title
+    // 6. Enter board game barcode
     const searchInput = page.getByPlaceholder("Enter barcode or title...");
-    await searchInput.fill("Carcassonne");
+    await searchInput.fill(testBarcode);
     await searchInput.press("Enter");
 
     // 7. Verify metadata displayed
