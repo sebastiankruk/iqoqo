@@ -55,22 +55,25 @@ def get_manifestations() -> tuple[Response, int]:
     if q:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
+        # Include search_vector for video/board game Cast, Directors, Mechanics search
+        w_search_vector_expr = "w.search_vector"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
         params = {"q": q, "limit": limit, "offset": offset}
 
         try:
+            # Include search_vector for Cast, Directors, Mechanics (video/board games)
             count_sql = f"""
             SELECT count(*) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             """
             rows_sql = f"""
-            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
             FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
             """

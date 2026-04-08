@@ -158,10 +158,16 @@ export function CameraCapture({
           }
         }
       } catch (err) {
-        if (err instanceof Error && err.message.includes("Vision extraction failed")) {
+        // Detect terminal errors (500, 503) vs transient network errors
+        const errorMessage = err instanceof Error ? err.message : "";
+        const isServerError = errorMessage.includes("500") || errorMessage.includes("503");
+        const isVisionFailed = errorMessage.includes("Vision extraction failed");
+
+        // Re-throw immediately for server errors or vision failures
+        if (isServerError || isVisionFailed) {
           throw err;
         }
-        // Other network errors - just retry
+        // For transient network errors, continue retrying
       }
 
       // Wait 2 seconds before next poll

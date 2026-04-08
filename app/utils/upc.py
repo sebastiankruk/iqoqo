@@ -42,7 +42,7 @@ def fetch_upc_metadata(barcode: str) -> dict | None:
                 return {
                     "title": item.get("title", "Unknown Puzzle"),
                     "barcode": item.get("upc") or item.get("ean"),
-                    "cover_url": item.get("images", [None])[0],
+                    "cover_url": (item.get("images") or [None])[0],
                     "description": item.get("description"),
                     "manufacturer": item.get("brand"),
                     "format": "puzzle",

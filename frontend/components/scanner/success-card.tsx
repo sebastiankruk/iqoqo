@@ -82,6 +82,13 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
       : Array.isArray(extendedMeta.mechanics)
         ? extendedMeta.mechanics
         : [];
+  // Player count for board games
+  const minPlayers = meta.min_players ?? extendedMeta.min_players ?? extendedMeta.minPlayers;
+  const maxPlayers = meta.max_players ?? extendedMeta.max_players ?? extendedMeta.maxPlayers;
+  const playerCountDisplay =
+    minPlayers && maxPlayers ? `${minPlayers}-${maxPlayers} players` : minPlayers ? `${minPlayers}+ players` : null;
+  // Runtime for video
+  const runtime = meta.runtime ?? extendedMeta.runtime ?? extendedMeta.Runtime;
 
   let formatDisplay = "Book / Text";
   if (isVideo) formatDisplay = "Video Media";
@@ -195,6 +202,16 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                 {authors.length > 0 && <p className="text-lg text-muted-foreground">{authorDisplay}</p>}
 
                 {/* Extended Metadata Display */}
+                {playerCountDisplay && (
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">Players:</span> {playerCountDisplay}
+                  </p>
+                )}
+                {runtime && (
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">Runtime:</span> {runtime} min
+                  </p>
+                )}
                 {directors.length > 0 && (
                   <p className="text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">Director:</span> {directors.join(", ")}

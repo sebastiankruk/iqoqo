@@ -286,7 +286,8 @@ def extract_from_cover():
 @require_auth
 def get_extract_status(task_id: str):
     """Poll for the status of an asynchronous cover extraction task."""
-    result = get_task_result(task_id)
+    user_id = str(getattr(request, "user_id", ""))
+    result = get_task_result(task_id, user_id=user_id if user_id else None)
 
     if not result:
         return jsonify({"success": False, "data": None, "error": "Task not found"}), 404
@@ -307,7 +308,6 @@ def get_extract_status(task_id: str):
         return jsonify({"success": True, "data": data, "error": None}), 200
 
     if result["status"] == "failed":
-        # 503 is used to indicate that all vision fallbacks failed/were unavailable
         status_code = 503 if "Vision extraction failed" in str(result.get("error", "")) else 500
         return jsonify({"success": False, "data": None, "error": result["error"]}), status_code
 

@@ -179,8 +179,13 @@ class IngestService:
         return manifestation
 
     @staticmethod
-    def ingest_video_from_barcode(barcode: str) -> Manifestation:
-        meta = fetch_video_metadata(barcode)
+    def ingest_video_from_barcode(query: str) -> Manifestation:
+        """Ingest video by title query (TMDB does not support UPC/EAN barcode resolution).
+
+        Note: The query parameter is used as a title search against TMDB.
+        Real barcodes (UPC/EAN) will not resolve - this expects movie titles.
+        """
+        meta = fetch_video_metadata(query)
 
         if not meta:
             raise ValueError("Video metadata not found in external services.")
@@ -200,12 +205,18 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            add_expression_contribution(expression.id, contributor.id, "director")
+            # Directors are Work-level (CreationEvent) per FRBRoo ontology
+            add_work_contribution(work.id, contributor.id, "director")
+
+        # Determine if query looks like a real barcode (UPC/EAN patterns)
+        # Only store barcode if it's actually a barcode-like string
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
+        stored_barcode = query if is_barcode else None
 
         man_meta = meta.copy()
         man_meta.update(
             {
-                "barcode": barcode,
+                "barcode": stored_barcode,
                 "format": meta.get("format", MediaFormat.VIDEO),
                 "title": title,
                 "author": author_name,
@@ -222,12 +233,17 @@ class IngestService:
         db.session.add(manifestation)
         db.session.commit()
 
-        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        start_cover_processing(manifestation_id=manifestation.id, identifier=query, title=title, author=author_name or "")
         return manifestation
 
     @staticmethod
-    def ingest_game_from_barcode(barcode: str) -> Manifestation:
-        meta = fetch_bgg_metadata(barcode)
+    def ingest_game_from_barcode(query: str) -> Manifestation:
+        """Ingest board game by title query (BGG does not support UPC/EAN barcode resolution).
+
+        Note: The query parameter is used as a title search against BGG.
+        Real barcodes (UPC/EAN) will not resolve - this expects game names.
+        """
+        meta = fetch_bgg_metadata(query)
 
         if not meta:
             raise ValueError("Board game metadata not found in external services.")
@@ -250,10 +266,15 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "designer")
 
+        # Determine if query looks like a real barcode (UPC/EAN patterns)
+        # Only store barcode if it's actually a barcode-like string
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
+        stored_barcode = query if is_barcode else None
+
         man_meta = meta.copy()
         man_meta.update(
             {
-                "barcode": barcode,
+                "barcode": stored_barcode,
                 "format": meta.get("format", meta.get("Format", MediaFormat.BOARDGAME)),
                 "title": title,
                 "author": author_name,
@@ -270,5 +291,5 @@ class IngestService:
         db.session.add(manifestation)
         db.session.commit()
 
-        start_cover_processing(manifestation_id=manifestation.id, identifier=barcode, title=title, author=author_name or "")
+        start_cover_processing(manifestation_id=manifestation.id, identifier=query, title=title, author=author_name or "")
         return manifestation

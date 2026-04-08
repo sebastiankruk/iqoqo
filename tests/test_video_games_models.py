@@ -20,7 +20,7 @@ import pytest
 
 from app.db import db
 from app.db.audio import Contributor
-from app.db.core import Expression, Item, Manifestation, Work
+from app.db.core import Expression, Manifestation, Work
 from app.db.games import ContainerAggregation
 from app.db.video import ManifestationContribution
 
