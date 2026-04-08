@@ -125,14 +125,12 @@ export function BottomSheet({
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const capabilities = (track.getCapabilities?.() as any) || {};
-          if (capabilities.torch !== undefined) {
-            await track.applyConstraints({
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              advanced: [{ torch: torchOn }] as any,
-            });
-          }
+          // Just apply the constraint. Some Android devices hide the torch capability 
+          // or report it as undefined, but still accept the constraint if applied.
+          await track.applyConstraints({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            advanced: [{ torch: torchOn }] as any,
+          });
         } catch (err) {
           console.error("Failed to apply torch constraints", err);
         }
@@ -195,15 +193,20 @@ export function BottomSheet({
       const track = stream.getVideoTracks()[0];
       if (track && onTorchCapabilityFound) {
         // Detect torch support by attempting to apply a no-op constraint.
-        // Checking capabilities alone can return torch=true on devices where
-        // the constraint silently fails (e.g. front cameras on iOS/Android).
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await track.applyConstraints({ advanced: [{ torch: false }] as any });
-          onTorchCapabilityFound(true);
-        } catch {
-          onTorchCapabilityFound(false);
-        }
+        // We wait a brief moment for Android devices hardware to warm up.
+        setTimeout(() => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const capabilities = (track.getCapabilities?.() as any) || {};
+            if (capabilities.torch !== undefined) {
+              onTorchCapabilityFound(true);
+            } else {
+              onTorchCapabilityFound(false);
+            }
+          } catch {
+            onTorchCapabilityFound(false);
+          }
+        }, 500);
       }
 
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
