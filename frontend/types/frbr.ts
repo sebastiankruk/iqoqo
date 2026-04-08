@@ -202,6 +202,12 @@ export interface IsbnMeta {
   game_mechanics?: string[];
   Description?: string;
   description?: string;
+  min_players?: number;
+  max_players?: number;
+  minPlayers?: number;
+  maxPlayers?: number;
+  runtime?: number;
+  Runtime?: number;
   meta?: Record<string, unknown>;
 }
 
