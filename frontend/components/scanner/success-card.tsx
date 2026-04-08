@@ -83,12 +83,19 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
         ? extendedMeta.mechanics
         : [];
   // Player count for board games
-  const minPlayers = meta.min_players ?? extendedMeta.min_players ?? extendedMeta.minPlayers;
-  const maxPlayers = meta.max_players ?? extendedMeta.max_players ?? extendedMeta.maxPlayers;
+  const minPlayers =
+    meta.min_players ??
+    (extendedMeta.min_players as number | undefined) ??
+    (extendedMeta.minPlayers as number | undefined);
+  const maxPlayers =
+    meta.max_players ??
+    (extendedMeta.max_players as number | undefined) ??
+    (extendedMeta.maxPlayers as number | undefined);
   const playerCountDisplay =
     minPlayers && maxPlayers ? `${minPlayers}-${maxPlayers} players` : minPlayers ? `${minPlayers}+ players` : null;
   // Runtime for video
-  const runtime = meta.runtime ?? extendedMeta.runtime ?? extendedMeta.Runtime;
+  const runtime =
+    meta.runtime ?? (extendedMeta.runtime as number | undefined) ?? (extendedMeta.Runtime as number | undefined);
 
   let formatDisplay = "Book / Text";
   if (isVideo) formatDisplay = "Video Media";
