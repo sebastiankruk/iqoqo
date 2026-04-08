@@ -30,7 +30,7 @@ from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import fetch_video_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
 from app.utils.upc import fetch_upc_metadata
 from app.utils.vision import extract_metadata_from_cover
 
@@ -76,9 +76,18 @@ def lookup_barcode_preview(barcode: str):
 
     # Route based on format hint first, fallback to heuristics
     if format_hint in ("video", "dvd", "bluray", "movie"):
-        meta = fetch_video_metadata(barcode)
+        upc_meta = fetch_upc_metadata(barcode)
+        if upc_meta and upc_meta.get("title"):
+            title = clean_video_title(upc_meta["title"])
+            meta = fetch_video_metadata(title)
+        if not meta:
+            meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
-        meta = fetch_bgg_metadata(barcode)
+        upc_meta = fetch_upc_metadata(barcode)
+        if upc_meta and upc_meta.get("title"):
+            meta = fetch_bgg_metadata(upc_meta["title"])
+        if not meta:
+            meta = fetch_bgg_metadata(barcode)
     elif format_hint in ("puzzle", "jigsaw"):
         meta = fetch_upc_metadata(barcode)
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
@@ -113,7 +122,12 @@ def lookup_barcode_preview(barcode: str):
 
         # Final fallback to video/game if all else fails
         if not meta:
-            meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
+            upc_meta = fetch_upc_metadata(barcode)
+            if upc_meta and upc_meta.get("title"):
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
+            if not meta:
+                meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
     if not meta:
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
@@ -211,7 +225,7 @@ def scan_barcode():
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
                     "author": (
-                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0]
+                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
                         if manifestation.meta
                         else manifestation.author
                     ),

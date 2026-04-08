@@ -33,6 +33,7 @@ def test_fetch_video_metadata_success(mock_get):
                 "overview": "A thief who steals corporate secrets...",
                 "poster_path": "/poster.jpg",
                 "release_date": "2010-07-15",
+                "media_type": "movie",
             }
         ]
     }
@@ -62,6 +63,7 @@ def test_fetch_video_metadata_with_cast_and_director(mock_get):
                 "poster_path": "/poster.jpg",
                 "release_date": "2010-07-15",
                 "genre_ids": [28, 878],
+                "media_type": "movie",
             }
         ]
     }
