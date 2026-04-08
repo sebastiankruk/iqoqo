@@ -49,7 +49,7 @@ class IngestService:
         db.session.flush()
 
         if author_name:
-            contributor = get_or_create_contributor(author_name, "organization")
+            get_or_create_contributor(author_name, "organization")
             # Note: "manufacturer" is not a supported WorkContribution role,
             # so we keep manufacturer info in manifestation metadata instead.
 

@@ -1,15 +1,16 @@
 {
-    "config": ".markdownlint.json",
-    "ignores": [
-        "**/node_modules/**",
-        "**/.venv/**",
-        "**/frontend/node_modules/**",
-        "**/build/**",
-        "**/dist/**",
-        "**/migrations/**",
-        "**/*.egg-info/**",
-        "**/__pycache__/**",
-        "**/.github/context/private-notes/**",
-        "**/.git/**"
-    ]
+  "config": ".markdownlint.json",
+  "ignores": [
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/frontend/node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/migrations/**",
+    "**/*.egg-info/**",
+    "**/__pycache__/**",
+    "**/.github/**",
+    "**/.git/**",
+    ".agents/**",
+  ],
 }
