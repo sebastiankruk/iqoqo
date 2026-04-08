@@ -48,6 +48,6 @@ def fetch_upc_metadata(barcode: str) -> dict | None:
                     "format": "puzzle",
                     "publisher": item.get("brand"),
                 }
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(f"UPC lookup failed for barcode {barcode}: {e}")
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("UPC lookup failed for barcode %s", barcode)
     return None

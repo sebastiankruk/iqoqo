@@ -17,19 +17,40 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Jigsaw Puzzle Workflow", () => {
   test("should scan and add a jigsaw puzzle successfully", async ({ page }) => {
-    // 1. Login
-    await page.goto("/login");
-    await page.fill('input[name="email"]', "test@iqoqo.org");
-    await page.fill('input[name="password"]', "password123");
-    await page.click('button[type="submit"]');
+    // 0. Mock User Profile and Config (following existing pattern)
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+          },
+        }),
+      });
+    });
 
-    // 2. Go to Scanner and Select Puzzle Mode
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "0.3.0" },
+        }),
+      });
+    });
+
+    // 1. Go to Scanner (already authenticated via mocks)
     await page.goto("/scan");
-    await page.click('button:has-text("Puzzle")');
+
+    // 2. Select Puzzle Mode using accessible button
+    await page.getByRole("button", { name: "Jigsaw Puzzle" }).click();
 
     // 3. Mock Barcode API Response (Simulating a successful scan)
-    // In a real test environment, we'd use a mock service worker or
-    // intercept the API call to /api/lookup/4005556199999
     await page.route("**/api/lookup/4005556199999*", async route => {
       await route.fulfill({
         status: 200,

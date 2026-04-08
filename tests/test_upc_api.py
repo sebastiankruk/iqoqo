@@ -15,8 +15,6 @@
 
 from unittest.mock import patch
 
-import pytest
-
 from app.utils.upc import fetch_upc_metadata
 
 

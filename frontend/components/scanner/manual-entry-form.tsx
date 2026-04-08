@@ -77,7 +77,11 @@ export function ManualEntryForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value as ScanFormat }));
+    if (name === "format") {
+      setFormData(prev => ({ ...prev, format: value as ScanFormat }));
+      return;
+    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

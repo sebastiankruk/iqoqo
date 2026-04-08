@@ -9,6 +9,7 @@ To enable automatic metadata fetching for jigsaw puzzles, iQoQo uses the **UPCit
 3. Retrieve your API Key from the dashboard.
 
 ## 2. Configure iQoQo
+
 Add the following to your `.env` file or environment variables:
 
 ```bash
@@ -21,10 +22,10 @@ When you select **Puzzle** mode in the scanner:
 
 1. The system specifically routes the barcode to `app/utils/upc.py`.
 2. It maps the raw retail JSON to iQoQo's FRBR structure:
-    - `brand` -> `Manufacturer` (Manifestation)
-        - `images[0]` -> `Cover URL`
-        - `description` -> `Abstract` (Work)
-3. Custom fields like `piece_count` are extracted from the title or description using regex if not explicitly provided.
+   - `brand` -> `Manufacturer` (Manifestation)
+   - `images[0]` -> `Cover URL`
+   - `description` -> `Abstract` (Work)
+3. Custom fields like `piece_count` are only populated when explicitly provided by the lookup result.
 
 ## 4. Troubleshooting
 

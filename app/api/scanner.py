@@ -124,7 +124,13 @@ def lookup_barcode_preview(barcode: str):
     if "cover_url" not in meta:
         meta["cover_url"] = meta.get("thumb") or meta.get("cover")
     if "author" not in meta:
-        meta["author"] = meta.get("artist") or meta.get("Artist") or meta.get("authors", [None])[0]
+        meta["author"] = (
+            meta.get("artist")
+            or meta.get("Artist")
+            or meta.get("manufacturer")
+            or meta.get("brand")
+            or meta.get("authors", [None])[0]
+        )
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 

@@ -35,15 +35,7 @@ interface TopBarProps {
  * @param {TopBarProps} props - The component props
  * @returns {JSX.Element} The component
  */
-export function TopBar({
-  currentFormat,
-  setFormat,
-  onCancel,
-  hasFlash,
-  isFlashOn,
-  onToggleFlash,
-}: TopBarProps) {
-
+export function TopBar({ currentFormat, setFormat, onCancel, hasFlash, isFlashOn, onToggleFlash }: TopBarProps) {
   return (
     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
       <div className="flex items-center justify-between bg-black/40 px-4 py-4 backdrop-blur-sm">
@@ -87,6 +79,7 @@ export function TopBar({
                   key={f}
                   onClick={() => setFormat(f)}
                   title={meta.label}
+                  aria-label={meta.label}
                   className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
                     currentFormat === f
                       ? "bg-primary text-primary-foreground border-primary shadow-lg"

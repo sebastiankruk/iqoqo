@@ -50,7 +50,8 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "organization")
-            add_work_contribution(work.id, contributor.id, "manufacturer")
+            # Note: "manufacturer" is not a supported WorkContribution role,
+            # so we keep manufacturer info in manifestation metadata instead.
 
         man_meta = meta.copy()
         man_meta.update(
@@ -62,6 +63,7 @@ class IngestService:
                 "authors": [author_name] if author_name else [],
                 "cover_url": cover_url,
                 "publisher": meta.get("publisher") or author_name,
+                "manufacturer": author_name,
             }
         )
 
