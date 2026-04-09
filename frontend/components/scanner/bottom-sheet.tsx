@@ -141,29 +141,42 @@ export function BottomSheet({
 
   /* ── Barcode API lookup ── */
   const lookupBarcode = useCallback(
-    async (rawBarcode: string) => {
+    async (rawBarcode: string, isManualText: boolean = false) => {
       if (!rawBarcode) return;
-      const barcode = rawBarcode.replace(/[^0-9Xx]/g, "").toUpperCase();
-      // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)
-      const isValidBarcode = /^\d{8,13}[\dX]?$/.test(barcode);
+      
+      let query = rawBarcode.trim();
+      
+      if (!isManualText) {
+        query = query.replace(/[^0-9Xx]/g, "").toUpperCase();
+        // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)
+        const isValidBarcode = /^\d{8,13}[\dX]?$/.test(query);
 
-      if (!isValidBarcode) {
-        setError("Please enter a valid barcode (8-13 characters).");
-        return;
+        if (!isValidBarcode) {
+          setError("Please enter a valid barcode (8-13 characters).");
+          return;
+        }
+      } else {
+        // If it looks like a user typed a barcode, clean it up but don't strictly reject other text
+        const digitsOnly = query.replace(/[^0-9Xx]/g, "").toUpperCase();
+        if (/^\d{8,13}[\dX]?$/.test(digitsOnly)) {
+          query = digitsOnly;
+        }
       }
+
       setIsSearching(true);
       setError(null);
       try {
         const { apiFetch } = await import("@/lib/api/client");
         const formatParam = formatToApiParam(format);
-        const url = formatParam ? `/lookup/${barcode}?format=${formatParam}` : `/lookup/${barcode}`;
+        const encodedQuery = encodeURIComponent(query);
+        const url = formatParam ? `/lookup/${encodedQuery}?format=${formatParam}` : `/lookup/${encodedQuery}`;
         const data = await apiFetch<IsbnMeta>(url);
-        onFound(barcode, data);
+        onFound(query, data);
       } catch (e: unknown) {
         if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
           setError(e.message);
         } else {
-          setError("Could not look up this barcode. Please try again.");
+          setError("Could not look up this item. Please try again.");
         }
       } finally {
         setIsSearching(false);
@@ -265,7 +278,7 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupBarcode(manualIsbn);
+    lookupBarcode(manualIsbn, true);
   };
 
   return (

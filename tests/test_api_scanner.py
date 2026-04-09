@@ -274,6 +274,21 @@ def test_lookup_barcode_video_tmdb(mock_tmdb, client, normal_user_headers):
     mock_tmdb.assert_called_once()
 
 
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_title_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test looking up video format by title directly."""
+    mock_tmdb.return_value = {"Title": "The Lord of the Rings", "Format": "video"}
+    mock_upc.return_value = None  # Mock UPC miss
+
+    response = client.get("/api/lookup/The%20Lord%20of%20the%20Rings?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "The Lord of the Rings"
+    # Should be called with the decoded string
+    mock_tmdb.assert_called_with("The Lord of the Rings")
+
+
 @patch("app.api.scanner.fetch_bgg_metadata")
 def test_lookup_barcode_boardgame_bgg(mock_bgg, client, normal_user_headers):
     """Test looking up game format."""
