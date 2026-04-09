@@ -519,6 +519,10 @@ The following endpoints are available for data management:
 
 **Security Note:** In a production environment, these admin endpoints should be protected with authentication and authorization. Consider implementing API keys or OAuth for access control.
 
+#### Artefact (Cover) Management
+
+For exporting and importing covers/images (artefacts) between instances, see the **[Cover Generation & Retrieval Setup](COVERS_SETUP.md#6-importing-covers-to-a-remote-iqoqo-instance)** guide.
+
 ### Troubleshooting
 
 #### Database Connection Issues
@@ -698,9 +702,11 @@ make lint-markdown  # markdownlint
 
 ## Next Steps
 
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
-- Read the [API documentation](../README.md#api-documentation) for API usage
-- Check [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl) for the FRBR ontology structure
+- See **[CHANGELOG.md](CHANGELOG.md)** for the latest updates and release notes.
+- See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development guidelines and coding standards.
+- See **[ARCHITECTURE.md](ARCHITECTURE.md)** to understand the FRBR hierarchy and data model.
+- See **[COVERS_SETUP.md](COVERS_SETUP.md)** for advanced cover art and vision configuration.
+- Check **[docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)** for the FRBR ontology structure.
 
 The application will be available at `http://127.0.0.1:5000`.
 
