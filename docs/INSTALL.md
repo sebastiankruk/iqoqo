@@ -137,6 +137,13 @@ After installation, make sure the Docker daemon is running.
      CORS_SUPPORTS_CREDENTIALS=false
      ```
 
+   - **Barcode Resolution Pipeline:** If you plan to use barcode scanning for physical media (DVDs, Games, Puzzles), you should register for API keys at:
+     - [upcdatabase.org](https://api.upcdatabase.org/) (Tier 1a Open Data)
+     - [upcitemdb.com](https://www.upcitemdb.com/) (Tier 1b high-quality data)
+     - [Allegro Developer](https://apps.developer.allegro.pl/) (Tier 2 retail resolve & covers)
+
+     Add these to your `.env` as `UPC_DATABASE_ORG_KEY`, `UPC_ITEM_DB_KEY`, `ALLEGRO_CLIENT_ID`, and `ALLEGRO_CLIENT_SECRET`.
+
    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
      Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
