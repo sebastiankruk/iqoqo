@@ -263,9 +263,11 @@ def test_scan_barcode_creates_book_item(mock_ingest_book, client, normal_user_he
     mock_ingest_book.assert_called_once_with("9780441013593")
 
 
+@patch("app.api.scanner.resolve_physical_media")
 @patch("app.api.scanner.fetch_video_metadata")
-def test_lookup_barcode_video_tmdb(mock_tmdb, client, normal_user_headers):
+def test_lookup_barcode_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
     """Test looking up video format."""
+    mock_upc.return_value = None
     mock_tmdb.return_value = {"Title": "The Matrix", "Format": "video"}
     response = client.get("/api/lookup/12345?format=video", headers=normal_user_headers)
 
@@ -332,3 +334,30 @@ def test_scan_barcode_creates_game_item(mock_ingest_game, client, normal_user_he
     assert response.status_code == 201
     assert response.json["data"]["manifestation_id"] == 666
     mock_ingest_game.assert_called_once_with("9876543210")
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_video_fallback_to_upc_meta(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test that if TMDB fails, we still return the Allegro/UPC metadata."""
+    upc_payload = {"title": "Allegro Item", "cover_url": "http://img.jpg", "source": "Allegro Listing"}
+    mock_upc.return_value = upc_payload
+    mock_tmdb.return_value = None  # TMDB finds nothing
+
+    response = client.get("/api/lookup/5906619071187?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "Allegro Item"
+    assert response.json["data"]["source"] == "Allegro Listing"
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test that format key is injected for frontend normalization."""
+    mock_upc.return_value = {"title": "No Format Item"}
+    mock_tmdb.return_value = None
+
+    response = client.get("/api/lookup/12345?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["format"] == "video"

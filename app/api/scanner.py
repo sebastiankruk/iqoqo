@@ -82,6 +82,8 @@ def lookup_barcode_preview(barcode: str):
             meta = fetch_video_metadata(title)
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
         if not meta:
             meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
@@ -90,6 +92,8 @@ def lookup_barcode_preview(barcode: str):
             meta = fetch_bgg_metadata(upc_meta["title"])
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
         if not meta:
             meta = fetch_bgg_metadata(barcode)
     elif format_hint in ("puzzle", "jigsaw"):
@@ -132,6 +136,8 @@ def lookup_barcode_preview(barcode: str):
                 meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
                 if meta:
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
             if not meta:
                 meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
@@ -147,6 +153,26 @@ def lookup_barcode_preview(barcode: str):
         meta["author"] = (
             meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
         )
+
+    if "format" not in meta and format_hint:
+        from app.db.core import MediaFormat
+
+        format_map = {
+            "video": MediaFormat.VIDEO,
+            "dvd": MediaFormat.VIDEO,
+            "bluray": MediaFormat.VIDEO,
+            "movie": MediaFormat.VIDEO,
+            "game": MediaFormat.BOARDGAME,
+            "boardgame": MediaFormat.BOARDGAME,
+            "puzzle": MediaFormat.PUZZLE,
+            "jigsaw": MediaFormat.PUZZLE,
+            "cd": MediaFormat.AUDIO,
+            "audio": MediaFormat.AUDIO,
+            "vinyl": MediaFormat.VINYL,
+            "book": MediaFormat.BOOK,
+            "text": MediaFormat.BOOK,
+        }
+        meta["format"] = format_map.get(format_hint, format_hint.upper())
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -200,7 +226,13 @@ def scan_barcode():
                         try:
                             manifestation = IngestService.ingest_video_from_barcode(barcode)
                         except ValueError:
-                            manifestation = IngestService.ingest_from_isbn(barcode)
+                            try:
+                                manifestation = IngestService.ingest_game_from_barcode(barcode)
+                            except ValueError:
+                                try:
+                                    manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
+                                except ValueError:
+                                    manifestation = IngestService.ingest_from_isbn(barcode)
 
             is_new_manifestation = True
         except ValueError as e:

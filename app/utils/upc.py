@@ -40,8 +40,12 @@ def fetch_upcdatabase_org(barcode: str) -> dict[str, Any] | None:
                     "manufacturer": data.get("brand"),
                     "source": "upcdatabase.org",
                 }
+    except requests.exceptions.Timeout:
+        logger.warning("upcdatabase.org lookup timed out for barcode %s", barcode)
+    except requests.exceptions.RequestException as e:
+        logger.warning("upcdatabase.org lookup network error for barcode %s: %s", barcode, e)
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("upcdatabase.org lookup failed for barcode %s", barcode)
+        logger.exception("upcdatabase.org lookup unexpected error for barcode %s", barcode)
     return None
 
 
@@ -70,8 +74,12 @@ def fetch_upc_metadata(barcode: str) -> dict[str, Any] | None:
                     "publisher": item.get("brand"),
                     "source": "upcitemdb",
                 }
+    except requests.exceptions.Timeout:
+        logger.warning("UPCitemdb lookup timed out for barcode %s", barcode)
+    except requests.exceptions.RequestException as e:
+        logger.warning("UPCitemdb lookup network error for barcode %s: %s", barcode, e)
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("UPCitemdb lookup failed for barcode %s", barcode)
+        logger.exception("UPCitemdb lookup unexpected error for barcode %s", barcode)
     return None
 
 

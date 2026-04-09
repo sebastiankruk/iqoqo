@@ -138,9 +138,17 @@ After installation, make sure the Docker daemon is running.
      ```
 
    - **Barcode Resolution Pipeline:** If you plan to use barcode scanning for physical media (DVDs, Games, Puzzles), you should register for API keys at:
-     - [upcdatabase.org](https://api.upcdatabase.org/) (Tier 1a Open Data)
-     - [upcitemdb.com](https://www.upcitemdb.com/) (Tier 1b high-quality data)
+     - [upcdatabase.org](https://upcdatabase.org/) (Tier 1a Open Data)
+     - [upcitemdb.com](https://upcitemdb.com/) (Tier 1b high-quality data)
      - [Allegro Developer](https://apps.developer.allegro.pl/) (Tier 2 retail resolve & covers)
+       > **Allegro Setup Note:** The Allegro Developer portal requires you to select *at least one* permission, such as **`allegro:api:sale:offers:read`**. Set the **Redirect URI** to `http://localhost`.
+       > **⚠️ IMPORTANT:** Allegro requires "User Context" for search. After setting your `CLIENT_ID` and `CLIENT_SECRET` in `.env`, you **MUST** run the authentication script once:
+       >
+       > ```bash
+       > python scripts/allegro_auth.py
+       > ```
+       >
+       > Follow the on-screen instructions to authorize the app. This creates a `.allegro_token.json` file used for future searches.
 
      Add these to your `.env` as `UPC_DATABASE_ORG_KEY`, `UPC_ITEM_DB_KEY`, `ALLEGRO_CLIENT_ID`, and `ALLEGRO_CLIENT_SECRET`.
 

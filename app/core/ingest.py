@@ -193,6 +193,8 @@ class IngestService:
                 meta = fetch_video_metadata(title)
                 if meta:
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
 
         if not meta:
             meta = fetch_video_metadata(query)
@@ -258,6 +260,8 @@ class IngestService:
                 if meta:
                     # Merge manifestation info (covers/affiliates from Allegro)
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
 
         if not meta:
             meta = fetch_bgg_metadata(query)
