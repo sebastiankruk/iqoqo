@@ -30,7 +30,7 @@ from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import fetch_video_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
 from app.utils.upc import resolve_physical_media
 from app.utils.vision import extract_metadata_from_cover
 
@@ -76,10 +76,12 @@ def lookup_barcode_preview(barcode: str):
 
     # Route based on format hint first, fallback to heuristics
     if format_hint in ("video", "dvd", "bluray", "movie"):
-        meta = resolve_physical_media(barcode)
-        if meta and "work" in meta:
-            work_data = meta.pop("work")
-            meta.update(work_data)
+        upc_meta = resolve_physical_media(barcode)
+        if upc_meta and upc_meta.get("title"):
+            title = clean_video_title(upc_meta["title"])
+            meta = fetch_video_metadata(title)
+            if meta:
+                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
         if not meta:
             meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
@@ -126,15 +128,10 @@ def lookup_barcode_preview(barcode: str):
         if not meta:
             upc_meta = resolve_physical_media(barcode)
             if upc_meta and upc_meta.get("title"):
-                # Try TMDB first (via the waterfall work) or BGG
-                if "work" in upc_meta:
-                    meta = upc_meta.copy()
-                    work_data = meta.pop("work")
-                    meta.update(work_data)
-                else:
-                    meta = fetch_bgg_metadata(upc_meta["title"])
-                    if meta:
-                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
+                if meta:
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             if not meta:
                 meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 

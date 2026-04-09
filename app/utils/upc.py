@@ -14,7 +14,6 @@ from typing import Any
 import requests
 
 from app.utils.allegro import fetch_allegro_metadata
-from app.utils.tmdb import clean_video_title, fetch_video_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +81,6 @@ def resolve_physical_media(barcode: str) -> dict[str, Any] | None:
     1. upcdatabase.org (Fast, Free)
     2. upcitemdb (High Quality)
     3. Allegro (Retail Manifestation & Covers)
-    4. TMDB (Cinematic Work Metadata)
     """
     manifestation_data = None
 
@@ -107,12 +105,5 @@ def resolve_physical_media(barcode: str) -> dict[str, Any] | None:
     # If we couldn't resolve a title, the waterfall fails entirely
     if not manifestation_data or not manifestation_data.get("title"):
         return None
-
-    # Tier 3: TMDB (Fetch Work/Expression Cinematic Metadata)
-    title_clean = clean_video_title(manifestation_data["title"])
-    tmdb_data = fetch_video_metadata(title_clean)
-
-    if tmdb_data:
-        manifestation_data["work"] = tmdb_data
 
     return manifestation_data

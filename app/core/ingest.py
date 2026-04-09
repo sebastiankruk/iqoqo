@@ -23,7 +23,7 @@ from app.utils.covers import start_cover_processing
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import fetch_video_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
 from app.utils.upc import resolve_physical_media
 
 
@@ -187,13 +187,12 @@ class IngestService:
         is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
 
         if is_barcode:
-            # resolve_physical_media handles Tiers 1-3 (UPC -> Allegro -> TMDB)
-            meta = resolve_physical_media(query)
-            if meta and "work" in meta:
-                # Upstream meta expects the 'work' data (TMDB) for normalization
-                # but we keep the manifestation data as well.
-                work_data = meta.pop("work")
-                meta.update(work_data)
+            upc_meta = resolve_physical_media(query)
+            if upc_meta and upc_meta.get("title"):
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title)
+                if meta:
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
 
         if not meta:
             meta = fetch_video_metadata(query)
