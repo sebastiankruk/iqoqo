@@ -437,9 +437,9 @@ def test_upload_cover(mock_start, client, sample_book, admin_headers):
     assert response.json["message"] == "Cover upload processing started"
     mock_start.assert_called_once()
 
+
 def test_manifestation_user_owns_authenticated(client, sample_book):
     """Test that retrieving a manifestation correctly returns user_owns=True if logged in and user owns it."""
-    from app.api.auth import generate_internal_jwt
     # First add a user and item
     with client.application.app_context():
         test_user = User(email="owns_tester@iqoqo.local", display_name="Ownership Tester")

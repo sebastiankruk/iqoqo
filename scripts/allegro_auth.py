@@ -28,7 +28,7 @@ def get_authorization_code():
 
 def get_access_token(authorization_code):
     data = {"grant_type": "authorization_code", "code": authorization_code, "redirect_uri": REDIRECT_URI}
-    response = requests.post(TOKEN_URL, data=data, auth=(CLIENT_ID, CLIENT_SECRET))
+    response = requests.post(TOKEN_URL, data=data, auth=(CLIENT_ID, CLIENT_SECRET), timeout=10)
     response.raise_for_status()
     tokens = response.json()
 

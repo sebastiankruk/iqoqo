@@ -28,12 +28,10 @@ logger = logging.getLogger(__name__)
 _CONNECT_TIMEOUT: int = 15
 _READ_TIMEOUT: int = 45
 
+
 def get_bgg_headers() -> dict[str, str]:
     """Get the headers required for calling BoardGameGeek XML API v2."""
-    headers = {
-        "User-Agent": "iqoqo/0.3.0 (https://github.com/sebastiankruk/iqoqo)",
-        "Accept": "application/xml"
-    }
+    headers = {"User-Agent": "iqoqo/0.3.0 (https://github.com/sebastiankruk/iqoqo)", "Accept": "application/xml"}
 
     token = os.getenv("BGG_API_TOKEN")
     if token:
@@ -53,7 +51,9 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
 
     try:
         # Step 1: Search for the exact or closest match to get the BGG ID
-        search_resp = requests.get(search_url, params={"query": query, "type": "boardgame"}, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        search_resp = requests.get(
+            search_url, params={"query": query, "type": "boardgame"}, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        )
         search_resp.raise_for_status()
 
         search_root = ET.fromstring(search_resp.content)

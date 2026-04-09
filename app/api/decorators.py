@@ -77,7 +77,7 @@ def optional_auth(f):
                 payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
                 if not _is_token_revoked(payload.get("jti")):
                     request.user_id = uuid.UUID(payload["sub"])
-            except Exception:
+            except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError):
                 pass
 
         return f(*args, **kwargs)

@@ -287,7 +287,6 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "designer")
 
-
         stored_barcode = query if is_barcode else None
 
         man_meta = meta.copy()

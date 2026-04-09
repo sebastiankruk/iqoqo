@@ -93,4 +93,3 @@ def test_fetch_bgg_metadata_with_designers(mock_get):
     assert "Trading" in result["Mechanics"]
     assert "Hexagon Grid" in result["Mechanics"]
     assert "Klaus Teuber" in result.get("Designers", [])
-

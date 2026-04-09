@@ -52,7 +52,7 @@ def get_allegro_token() -> str | None:
                 return str(new_tokens.get("access_token"))
 
             return str(tokens.get("access_token"))
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, KeyError) as e:
             logger.warning("Failed to load or refresh User Context Allegro token from file: %s", e)
 
     # Fallback to Client Credentials

@@ -335,6 +335,7 @@ def test_scan_barcode_creates_game_item(mock_ingest_game, client, normal_user_he
     assert response.json["data"]["manifestation_id"] == 666
     mock_ingest_game.assert_called_once_with("9876543210")
 
+
 @patch("app.api.scanner.resolve_physical_media")
 @patch("app.api.scanner.fetch_video_metadata")
 def test_lookup_video_fallback_to_upc_meta(mock_tmdb, mock_upc, client, normal_user_headers):

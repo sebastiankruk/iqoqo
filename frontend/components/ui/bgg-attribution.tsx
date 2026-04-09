@@ -20,18 +20,22 @@ import { Badge } from "@/components/ui/badge";
 /**
  * Component to display mandatory attribution to BoardGameGeek.
  * Required per BGG XML API Terms of Use for any public facing apps.
+ * @returns JSX.Element
  */
 export function BggAttribution() {
   return (
     <div className="flex items-center justify-center pt-2 pb-1 w-full">
-      <Link 
-        href="https://boardgamegeek.com" 
-        target="_blank" 
+      <Link
+        href="https://boardgamegeek.com"
+        target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <span>Powered by</span>
-        <Badge variant="outline" className="font-semibold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-200 dark:border-orange-900">
+        <Badge
+          variant="outline"
+          className="font-semibold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-200 dark:border-orange-900"
+        >
           BoardGameGeek
         </Badge>
       </Link>
