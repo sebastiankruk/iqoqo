@@ -67,7 +67,10 @@ def optional_auth(f):
     def decorated(*args, **kwargs):
         token = None
         if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]
+            auth_header = request.headers["Authorization"]
+            parts = auth_header.split(" ", 1)
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                token = parts[1]
         elif "iqoqo_session" in request.cookies:
             token = request.cookies.get("iqoqo_session")
 

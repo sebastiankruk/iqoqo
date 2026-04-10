@@ -49,9 +49,11 @@ def get_allegro_token() -> str | None:
                 new_tokens = response.json()
                 with open(_TOKEN_FILE, "w", encoding="utf-8") as wf:
                     json.dump(new_tokens, wf)
-                return str(new_tokens.get("access_token"))
+                new_access_token = new_tokens.get("access_token")
+                return new_access_token if isinstance(new_access_token, str) else None
 
-            return str(tokens.get("access_token"))
+            access_token = tokens.get("access_token")
+            return access_token if isinstance(access_token, str) else None
         except (json.JSONDecodeError, OSError, KeyError) as e:
             logger.warning("Failed to load or refresh User Context Allegro token from file: %s", e)
 
@@ -82,7 +84,6 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.allegro.public.v1+json",
-        "Lesta-Marketplace": "allegro-pl",
     }
 
     try:
