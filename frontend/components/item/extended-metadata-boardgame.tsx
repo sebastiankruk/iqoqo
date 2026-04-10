@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { Badge } from "@/components/ui/badge";
+import { BggAttribution } from "@/components/ui/bgg-attribution";
 
 interface ExtendedMetadataBoardGameProps {
   meta: Record<string, unknown>;
@@ -31,8 +32,9 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
   const maxPlayers = (meta.max_players || meta.MaxPlayers) as number | undefined;
   const playingTime = (meta.playing_time || meta.playtime || meta.max_playtime || meta.PlayTime) as number | undefined;
   const mechanics = (meta.mechanics || meta.Mechanics) as string[] | undefined;
+  const source = meta.Source as string | undefined;
 
-  if (!minPlayers && !maxPlayers && !playingTime && !mechanics?.length) return null;
+  if (!minPlayers && !maxPlayers && !playingTime && !mechanics?.length && source !== "BGG") return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
@@ -65,6 +67,12 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
           </div>
         )}
       </div>
+      
+      {source === "BGG" && (
+        <div className="mt-4 pt-4 border-t border-border/50">
+          <BggAttribution />
+        </div>
+      )}
     </div>
   );
 }

@@ -22,7 +22,9 @@ from app.utils.bgg import fetch_bgg_metadata
 
 
 @patch("app.utils.bgg.requests.get")
-def test_fetch_bgg_metadata_success(mock_get):
+@patch("app.utils.bgg.os.getenv")
+def test_fetch_bgg_metadata_success(mock_getenv, mock_get):
+    mock_getenv.return_value = "fake_token"
     # Mock search endpoint response
     mock_search_resp = MagicMock()
     mock_search_resp.content = b'<?xml version="1.0" encoding="utf-8"?><items><item id="12345"></item></items>'
@@ -36,6 +38,10 @@ def test_fetch_bgg_metadata_success(mock_get):
             <description>Trading game</description>
             <image>http://bgg.com/image.jpg</image>
             <link type="boardgamemechanic" value="Trading" />
+            <minplayers value="3" />
+            <maxplayers value="4" />
+            <playingtime value="120" />
+            <yearpublished value="1995" />
         </item>
     </items>"""
 
@@ -47,6 +53,16 @@ def test_fetch_bgg_metadata_success(mock_get):
     assert result["cover_url"] == "http://bgg.com/image.jpg"
     assert "Trading" in result["Mechanics"]
     assert result["Format"] == "boardgame"
+    assert result["min_players"] == 3
+    assert result["max_players"] == 4
+    assert result["playing_time"] == 120
+    assert result["PublicationYear"] == "1995"
+    assert result["bgg_id"] == "12345"
+    assert result["Source"] == "BGG"
+
+    # Check if authorization header was passed
+    call_args = mock_get.call_args_list[0]
+    assert call_args[1]["headers"]["Authorization"] == "Bearer fake_token"
 
 
 @patch("app.utils.bgg.requests.get")

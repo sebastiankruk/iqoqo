@@ -2,15 +2,13 @@
 
 To enable automatic metadata fetching for jigsaw puzzles, iQoQo uses the **UPCitemdb API**. This allows the scanner to resolve standard retail barcodes (UPC/EAN) which are not covered by ISBN (Books) or BGG (Board Games).
 
-## 1. Get an API Key
+## 1. Using the Free Tier (No Setup Required)
 
-1. Visit [UPCitemdb](https://www.upcitemdb.com/api-explorer).
-2. Register for a free account (Trial allows 100 lookups/day).
-3. Retrieve your API Key from the dashboard.
+By default, iQoQo will use UPCitemdb's public trial endpoint if no API key is provided. This allows for 100 lookups per day without any registration.
 
-## 2. Configure iQoQo
+## 2. Configuring a Paid Key (Optional)
 
-Add the following to your `.env` file or environment variables:
+If you need more than 100 lookups per day, you can subscribe to a paid tier on [UPCitemdb](https://www.upcitemdb.com/). Add your API key to your `.env` file:
 
 ```bash
 UPC_ITEM_DB_KEY=your_api_key_here

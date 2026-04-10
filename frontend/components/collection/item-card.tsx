@@ -122,23 +122,44 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         href={targetHref}
         className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
       >
-        <div className="flex h-full p-5">
-          <div className="flex flex-1 flex-col justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <MediaIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{mediaLabel}</span>
+        <div className="flex h-full p-5 gap-4 items-center">
+          <div className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}>
+            {(isProcessing || coverStatus === "pending") && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
-              <h3 className="font-serif text-lg font-bold leading-snug text-card-foreground">{title}</h3>
-              <p className="mt-0.5 text-sm text-muted-foreground">{authors}</p>
-              <div className="mt-3 flex items-center gap-2">
+            )}
+            {coverUrl ? (
+              <Image
+                src={coverUrl}
+                alt={`Cover of ${title}`}
+                fill
+                sizes="80px"
+                unoptimized
+                className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <MediaIcon className="h-6 w-6 text-muted-foreground/30" />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-1 flex-col justify-between min-w-0">
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <MediaIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">{mediaLabel}</span>
+              </div>
+              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">{title}</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{authors}</p>
+              <div className="mt-2.5 flex items-center gap-2">
                 {!isCatalog && (
-                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent whitespace-nowrap">
                     {dotTitle}
                   </span>
                 )}
                 {isCatalog && userOwns && (
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
                     In Collection
                   </span>
                 )}

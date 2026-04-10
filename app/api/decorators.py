@@ -62,6 +62,32 @@ def require_auth(f):
     return decorated
 
 
+def optional_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if "Authorization" in request.headers:
+            auth_header = request.headers["Authorization"]
+            parts = auth_header.split(" ", 1)
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                token = parts[1]
+        elif "iqoqo_session" in request.cookies:
+            token = request.cookies.get("iqoqo_session")
+
+        request.user_id = None
+        if token:
+            try:
+                payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+                if not _is_token_revoked(payload.get("jti")):
+                    request.user_id = uuid.UUID(payload["sub"])
+            except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError):
+                pass
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 def require_permission(perm_name):
     def decorator(f):
         @wraps(f)

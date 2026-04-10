@@ -30,8 +30,8 @@ from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import fetch_video_metadata
-from app.utils.upc import fetch_upc_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
+from app.utils.upc import resolve_physical_media
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -76,11 +76,28 @@ def lookup_barcode_preview(barcode: str):
 
     # Route based on format hint first, fallback to heuristics
     if format_hint in ("video", "dvd", "bluray", "movie"):
-        meta = fetch_video_metadata(barcode)
+        upc_meta = resolve_physical_media(barcode)
+        if upc_meta and upc_meta.get("title"):
+            title = clean_video_title(upc_meta["title"])
+            meta = fetch_video_metadata(title)
+            if meta:
+                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
+        if not meta:
+            meta = fetch_video_metadata(barcode)
     elif format_hint in ("game", "boardgame"):
-        meta = fetch_bgg_metadata(barcode)
+        upc_meta = resolve_physical_media(barcode)
+        if upc_meta and upc_meta.get("title"):
+            meta = fetch_bgg_metadata(upc_meta["title"])
+            if meta:
+                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
+        if not meta:
+            meta = fetch_bgg_metadata(barcode)
     elif format_hint in ("puzzle", "jigsaw"):
-        meta = fetch_upc_metadata(barcode)
+        meta = resolve_physical_media(barcode)
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
         try:
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
@@ -113,7 +130,16 @@ def lookup_barcode_preview(barcode: str):
 
         # Final fallback to video/game if all else fails
         if not meta:
-            meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
+            upc_meta = resolve_physical_media(barcode)
+            if upc_meta and upc_meta.get("title"):
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
+                if meta:
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
+            if not meta:
+                meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
     if not meta:
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
@@ -127,6 +153,26 @@ def lookup_barcode_preview(barcode: str):
         meta["author"] = (
             meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
         )
+
+    if "format" not in meta and format_hint:
+        from app.db.core import MediaFormat
+
+        format_map = {
+            "video": MediaFormat.VIDEO,
+            "dvd": MediaFormat.VIDEO,
+            "bluray": MediaFormat.VIDEO,
+            "movie": MediaFormat.VIDEO,
+            "game": MediaFormat.BOARDGAME,
+            "boardgame": MediaFormat.BOARDGAME,
+            "puzzle": MediaFormat.PUZZLE,
+            "jigsaw": MediaFormat.PUZZLE,
+            "cd": MediaFormat.AUDIO,
+            "audio": MediaFormat.AUDIO,
+            "vinyl": MediaFormat.VINYL,
+            "book": MediaFormat.BOOK,
+            "text": MediaFormat.BOOK,
+        }
+        meta["format"] = format_map.get(format_hint, format_hint.upper())
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -180,7 +226,13 @@ def scan_barcode():
                         try:
                             manifestation = IngestService.ingest_video_from_barcode(barcode)
                         except ValueError:
-                            manifestation = IngestService.ingest_from_isbn(barcode)
+                            try:
+                                manifestation = IngestService.ingest_game_from_barcode(barcode)
+                            except ValueError:
+                                try:
+                                    manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
+                                except ValueError:
+                                    manifestation = IngestService.ingest_from_isbn(barcode)
 
             is_new_manifestation = True
         except ValueError as e:
@@ -211,7 +263,7 @@ def scan_barcode():
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
                     "author": (
-                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0]
+                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
                         if manifestation.meta
                         else manifestation.author
                     ),

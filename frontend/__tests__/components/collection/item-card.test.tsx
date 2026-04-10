@@ -138,4 +138,16 @@ describe("ItemCard", () => {
     render(<ItemCard item={makeCatalogEntry({ user_owns: false })} isManifestationView={true} />);
     expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
   });
+
+  it("renders a cover image in horizontal variant when coverUrl is provided", () => {
+    render(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })} variant="horizontal" />);
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://example.com/horizontal-cover.jpg");
+    expect(img).toHaveAttribute("alt", "Cover of Dune");
+  });
+
+  it("renders a cover placeholder in horizontal variant when coverUrl is absent", () => {
+    render(<ItemCard item={makeItem({ meta: {} })} variant="horizontal" />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
 });

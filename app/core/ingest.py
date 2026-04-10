@@ -23,14 +23,16 @@ from app.utils.covers import start_cover_processing
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import fetch_video_metadata
-from app.utils.upc import fetch_upc_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
+from app.utils.upc import resolve_physical_media
 
 
 class IngestService:
     @staticmethod
     def ingest_puzzle_from_barcode(barcode: str) -> Manifestation:
-        meta = fetch_upc_metadata(barcode)
+        # Puzzles are purely manifestation-based (no cinematic 'work' resolution)
+        # but we still benefit from the Tier 1a/1b/2 waterfall.
+        meta = resolve_physical_media(barcode)
 
         if not meta:
             raise ValueError("Puzzle metadata not found in external services.")
@@ -180,12 +182,22 @@ class IngestService:
 
     @staticmethod
     def ingest_video_from_barcode(query: str) -> Manifestation:
-        """Ingest video by title query (TMDB does not support UPC/EAN barcode resolution).
+        """Ingest video by title query or barcode (via UPC resolution)."""
+        meta = None
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
 
-        Note: The query parameter is used as a title search against TMDB.
-        Real barcodes (UPC/EAN) will not resolve - this expects movie titles.
-        """
-        meta = fetch_video_metadata(query)
+        if is_barcode:
+            upc_meta = resolve_physical_media(query)
+            if upc_meta and upc_meta.get("title"):
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title)
+                if meta:
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
+
+        if not meta:
+            meta = fetch_video_metadata(query)
 
         if not meta:
             raise ValueError("Video metadata not found in external services.")
@@ -208,9 +220,6 @@ class IngestService:
             # Directors are Work-level (CreationEvent) per FRBRoo ontology
             add_work_contribution(work.id, contributor.id, "director")
 
-        # Determine if query looks like a real barcode (UPC/EAN patterns)
-        # Only store barcode if it's actually a barcode-like string
-        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
         stored_barcode = query if is_barcode else None
 
         man_meta = meta.copy()
@@ -238,12 +247,24 @@ class IngestService:
 
     @staticmethod
     def ingest_game_from_barcode(query: str) -> Manifestation:
-        """Ingest board game by title query (BGG does not support UPC/EAN barcode resolution).
+        """Ingest board game by title query or barcode (via UPC resolution)."""
+        meta = None
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
 
-        Note: The query parameter is used as a title search against BGG.
-        Real barcodes (UPC/EAN) will not resolve - this expects game names.
-        """
-        meta = fetch_bgg_metadata(query)
+        if is_barcode:
+            # For games, we use the waterfall for manifestation/title resolution,
+            # then link to BoardGameGeek (BGG).
+            upc_meta = resolve_physical_media(query)
+            if upc_meta and upc_meta.get("title"):
+                meta = fetch_bgg_metadata(upc_meta["title"])
+                if meta:
+                    # Merge manifestation info (covers/affiliates from Allegro)
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
+
+        if not meta:
+            meta = fetch_bgg_metadata(query)
 
         if not meta:
             raise ValueError("Board game metadata not found in external services.")
@@ -266,9 +287,6 @@ class IngestService:
             contributor = get_or_create_contributor(author_name, "person")
             add_work_contribution(work.id, contributor.id, "designer")
 
-        # Determine if query looks like a real barcode (UPC/EAN patterns)
-        # Only store barcode if it's actually a barcode-like string
-        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
         stored_barcode = query if is_barcode else None
 
         man_meta = meta.copy()

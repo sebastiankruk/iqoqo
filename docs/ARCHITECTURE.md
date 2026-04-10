@@ -414,6 +414,19 @@ Run `python scripts/backup.py` to create a ZIP archive containing the database d
 
 - **Configuration:** Set `BACKUP_DIR` env var to customize the output location (default: `exports/`).
 
+#### Scheduled Backups
+
+iqoqo automatically manages daily backups using its background scheduler (APScheduler).
+
+- **Implementation:** The scheduler is initialized in `app/core/scheduler.py` and triggers the `scripts/backup.py` logic.
+- **Configuration (via `.env`):**
+  - `SCHEDULER_AUTOSTART`: Set to `true` to enable daily background backups (default: `false`).
+  - `BACKUP_CRON_HOUR`: The hour (0-23) to run the backup (default: `3` for 3:00 AM).
+  - `BACKUP_CRON_MINUTE`: The minute (0-59) to run the backup (default: `0`).
+  - `BACKUP_DIR`: Directory where ZIP archives are stored.
+
+Each background backup creates a timestamped archive like `iqoqo_backup_20260408_030000.zip`.
+
 **Restore:**
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.
 

@@ -174,10 +174,20 @@ export default function ManifestationPage() {
               <div className="pt-6 space-y-4">
                 <div>
                   {manifestation.user_owns ? (
-                    <div className="inline-flex items-center rounded-lg bg-primary/10 px-4 py-2 font-medium text-primary">
-                      <span className="mr-2 block h-2 w-2 rounded-full bg-primary" />
-                      Already in your collection
-                    </div>
+                    <Button
+                      onClick={() =>
+                        router.push(
+                          `/collection?view=items&q=${encodeURIComponent(
+                            manifestation.isbn13 || manifestation.title || ""
+                          )}`
+                        )
+                      }
+                      variant="secondary"
+                      size="sm"
+                    >
+                      <BookOpen className="mr-2 h-4 w-4 text-primary" />
+                      View in My Collection
+                    </Button>
                   ) : (
                     <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
                       {isAdding ? (

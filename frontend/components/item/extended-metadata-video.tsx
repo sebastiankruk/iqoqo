@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { Badge } from "@/components/ui/badge";
+import { TmdbAttribution } from "@/components/ui/tmdb-attribution";
 
 interface ExtendedMetadataVideoProps {
   meta: Record<string, unknown>;
@@ -31,7 +32,7 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
   const directors = (meta.directors || meta.Director) as string[] | undefined;
   const runtime = (meta.runtime || meta.Runtime) as number | undefined;
 
-  if (!cast?.length && !directors?.length && !runtime) return null;
+  if (!cast?.length && !directors?.length && !runtime && meta.Source !== "TMDB") return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
@@ -62,6 +63,12 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
           </div>
         )}
       </div>
+      
+      {meta.Source === "TMDB" && (
+        <div className="mt-6 pt-4 border-t border-border/50">
+          <TmdbAttribution />
+        </div>
+      )}
     </div>
   );
 }

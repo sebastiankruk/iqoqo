@@ -125,14 +125,12 @@ export function BottomSheet({
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const capabilities = (track.getCapabilities?.() as any) || {};
-          if (capabilities.torch !== undefined) {
-            await track.applyConstraints({
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              advanced: [{ torch: torchOn }] as any,
-            });
-          }
+          // Just apply the constraint. Some Android devices hide the torch capability 
+          // or report it as undefined, but still accept the constraint if applied.
+          await track.applyConstraints({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            advanced: [{ torch: torchOn }] as any,
+          });
         } catch (err) {
           console.error("Failed to apply torch constraints", err);
         }
@@ -143,29 +141,42 @@ export function BottomSheet({
 
   /* ── Barcode API lookup ── */
   const lookupBarcode = useCallback(
-    async (rawBarcode: string) => {
+    async (rawBarcode: string, isManualText: boolean = false) => {
       if (!rawBarcode) return;
-      const barcode = rawBarcode.replace(/[^0-9Xx]/g, "").toUpperCase();
-      // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)
-      const isValidBarcode = /^\d{8,13}[\dX]?$/.test(barcode);
+      
+      let query = rawBarcode.trim();
+      
+      if (!isManualText) {
+        query = query.replace(/[^0-9Xx]/g, "").toUpperCase();
+        // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)
+        const isValidBarcode = /^\d{8,13}[\dX]?$/.test(query);
 
-      if (!isValidBarcode) {
-        setError("Please enter a valid barcode (8-13 characters).");
-        return;
+        if (!isValidBarcode) {
+          setError("Please enter a valid barcode (8-13 characters).");
+          return;
+        }
+      } else {
+        // If it looks like a user typed a barcode, clean it up but don't strictly reject other text
+        const digitsOnly = query.replace(/[^0-9Xx]/g, "").toUpperCase();
+        if (/^\d{8,13}[\dX]?$/.test(digitsOnly)) {
+          query = digitsOnly;
+        }
       }
+
       setIsSearching(true);
       setError(null);
       try {
         const { apiFetch } = await import("@/lib/api/client");
         const formatParam = formatToApiParam(format);
-        const url = formatParam ? `/lookup/${barcode}?format=${formatParam}` : `/lookup/${barcode}`;
+        const encodedQuery = encodeURIComponent(query);
+        const url = formatParam ? `/lookup/${encodedQuery}?format=${formatParam}` : `/lookup/${encodedQuery}`;
         const data = await apiFetch<IsbnMeta>(url);
-        onFound(barcode, data);
+        onFound(query, data);
       } catch (e: unknown) {
         if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
           setError(e.message);
         } else {
-          setError("Could not look up this barcode. Please try again.");
+          setError("Could not look up this item. Please try again.");
         }
       } finally {
         setIsSearching(false);
@@ -195,15 +206,20 @@ export function BottomSheet({
       const track = stream.getVideoTracks()[0];
       if (track && onTorchCapabilityFound) {
         // Detect torch support by attempting to apply a no-op constraint.
-        // Checking capabilities alone can return torch=true on devices where
-        // the constraint silently fails (e.g. front cameras on iOS/Android).
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await track.applyConstraints({ advanced: [{ torch: false }] as any });
-          onTorchCapabilityFound(true);
-        } catch {
-          onTorchCapabilityFound(false);
-        }
+        // We wait a brief moment for Android devices hardware to warm up.
+        setTimeout(() => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const capabilities = (track.getCapabilities?.() as any) || {};
+            if (capabilities.torch !== undefined) {
+              onTorchCapabilityFound(true);
+            } else {
+              onTorchCapabilityFound(false);
+            }
+          } catch {
+            onTorchCapabilityFound(false);
+          }
+        }, 500);
       }
 
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
@@ -262,7 +278,7 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupBarcode(manualIsbn);
+    lookupBarcode(manualIsbn, true);
   };
 
   return (
