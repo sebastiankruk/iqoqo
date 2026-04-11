@@ -5,13 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [0.3.0] - 2026-04-03
+## [0.3.0] - 2026-04-11
 
 ### Added
 
-- **Ontology Expansion**: Support for Video (Film, Series) and Board Games via FRBRoo `ManifestationContribution` (Studio/Distributor) and `ContainerAggregation` (Box Contents).
+- **Ontology Expansion**: Support for Video (Film, Series), Board Games, and Jigsaw Puzzles via FRBRoo `ManifestationContribution` (Studio/Distributor) and `ContainerAggregation` (Box Contents).
+- **External API Integrations**: Integrated TMDB (The Movie Database), BGG (BoardGameGeek), Allegro (Retail), and UPCItemDB for robust barcode fallback resolution and rich metadata fetching.
+- **Async Task Queue**: Implemented a `ThreadPoolExecutor` (`app/core/tasks.py`) for executing and polling LLM Vision cover metadata extractions asynchronously without blocking the UI.
+- **UI Attributions**: Added `TmdbAttribution` and `BggAttribution` components to comply with external API Terms of Service.
 - **Background Tasks**: Centralized APScheduler for recurring maintenance (e.g., daily automated backups).
 - **Navigation UX**: Added "View in My Collection" button to manifestation details, allowing users to jump directly to their owned items.
 - **Telemetry Hardening**: Refactored `LLMTelemetry` to handle high-concurrency event logging with non-blocking database indexes.
