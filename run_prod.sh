@@ -28,6 +28,16 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Activate Virtual Environment
+if [ ! -d ".venv" ]; then
+    echo "Virtual environment not found. Creating one..."
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+else
+    source .venv/bin/activate
+fi
+
 # Set APP_VERSION if not already set
 if [ -z "$APP_VERSION" ]; then
     VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
