@@ -52,14 +52,14 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     a single cover image. The function tries multiple backends in sequence and returns
     the first successful result:
 
-    1. Gemini Vision (cloud LLM) — used only when Config.ALLOW_LLM is true, a valid
+    1. Gemini Vision (cloud LLM) -- used only when Config.ALLOW_LLM is true, a valid
        ``user_id`` is provided, and the associated user has the
        ``ItemPermissions.LLM_GENERATE_CLOUD`` permission. If Gemini is unavailable, fails,
        or returns no usable data, the function falls through to the next step.
-    2. Ollama Vision — used when Config.ALLOW_LLM is true and a local Ollama instance is
+    2. Ollama Vision -- used when Config.ALLOW_LLM is true and a local Ollama instance is
        reachable. Network errors or invalid responses cause the function to fall through
        to the next step.
-    3. Tesseract OCR — used as a final, local-only fallback that performs OCR on the
+    3. Tesseract OCR -- used as a final, local-only fallback that performs OCR on the
        image and heuristically derives a title and list of authors from the text.
 
     Parameters
@@ -96,6 +96,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
     Backend-specific exceptions are logged and swallowed; this function itself does not
     raise on backend failure and instead returns ``None`` when all steps are exhausted.
     """
+
     # 1. Try Gemini
     try:
         result = _extract_via_gemini(image_bytes, mime_type, user_id)

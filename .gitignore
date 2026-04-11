@@ -60,3 +60,6 @@ app/static/uploads/covers/*
 # Testing
 test-results/
 playwright-report/
+
+# External services
+.allegro_token.json

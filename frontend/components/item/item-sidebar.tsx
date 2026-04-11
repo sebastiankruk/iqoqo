@@ -18,7 +18,7 @@
 import { ChangeEvent } from "react";
 import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
-import type { Item } from "@/types/frbr";
+import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
@@ -70,8 +70,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const hasEditPermission = permissions.includes("edit:manifestation");
 
   // Media type detection
-  const format = (item.manifestation_meta?.["format"] as string | undefined) ??
-                 (item.meta?.["format"] as string | undefined) ?? "book";
+  const format =
+    (item.manifestation_meta?.["format"] as string | undefined) ??
+    (item.meta?.["format"] as string | undefined) ??
+    "book";
   const isAudio = isAudioMedia(format);
   const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
   const MediaIcon = isAudio ? Disc : BookOpen;
@@ -126,7 +128,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     <div className="flex flex-col items-center gap-5">
       {/* Book/Audio cover */}
       <div className="-mt-28 w-full max-w-[220px]">
-        <div className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}>
+        <div
+          className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}
+        >
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={item.title ?? "Cover"} className="h-full w-full object-cover" />
@@ -158,28 +162,40 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           disabled={updateItem.isPending}
           className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
         >
-          <optgroup label="Availability & Condition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+          <optgroup
+            label="Availability & Condition"
+            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+          >
             {["available", "lent", "damaged", "lost"].map(key => (
               <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
                 {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
               </option>
             ))}
           </optgroup>
-          <optgroup label="Reading Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+          <optgroup
+            label="Reading Progress"
+            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+          >
             {["unread", "reading", "read", "want_to_read"].map(key => (
               <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
                 {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
               </option>
             ))}
           </optgroup>
-          <optgroup label="Listening Progress" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+          <optgroup
+            label="Listening Progress"
+            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+          >
             {["want_to_listen", "listening", "listened"].map(key => (
               <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
                 {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
               </option>
             ))}
           </optgroup>
-          <optgroup label="Acquisition" className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+          <optgroup
+            label="Acquisition"
+            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+          >
             {["wish_list", "ordered"].map(key => (
               <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
                 {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
@@ -211,7 +227,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         {hasUploadPermission && (
           <CameraCapture
             manifestation_id={item.manifestation_id}
-            format={format as import("@/components/scanner/camera-capture").MediaFormat}
+            format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
             icon={<ImagePlus className="h-4 w-4 mr-2" />}

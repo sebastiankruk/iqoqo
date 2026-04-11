@@ -18,8 +18,22 @@ def dummy_task(x, y):
 
 def test_global_executor_execution():
     """Verify the global ThreadPoolExecutor executes and returns correctly."""
-    future = submit_task(dummy_task, 3, 5)
-    result = future.result(timeout=2)
+    import time
+
+    from app.core.tasks import get_task_result
+
+    task_id = submit_task(dummy_task, 3, 5)
+
+    # Poll for the result
+    max_polls = 10
+    result = None
+    for _ in range(max_polls):
+        res = get_task_result(task_id)
+        if res and res["status"] == "completed":
+            result = res["result"]
+            break
+        time.sleep(0.1)
+
     assert result == 8
 
 

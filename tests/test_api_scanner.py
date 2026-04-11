@@ -93,33 +93,56 @@ def test_extract_from_cover_invalid_image(mock_image_open, client, vision_user_h
 
 
 @patch("app.api.scanner.Image.open")
-@patch("app.api.scanner.extract_metadata_from_cover")
-def test_extract_from_cover_success(mock_extract, mock_image_open, client, vision_user_headers):
-    """Test successful image content extraction."""
+@patch("app.api.scanner.submit_task")
+def test_extract_from_cover_success(mock_submit, mock_image_open, client, vision_user_headers):
+    """Test successful image content extraction submission."""
     mock_image_open.return_value.verify.return_value = None
-    mock_extract.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
+    mock_submit.return_value = "test-task-id"
 
     data = {"cover": (BytesIO(b"dummy_data"), "test.jpg")}
     response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=vision_user_headers)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert response.json["success"] is True
+    assert response.json["data"]["task_id"] == "test-task-id"
+
+
+def test_get_extract_status_not_found(client, vision_user_headers):
+    """Test polling for a non-existent task."""
+    response = client.get("/api/vision/extract/invalid-id", headers=vision_user_headers)
+    assert response.status_code == 404
+    assert response.json["error"] == "Task not found"
+
+
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_processing(mock_get_result, client, vision_user_headers):
+    """Test polling for a task that is still processing."""
+    mock_get_result.return_value = {"status": "processing"}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 202
+    assert response.json["data"]["status"] == "processing"
+
+
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_completed(mock_get_result, client, vision_user_headers):
+    """Test polling for a completed task."""
+    mock_get_result.return_value = {"status": "completed", "result": {"Title": "Dune", "Authors": ["Frank Herbert"]}}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 200
     assert response.json["data"]["Title"] == "Dune"
     assert response.json["data"]["Authors"] == ["Frank Herbert"]
 
 
-@patch("app.api.scanner.Image.open")
-@patch("app.api.scanner.extract_metadata_from_cover")
-def test_extract_from_cover_failure(mock_extract, mock_image_open, client, vision_user_headers):
-    """Test missing or failing vision extraction."""
-    mock_image_open.return_value.verify.return_value = None
-    mock_extract.return_value = None
+@patch("app.api.scanner.get_task_result")
+def test_get_extract_status_failed(mock_get_result, client, vision_user_headers):
+    """Test polling for a failed task."""
+    mock_get_result.return_value = {"status": "failed", "error": "Gemini API error"}
+    response = client.get("/api/vision/extract/test-id", headers=vision_user_headers)
+    assert response.status_code == 500
+    assert response.json["error"] == "Gemini API error"
 
-    data = {"cover": (BytesIO(b"dummy_data"), "test.jpg")}
-    response = client.post("/api/vision/extract", data=data, content_type="multipart/form-data", headers=vision_user_headers)
 
-    assert response.status_code == 503
-    assert "Vision extraction failed. All fallback methods" in response.json["error"]
+# Note: test_extract_from_cover_failure is removed as failure now happens during polling or background processing.
 
 
 def test_extract_from_cover_oversized_header(client, vision_user_headers):
@@ -238,3 +261,104 @@ def test_scan_barcode_creates_book_item(mock_ingest_book, client, normal_user_he
     assert response.json["data"]["manifestation_id"] == 888
     assert response.json["data"]["title"] == "Dune"
     mock_ingest_book.assert_called_once_with("9780441013593")
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_barcode_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test looking up video format."""
+    mock_upc.return_value = None
+    mock_tmdb.return_value = {"Title": "The Matrix", "Format": "video"}
+    response = client.get("/api/lookup/12345?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "The Matrix"
+    mock_tmdb.assert_called_once()
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_title_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test looking up video format by title directly."""
+    mock_tmdb.return_value = {"Title": "The Lord of the Rings", "Format": "video"}
+    mock_upc.return_value = None  # Mock UPC miss
+
+    response = client.get("/api/lookup/The%20Lord%20of%20the%20Rings?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "The Lord of the Rings"
+    # Should be called with the decoded string
+    mock_tmdb.assert_called_with("The Lord of the Rings")
+
+
+@patch("app.api.scanner.fetch_bgg_metadata")
+def test_lookup_barcode_boardgame_bgg(mock_bgg, client, normal_user_headers):
+    """Test looking up game format."""
+    mock_bgg.return_value = {"Title": "Catan", "Format": "boardgame"}
+    response = client.get("/api/lookup/54321?format=game", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "Catan"
+    mock_bgg.assert_called_once()
+
+
+@patch("app.api.scanner.IngestService.ingest_video_from_barcode")
+def test_scan_barcode_creates_video_item(mock_ingest_video, client, normal_user_headers, app):
+    """Test scan endpoint correctly processes video format hint."""
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 777
+    mock_manifestation.title = "The Matrix"
+    mock_manifestation.meta = {"title": "The Matrix"}
+    mock_ingest_video.return_value = mock_manifestation
+
+    payload = {"barcode": "0123456789", "format": "video"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["manifestation_id"] == 777
+    mock_ingest_video.assert_called_once_with("0123456789")
+
+
+@patch("app.api.scanner.IngestService.ingest_game_from_barcode")
+def test_scan_barcode_creates_game_item(mock_ingest_game, client, normal_user_headers, app):
+    """Test scan endpoint correctly processes boardgame format hint."""
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 666
+    mock_manifestation.title = "Catan"
+    mock_manifestation.meta = {"title": "Catan"}
+    mock_ingest_game.return_value = mock_manifestation
+
+    payload = {"barcode": "9876543210", "format": "boardgame"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["manifestation_id"] == 666
+    mock_ingest_game.assert_called_once_with("9876543210")
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_video_fallback_to_upc_meta(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test that if TMDB fails, we still return the Allegro/UPC metadata."""
+    upc_payload = {"title": "Allegro Item", "cover_url": "http://img.jpg", "source": "Allegro Listing"}
+    mock_upc.return_value = upc_payload
+    mock_tmdb.return_value = None  # TMDB finds nothing
+
+    response = client.get("/api/lookup/5906619071187?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "Allegro Item"
+    assert response.json["data"]["source"] == "Allegro Listing"
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_video_metadata")
+def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_headers):
+    """Test that format key is injected for frontend normalization."""
+    mock_upc.return_value = {"title": "No Format Item"}
+    mock_tmdb.return_value = None
+
+    response = client.get("/api/lookup/12345?format=video", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["format"] == "video"

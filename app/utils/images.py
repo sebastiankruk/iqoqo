@@ -10,9 +10,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Affero General Public License for more details.
 #
+#
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+# pylint: disable=no-member
 import io
 import logging
 import os
@@ -84,10 +86,10 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 
 
 def optimize_and_save_image(image_bytes: bytes, filepath: str):
-    """Converts image to JPEG, resizes to max 1024x1024, sets 85% quality."""
+    """Converts image to JPEG, fixes EXIF, resizes to max 1024x1024."""
     try:
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
-            # Fix EXIF rotation before processing
+            # Fix rotation based on EXIF data before doing anything else
             transposed_img = ImageOps.exif_transpose(raw_img)
             out: Image.Image = transposed_img.convert("RGB")
             out.thumbnail((1024, 1024))
@@ -242,7 +244,7 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
     target_filename = filename or file.filename
     filepath = os.path.join(base_dir, target_filename)
 
-    # Save and optimize
+    # Save and optimize.
     optimize_and_save_image(file.read(), filepath)
 
     # Return public URL

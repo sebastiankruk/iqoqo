@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Disc, Loader2 } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
 import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
@@ -53,7 +53,6 @@ const statusDotTitle: Record<ItemStatus, string> = {
   want_to_listen: "Want to Listen",
 };
 
-/** Props for ItemCard component */
 interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
@@ -72,26 +71,23 @@ interface ItemCardProps {
 export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
   const isCatalog = isManifestationView;
 
-  // Narrow types safely instead of using 'any'
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
-
   const status = isCatalog ? undefined : (item as Item).status;
   const userOwns = isCatalog ? (item as CatalogEntry).user_owns : true;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
-
-  // Dynamic linking based on view context
   const targetHref = isCatalog ? `/manifestation/${manifestationId}` : `/item/${itemId}`;
 
-  // `cover_url` and `cover_status` exist on both Item and CatalogEntry
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
   const tMeta = isCatalog ? (item as CatalogEntry).meta : (item as Item).manifestation_meta || (item as Item).meta;
   const timestamp = getCoverTimestamp(tMeta);
 
-  const coverUrl = getCoverUrl(itemCoverUrl || undefined, timestamp) || (isCatalog
+  const coverUrl =
+    getCoverUrl(itemCoverUrl || undefined, timestamp) ||
+    (isCatalog
       ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
       : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
         ((item as Item).meta?.["cover_url"] as string | undefined)));
@@ -103,45 +99,67 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const isProcessing = coverStatus === "processing";
   const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
 
-  // Media type detection
   const format = isCatalog
     ? ((item as CatalogEntry).meta?.["format"] as string | undefined)
     : (((item as Item).manifestation_meta?.["format"] as string | undefined) ??
       ((item as Item).meta?.["format"] as string | undefined));
 
   const isAudio = isAudioMedia(format);
-  const MediaIcon = isAudio ? Disc : BookOpen;
-  const mediaLabel = isAudio ? "Audio" : "Book";
-  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
+  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
 
-  // TypeScript allows accessing `title` and `authors` because they are defined on both types in the union
+  const MediaIcon = isAudio ? Disc : isVideo ? Film : isBoardGame ? Dices : isPuzzle ? Puzzle : BookOpen;
+  const mediaLabel = isAudio ? "Audio" : isVideo ? "Video" : isBoardGame ? "Board Game" : isPuzzle ? "Puzzle" : "Book";
+  const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
+
   const title = item.title ?? "Untitled";
   const authors = item.authors?.join(", ") ?? "Unknown author";
 
   if (variant === "horizontal") {
     return (
       <Link
-        key={itemId}
         href={targetHref}
         className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
       >
-        <div className="flex h-full p-5">
-          <div className="flex flex-1 flex-col justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <MediaIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{mediaLabel}</span>
+        <div className="flex h-full p-5 gap-4 items-center">
+          <div className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}>
+            {(isProcessing || coverStatus === "pending") && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
-              <h3 className="font-serif text-lg font-bold leading-snug text-card-foreground">{title}</h3>
-              <p className="mt-0.5 text-sm text-muted-foreground">{authors}</p>
-              <div className="mt-3 flex items-center gap-2">
+            )}
+            {coverUrl ? (
+              <Image
+                src={coverUrl}
+                alt={`Cover of ${title}`}
+                fill
+                sizes="80px"
+                unoptimized
+                className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <MediaIcon className="h-6 w-6 text-muted-foreground/30" />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-1 flex-col justify-between min-w-0">
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <MediaIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">{mediaLabel}</span>
+              </div>
+              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">{title}</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{authors}</p>
+              <div className="mt-2.5 flex items-center gap-2">
                 {!isCatalog && (
-                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent whitespace-nowrap">
                     {dotTitle}
                   </span>
                 )}
                 {isCatalog && userOwns && (
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
                     In Collection
                   </span>
                 )}
@@ -156,7 +174,6 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   return (
     <Link href={targetHref} className="group block">
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
-        {/* Cover */}
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
@@ -178,20 +195,15 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
           ) : (
             <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
               <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
-              <span className="text-xs text-muted-foreground line-clamp-2">{authors}</span>
               <MediaIcon className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="flex items-start gap-2 px-3 py-2.5">
-          {/* Status dot */}
           {!isCatalog && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={dotTitle} />}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-snug text-foreground">{title}</p>
             <p className="truncate text-xs text-muted-foreground">{authors}</p>
-
             {isCatalog && userOwns && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />

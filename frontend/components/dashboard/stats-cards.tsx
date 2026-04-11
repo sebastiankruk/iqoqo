@@ -17,6 +17,7 @@
 
 import { BookMarked, BookOpen, HandHelping, Target } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
+import Link from "next/link";
 
 /**
  * Three top-row stat cards pulled from the Flask /api/stats endpoint.
@@ -35,6 +36,7 @@ export function StatsCards() {
       iconBg: "bg-primary/8",
       iconColor: "text-primary",
       description: "Total in collection",
+      href: "/collection",
     },
     {
       label: "Reading",
@@ -44,6 +46,7 @@ export function StatsCards() {
       iconBg: "bg-green-500/10",
       iconColor: "text-green-600",
       description: "Currently active reads",
+      href: "/collection?statuses=reading",
     },
     {
       label: "On Wish List",
@@ -53,6 +56,7 @@ export function StatsCards() {
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
       description: "On your list",
+      href: "/collection?statuses=wish_list",
     },
     {
       label: "Lent Out",
@@ -62,6 +66,7 @@ export function StatsCards() {
       iconBg: "bg-accent/10",
       iconColor: "text-accent",
       description: "Currently with friends",
+      href: "/collection?statuses=lent",
     },
   ];
 
@@ -69,9 +74,10 @@ export function StatsCards() {
     <section aria-label="Collection statistics">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
         {cards.map(stat => (
-          <div
+          <Link
             key={stat.label}
-            className={`group relative overflow-hidden rounded-xl border-l-4 ${stat.borderColor} bg-card p-5 shadow-sm transition-shadow hover:shadow-md`}
+            href={stat.href}
+            className={`group relative overflow-hidden rounded-xl border-l-4 ${stat.borderColor} bg-card p-5 shadow-sm transition-shadow hover:shadow-md block`}
           >
             <div className="flex items-start justify-between">
               <div>
@@ -91,7 +97,7 @@ export function StatsCards() {
                 <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </section>

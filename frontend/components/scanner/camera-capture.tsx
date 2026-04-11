@@ -33,6 +33,7 @@ import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { MediaFormat } from "@/types/frbr";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,9 +57,6 @@ interface ExtractedMetadata {
   Title?: string;
   Authors?: string[];
 }
-
-/** Supported media formats for the scanner. */
-export type MediaFormat = "book" | "cd" | "vinyl";
 
 interface CameraCaptureProps {
   /** If set, the component uploads the image as a cover for this manifestation. */
@@ -121,17 +119,62 @@ export function CameraCapture({
   useEffect(() => {
     let mounted = true;
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then((devices) => {
-        const videoInputs = devices.filter((d) => d.kind === "videoinput");
-        if (mounted) setHasCamera(videoInputs.length > 0);
-      }).catch(() => {
-        if (mounted) setHasCamera(false);
-      });
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then(devices => {
+          const videoInputs = devices.filter(d => d.kind === "videoinput");
+          if (mounted) setHasCamera(videoInputs.length > 0);
+        })
+        .catch(() => {
+          if (mounted) setHasCamera(false);
+        });
     } else {
       setHasCamera(false);
     }
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  const startPolling = async (taskId: string) => {
+    const maxRetries = 30; // 30 retries * 2s = 60s max
+    const { apiClient: pollClient } = await import("@/lib/api/client");
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(
+          `/vision/extract/${taskId}`
+        );
+        const env = response.data;
+
+        if (env.success && env.data) {
+          // Check if data is the result (has Title) or just status
+          if ("Title" in env.data) {
+            return env.data;
+          }
+          const data = env.data as { status: string };
+          if (data.status === "failed") {
+            throw new Error(env.error || "Vision extraction failed");
+          }
+        }
+      } catch (err) {
+        // Detect terminal errors (500, 503) vs transient network errors
+        const errorMessage = err instanceof Error ? err.message : "";
+        const isServerError = errorMessage.includes("500") || errorMessage.includes("503");
+        const isVisionFailed = errorMessage.includes("Vision extraction failed");
+
+        // Re-throw immediately for server errors or vision failures
+        if (isServerError || isVisionFailed) {
+          throw err;
+        }
+        // For transient network errors, continue retrying
+      }
+
+      // Wait 2 seconds before next poll
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    throw new Error("Task timed out. Please try again or enter manually.");
+  };
 
   const processFile = async (file: File) => {
     setUploading(true);
@@ -147,19 +190,23 @@ export function CameraCapture({
         });
         if (onUploadComplete) onUploadComplete();
       } else {
-        // Mode 2: OCR / Vision Metadata Extraction
-        const response = await apiClient.post<ApiEnvelope<ExtractedMetadata>>(`/vision/extract`, formData, {
+        // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
+        const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+
         const envelope = response.data;
-        if (envelope.success && envelope.data) {
-          if (onExtractComplete) onExtractComplete(envelope.data, file, format);
+        if (envelope.success && envelope.data?.task_id) {
+          // Transition to polling
+          const result = await startPolling(envelope.data.task_id);
+          if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
-          toast.error(envelope.error ?? "Vision extraction failed");
+          toast.error(envelope.error ?? "Vision extraction submission failed");
         }
       }
     } catch (error) {
-      toast.error("Failed to process cover image");
+      const message = error instanceof Error ? error.message : "Failed to process cover image";
+      toast.error(message);
       console.error("Failed to process cover image", error);
     } finally {
       setUploading(false);
@@ -202,11 +249,14 @@ export function CameraCapture({
   return (
     <div
       className={`w-full ${className ?? ""} ${
-        isDesktopMode 
-          ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " + (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
-          : (isDragging ? "ring-2 ring-primary ring-offset-2 rounded-md" : "")
+        isDesktopMode
+          ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " +
+            (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
+          : isDragging
+            ? "ring-2 ring-primary ring-offset-2 rounded-md"
+            : ""
       }`}
-      onDragOver={(e) => {
+      onDragOver={e => {
         e.preventDefault();
         setIsDragging(true);
       }}
@@ -221,25 +271,21 @@ export function CameraCapture({
         onChange={handleCapture}
         className="hidden"
       />
-      
+
       {isDesktopMode ? (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
-          <UploadCloud className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`} />
+          <UploadCloud
+            className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`}
+          />
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">
-              Drag & Drop cover image here
-            </p>
-            <p className="text-xs text-muted-foreground">
-              or click to browse files
-            </p>
+            <p className="text-sm font-medium">Drag & Drop cover image here</p>
+            <p className="text-xs text-muted-foreground">or click to browse files</p>
           </div>
-          <Button
-            onClick={handleClick}
-            disabled={uploading}
-            className="mt-2"
-          >
+          <Button onClick={handleClick} disabled={uploading} className="mt-2">
             {uploading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+              </>
             ) : (
               "Browse Files"
             )}
@@ -247,12 +293,7 @@ export function CameraCapture({
         </div>
       ) : (
         <div className="flex flex-col gap-4 w-full">
-          <Button
-            onClick={handleClick}
-            disabled={uploading}
-            variant="outline"
-            className="w-full"
-          >
+          <Button onClick={handleClick} disabled={uploading} variant="outline" className="w-full">
             {uploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -13,7 +13,7 @@ describe("CameraCapture", () => {
   const originalMediaDevices = navigator.mediaDevices;
 
   afterEach(() => {
-    Object.defineProperty(navigator, 'mediaDevices', {
+    Object.defineProperty(navigator, "mediaDevices", {
       writable: true,
       value: originalMediaDevices,
     });
@@ -21,10 +21,10 @@ describe("CameraCapture", () => {
   });
 
   it("renders standard camera button when video inputs are present", async () => {
-    Object.defineProperty(navigator, 'mediaDevices', {
+    Object.defineProperty(navigator, "mediaDevices", {
       writable: true,
       value: {
-        enumerateDevices: vi.fn().mockResolvedValue([{ kind: 'videoinput' }]),
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: "videoinput" }]),
       },
     });
 
@@ -37,10 +37,10 @@ describe("CameraCapture", () => {
   });
 
   it("renders Drag & Drop fallback when no video inputs are present (Desktop mode)", async () => {
-    Object.defineProperty(navigator, 'mediaDevices', {
+    Object.defineProperty(navigator, "mediaDevices", {
       writable: true,
       value: {
-        enumerateDevices: vi.fn().mockResolvedValue([{ kind: 'audioinput' }]), // No video
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: "audioinput" }]), // No video
       },
     });
 

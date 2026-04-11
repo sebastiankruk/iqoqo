@@ -351,11 +351,11 @@ responsible for all outbound HTTP calls to book metadata providers.
 
 1. **Canonicalize** — `canonicalize_isbn(raw)` validates and normalises any
    ISBN-10 or ISBN-13 input (hyphens, spaces, mixed case) into a standard
-   13-digit string.  Returns `None` for invalid input.
+   13-digit string. Returns `None` for invalid input.
 2. **Google Books API** — queried first; fast, high availability, no API key
    required for low-volume usage.
 3. **Open Library Books API** — fallback; broader language coverage and fully
-   open data.  Same retry/timeout policy.
+   open data. Same retry/timeout policy.
 
 ### Retry and timeout policy
 
@@ -388,16 +388,18 @@ lookups of the same ISBN are served from the local database.
 - **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
 
 ## Authentication and Authorization (v0.1.0)
+
 Iqoqo uses a hybrid authentication approach suitable for distributed deployments:
 
 1. **SSO / Local Identity**: Users can register via standard email/password or use Google SSO (via Authlib).
 2. **JWT & BFF Pattern**: The Python backend generates a stateless JWT and redirects the browser to the Next.js Backend-For-Frontend (BFF) route (`/api/auth-exchange`). That route handler catches the token and stores it securely in an `HttpOnly` cookie.
 3. **Next.js Auth Guard (current behavior)**: A small helper used by protected routes (for example, `/collection`, `/profile`) checks for the presence of the auth cookie set by the BFF route before rendering pages. JWT signature and expiry verification are enforced on the Python backend; the Next.js layer currently treats the cookie as an opaque session token. A future iteration may introduce Edge middleware using `jose` for full client-side verification.
 4. **RBAC**: The database implements an RBAC matrix (`Role`, `Permission`, `user_roles`). Backend API endpoints are protected using `@require_auth` and `@require_permission` decorators.
-    > **Frontend RBAC and UI State:**
-    > To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions.
-    >
-    > **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
+
+   > **Frontend RBAC and UI State:**
+   > To ensure the user interface accurately reflects backend authorization rules (as tested in `test_api.py`), the frontend utilizes the `useProfile` hook which exposes `profile.permissions`. Components like `ItemActions` dynamically mount buttons based on the current user's permissions.
+   >
+   > **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
 
 5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
 
@@ -411,6 +413,19 @@ iqoqo includes scripts to manage data portability and disaster recovery.
 Run `python scripts/backup.py` to create a ZIP archive containing the database dump (`metadata.json`) and the `covers/` directory.
 
 - **Configuration:** Set `BACKUP_DIR` env var to customize the output location (default: `exports/`).
+
+#### Scheduled Backups
+
+iqoqo automatically manages daily backups using its background scheduler (APScheduler).
+
+- **Implementation:** The scheduler is initialized in `app/core/scheduler.py` and triggers the `scripts/backup.py` logic.
+- **Configuration (via `.env`):**
+  - `SCHEDULER_AUTOSTART`: Set to `true` to enable daily background backups (default: `false`).
+  - `BACKUP_CRON_HOUR`: The hour (0-23) to run the backup (default: `3` for 3:00 AM).
+  - `BACKUP_CRON_MINUTE`: The minute (0-59) to run the backup (default: `0`).
+  - `BACKUP_DIR`: Directory where ZIP archives are stored.
+
+Each background backup creates a timestamped archive like `iqoqo_backup_20260408_030000.zip`.
 
 **Restore:**
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.
@@ -429,6 +444,64 @@ python scripts/archive_orphans.py
 This moves unused images to an archive folder.
 
 - **Configuration:** Set `COVERS_ARCHIVE_DIR` env var to customize the archive location (default: `app/static/archive/covers`).
+
+### Video / Film Metadata (FRBRoo Event-Based)
+
+For video media (Blu-Rays, DVDs, VHS) the FRBR hierarchy leverages the existing Audio contributor models for Creation and Performance, but adds Publication events:
+
+```text
+Contributor  ←── ManifestationContribution  ←── Manifestation    (Publication Event)
+```
+
+Valid `ManifestationContribution.role` values: `studio`, `distributor`, `producer`, `network`.
+Video-specific keys in `Manifestation.meta`: `resolution`, `aspect_ratio`, `video_format`, `audio_formats`, `run_time_minutes`.
+
+### Board Game Metadata (FRBRoo Container Work)
+
+Board games are modeled as an F16 Container Work (the Box) which aggregates distinct components:
+
+```text
+Work (The Box)  ←── ContainerAggregation  ──→ Work (Rulebook / Scenarios)
+Work (The Box)  ←── ContainerAggregation  ──→ Item (Game Board / Pieces / Meeples)
+```
+
+Game-specific keys in `Manifestation.meta`: `min_players`, `max_players`, `playtime_minutes`, `min_age`, `game_mechanics`, `designer`.
+
+### 5. F16 Container Work (Board Games)
+
+**Database**: `catalog.container_aggregations` table (linking `works` and `items`)
+
+For board games, iqoqo extends the basic FRBR hierarchy using the **FRBRoo F16 Container Work** pattern. A board game box is a container that holds multiple disparate items and works.
+
+**Examples**:
+
+- The "Catan" base game box.
+- Inside the box: The Rulebook (F1 Work), The Game Board (F5 Item), 15 Road pieces (F5 Items).
+
+**Attributes (`container_aggregations`)**:
+
+- `container_work_id` - Foreign key to the main game's Work.
+- `aggregated_type` - Type of component ('work' or 'item').
+- `aggregated_work_id` / `aggregated_item_id` - Link to the specific rulebook or physical piece.
+- `component_name` - "Red Meeples", "Main Board", etc.
+- `quantity` - Number of identical pieces.
+
+**Key Principle**: The main board game is an F16 Container. Its mechanics, min/max players, and playtime are stored in the Manifestation's `meta` JSON. The physical pieces and rulebooks are aggregated into this container, allowing users to track missing components.
+
+```python
+# Board Game as a Container
+game_work = Work(title="Catan", meta={"categories": ["Board Game"]})
+
+# Aggregating a rulebook
+rulebook_work = Work(title="Catan Almanac")
+aggregation1 = ContainerAggregation(
+    container_work_id=game_work.id,
+    aggregated_type='work',
+    aggregated_work_id=rulebook_work.id,
+    component_name="Almanac",
+    quantity=1
+)
+```
 
 ## 🌐 Frontend Architecture (Phase 2)
 
@@ -498,14 +571,17 @@ The frontend communicates with Flask via a standardised JSON envelope:
 // Every endpoint returns this shape
 {
   "success": true,
-  "data": { /* entity or list */ },
-  "error": null,           // string when success=false
-  "meta": {               // present on paginated endpoints only
+  "data": {
+    /* entity or list */
+  },
+  "error": null, // string when success=false
+  "meta": {
+    // present on paginated endpoints only
     "page": 1,
     "limit": 20,
     "total": 1562,
-    "pages": 79
-  }
+    "pages": 79,
+  },
 }
 ```
 
@@ -519,46 +595,49 @@ definition is `ITEM_STATUSES` in `app/db/core.py`; the TypeScript mirror is
 `ItemStatus` in `frontend/types/frbr.ts`. The cross-subsystem contract is
 enforced by `tests/test_ontology.py`.
 
-| Status           | Meaning                                    | Media     |
-| ---------------- | ------------------------------------------ | --------- |
-| `available`      | On your shelf, ready to use                | All       |
-| `lent`           | Lent to a friend                           | All       |
-| `lost`           | Cannot be located                          | All       |
-| `wish_list`      | Want to acquire (owned or not)             | All       |
-| `ordered`        | Purchased, awaiting delivery               | All       |
-| `damaged`        | Physically damaged copy                    | All       |
-| `reading`        | Currently being read                       | Text      |
-| `read`           | Finished reading                           | Text      |
-| `unread`         | Never opened                               | Text      |
-| `listening`      | Currently playing / listening to           | Audio     |
-| `listened`       | Finished listening                         | Audio     |
-| `want_to_listen` | On audio wishlist (do not own yet)         | Audio     |
+| Status           | Meaning                            | Media |
+| ---------------- | ---------------------------------- | ----- |
+| `available`      | On your shelf, ready to use        | All   |
+| `lent`           | Lent to a friend                   | All   |
+| `lost`           | Cannot be located                  | All   |
+| `wish_list`      | Want to acquire (owned or not)     | All   |
+| `ordered`        | Purchased, awaiting delivery       | All   |
+| `damaged`        | Physically damaged copy            | All   |
+| `reading`        | Currently being read               | Text  |
+| `read`           | Finished reading                   | Text  |
+| `unread`         | Never opened                       | Text  |
+| `listening`      | Currently playing / listening to   | Audio |
+| `listened`       | Finished listening                 | Audio |
+| `want_to_listen` | On audio wishlist (do not own yet) | Audio |
 
 ### Database Schema Layout
 
 Tables are split across two PostgreSQL schemas:
 
-| Schema   | Tables                                                                 |
-| -------- | ---------------------------------------------------------------------- |
-| `public` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`,     |
-|          | `token_blocklist`, `user_consents`, `llm_telemetry`,                   |
-|          | `instance_settings`, `alembic_version`                                 |
-| `catalog`| `works`, `expressions`, `manifestations`, `items`,                     |
-|          | `contributors`, `work_contributions`,                                  |
-|          | `expression_contributions`, `work_parts`                               |
+| Schema    | Tables                                                             |
+| --------- | ------------------------------------------------------------------ |
+| `public`  | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, |
+|           | `token_blocklist`, `user_consents`, `llm_telemetry`,               |
+|           | `instance_settings`, `alembic_version`                             |
+| `catalog` | `works`, `expressions`, `manifestations`, `items`,                 |
+|           | `contributors`, `work_contributions`,                              |
+|           | `expression_contributions`, `manifestation_contributions`,         |
+|           | `work_parts`, `container_aggregations`                             |
 
 ### Model File Structure
 
 Model classes are split into domain-focused modules under `app/db/`:
 
-| File          | Contents                                                                     |
-| ------------- | ---------------------------------------------------------------------------- |
-| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`              |
-| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`               |
-| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`,     |
-|               | `MANIFESTATION_AUDIO_META_KEYS`                                              |
-| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                           |
-| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work          |
+| File          | Contents                                                                 |
+| ------------- | ------------------------------------------------------------------------ |
+| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`          |
+| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`           |
+| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, |
+|               | `MANIFESTATION_AUDIO_META_KEYS`                                          |
+| `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`             |
+| `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                   |
+| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                       |
+| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work      |
 
 ### Audio / Music Metadata (FRBRoo Event-Based)
 
@@ -577,15 +656,15 @@ Valid `ExpressionContribution.role` values: `performer`, `conductor`, `narrator`
 
 Audio-specific keys that **may** be stored in `Manifestation.meta`:
 
-| Key               | Type          | Description                                                        |
-| ----------------- | ------------- | ------------------------------------------------------------------ |
-| `catalog_number`  | string        | Record-label catalog number (e.g. `"ECM 1064"`)                    |
-| `pressing_number` | string        | Specific pressing identifier                                       |
-| `matrix_number`   | string        | Vinyl run-out groove / lacquer ID                                  |
-| `label`           | string        | Record label name (e.g. `"Blue Note"`)                             |
-| `format`          | string        | Physical format: `LP`, `45`, `EP`, `CD`, `CD-EP`, …                |
-| `disc_count`      | integer       | Number of discs in a multi-disc release                            |
-| `track_list`      | list          | `[{"position": "A1", "title": "…", "duration_seconds": 210}]`      |
+| Key               | Type    | Description                                                   |
+| ----------------- | ------- | ------------------------------------------------------------- |
+| `catalog_number`  | string  | Record-label catalog number (e.g. `"ECM 1064"`)               |
+| `pressing_number` | string  | Specific pressing identifier                                  |
+| `matrix_number`   | string  | Vinyl run-out groove / lacquer ID                             |
+| `label`           | string  | Record label name (e.g. `"Blue Note"`)                        |
+| `format`          | string  | Physical format: `LP`, `45`, `EP`, `CD`, `CD-EP`, …           |
+| `disc_count`      | integer | Number of discs in a multi-disc release                       |
+| `track_list`      | list    | `[{"position": "A1", "title": "…", "duration_seconds": 210}]` |
 
 ### Local Development
 

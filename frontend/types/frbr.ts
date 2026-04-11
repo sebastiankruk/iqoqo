@@ -60,7 +60,7 @@ export interface Manifestation {
   cover_url?: string | null;
   meta: {
     additional_images?: AdditionalImage[];
-    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | string;
+    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | "Blu-ray" | "DVD" | "VHS" | "Board Game" | string;
     catalog_number?: string;
     pressing_number?: string;
     matrix_number?: string;
@@ -71,6 +71,20 @@ export interface Manifestation {
       title: string;
       duration_seconds: number;
     }>;
+    // Video-specific
+    resolution?: string;
+    aspect_ratio?: string;
+    video_format?: string;
+    audio_formats?: string[];
+    region_code?: string;
+    run_time_minutes?: number;
+    // Game-specific
+    min_players?: number;
+    max_players?: number;
+    playtime_minutes?: number;
+    min_age?: number;
+    game_mechanics?: string[];
+    designer?: string;
     [key: string]: unknown;
   };
 }
@@ -124,6 +138,14 @@ export type ItemStatus =
   | "listened"
   | "want_to_listen";
 
+/** Standard media formats used across the app */
+export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;
+export type MediaFormat = (typeof MEDIA_FORMATS)[number];
+
+/** High-level categories for scanning and manual entry */
+export const SCAN_FORMATS = ["book", "audio", "video", "boardgame", "puzzle"] as const;
+export type ScanFormat = (typeof SCAN_FORMATS)[number];
+
 /** API Response envelope */
 export interface ApiResponse<T> {
   success: boolean;
@@ -155,7 +177,7 @@ export interface DashboardStats {
   items_read: number;
 }
 
-/** Barcode lookup metadata (books and audio) */
+/** Barcode lookup metadata (books, audio, video, games) */
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
@@ -171,6 +193,22 @@ export interface IsbnMeta {
   barcode?: string;
   isbn?: string;
   cover_url?: string;
+  directors?: string[];
+  Director?: string[];
+  cast?: string[];
+  Cast?: string[];
+  mechanics?: string[];
+  Mechanics?: string[];
+  game_mechanics?: string[];
+  Description?: string;
+  description?: string;
+  min_players?: number;
+  max_players?: number;
+  minPlayers?: number;
+  maxPlayers?: number;
+  runtime?: number;
+  Runtime?: number;
+  meta?: Record<string, unknown>;
 }
 
 /** User profile */

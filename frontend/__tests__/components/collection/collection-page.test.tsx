@@ -366,3 +366,23 @@ describe("CollectionPage – Authentication & View Modes", () => {
     expect(calls[calls.length - 1][3]).toBe(true);
   });
 });
+
+describe("CollectionPage – Sorting Behavior", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
+    mockUseItems.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useItems>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
+    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useManifestations>);
+  });
+
+  it("defaults to recently updated sorting when entering the collection", () => {
+    render(<CollectionPage />);
+    const calls = mockUseItems.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    // useItems parameters: (page, limit, statuses, query, sortBy, enabled)
+    // sortBy is parameter index 4
+    const lastCall = calls.at(-1) as Parameters<typeof useItems>;
+    expect(lastCall[4]).toBe("updated");
+  });
+});

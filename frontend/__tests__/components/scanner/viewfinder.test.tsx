@@ -36,10 +36,10 @@ describe("Viewfinder", () => {
     expect(svg).not.toBeNull();
   });
 
-  it("marks the SVG as decorative (aria-hidden)", () => {
+  it("marks the SVG as decorative (role presentation)", () => {
     const { container } = render(<Viewfinder />);
     const svg = container.querySelector("svg");
-    expect(svg).toHaveAttribute("aria-hidden", "true");
+    expect(svg).toHaveAttribute("role", "presentation");
   });
 
   it("renders four SVG path elements for the corner brackets", () => {

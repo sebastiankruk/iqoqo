@@ -18,7 +18,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Audio Media Workflow", () => {
   test("should display tracklist and support status updates for audio CD", async ({ page }) => {
     // 0. Mock User Profile and Config
-    await page.route("**/api/profile**", async (route) => {
+    await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -27,25 +27,25 @@ test.describe("Audio Media Workflow", () => {
           data: {
             id: "test-user-id",
             email: "test@iqoqo.local",
-            permissions: ["upload:cover", "edit:item", "edit:manifestation"]
-          }
-        })
+            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+          },
+        }),
       });
     });
 
-    await page.route("**/api/config**", async (route) => {
+    await page.route("**/api/config**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { federation_enabled: false, version: "0.3.0" }
-        })
+          data: { federation_enabled: false, version: "0.3.0" },
+        }),
       });
     });
 
     // 1. Mock the Item API response
-    await page.route("**/api/items/1", async (route) => {
+    await page.route("**/api/items/1", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -84,7 +84,7 @@ test.describe("Audio Media Workflow", () => {
     });
 
     // 2. Mock Manifestation Polling (used by ItemDetail)
-    await page.route("**/api/manifestations/102", async (route) => {
+    await page.route("**/api/manifestations/102", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -133,7 +133,7 @@ test.describe("Audio Media Workflow", () => {
     await expect(listeningGroup).toBeAttached();
 
     // 7. Update status to "Listening"
-    await page.route("**/api/items/1", async (route) => {
+    await page.route("**/api/items/1", async route => {
       if (route.request().method() === "PATCH" || route.request().method() === "PUT") {
         await route.fulfill({
           status: 200,
@@ -158,13 +158,13 @@ test.describe("Audio Media Workflow", () => {
 
     // 9. Verify NO redundant format toggle (Book/CD/Vinyl) on the item page
     // It should be hidden because manifestation_id is passed to CameraCapture
-    await expect(page.locator('button:has-text("BOOK")')).not.toBeVisible();
-    await expect(page.locator('button:has-text("CD")')).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "BOOK" })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "CD" })).not.toBeVisible();
   });
 
   test("should lookup and add an audio CD via generic scanner endpoint using UPC", async ({ page }) => {
     // 0. Mock User Profile and Config
-    await page.route("**/api/profile**", async (route) => {
+    await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -175,7 +175,7 @@ test.describe("Audio Media Workflow", () => {
       });
     });
 
-    await page.route("**/api/config**", async (route) => {
+    await page.route("**/api/config**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -185,7 +185,7 @@ test.describe("Audio Media Workflow", () => {
 
     // 1. Mock the new GET /lookup/:barcode endpoint (for 12-digit CD UPC)
     const testBarcode = "074646493524";
-    await page.route(`**/api/lookup/${testBarcode}`, async (route) => {
+    await page.route("**/api/lookup/074646493524*", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -202,7 +202,7 @@ test.describe("Audio Media Workflow", () => {
     });
 
     // 2. Mock the unified POST /scan endpoint
-    await page.route("**/api/scan", async (route) => {
+    await page.route("**/api/scan", async route => {
       const postData = route.request().postDataJSON();
       expect(postData.barcode).toBe(testBarcode);
 
@@ -224,7 +224,10 @@ test.describe("Audio Media Workflow", () => {
     // 3. Navigate to the scanner page
     await page.goto("/scan");
 
-    // 4. Use the Manual Search tab
+    // 4. Select the Audio format first
+    await page.getByRole("button", { name: "CD" }).click();
+
+    // 5. Use the Manual Search tab
     await page.getByText("Manual Search").click();
 
     // 5. Submit 12-digit UPC (validates updated frontend regex rules)
@@ -237,8 +240,9 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByText("Miles Davis")).toBeVisible();
     await expect(page.getByText("AUDIO", { exact: true })).toBeVisible(); // JS transformation check
 
-    // 7. Verify NO redundant format toggle in the scanner snap section
-    await expect(page.locator('div.flex-col > div.flex.justify-center >> button:has-text("BOOK")')).not.toBeVisible();
+    // 7. Verify the Audio format is active (selected) in the scanner header
+    // The CD button should be highlighted as the active format
+    await expect(page.getByRole("button", { name: "CD" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
     await page.getByRole("button", { name: "Add to Collection" }).click();

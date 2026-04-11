@@ -30,8 +30,9 @@ import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { IsbnMeta } from "@/types/frbr";
+import type { IsbnMeta, ScanFormat } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { mapFormatToApi } from "@/lib/media";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -45,8 +46,10 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
-  const [activeFormat, setActiveFormat] = useState<"book" | "cd" | "vinyl">("book");
+  const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const addManualMutation = useAddManualItem();
@@ -69,21 +72,24 @@ export default function ScanPage() {
   }, []);
 
   const handleManualSubmit = async (data: ManualEntryData) => {
-    // Format authors to be a clean list without empty strings
-    const authors = data.authors 
-      ? data.authors.split(",").map(a => a.trim()).filter(Boolean)
+    const authors = data.authors
+      ? data.authors
+          .split(",")
+          .map(a => a.trim())
+          .filter(Boolean)
       : ["Unknown"];
 
-    // If only a year is provided, convert to YYYY-01-01 for backend compatibility
     let explicitDate = data.year || undefined;
     if (explicitDate && /^\d{4}$/.test(explicitDate)) {
       explicitDate = `${explicitDate}-01-01`;
     }
 
+    const apiFormat = mapFormatToApi(data.format);
+
     const payload = {
       Title: data.title || "Unknown",
       Authors: authors.length > 0 ? authors : ["Unknown"],
-      Format: data.format === "book" ? "text" : "sound", // Map UI format to API format
+      Format: apiFormat,
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
       Publisher: data.publisher || undefined,
@@ -118,6 +124,10 @@ export default function ScanPage() {
     });
   };
 
+  const handleToggleTorch = useCallback(() => {
+    setTorchOn(prev => !prev);
+  }, []);
+
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
       <video
@@ -125,32 +135,17 @@ export default function ScanPage() {
         playsInline
         muted
         autoPlay
-        aria-hidden="true"
+        suppressHydrationWarning
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
 
-      <TopBar />
-      
-      {/* Format Toggle */}
-      {!result && !showManual && (
-        <div className="absolute top-20 inset-x-0 z-30 flex justify-center">
-          <div className="inline-flex rounded-full bg-black/40 backdrop-blur-md p-1 border border-white/10">
-            {(["book", "cd", "vinyl"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFormat(f)}
-                className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  activeFormat === f 
-                    ? "bg-primary text-primary-foreground" 
-                    : "text-white/70 hover:text-white"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <TopBar
+        currentFormat={activeFormat}
+        setFormat={f => setActiveFormat(f as ScanFormat)}
+        hasFlash={hasTorch}
+        isFlashOn={torchOn}
+        onToggleFlash={handleToggleTorch}
+      />
 
       {!result && !showManual && scannerTab === "barcode" && (
         <Viewfinder isScanning={scannerActive} format={activeFormat} />
@@ -165,6 +160,8 @@ export default function ScanPage() {
           onExtractComplete={handleExtractComplete}
           onShowManualForm={() => setShowManual(true)}
           format={activeFormat}
+          torchOn={torchOn}
+          onTorchCapabilityFound={setHasTorch}
         />
       )}
       {result && (
@@ -173,7 +170,7 @@ export default function ScanPage() {
 
       {showManual && (
         <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
-          <ManualEntryForm 
+          <ManualEntryForm
             onSubmit={handleManualSubmit}
             onCancel={() => setShowManual(false)}
             initialTitle={title}

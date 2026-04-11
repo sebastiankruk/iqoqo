@@ -24,10 +24,14 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import ItemPermissions
+from app.core.tasks import get_task_result, submit_task
 from app.db.models import Item, Manifestation, db
+from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
+from app.utils.tmdb import clean_video_title, fetch_video_metadata
+from app.utils.upc import resolve_physical_media
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -53,7 +57,9 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
 @api_bp.route("/lookup/<barcode>", methods=["GET"])
 @require_auth
 def lookup_barcode_preview(barcode: str):
-    """Generic barcode lookup for preview (books and audio)."""
+    """Generic barcode lookup for preview (books, audio, video, games)."""
+    format_hint = request.args.get("format")
+
     # Check DB first
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
@@ -61,33 +67,79 @@ def lookup_barcode_preview(barcode: str):
     ).first()
 
     if manifestation and manifestation.meta:
-        # Check normalized vs legacy titles in meta
         title = manifestation.meta.get("title") or manifestation.meta.get("Title")
         if title:
             return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
 
-    # Try external sources
     meta = None
-
-    # Simple heuristic: 978/979 or 10 digits strongly implies a book
     is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
 
-    if is_book:
+    # Route based on format hint first, fallback to heuristics
+    if format_hint in ("video", "dvd", "bluray", "movie"):
+        upc_meta = resolve_physical_media(barcode)
+        if upc_meta and upc_meta.get("title"):
+            title = clean_video_title(upc_meta["title"])
+            meta = fetch_video_metadata(title)
+            if meta:
+                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
+        if not meta:
+            meta = fetch_video_metadata(barcode)
+    elif format_hint in ("game", "boardgame"):
+        upc_meta = resolve_physical_media(barcode)
+        if upc_meta and upc_meta.get("title"):
+            meta = fetch_bgg_metadata(upc_meta["title"])
+            if meta:
+                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+            else:
+                meta = upc_meta
+        if not meta:
+            meta = fetch_bgg_metadata(barcode)
+    elif format_hint in ("puzzle", "jigsaw"):
+        meta = resolve_physical_media(barcode)
+    elif format_hint in ("audio", "cd", "vinyl", "sound"):
+        try:
+            meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
+        except Exception:  # pylint: disable=broad-except
+            pass
+    elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
+
+        # Fallback to audio if book fails
+        if not meta:
+            try:
+                meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
+            except Exception:  # pylint: disable=broad-except
+                pass
     else:
+        # No format hint: auto-fallback strategy for non-ISBN barcodes
+        # Try audio sources first (UPC/EAN codes commonly map to audio)
         try:
-            # Try Audio sources for UPC/EAN
             meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
         except Exception:  # pylint: disable=broad-except
             pass
 
-        # Fallback to book in case it's a non-standard ISBN prefix
+        # Fallback to book if audio fails
         if not meta:
             canonical = canonicalize_isbn(barcode)
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
+
+        # Final fallback to video/game if all else fails
+        if not meta:
+            upc_meta = resolve_physical_media(barcode)
+            if upc_meta and upc_meta.get("title"):
+                title = clean_video_title(upc_meta["title"])
+                meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
+                if meta:
+                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
+            if not meta:
+                meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
     if not meta:
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
@@ -98,7 +150,29 @@ def lookup_barcode_preview(barcode: str):
     if "cover_url" not in meta:
         meta["cover_url"] = meta.get("thumb") or meta.get("cover")
     if "author" not in meta:
-        meta["author"] = meta.get("artist") or meta.get("Artist") or meta.get("authors", [None])[0]
+        meta["author"] = (
+            meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
+        )
+
+    if "format" not in meta and format_hint:
+        from app.db.core import MediaFormat
+
+        format_map = {
+            "video": MediaFormat.VIDEO,
+            "dvd": MediaFormat.VIDEO,
+            "bluray": MediaFormat.VIDEO,
+            "movie": MediaFormat.VIDEO,
+            "game": MediaFormat.BOARDGAME,
+            "boardgame": MediaFormat.BOARDGAME,
+            "puzzle": MediaFormat.PUZZLE,
+            "jigsaw": MediaFormat.PUZZLE,
+            "cd": MediaFormat.AUDIO,
+            "audio": MediaFormat.AUDIO,
+            "vinyl": MediaFormat.VINYL,
+            "book": MediaFormat.BOOK,
+            "text": MediaFormat.BOOK,
+        }
+        meta["format"] = format_map.get(format_hint, format_hint.upper())
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -107,30 +181,19 @@ def lookup_barcode_preview(barcode: str):
 @require_auth
 def scan_barcode():
     # pylint: disable=too-many-return-statements
-    """Scan a barcode and add the corresponding item to the authenticated user's collection.
-
-    Request body (JSON):
-        barcode (str): The ISBN or other barcode value to look up.
-
-    Returns:
-        201 - ``{"message", "item_id", "manifestation_id", "title", "is_new_manifestation"}``
-        400 - barcode missing or invalid
-        404 - barcode could not be resolved to a manifestation
-        503 - upstream network error during metadata lookup
-    """
+    """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()
 
     barcode = data.get("barcode")
-    format_hint = data.get("format")  # Optional: 'audio' or 'book'
+    format_hint = data.get("format")
 
     if not barcode:
         return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
 
     is_new_manifestation = False
 
-    # Check both ISBN and generic barcode metadata fields
     # pylint: disable=singleton-comparison
     manifestation = Manifestation.query.filter(
         (Manifestation.meta["isbn"].as_string() == barcode) | (Manifestation.meta["barcode"].as_string() == barcode)
@@ -138,14 +201,18 @@ def scan_barcode():
 
     if not manifestation:
         try:
-            # Handle both 'audio' generic hint AND specific 'cd'/'vinyl' formats
-            is_audio_hint = format_hint in ("audio", "cd", "vinyl", "sound")
-            if is_audio_hint:
+            if format_hint in ("audio", "cd", "vinyl", "sound"):
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
+            elif format_hint in ("video", "dvd", "bluray", "movie"):
+                manifestation = IngestService.ingest_video_from_barcode(barcode)
+            elif format_hint in ("game", "boardgame"):
+                manifestation = IngestService.ingest_game_from_barcode(barcode)
+            elif format_hint in ("puzzle", "jigsaw"):
+                manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
             elif format_hint in ("book", "text"):
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
-                # Auto-fallback strategy: try ISBN first for 10/13 digits, otherwise audio
+                # Auto-fallback strategy
                 is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
                 if is_isbn_like:
                     try:
@@ -156,7 +223,16 @@ def scan_barcode():
                     try:
                         manifestation = IngestService.ingest_audio_from_barcode(barcode)
                     except ValueError:
-                        manifestation = IngestService.ingest_from_isbn(barcode)
+                        try:
+                            manifestation = IngestService.ingest_video_from_barcode(barcode)
+                        except ValueError:
+                            try:
+                                manifestation = IngestService.ingest_game_from_barcode(barcode)
+                            except ValueError:
+                                try:
+                                    manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
+                                except ValueError:
+                                    manifestation = IngestService.ingest_from_isbn(barcode)
 
             is_new_manifestation = True
         except ValueError as e:
@@ -187,7 +263,7 @@ def scan_barcode():
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
                     "author": (
-                        manifestation.meta.get("author") or manifestation.meta.get("authors", [None])[0]
+                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
                         if manifestation.meta
                         else manifestation.author
                     ),
@@ -209,27 +285,12 @@ def scan_barcode():
 @require_auth
 @require_permission(ItemPermissions.LLM_GENERATE_METADATA)
 def extract_from_cover():
-    """Extract metadata from a cover image.
-
-    Accepts a multipart/form-data ``POST`` with a ``cover`` file field.
-    The image is passed to the Gemini Vision API which returns the title and
-    author(s) extracted from the cover artwork.
-
-    **Supported image types:** JPEG, PNG, WebP (max 10 MB).
-
-    **Setup:** Requires the ``GEMINI_API_KEY`` environment variable to be set.
-    See ``docs/COVERS_SETUP.md`` → *Vision-based Metadata Extraction* for details.
-
-    Request form fields:
-        cover (file): The cover image to analyse.
+    # pylint: disable=too-many-return-statements
+    """Submit a cover image for asynchronous metadata extraction.
 
     Returns:
-        200 - ``{"success": true, "data": {"Title": str, "Authors": [str]}, "error": null}``
-        400 - missing file, empty filename, invalid extension, oversized or corrupt image
-        401 - authentication required (handled by ``@require_auth``)
-        503 - Gemini API key not configured or upstream call failed
+        202 - ``{"success": true, "data": {"task_id": str}, "error": null}``
     """
-    # pylint: disable=too-many-return-statements
     if "cover" not in request.files:
         return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
 
@@ -265,25 +326,42 @@ def extract_from_cover():
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
+    user_id = getattr(request, "user_id", None)
 
-    user_id = str(getattr(request, "user_id", ""))
+    # Dispatch to background task queue
+    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)
 
-    result = extract_metadata_from_cover(image_bytes, mime_type=mime_type, user_id=user_id)
+    return jsonify({"success": True, "data": {"task_id": task_id}, "error": None}), 202
 
-    if result is None:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": (
-                        "Vision extraction failed. "
-                        "All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. "
-                        "Please check the server logs."
-                    ),
-                }
-            ),
-            503,
-        )
 
-    return jsonify({"success": True, "data": result, "error": None}), 200
+@api_bp.route("/vision/extract/<task_id>", methods=["GET"])
+@require_auth
+def get_extract_status(task_id: str):
+    """Poll for the status of an asynchronous cover extraction task."""
+    user_id = getattr(request, "user_id", None)
+    result = get_task_result(task_id, user_id=user_id)
+
+    if not result:
+        return jsonify({"success": False, "data": None, "error": "Task not found"}), 404
+
+    if result["status"] == "completed":
+        data = result["result"]
+        if data is None:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": "Vision extraction failed. Fallback methods unconfigured or failed.",
+                    }
+                ),
+                503,
+            )
+        return jsonify({"success": True, "data": data, "error": None}), 200
+
+    if result["status"] == "failed":
+        status_code = 503 if "Vision extraction failed" in str(result.get("error", "")) else 500
+        return jsonify({"success": False, "data": None, "error": result["error"]}), status_code
+
+    # Task is pending or processing
+    return jsonify({"success": True, "data": {"status": result["status"]}, "error": None}), 202

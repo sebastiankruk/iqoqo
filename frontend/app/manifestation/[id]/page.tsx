@@ -68,7 +68,9 @@ export default function ManifestationPage() {
   }
 
   const timestamp = getCoverTimestamp(manifestation.meta);
-  const coverUrl = getCoverUrl(manifestation.cover_url || undefined, timestamp) || (manifestation.meta?.["cover_url"] as string | undefined);
+  const coverUrl =
+    getCoverUrl(manifestation.cover_url || undefined, timestamp) ||
+    (manifestation.meta?.["cover_url"] as string | undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
   /**
@@ -139,28 +141,32 @@ export default function ManifestationPage() {
                     <dd className="font-medium text-foreground">{String(manifestation.isbn13)}</dd>
                   </div>
                 )}
-                {!!(manifestation.meta?.Publisher &&
+                {!!(
+                  manifestation.meta?.Publisher &&
                   manifestation.meta.Publisher !== "Unknown" &&
-                  manifestation.meta.Publisher !== "N/A") && (
-                    <div>
-                      <dt className="text-muted-foreground">Publisher</dt>
-                      <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
-                    </div>
-                  )}
+                  manifestation.meta.Publisher !== "N/A"
+                ) && (
+                  <div>
+                    <dt className="text-muted-foreground">Publisher</dt>
+                    <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
+                  </div>
+                )}
                 {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
                   <div>
                     <dt className="text-muted-foreground">Year</dt>
                     <dd className="font-medium text-foreground">{String(resolved_year)}</dd>
                   </div>
                 )}
-                {!!(manifestation.meta?.Language &&
+                {!!(
+                  manifestation.meta?.Language &&
                   manifestation.meta.Language !== "Unknown" &&
-                  manifestation.meta.Language !== "N/A") && (
-                    <div>
-                      <dt className="text-muted-foreground">Language</dt>
-                      <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
-                    </div>
-                  )}
+                  manifestation.meta.Language !== "N/A"
+                ) && (
+                  <div>
+                    <dt className="text-muted-foreground">Language</dt>
+                    <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
 
@@ -168,10 +174,20 @@ export default function ManifestationPage() {
               <div className="pt-6 space-y-4">
                 <div>
                   {manifestation.user_owns ? (
-                    <div className="inline-flex items-center rounded-lg bg-primary/10 px-4 py-2 font-medium text-primary">
-                      <span className="mr-2 block h-2 w-2 rounded-full bg-primary" />
-                      Already in your collection
-                    </div>
+                    <Button
+                      onClick={() =>
+                        router.push(
+                          `/collection?view=items&q=${encodeURIComponent(
+                            manifestation.isbn13 || manifestation.title || ""
+                          )}`
+                        )
+                      }
+                      variant="secondary"
+                      size="sm"
+                    >
+                      <BookOpen className="mr-2 h-4 w-4 text-primary" />
+                      View in My Collection
+                    </Button>
                   ) : (
                     <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
                       {isAdding ? (

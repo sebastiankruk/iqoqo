@@ -251,6 +251,7 @@ def process_cover_pipeline(
 
                 with open(user_image_path, "rb") as upload_file:
                     image_bytes = upload_file.read()
+
                 optimize_and_save_image(image_bytes, dest_path)
                 os.remove(user_image_path)
 

@@ -56,6 +56,8 @@ def get_items():
     if q:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
+        # Include search_vector for video/board game Cast, Directors, Mechanics search
+        w_search_vector_expr = "w.search_vector"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
         # Set up explicit exact bindings for count/rows so FTS executes safely
@@ -69,12 +71,13 @@ def get_items():
 
         try:
             # Safely grab exact total of matches natively
+            # Include w.search_vector for Cast, Directors, Mechanics (video/board games)
             count_sql = f"""
             SELECT count(i.id) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             JOIN items i ON i.manifestation_id = m.id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             {statuses_sql}
             """
 
@@ -83,12 +86,12 @@ def get_items():
             SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                    w.meta as work_meta, i.added_at, i.updated_at,
-                   ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+                   ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
             FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
             JOIN items i ON i.manifestation_id = m.id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             {statuses_sql}
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset

@@ -137,6 +137,21 @@ After installation, make sure the Docker daemon is running.
      CORS_SUPPORTS_CREDENTIALS=false
      ```
 
+   - **Barcode Resolution Pipeline:** If you plan to use barcode scanning for physical media (DVDs, Games, Puzzles), you should register for API keys at:
+     - [upcdatabase.org](https://upcdatabase.org/) (Tier 1a Open Data)
+     - [upcitemdb.com](https://upcitemdb.com/) (Tier 1b high-quality data)
+     - [Allegro Developer](https://apps.developer.allegro.pl/) (Tier 2 retail resolve & covers)
+       > **Allegro Setup Note:** The Allegro Developer portal requires you to select *at least one* permission, such as **`allegro:api:sale:offers:read`**. Set the **Redirect URI** to `http://localhost`.
+       > **⚠️ IMPORTANT:** Allegro requires "User Context" for search. After setting your `CLIENT_ID` and `CLIENT_SECRET` in `.env`, you **MUST** run the authentication script once:
+       >
+       > ```bash
+       > python scripts/allegro_auth.py
+       > ```
+       >
+       > Follow the on-screen instructions to authorize the app. This creates a `.allegro_token.json` file used for future searches.
+
+     Add these to your `.env` as `UPC_DATABASE_ORG_KEY`, `UPC_ITEM_DB_KEY`, `ALLEGRO_CLIENT_ID`, and `ALLEGRO_CLIENT_SECRET`.
+
    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
      Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
@@ -512,6 +527,10 @@ The following endpoints are available for data management:
 
 **Security Note:** In a production environment, these admin endpoints should be protected with authentication and authorization. Consider implementing API keys or OAuth for access control.
 
+#### Artefact (Cover) Management
+
+For exporting and importing covers/images (artefacts) between instances, see the **[Cover Generation & Retrieval Setup](COVERS_SETUP.md#6-importing-covers-to-a-remote-iqoqo-instance)** guide.
+
 ### Troubleshooting
 
 #### Database Connection Issues
@@ -691,9 +710,11 @@ make lint-markdown  # markdownlint
 
 ## Next Steps
 
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
-- Read the [API documentation](../README.md#api-documentation) for API usage
-- Check [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl) for the FRBR ontology structure
+- See **[CHANGELOG.md](CHANGELOG.md)** for the latest updates and release notes.
+- See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development guidelines and coding standards.
+- See **[ARCHITECTURE.md](ARCHITECTURE.md)** to understand the FRBR hierarchy and data model.
+- See **[COVERS_SETUP.md](COVERS_SETUP.md)** for advanced cover art and vision configuration.
+- Check **[docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)** for the FRBR ontology structure.
 
 The application will be available at `http://127.0.0.1:5000`.
 

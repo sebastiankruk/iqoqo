@@ -40,7 +40,7 @@ function CollectionContent() {
 
   // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
   const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
-  const initialSort = searchParams?.get("sort") || "title";
+  const initialSort = searchParams?.get("sort") || "updated";
   const initialStatuses = searchParams?.get("statuses") || "";
   const initialFilters: ActiveFilter[] = initialStatuses
     ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
@@ -76,7 +76,7 @@ function CollectionContent() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (page > 1) params.set("page", page.toString());
-    if (sortBy !== "title") params.set("sort", sortBy);
+    if (sortBy !== "updated") params.set("sort", sortBy);
 
     const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
@@ -167,6 +167,16 @@ function CollectionContent() {
           return tb.localeCompare(ta);
         case "author":
           return aa.localeCompare(ab);
+        case "updated": {
+          const uA = (a as Item).updated_at ? new Date((a as Item).updated_at!).getTime() : 0;
+          const uB = (b as Item).updated_at ? new Date((b as Item).updated_at!).getTime() : 0;
+          return uB - uA;
+        }
+        case "added": {
+          const aA = (a as Item).added_at ? new Date((a as Item).added_at!).getTime() : 0;
+          const aB = (b as Item).added_at ? new Date((b as Item).added_at!).getTime() : 0;
+          return aB - aA;
+        }
         default:
           return 0;
       }

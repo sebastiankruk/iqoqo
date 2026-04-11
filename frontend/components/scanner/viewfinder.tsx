@@ -13,12 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import { getMediaMetadata } from "@/lib/media";
+import { MediaFormat, ScanFormat } from "@/types/frbr";
+
 /**
  * Viewfinder overlay with corner brackets and animated scanning line.
  *
  * @param {object} props The component props
  * @param {boolean} [props.isScanning=true] Whether the line should animate
- * @param {"book" | "cd" | "vinyl"} [props.format="book"] Media format for aspect ratio
+ * @param {MediaFormat | ScanFormat} [props.format="book"] Media format for aspect ratio
  * @returns {JSX.Element} The component
  */
 export function Viewfinder({
@@ -26,13 +29,13 @@ export function Viewfinder({
   format = "book",
 }: {
   isScanning?: boolean;
-  format?: "book" | "cd" | "vinyl";
+  format?: MediaFormat | ScanFormat;
 }) {
-  const isAudio = format === "cd" || format === "vinyl";
+  const metadata = getMediaMetadata(format);
 
-  // Dimensions: Books are vertical 2:3, CDs/Vinyls are square 1:1
+  // Dimensions: Books are vertical 2:3, others (CDs/Vinyls/Video/BoardGame) are square 1:1
   const width = 240;
-  const height = isAudio ? 240 : 360;
+  const height = width / metadata.aspectRatio;
 
   const bracketSize = 28;
   const strokeWidth = 3;
@@ -41,28 +44,22 @@ export function Viewfinder({
     <div className="absolute inset-0 flex items-center justify-center">
       {/* Darkened overlay with transparent cutout */}
       <div className="pointer-events-none absolute inset-0">
-        <div 
-          className="absolute inset-x-0 top-0 bg-black/60" 
-          style={{ bottom: `calc(50% + ${height / 2}px)` }} 
-        />
-        <div 
-          className="absolute inset-x-0 bottom-0 bg-black/60" 
-          style={{ top: `calc(50% + ${height / 2}px)` }} 
-        />
+        <div className="absolute inset-x-0 top-0 bg-black/60" style={{ bottom: `calc(50% + ${height / 2}px)` }} />
+        <div className="absolute inset-x-0 bottom-0 bg-black/60" style={{ top: `calc(50% + ${height / 2}px)` }} />
         <div
           className="absolute top-1/2 bottom-1/2 left-0 bg-black/60"
-          style={{ 
-            marginTop: `-${height / 2}px`, 
+          style={{
+            marginTop: `-${height / 2}px`,
             marginBottom: `-${height / 2}px`,
-            width: `calc(50% - ${width / 2}px)` 
+            width: `calc(50% - ${width / 2}px)`,
           }}
         />
         <div
           className="absolute top-1/2 bottom-1/2 right-0 bg-black/60"
-          style={{ 
-            marginTop: `-${height / 2}px`, 
+          style={{
+            marginTop: `-${height / 2}px`,
             marginBottom: `-${height / 2}px`,
-            width: `calc(50% - ${width / 2}px)` 
+            width: `calc(50% - ${width / 2}px)`,
           }}
         />
       </div>
@@ -74,7 +71,7 @@ export function Viewfinder({
           className="absolute inset-0 h-full w-full"
           viewBox={`0 0 ${width} ${height}`}
           fill="none"
-          aria-hidden="true"
+          role="presentation"
         >
           <path
             d={`M ${strokeWidth / 2} ${bracketSize} L ${strokeWidth / 2} ${strokeWidth / 2} L ${bracketSize} ${strokeWidth / 2}`}

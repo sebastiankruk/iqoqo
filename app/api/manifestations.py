@@ -28,13 +28,14 @@ from werkzeug.utils import secure_filename
 
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image
 
 
 @api_bp.route("/manifestations", methods=["GET"])
+@optional_auth
 def get_manifestations() -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     page_param = request.args.get("page", "1")
@@ -55,22 +56,25 @@ def get_manifestations() -> tuple[Response, int]:
     if q:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
+        # Include search_vector for video/board game Cast, Directors, Mechanics search
+        w_search_vector_expr = "w.search_vector"
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
         params = {"q": q, "limit": limit, "offset": offset}
 
         try:
+            # Include search_vector for Cast, Directors, Mechanics (video/board games)
             count_sql = f"""
             SELECT count(*) FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             """
             rows_sql = f"""
-            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr}, {tsquery_expr}) as rank
+            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
             FROM manifestations m
             JOIN expressions e ON e.id = m.expression_id
             JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr})
+            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
             """
@@ -167,6 +171,7 @@ def get_manifestations() -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+@optional_auth
 def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     user_id = getattr(request, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
