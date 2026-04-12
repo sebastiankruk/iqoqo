@@ -72,7 +72,7 @@ export function GroupManagement() {
       const mappedRoles: RoleData[] = roleData.map((r: RoleType, idx: number) => ({
         id: r.id,
         name: r.name,
-        memberCount: 0,
+        memberCount: r.member_count ?? 0,
         description: `${r.name.charAt(0).toUpperCase() + r.name.slice(1)} role`,
         color: ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"][idx % 5],
         is_protected: protectedRoles.includes(r.name.toLowerCase()),

@@ -109,7 +109,12 @@ def get_roles():
     roles = Role.query.all()
     protected_roles = {"admin", "user", "contributor"}
     return jsonify(
-        {"success": True, "data": [{"id": r.id, "name": r.name, "is_protected": r.name.lower() in protected_roles} for r in roles]}
+        {
+            "success": True,
+            "data": [
+                {"id": r.id, "name": r.name, "is_protected": r.name.lower() in protected_roles, "member_count": r.users.count()} for r in roles
+            ],
+        }
     )
 
 
