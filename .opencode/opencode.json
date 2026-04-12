@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["../.agents/rules/iqoqo-standards.md"],
+  "permission": {
+    "external_directory": {
+      "~/Downloads/**": "allow",
+      "~/Library/CloudStorage/Dropbox/Obsidian/Default/iqoqo/**": "allow"
+    },
+    "edit": {
+      "~/Downloads/**": "allow",
+      "~/Library/CloudStorage/Dropbox/Obsidian/Default/iqoqo/**": "deny"
+    }
+  }
+}
