@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import SettingsHubPage from "@/app/admin/settings/page";
 import { useProfile } from "@/lib/api/hooks";
 import { useRouter } from "next/navigation";

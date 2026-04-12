@@ -16,19 +16,65 @@
 import { apiFetch, apiClient } from "./client";
 import type { ApiResponse } from "@/types/frbr";
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name?: string | null;
+  roles: string[];
+  is_active: boolean;
+}
+
 /**
- * Fetch a list of users.
+ * Fetch a paginated and filtered list of users.
  *
- * @returns {Promise<Record<string, unknown>[]>} The users
+ * @param params - Query parameters
+ * @param params.search - Search term for email or display name
+ * @param params.status - Filter by status (active/inactive)
+ * @param params.page - Page number
+ * @param params.limit - Items per page
+ * @returns The users and pagination metadata
  */
-export async function getUsers(): Promise<Record<string, unknown>[]> {
-  return apiFetch<Record<string, unknown>[]>("/v1/admin/users");
+export async function getUsers(params?: {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ data: AdminUser[]; meta: { total: number; page: number; pages: number } }> {
+  const query = new URLSearchParams();
+  if (params?.search) query.append("search", params.search);
+  if (params?.status && params.status !== "all") query.append("status", params.status);
+  if (params?.page) query.append("page", params.page.toString());
+  if (params?.limit) query.append("limit", params.limit.toString());
+
+  const res = await apiClient.get<ApiResponse<AdminUser[]>>(`/v1/admin/users?${query.toString()}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch users");
+  }
+
+  // Bypass strict ApiResponse limits to capture pagination metadata
+  const meta = (res.data as unknown as { meta: { total: number; page: number; pages: number } }).meta;
+  return { data: res.data.data as AdminUser[], meta };
+}
+
+/**
+ * Update user roles and status.
+ *
+ * @param userId - The user ID
+ * @param data - The update data
+ * @returns The updated user
+ */
+export async function updateUser(userId: string, data: Partial<AdminUser>): Promise<AdminUser> {
+  const res = await apiClient.put<ApiResponse<AdminUser>>(`/v1/admin/users/${userId}`, data);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update user");
+  }
+  return res.data.data as AdminUser;
 }
 
 /**
  * Fetch instance settings.
  *
- * @returns {Promise<Record<string, unknown>>} The settings
+ * @returns The settings
  */
 export async function getInstanceSettings(): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>("/v1/admin/settings");
@@ -38,7 +84,7 @@ export async function getInstanceSettings(): Promise<Record<string, unknown>> {
  * Update instance settings.
  *
  * @param settings - The new settings
- * @returns {Promise<Record<string, unknown>>} The updated settings
+ * @returns The updated settings
  */
 export async function updateInstanceSettings(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await apiClient.put<ApiResponse<Record<string, unknown>>>("/v1/admin/settings", settings);
