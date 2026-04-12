@@ -16,6 +16,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -76,9 +77,17 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
  * @returns {JSX.Element} The settings hub page component
  */
 export default function SettingsHubPage() {
+  const searchParams = useSearchParams();
   const { data: profile, isLoading } = useProfile();
+  const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState("profile");
+  // Use URL param if set, otherwise use internal state, fallback to profile
+  const activeTab = searchParams.get("tab") || internalTab || "profile";
+
+  // Update internal state when URL param is cleared (user clicks nav item)
+  const handleTabChange = (tab: string) => {
+    setInternalTab(tab);
+  };
 
   if (isLoading || !profile) {
     return (
@@ -104,7 +113,7 @@ export default function SettingsHubPage() {
                 label="Profile"
                 icon={User}
                 isActive={activeTab === "profile"}
-                onClick={() => setActiveTab("profile")}
+                onClick={() => handleTabChange("profile")}
               />
             </nav>
           </div>
@@ -117,20 +126,20 @@ export default function SettingsHubPage() {
                   label="Settings"
                   icon={Settings}
                   isActive={activeTab === "instance"}
-                  onClick={() => setActiveTab("instance")}
+                  onClick={() => handleTabChange("instance")}
                 />
                 <NavItem
                   label="Users"
                   icon={Users}
                   isActive={activeTab === "users"}
-                  onClick={() => setActiveTab("users")}
+                  onClick={() => handleTabChange("users")}
                 />
                 <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
                 <NavItem
                   label="Security"
                   icon={Shield}
                   isActive={activeTab === "security"}
-                  onClick={() => setActiveTab("security")}
+                  onClick={() => handleTabChange("security")}
                 />
               </nav>
             </div>

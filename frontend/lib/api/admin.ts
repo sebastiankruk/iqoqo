@@ -72,14 +72,111 @@ export async function updateUser(userId: string, data: Partial<AdminUser>): Prom
 }
 
 /**
+ * Role data from API.
+ */
+export interface Role {
+  id: number;
+  name: string;
+  is_protected?: boolean;
+}
+
+/**
  * Fetch all available roles for RBAC assignment.
  *
  * @returns The roles
  */
-export async function getRoles(): Promise<{ id: number; name: string }[]> {
-  const res = await apiClient.get<ApiResponse<{ id: number; name: string }[]>>("/v1/admin/roles");
+export async function getRoles(): Promise<Role[]> {
+  const res = await apiClient.get<ApiResponse<Role[]>>("/v1/admin/roles");
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to fetch roles");
+  }
+  return res.data.data;
+}
+
+/**
+ * Create a new role.
+ *
+ * @param name - The role name
+ * @returns The created role
+ */
+export async function createRole(name: string): Promise<Role> {
+  const res = await apiClient.post<ApiResponse<Role>>("/v1/admin/roles", { name });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to create role");
+  }
+  return res.data.data;
+}
+
+/**
+ * Delete a role by ID.
+ *
+ * @param roleId - The role ID to delete
+ */
+export async function deleteRole(roleId: number): Promise<void> {
+  const res = await apiClient.delete<ApiResponse<null>>(`/v1/admin/roles/${roleId}`);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to delete role");
+  }
+}
+
+/**
+ * Permission data from API.
+ */
+export interface Permission {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+/**
+ * Fetch all available permissions that can be assigned to roles.
+ *
+ * @returns The permissions
+ */
+export async function getPermissions(): Promise<Permission[]> {
+  const res = await apiClient.get<ApiResponse<Permission[]>>("/v1/admin/permissions");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch permissions");
+  }
+  return res.data.data;
+}
+
+/**
+ * Role permissions data from API.
+ */
+export interface RolePermissions {
+  role_id: number;
+  role_name: string;
+  permission_ids: number[];
+}
+
+/**
+ * Fetch permissions for a specific role.
+ *
+ * @param roleId - The role ID
+ * @returns The role permissions
+ */
+export async function getRolePermissions(roleId: number): Promise<RolePermissions> {
+  const res = await apiClient.get<ApiResponse<RolePermissions>>(`/v1/admin/roles/${roleId}/permissions`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch role permissions");
+  }
+  return res.data.data;
+}
+
+/**
+ * Update permissions for a specific role.
+ *
+ * @param roleId - The role ID
+ * @param permissionIds - Array of permission IDs to assign
+ * @returns The updated role permissions
+ */
+export async function updateRolePermissions(roleId: number, permissionIds: number[]): Promise<RolePermissions> {
+  const res = await apiClient.put<ApiResponse<RolePermissions>>(`/v1/admin/roles/${roleId}/permissions`, {
+    permission_ids: permissionIds,
+  });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update role permissions");
   }
   return res.data.data;
 }

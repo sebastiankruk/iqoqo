@@ -27,6 +27,7 @@ vi.mock("@/lib/api/hooks", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
+  useSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
 vi.mock("@/components/admin/instance-settings", () => ({
