@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
@@ -28,26 +28,16 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 interface NavItemProps {
-  /** Display label */
   label: string;
-  /** Lucide icon component */
   icon: LucideIcon;
-  /** Whether this item is currently active */
   isActive: boolean;
-  /** Click handler */
   onClick: () => void;
-  /** Optional href for external navigation */
   href?: string;
 }
 
 /**
  * Navigation item for settings sidebar.
  * @param props - Navigation item properties
- * @param props.label - Display label
- * @param props.icon - Lucide icon component
- * @param props.isActive - Whether this item is currently active
- * @param props.onClick - Click handler
- * @param props.href - Optional href for external navigation
  * @returns Navigation item component
  */
 function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
@@ -72,19 +62,16 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
 }
 
 /**
- * Unified settings hub page - serves as Profile for regular users and Admin panel for administrators.
- *
- * @returns {JSX.Element} The settings hub page component
+ * Inner settings content component that uses useSearchParams.
+ * Must be wrapped in Suspense boundary.
  */
-export default function SettingsHubPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  // Use URL param if set, otherwise use internal state, fallback to profile
   const activeTab = searchParams.get("tab") || internalTab || "profile";
 
-  // Update internal state when URL param is cleared (user clicks nav item)
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
   };
@@ -152,44 +139,24 @@ export default function SettingsHubPage() {
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Manage your personal account settings and preferences.
-                </p>
-              </div>
-              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6">
-                  <h3 className="text-lg font-medium">Display Name</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    This is your public display name on this instance.
-                  </p>
-                  <input
-                    className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    value={profile.display_name || ""}
-                    readOnly
-                  />
-                </div>
-                <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
-                  <button className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium">
-                    Save
-                  </button>
-                </div>
+                <p className="text-sm text-muted-foreground mt-1">Manage your account settings and preferences.</p>
               </div>
             </div>
           )}
 
-          {isAdmin && activeTab === "instance" && (
+          {activeTab === "instance" && isAdmin && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Instance Settings</h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Manage global configuration, federation, and monetization for your node.
+                  Configure instance-wide settings for this deployment.
                 </p>
               </div>
               <InstanceSettings />
             </div>
           )}
 
-          {isAdmin && activeTab === "users" && (
+          {activeTab === "users" && isAdmin && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
@@ -204,5 +171,24 @@ export default function SettingsHubPage() {
       </main>
       <Footer />
     </div>
+  );
+}
+
+/**
+ * Unified settings hub page - serves as Profile for regular users and Admin panel for administrators.
+ *
+ * @returns The settings hub page component
+ */
+export default function SettingsHubPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
   );
 }
