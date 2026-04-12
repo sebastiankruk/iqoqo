@@ -67,13 +67,16 @@ test.describe("Admin User Management & RBAC Workflow", () => {
     });
 
     await page.goto("/admin/settings");
+
+    // Click on User Management tab
+    await page.getByText("User Management").click();
   });
 
   test("Should display data table and modify permissions in RBAC sheet", async ({ page }) => {
     // Wait for the data table
     await expect(page.getByText("jane.doe@example.com")).toBeVisible();
     await expect(page.getByText("Jane Doe")).toBeVisible();
-    await expect(page.getByText("Active").first()).toBeVisible();
+    await expect(page.locator("tbody").getByText("Active")).toBeVisible();
 
     // Click the row to open the RBAC Sheet
     await page.getByText("jane.doe@example.com").click();
