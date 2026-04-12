@@ -15,14 +15,11 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { getInstanceSettings, updateInstanceSettings } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
-/**
- * Instance settings data
- */
 interface InstanceSettingsData {
   instance_name?: string;
   amazon_affiliate_id?: string;
@@ -30,15 +27,55 @@ interface InstanceSettingsData {
   [key: string]: unknown;
 }
 
+interface CardWrapperProps {
+  /** Card title */
+  title: string;
+  /** Card description */
+  description: string;
+  /** Footer helper text */
+  footerText: string;
+  /** Save button handler */
+  onSave: () => void;
+  /** Card body content */
+  children: ReactNode;
+}
+
 /**
- * Component for managing global instance settings.
+ * Card wrapper for settings sections.
+ * @param props - Card wrapper properties
+ * @param props.title - Card title
+ * @param props.description - Card description
+ * @param props.footerText - Footer helper text
+ * @param props.onSave - Save button handler
+ * @param props.children - Card body content
+ * @returns Card wrapper component
+ */
+function CardWrapper({ title, description, footerText, onSave, children }: CardWrapperProps) {
+  return (
+    <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
+      <div className="p-6 flex-1">
+        <h3 className="text-lg font-medium tracking-tight">{title}</h3>
+        <p className="text-sm text-muted-foreground mt-1">{description}</p>
+        <div className="mt-5">{children}</div>
+      </div>
+      <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">{footerText}</p>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Instance settings component for managing global configuration.
  *
- * @returns {JSX.Element} The component
+ * @returns {JSX.Element} The instance settings component
  */
 export function InstanceSettings() {
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getInstanceSettings()
@@ -46,67 +83,65 @@ export function InstanceSettings() {
       .finally(() => setLoading(false));
   }, []);
 
-  /**
-   * Handles saving the settings.
-   */
   const handleSave = async () => {
-    setSaving(true);
     try {
       await updateInstanceSettings(settings);
     } catch (e) {
       console.error("Failed to save settings", e);
-    } finally {
-      setSaving(false);
     }
   };
 
-  if (loading)
-    return (
-      <div className="p-4 flex justify-center">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
+  if (loading) {
+    return <Loader2 className="animate-spin h-6 w-6 text-muted-foreground my-10 mx-auto" />;
+  }
 
   return (
-    <div className="flex flex-col gap-5 max-w-lg">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium">Instance Name</label>
+    <div className="flex flex-col gap-8">
+      <CardWrapper
+        title="Instance Name"
+        description="Used to identify your library on the web and within federated networks."
+        footerText="Maximum 32 characters."
+        onSave={handleSave}
+      >
         <input
           type="text"
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           value={settings.instance_name ?? ""}
           onChange={e => setSettings({ ...settings, instance_name: e.target.value })}
           placeholder="e.g., My Personal Library"
         />
-      </div>
+      </CardWrapper>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium">Amazon Affiliate ID</label>
+      <CardWrapper
+        title="Amazon Affiliate ID"
+        description="Monetize external store links by automatically appending your affiliate tracking ID."
+        footerText="Leave blank to disable Amazon integrations."
+        onSave={handleSave}
+      >
         <input
           type="text"
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           value={settings.amazon_affiliate_id ?? ""}
           onChange={e => setSettings({ ...settings, amazon_affiliate_id: e.target.value })}
           placeholder="e.g., iqoqo-20"
         />
-      </div>
+      </CardWrapper>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium">Enable Federation (Share metadata globally)</label>
+      <CardWrapper
+        title="Federation"
+        description="Allow other iqoqo instances to query your public catalog via ActivityPub and Linked Open Data."
+        footerText="This requires your server to be publicly accessible."
+        onSave={handleSave}
+      >
         <select
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           value={String(settings.enable_federation ?? "false")}
           onChange={e => setSettings({ ...settings, enable_federation: e.target.value })}
         >
           <option value="true">Enabled</option>
           <option value="false">Disabled</option>
         </select>
-      </div>
-
-      <Button onClick={handleSave} disabled={saving} className="w-fit mt-2">
-        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Save Configuration
-      </Button>
+      </CardWrapper>
     </div>
   );
 }

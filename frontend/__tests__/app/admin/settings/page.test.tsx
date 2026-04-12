@@ -15,7 +15,7 @@
 //
 
 import { render, screen, waitFor } from "@testing-library/react";
-import AdminSettingsPage from "@/app/admin/settings/page";
+import SettingsHubPage from "@/app/admin/settings/page";
 import { useProfile } from "@/lib/api/hooks";
 import { useRouter } from "next/navigation";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -29,13 +29,15 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
 }));
 
-vi.mock("@/lib/api/admin", () => ({
-  getInstanceSettings: vi.fn().mockResolvedValue([]),
-  getUsers: vi.fn().mockResolvedValue([]),
-  updateSettings: vi.fn().mockResolvedValue({ success: true }),
+vi.mock("@/components/admin/instance-settings", () => ({
+  InstanceSettings: () => <div data-testid="instance-settings" />,
 }));
 
-describe("AdminSettingsPage", () => {
+vi.mock("@/components/admin/user-management", () => ({
+  UserManagement: () => <div data-testid="user-management" />,
+}));
+
+describe("SettingsHubPage", () => {
   const mockPush = vi.fn();
 
   beforeEach(() => {
@@ -48,36 +50,45 @@ describe("AdminSettingsPage", () => {
       typeof useProfile
     >);
 
-    render(<AdminSettingsPage />);
-    expect(screen.queryByText("Admin Settings")).toBeNull();
+    render(<SettingsHubPage />);
+    expect(screen.queryByRole("heading", { name: "Profile Settings" })).toBeNull();
   });
 
-  it("redirects non-admin users to the home page", async () => {
+  it("renders profile settings for standard users", async () => {
     vi.mocked(useProfile).mockReturnValue({
-      data: { id: "1", email: "user@test.com", roles: ["user"] } as unknown as UserProfile,
+      data: { id: "1", email: "user@test.com", display_name: "Test User", roles: ["user"] } as unknown as UserProfile,
       isLoading: false,
     } as unknown as ReturnType<typeof useProfile>);
 
-    render(<AdminSettingsPage />);
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/");
-    });
-  });
-
-  it("renders the admin dashboard and sidebar tabs for admin users", async () => {
-    vi.mocked(useProfile).mockReturnValue({
-      data: { id: "2", email: "admin@test.com", roles: ["admin"] } as unknown as UserProfile,
-      isLoading: false,
-    } as unknown as ReturnType<typeof useProfile>);
-
-    render(<AdminSettingsPage />);
+    render(<SettingsHubPage />);
 
     expect(mockPush).not.toHaveBeenCalled();
-    expect(await screen.findByRole("heading", { name: "Admin Settings", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
 
+    expect(screen.getByRole("button", { name: "Profile Overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Instance Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "User Management" })).not.toBeInTheDocument();
+  });
+
+  it("renders admin tabs and allows switching for admins", async () => {
+    vi.mocked(useProfile).mockReturnValue({
+      data: {
+        id: "2",
+        email: "admin@test.com",
+        display_name: "Admin User",
+        roles: ["admin"],
+      } as unknown as UserProfile,
+      isLoading: false,
+    } as unknown as ReturnType<typeof useProfile>);
+
+    render(<SettingsHubPage />);
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Profile Overview" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Instance Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "User Management" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Integrations & Monetization" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "API & Security" })).toBeInTheDocument();
   });
 });

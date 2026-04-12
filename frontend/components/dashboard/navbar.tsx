@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2 } from "lucide-react";
+import { Search, ScanLine, Library, Loader2, Settings, User, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -25,8 +25,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -154,23 +154,36 @@ export function Navbar() {
                   />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 dark:bg-[#040608] dark:border-white/20">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuContent
+                align="end"
+                className="w-60 p-2 dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl"
+              >
+                <div className="px-2 py-2.5">
+                  <p className="text-sm font-medium leading-none">{profile.display_name || "User"}</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 truncate">{profile.email}</p>
+                </div>
                 <DropdownMenuSeparator className="dark:bg-white/10" />
-                <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/profile">Profile Settings</Link>
-                </DropdownMenuItem>
-
-                {profile.roles?.includes("admin") && (
-                  <DropdownMenuItem asChild className="cursor-pointer">
-                    <Link href="/admin/settings">Admin Settings</Link>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                    <Link href="/admin/settings">
+                      <User className="mr-2 h-4 w-4" /> Profile Settings
+                    </Link>
                   </DropdownMenuItem>
-                )}
-
+                  {profile.roles?.includes("admin") && (
+                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                      <Link href="/admin/settings">
+                        <Settings className="mr-2 h-4 w-4" /> Admin Configuration
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator className="dark:bg-white/10" />
-                <DropdownMenuItem asChild className="cursor-pointer text-red-500 focus:text-red-500">
-                  <button onClick={handleLogout} className="w-full text-left">
-                    Log out
+                <DropdownMenuItem
+                  asChild
+                  className="cursor-pointer rounded-md py-2 px-3 text-sm text-red-500 focus:text-red-500 focus:bg-red-500/10"
+                >
+                  <button onClick={handleLogout} className="w-full flex items-center">
+                    <LogOut className="mr-2 h-4 w-4" /> Log out
                   </button>
                 </DropdownMenuItem>
               </DropdownMenuContent>

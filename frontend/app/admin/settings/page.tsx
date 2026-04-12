@@ -15,92 +15,171 @@
 //
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useProfile } from "@/lib/api/hooks";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings, Users, User, Shield } from "lucide-react";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+
+interface NavItemProps {
+  /** Display label */
+  label: string;
+  /** Lucide icon component */
+  icon: LucideIcon;
+  /** Whether this item is currently active */
+  isActive: boolean;
+  /** Click handler */
+  onClick: () => void;
+}
 
 /**
- * Admin settings page component.
- *
- * @returns {JSX.Element} The page component
+ * Navigation item for settings sidebar.
+ * @param props - Navigation item properties
+ * @param props.label - Display label
+ * @param props.icon - Lucide icon component
+ * @param props.isActive - Whether this item is currently active
+ * @param props.onClick - Click handler
+ * @returns Navigation item component
  */
-export default function AdminSettingsPage() {
+function NavItem({ label, icon: Icon, isActive, onClick }: NavItemProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+        isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
+/**
+ * Unified settings hub page - serves as Profile for regular users and Admin panel for administrators.
+ *
+ * @returns {JSX.Element} The settings hub page component
+ */
+export default function SettingsHubPage() {
   const { data: profile, isLoading } = useProfile();
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState("instance");
 
-  useEffect(() => {
-    if (!isLoading && (!profile || !profile.roles?.includes("admin"))) {
-      router.push("/"); // Redirect non-admins
-    }
-  }, [profile, isLoading, router]);
+  const [activeTab, setActiveTab] = useState("profile");
 
-  if (isLoading || !profile)
+  if (isLoading || !profile) {
     return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="animate-spin h-8 w-8" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
       </div>
     );
+  }
+
+  const isAdmin = profile.roles?.includes("admin");
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
       <Navbar />
-      <main className="max-w-6xl mx-auto py-10 px-6">
-        <h1 className="text-3xl font-serif font-bold mb-8">Admin Settings</h1>
 
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Nav */}
-          <aside className="w-full md:w-64 shrink-0">
-            <nav className="flex flex-col gap-2">
-              <button
-                onClick={() => setActiveTab("instance")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "instance" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                Instance Settings
-              </button>
-              <button
-                onClick={() => setActiveTab("users")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "users" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                User Management
-              </button>
-              <button
-                onClick={() => setActiveTab("integrations")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "integrations" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                Integrations & Monetization
-              </button>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
+        {/* Left Sidebar Navigation */}
+        <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
+            <nav className="flex flex-col gap-1">
+              <NavItem
+                label="Profile Overview"
+                icon={User}
+                isActive={activeTab === "profile"}
+                onClick={() => setActiveTab("profile")}
+              />
             </nav>
-          </aside>
+          </div>
 
-          {/* Main Content Area */}
-          <main className="flex-1 bg-white dark:bg-[#0a0c10] border border-primary/10 dark:border-white/10 rounded-lg p-6">
-            {activeTab === "instance" && (
+          {isAdmin && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
+              <nav className="flex flex-col gap-1">
+                <NavItem
+                  label="Instance Settings"
+                  icon={Settings}
+                  isActive={activeTab === "instance"}
+                  onClick={() => setActiveTab("instance")}
+                />
+                <NavItem
+                  label="User Management"
+                  icon={Users}
+                  isActive={activeTab === "users"}
+                  onClick={() => setActiveTab("users")}
+                />
+                <NavItem
+                  label="API & Security"
+                  icon={Shield}
+                  isActive={activeTab === "security"}
+                  onClick={() => setActiveTab("security")}
+                />
+              </nav>
+            </div>
+          )}
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="flex-1 min-w-0 pb-20">
+          {activeTab === "profile" && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">Instance Settings</h2>
-                <p className="text-sm text-muted-foreground mb-6">Manage global configuration for your iqoqo node.</p>
-                <InstanceSettings />
+                <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage your personal account settings and preferences.
+                </p>
               </div>
-            )}
-            {activeTab === "users" && (
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <h3 className="text-lg font-medium">Display Name</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This is your public display name on this instance.
+                  </p>
+                  <input
+                    className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={profile.display_name || ""}
+                    readOnly
+                  />
+                </div>
+                <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
+                  <button className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium">
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isAdmin && activeTab === "instance" && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">User Management</h2>
-                <UserManagement />
+                <h1 className="text-2xl font-semibold tracking-tight">Instance Settings</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage global configuration, federation, and monetization for your node.
+                </p>
               </div>
-            )}
-            {activeTab === "integrations" && (
+              <InstanceSettings />
+            </div>
+          )}
+
+          {isAdmin && activeTab === "users" && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">Integrations & Monetization</h2>
-                {/* Add Affiliate IDs / Federation forms here (reuse InstanceSettings inputs if needed) */}
-                <InstanceSettings />
+                <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  View and manage roles for users registered on this instance.
+                </p>
               </div>
-            )}
-          </main>
+              <UserManagement />
+            </div>
+          )}
         </div>
       </main>
       <Footer />
