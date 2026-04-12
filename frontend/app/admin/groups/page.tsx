@@ -18,13 +18,13 @@
 import { GroupManagement } from "@/components/admin/group-management";
 
 /**
- * Groups/Roles management page.
+ * Roles management page.
  *
- * @returns The groups page component
+ * @returns The roles page component
  */
 export default function GroupsPage() {
   const handleCreateGroup = () => {
-    console.log("Create new group");
+    console.log("Create new role");
   };
 
   return (

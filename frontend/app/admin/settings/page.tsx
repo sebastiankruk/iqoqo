@@ -17,13 +17,14 @@
 
 import { useState } from "react";
 import { useProfile } from "@/lib/api/hooks";
-import { Loader2, Settings, Users, User, Shield } from "lucide-react";
+import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 
 interface NavItemProps {
   /** Display label */
@@ -34,6 +35,8 @@ interface NavItemProps {
   isActive: boolean;
   /** Click handler */
   onClick: () => void;
+  /** Optional href for external navigation */
+  href?: string;
 }
 
 /**
@@ -43,10 +46,11 @@ interface NavItemProps {
  * @param props.icon - Lucide icon component
  * @param props.isActive - Whether this item is currently active
  * @param props.onClick - Click handler
+ * @param props.href - Optional href for external navigation
  * @returns Navigation item component
  */
-function NavItem({ label, icon: Icon, isActive, onClick }: NavItemProps) {
-  return (
+function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
+  const content = (
     <button
       onClick={onClick}
       className={cn(
@@ -58,6 +62,12 @@ function NavItem({ label, icon: Icon, isActive, onClick }: NavItemProps) {
       {label}
     </button>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+
+  return content;
 }
 
 /**
@@ -91,7 +101,7 @@ export default function SettingsHubPage() {
             <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
             <nav className="flex flex-col gap-1">
               <NavItem
-                label="Profile Overview"
+                label="Profile"
                 icon={User}
                 isActive={activeTab === "profile"}
                 onClick={() => setActiveTab("profile")}
@@ -104,19 +114,20 @@ export default function SettingsHubPage() {
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
               <nav className="flex flex-col gap-1">
                 <NavItem
-                  label="Instance Settings"
+                  label="Settings"
                   icon={Settings}
                   isActive={activeTab === "instance"}
                   onClick={() => setActiveTab("instance")}
                 />
                 <NavItem
-                  label="User Management"
+                  label="Users"
                   icon={Users}
                   isActive={activeTab === "users"}
                   onClick={() => setActiveTab("users")}
                 />
+                <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
                 <NavItem
-                  label="API & Security"
+                  label="Security"
                   icon={Shield}
                   isActive={activeTab === "security"}
                   onClick={() => setActiveTab("security")}

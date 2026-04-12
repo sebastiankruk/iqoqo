@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { getRoles } from "@/lib/api/admin";
 
@@ -45,7 +45,7 @@ export function GroupManagement({ onCreateGroup }: GroupManagementProps) {
   const [loading, setLoading] = useState(true);
 
   // Load roles on mount
-  useState(() => {
+  useEffect(() => {
     getRoles()
       .then(roleData => {
         const mappedRoles: RoleData[] = roleData.map((r, idx) => ({
@@ -59,7 +59,7 @@ export function GroupManagement({ onCreateGroup }: GroupManagementProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  });
+  }, []);
 
   if (loading) {
     return (

@@ -68,8 +68,8 @@ test.describe("Admin User Management & RBAC Workflow", () => {
 
     await page.goto("/admin/settings");
 
-    // Click on User Management tab
-    await page.getByText("User Management").click();
+    // Click on Users tab
+    await page.getByText("Users").click();
   });
 
   test("Should display data table and modify permissions in RBAC sheet", async ({ page }) => {

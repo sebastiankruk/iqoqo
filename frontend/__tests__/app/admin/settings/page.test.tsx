@@ -65,9 +65,9 @@ describe("SettingsHubPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
     expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Profile Overview" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Instance Settings" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "User Management" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Users" })).not.toBeInTheDocument();
   });
 
   it("renders admin tabs and allows switching for admins", async () => {
@@ -86,9 +86,10 @@ describe("SettingsHubPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
     expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Profile Overview" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Instance Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "User Management" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "API & Security" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Roles" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Security" })).toBeInTheDocument();
   });
 });
