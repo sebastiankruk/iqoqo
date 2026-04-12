@@ -79,12 +79,20 @@ def update_user(user_id):
         user.is_active = bool(data["is_active"])
 
     if "roles" in data and isinstance(data["roles"], list):
-        # Fetch corresponding Role models
+        # Fetch corresponding Role models from database
         new_roles = Role.query.filter(Role.name.in_(data["roles"])).all()
         user.roles = new_roles
 
     db.session.commit()
     return jsonify({"success": True, "data": _format_user(user)})
+
+
+@admin_bp.route("/roles", methods=["GET"])
+@admin_required
+def get_roles():
+    """Get all available roles for RBAC assignment."""
+    roles = Role.query.all()
+    return jsonify({"success": True, "data": [{"id": r.id, "name": r.name} for r in roles]})
 
 
 @admin_bp.route("/settings", methods=["GET", "PUT"])

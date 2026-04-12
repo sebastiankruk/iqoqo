@@ -72,6 +72,19 @@ export async function updateUser(userId: string, data: Partial<AdminUser>): Prom
 }
 
 /**
+ * Fetch all available roles for RBAC assignment.
+ *
+ * @returns The roles
+ */
+export async function getRoles(): Promise<{ id: number; name: string }[]> {
+  const res = await apiClient.get<ApiResponse<{ id: number; name: string }[]>>("/v1/admin/roles");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch roles");
+  }
+  return res.data.data;
+}
+
+/**
  * Fetch instance settings.
  *
  * @returns The settings

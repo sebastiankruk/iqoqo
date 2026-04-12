@@ -78,3 +78,22 @@ def test_update_user_rbac(client, admin_headers, app):
     data = res.json["data"]
     assert data["is_active"] is False
     assert "custodian" in data["roles"]
+
+
+def test_get_roles(client, admin_headers, app):
+    """Test fetching available roles."""
+    with app.app_context():
+        # Check if roles exist first, create only if needed
+        existing_roles = Role.query.count()
+        if existing_roles == 0:
+            admin_role = Role(name="admin")
+            user_role = Role(name="user")
+            db.session.add_all([admin_role, user_role])
+            db.session.commit()
+
+    res = client.get("/api/v1/admin/roles", headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json["success"] is True
+    assert len(res.json["data"]) > 0
+    role_names = [r["name"] for r in res.json["data"]]
+    assert "admin" in role_names or "user" in role_names

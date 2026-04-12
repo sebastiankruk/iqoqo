@@ -15,8 +15,8 @@
 //
 "use client";
 
-import { useState } from "react";
-import { AdminUser, updateUser } from "@/lib/api/admin";
+import { useState, useEffect } from "react";
+import { AdminUser, updateUser, getRoles } from "@/lib/api/admin";
 import { Loader2, X, ShieldAlert } from "lucide-react";
 
 interface RbacSheetProps {
@@ -27,9 +27,6 @@ interface RbacSheetProps {
   /** Callback when user is updated */
   onUpdate: (updated: AdminUser) => void;
 }
-
-// Available base system roles
-const AVAILABLE_ROLES = ["admin", "custodian", "user"];
 
 /**
  * Slide-over interface for managing user properties and RBAC assignments.
@@ -42,17 +39,34 @@ const AVAILABLE_ROLES = ["admin", "custodian", "user"];
  */
 export function RbacSheet({ user, onClose, onUpdate }: RbacSheetProps) {
   const [loading, setLoading] = useState(false);
+  const [rolesLoading, setRolesLoading] = useState(true);
+  const [availableRoles, setAvailableRoles] = useState<{ id: number; name: string }[]>([]);
   const [isActive, setIsActive] = useState(user.is_active);
-  const [roles, setRoles] = useState<string[]>(user.roles || []);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles || []);
 
-  const toggleRole = (role: string) => {
-    setRoles(prev => (prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]));
+  useEffect(() => {
+    getRoles()
+      .then(setAvailableRoles)
+      .catch(err => {
+        console.error("Failed to load roles:", err);
+        // Fallback to hardcoded roles if API fails
+        setAvailableRoles([
+          { id: 1, name: "admin" },
+          { id: 2, name: "custodian" },
+          { id: 3, name: "user" },
+        ]);
+      })
+      .finally(() => setRolesLoading(false));
+  }, []);
+
+  const toggleRole = (roleName: string) => {
+    setSelectedRoles(prev => (prev.includes(roleName) ? prev.filter(r => r !== roleName) : [...prev, roleName]));
   };
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      const updated = await updateUser(user.id, { is_active: isActive, roles });
+      const updated = await updateUser(user.id, { is_active: isActive, roles: selectedRoles });
       onUpdate(updated);
       onClose();
     } catch (e) {
@@ -125,30 +139,32 @@ export function RbacSheet({ user, onClose, onUpdate }: RbacSheetProps) {
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground border-b pb-2">
               Privileges & Roles
             </h3>
-            <div className="space-y-3 mt-2">
-              {AVAILABLE_ROLES.map(role => (
-                <label key={role} className="flex items-start gap-3 cursor-pointer group">
-                  <div className="relative flex items-center h-5">
-                    <input
-                      type="checkbox"
-                      checked={roles.includes(role)}
-                      onChange={() => toggleRole(role)}
-                      className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm capitalize group-hover:text-primary transition-colors">
-                      {role}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {role === "admin" && "Full system access including configuration."}
-                      {role === "custodian" && "Manage collections, metadata, and approvals."}
-                      {role === "user" && "Standard permissions to maintain a personal collection."}
-                    </span>
-                  </div>
-                </label>
-              ))}
-            </div>
+            {rolesLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Loading roles...</span>
+              </div>
+            ) : (
+              <div className="space-y-3 mt-2">
+                {availableRoles.map(role => (
+                  <label key={role.id} className="flex items-start gap-3 cursor-pointer group">
+                    <div className="relative flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        checked={selectedRoles.includes(role.name)}
+                        onChange={() => toggleRole(role.name)}
+                        className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm capitalize group-hover:text-primary transition-colors">
+                        {role.name}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -162,7 +178,7 @@ export function RbacSheet({ user, onClose, onUpdate }: RbacSheetProps) {
           </button>
           <button
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || rolesLoading}
             className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 font-medium hover:opacity-90 disabled:opacity-50"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}

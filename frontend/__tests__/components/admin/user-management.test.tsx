@@ -33,6 +33,11 @@ describe("UserManagement Component", () => {
       data: mockUsers,
       meta: { total: 2, page: 1, pages: 1 },
     });
+    vi.mocked(adminApi.getRoles).mockResolvedValue([
+      { id: 1, name: "admin" },
+      { id: 2, name: "custodian" },
+      { id: 3, name: "user" },
+    ]);
   });
 
   it("renders table and loads users automatically", async () => {
