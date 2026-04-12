@@ -15,6 +15,15 @@
 #
 .PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend
 
+# Detect node/npm/npx - works even when make is invoked from a non-interactive
+# shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
+# binary's directory and prepend it to PATH so that '#!/usr/bin/env node'
+# shebangs in npm/npx scripts resolve correctly.
+NODE     := $(shell command -v node 2>/dev/null || ls $(HOME)/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)
+NODE_DIR := $(dir $(NODE))
+NPM       = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npm
+NPX       = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npx
+
 help:
 	@echo "Available targets:"
 	@echo ""
@@ -106,11 +115,11 @@ lint-format:
 
 lint-js:
 	@echo "Running eslint..."
-	@cd frontend && npm run lint
+	@cd frontend && $(NPM) run lint
 
 lint-ts:
 	@echo "Running TypeScript type checks..."
-	@cd frontend && npx tsc --noEmit
+	@cd frontend && $(NPX) tsc --noEmit
 
 lint-frontend: lint-js lint-ts
 
@@ -124,11 +133,11 @@ lint-license:
 
 lint-css:
 	@echo "Running stylelint..."
-	npx stylelint --allow-empty-input "frontend/app/**/*.css" "frontend/components/**/*.css"
+	$(NPX) stylelint --allow-empty-input "frontend/app/**/*.css" "frontend/components/**/*.css"
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#frontend/playwright-report" "#frontend/test-results"
+	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#frontend/playwright-report" "#frontend/test-results"
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license
@@ -142,7 +151,7 @@ format-python:
 
 format-js:
 	@echo "Formatting frontend TypeScript and CSS..."
-	@cd frontend && npx prettier --write "**/*.{ts,tsx,css}" --ignore-path .gitignore
+	@cd frontend && $(NPX) prettier --write "**/*.{ts,tsx,css}" --ignore-path .gitignore
 
 format: format-python format-js
 	@echo "All code formatted!"
@@ -154,11 +163,11 @@ test-backend:
 
 test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
-	cd frontend && npm run test
+	cd frontend && $(NPM) run test
 
 test-e2e:
 	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && npx playwright test
+	cd frontend && $(NPX) playwright test
 
 test: test-backend test-frontend test-e2e
 	@echo "All tests completed!"
