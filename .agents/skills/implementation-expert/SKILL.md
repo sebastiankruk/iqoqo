@@ -41,7 +41,7 @@ This skill defines the protocol for implementing features in the iqoqo repositor
     # GNU Affero General Public License for more details.
     #
     # You should have received a copy of the GNU Affero General Public License
-    # along with this program.  If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/)
+    # along with this program.  If not, see <https://www.gnu.org/licenses/>
     #
     ```
 
