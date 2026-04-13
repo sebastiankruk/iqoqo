@@ -110,6 +110,7 @@ export interface Item {
   manifestation_id: number;
   owner_id: string;
   owner_name?: string | null;
+  owner_count?: number;
   status: ItemStatus;
   meta: Record<string, unknown>;
   added_at?: string;

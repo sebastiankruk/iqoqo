@@ -172,7 +172,7 @@ export default function ManifestationPage() {
 
             {userProfile && (
               <div className="pt-6 space-y-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col items-start gap-2">
                   <div>
                     {manifestation.user_owns ? (
                       <Button
@@ -201,8 +201,9 @@ export default function ManifestationPage() {
                     )}
                   </div>
                   {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      Owned by {manifestation.owner_count} {manifestation.owner_count === 1 ? "person" : "people"}
+                    <span className="text-xs text-muted-foreground">
+                      Owned by <strong className="text-foreground">{manifestation.owner_count}</strong>{" "}
+                      {manifestation.owner_count === 1 ? "person" : "people"}
                     </span>
                   )}
                 </div>

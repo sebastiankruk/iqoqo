@@ -27,6 +27,7 @@ import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
   owner_name?: string | null;
+  owner_count?: number;
 }
 
 /**
@@ -35,9 +36,10 @@ interface ExtendedMetadataProps {
  * @param root0 - The props object
  * @param root0.meta - The metadata to display
  * @param root0.owner_name - The owner name to display
+ * @param root0.owner_count - The number of owners for this manifestation
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta, owner_name }: ExtendedMetadataProps) {
+export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
@@ -136,7 +138,8 @@ export function ExtendedMetadata({ meta, owner_name }: ExtendedMetadataProps) {
     !isPuzzle &&
     !trackList &&
     extraKeys.length === 0 &&
-    !owner_name
+    !owner_name &&
+    !owner_count
   )
     return null;
 
@@ -249,10 +252,17 @@ export function ExtendedMetadata({ meta, owner_name }: ExtendedMetadataProps) {
 
           {isExpanded && (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 text-sm bg-background/50 rounded-lg mt-2 border border-border/40">
-              {owner_name && (
+              {(owner_name || owner_count) && (
                 <div className="flex flex-col gap-1 pb-2 border-b border-border/20">
                   <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Owner</dt>
-                  <dd className="font-medium text-foreground">{owner_name}</dd>
+                  <dd className="font-medium text-foreground">
+                    {owner_name}
+                    {owner_count && owner_count > 1 && (
+                      <span className="text-muted-foreground ml-1">
+                        (<strong>{owner_count}</strong> owners)
+                      </span>
+                    )}
+                  </dd>
                 </div>
               )}
               {extraKeys.map(key => (

@@ -289,10 +289,13 @@ def get_item_detail(item_id: int):
             has_read_owners = any(p.name == "read:owners" for p in user_perms)
 
     manifestation = item.manifestation
+    owner_count = db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id).scalar() or 0
+
     item_data = {
         "id": item.id,
         "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
         "owner_name": None,
+        "owner_count": owner_count,
         "status": item.status,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
