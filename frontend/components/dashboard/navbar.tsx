@@ -144,7 +144,7 @@ export function Navbar() {
                     alt={`${profile.display_name || profile.email}'s profile picture`}
                     size={36}
                     className="rounded-full"
-                    fallback={(profile.display_name?.charAt(0) || profile.email.charAt(0)).toUpperCase()}
+                    fallback={(profile.display_name?.charAt(0) || profile.email?.charAt(0) || "?").toUpperCase()}
                   />
                 </button>
               </DropdownMenuTrigger>

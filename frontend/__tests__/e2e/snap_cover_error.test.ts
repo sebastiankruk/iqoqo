@@ -84,7 +84,7 @@ test.describe("Snap Cover Workflow", () => {
     });
 
     // 5. Assert that the error message is displayed after polling fails
-    const errorText = page.locator("text=Vision extraction failed. All fallback methods");
+    const errorText = page.getByText("Vision extraction failed. All fallback methods").first();
     await expect(errorText).toBeVisible();
 
     // 6. Verify that "Manual Entry Form" is still accessible by switching to manual tab
