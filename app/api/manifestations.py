@@ -19,7 +19,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, current_app, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload
@@ -37,7 +37,7 @@ from app.utils.images import save_upload_image
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
@@ -173,7 +173,7 @@ def get_manifestations() -> tuple[Response, int]:
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
 @optional_auth
 def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
 
     if not m:
@@ -187,10 +187,12 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         authors = work.meta.get("authors", []) if work.meta else []
 
     user_owns = False
+    owner_count = 0
     if user_id:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
+    owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -206,6 +208,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
+        "owner_count": owner_count,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 
@@ -292,7 +295,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             manifestation.update_meta(cover_status="pending")
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-            user_id = getattr(request, "user_id", None)
+            user_id = getattr(g, "user_id", None)
             user_id_str = str(user_id) if user_id else "anonymous"
             user = db.session.get(User, user_id) if user_id else None
             llm_permissions = User.list_llm_permissions(user)
@@ -410,7 +413,7 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     title = work.title if work else "Unknown Title"
     author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
 
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
@@ -500,7 +503,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     description = meta.get("Description", "")
     categories = meta.get("Categories", [])
     genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)

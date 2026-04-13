@@ -1,7 +1,13 @@
 ---
+name: makefile-tester
 description: "Skill for intelligently running lint and test suites using Makefile sub-tasks to save time."
+license: AGPL
+compatibility:
+  - opencode
+  - antigravity
+metadata:
+  audience: testers
 ---
-
 # Smart Makefile Tester
 
 ## Context
