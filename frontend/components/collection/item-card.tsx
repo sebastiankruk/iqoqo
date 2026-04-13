@@ -74,7 +74,8 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
   const status = isCatalog ? undefined : (item as Item).status;
-  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : true;
+
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).owner_id !== "Unavailable";
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
@@ -123,7 +124,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
       >
         <div className="flex h-full p-5 gap-4 items-center">
-          <div className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}>
+          <div
+            className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}
+          >
             {(isProcessing || coverStatus === "pending") && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -148,9 +151,13 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
             <div>
               <div className="mb-1.5 flex items-center gap-1.5">
                 <MediaIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">{mediaLabel}</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">
+                  {mediaLabel}
+                </span>
               </div>
-              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">{title}</h3>
+              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">
+                {title}
+              </h3>
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{authors}</p>
               <div className="mt-2.5 flex items-center gap-2">
                 {!isCatalog && (

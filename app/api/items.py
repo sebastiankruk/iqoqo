@@ -21,9 +21,9 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -269,19 +269,39 @@ def get_items():
 
 
 @api_bp.route("/items/<int:item_id>", methods=["GET"])
+@optional_auth
 def get_item_detail(item_id: int):
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
+    user_id = getattr(request, "user_id", None)
+    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_admin = False
+    has_read_owners = False
+
+    if user_id:
+        user = db.session.get(User, user_id)
+        if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
+            is_admin = True
+        if user:
+            user_perms = getattr(user, "permissions", []) if hasattr(user, "permissions") else []
+            has_read_owners = any(p.name == "read:owners" for p in user_perms)
+
     manifestation = item.manifestation
     item_data = {
         "id": item.id,
-        "owner_id": item.owner_id,
+        "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
+        "owner_name": None,
         "status": item.status,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
+
+    if is_owner or is_admin or has_read_owners:
+        owner = db.session.get(User, item.owner_id)
+        if owner:
+            item_data["owner_name"] = owner.display_name or owner.email
 
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
@@ -310,10 +330,27 @@ def get_item_detail(item_id: int):
 
 
 @api_bp.route("/items/<int:item_id>", methods=["PUT"])
+@require_auth
 def update_item(item_id: int):
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    user_id = getattr(request, "user_id", None)
+    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_admin = False
+
+    user = db.session.get(User, user_id)
+    if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
+        is_admin = True
+
+    has_update_permission = False
+    if user:
+        user_perms = getattr(user, "permissions", []) if hasattr(user, "permissions") else []
+        has_update_permission = any(p.name == "update:item" for p in user_perms)
+
+    if not (is_owner or is_admin or has_update_permission):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -339,6 +376,17 @@ def delete_item(item_id: int):
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    user_id = getattr(request, "user_id", None)
+    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_admin = False
+
+    user = db.session.get(User, user_id)
+    if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
+        is_admin = True
+
+    if not (is_owner or is_admin):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     try:
         db.session.delete(item)

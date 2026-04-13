@@ -16,13 +16,12 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, BookCopy, Globe } from "lucide-react";
+import { FileText, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useAppConfig } from "@/lib/api/hooks";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
-  { id: "my-copy", label: "My Copy", icon: BookCopy },
   { id: "federation", label: "Federation", icon: Globe },
 ] as const;
 
@@ -31,6 +30,7 @@ type TabId = (typeof TABS)[number]["id"];
 /* ── Details tab ─────────────────────────────────────────────────────────── */
 
 import { ExtendedMetadata } from "./extended-metadata";
+import Link from "next/link";
 
 /**
  * Details tab component.
@@ -59,51 +59,35 @@ function DetailsTab({ item }: { item: Item }) {
           )}
           {item.expression && (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Exp ID</dt>
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Expression ID</dt>
               <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
             </div>
           )}
           <div className="flex flex-col gap-0.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manif ID</dt>
-            <dd className="text-sm font-mono text-foreground">#{item.manifestation_id}</dd>
+            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manifestation ID</dt>
+            <dd className="text-sm font-mono text-foreground">
+              <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
+                #{item.manifestation_id}
+              </Link>
+            </dd>
           </div>
           <div className="flex flex-col gap-0.5">
             <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
             <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
           </div>
         </dl>
-      </div>
-    </div>
-  );
-}
 
-/* ── My Copy tab ─────────────────────────────────────────────────────────── */
-
-/**
- * My Copy tab component.
- *
- * @param {{ item: Item }} props - The component props.
- * @param {Item} props.item - The item to display.
- * @returns {JSX.Element}
- */
-function MyCopyTab({ item }: { item: Item }) {
-  const fields = [
-    { label: "Status", value: item.status },
-    { label: "Owner", value: item.owner_id },
-  ].filter(f => f.value);
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="rounded-lg border border-border bg-muted/40 p-4">
-        <h4 className="mb-3 font-serif text-sm font-bold text-foreground">Copy Information</h4>
-        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-          {fields.map(({ label, value }) => (
-            <div key={label} className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
-              <dd className="text-sm font-medium capitalize text-foreground">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* Owner info - shown when owner_name is available */}
+        {item.owner_name && (
+          <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4">
+            <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Owner</dt>
+                <dd className="text-sm font-medium text-foreground">{item.owner_name}</dd>
+              </div>
+            </dl>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -166,7 +150,6 @@ export function ItemTabs({ item }: { item: Item }) {
       {/* Tab content */}
       <div>
         {active === "details" && <DetailsTab item={item} />}
-        {active === "my-copy" && <MyCopyTab item={item} />}
         {active === "federation" && <FederationTab />}
       </div>
     </div>

@@ -140,7 +140,12 @@ describe("ItemCard", () => {
   });
 
   it("renders a cover image in horizontal variant when coverUrl is provided", () => {
-    render(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })} variant="horizontal" />);
+    render(
+      <ItemCard
+        item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })}
+        variant="horizontal"
+      />
+    );
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/horizontal-cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
@@ -149,5 +154,10 @@ describe("ItemCard", () => {
   it("renders a cover placeholder in horizontal variant when coverUrl is absent", () => {
     render(<ItemCard item={makeItem({ meta: {} })} variant="horizontal" />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("does not show 'In Collection' badge when owner_id is 'Unavailable'", () => {
+    render(<ItemCard item={makeItem({ owner_id: "Unavailable" })} />);
+    expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
   });
 });

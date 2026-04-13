@@ -67,6 +67,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "cover_status",
     "cover_source",
     "cover_url",
+    "cover_status_updated_at",
     "local_cover",
     "tags",
     "year",

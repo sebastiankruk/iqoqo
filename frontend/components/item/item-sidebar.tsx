@@ -68,6 +68,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const permissions = profile?.permissions ?? [];
   const hasUploadPermission = permissions.includes("upload:cover");
   const hasEditPermission = permissions.includes("edit:manifestation");
+  const hasUpdateItemPermission = permissions.includes("update:item");
+
+  const canModifyItem = item.owner_id !== "Unavailable" && hasUpdateItemPermission;
 
   // Media type detection
   const format =
@@ -155,56 +158,62 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
       {/* Action buttons & Status Select */}
       <div className="flex w-full flex-col gap-2.5">
-        <select
-          aria-label="Item status"
-          value={item.status}
-          onChange={handleStatusChange}
-          disabled={updateItem.isPending}
-          className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
-        >
-          <optgroup
-            label="Availability & Condition"
-            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+        {canModifyItem ? (
+          <select
+            aria-label="Item status"
+            value={item.status}
+            onChange={handleStatusChange}
+            disabled={updateItem.isPending}
+            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
           >
-            {["available", "lent", "damaged", "lost"].map(key => (
-              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup
-            label="Reading Progress"
-            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-          >
-            {["unread", "reading", "read", "want_to_read"].map(key => (
-              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup
-            label="Listening Progress"
-            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-          >
-            {["want_to_listen", "listening", "listened"].map(key => (
-              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup
-            label="Acquisition"
-            className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-          >
-            {["wish_list", "ordered"].map(key => (
-              <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-              </option>
-            ))}
-          </optgroup>
-        </select>
+            <optgroup
+              label="Availability & Condition"
+              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+            >
+              {["available", "lent", "damaged", "lost"].map(key => (
+                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup
+              label="Reading Progress"
+              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+            >
+              {["unread", "reading", "read", "want_to_read"].map(key => (
+                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup
+              label="Listening Progress"
+              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+            >
+              {["want_to_listen", "listening", "listened"].map(key => (
+                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup
+              label="Acquisition"
+              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+            >
+              {["wish_list", "ordered"].map(key => (
+                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        ) : (
+          <div className="w-full rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-center text-secondary-foreground border border-border">
+            {statusInfo.label}
+          </div>
+        )}
 
-        {onEdit && (
+        {canModifyItem && onEdit && (
           <button
             onClick={onEdit}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
@@ -224,7 +233,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         </button>
         */}
 
-        {hasUploadPermission && (
+        {canModifyItem && hasUploadPermission && (
           <CameraCapture
             manifestation_id={item.manifestation_id}
             format={format as MediaFormat}
@@ -241,7 +250,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           />
         )}
 
-        {hasEditPermission && (
+        {canModifyItem && hasEditPermission && (
           <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
         )}
       </div>

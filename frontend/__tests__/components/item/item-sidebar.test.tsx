@@ -21,7 +21,11 @@ import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
-  useProfile: vi.fn(() => ({ data: null })),
+  useProfile: vi.fn(() => ({
+    data: {
+      permissions: ["update:item", "upload:cover", "edit:manifestation"],
+    },
+  })),
 }));
 
 vi.mock("sonner", () => ({
@@ -71,5 +75,46 @@ describe("ItemSidebar Component", () => {
 
     expect(mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith({ status: "reading" }, expect.any(Object));
+  });
+
+  it("renders read-only status badge when owner is anonymized", () => {
+    vi.mocked(hooks.useUpdateItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+    const anonymizedItem = {
+      ...mockItem,
+      owner_id: "Unavailable",
+    } as unknown as Item;
+
+    render(<ItemSidebar item={anonymizedItem} />);
+    expect(screen.getAllByText(/On Shelf/i)[0]).toBeInTheDocument();
+    expect(screen.queryByLabelText("Item status")).not.toBeInTheDocument();
+  });
+
+  it("hides Edit Metadata button when owner is anonymized", () => {
+    vi.mocked(hooks.useUpdateItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+    const anonymizedItem = {
+      ...mockItem,
+      owner_id: "Unavailable",
+    } as unknown as Item;
+
+    render(<ItemSidebar item={anonymizedItem} onEdit={vi.fn()} />);
+    expect(screen.queryByText(/Edit Metadata/i)).not.toBeInTheDocument();
+  });
+
+  it("shows Edit Metadata button when owner is not anonymized", () => {
+    vi.mocked(hooks.useUpdateItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+    render(<ItemSidebar item={mockItem} onEdit={vi.fn()} />);
+    expect(screen.getByText(/Edit Metadata/i)).toBeInTheDocument();
   });
 });

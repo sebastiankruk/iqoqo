@@ -65,6 +65,8 @@ def admin_headers(app):
             Permission(name="regenerate:cover"),
             Permission(name="refetch:metadata"),
             Permission(name="delete:item"),
+            Permission(name="update:item"),
+            Permission(name="read:owners"),
             Permission(name="edit:manifestation"),
             Permission(name="upload:cover"),
             Permission(name="config:external_apis"),

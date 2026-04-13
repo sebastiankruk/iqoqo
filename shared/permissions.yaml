@@ -22,6 +22,10 @@ permissions:
     description: "Allow deletion of items"
   - name: delete:manifestation
     description: "Allow deletion of manifestations"
+  - name: update:item
+    description: "Allow updating item status and metadata"
+  - name: read:owners
+    description: "View owner names of items (admin only by default)"
   - name: llm_generate:cover
     description: "Allow LLM to generate covers"
   - name: llm_generate:metadata
