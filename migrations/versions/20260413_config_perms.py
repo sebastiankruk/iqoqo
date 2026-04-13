@@ -16,7 +16,7 @@
 """Add config and user/role management permissions
 
 Revision ID: 20260413_config_perms
-Revises: 40408803b0ba
+Revises: 20260405_fts_video_games
 Create Date: 2026-04-13 12:00:00.000000
 
 """

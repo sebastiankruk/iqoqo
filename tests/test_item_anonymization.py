@@ -347,4 +347,3 @@ def test_admin_can_delete_any_item(client, admin_headers, app):
 
     response = client.delete(f"/api/items/{item_id}", headers=admin_headers)
     assert response.status_code == 200
-
