@@ -77,7 +77,7 @@ function SettingsContent(): React.JSX.Element {
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  const activeTab = searchParams.get("tab") || internalTab || "profile";
+  const activeTab = internalTab || searchParams.get("tab") || "profile";
 
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
@@ -94,7 +94,16 @@ function SettingsContent(): React.JSX.Element {
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: string): boolean => permissions.includes(perm);
 
-  console.log("[DEBUG] activeTab:", activeTab, "internalTab:", internalTab, "searchParams:", searchParams.get("tab"));
+  console.log(
+    "[DEBUG] activeTab:",
+    activeTab,
+    "internalTab:",
+    internalTab,
+    "searchParams:",
+    searchParams.get("tab"),
+    "rendering:",
+    activeTab === "federation" ? "FEDERATION CONTENT" : activeTab
+  );
 
   const canViewSettings =
     hasPermission("config:external_apis") ||
