@@ -34,7 +34,7 @@ def upgrade():
 
     conn.execute(
         sa.text("""
-            INSERT INTO permissions (name, description)
+            INSERT INTO auth.permissions (name, description)
             VALUES
                 ('config:external_apis', 'Manage external API keys and integrations'),
                 ('config:federation', 'Manage federation settings'),
@@ -50,10 +50,10 @@ def upgrade():
 
     conn.execute(
         sa.text("""
-            INSERT INTO role_permissions (role_id, permission_id)
+            INSERT INTO auth.role_permissions (role_id, permission_id)
             SELECT r.id, p.id
-            FROM roles r
-            CROSS JOIN permissions p
+            FROM auth.roles r
+            CROSS JOIN auth.permissions p
             WHERE r.name = 'admin'
             AND p.name IN (
                 'config:external_apis',
@@ -75,9 +75,9 @@ def downgrade():
 
     conn.execute(
         sa.text("""
-            DELETE FROM role_permissions
+            DELETE FROM auth.role_permissions
             WHERE permission_id IN (
-                SELECT id FROM permissions WHERE name IN (
+                SELECT id FROM auth.permissions WHERE name IN (
                     'config:external_apis',
                     'config:federation',
                     'config:affiliate',
@@ -93,7 +93,7 @@ def downgrade():
 
     conn.execute(
         sa.text("""
-            DELETE FROM permissions
+            DELETE FROM auth.permissions
             WHERE name IN (
                 'config:external_apis',
                 'config:federation',
@@ -106,4 +106,3 @@ def downgrade():
             )
         """)
     )
-
