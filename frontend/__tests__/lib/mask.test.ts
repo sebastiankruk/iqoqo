@@ -16,16 +16,18 @@
 import { describe, it, expect } from "vitest";
 
 describe("_mask_api_key behavior", () => {
-  it("should show last 4 characters for long API keys", () => {
-    // Simulate backend behavior - last 4 chars should be visible
+  it("should mask API keys showing last 4 characters", () => {
     const maskKey = (value: string) => {
       if (!value) return "";
       if (value.length >= 8) return `***${value.slice(-4)}`;
       return "***";
     };
 
-    expect(maskKey("sk-1234567890abcdef")).toBe("***cdef");
-    expect(maskKey("OPENAI_API_KEY_123")).toBe("***e123");
+    // Should show last 4 chars - verify pattern
+    const result1 = maskKey("OPENAI_KEY_12345");
+    expect(result1.startsWith("***")).toBe(true);
+    expect(result1.endsWith("2345")).toBe(true);
+    expect(result1.length).toBe(7); // *** + last 4 = 7
   });
 
   it("should mask short values", () => {

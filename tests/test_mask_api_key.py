@@ -23,7 +23,7 @@ def test_mask_api_key_shows_last_4_chars():
     # Just verify it masks - shows last 4 actual chars
     assert "***" in _mask_api_key("sk-1234567890abcdef")
     assert _mask_api_key("sk-1234567890abcdef").endswith("cdef")
-    
+
     # Verify env var masking also works
     assert "***" in _mask_api_key("OPENAI_KEY_12345678")
     assert _mask_api_key("OPENAI_KEY_12345678").endswith("5678")
