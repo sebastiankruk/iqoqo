@@ -14,6 +14,8 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>
 #
 
+import os
+
 from flask import Blueprint, jsonify, request
 
 from app.api.decorators import admin_required
@@ -269,23 +271,62 @@ def manage_settings():
     category = request.args.get("category", "all")
 
     if request.method == "GET":
-        settings = InstanceSettings.query.all()
-
         can_external = _has_permission(user, "config:external_apis")
         can_federation = _has_permission(user, "config:federation")
         can_affiliate = _has_permission(user, "config:affiliate")
         can_internal = _has_permission(user, "config:internal")
 
+        # Get all DB settings
+        db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
+
+        # Get Flask config keys
+        try:
+            from flask import current_app
+            flask_config = current_app.config if current_app else {}
+        except Exception:
+            flask_config = {}
+
         result = {}
-        for s in settings:
-            if s.key in API_KEYS and can_external:
-                result[s.key] = _mask_api_key(str(s.value)) if s.value else ""
-            elif s.key in FEDERATION_KEYS and can_federation:
-                result[s.key] = s.value
-            elif s.key in AFFILIATE_KEYS and can_affiliate:
-                result[s.key] = s.value
-            elif s.key in INTERNAL_KEYS and can_internal:
-                result[s.key] = s.value
+
+        # Process API keys (external)
+        if can_external:
+            for key in API_KEYS:
+                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+                if value:
+                    result[key] = {"value": _mask_api_key(str(value)), "source": source}
+                else:
+                    result[key] = {"value": "", "source": source}
+
+        # Process Federation keys
+        if can_federation:
+            for key in FEDERATION_KEYS:
+                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+                if value:
+                    result[key] = {"value": str(value), "source": source}
+                else:
+                    result[key] = {"value": "", "source": source}
+
+        # Process Affiliate keys
+        if can_affiliate:
+            for key in AFFILIATE_KEYS:
+                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+                if value:
+                    result[key] = {"value": str(value), "source": source}
+                else:
+                    result[key] = {"value": "", "source": source}
+
+        # Process Internal keys
+        if can_internal:
+            for key in INTERNAL_KEYS:
+                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+                if value:
+                    result[key] = {"value": str(value), "source": source}
+                else:
+                    result[key] = {"value": "", "source": source}
 
         if category == "federation" and not can_federation:
             return jsonify({"success": False, "error": "Permission denied: config:federation required"}), 403

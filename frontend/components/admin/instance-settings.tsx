@@ -25,8 +25,13 @@ interface InstanceSettingsProps {
   showApiKeys?: boolean;
 }
 
+interface SettingValue {
+  value: string | boolean | null;
+  source: "db" | "env" | "missing";
+}
+
 interface InstanceSettingsData {
-  [key: string]: string | boolean | null;
+  [key: string]: SettingValue | string | boolean | null;
 }
 
 const SETTING_GROUPS = {
@@ -142,7 +147,15 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     try {
       const toSave: Record<string, unknown> = {};
       for (const s of settingsList) {
-        const val = settings[s.key];
+        const setting = settings[s.key];
+        let val: string | boolean = "";
+        if (setting && typeof setting === "object" && "value" in setting) {
+          val = String(setting.value || "");
+        } else if (typeof setting === "boolean") {
+          val = setting;
+        } else if (typeof setting === "string") {
+          val = setting;
+        }
         if (s.type === "boolean") {
           toSave[s.key] = val === true || val === "true";
         } else {
@@ -171,26 +184,35 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     });
   };
 
-  const isApiValue = (key: string, value: unknown): boolean => {
-    return (
-      SETTING_GROUPS.external_apis.some(s => s.key === key && s.type === "api") &&
-      typeof value === "string" &&
-      value.startsWith("***")
-    );
+  const getSettingValue = (key: string): { value: string; source: string } => {
+    const setting = settings[key];
+    if (setting && typeof setting === "object" && "value" in setting) {
+      return { value: String(setting.value || ""), source: setting.source || "missing" };
+    }
+    return { value: String(setting || ""), source: "missing" };
   };
 
   if (loading) {
     return <Loader2 className="animate-spin h-6 w-6 text-muted-foreground my-10 mx-auto" />;
   }
 
+  const getSourceBadge = (source: string) => {
+    if (source === "db")
+      return { label: "DB", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" };
+    if (source === "env")
+      return { label: "ENV", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" };
+    return { label: "—", className: "bg-muted text-muted-foreground" };
+  };
+
   if (showApiKeys && category === "external_apis") {
     const apiSettings = SETTING_GROUPS.external_apis;
     return (
       <div className="flex flex-col gap-8">
         {apiSettings.map(s => {
-          const value = (settings[s.key] as string) || "";
-          const isMasked = isApiValue(s.key, value);
+          const { value, source } = getSettingValue(s.key);
+          const isMasked = s.type === "api" && value.startsWith("***");
           const isRevealed = revealedKeys.has(s.key);
+          const badge = getSourceBadge(source);
 
           return (
             <CardWrapper
@@ -199,23 +221,26 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               description={`Configure your ${s.label.toLowerCase()}`}
               onSave={handleSave}
             >
-              <div className="relative">
-                <input
-                  type={isRevealed && !isMasked ? "text" : "password"}
-                  className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
-                  value={value}
-                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                  placeholder={s.placeholder}
-                />
-                {isMasked && (
-                  <button
-                    type="button"
-                    onClick={() => toggleReveal(s.key)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                )}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type={isRevealed && !isMasked ? "text" : "password"}
+                    className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
+                    value={isRevealed ? value.replace(/^\*+/, "") : value}
+                    onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                    placeholder={s.placeholder}
+                  />
+                  {(isMasked || source !== "missing") && (
+                    <button
+                      type="button"
+                      onClick={() => toggleReveal(s.key)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  )}
+                </div>
+                <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
               </div>
             </CardWrapper>
           );
@@ -229,29 +254,39 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     <div className="flex flex-col gap-8">
       {settingsList.map(s => {
         if (s.type === "boolean") {
+          const { value, source } = getSettingValue(s.key);
+          const badge = getSourceBadge(source);
           return (
             <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
-              <select
-                className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={String(settings[s.key] ?? "false")}
-                onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-              >
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
-              </select>
+              <div className="flex items-center gap-3">
+                <select
+                  className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={value === "true" ? "true" : "false"}
+                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                >
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+                <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
+              </div>
             </CardWrapper>
           );
         }
 
+        const { value, source } = getSettingValue(s.key);
+        const badge = getSourceBadge(source);
         return (
           <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
-            <input
-              type={s.type === "api" ? "password" : "text"}
-              className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={(settings[s.key] as string) || ""}
-              onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-              placeholder={s.placeholder}
-            />
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={value}
+                onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                placeholder={s.placeholder}
+              />
+              <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
+            </div>
           </CardWrapper>
         );
       })}
