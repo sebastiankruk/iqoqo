@@ -148,12 +148,14 @@ function SettingsContent(): React.JSX.Element {
                     onClick={() => handleTabChange("monetization")}
                   />
                 )}
-                <NavItem
-                  label="API Keys"
-                  icon={Key}
-                  isActive={activeTab === "apikeys"}
-                  onClick={() => handleTabChange("apikeys")}
-                />
+                {hasPermission("config:external_apis") && (
+                  <NavItem
+                    label="API Keys"
+                    icon={Key}
+                    isActive={activeTab === "apikeys"}
+                    onClick={() => handleTabChange("apikeys")}
+                  />
+                )}
                 {canViewUsers && (
                   <NavItem
                     label="Users"
@@ -163,7 +165,13 @@ function SettingsContent(): React.JSX.Element {
                   />
                 )}
                 {canViewRoles && (
-                  <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
+                  <NavItem
+                    label="Roles"
+                    icon={BadgeCheck}
+                    isActive={activeTab === "roles"}
+                    onClick={() => handleTabChange("roles")}
+                    href="/admin/groups"
+                  />
                 )}
                 {hasPermission("config:internal") && (
                   <NavItem
@@ -221,7 +229,7 @@ function SettingsContent(): React.JSX.Element {
             </div>
           )}
 
-          {activeTab === "federation" && hasPermission("config:federation") && (
+          {activeTab === "federation" && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Federation</h1>
@@ -235,7 +243,7 @@ function SettingsContent(): React.JSX.Element {
             </div>
           )}
 
-          {activeTab === "monetization" && hasPermission("config:affiliate") && (
+          {activeTab === "monetization" && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Monetization</h1>
@@ -249,7 +257,7 @@ function SettingsContent(): React.JSX.Element {
             </div>
           )}
 
-          {activeTab === "apikeys" && hasPermission("config:external_apis") && (
+          {activeTab === "apikeys" && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
@@ -270,6 +278,16 @@ function SettingsContent(): React.JSX.Element {
                 </p>
               </div>
               <UserManagement canEdit={canEditUsers} />
+            </div>
+          )}
+
+          {activeTab === "security" && hasPermission("config:internal") && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
+                <p className="text-sm text-muted-foreground mt-1">Configure internal security settings.</p>
+              </div>
+              <InstanceSettings category="internal" />
             </div>
           )}
         </div>
