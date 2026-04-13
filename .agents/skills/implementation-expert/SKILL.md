@@ -75,7 +75,7 @@ Apply changes based on format:
 
 1. **Read and Parse**: Carefully read the provided markdown plan, prompt, or diff containing the code.
 1. **Validate**: Verify the target file paths exist in the current workspace. Provide necessary shell commands to create/move files if applicable.
-1. **Apply**: Use `write` for full files or `edit` for incremental snippets.
+1. **Apply**: Use `replace_file_content` or `multi_replace_file_content` to apply the changes exactly as specified.
 1. **Enforce QA**: Never conclude a task without running `make lint` and `make test`. Ensure no tests are failing.
 1. **Analyze Failures**: If tests or linters fail, introduce code modifications strictly needed to make them pass. Do not rewrite the whole file unless necessary.
 1. **Clean Lints**: If the provided code triggers lint warnings (e.g., import sorting), fix them using `ruff check --fix` or `black` before final submission, but DO NOT alter the core logic.

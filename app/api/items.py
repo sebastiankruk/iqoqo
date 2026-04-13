@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-from flask import current_app, jsonify, request
+from flask import current_app, g, jsonify, request
 from sqlalchemy import func, text
 from sqlalchemy.orm import selectinload
 
@@ -29,7 +29,7 @@ from app.db.models import Expression, Item, Manifestation, User, Work, db
 @api_bp.route("/items", methods=["GET"])
 @require_auth
 def get_items():
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     if not user_id:
         return (
             jsonify({"success": False, "data": [], "meta": {"page": 1, "limit": 20, "total": 0, "pages": 0}, "error": "Unauthorized"}),
@@ -275,7 +275,7 @@ def get_item_detail(item_id: int):
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
     is_admin = False
     has_read_owners = False
@@ -285,8 +285,7 @@ def get_item_detail(item_id: int):
         if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
             is_admin = True
         if user:
-            user_perms = getattr(user, "permissions", []) if hasattr(user, "permissions") else []
-            has_read_owners = any(p.name == "read:owners" for p in user_perms)
+            has_read_owners = user.has_permission("read:owners")
 
     manifestation = item.manifestation
     owner_count = db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id).scalar() or 0
@@ -339,7 +338,7 @@ def update_item(item_id: int):
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
     is_admin = False
 
@@ -347,10 +346,7 @@ def update_item(item_id: int):
     if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
         is_admin = True
 
-    has_update_permission = False
-    if user:
-        user_perms = getattr(user, "permissions", []) if hasattr(user, "permissions") else []
-        has_update_permission = any(p.name == "update:item" for p in user_perms)
+    has_update_permission = user.has_permission("update:item") if user else False
 
     if not (is_owner or is_admin or has_update_permission):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
@@ -380,7 +376,7 @@ def delete_item(item_id: int):
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
     is_admin = False
 
@@ -416,7 +412,7 @@ def get_items_by_isbn(isbn: str):
 @api_bp.route("/item/<isbn>", methods=["POST"])
 @require_auth
 def add_item(isbn: str):
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -454,7 +450,7 @@ def add_item(isbn: str):
 @require_auth
 def add_item_by_manifestation(manifestation_id: int):
     """Add a new item to the user collection by manifestation ID (no ISBN required)."""
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
@@ -473,7 +469,7 @@ def add_item_by_manifestation(manifestation_id: int):
 @require_auth
 def add_item_manual():
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
 

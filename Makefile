@@ -21,8 +21,15 @@
 # shebangs in npm/npx scripts resolve correctly.
 NODE     := $(shell command -v node 2>/dev/null || ls $(HOME)/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)
 NODE_DIR := $(dir $(NODE))
-NPM       = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npm
-NPX       = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npx
+
+# Safely define NPM/NPX only if node was found, otherwise fallback to system default
+ifeq ($(NODE),)
+NPM = npm
+NPX = npx
+else
+NPM = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npm
+NPX = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npx
+endif
 
 help:
 	@echo "Available targets:"
