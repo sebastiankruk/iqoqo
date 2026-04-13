@@ -94,6 +94,9 @@ function SettingsContent(): React.JSX.Element {
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: string): boolean => permissions.includes(perm);
 
+  console.log("[DEBUG] profile.roles:", profile.roles);
+  console.log("[DEBUG] profile.permissions:", permissions);
+
   const canViewSettings =
     hasPermission("config:external_apis") ||
     hasPermission("config:federation") ||
