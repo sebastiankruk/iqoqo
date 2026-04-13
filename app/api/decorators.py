@@ -17,7 +17,7 @@ import uuid
 from functools import wraps
 
 import jwt
-from flask import current_app, jsonify, request
+from flask import current_app, g, jsonify, request
 
 from app.db.models import TokenBlocklist, User, db
 
@@ -47,7 +47,7 @@ def require_auth(f):
             if _is_token_revoked(payload.get("jti")):
                 return jsonify({"error": "Token revoked"}), 401
 
-            request.user_id = uuid.UUID(payload["sub"])
+            g.user_id = uuid.UUID(payload["sub"])
 
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token expired"}), 401
@@ -74,12 +74,12 @@ def optional_auth(f):
         elif "iqoqo_session" in request.cookies:
             token = request.cookies.get("iqoqo_session")
 
-        request.user_id = None
+        g.user_id = None
         if token:
             try:
                 payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
                 if not _is_token_revoked(payload.get("jti")):
-                    request.user_id = uuid.UUID(payload["sub"])
+                    g.user_id = uuid.UUID(payload["sub"])
             except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError):
                 pass
 
@@ -94,7 +94,7 @@ def require_permission(perm_name):
         def decorated(*args, **kwargs):
             # Allow passing Enum members (with .value) or plain strings
             perm = perm_name.value if hasattr(perm_name, "value") else perm_name
-            user = db.session.get(User, request.user_id)
+            user = db.session.get(User, getattr(g, "user_id", None))
             if not user or not user.has_permission(perm):
                 return jsonify({"error": "Forbidden", "missing_permission": perm}), 403
             return f(*args, **kwargs)
@@ -122,7 +122,7 @@ def admin_required(f):
             if _is_token_revoked(payload.get("jti")):
                 return jsonify({"success": False, "error": "Token revoked"}), 401
 
-            request.user_id = uuid.UUID(payload["sub"])
+            g.user_id = uuid.UUID(payload["sub"])
         except jwt.ExpiredSignatureError:
             return jsonify({"success": False, "error": "Token expired"}), 401
         except jwt.InvalidTokenError:
@@ -130,7 +130,7 @@ def admin_required(f):
         except ValueError:
             return jsonify({"success": False, "error": "Invalid user ID format"}), 401
 
-        user = db.session.get(User, request.user_id)
+        user = db.session.get(User, g.user_id)
         is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
         if not is_admin:
             return jsonify({"success": False, "error": "Admin privileges required"}), 403

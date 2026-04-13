@@ -19,6 +19,8 @@ import { useState } from "react";
 import { FileText, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useAppConfig } from "@/lib/api/hooks";
+import Link from "next/link";
+import { ExtendedMetadata } from "./extended-metadata";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -28,9 +30,6 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 /* ── Details tab ─────────────────────────────────────────────────────────── */
-
-import { ExtendedMetadata } from "./extended-metadata";
-import Link from "next/link";
 
 /**
  * Details tab component.

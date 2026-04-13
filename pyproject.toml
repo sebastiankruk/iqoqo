@@ -106,14 +106,6 @@ exclude = [
 module = "tests.*"
 disallow_untyped_defs = false
 
-[[tool.mypy.overrides]]
-module = "app.api.admin"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "app.core.config_service"
-ignore_errors = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"

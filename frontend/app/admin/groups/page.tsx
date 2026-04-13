@@ -43,24 +43,31 @@ interface NavItemProps {
  * @returns Navigation item component
  */
 function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
+  const className = cn(
+    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+  );
+
   const content = (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-        isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-      )}
-    >
+    <>
       <Icon className="h-4 w-4" />
       {label}
-    </button>
+    </>
   );
 
   if (href) {
-    return <Link href={href}>{content}</Link>;
+    return (
+      <Link href={href} className={className} onClick={onClick}>
+        {content}
+      </Link>
+    );
   }
 
-  return content;
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  );
 }
 
 /**

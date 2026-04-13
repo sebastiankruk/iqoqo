@@ -17,7 +17,7 @@
 
 import os
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app.api.decorators import admin_required
 from app.db.models import InstanceSettings, Permission, Role, User, db
@@ -25,12 +25,12 @@ from app.db.models import InstanceSettings, Permission, Role, User, db
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
 
 
-def _get_current_user() -> User:
+def _get_current_user() -> User | None:
     """Get the current user from request context."""
-    return db.session.get(User, request.user_id)
+    return db.session.get(User, getattr(g, "user_id", None))
 
 
-def _has_permission(user: User, permission: str) -> bool:
+def _has_permission(user: User | None, permission: str) -> bool:
     """Check if user has a specific permission through their roles."""
     if not user:
         return False
@@ -185,7 +185,12 @@ def get_permissions():
         return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
 
     permissions = Permission.query.all()
-    return jsonify({"success": True, "data": [{"id": p.id, "name": p.name, "description": p.description} for p in permissions]})
+    return jsonify(
+        {
+            "success": True,
+            "data": [{"id": p.id, "name": p.name, "description": p.description} for p in permissions],
+        }
+    )
 
 
 @admin_bp.route("/roles/<int:role_id>/permissions", methods=["GET", "PUT"])
@@ -194,7 +199,10 @@ def manage_role_permissions(role_id):
     """Get or update permissions for a specific role."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:roles"):
+    if request.method == "GET":
+        if not _has_permission(user, "read:roles"):
+            return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
+    elif not _has_permission(user, "write:roles"):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
     role = Role.query.get_or_404(role_id)
@@ -340,7 +348,7 @@ def manage_settings():
             return jsonify({"success": False, "error": "Permission denied: config:federation required"}), 403
         if category == "affiliate" and not can_affiliate:
             return jsonify({"success": False, "error": "Permission denied: config:affiliate required"}), 403
-        if category == "apikeys" and not can_external:
+        if category in {"external_apis", "apikeys"} and not can_external:
             return jsonify({"success": False, "error": "Permission denied: config:external_apis required"}), 403
         if category == "internal" and not can_internal:
             return jsonify({"success": False, "error": "Permission denied: config:internal required"}), 403

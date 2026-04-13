@@ -19,7 +19,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { isAudioMedia } from "@/lib/utils";
+import { cn, isAudioMedia } from "@/lib/utils";
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
@@ -258,7 +258,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                   <dd className="font-medium text-foreground">
                     {owner_name}
                     {owner_count && owner_count > 1 && (
-                      <span className={`text-muted-foreground ${owner_name && "ml-1"}`}>
+                      <span className={cn("text-muted-foreground", owner_name && "ml-1")}>
                         (<strong>{owner_count}</strong> owners)
                       </span>
                     )}

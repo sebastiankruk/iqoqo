@@ -76,7 +76,10 @@ class ConfigService:
         Returns:
             List of values from configuration
         """
-        val = ConfigService.get(key, default)
+        val = ConfigService.get(key)
+        if val is None:
+            return default if default is not None else []
+
         if isinstance(val, list):
             return val
         if isinstance(val, str):
@@ -86,7 +89,7 @@ class ConfigService:
                     return parsed
             except json.JSONDecodeError:
                 return [x.strip() for x in val.split(",") if x.strip()]
-        return default if val is None else [val]  # type: ignore[return-value]
+        return [val]
 
     @staticmethod
     def get_bool(key: str, default: bool = False) -> bool:

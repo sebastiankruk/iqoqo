@@ -18,7 +18,7 @@
 import json
 from io import BytesIO
 
-from flask import jsonify, request, send_file, send_from_directory
+from flask import g, jsonify, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -61,7 +61,7 @@ def get_config():
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():
-    stats = DataManager.get_stats(owner_id=request.user_id)
+    stats = DataManager.get_stats(owner_id=getattr(g, "user_id", None))
     return jsonify({"success": True, "data": stats, "error": None})
 
 

@@ -17,7 +17,7 @@
 #
 import io
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 from PIL import Image
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -245,7 +245,7 @@ def scan_barcode():
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
-    new_item = Item(manifestation_id=manifestation.id, owner_id=request.user_id, status="available")
+    new_item = Item(manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status="available")
     db.session.add(new_item)
     db.session.commit()
 
@@ -326,7 +326,7 @@ def extract_from_cover():
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
 
     # Dispatch to background task queue
     task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)

@@ -15,7 +15,7 @@
 #
 from datetime import UTC, datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app.db.models import ConsentRecord, User, db
 
@@ -27,7 +27,7 @@ profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 @profile_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_profile():
-    user = db.session.get(User, request.user_id)
+    user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -64,7 +64,7 @@ def update_consent():
     if not consent_type:
         return jsonify({"error": "Missing consent_type"}), 400
 
-    user = db.session.get(User, request.user_id)
+    user = db.session.get(User, getattr(g, "user_id", None))
     existing_consent = ConsentRecord.query.filter_by(user_id=user.id, consent_type=consent_type).first()
 
     if existing_consent:
@@ -85,7 +85,7 @@ def update_consent():
 @require_auth
 def update_profile():
     data = request.get_json()
-    user = db.session.get(User, request.user_id)
+    user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -100,7 +100,7 @@ def update_profile():
 @require_auth
 def delete_profile():
     """Right to be forgotten: Deletes user, their items, and consents."""
-    user = db.session.get(User, request.user_id)
+    user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
         return jsonify({"error": "User not found"}), 404
 
