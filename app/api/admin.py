@@ -297,12 +297,12 @@ def manage_settings():
                 source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
                 value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
                 if value:
-                    # Only mask DB values for API keys (not env vars); URL fields never masked
+                    # Mask all API keys (DB and env); URLs shown unmasked
                     is_url = key in ("LOCAL_SD_URL",)
-                    if source == "db" and not is_url:
-                        result[key] = {"value": _mask_api_key(str(value)), "source": source}
-                    else:
+                    if is_url:
                         result[key] = {"value": str(value), "source": source}
+                    else:
+                        result[key] = {"value": _mask_api_key(str(value)), "source": source}
                 else:
                     result[key] = {"value": "", "source": source}
 
