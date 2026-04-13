@@ -15,7 +15,6 @@
 //
 "use client";
 
-import { useState } from "react";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
@@ -72,7 +71,7 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
 export default function GroupsPage() {
   const { data: profile, isLoading } = useProfile();
 
-  const [activeTab, setActiveTab] = useState("roles");
+  const activeTab = "roles";
 
   if (isLoading || !profile) {
     return (
@@ -94,12 +93,7 @@ export default function GroupsPage() {
           <div>
             <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
             <nav className="flex flex-col gap-1">
-              <NavItem
-                label="Profile"
-                icon={User}
-                isActive={activeTab === "profile"}
-                onClick={() => setActiveTab("profile")}
-              />
+              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/admin/settings" />
             </nav>
           </div>
 

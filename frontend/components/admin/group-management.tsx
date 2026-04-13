@@ -28,13 +28,24 @@ import {
   Role as RoleType,
 } from "@/lib/api/admin";
 
+/**
+ * Role data for UI rendering.
+ */
 interface RoleData {
+  /** Role ID */
   id: number;
+  /** Role name */
   name: string;
+  /** Number of users with this role */
   memberCount?: number;
+  /** Role description */
   description: string;
+  /** Color for UI display */
   color: string;
+  /** Whether role is protected from deletion */
   is_protected: boolean;
+  /** Number of permissions assigned to this role */
+  permissionCount: number;
 }
 
 /**
@@ -76,6 +87,7 @@ export function GroupManagement() {
         description: `${r.name.charAt(0).toUpperCase() + r.name.slice(1)} role`,
         color: ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"][idx % 5],
         is_protected: protectedRoles.includes(r.name.toLowerCase()),
+        permissionCount: r.permission_count ?? 0,
       }));
       setRoles(mappedRoles);
       setPermissions(permData);
@@ -140,6 +152,7 @@ export function GroupManagement() {
         description: `${newRole.name.charAt(0).toUpperCase() + newRole.name.slice(1)} role`,
         color: ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"][roles.length % 5],
         is_protected: protectedRoles.includes(newRole.name.toLowerCase()),
+        permissionCount: 0,
       };
       setRoles(prev => [...prev, roleData]);
       setShowCreateModal(false);
@@ -223,7 +236,9 @@ export function GroupManagement() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-sm font-medium text-foreground">{currentPerms.length} permissions</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {isExpanded ? currentPerms.length : role.permissionCount} permissions
+                    </p>
                     <p className="text-xs text-muted-foreground">{role.memberCount || 0} users</p>
                   </div>
                   {isExpanded ? (

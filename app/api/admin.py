@@ -112,7 +112,14 @@ def get_roles():
         {
             "success": True,
             "data": [
-                {"id": r.id, "name": r.name, "is_protected": r.name.lower() in protected_roles, "member_count": r.users.count()} for r in roles
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "is_protected": r.name.lower() in protected_roles,
+                    "member_count": r.users.count(),
+                    "permission_count": len(r.permissions),
+                }
+                for r in roles
             ],
         }
     )

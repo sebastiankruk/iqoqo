@@ -79,6 +79,7 @@ export interface Role {
   name: string;
   is_protected?: boolean;
   member_count?: number;
+  permission_count?: number;
 }
 
 /**

@@ -25,6 +25,7 @@ import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
+import type React from "react";
 import Link from "next/link";
 
 interface NavItemProps {
@@ -38,9 +39,14 @@ interface NavItemProps {
 /**
  * Navigation item for settings sidebar.
  * @param props - Navigation item properties
- * @returns Navigation item component
+ * @param props.label - Display label
+ * @param props.icon - Lucide icon component
+ * @param props.isActive - Whether this item is currently active
+ * @param props.onClick - Click handler
+ * @param props.href - Optional href for external navigation
+ * @returns Navigation item JSX element
  */
-function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
+function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps): React.JSX.Element {
   const content = (
     <button
       onClick={onClick}
@@ -64,8 +70,9 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
 /**
  * Inner settings content component that uses useSearchParams.
  * Must be wrapped in Suspense boundary.
+ * @returns Settings page JSX element
  */
-function SettingsContent() {
+function SettingsContent(): React.JSX.Element {
   const searchParams = useSearchParams();
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
@@ -139,7 +146,27 @@ function SettingsContent() {
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
-                <p className="text-sm text-muted-foreground mt-1">Manage your account settings and preferences.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage your personal account settings and preferences.
+                </p>
+              </div>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <h3 className="text-lg font-medium">Display Name</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This is your public display name on this instance.
+                  </p>
+                  <input
+                    className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={profile.display_name || ""}
+                    readOnly
+                  />
+                </div>
+                <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
+                  <button className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium">
+                    Save
+                  </button>
+                </div>
               </div>
             </div>
           )}
