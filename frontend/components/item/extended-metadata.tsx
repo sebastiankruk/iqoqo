@@ -258,7 +258,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                   <dd className="font-medium text-foreground">
                     {owner_name}
                     {owner_count && owner_count > 1 && (
-                      <span className="text-muted-foreground ml-1">
+                      <span className={`text-muted-foreground ${owner_name && "ml-1"}`}>
                         (<strong>{owner_count}</strong> owners)
                       </span>
                     )}
