@@ -101,7 +101,7 @@ describe("SettingsHubPage", () => {
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "API Integrations" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Roles" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Roles" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Security" })).toBeInTheDocument();
   });
 });
