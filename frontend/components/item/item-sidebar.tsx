@@ -70,7 +70,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const hasEditPermission = permissions.includes("edit:manifestation");
   const hasUpdateItemPermission = permissions.includes("update:item");
 
-  const canModifyItem = item.owner_id !== "Unavailable" && hasUpdateItemPermission;
+  const isOwner = item.owner_id !== "Unavailable";
+  const canModifyItem = isOwner || hasUpdateItemPermission;
 
   // Media type detection
   const format =

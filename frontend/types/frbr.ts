@@ -58,6 +58,7 @@ export interface Manifestation {
   publisher?: string;
   year?: number;
   cover_url?: string | null;
+  owner_count?: number;
   meta: {
     additional_images?: AdditionalImage[];
     format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | "Blu-ray" | "DVD" | "VHS" | "Board Game" | string;

@@ -77,7 +77,12 @@ describe("ItemSidebar Component", () => {
     expect(mutateMock).toHaveBeenCalledWith({ status: "reading" }, expect.any(Object));
   });
 
-  it("renders read-only status badge when owner is anonymized", () => {
+  it("renders read-only status badge when owner is anonymized and no update:item permission", () => {
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: {
+        permissions: [],
+      },
+    } as unknown as ReturnType<typeof hooks.useProfile>);
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -93,7 +98,12 @@ describe("ItemSidebar Component", () => {
     expect(screen.queryByLabelText("Item status")).not.toBeInTheDocument();
   });
 
-  it("hides Edit Metadata button when owner is anonymized", () => {
+  it("hides Edit Metadata button when owner is anonymized and no update:item permission", () => {
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: {
+        permissions: [],
+      },
+    } as unknown as ReturnType<typeof hooks.useProfile>);
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: vi.fn(),
       isPending: false,

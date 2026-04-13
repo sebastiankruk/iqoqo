@@ -172,31 +172,38 @@ export default function ManifestationPage() {
 
             {userProfile && (
               <div className="pt-6 space-y-4">
-                <div>
-                  {manifestation.user_owns ? (
-                    <Button
-                      onClick={() =>
-                        router.push(
-                          `/collection?view=items&q=${encodeURIComponent(
-                            manifestation.isbn13 || manifestation.title || ""
-                          )}`
-                        )
-                      }
-                      variant="secondary"
-                      size="sm"
-                    >
-                      <BookOpen className="mr-2 h-4 w-4 text-primary" />
-                      View in My Collection
-                    </Button>
-                  ) : (
-                    <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
-                      {isAdding ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <BookOpen className="mr-2 h-4 w-4" />
-                      )}
-                      Add to My Collection
-                    </Button>
+                <div className="flex items-center gap-3">
+                  <div>
+                    {manifestation.user_owns ? (
+                      <Button
+                        onClick={() =>
+                          router.push(
+                            `/collection?view=items&q=${encodeURIComponent(
+                              manifestation.isbn13 || manifestation.title || ""
+                            )}`
+                          )
+                        }
+                        variant="secondary"
+                        size="sm"
+                      >
+                        <BookOpen className="mr-2 h-4 w-4 text-primary" />
+                        View in My Collection
+                      </Button>
+                    ) : (
+                      <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
+                        {isAdding ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <BookOpen className="mr-2 h-4 w-4" />
+                        )}
+                        Add to My Collection
+                      </Button>
+                    )}
+                  </div>
+                  {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      Owned by {manifestation.owner_count} {manifestation.owner_count === 1 ? "person" : "people"}
+                    </span>
                   )}
                 </div>
 

@@ -187,10 +187,12 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         authors = work.meta.get("authors", []) if work.meta else []
 
     user_owns = False
+    owner_count = 0
     if user_id:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
+        owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -206,6 +208,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
+        "owner_count": owner_count,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 
