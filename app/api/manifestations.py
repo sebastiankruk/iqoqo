@@ -192,7 +192,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
-        owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
+    owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
