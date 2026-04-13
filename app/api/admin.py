@@ -7,12 +7,13 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 
 import os
 
@@ -264,6 +265,7 @@ def _mask_api_key(value: str) -> str:
 
 @admin_bp.route("/settings", methods=["GET", "PUT"])
 @admin_required
+# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 def manage_settings():
     """Manage global instance settings with category-based RBAC."""
     user = _get_current_user()
@@ -282,6 +284,7 @@ def manage_settings():
         # Get Flask config keys
         try:
             from flask import current_app
+
             flask_config = current_app.config if current_app else {}
         except Exception:
             flask_config = {}

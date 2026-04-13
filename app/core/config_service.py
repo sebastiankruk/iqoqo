@@ -15,6 +15,8 @@
 #
 """Unified configuration service prioritizing DB overrides over environment variables."""
 
+# pylint: disable=broad-exception-caught
+
 import json
 import os
 from typing import Any
@@ -43,8 +45,10 @@ class ConfigService:
         # pylint: disable=too-many-return-statements
         try:
             from flask import current_app
+
             if current_app:
                 from app.db.models import InstanceSettings
+
                 setting = InstanceSettings.query.filter_by(key=key).first()
                 if setting is not None and setting.value is not None:
                     return setting.value
@@ -53,6 +57,7 @@ class ConfigService:
 
         try:
             from flask import current_app
+
             if current_app and key in current_app.config:
                 return current_app.config[key]
         except Exception:
@@ -81,7 +86,7 @@ class ConfigService:
                     return parsed
             except json.JSONDecodeError:
                 return [x.strip() for x in val.split(",") if x.strip()]
-        return default if val is None else [val]
+        return default if val is None else [val]  # type: ignore[return-value]
 
     @staticmethod
     def get_bool(key: str, default: bool = False) -> bool:
@@ -100,4 +105,3 @@ class ConfigService:
         if isinstance(val, str):
             return val.lower() in ("true", "1", "yes", "on")
         return default
-
