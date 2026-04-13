@@ -94,17 +94,6 @@ function SettingsContent(): React.JSX.Element {
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: string): boolean => permissions.includes(perm);
 
-  console.log(
-    "[DEBUG] activeTab:",
-    activeTab,
-    "internalTab:",
-    internalTab,
-    "searchParams:",
-    searchParams.get("tab"),
-    "rendering:",
-    activeTab === "federation" ? "FEDERATION CONTENT" : activeTab
-  );
-
   const canViewSettings =
     hasPermission("config:external_apis") ||
     hasPermission("config:federation") ||
@@ -236,7 +225,8 @@ function SettingsContent(): React.JSX.Element {
                   Configure instance-wide settings for this deployment.
                 </p>
               </div>
-              <InstanceSettings category="external_apis" />
+              <InstanceSettings category="federation" />
+              <InstanceSettings category="affiliate" />
             </div>
           )}
 

@@ -16,7 +16,7 @@
 "use client";
 
 import { useProfile } from "@/lib/api/hooks";
-import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
+import { Loader2, Settings, Users, User, Shield, BadgeCheck, Building2, DollarSign, Key } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
@@ -79,11 +79,20 @@ export default function GroupsPage() {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const isAdmin = profile.roles?.includes("admin");
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: string): boolean => permissions.includes(perm);
   const canViewRoles = hasPermission("read:roles");
   const canEditRoles = hasPermission("write:roles");
+  const canViewUsers = hasPermission("read:users");
+  const canViewSettings =
+    hasPermission("config:external_apis") ||
+    hasPermission("config:federation") ||
+    hasPermission("config:affiliate") ||
+    hasPermission("config:internal") ||
+    canViewUsers ||
+    canViewRoles;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -99,16 +108,59 @@ export default function GroupsPage() {
             </nav>
           </div>
 
-          {isAdmin && (
+          {canViewSettings && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
               <nav className="flex flex-col gap-1">
                 <NavItem label="Settings" icon={Settings} isActive={false} onClick={() => {}} href="/admin/settings" />
-                <NavItem label="Users" icon={Users} isActive={false} onClick={() => {}} href="/admin/settings" />
+                {hasPermission("config:federation") && (
+                  <NavItem
+                    label="Federation"
+                    icon={Building2}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/settings?tab=federation"
+                  />
+                )}
+                {hasPermission("config:affiliate") && (
+                  <NavItem
+                    label="Monetization"
+                    icon={DollarSign}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/settings?tab=monetization"
+                  />
+                )}
+                {hasPermission("config:external_apis") && (
+                  <NavItem
+                    label="API Keys"
+                    icon={Key}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/settings?tab=apikeys"
+                  />
+                )}
+                {canViewUsers && (
+                  <NavItem
+                    label="Users"
+                    icon={Users}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/settings?tab=users"
+                  />
+                )}
                 {canViewRoles && (
                   <NavItem label="Roles" icon={BadgeCheck} isActive={true} onClick={() => {}} href="/admin/groups" />
                 )}
-                <NavItem label="Security" icon={Shield} isActive={false} onClick={() => {}} href="/admin/settings" />
+                {hasPermission("config:internal") && (
+                  <NavItem
+                    label="Security"
+                    icon={Shield}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/settings?tab=security"
+                  />
+                )}
               </nav>
             </div>
           )}
