@@ -32,7 +32,16 @@ test.describe("Admin Roles Management Workflow", () => {
             email: "admin@iqoqo.local",
             display_name: "System Admin",
             roles: ["admin"],
-            permissions: ["*"],
+            permissions: [
+              "config:external_apis",
+              "config:federation",
+              "config:affiliate",
+              "config:internal",
+              "read:users",
+              "write:users",
+              "read:roles",
+              "write:roles",
+            ],
           },
         },
       })
