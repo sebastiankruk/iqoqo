@@ -94,8 +94,7 @@ function SettingsContent(): React.JSX.Element {
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: string): boolean => permissions.includes(perm);
 
-  console.log("[DEBUG] profile.roles:", profile.roles);
-  console.log("[DEBUG] profile.permissions:", permissions);
+  console.log("[DEBUG] activeTab:", activeTab, "internalTab:", internalTab, "searchParams:", searchParams.get("tab"));
 
   const canViewSettings =
     hasPermission("config:external_apis") ||
