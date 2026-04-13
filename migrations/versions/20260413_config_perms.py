@@ -20,11 +20,11 @@ Revises: 40408803b0ba
 Create Date: 2026-04-13 12:00:00.000000
 
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "20260413_config_perms"
-down_revision = "40408803b0ba"
+down_revision = "20260405_fts_video_games"
 branch_labels = None
 depends_on = None
 
@@ -34,8 +34,8 @@ def upgrade():
 
     conn.execute(
         sa.text("""
-            INSERT INTO permissions (name, description) 
-            VALUES 
+            INSERT INTO permissions (name, description)
+            VALUES
                 ('config:external_apis', 'Manage external API keys and integrations'),
                 ('config:federation', 'Manage federation settings'),
                 ('config:affiliate', 'Manage affiliate tracking IDs'),
@@ -57,7 +57,7 @@ def upgrade():
             WHERE r.name = 'admin'
             AND p.name IN (
                 'config:external_apis',
-                'config:federation', 
+                'config:federation',
                 'config:affiliate',
                 'config:internal',
                 'read:users',
@@ -75,12 +75,12 @@ def downgrade():
 
     conn.execute(
         sa.text("""
-            DELETE FROM role_permissions 
+            DELETE FROM role_permissions
             WHERE permission_id IN (
                 SELECT id FROM permissions WHERE name IN (
                     'config:external_apis',
                     'config:federation',
-                    'config:affiliate', 
+                    'config:affiliate',
                     'config:internal',
                     'read:users',
                     'write:users',
@@ -93,7 +93,7 @@ def downgrade():
 
     conn.execute(
         sa.text("""
-            DELETE FROM permissions 
+            DELETE FROM permissions
             WHERE name IN (
                 'config:external_apis',
                 'config:federation',
@@ -106,3 +106,4 @@ def downgrade():
             )
         """)
     )
+
