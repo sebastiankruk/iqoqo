@@ -78,6 +78,16 @@ describe("SettingsHubPage", () => {
         email: "admin@test.com",
         display_name: "Admin User",
         roles: ["admin"],
+        permissions: [
+          "config:external_apis",
+          "config:federation",
+          "config:affiliate",
+          "config:internal",
+          "read:users",
+          "write:users",
+          "read:roles",
+          "write:roles",
+        ],
       } as unknown as UserProfile,
       isLoading: false,
     } as unknown as ReturnType<typeof useProfile>);
@@ -89,6 +99,7 @@ describe("SettingsHubPage", () => {
 
     expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "API Integrations" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Roles" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Security" })).toBeInTheDocument();

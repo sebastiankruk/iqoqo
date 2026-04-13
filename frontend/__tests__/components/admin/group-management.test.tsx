@@ -48,7 +48,7 @@ describe("GroupManagement Component", () => {
   });
 
   it("renders roles with member counts", async () => {
-    render(<GroupManagement />);
+    render(<GroupManagement canEdit />);
 
     // Wait for roles to load
     await waitFor(() => {
@@ -61,7 +61,7 @@ describe("GroupManagement Component", () => {
   });
 
   it("shows protected badge for protected roles", async () => {
-    render(<GroupManagement />);
+    render(<GroupManagement canEdit />);
 
     // Wait for loading to complete
     await waitFor(() => {
@@ -73,8 +73,8 @@ describe("GroupManagement Component", () => {
     expect(protectedBadges.length).toBeGreaterThan(0);
   });
 
-  it("shows add role button", async () => {
-    render(<GroupManagement />);
+  it("shows add role button when canEdit is true", async () => {
+    render(<GroupManagement canEdit />);
 
     await waitFor(() => {
       expect(screen.getByText("Add Role")).toBeInTheDocument();

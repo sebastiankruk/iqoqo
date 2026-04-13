@@ -41,7 +41,7 @@ describe("UserManagement Component", () => {
   });
 
   it("renders table and loads users automatically", async () => {
-    render(<UserManagement />);
+    render(<UserManagement canEdit />);
 
     // Shows loading state initially
     expect(screen.getByRole("table")).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe("UserManagement Component", () => {
   });
 
   it("triggers search filter on input change (debounced)", async () => {
-    render(<UserManagement />);
+    render(<UserManagement canEdit />);
     await waitFor(() => expect(screen.getByText("test1@test.com")).toBeInTheDocument());
 
     const searchInput = screen.getByPlaceholderText("Search users...");
@@ -70,8 +70,8 @@ describe("UserManagement Component", () => {
     });
   });
 
-  it("opens RBAC sheet on user row click", async () => {
-    render(<UserManagement />);
+  it("opens RBAC sheet on user row click when canEdit is true", async () => {
+    render(<UserManagement canEdit />);
     await waitFor(() => expect(screen.getByText("test1@test.com")).toBeInTheDocument());
 
     // Click the table row
