@@ -186,20 +186,27 @@ export async function updateRolePermissions(roleId: number, permissionIds: numbe
 /**
  * Fetch instance settings.
  *
+ * @param category - Optional category filter (external_apis, federation, affiliate, internal)
  * @returns The settings
  */
-export async function getInstanceSettings(): Promise<Record<string, unknown>> {
-  return apiFetch<Record<string, unknown>>("/v1/admin/settings");
+export async function getInstanceSettings(category?: string): Promise<Record<string, unknown>> {
+  const query = category ? `?category=${category}` : "";
+  return apiFetch<Record<string, unknown>>(`/v1/admin/settings${query}`);
 }
 
 /**
  * Update instance settings.
  *
  * @param settings - The new settings
+ * @param category - Optional category for RBAC verification
  * @returns The updated settings
  */
-export async function updateInstanceSettings(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await apiClient.put<ApiResponse<Record<string, unknown>>>("/v1/admin/settings", settings);
+export async function updateInstanceSettings(
+  settings: Record<string, unknown>,
+  category?: string
+): Promise<Record<string, unknown>> {
+  const query = category ? `?category=${category}` : "";
+  const res = await apiClient.put<ApiResponse<Record<string, unknown>>>(`/v1/admin/settings${query}`, settings);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to update settings");
   }

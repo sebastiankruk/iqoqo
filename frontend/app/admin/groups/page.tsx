@@ -71,8 +71,6 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
 export default function GroupsPage() {
   const { data: profile, isLoading } = useProfile();
 
-  const activeTab = "roles";
-
   if (isLoading || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -82,6 +80,10 @@ export default function GroupsPage() {
   }
 
   const isAdmin = profile.roles?.includes("admin");
+  const permissions = profile.permissions ?? [];
+  const hasPermission = (perm: string): boolean => permissions.includes(perm);
+  const canViewRoles = hasPermission("read:roles");
+  const canEditRoles = hasPermission("write:roles");
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -103,7 +105,9 @@ export default function GroupsPage() {
               <nav className="flex flex-col gap-1">
                 <NavItem label="Settings" icon={Settings} isActive={false} onClick={() => {}} href="/admin/settings" />
                 <NavItem label="Users" icon={Users} isActive={false} onClick={() => {}} href="/admin/settings" />
-                <NavItem label="Roles" icon={BadgeCheck} isActive={true} onClick={() => {}} href="/admin/groups" />
+                {canViewRoles && (
+                  <NavItem label="Roles" icon={BadgeCheck} isActive={true} onClick={() => {}} href="/admin/groups" />
+                )}
                 <NavItem label="Security" icon={Shield} isActive={false} onClick={() => {}} href="/admin/settings" />
               </nav>
             </div>
@@ -119,7 +123,7 @@ export default function GroupsPage() {
                 Configure roles and their assigned permissions for this instance.
               </p>
             </div>
-            <GroupManagement />
+            <GroupManagement canEdit={canEditRoles} />
           </div>
         </div>
       </main>

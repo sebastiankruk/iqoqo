@@ -18,7 +18,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
-import { Loader2, Settings, Users, User, Shield, BadgeCheck } from "lucide-react";
+import { Loader2, Settings, Users, User, Shield, BadgeCheck, Key, Building2, DollarSign } from "lucide-react";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -91,7 +91,17 @@ function SettingsContent(): React.JSX.Element {
     );
   }
 
-  const isAdmin = profile.roles?.includes("admin");
+  const permissions = profile.permissions ?? [];
+  const hasPermission = (perm: string): boolean => permissions.includes(perm);
+
+  const canViewSettings =
+    hasPermission("config:external_apis") ||
+    hasPermission("config:federation") ||
+    hasPermission("config:affiliate") ||
+    hasPermission("config:internal");
+  const canViewUsers = hasPermission("read:users");
+  const canViewRoles = hasPermission("read:roles");
+  const canEditUsers = hasPermission("write:users");
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -112,7 +122,7 @@ function SettingsContent(): React.JSX.Element {
             </nav>
           </div>
 
-          {isAdmin && (
+          {canViewSettings && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
               <nav className="flex flex-col gap-1">
@@ -122,19 +132,47 @@ function SettingsContent(): React.JSX.Element {
                   isActive={activeTab === "instance"}
                   onClick={() => handleTabChange("instance")}
                 />
+                {hasPermission("config:federation") && (
+                  <NavItem
+                    label="Federation"
+                    icon={Building2}
+                    isActive={activeTab === "federation"}
+                    onClick={() => handleTabChange("federation")}
+                  />
+                )}
+                {hasPermission("config:affiliate") && (
+                  <NavItem
+                    label="Monetization"
+                    icon={DollarSign}
+                    isActive={activeTab === "monetization"}
+                    onClick={() => handleTabChange("monetization")}
+                  />
+                )}
                 <NavItem
-                  label="Users"
-                  icon={Users}
-                  isActive={activeTab === "users"}
-                  onClick={() => handleTabChange("users")}
+                  label="API Keys"
+                  icon={Key}
+                  isActive={activeTab === "apikeys"}
+                  onClick={() => handleTabChange("apikeys")}
                 />
-                <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
-                <NavItem
-                  label="Security"
-                  icon={Shield}
-                  isActive={activeTab === "security"}
-                  onClick={() => handleTabChange("security")}
-                />
+                {canViewUsers && (
+                  <NavItem
+                    label="Users"
+                    icon={Users}
+                    isActive={activeTab === "users"}
+                    onClick={() => handleTabChange("users")}
+                  />
+                )}
+                {canViewRoles && (
+                  <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
+                )}
+                {hasPermission("config:internal") && (
+                  <NavItem
+                    label="Security"
+                    icon={Shield}
+                    isActive={activeTab === "security"}
+                    onClick={() => handleTabChange("security")}
+                  />
+                )}
               </nav>
             </div>
           )}
@@ -171,7 +209,7 @@ function SettingsContent(): React.JSX.Element {
             </div>
           )}
 
-          {activeTab === "instance" && isAdmin && (
+          {activeTab === "instance" && canViewSettings && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Instance Settings</h1>
@@ -179,11 +217,51 @@ function SettingsContent(): React.JSX.Element {
                   Configure instance-wide settings for this deployment.
                 </p>
               </div>
-              <InstanceSettings />
+              <InstanceSettings category="external_apis" />
             </div>
           )}
 
-          {activeTab === "users" && isAdmin && (
+          {activeTab === "federation" && hasPermission("config:federation") && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Federation</h1>
+                <p className="text-sm text-muted-foreground mt-1">Manage federated instances and partnerships.</p>
+              </div>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "monetization" && hasPermission("config:affiliate") && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Monetization</h1>
+                <p className="text-sm text-muted-foreground mt-1">Configure affiliate programs and revenue sharing.</p>
+              </div>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "apikeys" && hasPermission("config:external_apis") && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage external API keys for third-party integrations.
+                </p>
+              </div>
+              <InstanceSettings category="external_apis" showApiKeys />
+            </div>
+          )}
+
+          {activeTab === "users" && canViewUsers && (
             <div className="flex flex-col gap-8">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
@@ -191,7 +269,7 @@ function SettingsContent(): React.JSX.Element {
                   View and manage roles for users registered on this instance.
                 </p>
               </div>
-              <UserManagement />
+              <UserManagement canEdit={canEditUsers} />
             </div>
           )}
         </div>

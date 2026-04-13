@@ -15,42 +15,83 @@
 //
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect } from "react";
 import { getInstanceSettings, updateInstanceSettings } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff, Save } from "lucide-react";
+
+interface InstanceSettingsProps {
+  category?: "external_apis" | "federation" | "affiliate" | "internal";
+  showApiKeys?: boolean;
+}
 
 interface InstanceSettingsData {
-  instance_name?: string;
-  amazon_affiliate_id?: string;
-  enable_federation?: string | boolean;
-  [key: string]: unknown;
+  [key: string]: string | boolean | null;
 }
 
-interface CardWrapperProps {
-  /** Card title */
-  title: string;
-  /** Card description */
-  description: string;
-  /** Footer helper text */
-  footerText: string;
-  /** Save button handler */
-  onSave: () => void;
-  /** Card body content */
-  children: ReactNode;
-}
+const SETTING_GROUPS = {
+  external_apis: [
+    { key: "google_books_api_key", label: "Google Books API Key", type: "api" as const, placeholder: "Enter API key" },
+    {
+      key: "discogs_consumer_key",
+      label: "Discogs Consumer Key",
+      type: "api" as const,
+      placeholder: "Enter consumer key",
+    },
+    {
+      key: "discogs_consumer_secret",
+      label: "Discogs Consumer Secret",
+      type: "api" as const,
+      placeholder: "Enter consumer secret",
+    },
+    { key: "tmdb_api_key", label: "TMDB API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "bgg_username", label: "BGG Username", type: "text" as const, placeholder: "Enter BGG username" },
+    { key: "openai_api_key", label: "OpenAI API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "anthropic_api_key", label: "Anthropic API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "upc_database_api_key", label: "UPC Database API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "allegro_client_id", label: "Allegro Client ID", type: "api" as const, placeholder: "Enter client ID" },
+    {
+      key: "allegro_client_secret",
+      label: "Allegro Client Secret",
+      type: "api" as const,
+      placeholder: "Enter client secret",
+    },
+  ],
+  federation: [
+    { key: "instance_name", label: "Instance Name", type: "text" as const, placeholder: "e.g., My Library" },
+    { key: "instance_url", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
+    { key: "enable_federation", label: "Enable Federation", type: "boolean" as const },
+  ],
+  affiliate: [
+    { key: "amazon_affiliate_id", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
+  ],
+  internal: [
+    { key: "maintenance_mode", label: "Maintenance Mode", type: "boolean" as const },
+    { key: "registration_enabled", label: "Registration Enabled", type: "boolean" as const },
+  ],
+};
 
 /**
  * Card wrapper for settings sections.
+ *
  * @param props - Card wrapper properties
  * @param props.title - Card title
  * @param props.description - Card description
- * @param props.footerText - Footer helper text
  * @param props.onSave - Save button handler
  * @param props.children - Card body content
  * @returns Card wrapper component
  */
-function CardWrapper({ title, description, footerText, onSave, children }: CardWrapperProps) {
+function CardWrapper({
+  title,
+  description,
+  onSave,
+  children,
+}: {
+  title: string;
+  description: string;
+  onSave: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
       <div className="p-6 flex-1">
@@ -59,8 +100,9 @@ function CardWrapper({ title, description, footerText, onSave, children }: CardW
         <div className="mt-5">{children}</div>
       </div>
       <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">{footerText}</p>
+        <p className="text-sm text-muted-foreground"></p>
         <Button size="sm" onClick={onSave}>
+          <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
       </div>
@@ -71,77 +113,151 @@ function CardWrapper({ title, description, footerText, onSave, children }: CardW
 /**
  * Instance settings component for managing global configuration.
  *
- * @returns {JSX.Element} The instance settings component
+ * @param props - Component props
+ * @param props.category - Settings category (external_apis, federation, affiliate, internal)
+ * @param props.showApiKeys - Whether to show API keys interface
+ * @returns The instance settings component
  */
-export function InstanceSettings() {
+export function InstanceSettings({ category = "external_apis", showApiKeys = false }: InstanceSettingsProps) {
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [saving, setSaving] = useState(false);
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState(false);
+
+  const settingsList = SETTING_GROUPS[category] || [];
 
   useEffect(() => {
-    getInstanceSettings()
-      .then(setSettings)
+    if (showApiKeys && category !== "external_apis") {
+      setLoading(false);
+      return;
+    }
+    getInstanceSettings(category)
+      .then(data => setSettings(data as InstanceSettingsData))
       .finally(() => setLoading(false));
-  }, []);
+  }, [category, showApiKeys]);
 
   const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
     try {
-      await updateInstanceSettings(settings);
+      const toSave: Record<string, unknown> = {};
+      for (const s of settingsList) {
+        const val = settings[s.key];
+        if (s.type === "boolean") {
+          toSave[s.key] = val === true || val === "true";
+        } else {
+          toSave[s.key] = val ?? "";
+        }
+      }
+      await updateInstanceSettings(toSave, category);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
     } catch (e) {
       console.error("Failed to save settings", e);
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const toggleReveal = (key: string) => {
+    setRevealedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const isApiValue = (key: string, value: unknown): boolean => {
+    return (
+      SETTING_GROUPS.external_apis.some(s => s.key === key && s.type === "api") &&
+      typeof value === "string" &&
+      value.startsWith("***")
+    );
   };
 
   if (loading) {
     return <Loader2 className="animate-spin h-6 w-6 text-muted-foreground my-10 mx-auto" />;
   }
 
+  if (showApiKeys && category === "external_apis") {
+    const apiSettings = SETTING_GROUPS.external_apis;
+    return (
+      <div className="flex flex-col gap-8">
+        {apiSettings.map(s => {
+          const value = (settings[s.key] as string) || "";
+          const isMasked = isApiValue(s.key, value);
+          const isRevealed = revealedKeys.has(s.key);
+
+          return (
+            <CardWrapper
+              key={s.key}
+              title={s.label}
+              description={`Configure your ${s.label.toLowerCase()}`}
+              onSave={handleSave}
+            >
+              <div className="relative">
+                <input
+                  type={isRevealed && !isMasked ? "text" : "password"}
+                  className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
+                  value={value}
+                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                  placeholder={s.placeholder}
+                />
+                {isMasked && (
+                  <button
+                    type="button"
+                    onClick={() => toggleReveal(s.key)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
+            </CardWrapper>
+          );
+        })}
+        {saved && <p className="text-sm text-green-500">Settings saved successfully</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
-      <CardWrapper
-        title="Instance Name"
-        description="Used to identify your library on the web and within federated networks."
-        footerText="Maximum 32 characters."
-        onSave={handleSave}
-      >
-        <input
-          type="text"
-          className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={settings.instance_name ?? ""}
-          onChange={e => setSettings({ ...settings, instance_name: e.target.value })}
-          placeholder="e.g., My Personal Library"
-        />
-      </CardWrapper>
+      {settingsList.map(s => {
+        if (s.type === "boolean") {
+          return (
+            <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
+              <select
+                className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={String(settings[s.key] ?? "false")}
+                onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+              >
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </CardWrapper>
+          );
+        }
 
-      <CardWrapper
-        title="Amazon Affiliate ID"
-        description="Monetize external store links by automatically appending your affiliate tracking ID."
-        footerText="Leave blank to disable Amazon integrations."
-        onSave={handleSave}
-      >
-        <input
-          type="text"
-          className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={settings.amazon_affiliate_id ?? ""}
-          onChange={e => setSettings({ ...settings, amazon_affiliate_id: e.target.value })}
-          placeholder="e.g., iqoqo-20"
-        />
-      </CardWrapper>
-
-      <CardWrapper
-        title="Federation"
-        description="Allow other iqoqo instances to query your public catalog via ActivityPub and Linked Open Data."
-        footerText="This requires your server to be publicly accessible."
-        onSave={handleSave}
-      >
-        <select
-          className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={String(settings.enable_federation ?? "false")}
-          onChange={e => setSettings({ ...settings, enable_federation: e.target.value })}
-        >
-          <option value="true">Enabled</option>
-          <option value="false">Disabled</option>
-        </select>
-      </CardWrapper>
+        return (
+          <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
+            <input
+              type={s.type === "api" ? "password" : "text"}
+              className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={(settings[s.key] as string) || ""}
+              onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+              placeholder={s.placeholder}
+            />
+          </CardWrapper>
+        );
+      })}
+      {saved && <p className="text-sm text-green-500">Settings saved successfully</p>}
     </div>
   );
 }

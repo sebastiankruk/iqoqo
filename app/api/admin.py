@@ -7,11 +7,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
+# along with this program. If not, see <https://www.gnu.org/licenses/>
 #
 
 from flask import Blueprint, jsonify, request
@@ -20,6 +20,22 @@ from app.api.decorators import admin_required
 from app.db.models import InstanceSettings, Permission, Role, User, db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
+
+
+def _get_current_user() -> User:
+    """Get the current user from request context."""
+    return db.session.get(User, request.user_id)
+
+
+def _has_permission(user: User, permission: str) -> bool:
+    """Check if user has a specific permission through their roles."""
+    if not user:
+        return False
+    for role in getattr(user, "roles", []):
+        for perm in getattr(role, "permissions", []):
+            if perm.name == permission:
+                return True
+    return False
 
 
 def _format_user(u: User) -> dict:
@@ -37,6 +53,11 @@ def _format_user(u: User) -> dict:
 @admin_required
 def get_users():
     """Get all users with optional filtering and pagination."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "read:users"):
+        return jsonify({"success": False, "error": "Permission denied: read:users required"}), 403
+
     search = request.args.get("search", "").strip()
     status = request.args.get("status", "").strip()
     page = request.args.get("page", 1, type=int)
@@ -44,17 +65,14 @@ def get_users():
 
     query = User.query
 
-    # Global search on email or display name
     if search:
         query = query.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
 
-    # Status filtering
     if status == "active":
         query = query.filter(User.is_active.is_(True))
     elif status == "inactive":
         query = query.filter(User.is_active.is_(False))
 
-    # Order by newest
     query = query.order_by(User.created_at.desc())
 
     paginated = query.paginate(page=page, per_page=limit, error_out=False)
@@ -72,39 +90,50 @@ def get_users():
 @admin_required
 def update_user(user_id):
     """Update user's active status and RBAC roles."""
-    user = User.query.get_or_404(user_id)
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:users"):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    user_obj = User.query.get_or_404(user_id)
     data = request.json or {}
 
     if "is_active" in data:
-        user.is_active = bool(data["is_active"])
+        user_obj.is_active = bool(data["is_active"])
 
     if "roles" in data and isinstance(data["roles"], list):
-        # Fetch corresponding Role models from database
         new_roles = Role.query.filter(Role.name.in_(data["roles"])).all()
-        user.roles = new_roles
+        user_obj.roles = new_roles
 
     db.session.commit()
-    return jsonify({"success": True, "data": _format_user(user)})
+    return jsonify({"success": True, "data": _format_user(user_obj)})
 
 
 @admin_bp.route("/roles", methods=["GET", "POST"])
 @admin_required
 def get_roles():
     """Get all available roles for RBAC assignment, or create a new role."""
+    user = _get_current_user()
+
     if request.method == "POST":
+        if not _has_permission(user, "write:roles"):
+            return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+
         data = request.json or {}
         name = data.get("name", "").strip()
         if not name:
             return jsonify({"success": False, "error": "Role name is required"}), 400
         if len(name) > 50:
             return jsonify({"success": False, "error": "Role name too long (max 50 chars)"}), 400
-        # Check if role already exists
         if Role.query.filter_by(name=name).first():
             return jsonify({"success": False, "error": "Role already exists"}), 400
         role = Role(name=name)
         db.session.add(role)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": role.id, "name": role.name, "is_protected": False}})
+
+    if not _has_permission(user, "read:roles"):
+        return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
 
     roles = Role.query.all()
     protected_roles = {"admin", "user", "contributor"}
@@ -129,6 +158,11 @@ def get_roles():
 @admin_required
 def delete_role(role_id):
     """Delete a role (only non-protected roles can be deleted)."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:roles"):
+        return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+
     role = Role.query.get_or_404(role_id)
     protected_roles = {"admin", "user", "contributor"}
     if role.name.lower() in protected_roles:
@@ -142,6 +176,11 @@ def delete_role(role_id):
 @admin_required
 def get_permissions():
     """Get all available permissions that can be assigned to roles."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "read:roles"):
+        return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
+
     permissions = Permission.query.all()
     return jsonify({"success": True, "data": [{"id": p.id, "name": p.name, "description": p.description} for p in permissions]})
 
@@ -150,6 +189,11 @@ def get_permissions():
 @admin_required
 def manage_role_permissions(role_id):
     """Get or update permissions for a specific role."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:roles"):
+        return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+
     role = Role.query.get_or_404(role_id)
 
     if request.method == "GET":
@@ -165,14 +209,9 @@ def manage_role_permissions(role_id):
             }
         )
 
-    # PUT - update permissions
     data = request.json or {}
     permission_ids = data.get("permission_ids", [])
-
-    # Fetch permissions by ID
     permissions = Permission.query.filter(Permission.id.in_(permission_ids)).all() if permission_ids else []
-
-    # Replace role's permissions
     role.permissions = permissions
     db.session.commit()
 
@@ -188,22 +227,107 @@ def manage_role_permissions(role_id):
     )
 
 
+API_KEYS = {
+    "GOOGLE_BOOKS_API_KEY",
+    "DISCOGS_USER_TOKEN",
+    "TMDB_API_KEY",
+    "TMDB_API_READ_ACCESS_TOKEN",
+    "BGG_API_TOKEN",
+    "LOCAL_SD_URL",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "UPC_ITEM_DB_KEY",
+    "UPC_DATABASE_ORG_KEY",
+    "ALLEGRO_CLIENT_ID",
+    "ALLEGRO_CLIENT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+}
+
+FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
+
+AFFILIATE_KEYS = {"AFFILIATE_AMAZON", "AFFILIATE_ALLEGRO", "AFFILIATE_EMPIK"}
+
+INTERNAL_KEYS = {"instance_name", "IQOQO_KNOWN_JUNK_PHASHES"}
+
+
+def _mask_api_key(value: str) -> str:
+    """Mask API key showing only last 4 characters."""
+    if not value:
+        return ""
+    if len(value) >= 8:
+        return f"***{value[-4:]}"
+    return "***"
+
+
 @admin_bp.route("/settings", methods=["GET", "PUT"])
 @admin_required
 def manage_settings():
-    """Manage global instance settings."""
+    """Manage global instance settings with category-based RBAC."""
+    user = _get_current_user()
+
+    category = request.args.get("category", "all")
+
     if request.method == "GET":
         settings = InstanceSettings.query.all()
-        return jsonify({"success": True, "data": {s.key: s.value for s in settings}})
 
-    data = request.json or {}
-    for key, value in data.items():
-        setting = InstanceSettings.query.filter_by(key=key).first()
-        if setting:
-            setting.value = value
-        else:
-            setting = InstanceSettings(key=key, value=value)
-            db.session.add(setting)
+        can_external = _has_permission(user, "config:external_apis")
+        can_federation = _has_permission(user, "config:federation")
+        can_affiliate = _has_permission(user, "config:affiliate")
+        can_internal = _has_permission(user, "config:internal")
 
-    db.session.commit()
-    return jsonify({"success": True, "data": data})
+        result = {}
+        for s in settings:
+            if s.key in API_KEYS and can_external:
+                result[s.key] = _mask_api_key(str(s.value)) if s.value else ""
+            elif s.key in FEDERATION_KEYS and can_federation:
+                result[s.key] = s.value
+            elif s.key in AFFILIATE_KEYS and can_affiliate:
+                result[s.key] = s.value
+            elif s.key in INTERNAL_KEYS and can_internal:
+                result[s.key] = s.value
+
+        if category == "federation" and not can_federation:
+            return jsonify({"success": False, "error": "Permission denied: config:federation required"}), 403
+        if category == "affiliate" and not can_affiliate:
+            return jsonify({"success": False, "error": "Permission denied: config:affiliate required"}), 403
+        if category == "apikeys" and not can_external:
+            return jsonify({"success": False, "error": "Permission denied: config:external_apis required"}), 403
+        if category == "internal" and not can_internal:
+            return jsonify({"success": False, "error": "Permission denied: config:internal required"}), 403
+
+        return jsonify({"success": True, "data": result})
+
+    if request.method == "PUT":
+        can_external = _has_permission(user, "config:external_apis")
+        can_federation = _has_permission(user, "config:federation")
+        can_affiliate = _has_permission(user, "config:affiliate")
+        can_internal = _has_permission(user, "config:internal")
+
+        data = request.json or {}
+        saved = {}
+
+        for key, value in data.items():
+            if key in API_KEYS and not can_external:
+                continue
+            if key in FEDERATION_KEYS and not can_federation:
+                continue
+            if key in AFFILIATE_KEYS and not can_affiliate:
+                continue
+            if key in INTERNAL_KEYS and not can_internal:
+                continue
+
+            if isinstance(value, str) and value.startswith("***"):
+                continue
+
+            setting = InstanceSettings.query.filter_by(key=key).first()
+            if setting:
+                setting.value = value
+            else:
+                setting = InstanceSettings(key=key, value=value)
+                db.session.add(setting)
+
+            saved[key] = value
+
+        db.session.commit()
+        return jsonify({"success": True, "data": saved})

@@ -20,13 +20,19 @@ import { getUsers, AdminUser } from "@/lib/api/admin";
 import { Loader2, Search, Filter } from "lucide-react";
 import { RbacSheet } from "./rbac-sheet";
 
+interface UserManagementProps {
+  canEdit?: boolean;
+}
+
 /**
  * Component for managing users, displaying data table with search/filtering
  * and invoking the RBAC Sheet.
  *
+ * @param props - Component props
+ * @param props.canEdit - Whether user has write:users permission
  * @returns {JSX.Element} The component
  */
-export function UserManagement() {
+export function UserManagement({ canEdit = false }: UserManagementProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
@@ -111,8 +117,8 @@ export function UserManagement() {
               users.map(u => (
                 <tr
                   key={u.id}
-                  onClick={() => setSelectedUser(u)}
-                  className="hover:bg-accent/20 transition-colors cursor-pointer"
+                  onClick={canEdit ? () => setSelectedUser(u) : undefined}
+                  className={canEdit ? "hover:bg-accent/20 transition-colors cursor-pointer" : ""}
                 >
                   <td className="px-6 py-4 font-medium">{u.email}</td>
                   <td className="px-6 py-4 text-muted-foreground">{u.display_name || "—"}</td>
@@ -145,7 +151,12 @@ export function UserManagement() {
       </div>
 
       {selectedUser && (
-        <RbacSheet user={selectedUser} onClose={() => setSelectedUser(null)} onUpdate={handleUserUpdate} />
+        <RbacSheet
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onUpdate={handleUserUpdate}
+          canEdit={canEdit}
+        />
       )}
     </div>
   );

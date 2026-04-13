@@ -48,12 +48,18 @@ interface RoleData {
   permissionCount: number;
 }
 
+interface GroupManagementProps {
+  canEdit?: boolean;
+}
+
 /**
  * Role management component - allows assigning permissions to roles.
  *
+ * @param props - Component props
+ * @param props.canEdit - Whether user has write:roles permission
  * @returns The role management component
  */
-export function GroupManagement() {
+export function GroupManagement({ canEdit = false }: GroupManagementProps) {
   const [expandedRole, setExpandedRole] = useState<number | null>(null);
   const [roles, setRoles] = useState<RoleData[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -194,13 +200,15 @@ export function GroupManagement() {
           <h2 className="font-serif text-xl font-bold text-foreground">Roles</h2>
           <p className="mt-1 text-sm text-muted-foreground">Configure roles and their assigned permissions</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" />
-          Add Role
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            Add Role
+          </button>
+        )}
       </div>
 
       {/* Role Cards */}
@@ -279,7 +287,7 @@ export function GroupManagement() {
 
                   {/* Actions */}
                   <div className="mt-6 flex justify-between">
-                    {!role.is_protected && (
+                    {canEdit && !role.is_protected && (
                       <button
                         onClick={() => setRoleToDelete(role)}
                         className="flex items-center gap-2 rounded-lg border border-destructive px-4 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10 transition-opacity"
@@ -289,23 +297,25 @@ export function GroupManagement() {
                       </button>
                     )}
                     <div className="flex justify-end ml-auto">
-                      <button
-                        onClick={() => handleSavePermissions(role.id)}
-                        disabled={saving === role.id}
-                        className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-                      >
-                        {saving === role.id ? (
-                          <>
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4" />
-                            Save Changes
-                          </>
-                        )}
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => handleSavePermissions(role.id)}
+                          disabled={saving === role.id}
+                          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          {saving === role.id ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4" />
+                              Save Changes
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

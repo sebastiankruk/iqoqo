@@ -30,3 +30,19 @@ permissions:
     description: "Allow LLM to generate content using cloud resources"
   - name: upload:cover
     description: "Allow uploading/contributing manifestation covers"
+  - name: config:external_apis
+    description: "Manage external API keys and integrations"
+  - name: config:federation
+    description: "Manage federation settings"
+  - name: config:affiliate
+    description: "Manage affiliate tracking IDs"
+  - name: config:internal
+    description: "Manage internal instance settings"
+  - name: read:users
+    description: "View users list"
+  - name: write:users
+    description: "Modify user roles and active status"
+  - name: read:roles
+    description: "View roles list"
+  - name: write:roles
+    description: "Create/delete roles and assign permissions"

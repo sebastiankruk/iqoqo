@@ -26,6 +26,8 @@ interface RbacSheetProps {
   onClose: () => void;
   /** Callback when user is updated */
   onUpdate: (updated: AdminUser) => void;
+  /** Whether user has write:users permission */
+  canEdit?: boolean;
 }
 
 /**
@@ -35,9 +37,10 @@ interface RbacSheetProps {
  * @param props.user - The user to edit
  * @param props.onClose - Callback when sheet closes
  * @param props.onUpdate - Callback when user is updated
+ * @param props.canEdit - Whether user has write:users permission
  * @returns The RBAC sheet component
  */
-export function RbacSheet({ user, onClose, onUpdate }: RbacSheetProps) {
+export function RbacSheet({ user, onClose, onUpdate, canEdit = false }: RbacSheetProps) {
   const [loading, setLoading] = useState(false);
   const [rolesLoading, setRolesLoading] = useState(true);
   const [availableRoles, setAvailableRoles] = useState<{ id: number; name: string }[]>([]);
@@ -176,14 +179,16 @@ export function RbacSheet({ user, onClose, onUpdate }: RbacSheetProps) {
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={loading || rolesLoading}
-            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save Permissions
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={loading || rolesLoading}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Permissions
+            </button>
+          )}
         </div>
       </div>
     </div>
