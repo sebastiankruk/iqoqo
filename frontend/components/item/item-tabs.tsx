@@ -45,7 +45,7 @@ function DetailsTab({ item }: { item: Item }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Rich metadata including audio tracklists */}
-      <ExtendedMetadata meta={meta} />
+      <ExtendedMetadata meta={meta} owner_name={item.owner_name} />
 
       {/* FRBR hierarchy info */}
       <div className="border-t pt-6">
@@ -76,18 +76,6 @@ function DetailsTab({ item }: { item: Item }) {
             <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
           </div>
         </dl>
-
-        {/* Owner info - shown when owner_name is available */}
-        {item.owner_name && (
-          <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4">
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Owner</dt>
-                <dd className="text-sm font-medium text-foreground">{item.owner_name}</dd>
-              </div>
-            </dl>
-          </div>
-        )}
       </div>
     </div>
   );
