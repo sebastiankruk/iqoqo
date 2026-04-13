@@ -224,7 +224,8 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <input
-                    type={isRevealed && !isMasked ? "text" : "password"}
+                    type="text"
+                    autoComplete="off"
                     className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
                     value={isRevealed ? value.replace(/^\*+/, "") : value}
                     onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
