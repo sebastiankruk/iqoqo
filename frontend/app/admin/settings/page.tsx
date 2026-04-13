@@ -150,7 +150,7 @@ function SettingsContent(): React.JSX.Element {
                 )}
                 {hasPermission("config:external_apis") && (
                   <NavItem
-                    label="API Keys"
+                    label="API Integrations"
                     icon={Key}
                     isActive={activeTab === "apikeys"}
                     onClick={() => handleTabChange("apikeys")}
@@ -225,8 +225,7 @@ function SettingsContent(): React.JSX.Element {
                   Configure instance-wide settings for this deployment.
                 </p>
               </div>
-              <InstanceSettings category="federation" />
-              <InstanceSettings category="affiliate" />
+              <InstanceSettings category="internal" />
             </div>
           )}
 
@@ -261,7 +260,7 @@ function SettingsContent(): React.JSX.Element {
           {activeTab === "apikeys" && (
             <div className="flex flex-col gap-8">
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">API Integrations</h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   Manage external API keys for third-party integrations.
                 </p>
@@ -288,7 +287,11 @@ function SettingsContent(): React.JSX.Element {
                 <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
                 <p className="text-sm text-muted-foreground mt-1">Configure internal security settings.</p>
               </div>
-              <InstanceSettings category="internal" />
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
             </div>
           )}
         </div>

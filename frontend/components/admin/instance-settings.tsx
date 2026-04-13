@@ -31,43 +31,41 @@ interface InstanceSettingsData {
 
 const SETTING_GROUPS = {
   external_apis: [
-    { key: "google_books_api_key", label: "Google Books API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "GOOGLE_BOOKS_API_KEY", label: "Google Books API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "DISCOGS_USER_TOKEN", label: "Discogs User Token", type: "api" as const, placeholder: "Enter token" },
+    { key: "TMDB_API_KEY", label: "TMDB API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "BGG_API_TOKEN", label: "BGG API Token", type: "api" as const, placeholder: "Enter token" },
+    { key: "OPENAI_API_KEY", label: "OpenAI API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "GEMINI_API_KEY", label: "Google Gemini API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "UPC_DATABASE_ORG_KEY", label: "UPC Database API Key", type: "api" as const, placeholder: "Enter API key" },
+    { key: "ALLEGRO_CLIENT_ID", label: "Allegro Client ID", type: "api" as const, placeholder: "Enter client ID" },
     {
-      key: "discogs_consumer_key",
-      label: "Discogs Consumer Key",
-      type: "api" as const,
-      placeholder: "Enter consumer key",
-    },
-    {
-      key: "discogs_consumer_secret",
-      label: "Discogs Consumer Secret",
-      type: "api" as const,
-      placeholder: "Enter consumer secret",
-    },
-    { key: "tmdb_api_key", label: "TMDB API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "bgg_username", label: "BGG Username", type: "text" as const, placeholder: "Enter BGG username" },
-    { key: "openai_api_key", label: "OpenAI API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "anthropic_api_key", label: "Anthropic API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "upc_database_api_key", label: "UPC Database API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "allegro_client_id", label: "Allegro Client ID", type: "api" as const, placeholder: "Enter client ID" },
-    {
-      key: "allegro_client_secret",
+      key: "ALLEGRO_CLIENT_SECRET",
       label: "Allegro Client Secret",
       type: "api" as const,
       placeholder: "Enter client secret",
     },
+    {
+      key: "LOCAL_SD_URL",
+      label: "Local Stable Diffusion URL",
+      type: "text" as const,
+      placeholder: "http://localhost:7860",
+    },
   ],
   federation: [
-    { key: "instance_name", label: "Instance Name", type: "text" as const, placeholder: "e.g., My Library" },
-    { key: "instance_url", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
-    { key: "enable_federation", label: "Enable Federation", type: "boolean" as const },
+    { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
+    { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const },
   ],
   affiliate: [
-    { key: "amazon_affiliate_id", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
+    { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
   ],
   internal: [
-    { key: "maintenance_mode", label: "Maintenance Mode", type: "boolean" as const },
-    { key: "registration_enabled", label: "Registration Enabled", type: "boolean" as const },
+    {
+      key: "IQOQO_KNOWN_JUNK_PHASHES",
+      label: "Known Junk Image Hashes",
+      type: "text" as const,
+      placeholder: "Comma-separated pHash values",
+    },
   ],
 };
 
