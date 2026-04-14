@@ -26,14 +26,17 @@ import { Badge } from "@/components/ui/badge";
 export function TmdbAttribution() {
   return (
     <div className="flex items-center justify-center pt-2 pb-1 w-full">
-      <Link 
-        href="https://www.themoviedb.org" 
-        target="_blank" 
+      <Link
+        href="https://www.themoviedb.org"
+        target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <span>Powered by</span>
-        <Badge variant="outline" className="font-semibold bg-[#01b4e4]/10 text-[#01b4e4] hover:bg-[#01b4e4]/20 border-[#01b4e4]/30 dark:border-[#01b4e4]/50">
+        <Badge
+          variant="outline"
+          className="font-semibold bg-[#01b4e4]/10 text-[#01b4e4] hover:bg-[#01b4e4]/20 border-[#01b4e4]/30 dark:border-[#01b4e4]/50"
+        >
           TMDB
         </Badge>
       </Link>

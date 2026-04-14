@@ -107,10 +107,10 @@ describe("StatsCards", () => {
   it("renders links with the correct URLs for filtering collections", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
     render(<StatsCards />);
-    
+
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(4);
-    
+
     expect(links[0]).toHaveAttribute("href", "/collection");
     expect(links[1]).toHaveAttribute("href", "/collection?statuses=reading");
     expect(links[2]).toHaveAttribute("href", "/collection?statuses=wish_list");

@@ -31,7 +31,6 @@ type TabId = (typeof TABS)[number]["id"];
 
 /* ── Details tab ─────────────────────────────────────────────────────────── */
 
-
 /**
  * Details tab component.
  *

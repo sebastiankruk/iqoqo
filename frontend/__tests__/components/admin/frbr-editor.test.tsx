@@ -104,7 +104,7 @@ describe("FrbrEditor Component", () => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText(/Item #10/));
+    fireEvent.click(screen.getByText(/Like New/));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("available")).toBeInTheDocument();

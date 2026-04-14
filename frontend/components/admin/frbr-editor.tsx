@@ -886,7 +886,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
                                 href={`/item/${item.id}`}
                                 className="hover:underline hover:text-primary transition-colors"
                                 target="_blank"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={e => e.stopPropagation()}
                               >
                                 Item #{item.id}
                               </Link>

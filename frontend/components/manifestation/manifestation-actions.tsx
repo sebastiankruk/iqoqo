@@ -162,22 +162,14 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
       {hasPermission("refetch:metadata") && (
-        <button
-          onClick={handleRefetch}
-          disabled={isRefetching}
-          className="btn-action-dashed"
-        >
+        <button onClick={handleRefetch} disabled={isRefetching} className="btn-action-dashed">
           <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
         </button>
       )}
 
       {hasPermission("regenerate:cover") && (
-        <button
-          onClick={handleRegenerateClick}
-          disabled={isPending || isRequesting}
-          className="btn-action-dashed"
-        >
+        <button onClick={handleRegenerateClick} disabled={isPending || isRequesting} className="btn-action-dashed">
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
