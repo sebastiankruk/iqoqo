@@ -23,6 +23,7 @@ import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
+import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
@@ -66,9 +67,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
   const permissions = profile?.permissions ?? [];
-  const hasUploadPermission = permissions.includes("upload:cover");
-  const hasEditPermission = permissions.includes("edit:manifestation");
-  const hasUpdateItemPermission = permissions.includes("update:item");
+  const hasUploadPermission = permissions.includes(PermissionName.UPLOAD_COVER);
+  const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
+  const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
   const isOwner = item.owner_id !== "Unavailable";
   const canModifyItem = isOwner || hasUpdateItemPermission;

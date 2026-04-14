@@ -25,6 +25,7 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
+from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 
@@ -300,7 +301,7 @@ def get_item_detail(item_id: int):
         if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
             is_admin = True
         if user:
-            has_read_owners = user.has_permission("read:owners")
+            has_read_owners = user.has_permission(PermissionName.READ_OWNERS)
 
     manifestation = item.manifestation
     owner_count = db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id).scalar() or 0
@@ -361,7 +362,7 @@ def update_item(item_id: int):
     if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
         is_admin = True
 
-    has_update_permission = user.has_permission("update:item") if user else False
+    has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
 
     if not (is_owner or is_admin or has_update_permission):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
@@ -385,7 +386,7 @@ def update_item(item_id: int):
 
 @api_bp.route("/items/<int:item_id>", methods=["DELETE"])
 @require_auth
-@require_permission("delete:item")
+@require_permission(PermissionName.DELETE_ITEM)
 def delete_item(item_id: int):
     item = db.session.get(Item, item_id)
     if not item:

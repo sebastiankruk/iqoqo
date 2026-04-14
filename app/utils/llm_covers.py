@@ -24,7 +24,7 @@ from openai import OpenAI
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
-from app.core.permissions import ItemPermissions
+from app.core.permissions import PermissionName
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
@@ -216,7 +216,7 @@ def fetch_llm_cover(
 
     # 2. Cloud (Paid) - restricted by cloud permission
     if not allow_cloud_llm:
-        logger.debug(f"Cloud LLM generation skipped: user lacks {ItemPermissions.LLM_GENERATE_CLOUD.value} permission.")
+        logger.debug(f"Cloud LLM generation skipped: user lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission.")
         return None
 
     if os.environ.get("GEMINI_API_KEY"):

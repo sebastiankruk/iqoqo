@@ -23,6 +23,7 @@ from flask import Blueprint, g, jsonify, request
 
 from app.api.decorators import admin_required
 from app.core import frbr_service
+from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
 from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db
@@ -64,13 +65,14 @@ def _get_current_user() -> User | None:
     return db.session.get(User, getattr(g, "user_id", None))
 
 
-def _has_permission(user: User | None, permission: str) -> bool:
+def _has_permission(user: User | None, permission: PermissionName | str) -> bool:
     """Check if user has a specific permission through their roles."""
     if not user:
         return False
+    perm_val = permission.value if hasattr(permission, "value") else permission
     for role in getattr(user, "roles", []):
         for perm in getattr(role, "permissions", []):
-            if perm.name == permission:
+            if perm.name == perm_val:
                 return True
     return False
 
@@ -92,7 +94,7 @@ def get_users():
     """Get all users with optional filtering and pagination."""
     user = _get_current_user()
 
-    if not _has_permission(user, "read:users"):
+    if not _has_permission(user, PermissionName.READ_USERS):
         return jsonify({"success": False, "error": "Permission denied: read:users required"}), 403
 
     search = request.args.get("search", "").strip()
@@ -129,7 +131,7 @@ def update_user(user_id):
     """Update user's active status and RBAC roles."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:users"):
+    if not _has_permission(user, PermissionName.WRITE_USERS):
         return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
 
     user_obj = User.query.get_or_404(user_id)
@@ -153,7 +155,7 @@ def get_roles():
     user = _get_current_user()
 
     if request.method == "POST":
-        if not _has_permission(user, "write:roles"):
+        if not _has_permission(user, PermissionName.WRITE_ROLES):
             return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
         data = request.json or {}
@@ -169,8 +171,8 @@ def get_roles():
         db.session.commit()
         return jsonify({"success": True, "data": {"id": role.id, "name": role.name, "is_protected": False}})
 
-    if not _has_permission(user, "read:roles"):
-        return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
+    if not _has_permission(user, PermissionName.READ_ROLES):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
     roles = Role.query.all()
     protected_roles = {"admin", "user", "contributor"}
@@ -197,7 +199,7 @@ def delete_role(role_id):
     """Delete a role (only non-protected roles can be deleted)."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:roles"):
+    if not _has_permission(user, PermissionName.WRITE_ROLES):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
     role = Role.query.get_or_404(role_id)
@@ -215,8 +217,8 @@ def get_permissions():
     """Get all available permissions that can be assigned to roles."""
     user = _get_current_user()
 
-    if not _has_permission(user, "read:roles"):
-        return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
+    if not _has_permission(user, PermissionName.READ_ROLES):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
     permissions = Permission.query.all()
     return jsonify(
@@ -232,12 +234,12 @@ def get_permissions():
 def manage_role_permissions(role_id):
     """Get or update permissions for a specific role."""
     user = _get_current_user()
-
     if request.method == "GET":
-        if not _has_permission(user, "read:roles"):
-            return jsonify({"success": False, "error": "Permission denied: read:roles required"}), 403
-    elif not _has_permission(user, "write:roles"):
-        return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+        if not _has_permission(user, PermissionName.READ_ROLES):
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
+    elif request.method == "PUT":
+        if not _has_permission(user, PermissionName.WRITE_ROLES):
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
     role = Role.query.get_or_404(role_id)
 
@@ -379,21 +381,21 @@ def manage_settings():
                     result[key] = {"value": "", "source": source}
 
         if category == "federation" and not can_federation:
-            return jsonify({"success": False, "error": "Permission denied: config:federation required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_FEDERATION} required"}), 403
         if category == "affiliate" and not can_affiliate:
-            return jsonify({"success": False, "error": "Permission denied: config:affiliate required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_AFFILIATE} required"}), 403
         if category in {"external_apis", "apikeys"} and not can_external:
-            return jsonify({"success": False, "error": "Permission denied: config:external_apis required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_EXTERNAL_APIS} required"}), 403
         if category == "internal" and not can_internal:
-            return jsonify({"success": False, "error": "Permission denied: config:internal required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_INTERNAL} required"}), 403
 
         return jsonify({"success": True, "data": result})
 
     if request.method == "PUT":
-        can_external = _has_permission(user, "config:external_apis")
-        can_federation = _has_permission(user, "config:federation")
-        can_affiliate = _has_permission(user, "config:affiliate")
-        can_internal = _has_permission(user, "config:internal")
+        can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+        can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+        can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+        can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
 
         data = request.json or {}
         saved = {}
@@ -433,8 +435,8 @@ def get_frbr_tree(manif_id):
     """Fetches the full FRBR lineage upward from a Manifestation."""
     user = _get_current_user()
 
-    if not _has_permission(user, "read:content"):
-        return jsonify({"success": False, "error": "Permission denied: read:content required"}), 403
+    if not _has_permission(user, PermissionName.READ_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_METADATA} required"}), 403
 
     manif = db.session.get(Manifestation, manif_id)
     if manif is None:
@@ -498,8 +500,8 @@ def update_work(work_id):
     """Update a Work entity."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:content"):
-        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+    if not _has_permission(user, PermissionName.WRITE_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
 
     data = request.json or {}
     try:
@@ -515,8 +517,8 @@ def update_expression(expr_id):
     """Update an Expression entity."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:content"):
-        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+    if not _has_permission(user, PermissionName.WRITE_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
 
     data = request.json or {}
     try:
@@ -538,8 +540,8 @@ def update_manifestation(manif_id):
     """Update a Manifestation entity."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:content"):
-        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+    if not _has_permission(user, PermissionName.WRITE_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
 
     data = request.json or {}
     pub_date_str = data.get("publication_date")
@@ -570,8 +572,8 @@ def update_item(item_id):
     """Update an Item entity."""
     user = _get_current_user()
 
-    if not _has_permission(user, "write:content"):
-        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+    if not _has_permission(user, PermissionName.WRITE_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
 
     data = request.json or {}
     try:
@@ -593,8 +595,8 @@ def search_frbr_entities():
     """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
     user = _get_current_user()
 
-    if not _has_permission(user, "read:content"):
-        return jsonify({"success": False, "error": "Permission denied: read:content required"}), 403
+    if not _has_permission(user, PermissionName.READ_METADATA):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_METADATA} required"}), 403
 
     query = request.args.get("q", "").strip()
     entity_type = request.args.get("type", "manifestation")  # work, expression, manifestation

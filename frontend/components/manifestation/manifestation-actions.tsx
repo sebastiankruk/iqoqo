@@ -24,6 +24,7 @@ import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
 import {
   AlertDialog,
@@ -77,7 +78,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   if (!profile) return null;
 
-  const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
+  const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
 
   /**
    * Handles the confirmation of manifestation deletion.
@@ -161,23 +162,23 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission("refetch:metadata") && (
+      {hasPermission(PermissionName.REFETCH_METADATA) && (
         <button onClick={handleRefetch} disabled={isRefetching} className="btn-action-dashed">
           <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
         </button>
       )}
 
-      {hasPermission("regenerate:cover") && (
+      {hasPermission(PermissionName.REGENERATE_COVER) && (
         <button onClick={handleRegenerateClick} disabled={isPending || isRequesting} className="btn-action-dashed">
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
       )}
 
-      {hasPermission("read:content") && manifestation.id && (
+      {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
         <button
-          onClick={() => router.push(`/admin/content?tab=content&manifestationId=${manifestation.id}`)}
+          onClick={() => router.push(`/admin/settings?tab=metadata&manifestationId=${manifestation.id}`)}
           className="btn-action-dashed"
         >
           <Pencil className="h-3.5 w-3.5" />
@@ -185,7 +186,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         </button>
       )}
 
-      {hasPermission("upload:cover") && (
+      {hasPermission(PermissionName.UPLOAD_COVER) && (
         <CameraCapture
           manifestation_id={manifestation.id}
           onUploadComplete={() => {
@@ -211,7 +212,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         />
       )}
 
-      {hasPermission("delete:manifestation") && (
+      {hasPermission(PermissionName.DELETE_MANIFESTATION) && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={isDeleting}

@@ -31,7 +31,9 @@ import {
   Database,
   Search,
   X,
+  Image as ImageIcon,
 } from "lucide-react";
+import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -129,17 +131,20 @@ function ContentManagementContent(): React.JSX.Element {
   }
 
   const permissions = profile.permissions ?? [];
-  const hasPermission = (perm: string): boolean => permissions.includes(perm);
+  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
 
   const canViewSettings =
-    hasPermission("config:external_apis") ||
-    hasPermission("config:federation") ||
-    hasPermission("config:affiliate") ||
-    hasPermission("config:internal");
-  const canViewUsers = hasPermission("read:users");
-  const canViewRoles = hasPermission("read:roles");
-  const canEditUsers = hasPermission("write:users");
-  const canViewContent = hasPermission("read:content");
+    hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) ||
+    hasPermission(PermissionName.CONFIG_FEDERATION) ||
+    hasPermission(PermissionName.CONFIG_AFFILIATE) ||
+    hasPermission(PermissionName.CONFIG_INTERNAL);
+  const canViewUsers = hasPermission(PermissionName.READ_USERS);
+  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
+  const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
+  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+
+  const hasCustodianAccess = canViewMetadata || canEditCover;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -160,6 +165,31 @@ function ContentManagementContent(): React.JSX.Element {
             </nav>
           </div>
 
+          {hasCustodianAccess && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
+              <nav className="flex flex-col gap-1">
+                {canViewMetadata && (
+                  <NavItem
+                    label="Metadata"
+                    icon={Database}
+                    isActive={effectiveTab === "metadata"}
+                    onClick={() => handleTabChange("metadata")}
+                  />
+                )}
+                {canEditCover && (
+                  <NavItem
+                    label="Cover Art"
+                    icon={ImageIcon}
+                    isActive={effectiveTab === "cover-art"}
+                    onClick={() => handleTabChange("cover-art")}
+                    href="/admin/media/cover"
+                  />
+                )}
+              </nav>
+            </div>
+          )}
+
           {canViewSettings && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
@@ -170,7 +200,7 @@ function ContentManagementContent(): React.JSX.Element {
                   isActive={effectiveTab === "instance"}
                   onClick={() => handleTabChange("instance")}
                 />
-                {hasPermission("config:federation") && (
+                {hasPermission(PermissionName.CONFIG_FEDERATION) && (
                   <NavItem
                     label="Federation"
                     icon={Building2}
@@ -178,7 +208,7 @@ function ContentManagementContent(): React.JSX.Element {
                     onClick={() => handleTabChange("federation")}
                   />
                 )}
-                {hasPermission("config:affiliate") && (
+                {hasPermission(PermissionName.CONFIG_AFFILIATE) && (
                   <NavItem
                     label="Monetization"
                     icon={DollarSign}
@@ -186,7 +216,7 @@ function ContentManagementContent(): React.JSX.Element {
                     onClick={() => handleTabChange("monetization")}
                   />
                 )}
-                {hasPermission("config:external_apis") && (
+                {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
                   <NavItem
                     label="API Integrations"
                     icon={Key}
@@ -209,13 +239,7 @@ function ContentManagementContent(): React.JSX.Element {
                     href="/admin/groups"
                   />
                 )}
-                <NavItem
-                  label="Content"
-                  icon={Database}
-                  isActive={effectiveTab === "content"}
-                  onClick={() => handleTabChange("content")}
-                />
-                {hasPermission("config:internal") && (
+                {hasPermission(PermissionName.CONFIG_INTERNAL) && (
                   <NavItem
                     label="Security"
                     icon={Shield}
@@ -248,7 +272,7 @@ function ContentManagementContent(): React.JSX.Element {
 
           {effectiveTab === "groups" && canViewRoles && <GroupManagementWrapper />}
 
-          {effectiveTab === "content" && canViewContent && (
+          {effectiveTab === "metadata" && canViewMetadata && (
             <ContentEditorWrapper preselectedManifestationId={preselectedManifestationId} />
           )}
         </section>

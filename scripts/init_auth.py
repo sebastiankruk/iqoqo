@@ -14,31 +14,40 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import uuid
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables before importing models to ensure schema detection works
+load_dotenv()
+
+import yaml
 
 from app import create_app
 from app.db.models import Item, Permission, Role, User, db
+from app.core.permissions import PermissionName
 
 app = create_app()
 with app.app_context():
-    # 1. Create permissions
-    perms = [
-        "delete:item",
-        "update:item",
-        "read:owners",
-        "delete:manifestation",
-        "regenerate:cover",
-        "refetch:metadata",
-        "llm_generate:cover",
-        "llm_generate:metadata",
-        "llm_generate:cloud",
-        "upload:cover",
-        "read:content",
-        "write:content",
-    ]
+    # 1. Create permissions from shared/permissions.yaml
+    permissions_path = Path(app.root_path).parent / "shared" / "permissions.yaml"
+    with open(permissions_path, "r") as f:
+        permissions_data = yaml.safe_load(f)
+
+    perms = [p["name"] for p in permissions_data.get("permissions", [])]
+
+    # Validate that all permissions in YAML are also in the Enum
+    enum_values = {p.value for p in PermissionName}
+    for p in perms:
+        if p not in enum_values:
+            print(f"WARNING: Permission '{p}' found in YAML but not in PermissionName Enum!")
+
     for p in perms:
         existing = Permission.query.filter_by(name=p).first()
         if not existing:
             db.session.add(Permission(name=p))
+        else:
+            # Update description if needed (not implemented here but good to have)
+            pass
     db.session.commit()
 
     # 2. Create Roles
@@ -51,7 +60,31 @@ with app.app_context():
     if not user_role:
         db.session.add(Role(name="user"))
 
+    contributor_role = Role.query.filter_by(name="contributor").first()
+    if not contributor_role:
+        contributor_role = Role(name="contributor")
+        db.session.add(contributor_role)
+
+    db.session.commit()
+
+    # Admin gets everything
     admin_role.permissions = Permission.query.all()
+
+    # Contributor gets metadata, cover stuff, and llm_generate
+    all_perms = Permission.query.all()
+    contributor_perms = [
+        p for p in all_perms
+        if p.name in {
+            PermissionName.READ_METADATA.value,
+            PermissionName.WRITE_METADATA.value,
+            PermissionName.EDIT_COVER.value,
+            PermissionName.UPLOAD_COVER.value,
+            PermissionName.REGENERATE_COVER.value,
+            PermissionName.DELETE_ITEM.value,
+        } or p.name.startswith("llm_generate:")
+    ]
+    contributor_role.permissions = contributor_perms
+
     db.session.commit()
 
     # 3. Create Admin user

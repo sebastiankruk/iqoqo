@@ -29,7 +29,7 @@ import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import Config
-from app.core.permissions import ItemPermissions
+from app.core.permissions import PermissionName
 from app.db.models import User, db
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
 
     1. Gemini Vision (cloud LLM) -- used only when Config.ALLOW_LLM is true, a valid
        ``user_id`` is provided, and the associated user has the
-       ``ItemPermissions.LLM_GENERATE_CLOUD`` permission. If Gemini is unavailable, fails,
+       ``PermissionName.LLM_GENERATE_CLOUD`` permission. If Gemini is unavailable, fails,
        or returns no usable data, the function falls through to the next step.
     2. Ollama Vision -- used when Config.ALLOW_LLM is true and a local Ollama instance is
        reachable. Network errors or invalid responses cause the function to fall through
@@ -143,7 +143,7 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
             logger.debug("vision._extract_via_gemini: invalid user_id format %r, skipping permission check.", user_id)
 
         if user:
-            can_use_cloud_llm = user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value)
+            can_use_cloud_llm = user.has_permission(PermissionName.LLM_GENERATE_CLOUD.value)
 
     if not Config.ALLOW_LLM or not can_use_cloud_llm:
         logger.debug("Gemini execution skipped: ALLOW_LLM=%s, cloud status=%s", Config.ALLOW_LLM, can_use_cloud_llm)
