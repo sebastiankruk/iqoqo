@@ -84,6 +84,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
     "tracks",
     "Tracks",
     "additional_images",
+    "imageLinks",
     "format",
     "publisher",
     "label",
@@ -265,14 +266,41 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                   </dd>
                 </div>
               )}
-              {extraKeys.map(key => (
-                <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
-                  <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                    {key.replace(/_/g, " ")}
-                  </dt>
-                  <dd className="font-medium text-foreground break-words">{String(meta[key])}</dd>
-                </div>
-              ))}
+              {extraKeys.map(key => {
+                const value = meta[key];
+                let displayValue: React.ReactNode;
+
+                if (value === null || value === undefined) {
+                  displayValue = <span className="text-muted-foreground italic">null</span>;
+                } else if (typeof value === "object") {
+                  displayValue = (
+                    <pre className="text-xs bg-muted/30 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(value, null, 2)}
+                    </pre>
+                  );
+                } else if (Array.isArray(value)) {
+                  displayValue = (
+                    <div className="flex flex-wrap gap-1">
+                      {value.map((item, idx) => (
+                        <span key={idx} className="bg-muted px-2 py-0.5 rounded text-xs">
+                          {String(item)}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                } else {
+                  displayValue = String(value);
+                }
+
+                return (
+                  <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
+                    <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
+                      {key.replace(/_/g, " ")}
+                    </dt>
+                    <dd className="font-medium text-foreground break-words">{displayValue}</dd>
+                  </div>
+                );
+              })}
             </dl>
           )}
         </div>

@@ -240,14 +240,14 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
-            icon={<ImagePlus className="h-4 w-4 mr-2" />}
+            icon={<ImagePlus className="h-3.5 w-3.5" />}
             confirmTitle={item.cover_url ? "Replace Existing Cover?" : undefined}
             confirmMessage={
               item.cover_url
                 ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
                 : undefined
             }
-            className="w-full [&>button]:w-full [&>button]:h-10 [&>button]:rounded-lg [&>button]:bg-accent/10 [&>button]:text-accent [&>button]:hover:bg-accent/20 [&>button]:border-none [&>button]:font-semibold [&>button]:text-xs"
+            className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
           />
         )}
 

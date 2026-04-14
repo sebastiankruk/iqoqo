@@ -246,6 +246,7 @@ export interface FrbrItem {
   condition: string | null;
   meta: Record<string, unknown>;
   owner_id: string;
+  owner_name?: string;
 }
 
 export interface FrbrTree {

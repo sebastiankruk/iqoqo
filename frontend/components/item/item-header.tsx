@@ -148,7 +148,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
                 {isAudio ? "Tracks" : "Pages"}
               </span>
               <span className="font-semibold">
-                {String(meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"])}
+                {String((meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"]) ?? "").slice(0, 50)}
               </span>
             </div>
           )}

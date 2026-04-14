@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, ImagePlus } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, ImagePlus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
@@ -180,6 +180,16 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
+        </button>
+      )}
+
+      {hasPermission("read:content") && manifestation.id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=content&manifestationId=${manifestation.id}`)}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit FRBR
         </button>
       )}
 

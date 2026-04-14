@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
 import {
@@ -24,6 +24,10 @@ import {
   Users,
   User,
   Shield,
+  BadgeCheck,
+  Key,
+  Building2,
+  DollarSign,
   Database,
   Search,
   X,
@@ -98,11 +102,23 @@ function ContentManagementContent(): React.JSX.Element {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  const activeTab = internalTab || searchParams.get("tab") || "profile";
-
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
   };
+
+  const manifId = searchParams.get("manifestationId");
+  const preselectedManifestationId = (() => {
+    if (manifId) {
+      const id = parseInt(manifId, 10);
+      if (!isNaN(id)) {
+        return id;
+      }
+    }
+    return null;
+  })();
+
+  const activeTab = internalTab || searchParams.get("tab") || "profile";
+  const effectiveTab = preselectedManifestationId ? "content" : activeTab;
 
   if (profileLoading || !profile) {
     return (
@@ -138,7 +154,7 @@ function ContentManagementContent(): React.JSX.Element {
               <NavItem
                 label="Profile"
                 icon={User}
-                isActive={activeTab === "profile"}
+                isActive={effectiveTab === "profile"}
                 onClick={() => handleTabChange("profile")}
               />
             </nav>
@@ -151,27 +167,62 @@ function ContentManagementContent(): React.JSX.Element {
                 <NavItem
                   label="Settings"
                   icon={Settings}
-                  isActive={activeTab === "instance"}
+                  isActive={effectiveTab === "instance"}
                   onClick={() => handleTabChange("instance")}
                 />
+                {hasPermission("config:federation") && (
+                  <NavItem
+                    label="Federation"
+                    icon={Building2}
+                    isActive={effectiveTab === "federation"}
+                    onClick={() => handleTabChange("federation")}
+                  />
+                )}
+                {hasPermission("config:affiliate") && (
+                  <NavItem
+                    label="Monetization"
+                    icon={DollarSign}
+                    isActive={effectiveTab === "monetization"}
+                    onClick={() => handleTabChange("monetization")}
+                  />
+                )}
+                {hasPermission("config:external_apis") && (
+                  <NavItem
+                    label="API Integrations"
+                    icon={Key}
+                    isActive={effectiveTab === "apikeys"}
+                    onClick={() => handleTabChange("apikeys")}
+                  />
+                )}
                 <NavItem
                   label="Users"
                   icon={Users}
-                  isActive={activeTab === "users"}
+                  isActive={effectiveTab === "users"}
                   onClick={() => handleTabChange("users")}
                 />
-                <NavItem
-                  label="Groups"
-                  icon={Shield}
-                  isActive={activeTab === "groups"}
-                  onClick={() => handleTabChange("groups")}
-                />
+                {canViewRoles && (
+                  <NavItem
+                    label="Roles"
+                    icon={BadgeCheck}
+                    isActive={effectiveTab === "roles"}
+                    onClick={() => handleTabChange("roles")}
+                    href="/admin/groups"
+                  />
+                )}
                 <NavItem
                   label="Content"
                   icon={Database}
-                  isActive={activeTab === "content"}
+                  isActive={effectiveTab === "content"}
                   onClick={() => handleTabChange("content")}
                 />
+                {hasPermission("config:internal") && (
+                  <NavItem
+                    label="Security"
+                    icon={Shield}
+                    isActive={effectiveTab === "security"}
+                    onClick={() => handleTabChange("security")}
+                  />
+                )}
               </nav>
             </div>
           )}
@@ -179,7 +230,7 @@ function ContentManagementContent(): React.JSX.Element {
 
         {/* Main Content Area */}
         <section className="flex-1">
-          {activeTab === "profile" && (
+          {effectiveTab === "profile" && (
             <Card>
               <CardHeader>
                 <CardTitle>Profile Settings</CardTitle>
@@ -191,13 +242,15 @@ function ContentManagementContent(): React.JSX.Element {
             </Card>
           )}
 
-          {activeTab === "instance" && canViewSettings && <InstanceSettings />}
+          {effectiveTab === "instance" && canViewSettings && <InstanceSettings />}
 
-          {activeTab === "users" && canViewUsers && <UserManagement canEdit={canEditUsers} />}
+          {effectiveTab === "users" && canViewUsers && <UserManagement canEdit={canEditUsers} />}
 
-          {activeTab === "groups" && canViewRoles && <GroupManagementWrapper />}
+          {effectiveTab === "groups" && canViewRoles && <GroupManagementWrapper />}
 
-          {activeTab === "content" && canViewContent && <ContentEditorWrapper />}
+          {effectiveTab === "content" && canViewContent && (
+            <ContentEditorWrapper preselectedManifestationId={preselectedManifestationId} />
+          )}
         </section>
       </main>
 
@@ -208,14 +261,23 @@ function ContentManagementContent(): React.JSX.Element {
 
 /**
  * Wrapper for Content Editor with search functionality.
+ * @param root0 - The props object
+ * @param root0.preselectedManifestationId - Optional preselected manifestation ID
  * @returns Content editor with search JSX element
  */
-function ContentEditorWrapper(): React.JSX.Element {
-  const [selectedManifestationId, setSelectedManifestationId] = useState<number | null>(null);
+function ContentEditorWrapper({
+  preselectedManifestationId,
+}: {
+  preselectedManifestationId?: number | null;
+}): React.JSX.Element {
+  const [selectedManifestationId, setSelectedManifestationId] = useState<number | null>(
+    preselectedManifestationId ?? null
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -223,6 +285,7 @@ function ContentEditorWrapper(): React.JSX.Element {
     setSearching(true);
     setSearchError(null);
     setSearchResults([]);
+    setHasSearched(true);
 
     try {
       const results = await searchFrbrEntities(searchQuery.trim(), "manifestation", 20);
@@ -239,6 +302,12 @@ function ContentEditorWrapper(): React.JSX.Element {
       handleSearch();
     }
   };
+
+  useEffect(() => {
+    if (searchResults.length === 1 && !selectedManifestationId) {
+      setSelectedManifestationId(searchResults[0].id);
+    }
+  }, [searchResults, selectedManifestationId]);
 
   const handleSelectManifestation = (id: number) => {
     setSelectedManifestationId(id);
@@ -262,13 +331,13 @@ function ContentEditorWrapper(): React.JSX.Element {
           <CardHeader>
             <CardTitle>Find Manifestation</CardTitle>
             <CardDescription>
-              Search by ISBN-13, UPC, or EAN to locate the manifestation you want to edit.
+              Search by ISBN-13, UPC, EAN, Title, or Author to locate the manifestation you want to edit.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4">
               <input
-                placeholder="Enter ISBN-13, UPC, or EAN"
+                placeholder="Enter ISBN-13, UPC, EAN, Title, or Author"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -309,7 +378,7 @@ function ContentEditorWrapper(): React.JSX.Element {
               </div>
             )}
 
-            {searchResults.length === 0 && !searching && !searchError && searchQuery && (
+            {hasSearched && searchResults.length === 0 && !searching && !searchError && (
               <p className="text-muted-foreground mt-4">No results found. Try a different search term.</p>
             )}
           </CardContent>
@@ -323,7 +392,7 @@ function ContentEditorWrapper(): React.JSX.Element {
             </div>
             <Button variant="ghost" size="sm" onClick={handleClearSelection}>
               <X className="h-4 w-4 mr-2" />
-              Clear
+              Close
             </Button>
           </CardHeader>
           <CardContent>

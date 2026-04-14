@@ -22,6 +22,7 @@ from flask import Blueprint, g, jsonify, request
 
 from app.api.decorators import admin_required
 from app.core import frbr_service
+from app.db.auth import User as AuthUser
 from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db
 
@@ -414,6 +415,21 @@ def get_frbr_tree(manif_id):
 
     items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
 
+    items_data = []
+    for i in items:
+        owner = db.session.get(AuthUser, i.owner_id) if i.owner_id else None
+        owner_name = owner.display_name if owner and owner.display_name else (owner.email if owner else None)
+        items_data.append(
+            {
+                "id": i.id,
+                "status": i.status,
+                "condition": i.condition,
+                "meta": i.meta,
+                "owner_id": i.owner_id,
+                "owner_name": owner_name,
+            }
+        )
+
     return jsonify(
         {
             "success": True,
@@ -440,9 +456,7 @@ def get_frbr_tree(manif_id):
                     "publication_date": str(manif.publication_date) if manif.publication_date else None,
                     "meta": manif.meta,
                 },
-                "items": [
-                    {"id": i.id, "status": i.status, "condition": i.condition, "meta": i.meta, "owner_id": i.owner_id} for i in items
-                ],
+                "items": items_data,
             },
         }
     )
@@ -584,10 +598,27 @@ def search_frbr_entities():
             for e in expressions
         ]
     else:  # manifestation
+        # Search by ISBN/UPC/EAN OR by work title/author in meta
+        work_filter = db.or_(
+            Work.title.ilike(f"%{query}%"),
+            db.or_(
+                Work.meta["authors"].cast(db.String).ilike(f"%{query}%"),
+                Work.meta["author"].cast(db.String).ilike(f"%{query}%"),
+            ),
+        )
+        identifier_filter = db.or_(
+            Manifestation.isbn13.ilike(f"%{query}%"),
+            Manifestation.upc.ilike(f"%{query}%"),
+            Manifestation.ean.ilike(f"%{query}%"),
+        )
+
+        # Get manifestations matching either criteria
+        work_ids_subquery = db.session.query(Work.id).filter(work_filter).subquery()
         mans = (
             Manifestation.query.filter(
                 db.or_(
-                    Manifestation.isbn13.ilike(f"%{query}%"), Manifestation.upc.ilike(f"%{query}%"), Manifestation.ean.ilike(f"%{query}%")
+                    identifier_filter,
+                    Manifestation.expression_id.in_(db.session.query(Expression.id).filter(Expression.work_id.in_(work_ids_subquery))),
                 )
             )
             .limit(limit)

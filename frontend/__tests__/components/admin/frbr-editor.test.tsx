@@ -45,17 +45,17 @@ describe("FrbrEditor Component", () => {
 
   it("renders loading state initially", () => {
     render(<FrbrEditor manifestationId={3} />);
-    expect(screen.queryByText("F1 Work")).not.toBeInTheDocument();
+    expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
   });
 
   it("loads and renders the FRBR tree tabs", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => {
-      expect(screen.getByText("F1 Work")).toBeInTheDocument();
-      expect(screen.getByText("F2 Expression")).toBeInTheDocument();
-      expect(screen.getByText("F3 Manifestation")).toBeInTheDocument();
-      expect(screen.getByText("F5 Items (1)")).toBeInTheDocument();
+      expect(screen.getByText("Work (F1)")).toBeInTheDocument();
+      expect(screen.getByText("Expression (F2)")).toBeInTheDocument();
+      expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument();
+      expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument();
     });
   });
 
@@ -71,9 +71,9 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Work tab and displays correct data", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("F1 Work")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Work (F1)")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("F1 Work"));
+    fireEvent.click(screen.getByText("Work (F1)"));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Dune")).toBeInTheDocument();
@@ -83,9 +83,9 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Expression tab", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("F2 Expression")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("F2 Expression"));
+    fireEvent.click(screen.getByText("Expression (F2)"));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("text")).toBeInTheDocument();
@@ -96,12 +96,17 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Items tab", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("F5 Items (1)")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("F5 Items (1)"));
+    fireEvent.click(screen.getByText(/Items \(F5\)/));
 
     await waitFor(() => {
-      expect(screen.getByText("Item #10")).toBeInTheDocument();
+      expect(screen.getByText(/Item #10/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/Item #10/));
+
+    await waitFor(() => {
       expect(screen.getByDisplayValue("available")).toBeInTheDocument();
     });
   });
@@ -109,7 +114,7 @@ describe("FrbrEditor Component", () => {
   it("submits updated manifestation data to the API", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("F3 Manifestation")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
 
     const pubInput = screen.getByDisplayValue("Ace Books");
     fireEvent.change(pubInput, { target: { value: "Penguin" } });

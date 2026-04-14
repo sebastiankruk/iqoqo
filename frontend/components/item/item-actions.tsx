@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
@@ -153,6 +153,16 @@ export function ItemActions({ item }: { item: Item }) {
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
+        </button>
+      )}
+
+      {hasPermission("read:content") && item.manifestation_id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=content&manifestationId=${item.manifestation_id}`)}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit FRBR
         </button>
       )}
 
