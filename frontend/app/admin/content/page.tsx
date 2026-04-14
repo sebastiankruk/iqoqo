@@ -121,7 +121,7 @@ function ContentManagementContent(): React.JSX.Element {
   })();
 
   const activeTab = internalTab || searchParams.get("tab") || "profile";
-  const effectiveTab = preselectedManifestationId ? "content" : activeTab;
+  const effectiveTab = activeTab;
 
   if (profileLoading || !profile) {
     return (
@@ -277,7 +277,7 @@ function ContentManagementContent(): React.JSX.Element {
           )}
 
           {effectiveTab === "cover-art" && canEditCover && (
-            <CoverArtEditorWrapper />
+            <CoverArtEditorWrapper preselectedManifestationId={preselectedManifestationId} />
           )}
         </section>
       </main>

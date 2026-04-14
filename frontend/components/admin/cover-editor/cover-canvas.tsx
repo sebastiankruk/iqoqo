@@ -61,7 +61,6 @@ export function CoverCanvas({ imgRef, imageUrl, crop, setCrop, setCompletedCrop,
           onLoad={onImageLoad}
           style={{ transform: `scale(${flipH ? -1 : 1}, ${flipV ? -1 : 1}) rotate(${rotation}deg)` }}
           className="max-h-[70vh] object-contain"
-          crossOrigin="anonymous"
         />
       </ReactCrop>
     </div>

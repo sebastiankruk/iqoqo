@@ -1,28 +1,43 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { type PixelCrop } from 'react-image-crop';
 import { CoverCanvas } from '@/components/admin/cover-editor/cover-canvas';
 import { EditorToolbar } from '@/components/admin/cover-editor/editor-toolbar';
 import { InfoSidebar } from '@/components/admin/cover-editor/info-sidebar';
-import { uploadEntityCover } from '@/lib/api/admin';
+import { uploadEntityCover, searchFrbrEntities, type FrbrSearchResult } from '@/lib/api/admin';
+import { useManifestation } from '@/lib/api/hooks';
+import { getCoverUrl, getCoverTimestamp } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Search, X, Loader2 } from 'lucide-react';
+
+interface CoverArtEditorWrapperProps {
+  preselectedManifestationId?: number | null;
+}
 
 /**
  * Component that wraps the Cover Art Editor logic and views.
  *
+ * @param props - Component props containing optional preselected manifestation ID.
  * @returns The wrapper component for editing cover art.
  */
-export function CoverArtEditorWrapper() {
-  // Example dummy manifestation context: In reality this would be driven by the user selecting a manifestation, similar to ContentEditorWrapper
-  const entityId = 1;
-  const entityType = 'manifestation';
-  const initialImageUrl = '/images/sample-cover-edit.jpg';
+export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEditorWrapperProps) {
+  const [selectedEntityId, setSelectedEntityId] = useState<number | null>(preselectedManifestationId ?? null);
+  const [entityType, setEntityType] = useState<'manifestation' | 'item'>('manifestation');
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const { data: entityData, isLoading: isLoadingEntity } = useManifestation(selectedEntityId ?? 0);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageSrc, setImageSrc] = useState(initialImageUrl);
+  
+  const [imageSrc, setImageSrc] = useState<string>('/images/sample-cover-edit.jpg');
   const [crop, setCrop] = useState<any>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [aspect, setAspect] = useState<number | undefined>(2 / 3);
@@ -30,6 +45,50 @@ export function CoverArtEditorWrapper() {
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (entityData) {
+      const timestamp = getCoverTimestamp(entityData.meta);
+      const url = getCoverUrl(entityData.cover_url || undefined, timestamp) || 
+                  (entityData.meta?.["cover_url"] as string | undefined);
+      
+      if (url && url !== imageSrc) {
+        setImageSrc(url);
+        // Reset editor state for new image
+        setRotation(0);
+        setFlipH(false);
+        setFlipV(false);
+        setCrop(undefined);
+        setCompletedCrop(undefined);
+      }
+    }
+  }, [entityData, imageSrc]);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const results = await searchFrbrEntities(searchQuery.trim(), "manifestation", 20);
+      setSearchResults(results);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectManifestation = (id: number) => {
+    setSelectedEntityId(id);
+    setEntityType('manifestation');
+  };
+
+  const handleClearSelection = () => {
+    setSelectedEntityId(null);
+    setImageSrc('/images/sample-cover-edit.jpg');
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,9 +103,14 @@ export function CoverArtEditorWrapper() {
   };
 
   const handleSave = async (blob: Blob) => {
+    if (!selectedEntityId) {
+      toast.error('No manifestation selected.');
+      return;
+    }
+
     try {
       setIsUploading(true);
-      const response = await uploadEntityCover(entityType, entityId, blob);
+      const response = await uploadEntityCover(entityType, selectedEntityId, blob);
       
       if (response.success) {
         toast.success('Cover art updated successfully!');
@@ -60,11 +124,68 @@ export function CoverArtEditorWrapper() {
     }
   };
 
+  if (!selectedEntityId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Cover Art Editor</CardTitle>
+          <CardDescription>Search for a manifestation to edit its cover art.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex gap-4">
+            <input
+              placeholder="Search by Title, ISBN, UPC, or EAN"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <Button onClick={handleSearch} disabled={searching}>
+              {searching ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+              Search
+            </Button>
+          </div>
+
+          {searchError && <p className="text-destructive font-medium">{searchError}</p>}
+
+          {searchResults.length > 0 && (
+            <div className="border rounded-lg divide-y">
+              {searchResults.map(result => (
+                <div
+                  key={result.id}
+                  className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                  onClick={() => handleSelectManifestation(result.id)}
+                >
+                  <div>
+                    <p className="font-medium">{result.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      ID: {result.id}
+                      {result.isbn13 && ` | ISBN: ${result.isbn13}`}
+                      {result.upc && ` | UPC: ${result.upc}`}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">Select</Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Cover Art Editor</CardTitle>
-        <CardDescription>Upload, crop, zoom, and rotate cover art. Make sure bounding boxes represent actual media aspects.</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div className="space-y-1">
+          <CardTitle>Cover Art Editor</CardTitle>
+          <CardDescription>
+            {isLoadingEntity ? "Loading manifestation..." : `Editing cover for: ${entityData?.title || `#${selectedEntityId}`}`}
+          </CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+          <X className="h-4 w-4 mr-2" /> Change Manifestation
+        </Button>
       </CardHeader>
       <CardContent>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />

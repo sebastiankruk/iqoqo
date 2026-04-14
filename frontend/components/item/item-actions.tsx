@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, Pencil } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, Pencil, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
@@ -157,13 +157,24 @@ export function ItemActions({ item }: { item: Item }) {
         </button>
       )}
 
+
       {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
         <button
-          onClick={() => router.push(`/admin/settings?tab=metadata&manifestationId=${item.manifestation_id}`)}
+          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
           <Pencil className="h-3.5 w-3.5" />
           Edit FRBR
+        </button>
+      )}
+
+      {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Edit Cover Art
         </button>
       )}
 

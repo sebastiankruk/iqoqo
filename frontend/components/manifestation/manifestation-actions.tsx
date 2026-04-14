@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, ImagePlus, Pencil } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, ImagePlus, Pencil, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
@@ -178,11 +178,21 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
       {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
         <button
-          onClick={() => router.push(`/admin/settings?tab=metadata&manifestationId=${manifestation.id}`)}
+          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${manifestation.id}`)}
           className="btn-action-dashed"
         >
           <Pencil className="h-3.5 w-3.5" />
           Edit FRBR
+        </button>
+      )}
+
+      {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${manifestation.id}`)}
+          className="btn-action-dashed"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Edit Cover Art
         </button>
       )}
 
