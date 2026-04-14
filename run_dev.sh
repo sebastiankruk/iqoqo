@@ -159,11 +159,17 @@ for LOCK in "frontend/.next/lock" "frontend/.next/dev/lock"; do
         echo "     Next.js might fail to start or behave incorrectly."
         echo ""
         if [ -t 0 ]; then
-            read -p "     Do you want to remove this lock file and proceed? [y/N] " -n 1 -r
+            read -p "     Do you want to fix this (kill zombie processes and clear cache)? [y/N] " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo "     Removing lock file..."
-                rm -f "$LOCK"
+                ZOMBIE_PIDS=$(lsof -t -i :${NEXT_PORT:-3000} 2>/dev/null || true)
+                if [ -n "$ZOMBIE_PIDS" ]; then
+                    echo "     ⚠️  Killing zombie process(es) on port ${NEXT_PORT:-3000} (PIDs: $ZOMBIE_PIDS)..."
+                    kill -9 $ZOMBIE_PIDS 2>/dev/null || true
+                fi
+                echo "     🧹 Clearing corrupted Next.js cache and removing lock file..."
+                rm -rf "frontend/.next"
+                echo "     ✅ Cleanup complete."
             else
                 echo "     ❌ Exiting. Please remove the lock file manually."
                 exit 1
