@@ -165,7 +165,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         <button
           onClick={handleRefetch}
           disabled={isRefetching}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="btn-action-dashed"
         >
           <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
@@ -176,7 +176,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         <button
           onClick={handleRegenerateClick}
           disabled={isPending || isRequesting}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="btn-action-dashed"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
@@ -186,7 +186,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
       {hasPermission("read:content") && manifestation.id && (
         <button
           onClick={() => router.push(`/admin/content?tab=content&manifestationId=${manifestation.id}`)}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="btn-action-dashed"
         >
           <Pencil className="h-3.5 w-3.5" />
           Edit FRBR
@@ -215,7 +215,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           inline
           variant="ghost"
           className="p-0 m-0 w-auto"
-          buttonClassName="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground bg-transparent border-none p-0 h-auto hover:bg-transparent"
+          buttonClassName="btn-action-dashed h-auto"
         />
       )}
 
@@ -223,7 +223,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={isDeleting}
-          className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
+          className="btn-action-dashed-destructive"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Delete manifestation
