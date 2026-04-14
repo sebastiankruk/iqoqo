@@ -1,9 +1,24 @@
-'use client';
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save, Loader2, Upload } from 'lucide-react';
-import { type PixelCrop } from 'react-image-crop';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Save, Loader2, Upload } from "lucide-react";
+import { type PixelCrop } from "react-image-crop";
 
 interface InfoSidebarProps {
   imgRef: React.RefObject<HTMLImageElement | null>;
@@ -19,22 +34,38 @@ interface InfoSidebarProps {
 /**
  * Sidebar component that triggers the upload process and binds UI actions.
  *
- * @param props - Layout and upload handling configurations.
- * @returns The rendered sidebar pane.
+ * @param {Object} props - Component props.
+ * @param {React.RefObject<HTMLImageElement | null>} props.imgRef - Reference to the image element.
+ * @param {PixelCrop | undefined} props.completedCrop - The completed crop data.
+ * @param {number} props.rotation - Rotation in degrees.
+ * @param {boolean} props.flipH - Horizontal flip state.
+ * @param {boolean} props.flipV - Vertical flip state.
+ * @param {boolean} props.isUploading - Upload in progress state.
+ * @param {Function} props.onSave - Function to call with generated blob.
+ * @param {Function} [props.onUploadSelect] - Optional function to trigger file browser.
+ * @returns {JSX.Element} The rendered sidebar pane.
  */
-export function InfoSidebar({ imgRef, completedCrop, rotation, flipH, flipV, isUploading, onSave, onUploadSelect }: InfoSidebarProps) {
-  
+export function InfoSidebar({
+  imgRef,
+  completedCrop,
+  rotation,
+  flipH,
+  flipV,
+  isUploading,
+  onSave,
+  onUploadSelect,
+}: InfoSidebarProps) {
   const handleGenerateAndSave = async () => {
     const image = imgRef.current;
     if (!image || !completedCrop) return;
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
-    
+
     canvas.width = Math.floor(completedCrop.width * scaleX);
     canvas.height = Math.floor(completedCrop.height * scaleY);
 
@@ -56,8 +87,10 @@ export function InfoSidebar({ imgRef, completedCrop, rotation, flipH, flipV, isU
     );
 
     canvas.toBlob(
-      (blob) => { if (blob) onSave(blob); },
-      'image/jpeg',
+      blob => {
+        if (blob) onSave(blob);
+      },
+      "image/jpeg",
       0.9
     );
   };
@@ -70,24 +103,19 @@ export function InfoSidebar({ imgRef, completedCrop, rotation, flipH, flipV, isU
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {onUploadSelect && (
-            <Button 
-              className="w-full" 
-              variant="outline"
-              onClick={onUploadSelect} 
-              disabled={isUploading}
-            >
+            <Button className="w-full" variant="outline" onClick={onUploadSelect} disabled={isUploading}>
               <Upload className="mr-2 h-4 w-4" /> Upload New File
             </Button>
           )}
-          <Button 
-            className="w-full" 
-            onClick={handleGenerateAndSave} 
-            disabled={isUploading || !completedCrop}
-          >
+          <Button className="w-full" onClick={handleGenerateAndSave} disabled={isUploading || !completedCrop}>
             {isUploading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+              </>
             ) : (
-              <><Save className="mr-2 h-4 w-4" /> Save Cover Art</>
+              <>
+                <Save className="mr-2 h-4 w-4" /> Save Cover Art
+              </>
             )}
           </Button>
         </CardContent>
@@ -95,8 +123,8 @@ export function InfoSidebar({ imgRef, completedCrop, rotation, flipH, flipV, isU
       <div className="text-sm text-muted-foreground mt-4">
         <p>Ensure the cover correctly identifies the format.</p>
         <ul className="list-disc pl-4 mt-2">
-            <li>1:1 for Vinyl/CD</li>
-            <li>2:3 for standard Books/DVDs</li>
+          <li>1:1 for Vinyl/CD</li>
+          <li>2:3 for standard Books/DVDs</li>
         </ul>
       </div>
     </div>

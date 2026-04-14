@@ -675,14 +675,14 @@ def upload_cover():
     if not _has_permission(user, PermissionName.UPLOAD_COVER):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.UPLOAD_COVER} required"}), 403
 
-    if 'file' not in request.files:
+    if "file" not in request.files:
         return jsonify({"success": False, "error": "No file provided"}), 400
 
-    file = request.files['file']
-    entity_type = request.form.get('entity_type')
-    entity_id = request.form.get('entity_id')
+    file = request.files["file"]
+    entity_type = request.form.get("entity_type")
+    entity_id = request.form.get("entity_id")
 
-    if not file or file.filename == '':
+    if not file or file.filename == "":
         return jsonify({"success": False, "error": "Empty file"}), 400
 
     if entity_type not in ["manifestation", "item"]:
@@ -691,11 +691,12 @@ def upload_cover():
     if not entity_id or not str(entity_id).isdigit():
         return jsonify({"success": False, "error": "Invalid or missing entity_id"}), 400
 
-    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
+    ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
     filename = f"{entity_type}_{entity_id}_cover.{ext}"
 
     try:
         from app.utils.images import save_upload_image
+
         public_url = save_upload_image(file, subfolder="covers", filename=filename)
     except Exception as e:
         return jsonify({"success": False, "error": f"Image processing failed: {str(e)}"}), 500
@@ -707,9 +708,9 @@ def upload_cover():
             entity = db.session.get(Item, int(entity_id))
 
         if not entity:
-             return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found"}), 404
+            return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found"}), 404
 
-        if hasattr(entity, 'cover_url'):
+        if hasattr(entity, "cover_url"):
             entity.cover_url = public_url
 
         if not entity.meta:

@@ -440,25 +440,21 @@ export interface UploadCoverResponse {
  * @returns The api response metadata.
  */
 export async function uploadEntityCover(
-  entityType: 'manifestation' | 'item',
+  entityType: "manifestation" | "item",
   entityId: number,
   blob: Blob,
-  filename: string = 'cover.jpg'
+  filename: string = "cover.jpg"
 ): Promise<UploadCoverResponse> {
   const formData = new FormData();
-  formData.append('file', blob, filename);
-  formData.append('entity_type', entityType);
-  formData.append('entity_id', entityId.toString());
+  formData.append("file", blob, filename);
+  formData.append("entity_type", entityType);
+  formData.append("entity_id", entityId.toString());
 
-  const response = await apiClient.post<UploadCoverResponse>(
-    '/v1/admin/media/upload-cover',
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }
-  );
+  const response = await apiClient.post<UploadCoverResponse>("/v1/admin/media/upload-cover", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
   return response.data;
 }

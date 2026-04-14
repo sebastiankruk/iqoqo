@@ -14,14 +14,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-from enum import Enum
+from enum import StrEnum
 
 
-class PermissionName(str, Enum):
+class PermissionName(StrEnum):
     """
     Enumeration of all system permissions.
     Must be kept in sync with shared/permissions.yaml.
     """
+
     CONFIG_AFFILIATE = "config:affiliate"
     CONFIG_EXTERNAL_APIS = "config:external_apis"
     CONFIG_FEDERATION = "config:federation"
@@ -43,6 +44,3 @@ class PermissionName(str, Enum):
     WRITE_METADATA = "write:metadata"
     WRITE_ROLES = "write:roles"
     WRITE_USERS = "write:users"
-
-    def __str__(self) -> str:
-        return self.value

@@ -157,7 +157,6 @@ export function ItemActions({ item }: { item: Item }) {
         </button>
       )}
 
-
       {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
         <button
           onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}

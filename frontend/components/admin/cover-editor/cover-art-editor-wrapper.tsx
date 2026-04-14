@@ -1,17 +1,32 @@
-'use client';
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-import React, { useState, useRef, useEffect } from 'react';
-import { type PixelCrop } from 'react-image-crop';
-import { CoverCanvas } from '@/components/admin/cover-editor/cover-canvas';
-import { EditorToolbar } from '@/components/admin/cover-editor/editor-toolbar';
-import { InfoSidebar } from '@/components/admin/cover-editor/info-sidebar';
-import { uploadEntityCover, searchFrbrEntities, type FrbrSearchResult } from '@/lib/api/admin';
-import { useManifestation } from '@/lib/api/hooks';
-import { getCoverUrl, getCoverTimestamp } from '@/lib/utils';
-import { toast } from 'sonner';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Search, X, Loader2 } from 'lucide-react';
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { type PixelCrop } from "react-image-crop";
+import { CoverCanvas } from "@/components/admin/cover-editor/cover-canvas";
+import { EditorToolbar } from "@/components/admin/cover-editor/editor-toolbar";
+import { InfoSidebar } from "@/components/admin/cover-editor/info-sidebar";
+import { uploadEntityCover, searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
+import { useManifestation } from "@/lib/api/hooks";
+import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { toast } from "sonner";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Search, X, Loader2 } from "lucide-react";
 
 interface CoverArtEditorWrapperProps {
   preselectedManifestationId?: number | null;
@@ -20,13 +35,14 @@ interface CoverArtEditorWrapperProps {
 /**
  * Component that wraps the Cover Art Editor logic and views.
  *
- * @param props - Component props containing optional preselected manifestation ID.
- * @returns The wrapper component for editing cover art.
+ * @param {Object} props - The component props.
+ * @param {number | null} [props.preselectedManifestationId] - Optional manifestation ID to pre-load.
+ * @returns {JSX.Element} The wrapper component for editing cover art.
  */
 export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEditorWrapperProps) {
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(preselectedManifestationId ?? null);
-  const [entityType, setEntityType] = useState<'manifestation' | 'item'>('manifestation');
-  
+  const [entityType, setEntityType] = useState<"manifestation" | "item">("manifestation");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -36,9 +52,9 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
 
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [imageSrc, setImageSrc] = useState<string>('/images/sample-cover-edit.jpg');
-  const [crop, setCrop] = useState<any>();
+
+  const [imageSrc, setImageSrc] = useState<string>("/images/sample-cover-edit.jpg");
+  const [crop, setCrop] = useState<import("react-image-crop").Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [aspect, setAspect] = useState<number | undefined>(2 / 3);
   const [rotation, setRotation] = useState(0);
@@ -49,9 +65,10 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
   useEffect(() => {
     if (entityData) {
       const timestamp = getCoverTimestamp(entityData.meta);
-      const url = getCoverUrl(entityData.cover_url || undefined, timestamp) || 
-                  (entityData.meta?.["cover_url"] as string | undefined);
-      
+      const url =
+        getCoverUrl(entityData.cover_url || undefined, timestamp) ||
+        (entityData.meta?.["cover_url"] as string | undefined);
+
       if (url && url !== imageSrc) {
         setImageSrc(url);
         // Reset editor state for new image
@@ -80,12 +97,12 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
 
   const handleSelectManifestation = (id: number) => {
     setSelectedEntityId(id);
-    setEntityType('manifestation');
+    setEntityType("manifestation");
   };
 
   const handleClearSelection = () => {
     setSelectedEntityId(null);
-    setImageSrc('/images/sample-cover-edit.jpg');
+    setImageSrc("/images/sample-cover-edit.jpg");
     setCrop(undefined);
     setCompletedCrop(undefined);
   };
@@ -104,21 +121,21 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
 
   const handleSave = async (blob: Blob) => {
     if (!selectedEntityId) {
-      toast.error('No manifestation selected.');
+      toast.error("No manifestation selected.");
       return;
     }
 
     try {
       setIsUploading(true);
       const response = await uploadEntityCover(entityType, selectedEntityId, blob);
-      
+
       if (response.success) {
-        toast.success('Cover art updated successfully!');
+        toast.success("Cover art updated successfully!");
       } else {
-        toast.error(response.error || 'Failed to upload.');
+        toast.error(response.error || "Failed to upload.");
       }
-    } catch (err: any) {
-      toast.error(err.message || 'An error occurred.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "An error occurred.");
     } finally {
       setIsUploading(false);
     }
@@ -164,7 +181,9 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
                       {result.upc && ` | UPC: ${result.upc}`}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm">Select</Button>
+                  <Button variant="outline" size="sm">
+                    Select
+                  </Button>
                 </div>
               ))}
             </div>
@@ -180,7 +199,9 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
         <div className="space-y-1">
           <CardTitle>Cover Art Editor</CardTitle>
           <CardDescription>
-            {isLoadingEntity ? "Loading manifestation..." : `Editing cover for: ${entityData?.title || `#${selectedEntityId}`}`}
+            {isLoadingEntity
+              ? "Loading manifestation..."
+              : `Editing cover for: ${entityData?.title || `#${selectedEntityId}`}`}
           </CardDescription>
         </div>
         <Button variant="ghost" size="sm" onClick={handleClearSelection}>
@@ -192,15 +213,17 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
 
         <div className="flex bg-background border rounded-md overflow-hidden min-h-[500px]">
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-            <EditorToolbar 
-              aspect={aspect} 
-              setAspect={setAspect} 
-              setRotation={setRotation} 
-              flipH={flipH} setFlipH={setFlipH}
-              flipV={flipV} setFlipV={setFlipV}
+            <EditorToolbar
+              aspect={aspect}
+              setAspect={setAspect}
+              setRotation={setRotation}
+              flipH={flipH}
+              setFlipH={setFlipH}
+              flipV={flipV}
+              setFlipV={setFlipV}
             />
             <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-muted/30">
-              <CoverCanvas 
+              <CoverCanvas
                 imgRef={imgRef}
                 imageUrl={imageSrc}
                 crop={crop}
@@ -213,7 +236,7 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
               />
             </div>
           </div>
-          <InfoSidebar 
+          <InfoSidebar
             imgRef={imgRef}
             completedCrop={completedCrop}
             rotation={rotation}

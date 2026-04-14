@@ -19,6 +19,7 @@ from functools import wraps
 import jwt
 from flask import current_app, g, jsonify, request
 
+from app.core.permissions import PermissionName
 from app.db.models import TokenBlocklist, User, db
 
 
@@ -86,9 +87,6 @@ def optional_auth(f):
         return f(*args, **kwargs)
 
     return decorated
-
-
-from app.core.permissions import PermissionName
 
 
 def require_permission(perm_name: PermissionName):

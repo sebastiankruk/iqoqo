@@ -13,28 +13,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-import { describe, it, expect } from 'vitest';
-import { PermissionName } from '../lib/permissions';
+import { describe, it, expect } from "vitest";
+import { PermissionName } from "../lib/permissions";
 
-describe('PermissionName Enum', () => {
-  it('should have consistent verb:noun values', () => {
-    Object.values(PermissionName).forEach((value) => {
+describe("PermissionName Enum", () => {
+  it("should have consistent verb:noun values", () => {
+    Object.values(PermissionName).forEach(value => {
       expect(value).toMatch(/^[a-z_]+:[a-z_]+$/);
     });
   });
 
-  it('should have metadata permissions', () => {
-    expect(PermissionName.READ_METADATA).toBe('read:metadata');
-    expect(PermissionName.WRITE_METADATA).toBe('write:metadata');
+  it("should have metadata permissions", () => {
+    expect(PermissionName.READ_METADATA).toBe("read:metadata");
+    expect(PermissionName.WRITE_METADATA).toBe("write:metadata");
   });
 
-  it('should have new cover permissions', () => {
-    expect(PermissionName.EDIT_COVER).toBe('edit:cover');
+  it("should have new cover permissions", () => {
+    expect(PermissionName.EDIT_COVER).toBe("edit:cover");
   });
 
-  it('should not contain legacy content permissions', () => {
+  it("should not contain legacy content permissions", () => {
     const values = Object.values(PermissionName) as string[];
-    expect(values).not.toContain('read:content');
-    expect(values).not.toContain('write:content');
+    expect(values).not.toContain("read:content");
+    expect(values).not.toContain("write:content");
   });
 });

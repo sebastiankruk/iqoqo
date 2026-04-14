@@ -16,7 +16,19 @@
 "use client";
 
 import { useProfile } from "@/lib/api/hooks";
-import { Loader2, Settings, Users, User, Shield, BadgeCheck, Building2, DollarSign, Key, Database, Image as ImageIcon } from "lucide-react";
+import {
+  Loader2,
+  Settings,
+  Users,
+  User,
+  Shield,
+  BadgeCheck,
+  Building2,
+  DollarSign,
+  Key,
+  Database,
+  Image as ImageIcon,
+} from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
