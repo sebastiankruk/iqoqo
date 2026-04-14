@@ -15,6 +15,7 @@
 #
 # pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 
+import json
 import os
 from datetime import date
 
@@ -27,6 +28,35 @@ from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
+
+
+def sanitize_meta(meta: dict | None) -> dict | None:
+    """Convert complex objects in meta to JSON strings for frontend compatibility."""
+    if not meta:
+        return meta
+    result = {}
+    for key, value in meta.items():
+        if isinstance(value, (dict, list)):
+            result[key] = json.dumps(value)
+        else:
+            result[key] = value
+    return result
+
+
+def parse_meta(meta: dict | None) -> dict | None:
+    """Parse JSON strings back to objects for backend storage."""
+    if not meta:
+        return meta
+    result = {}
+    for key, value in meta.items():
+        if isinstance(value, str):
+            try:
+                result[key] = json.loads(value)
+            except (ValueError, TypeError):
+                result[key] = value
+        else:
+            result[key] = value
+    return result
 
 
 def _get_current_user() -> User | None:
@@ -424,7 +454,7 @@ def get_frbr_tree(manif_id):
                 "id": i.id,
                 "status": i.status,
                 "condition": i.condition,
-                "meta": i.meta,
+                "meta": sanitize_meta(i.meta),
                 "owner_id": i.owner_id,
                 "owner_name": owner_name,
             }
@@ -434,13 +464,13 @@ def get_frbr_tree(manif_id):
         {
             "success": True,
             "data": {
-                "work": {"id": work.id, "title": work.title, "meta": work.meta} if work else None,
+                "work": {"id": work.id, "title": work.title, "meta": sanitize_meta(work.meta)} if work else None,
                 "expression": (
                     {
                         "id": expr.id,
                         "content_type": expr.content_type,
                         "language": expr.language,
-                        "meta": expr.meta,
+                        "meta": sanitize_meta(expr.meta),
                         "work_id": expr.work_id,
                     }
                     if expr
@@ -454,7 +484,7 @@ def get_frbr_tree(manif_id):
                     "ean": manif.ean,
                     "publisher": manif.publisher,
                     "publication_date": str(manif.publication_date) if manif.publication_date else None,
-                    "meta": manif.meta,
+                    "meta": sanitize_meta(manif.meta),
                 },
                 "items": items_data,
             },
@@ -473,7 +503,7 @@ def update_work(work_id):
 
     data = request.json or {}
     try:
-        work = frbr_service.update_work(work_id, title=data.get("title"), meta=data.get("meta"))
+        work = frbr_service.update_work(work_id, title=data.get("title"), meta=parse_meta(data.get("meta")))
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 404
@@ -495,7 +525,7 @@ def update_expression(expr_id):
             work_id=data.get("work_id"),
             content_type=data.get("content_type"),
             language=data.get("language"),
-            meta=data.get("meta"),
+            meta=parse_meta(data.get("meta")),
         )
         return jsonify({"success": True, "data": {"id": expr.id}})
     except ValueError as e:
@@ -527,7 +557,7 @@ def update_manifestation(manif_id):
             ean=data.get("ean"),
             publisher=data.get("publisher"),
             publication_date=pub_date,
-            meta=data.get("meta"),
+            meta=parse_meta(data.get("meta")),
         )
         return jsonify({"success": True, "data": {"id": manif.id}})
     except ValueError as e:
@@ -550,7 +580,7 @@ def update_item(item_id):
             manifestation_id=data.get("manifestation_id"),
             status=data.get("status"),
             condition=data.get("condition"),
-            meta=data.get("meta"),
+            meta=parse_meta(data.get("meta")),
         )
         return jsonify({"success": True, "data": {"id": item.id}})
     except ValueError as e:

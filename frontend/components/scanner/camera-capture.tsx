@@ -78,6 +78,12 @@ interface CameraCaptureProps {
   confirmMessage?: string;
   /** Initial media format */
   format?: MediaFormat;
+  /** Button variant */
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  /** Optional CSS class name applied directly to the button */
+  buttonClassName?: string;
+  /** If true, forces the simplified button layout and applies to button */
+  inline?: boolean;
 }
 
 /**
@@ -108,6 +114,9 @@ export function CameraCapture({
   confirmTitle,
   confirmMessage,
   format = "book",
+  variant,
+  buttonClassName,
+  inline,
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -244,7 +253,7 @@ export function CameraCapture({
   };
 
   // Determine if we should show the drag & drop standard layout (desktop / no camera)
-  const isDesktopMode = hasCamera === false || capture === false;
+  const isDesktopMode = !inline && (hasCamera === false || capture === false);
 
   return (
     <div
@@ -292,8 +301,13 @@ export function CameraCapture({
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-4 w-full">
-          <Button onClick={handleClick} disabled={uploading} variant="outline" className="w-full">
+        <div className={inline ? "" : "flex flex-col gap-4 w-full"}>
+          <Button 
+            onClick={handleClick} 
+            disabled={uploading} 
+            variant={variant || "outline"} 
+            className={buttonClassName || (inline ? "" : "w-full")}
+          >
             {uploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

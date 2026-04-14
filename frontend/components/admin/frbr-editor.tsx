@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getFrbrTree, updateFrbrEntity, type FrbrTree, type FrbrItem } from "@/lib/api/admin";
 import { toast } from "sonner";
 import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import Link from "next/link";
 
 interface MetaField {
   key: string;
@@ -803,7 +804,14 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
         <Card>
           <CardHeader>
             <CardTitle>
-              Edit Manifestation <span className="text-muted-foreground">#{tree.manifestation.id}</span>
+              Edit Manifestation{" "}
+              <Link
+                href={`/manifestation/${tree.manifestation.id}`}
+                className="text-muted-foreground hover:underline hover:text-primary transition-colors"
+                target="_blank"
+              >
+                #{tree.manifestation.id}
+              </Link>
             </CardTitle>
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
@@ -873,7 +881,16 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
                             <ChevronRight className="w-4 h-4 text-muted-foreground" />
                           )}
                           <div>
-                            <span className="font-medium">Item #{item.id}</span>
+                            <span className="font-medium">
+                              <Link
+                                href={`/item/${item.id}`}
+                                className="hover:underline hover:text-primary transition-colors"
+                                target="_blank"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Item #{item.id}
+                              </Link>
+                            </span>
                             <span className="text-sm text-muted-foreground ml-2">
                               {item.status} {item.condition && `• ${item.condition}`}
                             </span>

@@ -212,7 +212,10 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
               ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
               : undefined
           }
-          className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
+          inline
+          variant="ghost"
+          className="p-0 m-0 w-auto"
+          buttonClassName="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground bg-transparent border-none p-0 h-auto hover:bg-transparent"
         />
       )}
 
