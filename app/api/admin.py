@@ -664,3 +664,64 @@ def search_frbr_entities():
             results.append({"id": m.id, "title": title, "isbn13": m.isbn13, "upc": m.upc, "ean": m.ean, "type": "manifestation"})
 
     return jsonify({"success": True, "data": results, "meta": {"total": len(results), "query": query, "type": entity_type}})
+
+
+@admin_bp.route("/media/upload-cover", methods=["POST"])
+@admin_required
+def upload_cover():
+    """Accepts a client-side processed image blob, saves it, and binds it to an entity."""
+    user = _get_current_user()
+
+    if not _has_permission(user, PermissionName.UPLOAD_COVER):
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.UPLOAD_COVER} required"}), 403
+
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+
+    file = request.files['file']
+    entity_type = request.form.get('entity_type')
+    entity_id = request.form.get('entity_id')
+
+    if not file or file.filename == '':
+        return jsonify({"success": False, "error": "Empty file"}), 400
+
+    if entity_type not in ["manifestation", "item"]:
+        return jsonify({"success": False, "error": "Invalid entity type. Must be manifestation or item."}), 400
+
+    if not entity_id or not str(entity_id).isdigit():
+        return jsonify({"success": False, "error": "Invalid or missing entity_id"}), 400
+
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
+    filename = f"{entity_type}_{entity_id}_cover.{ext}"
+
+    try:
+        from app.utils.images import save_upload_image
+        public_url = save_upload_image(file, subfolder="covers", filename=filename)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Image processing failed: {str(e)}"}), 500
+
+    try:
+        if entity_type == "manifestation":
+            entity = db.session.get(Manifestation, int(entity_id))
+        else:
+            entity = db.session.get(Item, int(entity_id))
+
+        if not entity:
+             return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found"}), 404
+
+        if hasattr(entity, 'cover_url'):
+            entity.cover_url = public_url
+
+        if not entity.meta:
+            entity.meta = {}
+
+        # Create a new dictionary to ensure SQLAlchemy detects the JSONB mutation
+        new_meta = dict(entity.meta)
+        new_meta["cover_url"] = public_url
+        entity.meta = new_meta
+
+        db.session.commit()
+        return jsonify({"success": True, "data": {"cover_url": public_url}})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500

@@ -37,6 +37,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.1",
+    "react-image-crop": "^11.0.10",
     "sonner": "^2.0.7",
     "stylelint-config-standard": "^40.0.0",
     "tailwind-merge": "^3.5.0",

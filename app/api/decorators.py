@@ -98,7 +98,7 @@ def require_permission(perm_name: PermissionName):
             # Enforce strict usage of PermissionName
             if not isinstance(perm_name, PermissionName):
                 raise TypeError(f"require_permission expects PermissionName Enum, got {type(perm_name)}")
-            
+
             perm = perm_name.value
             user = db.session.get(User, getattr(g, "user_id", None))
             if not user or not user.has_permission(perm):

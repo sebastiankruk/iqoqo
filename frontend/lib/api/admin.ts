@@ -421,3 +421,44 @@ export async function searchFrbrEntities(
   const res = await apiFetch<FrbrSearchResult[]>(`/v1/admin/frbr/search?${params.toString()}`);
   return res;
 }
+
+export interface UploadCoverResponse {
+  success: boolean;
+  data?: {
+    cover_url: string;
+  };
+  error?: string;
+}
+
+/**
+ * Upload a cropped cover art blob to be attached to a specific entity.
+ *
+ * @param entityType - Either 'manifestation' or 'item'.
+ * @param entityId - The target entity ID.
+ * @param blob - The generated valid blob payload.
+ * @param filename - Optional target filename (defaults to cover.jpg).
+ * @returns The api response metadata.
+ */
+export async function uploadEntityCover(
+  entityType: 'manifestation' | 'item',
+  entityId: number,
+  blob: Blob,
+  filename: string = 'cover.jpg'
+): Promise<UploadCoverResponse> {
+  const formData = new FormData();
+  formData.append('file', blob, filename);
+  formData.append('entity_type', entityType);
+  formData.append('entity_id', entityId.toString());
+
+  const response = await apiClient.post<UploadCoverResponse>(
+    '/v1/admin/media/upload-cover',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
+  return response.data;
+}

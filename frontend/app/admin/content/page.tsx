@@ -42,6 +42,7 @@ import { FrbrEditor } from "@/components/admin/frbr-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
+import { CoverArtEditorWrapper } from "@/components/admin/cover-editor/cover-art-editor-wrapper";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
@@ -276,15 +277,7 @@ function ContentManagementContent(): React.JSX.Element {
           )}
 
           {effectiveTab === "cover-art" && canEditCover && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Cover Art Editor</CardTitle>
-                <CardDescription>Manage and upload cover artwork for manifestations.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Cover Art management is under construction...</p>
-              </CardContent>
-            </Card>
+            <CoverArtEditorWrapper />
           )}
         </section>
       </main>
