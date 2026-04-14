@@ -183,7 +183,6 @@ function ContentManagementContent(): React.JSX.Element {
                     icon={ImageIcon}
                     isActive={effectiveTab === "cover-art"}
                     onClick={() => handleTabChange("cover-art")}
-                    href="/admin/media/cover"
                   />
                 )}
               </nav>
@@ -274,6 +273,18 @@ function ContentManagementContent(): React.JSX.Element {
 
           {effectiveTab === "metadata" && canViewMetadata && (
             <ContentEditorWrapper preselectedManifestationId={preselectedManifestationId} />
+          )}
+
+          {effectiveTab === "cover-art" && canEditCover && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Cover Art Editor</CardTitle>
+                <CardDescription>Manage and upload cover artwork for manifestations.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Cover Art management is under construction...</p>
+              </CardContent>
+            </Card>
           )}
         </section>
       </main>

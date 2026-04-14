@@ -170,7 +170,7 @@ function SettingsContent(): React.JSX.Element {
                     icon={ImageIcon}
                     isActive={activeTab === "cover-art"}
                     onClick={() => handleTabChange("cover-art")}
-                    href="/admin/media/cover"
+                    href="/admin/content?tab=cover-art"
                   />
                 )}
               </nav>

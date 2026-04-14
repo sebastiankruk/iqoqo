@@ -139,7 +139,7 @@ export default function GroupsPage() {
                     icon={ImageIcon}
                     isActive={false}
                     onClick={() => {}}
-                    href="/admin/media/cover"
+                    href="/admin/content?tab=cover-art"
                   />
                 )}
               </nav>
