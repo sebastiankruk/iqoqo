@@ -16,10 +16,13 @@
 # pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 
 import os
+from datetime import date
 
 from flask import Blueprint, g, jsonify, request
 
 from app.api.decorators import admin_required
+from app.core import frbr_service
+from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
@@ -388,3 +391,221 @@ def manage_settings():
 
         db.session.commit()
         return jsonify({"success": True, "data": saved})
+
+
+# --- FRBR ENTITY MANAGEMENT ROUTES ---
+
+
+@admin_bp.route("/frbr/tree/manifestation/<int:manif_id>", methods=["GET"])
+@admin_required
+def get_frbr_tree(manif_id):
+    """Fetches the full FRBR lineage upward from a Manifestation."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "read:content"):
+        return jsonify({"success": False, "error": "Permission denied: read:content required"}), 403
+
+    manif = db.session.get(Manifestation, manif_id)
+    if manif is None:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
+    work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
+
+    items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "work": {"id": work.id, "title": work.title, "meta": work.meta} if work else None,
+            "expression": {
+                "id": expr.id,
+                "content_type": expr.content_type,
+                "language": expr.language,
+                "meta": expr.meta,
+                "work_id": expr.work_id
+            } if expr else None,
+            "manifestation": {
+                "id": manif.id,
+                "expression_id": manif.expression_id,
+                "isbn13": manif.isbn13,
+                "upc": manif.upc,
+                "ean": manif.ean,
+                "publisher": manif.publisher,
+                "publication_date": str(manif.publication_date) if manif.publication_date else None,
+                "meta": manif.meta
+            },
+            "items": [
+                {
+                    "id": i.id,
+                    "status": i.status,
+                    "condition": i.condition,
+                    "meta": i.meta,
+                    "owner_id": i.owner_id
+                } for i in items
+            ]
+        }
+    })
+
+
+@admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
+@admin_required
+def update_work(work_id):
+    """Update a Work entity."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:content"):
+        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+
+    data = request.json or {}
+    try:
+        work = frbr_service.update_work(work_id, title=data.get("title"), meta=data.get("meta"))
+        return jsonify({"success": True, "data": {"id": work.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+
+
+@admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
+@admin_required
+def update_expression(expr_id):
+    """Update an Expression entity."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:content"):
+        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+
+    data = request.json or {}
+    try:
+        expr = frbr_service.update_expression(
+            expr_id,
+            work_id=data.get("work_id"),
+            content_type=data.get("content_type"),
+            language=data.get("language"),
+            meta=data.get("meta")
+        )
+        return jsonify({"success": True, "data": {"id": expr.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+
+
+@admin_bp.route("/frbr/manifestation/<int:manif_id>", methods=["PUT"])
+@admin_required
+def update_manifestation(manif_id):
+    """Update a Manifestation entity."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:content"):
+        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+
+    data = request.json or {}
+    pub_date_str = data.get("publication_date")
+    try:
+        pub_date = date.fromisoformat(pub_date_str) if pub_date_str else None
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid date format. Use ISO format (YYYY-MM-DD)"}), 400
+
+    try:
+        manif = frbr_service.update_manifestation(
+            manif_id,
+            expression_id=data.get("expression_id"),
+            isbn13=data.get("isbn13"),
+            upc=data.get("upc"),
+            ean=data.get("ean"),
+            publisher=data.get("publisher"),
+            publication_date=pub_date,
+            meta=data.get("meta")
+        )
+        return jsonify({"success": True, "data": {"id": manif.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+
+
+@admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
+@admin_required
+def update_item(item_id):
+    """Update an Item entity."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "write:content"):
+        return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
+
+    data = request.json or {}
+    try:
+        item = frbr_service.update_item(
+            item_id,
+            manifestation_id=data.get("manifestation_id"),
+            status=data.get("status"),
+            condition=data.get("condition"),
+            meta=data.get("meta")
+        )
+        return jsonify({"success": True, "data": {"id": item.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+
+
+@admin_bp.route("/frbr/search", methods=["GET"])
+@admin_required
+def search_frbr_entities():
+    """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
+    user = _get_current_user()
+
+    if not _has_permission(user, "read:content"):
+        return jsonify({"success": False, "error": "Permission denied: read:content required"}), 403
+
+    query = request.args.get("q", "").strip()
+    entity_type = request.args.get("type", "manifestation")  # work, expression, manifestation
+    limit = request.args.get("limit", 20, type=int)
+
+    if not query:
+        return jsonify({"success": True, "data": [], "meta": {"total": 0}})
+
+    results = []
+
+    if entity_type == "work":
+        works = Work.query.filter(Work.title.ilike(f"%{query}%")).limit(limit).all()
+        results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
+    elif entity_type == "expression":
+        # Join with Work to filter by title
+        expressions = db.session.query(Expression).join(Work, Expression.work_id == Work.id).filter(
+            db.or_(
+                Work.title.ilike(f"%{query}%"),
+                Expression.content_type.ilike(f"%{query}%")
+            )
+        ).limit(limit).all()
+        
+        results = [
+            {
+                "id": e.id, 
+                "title": db.session.get(Work, e.work_id).title if e.work_id else f"Expression {e.id}",
+                "content_type": e.content_type, 
+                "type": "expression"
+            } 
+            for e in expressions
+        ]
+    else:  # manifestation
+        mans = Manifestation.query.filter(
+            db.or_(
+                Manifestation.isbn13.ilike(f"%{query}%"),
+                Manifestation.upc.ilike(f"%{query}%"),
+                Manifestation.ean.ilike(f"%{query}%")
+            )
+        ).limit(limit).all()
+        results = []
+        for m in mans:
+            expr = db.session.get(Expression, m.expression_id) if m.expression_id else None
+            work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
+            title = work.title if work else f"Manifestation {m.id}"
+            results.append({
+                "id": m.id,
+                "title": title,
+                "isbn13": m.isbn13,
+                "upc": m.upc,
+                "ean": m.ean,
+                "type": "manifestation"
+            })
+
+    return jsonify({
+        "success": True,
+        "data": results,
+        "meta": {"total": len(results), "query": query, "type": entity_type}
+    })

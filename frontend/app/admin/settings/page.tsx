@@ -18,11 +18,28 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
-import { Loader2, Settings, Users, User, Shield, BadgeCheck, Key, Building2, DollarSign } from "lucide-react";
+import {
+  Loader2,
+  Settings,
+  Users,
+  User,
+  Shield,
+  BadgeCheck,
+  Key,
+  Building2,
+  DollarSign,
+  Database,
+  Search,
+  X,
+} from "lucide-react";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
+import { FrbrEditor } from "@/components/admin/frbr-editor";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
@@ -180,6 +197,14 @@ function SettingsContent(): React.JSX.Element {
                     href="/admin/groups"
                   />
                 )}
+                {hasPermission("read:content") && (
+                  <NavItem
+                    label="Content"
+                    icon={Database}
+                    isActive={activeTab === "content"}
+                    onClick={() => handleTabChange("content")}
+                  />
+                )}
                 {hasPermission("config:internal") && (
                   <NavItem
                     label="Security"
@@ -301,6 +326,18 @@ function SettingsContent(): React.JSX.Element {
               </div>
             </div>
           )}
+
+          {activeTab === "content" && hasPermission("read:content") && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">FRBR Content Editor</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage Works, Expressions, and Manifestations through the FRBR hierarchy.
+                </p>
+              </div>
+              <FrbrEditorWrapper />
+            </div>
+          )}
         </div>
       </main>
       <Footer />
@@ -324,5 +361,128 @@ export default function SettingsHubPage() {
     >
       <SettingsContent />
     </Suspense>
+  );
+}
+
+/**
+ * Wrapper for the FRBR Editor that handles manifestation search and selection.
+ *
+ * @returns The wrapped FRBR Editor component
+ */
+function FrbrEditorWrapper() {
+  const [selectedManifestationId, setSelectedManifestationId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setSearching(true);
+    setSearchError(null);
+    setSearchResults([]);
+
+    try {
+      const results = await searchFrbrEntities(searchQuery.trim(), "manifestation", 20);
+      setSearchResults(results);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const handleSelectManifestation = (id: number) => {
+    setSelectedManifestationId(id);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedManifestationId(null);
+  };
+
+  if (!selectedManifestationId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Find Manifestation</CardTitle>
+          <CardDescription>
+            Search by ISBN-13, UPC, or EAN to locate the manifestation you want to edit.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <input
+              placeholder="Enter ISBN-13, UPC, or EAN"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <Button onClick={handleSearch} disabled={searching}>
+              {searching ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+              Search
+            </Button>
+          </div>
+
+          {searchError && <p className="text-destructive mt-4">{searchError}</p>}
+
+          {searchResults.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium mb-3">Search Results</h3>
+              <div className="border rounded-lg divide-y">
+                {searchResults.map(result => (
+                  <div
+                    key={result.id}
+                    className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                    onClick={() => handleSelectManifestation(result.id)}
+                  >
+                    <div>
+                      <p className="font-medium">{result.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        ID: {result.id}
+                        {result.isbn13 && ` | ISBN: ${result.isbn13}`}
+                        {result.upc && ` | UPC: ${result.upc}`}
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      Edit
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchResults.length === 0 && !searching && !searchError && searchQuery && (
+            <p className="text-muted-foreground mt-4">No results found. Try a different search term.</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Editing Manifestation #{selectedManifestationId}</CardTitle>
+          <CardDescription>Navigate through the FRBR hierarchy using the tabs below.</CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+          <X className="h-4 w-4 mr-2" />
+          Clear
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <FrbrEditor manifestationId={selectedManifestationId} />
+      </CardContent>
+    </Card>
   );
 }

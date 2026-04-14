@@ -13,13 +13,28 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-"""Instance-level settings and LLM telemetry models (public schema)."""
+"""Instance-level settings and LLM telemetry models."""
 
 from __future__ import annotations
 
+import os
+import sys
 from datetime import UTC, datetime
 
 from . import db
+
+# Use the "inventory" PostgreSQL schema in production.  SQLite (used in tests)
+# does not support named schemas, so we fall back to no schema.
+# ---------------------------------------------------------------------------
+_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+# In test environments (pytest), default to non-Postgres (no schemas/FTS) unless
+# FTS tests are explicitly enabled. This ensures tests run correctly on SQLite
+# even if DATABASE_URL is set in the environment.
+if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
+    _USE_PG = False
+
+_INVENTORY = "inventory" if _USE_PG else None
+_CATALOG = "catalog" if _USE_PG else None
 
 
 class LLMTelemetry(db.Model):  # type: ignore[name-defined]
@@ -36,7 +51,10 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     total_duration_seconds = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
-    __table_args__ = (db.Index("ix_llm_telemetry_provider_user_op_time", "provider", "user_id", "operation_type", "created_at"),)
+    __table_args__ = (
+        db.Index("ix_llm_telemetry_provider_user_op_time", "provider", "user_id", "operation_type", "created_at"),
+        {"schema": _INVENTORY} if _INVENTORY else {}
+    )
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]
@@ -51,3 +69,5 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     key = db.Column(db.String(100), unique=True, nullable=False, index=True)
     value = db.Column(db.JSON, nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
