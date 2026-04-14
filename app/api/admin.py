@@ -414,38 +414,38 @@ def get_frbr_tree(manif_id):
 
     items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
 
-    return jsonify({
-        "success": True,
-        "data": {
-            "work": {"id": work.id, "title": work.title, "meta": work.meta} if work else None,
-            "expression": {
-                "id": expr.id,
-                "content_type": expr.content_type,
-                "language": expr.language,
-                "meta": expr.meta,
-                "work_id": expr.work_id
-            } if expr else None,
-            "manifestation": {
-                "id": manif.id,
-                "expression_id": manif.expression_id,
-                "isbn13": manif.isbn13,
-                "upc": manif.upc,
-                "ean": manif.ean,
-                "publisher": manif.publisher,
-                "publication_date": str(manif.publication_date) if manif.publication_date else None,
-                "meta": manif.meta
+    return jsonify(
+        {
+            "success": True,
+            "data": {
+                "work": {"id": work.id, "title": work.title, "meta": work.meta} if work else None,
+                "expression": (
+                    {
+                        "id": expr.id,
+                        "content_type": expr.content_type,
+                        "language": expr.language,
+                        "meta": expr.meta,
+                        "work_id": expr.work_id,
+                    }
+                    if expr
+                    else None
+                ),
+                "manifestation": {
+                    "id": manif.id,
+                    "expression_id": manif.expression_id,
+                    "isbn13": manif.isbn13,
+                    "upc": manif.upc,
+                    "ean": manif.ean,
+                    "publisher": manif.publisher,
+                    "publication_date": str(manif.publication_date) if manif.publication_date else None,
+                    "meta": manif.meta,
+                },
+                "items": [
+                    {"id": i.id, "status": i.status, "condition": i.condition, "meta": i.meta, "owner_id": i.owner_id} for i in items
+                ],
             },
-            "items": [
-                {
-                    "id": i.id,
-                    "status": i.status,
-                    "condition": i.condition,
-                    "meta": i.meta,
-                    "owner_id": i.owner_id
-                } for i in items
-            ]
         }
-    })
+    )
 
 
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
@@ -481,7 +481,7 @@ def update_expression(expr_id):
             work_id=data.get("work_id"),
             content_type=data.get("content_type"),
             language=data.get("language"),
-            meta=data.get("meta")
+            meta=data.get("meta"),
         )
         return jsonify({"success": True, "data": {"id": expr.id}})
     except ValueError as e:
@@ -513,7 +513,7 @@ def update_manifestation(manif_id):
             ean=data.get("ean"),
             publisher=data.get("publisher"),
             publication_date=pub_date,
-            meta=data.get("meta")
+            meta=data.get("meta"),
         )
         return jsonify({"success": True, "data": {"id": manif.id}})
     except ValueError as e:
@@ -536,7 +536,7 @@ def update_item(item_id):
             manifestation_id=data.get("manifestation_id"),
             status=data.get("status"),
             condition=data.get("condition"),
-            meta=data.get("meta")
+            meta=data.get("meta"),
         )
         return jsonify({"success": True, "data": {"id": item.id}})
     except ValueError as e:
@@ -566,46 +566,38 @@ def search_frbr_entities():
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
-        expressions = db.session.query(Expression).join(Work, Expression.work_id == Work.id).filter(
-            db.or_(
-                Work.title.ilike(f"%{query}%"),
-                Expression.content_type.ilike(f"%{query}%")
-            )
-        ).limit(limit).all()
-        
+        expressions = (
+            db.session.query(Expression)
+            .join(Work, Expression.work_id == Work.id)
+            .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+            .limit(limit)
+            .all()
+        )
+
         results = [
             {
-                "id": e.id, 
+                "id": e.id,
                 "title": db.session.get(Work, e.work_id).title if e.work_id else f"Expression {e.id}",
-                "content_type": e.content_type, 
-                "type": "expression"
-            } 
+                "content_type": e.content_type,
+                "type": "expression",
+            }
             for e in expressions
         ]
     else:  # manifestation
-        mans = Manifestation.query.filter(
-            db.or_(
-                Manifestation.isbn13.ilike(f"%{query}%"),
-                Manifestation.upc.ilike(f"%{query}%"),
-                Manifestation.ean.ilike(f"%{query}%")
+        mans = (
+            Manifestation.query.filter(
+                db.or_(
+                    Manifestation.isbn13.ilike(f"%{query}%"), Manifestation.upc.ilike(f"%{query}%"), Manifestation.ean.ilike(f"%{query}%")
+                )
             )
-        ).limit(limit).all()
+            .limit(limit)
+            .all()
+        )
         results = []
         for m in mans:
             expr = db.session.get(Expression, m.expression_id) if m.expression_id else None
             work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
             title = work.title if work else f"Manifestation {m.id}"
-            results.append({
-                "id": m.id,
-                "title": title,
-                "isbn13": m.isbn13,
-                "upc": m.upc,
-                "ean": m.ean,
-                "type": "manifestation"
-            })
+            results.append({"id": m.id, "title": title, "isbn13": m.isbn13, "upc": m.upc, "ean": m.ean, "type": "manifestation"})
 
-    return jsonify({
-        "success": True,
-        "data": results,
-        "meta": {"total": len(results), "query": query, "type": entity_type}
-    })
+    return jsonify({"success": True, "data": results, "meta": {"total": len(results), "query": query, "type": entity_type}})

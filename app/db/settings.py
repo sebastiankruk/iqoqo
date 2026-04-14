@@ -53,7 +53,7 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
 
     __table_args__ = (
         db.Index("ix_llm_telemetry_provider_user_op_time", "provider", "user_id", "operation_type", "created_at"),
-        {"schema": _INVENTORY} if _INVENTORY else {}
+        {"schema": _INVENTORY} if _INVENTORY else {},
     )
 
 

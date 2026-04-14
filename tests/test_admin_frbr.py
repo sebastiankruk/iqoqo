@@ -46,10 +46,7 @@ def test_get_frbr_tree_success(client, admin_headers, app):
         work = frbr_service.create_work(title="Test FRBR Book")
         expression = frbr_service.create_expression(work_id=work.id, content_type="text", language="en")
         manifestation = frbr_service.create_manifestation(
-            expression_id=expression.id,
-            isbn13="9781234567890",
-            publisher="Test Publisher",
-            meta={"TestMeta": "test_value"}
+            expression_id=expression.id, isbn13="9781234567890", publisher="Test Publisher", meta={"TestMeta": "test_value"}
         )
         work_id = work.id
         manif_id = manifestation.id
@@ -95,7 +92,7 @@ def test_get_frbr_tree_with_items(client, admin_headers, app):
     assert res.status_code == 200
     data = res.json["data"]
     assert len(data["items"]) == 2
-    
+
     # Sort items by status to ensure deterministic assertion
     items = sorted(data["items"], key=lambda x: x["status"])
     assert items[0]["status"] == "available"
@@ -109,9 +106,7 @@ def test_update_work(client, admin_headers, app):
         work_id = work.id
 
     res = client.put(
-        f"/api/v1/admin/frbr/work/{work_id}",
-        json={"title": "Updated Title", "meta": {"new_key": "new_value"}},
-        headers=admin_headers
+        f"/api/v1/admin/frbr/work/{work_id}", json={"title": "Updated Title", "meta": {"new_key": "new_value"}}, headers=admin_headers
     )
     assert res.status_code == 200
     assert res.json["success"] is True
@@ -135,7 +130,7 @@ def test_update_expression(client, admin_headers, app):
     res = client.put(
         f"/api/v1/admin/frbr/expression/{expr_id}",
         json={"content_type": "audio", "language": "pl", "meta": {"TrackCount": 10}},
-        headers=admin_headers
+        headers=admin_headers,
     )
     assert res.status_code == 200
     assert res.json["success"] is True
@@ -153,20 +148,14 @@ def test_update_manifestation(client, admin_headers, app):
         work = frbr_service.create_work(title="Test Work")
         expression = frbr_service.create_expression(work_id=work.id)
         manifestation = frbr_service.create_manifestation(
-            expression_id=expression.id,
-            isbn13="9780000000000",
-            publisher="Original Publisher"
+            expression_id=expression.id, isbn13="9780000000000", publisher="Original Publisher"
         )
         manif_id = manifestation.id
 
     res = client.put(
         f"/api/v1/admin/frbr/manifestation/{manif_id}",
-        json={
-            "isbn13": "9781111111111",
-            "publisher": "New Publisher",
-            "meta": {"Pages": 300}
-        },
-        headers=admin_headers
+        json={"isbn13": "9781111111111", "publisher": "New Publisher", "meta": {"Pages": 300}},
+        headers=admin_headers,
     )
     assert res.status_code == 200
     assert res.json["success"] is True
@@ -194,13 +183,7 @@ def test_update_item(client, admin_headers, app):
             db.session.commit()
 
         # Use direct Item creation to use UUID
-        item = Item(
-            manifestation_id=manifestation.id,
-            owner_id=user.id,
-            status="available",
-            condition="Like New",
-            meta={}
-        )
+        item = Item(manifestation_id=manifestation.id, owner_id=user.id, status="available", condition="Like New", meta={})
         db.session.add(item)
         db.session.commit()
         item_id = item.id
@@ -208,7 +191,7 @@ def test_update_item(client, admin_headers, app):
     res = client.put(
         f"/api/v1/admin/frbr/item/{item_id}",
         json={"status": "lent", "condition": "Fair", "meta": {"LentTo": "Friend"}},
-        headers=admin_headers
+        headers=admin_headers,
     )
     assert res.status_code == 200
     assert res.json["success"] is True
@@ -222,11 +205,7 @@ def test_update_item(client, admin_headers, app):
 
 def test_update_work_not_found(client, admin_headers):
     """Test updating non-existent work returns 404."""
-    res = client.put(
-        "/api/v1/admin/frbr/work/999999",
-        json={"title": "New Title"},
-        headers=admin_headers
-    )
+    res = client.put("/api/v1/admin/frbr/work/999999", json={"title": "New Title"}, headers=admin_headers)
     assert res.status_code == 404
     assert res.json["success"] is False
 
@@ -238,11 +217,7 @@ def test_update_expression_invalid_work(client, admin_headers, app):
         expression = frbr_service.create_expression(work_id=work.id)
         expr_id = expression.id
 
-    res = client.put(
-        f"/api/v1/admin/frbr/expression/{expr_id}",
-        json={"work_id": 999999},
-        headers=admin_headers
-    )
+    res = client.put(f"/api/v1/admin/frbr/expression/{expr_id}", json={"work_id": 999999}, headers=admin_headers)
     assert res.status_code == 404
     assert res.json["success"] is False
 
