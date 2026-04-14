@@ -77,6 +77,8 @@ def admin_headers(app):
             Permission(name="write:users"),
             Permission(name="read:roles"),
             Permission(name="write:roles"),
+            Permission(name="read:content"),
+            Permission(name="write:content"),
         ]
         db.session.add_all(perms)
 

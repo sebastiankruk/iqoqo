@@ -212,3 +212,196 @@ export async function updateInstanceSettings(
   }
   return res.data.data;
 }
+
+// --- FRBR ENTITY TYPES ---
+
+export interface FrbrWork {
+  id: number;
+  title: string;
+  meta: Record<string, unknown>;
+}
+
+export interface FrbrExpression {
+  id: number;
+  work_id: number;
+  content_type: string;
+  language: string;
+  meta: Record<string, unknown>;
+}
+
+export interface FrbrManifestation {
+  id: number;
+  expression_id: number;
+  isbn13: string | null;
+  upc: string | null;
+  ean: string | null;
+  publisher: string | null;
+  publication_date: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface FrbrItem {
+  id: number;
+  status: string;
+  condition: string | null;
+  meta: Record<string, unknown>;
+  owner_id: string;
+}
+
+export interface FrbrTree {
+  work: FrbrWork | null;
+  expression: FrbrExpression | null;
+  manifestation: FrbrManifestation;
+  items: FrbrItem[];
+}
+
+export interface FrbrSearchResult {
+  id: number;
+  title: string;
+  type: "work" | "expression" | "manifestation";
+  isbn13?: string | null;
+  upc?: string | null;
+  ean?: string | null;
+  content_type?: string;
+}
+
+/**
+ * Fetch the full FRBR lineage for a manifestation.
+ *
+ * @param manifestationId - The manifestation ID
+ * @returns The FRBR tree (Work -> Expression -> Manifestation -> Items)
+ */
+export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
+  return apiFetch<FrbrTree>(`/v1/admin/frbr/tree/manifestation/${manifestationId}`);
+}
+
+/**
+ * Update a Work entity.
+ *
+ * @param workId - The work ID
+ * @param data - The update data
+ * @returns The updated work ID
+ */
+export async function updateFrbrWork(
+  workId: number,
+  data: { title?: string; meta?: Record<string, unknown> }
+): Promise<{ id: number }> {
+  const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/work/${workId}`, data);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update work");
+  }
+  return res.data.data;
+}
+
+/**
+ * Update an Expression entity.
+ *
+ * @param expressionId - The expression ID
+ * @param data - The update data
+ * @returns The updated expression ID
+ */
+export async function updateFrbrExpression(
+  expressionId: number,
+  data: { work_id?: number; content_type?: string; language?: string; meta?: Record<string, unknown> }
+): Promise<{ id: number }> {
+  const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/expression/${expressionId}`, data);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update expression");
+  }
+  return res.data.data;
+}
+
+/**
+ * Update a Manifestation entity.
+ *
+ * @param manifestationId - The manifestation ID
+ * @param data - The update data
+ * @returns The updated manifestation ID
+ */
+export async function updateFrbrManifestation(
+  manifestationId: number,
+  data: {
+    expression_id?: number;
+    isbn13?: string;
+    upc?: string;
+    ean?: string;
+    publisher?: string;
+    publication_date?: string;
+    meta?: Record<string, unknown>;
+  }
+): Promise<{ id: number }> {
+  const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/manifestation/${manifestationId}`, data);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update manifestation");
+  }
+  return res.data.data;
+}
+
+/**
+ * Update an Item entity.
+ *
+ * @param itemId - The item ID
+ * @param data - The update data
+ * @returns The updated item ID
+ */
+export async function updateFrbrItem(
+  itemId: number,
+  data: { manifestation_id?: number; status?: string; condition?: string; meta?: Record<string, unknown> }
+): Promise<{ id: number }> {
+  const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/item/${itemId}`, data);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to update item");
+  }
+  return res.data.data;
+}
+
+/**
+ * Unified function to update any FRBR entity.
+ *
+ * @param type - Entity type (work, expression, manifestation, item)
+ * @param id - Entity ID
+ * @param data - Update data
+ * @returns The updated entity ID
+ */
+export async function updateFrbrEntity(
+  type: "work" | "expression" | "manifestation" | "item",
+  id: number,
+  data: Record<string, unknown>
+): Promise<{ id: number }> {
+  switch (type) {
+    case "work":
+      return updateFrbrWork(id, data as { title?: string; meta?: Record<string, unknown> });
+    case "expression":
+      return updateFrbrExpression(
+        id,
+        data as { work_id?: number; content_type?: string; language?: string; meta?: Record<string, unknown> }
+      );
+    case "manifestation":
+      return updateFrbrManifestation(id, data as Parameters<typeof updateFrbrManifestation>[1]);
+    case "item":
+      return updateFrbrItem(
+        id,
+        data as { manifestation_id?: number; status?: string; condition?: string; meta?: Record<string, unknown> }
+      );
+  }
+}
+
+/**
+ * Search for FRBR entities by title or identifier.
+ *
+ * @param query - Search query
+ * @param entityType - Entity type to search (work, expression, manifestation)
+ * @param limit - Max results
+ * @returns Search results
+ */
+export async function searchFrbrEntities(
+  query: string,
+  entityType: "work" | "expression" | "manifestation" = "manifestation",
+  limit: number = 20
+): Promise<FrbrSearchResult[]> {
+  const params = new URLSearchParams({ q: query, type: entityType, limit: limit.toString() });
+  const res = await apiFetch<{ data: FrbrSearchResult[]; meta: { total: number } }>(
+    `/v1/admin/frbr/search?${params.toString()}`
+  );
+  return res.data;
+}

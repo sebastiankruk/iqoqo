@@ -23,15 +23,14 @@ with app.app_context():
     # 1. Create permissions
     perms = [
         "delete:item",
-        "delete:manifestation",
-        "update:item",
-        "read:owners",
         "regenerate:cover",
         "refetch:metadata",
         "llm_generate:cover",
         "llm_generate:metadata",
         "llm_generate:cloud",
         "upload:cover",
+        "read:content",
+        "write:content",
     ]
     for p in perms:
         existing = Permission.query.filter_by(name=p).first()
