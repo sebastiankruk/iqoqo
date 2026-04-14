@@ -95,8 +95,11 @@ def test_get_frbr_tree_with_items(client, admin_headers, app):
     assert res.status_code == 200
     data = res.json["data"]
     assert len(data["items"]) == 2
-    assert data["items"][0]["status"] == "available"
-    assert data["items"][1]["status"] == "lent"
+    
+    # Sort items by status to ensure deterministic assertion
+    items = sorted(data["items"], key=lambda x: x["status"])
+    assert items[0]["status"] == "available"
+    assert items[1]["status"] == "lent"
 
 
 def test_update_work(client, admin_headers, app):

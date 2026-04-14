@@ -16,6 +16,7 @@
 # pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 
 import os
+from datetime import date
 
 from flask import Blueprint, g, jsonify, request
 
@@ -411,7 +412,7 @@ def get_frbr_tree(manif_id):
     expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
     work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
 
-    items = Item.query.filter_by(manifestation_id=manif.id).all()
+    items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
 
     return jsonify({
         "success": True,
@@ -497,6 +498,12 @@ def update_manifestation(manif_id):
         return jsonify({"success": False, "error": "Permission denied: write:content required"}), 403
 
     data = request.json or {}
+    pub_date_str = data.get("publication_date")
+    try:
+        pub_date = date.fromisoformat(pub_date_str) if pub_date_str else None
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid date format. Use ISO format (YYYY-MM-DD)"}), 400
+
     try:
         manif = frbr_service.update_manifestation(
             manif_id,
@@ -505,7 +512,7 @@ def update_manifestation(manif_id):
             upc=data.get("upc"),
             ean=data.get("ean"),
             publisher=data.get("publisher"),
-            publication_date=data.get("publication_date"),
+            publication_date=pub_date,
             meta=data.get("meta")
         )
         return jsonify({"success": True, "data": {"id": manif.id}})
@@ -558,13 +565,23 @@ def search_frbr_entities():
         works = Work.query.filter(Work.title.ilike(f"%{query}%")).limit(limit).all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
-        expressions = Expression.query.limit(limit).all()
-        results = []
-        for e in expressions:
-            work = db.session.get(Work, e.work_id) if e.work_id else None
-            title = work.title if work else f"Expression {e.id}"
-            if query.lower() in title.lower() or query.lower() in str(e.content_type).lower():
-                results.append({"id": e.id, "title": title, "content_type": e.content_type, "type": "expression"})
+        # Join with Work to filter by title
+        expressions = db.session.query(Expression).join(Work, Expression.work_id == Work.id).filter(
+            db.or_(
+                Work.title.ilike(f"%{query}%"),
+                Expression.content_type.ilike(f"%{query}%")
+            )
+        ).limit(limit).all()
+        
+        results = [
+            {
+                "id": e.id, 
+                "title": db.session.get(Work, e.work_id).title if e.work_id else f"Expression {e.id}",
+                "content_type": e.content_type, 
+                "type": "expression"
+            } 
+            for e in expressions
+        ]
     else:  # manifestation
         mans = Manifestation.query.filter(
             db.or_(

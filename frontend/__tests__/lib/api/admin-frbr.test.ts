@@ -68,7 +68,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any,
+        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
       const result = await updateFrbrEntity("work", 1, mockPayload);
@@ -84,7 +84,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any,
+        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
       const result = await updateFrbrEntity("expression", 2, mockPayload);
@@ -100,7 +100,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any,
+        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
       const result = await updateFrbrEntity("manifestation", 3, mockPayload);
@@ -116,7 +116,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any,
+        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
       const result = await updateFrbrEntity("item", 10, mockPayload);
@@ -131,7 +131,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 400,
         statusText: "Bad Request",
         headers: {},
-        config: {} as any,
+        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
 
       await expect(updateFrbrEntity("expression", 2, {})).rejects.toThrow("Validation failed");
@@ -140,29 +140,23 @@ describe("Admin API - FRBR endpoints", () => {
 
   describe("searchFrbrEntities", () => {
     it("should search manifestations by ISBN", async () => {
-      const mockResponse = {
-        data: [{ id: 1, title: "Test Book", isbn13: "9781234567890", type: "manifestation" as const }],
-        meta: { total: 1 },
-      };
+      const mockResponse = [{ id: 1, title: "Test Book", isbn13: "9781234567890", type: "manifestation" as const }];
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       const result = await searchFrbrEntities("9781234567890", "manifestation");
 
       expect(apiFetch).toHaveBeenCalledWith("/v1/admin/frbr/search?q=9781234567890&type=manifestation&limit=20");
-      expect(result).toEqual(mockResponse.data);
+      expect(result).toEqual(mockResponse);
     });
 
     it("should search works by title", async () => {
-      const mockResponse = {
-        data: [{ id: 1, title: "Dune", type: "work" as const }],
-        meta: { total: 1 },
-      };
+      const mockResponse = [{ id: 1, title: "Dune", type: "work" as const }];
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       const result = await searchFrbrEntities("Dune", "work");
 
       expect(apiFetch).toHaveBeenCalledWith("/v1/admin/frbr/search?q=Dune&type=work&limit=20");
-      expect(result).toEqual(mockResponse.data);
+      expect(result).toEqual(mockResponse);
     });
   });
 });

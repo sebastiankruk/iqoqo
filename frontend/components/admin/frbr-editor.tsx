@@ -16,9 +16,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFrbrTree, updateFrbrEntity, type FrbrTree, type FrbrItem } from "@/lib/api/admin";
@@ -35,37 +32,38 @@ interface FrbrEditorProps {
   onClose?: () => void;
 }
 
-const metaFieldsSchema = z.object({
-  metaFields: z.array(z.object({ key: z.string().min(1), value: z.string() })),
-});
+interface WorkFormData {
+  title: string;
+  metaFields: MetaField[];
+}
 
-const workSchema = metaFieldsSchema.extend({
-  title: z.string().min(1, "Title is required"),
-});
+interface ExpressionFormData {
+  content_type?: string;
+  language?: string;
+  metaFields: MetaField[];
+}
 
-const expressionSchema = metaFieldsSchema.extend({
-  content_type: z.string().optional(),
-  language: z.string().optional(),
-});
+interface ManifestationFormData {
+  isbn13?: string;
+  upc?: string;
+  ean?: string;
+  publisher?: string;
+  publication_date?: string;
+  metaFields: MetaField[];
+}
 
-const manifestationSchema = metaFieldsSchema.extend({
-  isbn13: z.string().optional(),
-  upc: z.string().optional(),
-  ean: z.string().optional(),
-  publisher: z.string().optional(),
-  publication_date: z.string().optional(),
-});
+interface ItemFormData {
+  status?: string;
+  condition?: string;
+  metaFields: MetaField[];
+}
 
-const itemSchema = metaFieldsSchema.extend({
-  status: z.string().optional(),
-  condition: z.string().optional(),
-});
-
-type WorkFormData = z.infer<typeof workSchema>;
-type ExpressionFormData = z.infer<typeof expressionSchema>;
-type ManifestationFormData = z.infer<typeof manifestationSchema>;
-type ItemFormData = z.infer<typeof itemSchema>;
-
+/**
+ * Transforms a metadata object into an array of key-value pairs for form editing.
+ *
+ * @param meta - The source metadata object
+ * @returns Array of meta field pairs
+ */
 function transformMetaToFields(meta: Record<string, unknown> | null | undefined): MetaField[] {
   if (!meta || typeof meta !== "object") return [];
   return Object.entries(meta).map(([key, value]) => ({
@@ -74,6 +72,12 @@ function transformMetaToFields(meta: Record<string, unknown> | null | undefined)
   }));
 }
 
+/**
+ * Transforms an array of key-value pairs back into a metadata object.
+ *
+ * @param fields - The array of meta field pairs
+ * @returns The metadata record
+ */
 function transformFieldsToMeta(fields: MetaField[]): Record<string, unknown> {
   return fields.reduce(
     (acc, field) => {
@@ -86,6 +90,17 @@ function transformFieldsToMeta(fields: MetaField[]): Record<string, unknown> {
   );
 }
 
+/**
+ * A standard styled input field for admin forms.
+ *
+ * @param props - Component properties
+ * @param props.name - Input name
+ * @param props.defaultValue - Initial value
+ * @param props.placeholder - Placeholder text
+ * @param props.required - Whether the field is required
+ * @param props.className - Additional CSS classes
+ * @returns Input JSX element
+ */
 function InputField({
   name,
   defaultValue,
@@ -110,14 +125,18 @@ function InputField({
   );
 }
 
+/**
+ * Form for editing Work (F1) entities.
+ *
+ * @param props - Component properties
+ * @param props.tree - The FRBR tree data
+ * @param props.onSubmit - Submission handler
+ * @returns Work editor JSX element
+ */
 function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkFormData) => Promise<void> }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>([]);
-
-  useEffect(() => {
-    if (tree.work) {
-      setMetaFields(transformMetaToFields(tree.work.meta));
-    }
-  }, [tree.work]);
+  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
+    transformMetaToFields(tree.work?.meta)
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -187,6 +206,14 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
   );
 }
 
+/**
+ * Form for editing Expression (F2) entities.
+ *
+ * @param props - Component properties
+ * @param props.tree - The FRBR tree data
+ * @param props.onSubmit - Submission handler
+ * @returns Expression editor JSX element
+ */
 function ExpressionEditor({
   tree,
   onSubmit,
@@ -194,13 +221,9 @@ function ExpressionEditor({
   tree: FrbrTree;
   onSubmit: (data: ExpressionFormData) => Promise<void>;
 }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>([]);
-
-  useEffect(() => {
-    if (tree.expression) {
-      setMetaFields(transformMetaToFields(tree.expression.meta));
-    }
-  }, [tree.expression]);
+  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
+    transformMetaToFields(tree.expression?.meta)
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -277,6 +300,14 @@ function ExpressionEditor({
   );
 }
 
+/**
+ * Form for editing Manifestation (F3) entities.
+ *
+ * @param props - Component properties
+ * @param props.tree - The FRBR tree data
+ * @param props.onSubmit - Submission handler
+ * @returns Manifestation editor JSX element
+ */
 function ManifestationEditor({
   tree,
   onSubmit,
@@ -284,13 +315,9 @@ function ManifestationEditor({
   tree: FrbrTree;
   onSubmit: (data: ManifestationFormData) => Promise<void>;
 }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>([]);
-
-  useEffect(() => {
-    if (tree.manifestation) {
-      setMetaFields(transformMetaToFields(tree.manifestation.meta));
-    }
-  }, [tree.manifestation]);
+  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
+    transformMetaToFields(tree.manifestation.meta)
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -386,12 +413,18 @@ function ManifestationEditor({
   );
 }
 
+/**
+ * Form for editing Item (F5) entities.
+ *
+ * @param props - Component properties
+ * @param props.item - The FRBR item data
+ * @param props.onSubmit - Submission handler
+ * @returns Item editor JSX element
+ */
 function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemFormData) => Promise<void> }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>([]);
-
-  useEffect(() => {
-    setMetaFields(transformMetaToFields(item.meta));
-  }, [item]);
+  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
+    transformMetaToFields(item.meta)
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -468,6 +501,13 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
   );
 }
 
+/**
+ * Main FRBR Editor component that manages state for the entire hierarchy.
+ *
+ * @param props - Component properties
+ * @param props.manifestationId - The manifestation ID to load
+ * @returns FRBR editor JSX element
+ */
 export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
   const [tree, setTree] = useState<FrbrTree | null>(null);
   const [loading, setLoading] = useState(true);
@@ -632,7 +672,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.work ? (
-              <WorkEditor tree={tree} onSubmit={handleWorkSubmit} />
+              <WorkEditor key={tree.work.id} tree={tree} onSubmit={handleWorkSubmit} />
             ) : (
               <p className="text-muted-foreground">No Work associated with this manifestation.</p>
             )}
@@ -648,7 +688,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.expression ? (
-              <ExpressionEditor tree={tree} onSubmit={handleExpressionSubmit} />
+              <ExpressionEditor key={tree.expression.id} tree={tree} onSubmit={handleExpressionSubmit} />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
             )}
@@ -663,7 +703,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManifestationEditor tree={tree} onSubmit={handleManifestationSubmit} />
+            <ManifestationEditor key={tree.manifestation.id} tree={tree} onSubmit={handleManifestationSubmit} />
           </CardContent>
         </Card>
       )}
@@ -685,7 +725,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
                       <span className="font-medium">Item #{item.id}</span>
                       <span className="text-sm text-muted-foreground">Owner: {item.owner_id}</span>
                     </div>
-                    <ItemEditor item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
+                    <ItemEditor key={item.id} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
                   </div>
                 ))}
               </div>

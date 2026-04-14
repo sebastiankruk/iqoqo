@@ -23,6 +23,9 @@ with app.app_context():
     # 1. Create permissions
     perms = [
         "delete:item",
+        "update:item",
+        "read:owners",
+        "delete:manifestation",
         "regenerate:cover",
         "refetch:metadata",
         "llm_generate:cover",

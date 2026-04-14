@@ -280,6 +280,8 @@ export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
  *
  * @param workId - The work ID
  * @param data - The update data
+ * @param data.title - Optional new title
+ * @param data.meta - Optional new metadata
  * @returns The updated work ID
  */
 export async function updateFrbrWork(
@@ -298,6 +300,10 @@ export async function updateFrbrWork(
  *
  * @param expressionId - The expression ID
  * @param data - The update data
+ * @param data.work_id - Optional new work ID association
+ * @param data.content_type - Optional new content type
+ * @param data.language - Optional new language
+ * @param data.meta - Optional new metadata
  * @returns The updated expression ID
  */
 export async function updateFrbrExpression(
@@ -316,6 +322,13 @@ export async function updateFrbrExpression(
  *
  * @param manifestationId - The manifestation ID
  * @param data - The update data
+ * @param data.expression_id - Optional new expression ID association
+ * @param data.isbn13 - Optional new ISBN-13
+ * @param data.upc - Optional new UPC
+ * @param data.ean - Optional new EAN
+ * @param data.publisher - Optional new publisher name
+ * @param data.publication_date - Optional new publication date string
+ * @param data.meta - Optional new metadata
  * @returns The updated manifestation ID
  */
 export async function updateFrbrManifestation(
@@ -342,6 +355,10 @@ export async function updateFrbrManifestation(
  *
  * @param itemId - The item ID
  * @param data - The update data
+ * @param data.manifestation_id - Optional new manifestation ID association
+ * @param data.status - Optional new status
+ * @param data.condition - Optional new condition
+ * @param data.meta - Optional new metadata
  * @returns The updated item ID
  */
 export async function updateFrbrItem(
@@ -400,8 +417,6 @@ export async function searchFrbrEntities(
   limit: number = 20
 ): Promise<FrbrSearchResult[]> {
   const params = new URLSearchParams({ q: query, type: entityType, limit: limit.toString() });
-  const res = await apiFetch<{ data: FrbrSearchResult[]; meta: { total: number } }>(
-    `/v1/admin/frbr/search?${params.toString()}`
-  );
-  return res.data;
+  const res = await apiFetch<FrbrSearchResult[]>(`/v1/admin/frbr/search?${params.toString()}`);
+  return res;
 }

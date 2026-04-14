@@ -364,6 +364,11 @@ export default function SettingsHubPage() {
   );
 }
 
+/**
+ * Wrapper for the FRBR Editor that handles manifestation search and selection.
+ *
+ * @returns The wrapped FRBR Editor component
+ */
 function FrbrEditorWrapper() {
   const [selectedManifestationId, setSelectedManifestationId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

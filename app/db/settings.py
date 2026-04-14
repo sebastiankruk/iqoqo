@@ -51,7 +51,10 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     total_duration_seconds = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
-    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+    __table_args__ = (
+        db.Index("ix_llm_telemetry_provider_user_op_time", "provider", "user_id", "operation_type", "created_at"),
+        {"schema": _INVENTORY} if _INVENTORY else {}
+    )
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]
