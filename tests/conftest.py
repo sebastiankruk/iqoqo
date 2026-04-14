@@ -67,7 +67,7 @@ def admin_headers(app):
             Permission(name="delete:item"),
             Permission(name="update:item"),
             Permission(name="read:owners"),
-            Permission(name="edit:manifestation"),
+            Permission(name="write:metadata"),
             Permission(name="upload:cover"),
             Permission(name="config:external_apis"),
             Permission(name="config:federation"),
@@ -77,8 +77,12 @@ def admin_headers(app):
             Permission(name="write:users"),
             Permission(name="read:roles"),
             Permission(name="write:roles"),
-            Permission(name="read:content"),
-            Permission(name="write:content"),
+            Permission(name="read:metadata"),
+            Permission(name="delete:manifestation"),
+            Permission(name="llm_generate:metadata"),
+            Permission(name="llm_generate:cover"),
+            Permission(name="llm_generate:cloud"),
+            Permission(name="edit:cover"),
         ]
         db.session.add_all(perms)
 

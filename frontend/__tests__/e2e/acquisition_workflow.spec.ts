@@ -34,7 +34,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
             email: "test@example.com",
             display_name: "Test User",
             roles: ["user"],
-            permissions: ["upload:cover", "edit:manifestation", "update:item"],
+            permissions: ["upload:cover", "write:metadata", "update:item"],
           },
         },
       })

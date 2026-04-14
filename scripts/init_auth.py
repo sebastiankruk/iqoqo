@@ -15,6 +15,7 @@
 #
 import uuid
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load environment variables before importing models to ensure schema detection works
@@ -23,15 +24,20 @@ load_dotenv()
 import yaml
 
 from app import create_app
-from app.db.models import Item, Permission, Role, User, db
 from app.core.permissions import PermissionName
+from app.db.models import Item, Permission, Role, User, db
 
-app = create_app()
-with app.app_context():
-    # 1. Create permissions from shared/permissions.yaml
-    permissions_path = Path(app.root_path).parent / "shared" / "permissions.yaml"
-    with open(permissions_path, "r") as f:
-        permissions_data = yaml.safe_load(f)
+
+def run_init_auth(app=None):
+    if app is None:
+        app = create_app()
+
+    with app.app_context():
+        # 1. Create permissions from shared/permissions.yaml
+        permissions_path = Path(app.root_path).parent / "shared" / "permissions.yaml"
+
+        with open(permissions_path, encoding="utf-8") as f:
+            permissions_data = yaml.safe_load(f)
 
     perms = [p["name"] for p in permissions_data.get("permissions", [])]
 
@@ -73,15 +79,12 @@ with app.app_context():
     # Contributor gets metadata, cover stuff, and llm_generate
     all_perms = Permission.query.all()
     contributor_perms = [
-        p for p in all_perms
-        if p.name in {
-            PermissionName.READ_METADATA.value,
-            PermissionName.WRITE_METADATA.value,
-            PermissionName.EDIT_COVER.value,
-            PermissionName.UPLOAD_COVER.value,
-            PermissionName.REGENERATE_COVER.value,
-            PermissionName.DELETE_ITEM.value,
-        } or p.name.startswith("llm_generate:")
+        p
+        for p in all_perms
+        if p.name.endswith(":metadata")
+        or p.name.endswith(":cover")
+        or p.name.startswith("llm_generate:")
+        or p.name == PermissionName.DELETE_ITEM.value
     ]
     contributor_role.permissions = contributor_perms
 
@@ -122,3 +125,7 @@ with app.app_context():
     if migrated > 0:
         db.session.commit()
         print(f"Migrated {migrated} items to admin user.")
+
+
+if __name__ == "__main__":
+    run_init_auth()

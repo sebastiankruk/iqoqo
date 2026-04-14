@@ -27,7 +27,7 @@ test.describe("Board Game Ingestion Workflow", () => {
           data: {
             id: "test-user-id",
             email: "test@iqoqo.local",
-            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+            permissions: ["upload:cover", "update:item", "write:metadata"],
           },
         }),
       });
@@ -151,7 +151,7 @@ test.describe("Board Game Ingestion Workflow", () => {
           data: {
             id: "test-user-id",
             email: "test@iqoqo.local",
-            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+            permissions: ["upload:cover", "update:item", "write:metadata"],
           },
         }),
       });
