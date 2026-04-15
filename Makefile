@@ -110,7 +110,7 @@ lint-python:
 	@echo "Running ruff..."
 	.venv/bin/ruff check app/ tests/ scripts/
 	@echo "Running mypy..."
-	rm -rf .mypy_cache
+	rm -rf .mypy_cache || true
 	.venv/bin/mypy app/ tests/
 	@echo "Running pylint..."
 	.venv/bin/pylint app/ tests/ scripts/
