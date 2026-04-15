@@ -40,7 +40,9 @@ from app.db.audio import (  # noqa: F401
 )
 from app.db.auth import ConsentRecord, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
 from app.db.core import (  # noqa: F401
+    COLLECTION_STATUSES,
     ITEM_STATUSES,
+    PROGRESS_STATUSES,
     Expression,
     ImageScan,
     Item,

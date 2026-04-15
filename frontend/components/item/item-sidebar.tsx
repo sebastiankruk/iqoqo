@@ -26,14 +26,16 @@ import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
-const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
+const STATUS_LABELS: Record<string, { label: string; class: string }> = {
+  // Collection (Physical)
   available: { label: "On Shelf", class: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  reading: { label: "Reading...", class: "bg-accent/10 text-accent ring-accent/20" },
   lent: { label: "Lent Out", class: "bg-orange-50 text-orange-700 ring-orange-200" },
   lost: { label: "Lost", class: "bg-red-50 text-red-700 ring-red-200" },
   wish_list: { label: "On Wish List", class: "bg-primary/10 text-primary ring-primary/20" },
   ordered: { label: "Ordered", class: "bg-amber-50 text-amber-700 ring-amber-200" },
   damaged: { label: "Damaged", class: "bg-orange-100 text-orange-800 ring-orange-300" },
+  // Progress
+  reading: { label: "Reading...", class: "bg-accent/10 text-accent ring-accent/20" },
   read: { label: "Read", class: "bg-blue-50 text-blue-700 ring-blue-200" },
   unread: { label: "Unread", class: "bg-zinc-50 text-zinc-700 ring-zinc-200" },
   want_to_read: { label: "Want to Read", class: "bg-primary/10 text-primary ring-primary/20" },
@@ -92,8 +94,12 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const aspectClass = isAudio || isGame ? "aspect-square" : "aspect-[2/3]";
   const MediaIcon = isAudio ? Disc : isVideo ? Film : isGame ? Gamepad2 : BookOpen;
 
-  const statusInfo = STATUS_LABELS[item.status] ?? {
+  const progressStatusInfo = STATUS_LABELS[item.status] ?? {
     label: item.status,
+    class: "bg-secondary text-foreground ring-border",
+  };
+  const collectionStatusInfo = STATUS_LABELS[item.collection_status] ?? {
+    label: item.collection_status,
     class: "bg-secondary text-foreground ring-border",
   };
   const router = useRouter();
@@ -109,7 +115,18 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     updateItem.mutate(
       { status: newStatus },
       {
-        onSuccess: () => toast.success(`Item status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        onSuccess: () => toast.success(`Progress status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        onError: e => toast.error((e as Error).message),
+      }
+    );
+  };
+
+  const handleCollectionStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as Item["collection_status"];
+    updateItem.mutate(
+      { collection_status: newStatus },
+      {
+        onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
         onError: e => toast.error((e as Error).message),
       }
     );
@@ -156,99 +173,98 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         </div>
       </div>
 
-      {/* Status badge */}
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusInfo.class}`}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-        {statusInfo.label}
-      </span>
+      {/* Status badges */}
+      <div className="flex flex-wrap justify-center gap-2 px-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold ring-1 transition-all ${collectionStatusInfo.class}`}
+          title="Collection Availability"
+        >
+          <span className="h-1 w-1 rounded-full bg-current opacity-70" />
+          {collectionStatusInfo.label?.toUpperCase() || "UNKNOWN"}
+        </span>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold ring-1 transition-all ${progressStatusInfo.class}`}
+          title="Personal Progress"
+        >
+          <span className="h-1 w-1 rounded-full bg-current opacity-70" />
+          {progressStatusInfo.label?.toUpperCase() || "UNKNOWN"}
+        </span>
+      </div>
 
       {/* ISBN */}
       {item.isbn && <p className="text-center text-xs text-muted-foreground">ISBN: {item.isbn}</p>}
 
-      {/* Action buttons & Status Select */}
-      <div className="flex w-full flex-col gap-2.5">
+      {/* Action buttons & Status Selects */}
+      <div className="flex w-full flex-col gap-3 px-1">
         {canModifyItem ? (
-          <select
-            aria-label="Item status"
-            value={item.status}
-            onChange={handleStatusChange}
-            disabled={updateItem.isPending}
-            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer text-center appearance-none"
-          >
-            <optgroup
-              label="Availability & Condition"
-              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-            >
-              {["available", "lent", "damaged", "lost"].map(key => (
-                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                </option>
-              ))}
-            </optgroup>
-            {isBook && (
-              <optgroup
-                label="Reading Progress"
-                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+          <div className="flex flex-col gap-2.5">
+            {/* Collection Select */}
+            <div className="flex flex-col gap-1">
+              <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                Availability & Condition
+              </span>
+              <select
+                aria-label="Collection status"
+                value={item.collection_status}
+                onChange={handleCollectionStatusChange}
+                disabled={updateItem.isPending}
+                className="w-full rounded-lg bg-secondary/80 px-3 py-2 text-sm font-medium text-foreground outline-none ring-1 ring-border transition-all hover:bg-secondary focus:ring-primary/50 disabled:opacity-60 cursor-pointer appearance-none"
               >
-                {["unread", "reading", "read", "want_to_read"].map(key => (
-                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                {["available", "lent", "damaged", "lost", "wish_list", "ordered"].map(key => (
+                  <option key={key} value={key} className="bg-card py-2">
+                    {STATUS_LABELS[key]?.label || key}
                   </option>
                 ))}
-              </optgroup>
-            )}
-            {isAudio && (
-              <optgroup
-                label="Listening Progress"
-                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+              </select>
+            </div>
+
+            {/* Progress Select */}
+            <div className="flex flex-col gap-1">
+              <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                {isBook ? "Reading" : isAudio ? "Listening" : isVideo ? "Watching" : isGame ? "Gaming" : "Item"} Progress
+              </span>
+              <select
+                aria-label="Item progress"
+                value={item.status}
+                onChange={handleStatusChange}
+                disabled={updateItem.isPending}
+                className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground outline-none shadow-sm transition-all hover:opacity-90 focus:ring-2 focus:ring-primary/20 disabled:opacity-60 cursor-pointer appearance-none text-center"
               >
-                {["want_to_listen", "listening", "listened"].map(key => (
-                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {isVideo && (
-              <optgroup
-                label="Watching Progress"
-                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-              >
-                {["want_to_watch", "watching", "watched"].map(key => (
-                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {isGame && (
-              <optgroup
-                label="Gaming Progress"
-                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-              >
-                {["playing", "played"].map(key => (
-                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup
-              label="Acquisition"
-              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-            >
-              {["wish_list", "ordered"].map(key => (
-                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+                {isBook &&
+                  ["unread", "reading", "read", "want_to_read"].map(key => (
+                    <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
+                {isAudio &&
+                  ["want_to_listen", "listening", "listened"].map(key => (
+                    <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
+                {isVideo &&
+                  ["want_to_watch", "watching", "watched"].map(key => (
+                    <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
+                {isGame &&
+                  ["playing", "played"].map(key => (
+                    <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
         ) : (
-          <div className="w-full rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-center text-secondary-foreground border border-border">
-            {statusInfo.label}
+          <div className="flex flex-col gap-2">
+          <div className="w-full rounded-lg bg-secondary/50 px-4 py-2 text-xs font-semibold text-center text-secondary-foreground border border-border/50">
+            {collectionStatusInfo.label || "Unknown"}
+          </div>
+          <div className="w-full rounded-lg bg-primary/10 px-4 py-2 text-xs font-semibold text-center text-primary border border-primary/20">
+            {progressStatusInfo.label || "Unknown"}
+          </div>
           </div>
         )}
 

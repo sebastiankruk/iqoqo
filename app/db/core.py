@@ -70,26 +70,31 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #:   - generic:       available, lent, lost, wish_list, ordered, damaged
 #:   - text media:    reading, read, unread, want_to_read (alias: wish_list)
 #:   - audio media:   listening, listened, want_to_listen
-ITEM_STATUSES: tuple[str, ...] = (
+COLLECTION_STATUSES: tuple[str, ...] = (
     "available",
     "lent",
     "lost",
+    "damaged",
     "wish_list",
     "ordered",
-    "damaged",
+)
+
+PROGRESS_STATUSES: tuple[str, ...] = (
+    "unread",
     "reading",
     "read",
-    "unread",
     "want_to_read",
+    "want_to_listen",
     "listening",
     "listened",
-    "want_to_listen",
-    "playing",
-    "played",
     "watching",
     "watched",
     "want_to_watch",
+    "playing",
+    "played",
 )
+
+ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
 
 class MediaCategory:
@@ -306,7 +311,8 @@ class Item(db.Model):  # type: ignore[name-defined]
     manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id"), nullable=False)
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
+    status = db.Column(db.String(50), default="unread")  # see PROGRESS_STATUSES for valid values
+    collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
 
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))

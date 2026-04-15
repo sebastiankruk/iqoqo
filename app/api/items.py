@@ -124,6 +124,7 @@ def get_items():
                         "id": item_id,
                         "owner_id": str(owner_id) if owner_id else None,
                         "status": row.get("status"),
+                        "collection_status": row.get("collection_status"),
                         "manifestation_id": manifestation_id,
                         "isbn": row.get("isbn13"),
                         "title": row.get("title"),
@@ -248,6 +249,7 @@ def get_items():
                 "id": item.id,
                 "owner_id": item.owner_id,
                 "status": item.status,
+                "collection_status": item.collection_status,
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
@@ -297,6 +299,7 @@ def get_item_detail(item_id: int):
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
+        "collection_status": item.collection_status,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
@@ -360,6 +363,14 @@ def update_item(item_id: int):
         old_status = item.status
         item.status = data["status"]
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_status, new_status=item.status)
+        db.session.add(log)
+
+    if data.get("collection_status") and data["collection_status"] != item.collection_status:
+        # We also log collection status changes in the same log for now, 
+        # but we could add a flag if needed.
+        old_c_status = item.collection_status
+        item.collection_status = data["collection_status"]
+        log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
         db.session.add(log)
 
     if data.get("meta"):
@@ -444,7 +455,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -463,7 +474,7 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -512,7 +523,7 @@ def add_item_manual():
         db.session.add(manifestation)
         db.session.flush()
 
-        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
         db.session.add(item)
         db.session.commit()
 
