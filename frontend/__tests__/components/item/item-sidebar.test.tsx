@@ -88,7 +88,7 @@ describe("ItemSidebar Component", () => {
     } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
-    const select = screen.getByLabelText("Item progress");
+    const select = screen.getByLabelText("Item status");
     fireEvent.change(select, { target: { value: "reading" } });
 
     expect(mutateMock).toHaveBeenCalledTimes(1);
@@ -114,7 +114,7 @@ describe("ItemSidebar Component", () => {
     render(<ItemSidebar item={anonymizedItem} />);
     expect(screen.getAllByText(/ON SHELF/i)[0]).toBeInTheDocument();
     expect(screen.queryByLabelText("Collection status")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Item progress")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Item status")).not.toBeInTheDocument();
   });
 
   it("hides Edit Metadata button when owner is anonymized and no update:item permission", () => {

@@ -18,19 +18,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
-import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
-const statusDotColor: Record<ItemStatus, string> = {
+const statusDotColor: Record<string, string> = {
+  // Collection
   available: "bg-chart-3",
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
   ordered: "bg-amber-400",
   damaged: "bg-orange-600",
+  // Progress
   reading: "bg-green-500",
   read: "bg-blue-500",
-  unread: "bg-purple-500",
+  unread: "bg-zinc-400",
   want_to_read: "bg-primary",
   listening: "bg-teal-500",
   listened: "bg-cyan-500",
@@ -42,13 +44,15 @@ const statusDotColor: Record<ItemStatus, string> = {
   playing: "bg-pink-500",
 };
 
-const statusDotTitle: Record<ItemStatus, string> = {
+const statusDotTitle: Record<string, string> = {
+  // Collection
   available: "On Shelf",
   wish_list: "On Wish List",
   lent: "Lent Out",
   lost: "Lost",
   ordered: "Ordered",
   damaged: "Damaged",
+  // Progress
   reading: "Reading",
   read: "Read",
   unread: "Unread",
@@ -83,7 +87,11 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
 
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
-  const status = isCatalog ? undefined : (item as Item).status;
+
+  // Decide which status is more "interesting" to show on the card dot/badge
+  const progressStatus = isCatalog ? undefined : (item as Item).status;
+  const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
+  const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
 
   const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).owner_id !== "Unavailable";
 

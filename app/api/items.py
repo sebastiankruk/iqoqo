@@ -210,7 +210,7 @@ def get_items():
     query = query.filter(Item.owner_id == user_id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        query = query.filter(Item.status.in_(statuses_list))
+        query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if sort_by in ("title", "title-desc", "author"):
         query = (
@@ -366,7 +366,7 @@ def update_item(item_id: int):
         db.session.add(log)
 
     if data.get("collection_status") and data["collection_status"] != item.collection_status:
-        # We also log collection status changes in the same log for now, 
+        # We also log collection status changes in the same log for now,
         # but we could add a flag if needed.
         old_c_status = item.collection_status
         item.collection_status = data["collection_status"]
