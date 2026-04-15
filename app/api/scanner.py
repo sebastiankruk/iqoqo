@@ -17,7 +17,7 @@
 #
 import io
 
-from flask import g, jsonify, request
+from flask import current_app, g, jsonify, request
 from PIL import Image
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -62,22 +62,23 @@ def _record_scan_telemetry(
     manifestation_id: int | None = None,
     raw_request_url: str | None = None,
 ) -> None:
-    """Helper to persist a scan-lookup record."""
+    """Helper to persist a scan-lookup record safely."""
     try:
-        telemetry = ScanTelemetry(
-            barcode=barcode,
-            format_hint=format_hint,
-            provider=provider,
-            status=status,
-            manifestation_id=manifestation_id,
-            raw_request_url=raw_request_url,
-        )
-        db.session.add(telemetry)
+        # Create a savepoint to prevent rollback of outer transactions
+        with db.session.begin_nested():
+            telemetry = ScanTelemetry(
+                barcode=barcode,
+                format_hint=format_hint,
+                provider=provider,
+                status=status,
+                manifestation_id=manifestation_id,
+                raw_request_url=raw_request_url,
+            )
+            db.session.add(telemetry)
         db.session.commit()
-    except Exception as e:  # pylint: disable=broad-except
-        db.session.rollback()
-        # Non-critical, just log it
-        print(f"Failed to record scan telemetry: {e}")
+    except Exception:  # pylint: disable=broad-except
+        # The savepoint is automatically rolled back, main transaction is safe
+        current_app.logger.exception("Failed to record scan telemetry")
 
 
 @api_bp.route("/lookup/<barcode>", methods=["GET"])
@@ -99,6 +100,7 @@ def lookup_barcode_preview(barcode: str):
             return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
 
     meta = None
+    provider = None
     is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
 
     # Route based on format hint first, fallback to heuristics
@@ -107,66 +109,88 @@ def lookup_barcode_preview(barcode: str):
         if upc_meta and upc_meta.get("title"):
             title = clean_video_title(upc_meta["title"])
             meta = fetch_video_metadata(title)
+            provider = "tmdb" if meta else "upc"
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
         if not meta:
             meta = fetch_video_metadata(barcode)
+            provider = "tmdb" if meta else None
     elif format_hint in ("game", "boardgame"):
         upc_meta = resolve_physical_media(barcode)
         if upc_meta and upc_meta.get("title"):
             meta = fetch_bgg_metadata(upc_meta["title"])
+            provider = "bgg" if meta else "upc"
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
         if not meta:
             meta = fetch_bgg_metadata(barcode)
+            provider = "bgg" if meta else None
     elif format_hint in ("puzzle", "jigsaw"):
         meta = resolve_physical_media(barcode)
+        provider = "upc" if meta else None
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
-        try:
-            meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
-        except Exception:  # pylint: disable=broad-except
-            pass
+        meta = fetch_discogs_metadata(barcode)
+        provider = "discogs" if meta else None
+        if not meta:
+            meta = fetch_audio_metadata(barcode)
+            provider = "musicbrainz" if meta else None
     elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
+            provider = "isbn" if meta else None
 
         # Fallback to audio if book fails
         if not meta:
-            try:
-                meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
-            except Exception:  # pylint: disable=broad-except
-                pass
+            meta = fetch_discogs_metadata(barcode)
+            provider = "discogs" if meta else None
+            if not meta:
+                meta = fetch_audio_metadata(barcode)
+                provider = "musicbrainz" if meta else None
     else:
         # No format hint: auto-fallback strategy for non-ISBN barcodes
         # Try audio sources first (UPC/EAN codes commonly map to audio)
-        try:
-            meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
-        except Exception:  # pylint: disable=broad-except
-            pass
+        meta = fetch_discogs_metadata(barcode)
+        provider = "discogs" if meta else None
+        if not meta:
+            meta = fetch_audio_metadata(barcode)
+            provider = "musicbrainz" if meta else None
 
         # Fallback to book if audio fails
         if not meta:
             canonical = canonicalize_isbn(barcode)
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
+                provider = "isbn" if meta else None
 
         # Final fallback to video/game if all else fails
         if not meta:
             upc_meta = resolve_physical_media(barcode)
             if upc_meta and upc_meta.get("title"):
                 title = clean_video_title(upc_meta["title"])
-                meta = fetch_video_metadata(title) or fetch_bgg_metadata(upc_meta["title"])
+                meta = fetch_video_metadata(title)
                 if meta:
+                    provider = "tmdb"
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                 else:
-                    meta = upc_meta
+                    meta = fetch_bgg_metadata(upc_meta["title"])
+                    if meta:
+                        provider = "bgg"
+                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                    else:
+                        meta = upc_meta
+                        provider = "upc"
             if not meta:
-                meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
+                meta = fetch_video_metadata(barcode)
+                if meta:
+                    provider = "tmdb"
+                else:
+                    meta = fetch_bgg_metadata(barcode)
+                    provider = "bgg" if meta else None
 
     if not meta:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
@@ -203,7 +227,7 @@ def lookup_barcode_preview(barcode: str):
         meta["format"] = format_map.get(format_hint, format_hint.upper())
 
     # Record successful external lookup
-    _record_scan_telemetry(barcode, format_hint, provider=format_hint or "external", status="success")
+    _record_scan_telemetry(barcode, format_hint, provider=provider or "external", status="success")
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 

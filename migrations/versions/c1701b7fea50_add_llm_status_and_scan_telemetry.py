@@ -49,6 +49,9 @@ def upgrade():
     with op.batch_alter_table('scan_telemetry', schema='inventory') as batch_op:
         batch_op.create_index(batch_op.f('ix_inventory_scan_telemetry_barcode'), ['barcode'], unique=False)
 
+    # Note: Removing server-side default for collection_status. 
+    # This aligns the database with the modern ORM model which manages 
+    # defaults at the application/SQLAlchemy level.
     with op.batch_alter_table('items', schema='inventory') as batch_op:
         batch_op.alter_column('collection_status',
                existing_type=sa.VARCHAR(length=50),

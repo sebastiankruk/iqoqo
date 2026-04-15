@@ -19,9 +19,9 @@ The standard `POST /api/scan` endpoint has been upgraded with an auto-fallback f
 
 ### Discogs
 
-Requires authentication for reliable metadata and cover fetching. iqoqo supports two methods, but **OAuth v2 is preferred**:
+Requires authentication for reliable metadata and cover fetching. iqoqo supports two methods, but **OAuth consumer key/secret is preferred**:
 
-#### Option 1: OAuth v2 Consumer Key (Preferred)
+#### Option 1: OAuth Consumer Key (Preferred)
 
 Provides better stability and adheres to the latest Discogs API standards.
 

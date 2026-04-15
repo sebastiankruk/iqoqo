@@ -28,7 +28,7 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from Discogs.
 
     Supports two authentication methods (priority fallback):
-    1. Preferred: DISCOGS_CONSUMER_KEY and DISCOGS_CONSUMER_SECRET (OAuth v2 consumer keys).
+    1. Preferred: DISCOGS_CONSUMER_KEY and DISCOGS_CONSUMER_SECRET (OAuth 1.0a consumer key/secret).
     2. Legacy: DISCOGS_USER_TOKEN (Personal Access Token).
 
     Args:
@@ -42,7 +42,7 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
     legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
 
     if consumer_key and consumer_secret:
-        # Preferred: OAuth v2 consumer credentials
+        # Preferred: OAuth 1.0a consumer credentials
         auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
     elif legacy_token:
         # Fallback: legacy personal access token (still valid, just deprecated)

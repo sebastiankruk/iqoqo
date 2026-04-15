@@ -76,4 +76,16 @@ def downgrade():
                server_default=sa.text("'success'::character varying"),
                existing_nullable=False)
 
+    # Best-effort reversal of identity column back to traditional sequence.
+    # Note: This is not perfectly reversible as the identity vs serial/default
+    # behavior differs in internal Postgres catalog links.
+    try:
+        op.execute("ALTER TABLE inventory.llm_telemetry ALTER COLUMN id DROP IDENTITY IF EXISTS")
+        # Attempt to link back to the sequence - assumes it still exists or was named standardly
+        op.execute("ALTER TABLE inventory.llm_telemetry ALTER COLUMN id SET DEFAULT nextval('inventory.llm_telemetry_id_seq')")
+    except Exception:  # pylint: disable=broad-except
+        # If downgrade fails (e.g. sequence was dropped/renamed by PG identity machinery), 
+        # we log and continue as the table structure is technically still viable.
+        print("Warning: Failed to fully restore llm_telemetry.id default sequence. Manual intervention may be needed.")
+
     # ### end Alembic commands ###

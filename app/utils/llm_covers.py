@@ -244,7 +244,7 @@ def fetch_llm_cover(
     if not allow_cloud_llm:
         logger.debug(f"Cloud LLM generation skipped: user lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission.")
         record_telemetry(
-            "cloud", user_id, 0.0, status="not_allowed", error_message=f"User lacks {PermissionName.LLM_GENERATE_CLOUD} permission"
+            "cloud", user_id, 0.0, status="not_allowed", error_message=f"User lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission"
         )
         return None
 
