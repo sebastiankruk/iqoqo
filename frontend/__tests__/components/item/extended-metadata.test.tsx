@@ -62,4 +62,14 @@ describe("ExtendedMetadata", () => {
     // Hidden keys should remain hidden even when expanded
     expect(screen.queryByText("Hidden Title")).not.toBeInTheDocument();
   });
+
+  it("renders primitives through expandable section", () => {
+    const meta = {
+      Publisher: "Test Publisher", // Hidden key, so must expand
+    };
+    render(<ExtendedMetadata meta={meta} />);
+    const button = screen.getByText("Additional Details");
+    fireEvent.click(button);
+    expect(screen.getByText("Test Publisher")).toBeInTheDocument();
+  });
 });
