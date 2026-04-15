@@ -19,12 +19,35 @@ The standard `POST /api/scan` endpoint has been upgraded with an auto-fallback f
 
 ### Discogs
 
-- **Requires an Access Token** for reliable searching.
-- Set the `DISCOGS_USER_TOKEN` environment variable in your `.env` file.
-- To get a token:
+Requires authentication for reliable metadata and cover fetching. iqoqo supports two methods, but **OAuth v2 is preferred**:
 
-    1. Log in to [Discogs](https://www.discogs.com/settings/developers).
-    2. Click "Generate new token".
+#### Option 1: OAuth v2 Consumer Key (Preferred)
+
+Provides better stability and adheres to the latest Discogs API standards.
+
+1. Log in to [Discogs Developer Settings](https://www.discogs.com/settings/developers).
+2. Click **"Create an Application"**.
+3. Fill in the details:
+    - **Application Name**: `iqoqo`
+    - **Homepage URL**: Use your instance URL (e.g., `https://iqoqo.cc` or `http://localhost:3000`).
+    - **Callback URL**: You can use your instance URL (this is not currently used for interactive auth but required by Discogs).
+4. Copy the **Consumer Key** and **Consumer Secret**.
+5. Add them to your `.env`:
+
+    ```env
+    DISCOGS_CONSUMER_KEY=your_key_here
+    DISCOGS_CONSUMER_SECRET=your_secret_here
+    ```
+
+#### Option 2: Personal Access Token (Legacy)
+
+1. Log in to [Discogs Developer Settings](https://www.discogs.com/settings/developers).
+2. Click **"Generate new token"**.
+3. Add it to your `.env`:
+
+    ```env
+    DISCOGS_USER_TOKEN=your_token_here
+    ```
 
 ## Note on Throttling
 Both services are free but rely on rate limits. If you self-host a high-traffic instance, consider providing your own MusicBrainz API key (if supported) or ensuring you stay within Discogs' rate limits.

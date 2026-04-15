@@ -189,21 +189,18 @@ def generate_cover_local(
     if not sd_url:
         return None
 
-    # Truncate title to first 4 words for local SD prompt.
-    # We strip punctuation and hyphenation artifacts before trimming.
-    clean_title = re.sub(r"[^\w\s]", "", title)
-    words = clean_title.split()
-    trimmed_title = " ".join(words[:4]) if len(words) > 4 else title
-
+    # Trimming for prompt is now removed to give full context to LLM.
+    # Trimming for overlay is applied further below.
     context = build_context(description, genre)
     payload = {
-        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{trimmed_title}' by {author}, clean background, no text.{context}",
+        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text.{context}",
         "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
         "height": 768,
     }
 
+    logger.debug("Generating local SD cover with prompt: %s", payload["prompt"])
     start_time = time.time()
     try:
         response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, timeout=300)
@@ -212,9 +209,16 @@ def generate_cover_local(
             image_data = base64.b64decode(r["images"][0])
             path = save_image(image_data, identifier, "localsd")
 
-            # Overlay typography
+            # Overlay typography - potentially trimmed for visual clarity
             full_path = os.path.join(COVERS_DIR, os.path.basename(path))
-            add_text_overlay(full_path, title, author)
+            
+            overlay_title = title
+            if Config.LLM_TITLE_MAX_WORDS > 0:
+                words = title.split()
+                if len(words) > Config.LLM_TITLE_MAX_WORDS:
+                    overlay_title = " ".join(words[:Config.LLM_TITLE_MAX_WORDS]) + "..."
+            
+            add_text_overlay(full_path, overlay_title, author)
 
             duration = time.time() - start_time
             record_telemetry("local", user_id, duration, "cover_generation")

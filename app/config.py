@@ -64,6 +64,8 @@ class Config:
     # users who also hold the llm_generate:* RBAC permission.
     # When False, LLM tiers are never invoked regardless of user permissions.
     ALLOW_LLM: bool = os.environ.get("ALLOW_LLM", "false").lower() in {"true", "1", "yes"}
+    # Max words to display on the generated cover overlay (0 = no limit)
+    LLM_TITLE_MAX_WORDS = int(os.environ.get("LLM_TITLE_MAX_WORDS", "12"))
 
     # Scheduled Backups Configuration
     BACKUP_CRON_HOUR = os.environ.get("BACKUP_CRON_HOUR", "3")
