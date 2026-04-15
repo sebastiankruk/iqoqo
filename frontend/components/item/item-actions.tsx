@@ -17,12 +17,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, Pencil, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { useProfile } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
+import { PermissionName } from "@/lib/permissions";
 import type { Item } from "@/types/frbr";
 import {
   AlertDialog,
@@ -75,7 +76,7 @@ export function ItemActions({ item }: { item: Item }) {
 
   if (!profile) return null;
 
-  const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
+  const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
 
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
@@ -134,7 +135,7 @@ export function ItemActions({ item }: { item: Item }) {
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission("refetch:metadata") && (
+      {hasPermission(PermissionName.REFETCH_METADATA) && (
         <button
           onClick={handleRefetch}
           disabled={isRefetching}
@@ -145,7 +146,7 @@ export function ItemActions({ item }: { item: Item }) {
         </button>
       )}
 
-      {hasPermission("regenerate:cover") && (
+      {hasPermission(PermissionName.REGENERATE_COVER) && (
         <button
           onClick={handleRegenerateClick}
           disabled={isPending || isRequesting}
@@ -156,7 +157,27 @@ export function ItemActions({ item }: { item: Item }) {
         </button>
       )}
 
-      {hasPermission("delete:item") && (
+      {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit FRBR
+        </button>
+      )}
+
+      {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Edit Cover Art
+        </button>
+      )}
+
+      {hasPermission(PermissionName.DELETE_ITEM) && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={deleteItem.isPending}

@@ -23,7 +23,7 @@ from PIL import Image
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
-from app.core.permissions import ItemPermissions
+from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Item, Manifestation, db
 from app.utils.bgg import fetch_bgg_metadata
@@ -283,7 +283,7 @@ def scan_barcode():
 
 @api_bp.route("/vision/extract", methods=["POST"])
 @require_auth
-@require_permission(ItemPermissions.LLM_GENERATE_METADATA)
+@require_permission(PermissionName.LLM_GENERATE_METADATA)
 def extract_from_cover():
     # pylint: disable=too-many-return-statements
     """Submit a cover image for asynchronous metadata extraction.

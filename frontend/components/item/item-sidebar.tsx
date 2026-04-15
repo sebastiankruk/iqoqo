@@ -23,6 +23,7 @@ import { useUpdateItem, useProfile } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
+import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = {
@@ -66,9 +67,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
   const permissions = profile?.permissions ?? [];
-  const hasUploadPermission = permissions.includes("upload:cover");
-  const hasEditPermission = permissions.includes("edit:manifestation");
-  const hasUpdateItemPermission = permissions.includes("update:item");
+  const hasUploadPermission = permissions.includes(PermissionName.UPLOAD_COVER);
+  const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
+  const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
   const isOwner = item.owner_id !== "Unavailable";
   const canModifyItem = isOwner || hasUpdateItemPermission;
@@ -240,14 +241,14 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
             label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
-            icon={<ImagePlus className="h-4 w-4 mr-2" />}
+            icon={<ImagePlus className="h-3.5 w-3.5" />}
             confirmTitle={item.cover_url ? "Replace Existing Cover?" : undefined}
             confirmMessage={
               item.cover_url
                 ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
                 : undefined
             }
-            className="w-full [&>button]:w-full [&>button]:h-10 [&>button]:rounded-lg [&>button]:bg-accent/10 [&>button]:text-accent [&>button]:hover:bg-accent/20 [&>button]:border-none [&>button]:font-semibold [&>button]:text-xs"
+            className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
           />
         )}
 

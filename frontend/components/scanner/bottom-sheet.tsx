@@ -125,7 +125,7 @@ export function BottomSheet({
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
         try {
-          // Just apply the constraint. Some Android devices hide the torch capability 
+          // Just apply the constraint. Some Android devices hide the torch capability
           // or report it as undefined, but still accept the constraint if applied.
           await track.applyConstraints({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,9 +143,9 @@ export function BottomSheet({
   const lookupBarcode = useCallback(
     async (rawBarcode: string, isManualText: boolean = false) => {
       if (!rawBarcode) return;
-      
+
       let query = rawBarcode.trim();
-      
+
       if (!isManualText) {
         query = query.replace(/[^0-9Xx]/g, "").toUpperCase();
         // Allow 8, 10, 12, or 13 digit variations (EAN-8, ISBN-10, UPC-A, EAN-13)

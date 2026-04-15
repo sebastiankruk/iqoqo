@@ -16,7 +16,9 @@
 .PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
-# shell that hasn't sourced nvm (e.g. IDE terminals, CI).
+# shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
+# binary's directory and prepend it to PATH so that '#!/usr/bin/env node'
+# shebangs in npm/npx scripts resolve correctly.
 NODE     := $(shell command -v node 2>/dev/null || ls $(HOME)/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)
 NODE_DIR := $(dir $(NODE))
 

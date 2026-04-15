@@ -27,7 +27,7 @@ test.describe("Video Media Ingestion Workflow", () => {
           data: {
             id: "test-user-id",
             email: "test@iqoqo.local",
-            permissions: ["upload:cover", "edit:item", "edit:manifestation"],
+            permissions: ["upload:cover", "update:item", "write:metadata"],
           },
         }),
       });

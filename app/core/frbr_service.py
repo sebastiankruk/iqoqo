@@ -130,7 +130,9 @@ def create_item(
     return item
 
 
-def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None = None, publisher: str | None = None) -> Manifestation:
+def get_or_create_book_manifestation(
+    isbn: str, title: str, authors: list | None = None, publisher: str | None = None
+) -> Manifestation | None:
     """
     Get or create a complete FRBR hierarchy for a book.
 
@@ -147,7 +149,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
         The Manifestation object
     """
     # Check if manifestation already exists
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation: Manifestation | None = Manifestation.query.filter_by(isbn13=isbn).first()  # type: ignore[assignment]
 
     if manifestation:
         # Update metadata if provided
@@ -159,7 +161,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
             if authors:
                 manifestation.meta["Authors"] = authors
             db.session.commit()
-        return manifestation  # type: ignore[no-any-return]
+        return manifestation
 
     # Create the full FRBR hierarchy
     work = create_work(title=title, meta={"original_language": "en"})
@@ -174,7 +176,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
     return manifestation
 
 
-def get_or_create_contributor(name: str, contributor_type: str = "person") -> Contributor:
+def get_or_create_contributor(name: str, contributor_type: str = "person") -> Contributor | None:
     """
     Get an existing contributor by name, or create a new one.
 
@@ -187,9 +189,9 @@ def get_or_create_contributor(name: str, contributor_type: str = "person") -> Co
     """
     from sqlalchemy.exc import IntegrityError
 
-    contributor = Contributor.query.filter_by(name=name, type=contributor_type).first()
+    contributor: Contributor | None = Contributor.query.filter_by(name=name, type=contributor_type).first()  # type: ignore[assignment]
     if contributor:
-        return contributor  # type: ignore[no-any-return]
+        return contributor
 
     try:
         contributor = Contributor(name=name, type=contributor_type)
@@ -279,3 +281,167 @@ def create_work_part(container_work_id: int, part_work_id: int, sequence: int = 
     db.session.add(work_part)
     db.session.commit()
     return work_part
+
+
+# --- UPDATE METHODS ---
+
+
+def update_work(work_id: int, title: str | None = None, meta: dict[str, Any] | None = None) -> Work:
+    """
+    Update an existing Work.
+
+    Args:
+        work_id: The ID of the work to update
+        title: New title for the work
+        meta: Metadata to merge with existing
+
+    Returns:
+        The updated Work object
+    """
+    work = db.session.get(Work, work_id)
+    if work is None:
+        raise ValueError(f"Work with id {work_id} not found")
+
+    if title is not None:
+        work.title = title
+    if meta is not None:
+        current_meta = dict(work.meta or {})
+        current_meta.update(meta)
+        work.meta = current_meta
+    db.session.commit()
+    return work
+
+
+def update_expression(
+    expression_id: int,
+    work_id: int | None = None,
+    content_type: str | None = None,
+    language: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> Expression:
+    """
+    Update an existing Expression.
+
+    Args:
+        expression_id: The ID of the expression to update
+        work_id: New parent work ID
+        content_type: New content type
+        language: New language code
+        meta: Metadata to merge with existing
+
+    Returns:
+        The updated Expression object
+    """
+    expr = db.session.get(Expression, expression_id)
+    if expr is None:
+        raise ValueError(f"Expression with id {expression_id} not found")
+
+    if work_id is not None:
+        work = db.session.get(Work, work_id)
+        if work is None:
+            raise ValueError(f"Work with id {work_id} not found")
+        expr.work_id = work_id
+    if content_type is not None:
+        expr.content_type = content_type
+    if language is not None:
+        expr.language = language
+    if meta is not None:
+        current_meta = dict(expr.meta or {})
+        current_meta.update(meta)
+        expr.meta = current_meta
+    db.session.commit()
+    return expr
+
+
+def update_manifestation(
+    manifestation_id: int,
+    expression_id: int | None = None,
+    isbn13: str | None = None,
+    upc: str | None = None,
+    ean: str | None = None,
+    publisher: str | None = None,
+    publication_date: Any | None = None,
+    meta: dict[str, Any] | None = None,
+) -> Manifestation:
+    """
+    Update an existing Manifestation.
+
+    Args:
+        manifestation_id: The ID of the manifestation to update
+        expression_id: New parent expression ID
+        isbn13: New ISBN-13
+        upc: New UPC
+        ean: New EAN
+        publisher: New publisher name
+        publication_date: New publication date
+        meta: Metadata to merge with existing
+
+    Returns:
+        The updated Manifestation object
+    """
+    manif = db.session.get(Manifestation, manifestation_id)
+    if manif is None:
+        raise ValueError(f"Manifestation with id {manifestation_id} not found")
+
+    if expression_id is not None:
+        expr = db.session.get(Expression, expression_id)
+        if expr is None:
+            raise ValueError(f"Expression with id {expression_id} not found")
+        manif.expression_id = expression_id
+    if isbn13 is not None:
+        manif.isbn13 = isbn13
+    if upc is not None:
+        manif.upc = upc
+    if ean is not None:
+        manif.ean = ean
+    if publisher is not None:
+        manif.publisher = publisher
+    if publication_date is not None:
+        manif.publication_date = publication_date
+    if meta is not None:
+        current_meta = dict(manif.meta or {})
+        current_meta.update(meta)
+        manif.meta = current_meta
+    db.session.commit()
+    return manif
+
+
+def update_item(
+    item_id: int,
+    manifestation_id: int | None = None,
+    status: str | None = None,
+    condition: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> Item:
+    """
+    Update an existing Item.
+
+    Args:
+        item_id: The ID of the item to update
+        manifestation_id: New parent manifestation ID
+        status: New status
+        condition: New condition
+        meta: Metadata to merge with existing
+
+    Returns:
+        The updated Item object
+    """
+    item = db.session.get(Item, item_id)
+    if item is None:
+        raise ValueError(f"Item with id {item_id} not found")
+
+    if manifestation_id is not None:
+        manif = db.session.get(Manifestation, manifestation_id)
+        if manif is None:
+            raise ValueError(f"Manifestation with id {manifestation_id} not found")
+        item.manifestation_id = manifestation_id
+    if status is not None:
+        item.status = status
+    if condition is not None:
+        item.condition = condition
+    if meta is not None:
+        current_meta = dict(item.meta or {})
+        current_meta.update(meta)
+        item.meta = current_meta
+    db.session.commit()
+    return item

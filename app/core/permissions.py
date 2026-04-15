@@ -14,27 +14,33 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-# Auto-generated permissions (fallback copy)
-
-from enum import Enum
+from enum import StrEnum
 
 
-class ItemPermissions(Enum):
-    REFETCH_METADATA = "refetch:metadata"
-    REGENERATE_COVER = "regenerate:cover"
-    DELETE_ITEM = "delete:item"
-    DELETE_MANIFESTATION = "delete:manifestation"
-    UPDATE_ITEM = "update:item"
-    READ_OWNERS = "read:owners"
-    LLM_GENERATE_COVER = "llm_generate:cover"
-    LLM_GENERATE_METADATA = "llm_generate:metadata"
-    LLM_GENERATE_CLOUD = "llm_generate:cloud"
-    UPLOAD_COVER = "upload:cover"
+class PermissionName(StrEnum):
+    """
+    Enumeration of all system permissions.
+    Must be kept in sync with shared/permissions.yaml.
+    """
+
+    CONFIG_AFFILIATE = "config:affiliate"
     CONFIG_EXTERNAL_APIS = "config:external_apis"
     CONFIG_FEDERATION = "config:federation"
-    CONFIG_AFFILIATE = "config:affiliate"
     CONFIG_INTERNAL = "config:internal"
-    READ_USERS = "read:users"
-    WRITE_USERS = "write:users"
+    DELETE_ITEM = "delete:item"
+    DELETE_MANIFESTATION = "delete:manifestation"
+    EDIT_COVER = "edit:cover"
+    LLM_GENERATE_CLOUD = "llm_generate:cloud"
+    LLM_GENERATE_COVER = "llm_generate:cover"
+    LLM_GENERATE_METADATA = "llm_generate:metadata"
+    READ_METADATA = "read:metadata"
+    READ_OWNERS = "read:owners"
     READ_ROLES = "read:roles"
+    READ_USERS = "read:users"
+    REFETCH_METADATA = "refetch:metadata"
+    REGENERATE_COVER = "regenerate:cover"
+    UPDATE_ITEM = "update:item"
+    UPLOAD_COVER = "upload:cover"
+    WRITE_METADATA = "write:metadata"
     WRITE_ROLES = "write:roles"
+    WRITE_USERS = "write:users"

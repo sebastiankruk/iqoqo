@@ -148,7 +148,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
                 {isAudio ? "Tracks" : "Pages"}
               </span>
               <span className="font-semibold">
-                {String(meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"])}
+                {(() => {
+                  const val = meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"];
+                  if (val === null || val === undefined) return "";
+                  if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
+                  return String(val).slice(0, 50);
+                })()}
               </span>
             </div>
           )}

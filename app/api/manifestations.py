@@ -29,6 +29,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
+from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image
@@ -342,7 +343,7 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
 @require_auth
-@require_permission("refetch:metadata")
+@require_permission(PermissionName.REFETCH_METADATA)
 def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     if not manif.isbn13:
@@ -371,7 +372,7 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
 @require_auth
-@require_permission("upload:cover")
+@require_permission(PermissionName.UPLOAD_COVER)
 def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -426,7 +427,7 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
 @require_auth
-@require_permission("edit:manifestation")
+@require_permission(PermissionName.WRITE_METADATA)
 def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     # pylint: disable=too-many-return-statements
     """Upload an additional image (inlay, disc, back) for a manifestation."""
@@ -488,7 +489,7 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
 @require_auth
-@require_permission("regenerate:cover")
+@require_permission(PermissionName.REGENERATE_COVER)
 def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
@@ -523,7 +524,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["DELETE"])
 @require_auth
-@require_permission("delete:manifestation")
+@require_permission(PermissionName.DELETE_MANIFESTATION)
 def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:

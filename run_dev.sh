@@ -137,8 +137,8 @@ terminate_from_pidfile() {
     rm -f "${pidfile}"
 }
 
-# 1c. Kill stale processes and remove lock files to allow clean restart
-echo "Cleaning up stale processes and locks..."
+# 1c. Kill stale processes and check for lock files to allow clean restart
+echo "Cleaning up stale processes..."
 
 # Terminate Flask API process started by this script (if PID file exists)
 terminate_from_pidfile "${PID_DIR}/web_server.pid" "Flask API server"
@@ -147,11 +147,42 @@ terminate_from_pidfile "${PID_DIR}/web_server.pid" "Flask API server"
 NEXT_PORT=${NEXT_PORT:-3000}
 terminate_from_pidfile "${PID_DIR}/next_dev.pid" "Next.js dev server"
 
-# Remove stale Next.js dev lock file ("Unable to acquire lock" error)
-if [ -f "frontend/.next/lock" ]; then
-    echo "  Removing stale Next.js lock file..."
-    rm -f "frontend/.next/lock"
-fi
+# Check for stale Next.js lock files
+# Older Next.js or non-turbo: frontend/.next/lock
+# Turbopack: frontend/.next/dev/lock
+for LOCK in "frontend/.next/lock" "frontend/.next/dev/lock"; do
+    if [ -f "$LOCK" ]; then
+        echo ""
+        echo "  ════════════════════════════════════════════════"
+        echo "  ⚠️  BIG FAT WARNING: Stale lock file detected!"
+        echo "     File: $LOCK"
+        echo "     Next.js might fail to start or behave incorrectly."
+        echo ""
+        if [ -t 0 ]; then
+            read -p "     Do you want to fix this (kill zombie processes and clear cache)? [y/N] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                ZOMBIE_PIDS=$(lsof -t -i :${NEXT_PORT:-3000} 2>/dev/null || true)
+                if [ -n "$ZOMBIE_PIDS" ]; then
+                    echo "     ⚠️  Killing zombie process(es) on port ${NEXT_PORT:-3000} (PIDs: $ZOMBIE_PIDS)..."
+                    kill -9 $ZOMBIE_PIDS 2>/dev/null || true
+                fi
+                echo "     🧹 Clearing corrupted Next.js cache and removing lock file..."
+                rm -rf "frontend/.next"
+                echo "     ✅ Cleanup complete."
+            else
+                echo "     ❌ Exiting. Please remove the lock file manually."
+                exit 1
+            fi
+        else
+             echo "     ❌ Error: Lock file exists and script is non-interactive."
+             echo "     Please remove $LOCK manually."
+             exit 1
+        fi
+        echo "  ════════════════════════════════════════════════"
+        echo ""
+    fi
+done
 
 sleep 1
 

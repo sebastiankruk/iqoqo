@@ -34,7 +34,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
             email: "test@example.com",
             display_name: "Test User",
             roles: ["user"],
-            permissions: ["upload:cover", "edit:manifestation", "update:item"],
+            permissions: ["upload:cover", "write:metadata", "update:item"],
           },
         },
       })
@@ -220,7 +220,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       // 2. Open mobile scanner
       // Click the big round camera button
       // Using force: true because sometimes toasts or other overlays might intercept the click check
-      await page.locator("button:has(svg.lucide-camera)").click({ force: true });
+      await page.locator("button.group.relative.flex.items-center").click({ force: true });
 
       // 3. Verify scanner starts
       // 3. Verify scanner starts (wait longer for the camera to 'turn on')

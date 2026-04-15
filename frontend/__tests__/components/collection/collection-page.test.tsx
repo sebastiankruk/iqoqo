@@ -373,7 +373,9 @@ describe("CollectionPage – Sorting Behavior", () => {
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseItems.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useItems>);
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useManifestations>);
+    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useManifestations
+    >);
   });
 
   it("defaults to recently updated sorting when entering the collection", () => {

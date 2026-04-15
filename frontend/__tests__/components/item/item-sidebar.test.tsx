@@ -23,7 +23,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
   useProfile: vi.fn(() => ({
     data: {
-      permissions: ["update:item", "upload:cover", "edit:manifestation"],
+      permissions: ["update:item", "upload:cover", "write:metadata"],
     },
   })),
 }));

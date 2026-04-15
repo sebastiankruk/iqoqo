@@ -1,0 +1,43 @@
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
+
+/**
+ * Enumeration of all system permissions.
+ * Must be kept in sync with shared/permissions.yaml.
+ */
+export enum PermissionName {
+  CONFIG_AFFILIATE = "config:affiliate",
+  CONFIG_EXTERNAL_APIS = "config:external_apis",
+  CONFIG_FEDERATION = "config:federation",
+  CONFIG_INTERNAL = "config:internal",
+  DELETE_ITEM = "delete:item",
+  DELETE_MANIFESTATION = "delete:manifestation",
+  EDIT_COVER = "edit:cover",
+  LLM_GENERATE_CLOUD = "llm_generate:cloud",
+  LLM_GENERATE_COVER = "llm_generate:cover",
+  LLM_GENERATE_METADATA = "llm_generate:metadata",
+  READ_METADATA = "read:metadata",
+  READ_OWNERS = "read:owners",
+  READ_ROLES = "read:roles",
+  READ_USERS = "read:users",
+  REFETCH_METADATA = "refetch:metadata",
+  REGENERATE_COVER = "regenerate:cover",
+  UPDATE_ITEM = "update:item",
+  UPLOAD_COVER = "upload:cover",
+  WRITE_METADATA = "write:metadata",
+  WRITE_ROLES = "write:roles",
+  WRITE_USERS = "write:users",
+}

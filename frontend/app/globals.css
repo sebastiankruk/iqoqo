@@ -14,6 +14,7 @@
 * You should have received a copy of the GNU Affero General Public License
 * along with this program.  If not, see <https://www.gnu.org/licenses/>
 */
+@import "react-image-crop/dist/ReactCrop.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -253,5 +254,15 @@
   .scrollbar-hide {
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
+  }
+
+  .btn-action-dashed {
+    @apply flex items-center gap-2 text-xs font-medium transition-colors border border-dashed border-border rounded-sm pl-[5px] pr-[5px] py-0.5;
+    @apply text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-50;
+  }
+
+  .btn-action-dashed-destructive {
+    @apply flex items-center gap-2 text-xs font-medium transition-colors border border-dashed border-destructive/30 rounded-sm pl-[5px] pr-[5px] py-0.5;
+    @apply text-destructive/70 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50;
   }
 }

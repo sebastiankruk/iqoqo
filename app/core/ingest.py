@@ -98,7 +98,8 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            add_work_contribution(work.id, contributor.id, "author")
+            if contributor:
+                add_work_contribution(work.id, contributor.id, "author")
 
         expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.TEXT)
         db.session.add(expression)
@@ -153,7 +154,8 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            add_expression_contribution(expression.id, contributor.id, "performer")
+            if contributor:
+                add_expression_contribution(expression.id, contributor.id, "performer")
 
         # Merge raw meta with explicit standard keys for the UI
         man_meta = meta.copy()
@@ -217,8 +219,9 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            # Directors are Work-level (CreationEvent) per FRBRoo ontology
-            add_work_contribution(work.id, contributor.id, "director")
+            if contributor:
+                # Directors are Work-level (CreationEvent) per FRBRoo ontology
+                add_work_contribution(work.id, contributor.id, "director")
 
         stored_barcode = query if is_barcode else None
 
@@ -285,7 +288,8 @@ class IngestService:
 
         if author_name:
             contributor = get_or_create_contributor(author_name, "person")
-            add_work_contribution(work.id, contributor.id, "designer")
+            if contributor:
+                add_work_contribution(work.id, contributor.id, "designer")
 
         stored_barcode = query if is_barcode else None
 

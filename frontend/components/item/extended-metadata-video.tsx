@@ -63,7 +63,7 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
           </div>
         )}
       </div>
-      
+
       {meta.Source === "TMDB" && (
         <div className="mt-6 pt-4 border-t border-border/50">
           <TmdbAttribution />
