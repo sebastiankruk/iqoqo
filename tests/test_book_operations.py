@@ -59,7 +59,7 @@ def sample_work_complete(app):
         db.session.flush()
 
         # Create Item
-        item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="unread", collection_status="available", meta={})
         db.session.add(item)
         db.session.commit()
 
@@ -345,7 +345,8 @@ class TestAddingBooks:
 
         with client.application.app_context():
             item = db.session.get(Item, response.json["item_id"])
-            assert item.status == "available"
+            assert item.status == "unread"
+            assert item.collection_status == "available"
 
     def test_add_manual_item(self, client, normal_user_headers):
         """Test adding an item manually."""

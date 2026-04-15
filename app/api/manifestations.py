@@ -30,7 +30,7 @@ import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image
 
@@ -425,6 +425,32 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     return jsonify({"message": "Cover upload processing started"}), 202
 
 
+@api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["GET"])
+@optional_auth
+def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
+    """Get all additional scans for a manifestation."""
+    scans = ImageScan.query.filter_by(manifestation_id=manifestation_id).order_by(ImageScan.created_at.desc()).all()
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": [
+                    {
+                        "id": s.id,
+                        "url": s.file_path,
+                        "label": s.scan_type,
+                        "source": s.source,
+                        "added_at": s.created_at.isoformat(),
+                    }
+                    for s in scans
+                ],
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
@@ -469,22 +495,33 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
-    # Update JSONB meta field
+    # Save to ImageScan table
+    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source="user_upload")
+    db.session.add(scan)
 
+    # Keep compatibility with old JSONB field for now
     meta = dict(manifestation.meta or {})
     additional_images = meta.get("additional_images", [])
     additional_images.append({"url": image_url, "label": image_label, "added_at": datetime.now(UTC).isoformat()})
     meta["additional_images"] = additional_images
     manifestation.meta = meta
-
-    # SQLAlchemy requires this to detect JSON mutations if we didn't re-assign,
-    # but since we did manifestation.meta = meta above, it might be redundant.
-    # Still, good practice for JSONB.
     flag_modified(manifestation, "meta")
 
     db.session.commit()
 
-    return jsonify({"success": True, "data": meta["additional_images"]}), 201
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "url": image_url,
+                    "label": image_label,
+                    "added_at": scan.created_at.isoformat(),
+                },
+            }
+        ),
+        201,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])

@@ -111,7 +111,8 @@ export interface Item {
   owner_id: string;
   owner_name?: string | null;
   owner_count?: number;
-  status: ItemStatus;
+  status: ProgressStatus;
+  collection_status: CollectionStatus;
   meta: Record<string, unknown>;
   added_at?: string;
   updated_at?: string;
@@ -125,21 +126,26 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-/** Item status type */
-export type ItemStatus =
-  | "available"
-  | "lent"
-  | "lost"
-  | "wish_list"
-  | "ordered"
-  | "damaged"
+/** Physical/Collection status type */
+export type CollectionStatus = "available" | "lent" | "lost" | "wish_list" | "ordered" | "damaged";
+
+/** Media-specific progress status type */
+export type ProgressStatus =
+  | "unread"
   | "reading"
   | "read"
-  | "unread"
   | "want_to_read"
   | "listening"
   | "listened"
-  | "want_to_listen";
+  | "want_to_listen"
+  | "watching"
+  | "watched"
+  | "want_to_watch"
+  | "playing"
+  | "played";
+
+/** Backward compatible alias for ProgressStatus */
+export type ItemStatus = ProgressStatus;
 
 /** Standard media formats used across the app */
 export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;

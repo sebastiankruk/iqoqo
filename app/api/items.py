@@ -24,7 +24,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -68,7 +68,7 @@ def get_items():
         if statuses_filter:
             statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
             params["statuses"] = statuses_list
-            statuses_sql += " AND i.status IN :statuses"
+            statuses_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         try:
             # Safely grab exact total of matches natively
@@ -84,7 +84,7 @@ def get_items():
 
             # Pull fully populated rows ordered gracefully by the computed FTS rank
             rows_sql = f"""
-            SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
+            SELECT i.id as item_id, i.owner_id, i.status, i.collection_status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                    w.meta as work_meta, i.added_at, i.updated_at,
                    ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
@@ -124,6 +124,7 @@ def get_items():
                         "id": item_id,
                         "owner_id": str(owner_id) if owner_id else None,
                         "status": row.get("status"),
+                        "collection_status": row.get("collection_status"),
                         "manifestation_id": manifestation_id,
                         "isbn": row.get("isbn13"),
                         "title": row.get("title"),
@@ -167,7 +168,7 @@ def get_items():
 
             if statuses_filter:
                 statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-                base_query = base_query.filter(Item.status.in_(statuses_list))
+                base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
             total = base_query.count()
             results = base_query.offset(offset).limit(limit).all()
@@ -209,7 +210,7 @@ def get_items():
     query = query.filter(Item.owner_id == user_id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        query = query.filter(Item.status.in_(statuses_list))
+        query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if sort_by in ("title", "title-desc", "author"):
         query = (
@@ -248,6 +249,7 @@ def get_items():
                 "id": item.id,
                 "owner_id": item.owner_id,
                 "status": item.status,
+                "collection_status": item.collection_status,
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
@@ -297,6 +299,7 @@ def get_item_detail(item_id: int):
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
+        "collection_status": item.collection_status,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
@@ -356,8 +359,20 @@ def update_item(item_id: int):
     if not isinstance(data, dict):
         return invalid_json_payload_response()
 
-    if data.get("status"):
+    if data.get("status") and data["status"] != item.status:
+        old_status = item.status
         item.status = data["status"]
+        log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_status, new_status=item.status)
+        db.session.add(log)
+
+    if data.get("collection_status") and data["collection_status"] != item.collection_status:
+        # We also log collection status changes in the same log for now,
+        # but we could add a flag if needed.
+        old_c_status = item.collection_status
+        item.collection_status = data["collection_status"]
+        log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
+        db.session.add(log)
+
     if data.get("meta"):
         item.meta = data["meta"]
 
@@ -440,7 +455,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -459,7 +474,7 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -508,7 +523,7 @@ def add_item_manual():
         db.session.add(manifestation)
         db.session.flush()
 
-        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
         db.session.add(item)
         db.session.commit()
 
@@ -517,3 +532,40 @@ def add_item_manual():
         db.session.rollback()
         current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
+
+
+@api_bp.route("/items/<int:item_id>/logs", methods=["GET"])
+@require_auth
+def get_item_logs(item_id: int):
+    """Get the status timeline for an item."""
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    is_owner = str(item.owner_id) == str(user_id)
+    user = db.session.get(User, user_id)
+    is_admin = user and any(role.name == "admin" for role in getattr(user, "roles", []))
+    has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
+
+    if not (is_owner or is_admin or has_update_permission):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+
+    logs = db.session.query(ItemStatusLog).filter(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc()).all()
+    return jsonify(
+        {
+            "success": True,
+            "data": [
+                {
+                    "old_status": entry.old_status,
+                    "new_status": entry.new_status,
+                    "changed_at": entry.changed_at.isoformat(),
+                }
+                for entry in logs
+            ],
+            "error": None,
+        }
+    )

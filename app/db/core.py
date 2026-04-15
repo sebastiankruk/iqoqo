@@ -70,21 +70,31 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #:   - generic:       available, lent, lost, wish_list, ordered, damaged
 #:   - text media:    reading, read, unread, want_to_read (alias: wish_list)
 #:   - audio media:   listening, listened, want_to_listen
-ITEM_STATUSES: tuple[str, ...] = (
+COLLECTION_STATUSES: tuple[str, ...] = (
     "available",
     "lent",
     "lost",
+    "damaged",
     "wish_list",
     "ordered",
-    "damaged",
+)
+
+PROGRESS_STATUSES: tuple[str, ...] = (
+    "unread",
     "reading",
     "read",
-    "unread",
     "want_to_read",
+    "want_to_listen",
     "listening",
     "listened",
-    "want_to_listen",
+    "watching",
+    "watched",
+    "want_to_watch",
+    "playing",
+    "played",
 )
+
+ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
 
 class MediaCategory:
@@ -141,8 +151,14 @@ class Work(db.Model):  # type: ignore[name-defined]
             ),
             nullable=True,
         )
+        search_vector = db.Column(
+            TSVECTOR(),
+            db.FetchedValue(),
+            nullable=True,
+        )
         __table_args__: tuple = (
             db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),
+            db.Index("ix_works_search_vector", search_vector, postgresql_using="gin"),
             {"schema": _CATALOG},
         )
     else:
@@ -290,9 +306,44 @@ class Item(db.Model):  # type: ignore[name-defined]
     manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id"), nullable=False)
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    status = db.Column(db.String(50), default="available")  # see ITEM_STATUSES for valid values
+    status = db.Column(db.String(50), default="unread")  # see PROGRESS_STATUSES for valid values
+    collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
 
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
+
+
+class ItemStatusLog(db.Model):  # type: ignore[name-defined]
+    """Timeline of status changes for a specific item."""
+
+    __tablename__ = "item_status_logs"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False)
+    old_status = db.Column(db.String(50))
+    new_status = db.Column(db.String(50), nullable=False)
+    changed_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item = db.relationship("Item", backref=db.backref("status_logs", cascade="all, delete", lazy="dynamic"))
+    user = db.relationship("User", backref="status_logs")
+
+
+class ImageScan(db.Model):  # type: ignore[name-defined]
+    """Multiple gallery images per manifestation."""
+
+    __tablename__ = "image_scans"
+    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    scan_type = db.Column(db.String(50), default="front")  # front, back, inlay, disc, other
+    source = db.Column(db.String(100))  # e.g., user_upload, tmdb, gemini_llm
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    manifestation = db.relationship("Manifestation", backref=db.backref("image_scans", cascade="all, delete", lazy="selectin"))

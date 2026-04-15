@@ -18,7 +18,7 @@
 import json
 from io import BytesIO
 
-from flask import g, jsonify, request, send_file, send_from_directory
+from flask import g, jsonify, make_response, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -29,10 +29,42 @@ from app.db.models import Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, GALLERY_DIR
 
 
-@api_bp.route("/static/covers/<path:filename>", methods=["GET"])
+@api_bp.route("/static/covers/<path:filename>", methods=["GET", "HEAD"])
 def serve_cover(filename: str):
     """Serve a cover image from the covers directory."""
-    return send_from_directory(COVERS_DIR, filename)
+    response = make_response(send_from_directory(COVERS_DIR, filename))
+
+    wants_provenance = request.args.get("include") == "provenance" or request.headers.get("X-Include-Provenance", "").strip() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if wants_provenance:
+        from sqlalchemy import or_
+
+        isbn_prefix = filename.split("_")[0].split(".")[0]
+
+        m = (
+            db.session.query(Manifestation.id, Manifestation.meta)
+            .filter(
+                or_(
+                    Manifestation.cover_url == filename,
+                    Manifestation.cover_url == f"/static/covers/{filename}",
+                    Manifestation.cover_url == f"{Config.COVERS_BASE_URL}/{filename}",
+                    Manifestation.isbn13 == isbn_prefix,
+                )
+            )
+            .first()
+        )
+
+        if m:
+            response.headers["X-Manifestation-ID"] = str(m.id)
+            if m.meta and "cover_source" in m.meta:
+                response.headers["X-Image-Source"] = str(m.meta["cover_source"])
+
+        response.headers["Access-Control-Expose-Headers"] = "X-Manifestation-ID, X-Image-Source"
+
+    return response
 
 
 @api_bp.route("/static/gallery/<path:filename>", methods=["GET"])

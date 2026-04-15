@@ -35,7 +35,8 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     id: 1,
     manifestation_id: 1,
     owner_id: "user1",
-    status: "available",
+    status: "unread",
+    collection_status: "available",
     meta: {},
     title: "Dune",
     authors: ["Frank Herbert"],
@@ -93,22 +94,22 @@ describe("ItemCard", () => {
   });
 
   it("shows a status dot with the correct title for 'available'", () => {
-    render(<ItemCard item={makeItem({ status: "available" })} />);
-    expect(screen.getByTitle("On Shelf")).toBeInTheDocument();
+    render(<ItemCard item={makeItem({ collection_status: "available", status: "unread" })} />);
+    expect(screen.getByTitle("Unread")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lent'", () => {
-    render(<ItemCard item={makeItem({ status: "lent" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "lent" })} />);
     expect(screen.getByTitle("Lent Out")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'wish_list'", () => {
-    render(<ItemCard item={makeItem({ status: "wish_list" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "wish_list" })} />);
     expect(screen.getByTitle("On Wish List")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lost'", () => {
-    render(<ItemCard item={makeItem({ status: "lost" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "lost" })} />);
     expect(screen.getByTitle("Lost")).toBeInTheDocument();
   });
 

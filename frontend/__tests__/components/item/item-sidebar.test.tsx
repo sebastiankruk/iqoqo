@@ -39,7 +39,8 @@ const mockItem = {
   id: 1,
   manifestation_id: 1,
   owner_id: "00000000-0000-0000-0000-000000000000",
-  status: "available",
+  status: "unread",
+  collection_status: "available",
   meta: {},
   cover_url: "/cover.jpg",
   cover_status: "ready",
@@ -58,11 +59,28 @@ describe("ItemSidebar Component", () => {
     } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} />);
-    expect(screen.getAllByText(/On Shelf/i)[0]).toBeInTheDocument();
+    // Should show both badges
+    expect(screen.getAllByText(/ON SHELF/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/UNREAD/i)[0]).toBeInTheDocument();
     expect(screen.getByText(/ISBN: 9780544003415/i)).toBeInTheDocument();
   });
 
-  it("calls update mutation when status select is changed", () => {
+  it("calls update mutation when collection status select is changed", () => {
+    const mutateMock = vi.fn();
+    vi.mocked(hooks.useUpdateItem).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+    render(<ItemSidebar item={mockItem} />);
+    const select = screen.getByLabelText("Collection status");
+    fireEvent.change(select, { target: { value: "lent" } });
+
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+    expect(mutateMock).toHaveBeenCalledWith({ collection_status: "lent" }, expect.any(Object));
+  });
+
+  it("calls update mutation when progress status select is changed", () => {
     const mutateMock = vi.fn();
     vi.mocked(hooks.useUpdateItem).mockReturnValue({
       mutate: mutateMock,
@@ -94,7 +112,8 @@ describe("ItemSidebar Component", () => {
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} />);
-    expect(screen.getAllByText(/On Shelf/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/ON SHELF/i)[0]).toBeInTheDocument();
+    expect(screen.queryByLabelText("Collection status")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Item status")).not.toBeInTheDocument();
   });
 

@@ -23,6 +23,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useRegenerateCover: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useDeleteItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateItem: vi.fn(() => ({ mutate: vi.fn() })),
   queryKeys: { item: vi.fn((id: number) => ["item", id]) },
 }));
 
