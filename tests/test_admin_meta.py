@@ -15,7 +15,7 @@ from app.utils.json_utils import parse_meta, sanitize_meta
 def test_sanitize_meta_empty():
     """Test sanitization with None or empty dictionary."""
     assert sanitize_meta(None) is None
-    assert sanitize_meta({}) == {}
+    assert sanitize_meta({}) == {}  # pylint: disable=use-implicit-booleaness-not-comparison
 
 
 def test_sanitize_meta_conversion():
@@ -38,7 +38,7 @@ def test_sanitize_meta_conversion():
 def test_parse_meta_empty():
     """Test parsing with None or empty dictionary."""
     assert parse_meta(None) is None
-    assert parse_meta({}) == {}
+    assert parse_meta({}) == {}  # pylint: disable=use-implicit-booleaness-not-comparison
 
 
 def test_parse_meta_conversion():

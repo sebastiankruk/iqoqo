@@ -17,6 +17,7 @@ import base64
 import binascii
 import logging
 import os
+import re
 import time
 
 import requests
@@ -44,8 +45,15 @@ PRICING = {
 }
 
 
-def record_telemetry(provider: str, user_id: str, duration: float, operation_type: str = "cover_generation"):
-    """Records a new telemetry entry after a successful LLM operation.
+def record_telemetry(
+    provider: str,
+    user_id: str,
+    duration: float,
+    operation_type: str = "cover_generation",
+    status: str = "success",
+    error_message: str | None = None,
+):
+    """Records a new telemetry entry after an LLM operation.
 
     Each execution is recorded as a separate row to provide a full audit trail.
     """
@@ -54,9 +62,11 @@ def record_telemetry(provider: str, user_id: str, duration: float, operation_typ
             provider=provider,
             user_id=user_id,
             operation_type=operation_type,
-            images_generated=1,
-            estimated_cost_usd=PRICING.get(provider, 0.0),
+            images_generated=1 if status == "success" else 0,
+            estimated_cost_usd=PRICING.get(provider, 0.0) if status == "success" else 0.0,
             total_duration_seconds=duration,
+            status=status,
+            error_message=error_message,
         )
         db.session.add(stat)
         db.session.commit()
@@ -90,8 +100,8 @@ def generate_cover_cloud(
     if not api_key:
         return None
 
+    start_time = time.time()
     try:
-        start_time = time.time()
         client = OpenAI(api_key=api_key)
         context = build_context(description, genre)
         prompt = f"A high-quality, minimalist book cover design for '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
@@ -105,10 +115,12 @@ def generate_cover_cloud(
         )
 
         if not response.data:
+            record_telemetry("openai", user_id, time.time() - start_time, status="failed", error_message="Empty response data")
             return None
 
         image_url = response.data[0].url
         if not isinstance(image_url, str):
+            record_telemetry("openai", user_id, time.time() - start_time, status="failed", error_message="Invalid image URL in response")
             return None
 
         img_response = requests.get(image_url, timeout=30)
@@ -118,8 +130,11 @@ def generate_cover_cloud(
             duration = time.time() - start_time
             record_telemetry("openai", user_id, duration, "cover_generation")
             return path, "llm_openai"
+
+        record_telemetry("openai", user_id, time.time() - start_time, status="failed", error_message=f"HTTP {img_response.status_code}")
     except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
         logger.error(f"Cloud LLM Gen failed: {e}")
+        record_telemetry("openai", user_id, time.time() - start_time, status="failed", error_message=str(e))
 
     return None
 
@@ -132,8 +147,8 @@ def generate_cover_gemini(
     if not api_key:
         return None
 
+    start_time = time.time()
     try:
-        start_time = time.time()
         from google import genai
         from google.genai import types
 
@@ -157,8 +172,11 @@ def generate_cover_gemini(
                     record_telemetry("gemini", user_id, duration, "cover_generation")
                     return path, "llm_gemini"
 
+        record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message="No valid candidates in response")
+
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Gemini Gen failed: {e}")
+        record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message=str(e))
 
     return None
 
@@ -171,8 +189,10 @@ def generate_cover_local(
     if not sd_url:
         return None
 
-    # Truncate title to first 4 words for local SD prompt
-    words = title.split()
+    # Truncate title to first 4 words for local SD prompt.
+    # We strip punctuation and hyphenation artifacts before trimming.
+    clean_title = re.sub(r"[^\w\s]", "", title)
+    words = clean_title.split()
     trimmed_title = " ".join(words[:4]) if len(words) > 4 else title
 
     context = build_context(description, genre)
@@ -184,8 +204,8 @@ def generate_cover_local(
         "height": 768,
     }
 
+    start_time = time.time()
     try:
-        start_time = time.time()
         response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, timeout=300)
         if response.status_code == 200:
             r = response.json()
@@ -199,8 +219,11 @@ def generate_cover_local(
             duration = time.time() - start_time
             record_telemetry("local", user_id, duration, "cover_generation")
             return path, "llm_local_stable_diffusion"
+
+        record_telemetry("local", user_id, time.time() - start_time, status="failed", error_message=f"HTTP {response.status_code}")
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Local SD Gen failed: {e}")
+        record_telemetry("local", user_id, time.time() - start_time, status="failed", error_message=str(e))
 
     return None
 
@@ -217,6 +240,9 @@ def fetch_llm_cover(
     # 2. Cloud (Paid) - restricted by cloud permission
     if not allow_cloud_llm:
         logger.debug(f"Cloud LLM generation skipped: user lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission.")
+        record_telemetry(
+            "cloud", user_id, 0.0, status="not_allowed", error_message=f"User lacks {PermissionName.LLM_GENERATE_CLOUD} permission"
+        )
         return None
 
     if os.environ.get("GEMINI_API_KEY"):

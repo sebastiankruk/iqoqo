@@ -163,6 +163,7 @@ class User(db.Model):  # type: ignore[name-defined]
             return {
                 "allow_generate_cover": False,
                 "allow_cloud_llm": False,
+                "allow_generate_metadata": False,
             }
 
         from app.core.permissions import PermissionName
@@ -170,6 +171,7 @@ class User(db.Model):  # type: ignore[name-defined]
         return {
             "allow_generate_cover": user.has_permission(PermissionName.LLM_GENERATE_COVER),
             "allow_cloud_llm": user.has_permission(PermissionName.LLM_GENERATE_CLOUD),
+            "allow_generate_metadata": user.has_permission(PermissionName.LLM_GENERATE_METADATA),
         }
 
 

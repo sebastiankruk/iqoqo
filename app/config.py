@@ -73,6 +73,11 @@ class Config:
     # Base URL for static cover image serving mapping
     COVERS_BASE_URL = os.environ.get("COVERS_BASE_URL", "/static/covers")
 
+    # Discogs credentials — v2 OAuth preferred, legacy token as fallback
+    DISCOGS_CONSUMER_KEY = os.environ.get("DISCOGS_CONSUMER_KEY")
+    DISCOGS_CONSUMER_SECRET = os.environ.get("DISCOGS_CONSUMER_SECRET")
+    # DISCOGS_USER_TOKEN is read directly in discogs.py as a legacy fallback
+
     @staticmethod
     def _get_version():
         """Resolve application version from environment or pyproject.toml.

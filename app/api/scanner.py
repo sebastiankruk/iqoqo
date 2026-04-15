@@ -25,7 +25,7 @@ from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Item, Manifestation, db
+from app.db.models import Item, Manifestation, ScanTelemetry, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
@@ -54,6 +54,32 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
     return None if len(buf) > max_bytes else buf
 
 
+def _record_scan_telemetry(
+    barcode: str,
+    format_hint: str | None,
+    provider: str,
+    status: str,
+    manifestation_id: int | None = None,
+    raw_request_url: str | None = None,
+) -> None:
+    """Helper to persist a scan-lookup record."""
+    try:
+        telemetry = ScanTelemetry(
+            barcode=barcode,
+            format_hint=format_hint,
+            provider=provider,
+            status=status,
+            manifestation_id=manifestation_id,
+            raw_request_url=raw_request_url,
+        )
+        db.session.add(telemetry)
+        db.session.commit()
+    except Exception as e:  # pylint: disable=broad-except
+        db.session.rollback()
+        # Non-critical, just log it
+        print(f"Failed to record scan telemetry: {e}")
+
+
 @api_bp.route("/lookup/<barcode>", methods=["GET"])
 @require_auth
 def lookup_barcode_preview(barcode: str):
@@ -69,6 +95,7 @@ def lookup_barcode_preview(barcode: str):
     if manifestation and manifestation.meta:
         title = manifestation.meta.get("title") or manifestation.meta.get("Title")
         if title:
+            _record_scan_telemetry(barcode, format_hint, "database", "success", manifestation.id)
             return jsonify({"success": True, "data": manifestation.meta, "error": None}), 200
 
     meta = None
@@ -142,6 +169,7 @@ def lookup_barcode_preview(barcode: str):
                 meta = fetch_video_metadata(barcode) or fetch_bgg_metadata(barcode)
 
     if not meta:
+        _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
     # Ensure frontend gets normalized keys for preview
@@ -173,6 +201,9 @@ def lookup_barcode_preview(barcode: str):
             "text": MediaFormat.BOOK,
         }
         meta["format"] = format_map.get(format_hint, format_hint.upper())
+
+    # Record successful external lookup
+    _record_scan_telemetry(barcode, format_hint, provider=format_hint or "external", status="success")
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -240,14 +271,19 @@ def scan_barcode():
         except ConnectionError as e:
             return jsonify({"success": False, "data": None, "error": f"Network error while fetching metadata: {str(e)}"}), 503
         except Exception as e:  # pylint: disable=broad-except
+            _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
             return jsonify({"success": False, "data": None, "error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
 
     if not manifestation:
+        _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
         return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
     new_item = Item(manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status="available")
     db.session.add(new_item)
     db.session.commit()
+
+    # Success: record telemetry with manifestation_id
+    _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id)
 
     return (
         jsonify(
