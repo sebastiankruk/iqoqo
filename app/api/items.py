@@ -24,7 +24,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -356,8 +356,12 @@ def update_item(item_id: int):
     if not isinstance(data, dict):
         return invalid_json_payload_response()
 
-    if data.get("status"):
+    if data.get("status") and data["status"] != item.status:
+        old_status = item.status
         item.status = data["status"]
+        log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_status, new_status=item.status)
+        db.session.add(log)
+
     if data.get("meta"):
         item.meta = data["meta"]
 
@@ -517,3 +521,28 @@ def add_item_manual():
         db.session.rollback()
         current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
+
+
+@api_bp.route("/items/<int:item_id>/logs", methods=["GET"])
+@require_auth
+def get_item_logs(item_id: int):
+    """Get the status timeline for an item."""
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    logs = db.session.query(ItemStatusLog).filter(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc()).all()
+    return jsonify(
+        {
+            "success": True,
+            "data": [
+                {
+                    "old_status": entry.old_status,
+                    "new_status": entry.new_status,
+                    "changed_at": entry.changed_at.isoformat(),
+                }
+                for entry in logs
+            ],
+            "error": None,
+        }
+    )

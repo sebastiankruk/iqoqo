@@ -16,14 +16,18 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe } from "lucide-react";
+import { FileText, Globe, History, Images } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useAppConfig } from "@/lib/api/hooks";
 import Link from "next/link";
 import { ExtendedMetadata } from "./extended-metadata";
+import { ItemProvenanceTimeline } from "./item-timeline";
+import { MultiScanGallery } from "./multi-scan-gallery";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
+  { id: "gallery", label: "Gallery", icon: Images },
+  { id: "history", label: "History", icon: History },
   { id: "federation", label: "Federation", icon: Globe },
 ] as const;
 
@@ -137,6 +141,8 @@ export function ItemTabs({ item }: { item: Item }) {
       {/* Tab content */}
       <div>
         {active === "details" && <DetailsTab item={item} />}
+        {active === "gallery" && <MultiScanGallery manifestationId={item.manifestation_id} />}
+        {active === "history" && <ItemProvenanceTimeline itemId={item.id} />}
         {active === "federation" && <FederationTab />}
       </div>
     </div>

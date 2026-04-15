@@ -139,7 +139,12 @@ export type ItemStatus =
   | "want_to_read"
   | "listening"
   | "listened"
-  | "want_to_listen";
+  | "want_to_listen"
+  | "watching"
+  | "watched"
+  | "want_to_watch"
+  | "played"
+  | "playing";
 
 /** Standard media formats used across the app */
 export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;

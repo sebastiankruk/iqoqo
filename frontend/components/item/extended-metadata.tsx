@@ -305,6 +305,15 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
           )}
         </div>
       )}
+
+      {Boolean(meta.metadata_provenance && typeof meta.metadata_provenance === "object") && (
+        <div className="mt-6 flex items-center justify-end text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 gap-2 border-t border-border/20 pt-4">
+          <span>Sourced from</span>
+          <span className="text-muted-foreground/60">
+            {(meta.metadata_provenance as { source?: string }).source || "Unknown API"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

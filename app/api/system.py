@@ -18,7 +18,7 @@
 import json
 from io import BytesIO
 
-from flask import g, jsonify, request, send_file, send_from_directory
+from flask import g, jsonify, make_response, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -32,7 +32,17 @@ from app.utils.covers import COVERS_DIR, GALLERY_DIR
 @api_bp.route("/static/covers/<path:filename>", methods=["GET"])
 def serve_cover(filename: str):
     """Serve a cover image from the covers directory."""
-    return send_from_directory(COVERS_DIR, filename)
+    response = make_response(send_from_directory(COVERS_DIR, filename))
+
+    # Inject provenance headers
+    # We query by cover_url to find the manifestation id and meta
+    m = db.session.query(Manifestation.id, Manifestation.meta).filter(Manifestation.cover_url == filename).first()
+    if m:
+        response.headers["X-Manifestation-ID"] = str(m.id)
+        if m.meta and "cover_source" in m.meta:
+            response.headers["X-Image-Source"] = str(m.meta["cover_source"])
+
+    return response
 
 
 @api_bp.route("/static/gallery/<path:filename>", methods=["GET"])

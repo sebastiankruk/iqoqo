@@ -17,13 +17,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, Pencil, Image as ImageIcon } from "lucide-react";
+import {
+  Trash2,
+  RefreshCw,
+  CloudDownload,
+  Pencil,
+  Image as ImageIcon,
+  BookOpen,
+  Music,
+  Video,
+  Gamepad2,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
+import { useDeleteItem, useRegenerateCover, useUpdateItem, queryKeys } from "@/lib/api/hooks";
 import { useProfile } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
+import { isAudioMedia } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
 import {
   AlertDialog,
@@ -47,6 +58,7 @@ import { useQueryClient } from "@tanstack/react-query";
 export function ItemActions({ item }: { item: Item }) {
   const router = useRouter();
   const regenerateCover = useRegenerateCover();
+  const updateItem = useUpdateItem(item.id);
   const deleteItem = useDeleteItem();
   const qc = useQueryClient();
 
@@ -133,96 +145,161 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
+  const handleStatusUpdate = (status: Item["status"]) => {
+    updateItem.mutate(
+      { status },
+      {
+        onSuccess: () => toast.success(`Status updated to ${status.replace(/_/g, " ")}`),
+        onError: e => toast.error(e.message),
+      }
+    );
+  };
+
+  // Media type checks
+  const format =
+    (item.manifestation_meta?.["format"] as string | undefined) ??
+    (item.meta?.["format"] as string | undefined) ??
+    "book";
+  const isAudio = isAudioMedia(format);
+  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isBook = !isAudio && !isVideo && !isGame;
+
   return (
-    <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission(PermissionName.REFETCH_METADATA) && (
-        <button
-          onClick={handleRefetch}
-          disabled={isRefetching}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
-          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
-          {isRefetching ? "Fetching..." : "Refetch Metadata"}
-        </button>
-      )}
+    <div className="mt-8 flex flex-col gap-6 rounded-2xl border bg-card/50 p-6 shadow-sm border-border/40">
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Polymorphic quick actions */}
+        {isBook && item.status !== "read" && (
+          <button
+            onClick={() => handleStatusUpdate(item.status === "reading" ? "read" : "reading")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            {item.status === "reading" ? "Mark as Read" : "Log Reading Progress"}
+          </button>
+        )}
 
-      {hasPermission(PermissionName.REGENERATE_COVER) && (
-        <button
-          onClick={handleRegenerateClick}
-          disabled={isPending || isRequesting}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-          {isPending ? "Generating..." : "Regenerate Cover"}
-        </button>
-      )}
+        {isAudio && item.status !== "listened" && (
+          <button
+            onClick={() => handleStatusUpdate(item.status === "listening" ? "listened" : "listening")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <Music className="h-3.5 w-3.5" />
+            {item.status === "listening" ? "Mark as Listened" : "Now Listening"}
+          </button>
+        )}
 
-      {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
-        <button
-          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit FRBR
-        </button>
-      )}
+        {isVideo && item.status !== "watched" && (
+          <button
+            onClick={() => handleStatusUpdate(item.status === "watching" ? "watched" : "watching")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <Video className="h-3.5 w-3.5" />
+            {item.status === "watching" ? "Mark as Watched" : "Now Watching"}
+          </button>
+        )}
 
-      {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-        <button
-          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
-          <ImageIcon className="h-3.5 w-3.5" />
-          Edit Cover Art
-        </button>
-      )}
+        {isGame && (
+          <button
+            onClick={() => handleStatusUpdate("played")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <Gamepad2 className="h-3.5 w-3.5" />
+            Log Play
+          </button>
+        )}
+      </div>
 
-      {hasPermission(PermissionName.DELETE_ITEM) && (
-        <button
-          onClick={() => setDeleteConfirmOpen(true)}
-          disabled={deleteItem.isPending}
-          className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Remove from library
-        </button>
-      )}
+      <div className="flex flex-wrap items-center gap-6 border-t border-border/40 pt-4">
+        {hasPermission(PermissionName.REFETCH_METADATA) && (
+          <button
+            onClick={handleRefetch}
+            disabled={isRefetching}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
+            {isRefetching ? "Fetching..." : "Refetch Metadata"}
+          </button>
+        )}
 
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this item from your library. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              disabled={deleteItem.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteItem.isPending ? "Removing…" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {hasPermission(PermissionName.REGENERATE_COVER) && (
+          <button
+            onClick={handleRegenerateClick}
+            disabled={isPending || isRequesting}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+            {isPending ? "Generating..." : "Regenerate Cover"}
+          </button>
+        )}
 
-      <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This item already has a cover image. Regenerating it will overwrite the existing cover.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
+          <button
+            onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit FRBR
+          </button>
+        )}
+
+        {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+          <button
+            onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Edit Cover Art
+          </button>
+        )}
+
+        {hasPermission(PermissionName.DELETE_ITEM) && (
+          <button
+            onClick={() => setDeleteConfirmOpen(true)}
+            disabled={deleteItem.isPending}
+            className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove from library
+          </button>
+        )}
+
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove this item from your library. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                disabled={deleteItem.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteItem.isPending ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This item already has a cover image. Regenerating it will overwrite the existing cover.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

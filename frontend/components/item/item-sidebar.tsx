@@ -40,6 +40,11 @@ const STATUS_LABELS: Record<Item["status"], { label: string; class: string }> = 
   listening: { label: "Listening...", class: "bg-teal-50 text-teal-700 ring-teal-200" },
   listened: { label: "Listened", class: "bg-cyan-50 text-cyan-700 ring-cyan-200" },
   want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
+  watching: { label: "Watching...", class: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
+  watched: { label: "Watched", class: "bg-violet-50 text-violet-700 ring-violet-200" },
+  want_to_watch: { label: "Want to Watch", class: "bg-purple-50 text-purple-700 ring-purple-200" },
+  played: { label: "Played", class: "bg-rose-50 text-rose-700 ring-rose-200" },
+  playing: { label: "Playing...", class: "bg-pink-50 text-pink-700 ring-pink-200" },
 };
 
 /** Props for ItemSidebar component */

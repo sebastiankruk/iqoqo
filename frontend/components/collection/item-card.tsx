@@ -35,6 +35,11 @@ const statusDotColor: Record<ItemStatus, string> = {
   listening: "bg-teal-500",
   listened: "bg-cyan-500",
   want_to_listen: "bg-sky-400",
+  watching: "bg-indigo-500",
+  watched: "bg-violet-500",
+  want_to_watch: "bg-purple-500",
+  played: "bg-rose-500",
+  playing: "bg-pink-500",
 };
 
 const statusDotTitle: Record<ItemStatus, string> = {
@@ -51,6 +56,11 @@ const statusDotTitle: Record<ItemStatus, string> = {
   listening: "Listening",
   listened: "Listened",
   want_to_listen: "Want to Listen",
+  watching: "Watching",
+  watched: "Watched",
+  want_to_watch: "Want to Watch",
+  played: "Played",
+  playing: "Playing",
 };
 
 interface ItemCardProps {
