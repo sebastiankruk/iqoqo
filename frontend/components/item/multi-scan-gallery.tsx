@@ -38,7 +38,11 @@ interface ImageScan {
  * @returns {JSX.Element}
  */
 export function MultiScanGallery({ manifestationId }: { manifestationId: number }) {
-  const { data: scans, isLoading, error } = useQuery<ImageScan[]>({
+  const {
+    data: scans,
+    isLoading,
+    error,
+  } = useQuery<ImageScan[]>({
     queryKey: ["manifestation", manifestationId, "images"],
     queryFn: async () => {
       const res = await apiClient.get(`/manifestations/${manifestationId}/images`);

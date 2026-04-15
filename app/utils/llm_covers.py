@@ -17,7 +17,6 @@ import base64
 import binascii
 import logging
 import os
-import re
 import time
 
 import requests
@@ -211,13 +210,13 @@ def generate_cover_local(
 
             # Overlay typography - potentially trimmed for visual clarity
             full_path = os.path.join(COVERS_DIR, os.path.basename(path))
-            
+
             overlay_title = title
             if Config.LLM_TITLE_MAX_WORDS > 0:
                 words = title.split()
                 if len(words) > Config.LLM_TITLE_MAX_WORDS:
-                    overlay_title = " ".join(words[:Config.LLM_TITLE_MAX_WORDS]) + "..."
-            
+                    overlay_title = " ".join(words[: Config.LLM_TITLE_MAX_WORDS]) + "..."
+
             add_text_overlay(full_path, overlay_title, author)
 
             duration = time.time() - start_time
