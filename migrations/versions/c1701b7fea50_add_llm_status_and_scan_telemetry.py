@@ -56,7 +56,7 @@ def upgrade():
                existing_nullable=True)
 
     with op.batch_alter_table('llm_telemetry', schema='inventory') as batch_op:
-        batch_op.add_column(sa.Column('status', sa.String(length=20), nullable=False))
+        batch_op.add_column(sa.Column('status', sa.String(length=20), nullable=False, server_default='success'))
         batch_op.add_column(sa.Column('error_message', sa.Text(), nullable=True))
 
     # ### end Alembic commands ###
