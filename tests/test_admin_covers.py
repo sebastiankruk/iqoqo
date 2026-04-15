@@ -14,16 +14,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import io
-import json
 
-from app.db.core import Manifestation
+from app.core import frbr_service
 from app.db.models import db
 
 
 def test_admin_upload_cover_success(client, admin_headers):
     """Test successful client-side cropped cover upload"""
-    # Create dummy manifestation
-    manif = Manifestation(expression_id=1, meta={})
+    work = frbr_service.create_work(title="Test Work")
+    expr = frbr_service.create_expression(work_id=work.id)
+    manif = frbr_service.create_manifestation(expression_id=expr.id, meta={})
     db.session.add(manif)
     db.session.commit()
 

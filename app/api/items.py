@@ -13,10 +13,8 @@
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-
-import json
 
 from flask import current_app, g, jsonify, request
 from sqlalchemy import func, text
@@ -27,19 +25,6 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, User, Work, db
-
-
-def sanitize_meta(meta: dict | None) -> dict | None:
-    """Convert complex objects in meta to JSON strings for frontend compatibility."""
-    if not meta:
-        return meta
-    result = {}
-    for key, value in meta.items():
-        if isinstance(value, (dict, list)):
-            result[key] = json.dumps(value)
-        else:
-            result[key] = value
-    return result
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -131,8 +116,8 @@ def get_items():
                 owner_id = row.get("owner_id")
                 added_at = row.get("added_at")
                 updated_at = row.get("updated_at")
-                manifestation_meta = sanitize_meta(row.get("manifestation_meta")) or {}
-                work_meta = sanitize_meta(row.get("work_meta")) or {}
+                manifestation_meta = row.get("manifestation_meta") or {}
+                work_meta = row.get("work_meta") or {}
 
                 items_data.append(
                     {
@@ -323,7 +308,7 @@ def get_item_detail(item_id: int):
 
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
-        item_data["manifestation_meta"] = sanitize_meta(manifestation.meta)
+        item_data["manifestation_meta"] = manifestation.meta
         item_data["cover_url"] = manifestation.cover_url
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
@@ -341,7 +326,7 @@ def get_item_detail(item_id: int):
                     "id": work.id,
                     "title": work.title,
                     "authors": work.meta.get("authors", []) if work.meta else [],
-                    "meta": sanitize_meta(work.meta),
+                    "meta": work.meta,
                 }
 
     return jsonify({"success": True, "data": item_data, "error": None})

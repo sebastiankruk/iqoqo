@@ -272,12 +272,6 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
 
                 if (value === null || value === undefined) {
                   displayValue = <span className="text-muted-foreground italic">null</span>;
-                } else if (typeof value === "object") {
-                  displayValue = (
-                    <pre className="text-xs bg-muted/30 p-2 rounded overflow-x-auto">
-                      {JSON.stringify(value, null, 2)}
-                    </pre>
-                  );
                 } else if (Array.isArray(value)) {
                   displayValue = (
                     <div className="flex flex-wrap gap-1">
@@ -287,6 +281,12 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                         </span>
                       ))}
                     </div>
+                  );
+                } else if (typeof value === "object") {
+                  displayValue = (
+                    <pre className="text-xs bg-muted/30 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(value, null, 2)}
+                    </pre>
                   );
                 } else {
                   displayValue = String(value);

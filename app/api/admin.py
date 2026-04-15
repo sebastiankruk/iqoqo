@@ -15,7 +15,6 @@
 #
 # pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 
-import json
 import os
 from datetime import date
 
@@ -27,37 +26,9 @@ from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
 from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db
+from app.utils.json_utils import parse_meta, sanitize_meta
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
-
-
-def sanitize_meta(meta: dict | None) -> dict | None:
-    """Convert complex objects in meta to JSON strings for frontend compatibility."""
-    if not meta:
-        return meta
-    result = {}
-    for key, value in meta.items():
-        if isinstance(value, (dict, list)):
-            result[key] = json.dumps(value)
-        else:
-            result[key] = value
-    return result
-
-
-def parse_meta(meta: dict | None) -> dict | None:
-    """Parse JSON strings back to objects for backend storage."""
-    if not meta:
-        return meta
-    result = {}
-    for key, value in meta.items():
-        if isinstance(value, str):
-            try:
-                result[key] = json.loads(value)
-            except (ValueError, TypeError):
-                result[key] = value
-        else:
-            result[key] = value
-    return result
 
 
 def _get_current_user() -> User | None:
@@ -672,7 +643,7 @@ def upload_cover():
     """Accepts a client-side processed image blob, saves it, and binds it to an entity."""
     user = _get_current_user()
 
-    if not _has_permission(user, PermissionName.UPLOAD_COVER):
+    if not _has_permission(user, PermissionName.EDIT_COVER) and not _has_permission(user, PermissionName.UPLOAD_COVER):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.UPLOAD_COVER} required"}), 403
 
     if "file" not in request.files:
@@ -701,7 +672,12 @@ def upload_cover():
     except Exception as e:
         return jsonify({"success": False, "error": f"Image processing failed: {str(e)}"}), 500
 
+    saved_filepath = None
     try:
+        from app.utils.covers import COVERS_DIR
+
+        saved_filepath = os.path.join(COVERS_DIR, filename)
+
         if entity_type == "manifestation":
             entity = db.session.get(Manifestation, int(entity_id))
         else:
@@ -725,4 +701,10 @@ def upload_cover():
         return jsonify({"success": True, "data": {"cover_url": public_url}})
     except Exception as e:
         db.session.rollback()
+        # Clean up orphaned file if DB commit failed
+        if saved_filepath:
+            try:
+                os.remove(saved_filepath)
+            except OSError:
+                pass  # Best-effort cleanup
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500

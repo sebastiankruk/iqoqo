@@ -130,7 +130,9 @@ def create_item(
     return item
 
 
-def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None = None, publisher: str | None = None) -> Manifestation:
+def get_or_create_book_manifestation(
+    isbn: str, title: str, authors: list | None = None, publisher: str | None = None
+) -> Manifestation | None:
     """
     Get or create a complete FRBR hierarchy for a book.
 
@@ -147,7 +149,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
         The Manifestation object
     """
     # Check if manifestation already exists
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation: Manifestation | None = Manifestation.query.filter_by(isbn13=isbn).first()  # type: ignore[assignment]
 
     if manifestation:
         # Update metadata if provided
@@ -159,7 +161,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
             if authors:
                 manifestation.meta["Authors"] = authors
             db.session.commit()
-        return manifestation  # type: ignore[no-any-return]
+        return manifestation
 
     # Create the full FRBR hierarchy
     work = create_work(title=title, meta={"original_language": "en"})
@@ -174,7 +176,7 @@ def get_or_create_book_manifestation(isbn: str, title: str, authors: list | None
     return manifestation
 
 
-def get_or_create_contributor(name: str, contributor_type: str = "person") -> Contributor:
+def get_or_create_contributor(name: str, contributor_type: str = "person") -> Contributor | None:
     """
     Get an existing contributor by name, or create a new one.
 
@@ -187,9 +189,9 @@ def get_or_create_contributor(name: str, contributor_type: str = "person") -> Co
     """
     from sqlalchemy.exc import IntegrityError
 
-    contributor = Contributor.query.filter_by(name=name, type=contributor_type).first()
+    contributor: Contributor | None = Contributor.query.filter_by(name=name, type=contributor_type).first()  # type: ignore[assignment]
     if contributor:
-        return contributor  # type: ignore[no-any-return]
+        return contributor
 
     try:
         contributor = Contributor(name=name, type=contributor_type)

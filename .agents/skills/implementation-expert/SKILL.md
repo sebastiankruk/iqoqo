@@ -27,6 +27,12 @@ This skill defines the protocol for implementing features in the iqoqo repositor
 1. **Preserve Existing Code**: Do not delete or refactor existing code unless the plan explicitly instructs you to do so.
 1. **Completeness**: Ensure all specified tests, documentation updates (in `docs/`), and database migrations (Alembic) mentioned in the plan are fully implemented.
 1. **Environment Parity**: Always execute Python commands (flask, pytest, alembic, etc.) using the project's virtual environment: `.venv/bin/`.
+1. **Strict Type Safety — No Silent Suppression**: `mypy` errors must be fixed by correcting the code, not suppressed. Specific rules:
+   - **No `[[tool.mypy.overrides]]` blocks** may be added to `pyproject.toml` without explicit user approval and a written justification.
+   - **No `# type: ignore`** comments except for:
+     - SQLAlchemy dynamic relationship attributes (`# type: ignore[attr-defined]` on `role.permissions`, `u.roles`, etc.) — these are acceptable because SQLAlchemy's ORM uses `__getattr__` dynamically.
+     - External library stubs that are provably incorrect (e.g., PIL, google.genai types) — document the reason.
+   - All other `# type: ignore` uses must be resolved by fixing the type annotation or adding explicit `Variable: Type | None = ...` declarations.
 1. **Copyright Compliance**: Every new source file (.py, .ts, .tsx) MUST include the standard iqoqo copyright header:
 
    ```python

@@ -39,92 +39,92 @@ def run_init_auth(app=None):
         with open(permissions_path, encoding="utf-8") as f:
             permissions_data = yaml.safe_load(f)
 
-    perms = [p["name"] for p in permissions_data.get("permissions", [])]
+        perms = [p["name"] for p in permissions_data.get("permissions", [])]
 
-    # Validate that all permissions in YAML are also in the Enum
-    enum_values = {p.value for p in PermissionName}
-    for p in perms:
-        if p not in enum_values:
-            print(f"WARNING: Permission '{p}' found in YAML but not in PermissionName Enum!")
+        # Validate that all permissions in YAML are also in the Enum
+        enum_values = {p.value for p in PermissionName}
+        for p in perms:
+            if p not in enum_values:
+                print(f"WARNING: Permission '{p}' found in YAML but not in PermissionName Enum!")
 
-    for p in perms:
-        existing = Permission.query.filter_by(name=p).first()
-        if not existing:
-            db.session.add(Permission(name=p))
-        else:
-            # Update description if needed (not implemented here but good to have)
-            pass
-    db.session.commit()
-
-    # 2. Create Roles
-    admin_role = Role.query.filter_by(name="admin").first()
-    if not admin_role:
-        admin_role = Role(name="admin")
-        db.session.add(admin_role)
-
-    user_role = Role.query.filter_by(name="user").first()
-    if not user_role:
-        db.session.add(Role(name="user"))
-
-    contributor_role = Role.query.filter_by(name="contributor").first()
-    if not contributor_role:
-        contributor_role = Role(name="contributor")
-        db.session.add(contributor_role)
-
-    db.session.commit()
-
-    # Admin gets everything
-    admin_role.permissions = Permission.query.all()
-
-    # Contributor gets metadata, cover stuff, and llm_generate
-    all_perms = Permission.query.all()
-    contributor_perms = [
-        p
-        for p in all_perms
-        if p.name.endswith(":metadata")
-        or p.name.endswith(":cover")
-        or p.name.startswith("llm_generate:")
-        or p.name == PermissionName.DELETE_ITEM.value
-    ]
-    contributor_role.permissions = contributor_perms
-
-    db.session.commit()
-
-    # 3. Create Admin user
-    admin_email = app.config.get("ADMIN_EMAIL")
-    admin_user = User.query.filter_by(email=admin_email).first()
-    if not admin_user:
-        admin_user = User(email=admin_email, display_name="Administrator", is_active=True)
-        admin_user.set_password(app.config.get("ADMIN_PASSWORD"))
-        admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
-        print(f"Created admin user: {admin_email}")
-
-    # 4. Migrate items to Admin UUID (including those of the legacy system user)
-    legacy_items = Item.query.all()
-    migrated = 0
-    LEGACY_USER_ID = "00000000-0000-4000-a000-000000000000"
-
-    for item in legacy_items:
-        # Check if owner_id is not already a valid non-legacy UUID
-        owner_id_str = str(item.owner_id)
-        should_migrate = False
-        try:
-            if owner_id_str == LEGACY_USER_ID:
-                should_migrate = True
+        for p in perms:
+            existing = Permission.query.filter_by(name=p).first()
+            if not existing:
+                db.session.add(Permission(name=p))
             else:
-                uuid.UUID(owner_id_str)
-        except (ValueError, TypeError):
-            should_migrate = True
-
-        if should_migrate and item.owner_id != admin_user.id:
-            item.owner_id = admin_user.id
-            migrated += 1
-
-    if migrated > 0:
+                # Update description if needed (not implemented here but good to have)
+                pass
         db.session.commit()
-        print(f"Migrated {migrated} items to admin user.")
+
+        # 2. Create Roles
+        admin_role = Role.query.filter_by(name="admin").first()
+        if not admin_role:
+            admin_role = Role(name="admin")
+            db.session.add(admin_role)
+
+        user_role = Role.query.filter_by(name="user").first()
+        if not user_role:
+            db.session.add(Role(name="user"))
+
+        contributor_role = Role.query.filter_by(name="contributor").first()
+        if not contributor_role:
+            contributor_role = Role(name="contributor")
+            db.session.add(contributor_role)
+
+        db.session.commit()
+
+        # Admin gets everything
+        admin_role.permissions = Permission.query.all()
+
+        # Contributor gets metadata, llm_generate, delete item, and edit:cover (full editor + upload)
+        all_perms = Permission.query.all()
+        contributor_perms = [
+            p
+            for p in all_perms
+            if p.name.endswith(":metadata")
+            or p.name == PermissionName.EDIT_COVER.value
+            or p.name.startswith("llm_generate:")
+            or p.name == PermissionName.DELETE_ITEM.value
+        ]
+        contributor_role.permissions = contributor_perms
+
+        db.session.commit()
+
+        # 3. Create Admin user
+        admin_email = app.config.get("ADMIN_EMAIL")
+        admin_user = User.query.filter_by(email=admin_email).first()
+        if not admin_user:
+            admin_user = User(email=admin_email, display_name="Administrator", is_active=True)
+            admin_user.set_password(app.config.get("ADMIN_PASSWORD"))
+            admin_user.roles.append(admin_role)
+            db.session.add(admin_user)
+            db.session.commit()
+            print(f"Created admin user: {admin_email}")
+
+        # 4. Migrate items to Admin UUID (including those of the legacy system user)
+        legacy_items = Item.query.all()
+        migrated = 0
+        LEGACY_USER_ID = "00000000-0000-4000-a000-000000000000"
+
+        for item in legacy_items:
+            # Check if owner_id is not already a valid non-legacy UUID
+            owner_id_str = str(item.owner_id)
+            should_migrate = False
+            try:
+                if owner_id_str == LEGACY_USER_ID:
+                    should_migrate = True
+                else:
+                    uuid.UUID(owner_id_str)
+            except (ValueError, TypeError):
+                should_migrate = True
+
+            if should_migrate and item.owner_id != admin_user.id:
+                item.owner_id = admin_user.id
+                migrated += 1
+
+        if migrated > 0:
+            db.session.commit()
+            print(f"Migrated {migrated} items to admin user.")
 
 
 if __name__ == "__main__":
