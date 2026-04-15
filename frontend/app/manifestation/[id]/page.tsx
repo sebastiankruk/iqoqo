@@ -96,6 +96,7 @@ export default function ManifestationPage() {
                   fill
                   sizes="(max-width: 768px) 100vw, 33vw"
                   unoptimized
+                  priority
                   className="object-cover"
                 />
               ) : (
