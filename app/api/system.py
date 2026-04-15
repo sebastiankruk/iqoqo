@@ -34,34 +34,35 @@ def serve_cover(filename: str):
     """Serve a cover image from the covers directory."""
     response = make_response(send_from_directory(COVERS_DIR, filename))
 
-    # Inject provenance headers
-    # We query by cover_url to find the manifestation id and meta
-    from sqlalchemy import or_
-
-    # Strategy 1: Match by filename or full path
-    # Strategy 2: Match by ISBN prefix (common for auto-fetched covers)
-    isbn_prefix = filename.split("_")[0].split(".")[0]
-
-    m = (
-        db.session.query(Manifestation.id, Manifestation.meta)
-        .filter(
-            or_(
-                Manifestation.cover_url == filename,
-                Manifestation.cover_url == f"/static/covers/{filename}",
-                Manifestation.cover_url == f"{Config.COVERS_BASE_URL}/{filename}",
-                Manifestation.isbn13 == isbn_prefix,
-            )
-        )
-        .first()
+    wants_provenance = request.args.get("include") == "provenance" or request.headers.get("X-Include-Provenance", "").strip() in (
+        "1",
+        "true",
+        "yes",
     )
+    if wants_provenance:
+        from sqlalchemy import or_
 
-    if m:
-        response.headers["X-Manifestation-ID"] = str(m.id)
-        if m.meta and "cover_source" in m.meta:
-            response.headers["X-Image-Source"] = str(m.meta["cover_source"])
+        isbn_prefix = filename.split("_")[0].split(".")[0]
 
-    # Ensure headers are allowed to be seen by the browser in CORS environments
-    response.headers["Access-Control-Expose-Headers"] = "X-Manifestation-ID, X-Image-Source"
+        m = (
+            db.session.query(Manifestation.id, Manifestation.meta)
+            .filter(
+                or_(
+                    Manifestation.cover_url == filename,
+                    Manifestation.cover_url == f"/static/covers/{filename}",
+                    Manifestation.cover_url == f"{Config.COVERS_BASE_URL}/{filename}",
+                    Manifestation.isbn13 == isbn_prefix,
+                )
+            )
+            .first()
+        )
+
+        if m:
+            response.headers["X-Manifestation-ID"] = str(m.id)
+            if m.meta and "cover_source" in m.meta:
+                response.headers["X-Image-Source"] = str(m.meta["cover_source"])
+
+        response.headers["Access-Control-Expose-Headers"] = "X-Manifestation-ID, X-Image-Source"
 
     return response
 

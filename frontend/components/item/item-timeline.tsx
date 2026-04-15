@@ -33,10 +33,11 @@ interface StatusLog {
  * @returns {JSX.Element | null} The component or null if no logs.
  */
 export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
-  const { data: logs, isLoading } = useQuery<StatusLog[]>({
+  const { data: logs, isLoading, error } = useQuery<StatusLog[]>({
     queryKey: ["item", itemId, "logs"],
     queryFn: async () => {
       const res = await apiClient.get(`/items/${itemId}/logs`);
+      if (!res.data?.success) throw new Error(res.data?.error ?? "Failed to load history");
       return res.data.data;
     },
   });
@@ -45,6 +46,14 @@ export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
     return (
       <div className="flex justify-center py-10">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-center text-destructive text-xs">
+        Failed to load item history.
       </div>
     );
   }

@@ -59,10 +59,11 @@ def manifestation_with_cover(app):
 
 
 def test_serve_cover_provenance_headers_get(client, manifestation_with_cover):
-    """Test that provenance headers are correctly injected in GET requests."""
+    """Test that provenance headers are correctly injected in GET requests when requested."""
     m, filename = manifestation_with_cover
 
-    response = client.get(f"/api/static/covers/{filename}")
+    # CASE 1: With query parameter
+    response = client.get(f"/api/static/covers/{filename}?include=provenance")
 
     assert response.status_code == 200
     assert response.headers.get("X-Manifestation-ID") == str(m.id)
@@ -70,12 +71,22 @@ def test_serve_cover_provenance_headers_get(client, manifestation_with_cover):
     assert "X-Manifestation-ID" in response.headers.get("Access-Control-Expose-Headers")
     assert "X-Image-Source" in response.headers.get("Access-Control-Expose-Headers")
 
+    # CASE 2: With request header
+    response = client.get(f"/api/static/covers/{filename}", headers={"X-Include-Provenance": "1"})
+    assert response.status_code == 200
+    assert response.headers.get("X-Manifestation-ID") == str(m.id)
+
+    # CASE 3: Without trigger (Performance Guard)
+    response = client.get(f"/api/static/covers/{filename}")
+    assert response.status_code == 200
+    assert response.headers.get("X-Manifestation-ID") is None
+
 
 def test_serve_cover_provenance_headers_head(client, manifestation_with_cover):
-    """Test that provenance headers are correctly injected in HEAD requests."""
+    """Test that provenance headers are correctly injected in HEAD requests when requested."""
     m, filename = manifestation_with_cover
 
-    response = client.head(f"/api/static/covers/{filename}")
+    response = client.head(f"/api/static/covers/{filename}?include=provenance")
 
     assert response.status_code == 200
     assert response.headers.get("X-Manifestation-ID") == str(m.id)
@@ -94,7 +105,7 @@ def test_serve_cover_provenance_headers_isbn_fallback(client, manifestation_with
 
     os.rename(old_filepath, new_filepath)
     try:
-        response = client.get(f"/api/static/covers/{new_filename}")
+        response = client.get(f"/api/static/covers/{new_filename}?include=provenance")
 
         assert response.status_code == 200
         # Should match via isbn13="1234567890123" extracted from "1234567890123_different.jpg"

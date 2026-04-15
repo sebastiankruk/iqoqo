@@ -153,12 +153,7 @@ class Work(db.Model):  # type: ignore[name-defined]
         )
         search_vector = db.Column(
             TSVECTOR(),
-            db.Computed(
-                "to_tsvector('simple'::regconfig, ((COALESCE((meta ->> 'cast'::text), ''::text)"
-                " || ' '::text || COALESCE((meta ->> 'directors'::text), ''::text)"
-                " || ' '::text || COALESCE((meta ->> 'mechanics'::text), ''::text))))",
-                persisted=True,
-            ),
+            db.FetchedValue(),
             nullable=True,
         )
         __table_args__: tuple = (

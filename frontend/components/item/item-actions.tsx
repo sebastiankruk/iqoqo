@@ -96,7 +96,7 @@ export function ItemActions({ item }: { item: Item }) {
         toast.success("Item removed from library");
         router.push("/collection");
       },
-      onError: e => toast.error(e.message),
+      onError: e => toast.error(e instanceof Error ? e.message : String(e)),
     });
   };
 
@@ -150,7 +150,7 @@ export function ItemActions({ item }: { item: Item }) {
       { status },
       {
         onSuccess: () => toast.success(`Status updated to ${status.replace(/_/g, " ")}`),
-        onError: e => toast.error(e.message),
+        onError: e => toast.error(e instanceof Error ? e.message : String(e)),
       }
     );
   };

@@ -38,10 +38,11 @@ interface ImageScan {
  * @returns {JSX.Element}
  */
 export function MultiScanGallery({ manifestationId }: { manifestationId: number }) {
-  const { data: scans, isLoading } = useQuery<ImageScan[]>({
+  const { data: scans, isLoading, error } = useQuery<ImageScan[]>({
     queryKey: ["manifestation", manifestationId, "images"],
     queryFn: async () => {
       const res = await apiClient.get(`/manifestations/${manifestationId}/images`);
+      if (!res.data?.success) throw new Error(res.data?.error ?? "Failed to load images");
       return res.data.data;
     },
   });
@@ -52,6 +53,14 @@ export function MultiScanGallery({ manifestationId }: { manifestationId: number 
         {[1, 2, 3].map(i => (
           <div key={i} className="aspect-square animate-pulse rounded-xl bg-muted" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center text-destructive text-xs">
+        Failed to load additional scans.
       </div>
     );
   }

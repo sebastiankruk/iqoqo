@@ -68,7 +68,7 @@ def get_items():
         if statuses_filter:
             statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
             params["statuses"] = statuses_list
-            statuses_sql += " AND i.status IN :statuses"
+            statuses_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         try:
             # Safely grab exact total of matches natively
@@ -84,7 +84,7 @@ def get_items():
 
             # Pull fully populated rows ordered gracefully by the computed FTS rank
             rows_sql = f"""
-            SELECT i.id as item_id, i.owner_id, i.status, m.id as manifestation_id,
+            SELECT i.id as item_id, i.owner_id, i.status, i.collection_status, m.id as manifestation_id,
                    m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                    w.meta as work_meta, i.added_at, i.updated_at,
                    ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
@@ -168,7 +168,7 @@ def get_items():
 
             if statuses_filter:
                 statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-                base_query = base_query.filter(Item.status.in_(statuses_list))
+                base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
             total = base_query.count()
             results = base_query.offset(offset).limit(limit).all()
@@ -541,6 +541,18 @@ def get_item_logs(item_id: int):
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    is_owner = str(item.owner_id) == str(user_id)
+    user = db.session.get(User, user_id)
+    is_admin = user and any(role.name == "admin" for role in getattr(user, "roles", []))
+    has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
+
+    if not (is_owner or is_admin or has_update_permission):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     logs = db.session.query(ItemStatusLog).filter(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc()).all()
     return jsonify(

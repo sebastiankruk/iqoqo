@@ -29,53 +29,58 @@ def test_item_status_logging(client, normal_user_headers, app):
     payload = jwt.decode(token, app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
     user_id = uuid.UUID(payload["sub"])
 
-    # Create dummy Work -> Expression -> Manifestation
-    work = Work(title="Test Work")
-    db.session.add(work)
-    db.session.flush()
-    expr = Expression(work_id=work.id, content_type="text")
-    db.session.add(expr)
-    db.session.flush()
-    manif = Manifestation(expression_id=expr.id, isbn13="1234567890123")
-    db.session.add(manif)
-    db.session.flush()
+    with app.app_context():
+        # Create dummy Work -> Expression -> Manifestation
+        work = Work(title="Test Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="1234567890123")
+        db.session.add(manif)
+        db.session.flush()
 
-    # Create item
-    item = Item(manifestation_id=manif.id, owner_id=user_id, status="available")
-    db.session.add(item)
-    db.session.commit()
+        # Create item with proper field split
+        item = Item(manifestation_id=manif.id, owner_id=user_id, status="unread", collection_status="available")
+        db.session.add(item)
+        db.session.commit()
+        item_id = item.id
 
     # Update status via API
-    resp = client.put(f"/api/items/{item.id}", json={"status": "reading"}, headers=normal_user_headers)
+    resp = client.put(f"/api/items/{item_id}", json={"status": "reading"}, headers=normal_user_headers)
     assert resp.status_code == 200
 
     # Verify log entry exists
-    logs = ItemStatusLog.query.filter_by(item_id=item.id).all()
-    assert len(logs) == 1
-    assert logs[0].old_status == "available"
-    assert logs[0].new_status == "reading"
-    assert logs[0].user_id == user_id
+    with app.app_context():
+        logs = ItemStatusLog.query.filter_by(item_id=item_id).all()
+        assert len(logs) == 1
+        assert logs[0].old_status == "unread"
+        assert logs[0].new_status == "reading"
+        assert logs[0].user_id == user_id
 
     # Get logs via API
-    resp = client.get(f"/api/items/{item.id}/logs", headers=normal_user_headers)
+    resp = client.get(f"/api/items/{item_id}/logs", headers=normal_user_headers)
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert len(data) == 1
     assert data[0]["new_status"] == "reading"
 
 
-def test_image_scan_provenance(client, admin_headers):
+def test_image_scan_provenance(client, admin_headers, app):
     """Test that manifestation images are stored in the new table."""
-    # Create dummy manifestation
-    work = Work(title="Test Work")
-    db.session.add(work)
-    db.session.flush()
-    expr = Expression(work_id=work.id, content_type="text")
-    db.session.add(expr)
-    db.session.flush()
-    manif = Manifestation(expression_id=expr.id, isbn13="1234567890123")
-    db.session.add(manif)
-    db.session.commit()
+    with app.app_context():
+        # Create dummy manifestation
+        work = Work(title="Test Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="1234567890123")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
 
     # Create a real 1x1 transparent pixel image
     from io import BytesIO
@@ -89,35 +94,38 @@ def test_image_scan_provenance(client, admin_headers):
 
     data = {"image": (img_io, "test.jpg"), "label": "disc"}
 
-    resp = client.post(f"/api/manifestations/{manif.id}/images", data=data, content_type="multipart/form-data", headers=admin_headers)
+    resp = client.post(f"/api/manifestations/{manif_id}/images", data=data, content_type="multipart/form-data", headers=admin_headers)
     assert resp.status_code == 201
 
     # Verify table entry
-    scan = ImageScan.query.filter_by(manifestation_id=manif.id).first()
-    assert scan is not None
-    assert scan.scan_type == "disc"
-    assert "gallery" in scan.file_path
+    with app.app_context():
+        scan = ImageScan.query.filter_by(manifestation_id=manif_id).first()
+        assert scan is not None
+        assert scan.scan_type == "disc"
+        assert "gallery" in scan.file_path
 
     # Get images via API
-    resp = client.get(f"/api/manifestations/{manif.id}/images", headers=admin_headers)
+    resp = client.get(f"/api/manifestations/{manif_id}/images", headers=admin_headers)
     assert resp.status_code == 200
     assert len(resp.get_json()["data"]) == 1
     assert resp.get_json()["data"][0]["label"] == "disc"
 
 
-def test_cover_provenance_headers(client):
-    """Test that serving a cover provides provenance headers."""
-    # Create dummy manifestation
-    work = Work(title="Test Work")
-    db.session.add(work)
-    db.session.flush()
-    expr = Expression(work_id=work.id, content_type="text")
-    db.session.add(expr)
-    db.session.flush()
-    manif = Manifestation(expression_id=expr.id, isbn13="1234567890123", cover_url="test_cover.jpg")
-    manif.update_meta(cover_source="google_books")
-    db.session.add(manif)
-    db.session.commit()
+def test_cover_provenance_headers(client, app):
+    """Test that serving a cover provides provenance headers only when requested."""
+    with app.app_context():
+        # Create dummy manifestation
+        work = Work(title="Test Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9999999990001", cover_url="test_cover.jpg")
+        manif.update_meta(cover_source="google_books")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
 
     # Mock the file existing in covers directory
     import os
@@ -128,7 +136,19 @@ def test_cover_provenance_headers(client):
     with open(os.path.join(COVERS_DIR, "test_cover.jpg"), "w", encoding="utf-8") as f:
         f.write("fake content")
 
+    # CASE 1: No trigger
     resp = client.get("/api/static/covers/test_cover.jpg")
     assert resp.status_code == 200
-    assert resp.headers.get("X-Manifestation-ID") == str(manif.id)
+    assert resp.headers.get("X-Manifestation-ID") is None
+
+    # CASE 2: Via query param
+    resp = client.get("/api/static/covers/test_cover.jpg?include=provenance")
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Manifestation-ID") == str(manif_id)
+    assert resp.headers.get("X-Image-Source") == "google_books"
+
+    # CASE 3: Via header
+    resp = client.get("/api/static/covers/test_cover.jpg", headers={"X-Include-Provenance": "1"})
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Manifestation-ID") == str(manif_id)
     assert resp.headers.get("X-Image-Source") == "google_books"
