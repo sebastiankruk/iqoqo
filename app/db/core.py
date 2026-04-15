@@ -84,6 +84,11 @@ ITEM_STATUSES: tuple[str, ...] = (
     "listening",
     "listened",
     "want_to_listen",
+    "playing",
+    "played",
+    "watching",
+    "watched",
+    "want_to_watch",
 )
 
 

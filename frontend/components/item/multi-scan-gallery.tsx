@@ -16,9 +16,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Image from "next/image";
 import { apiClient } from "@/lib/api/client";
 import { ImageIcon, Maximize2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { resolveApiUrl } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface ImageScan {
   id: number;
@@ -74,11 +76,12 @@ export function MultiScanGallery({ manifestationId }: { manifestationId: number 
       {scans.map(scan => (
         <Dialog key={scan.id}>
           <DialogTrigger asChild>
-            <button className="group relative aspect-square overflow-hidden rounded-xl border bg-card/50 transition-all hover:ring-2 hover:ring-primary/50">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={scan.url}
+            <button className="group relative aspect-square overflow-hidden rounded-xl border bg-card/50 transition-all hover:ring-2 hover:ring-primary/50 text-left">
+              <Image
+                src={resolveApiUrl(scan.url)}
                 alt={scan.label}
+                fill
+                unoptimized
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
@@ -90,11 +93,24 @@ export function MultiScanGallery({ manifestationId }: { manifestationId: number 
               </div>
             </button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none sm:max-w-4xl">
-            <div className="flex flex-col">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={scan.url} alt={scan.label} className="max-h-[85vh] w-full rounded-lg object-contain" />
-              <div className="mt-4 flex items-center justify-between px-2 text-white">
+          <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none sm:max-w-4xl focus:outline-none">
+            <div className="sr-only">
+              <DialogTitle>{scan.label}</DialogTitle>
+              <DialogDescription>
+                Viewing {scan.label} from {scan.source}
+              </DialogDescription>
+            </div>
+            <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+              <div className="relative h-[70vh] sm:h-[80vh] w-full">
+                <Image
+                  src={resolveApiUrl(scan.url)}
+                  alt={scan.label}
+                  fill
+                  unoptimized
+                  className="rounded-lg object-contain drop-shadow-2xl"
+                />
+              </div>
+              <div className="mt-4 flex w-full items-center justify-between px-4 text-white">
                 <div>
                   <h4 className="text-sm font-bold uppercase tracking-widest">{scan.label}</h4>
                   <p className="text-xs opacity-60">Source: {scan.source}</p>

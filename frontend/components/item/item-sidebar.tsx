@@ -16,7 +16,7 @@
 "use client";
 
 import { ChangeEvent } from "react";
-import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus } from "lucide-react";
+import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile } from "@/lib/api/hooks";
@@ -85,8 +85,12 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     (item.meta?.["format"] as string | undefined) ??
     "book";
   const isAudio = isAudioMedia(format);
-  const aspectClass = isAudio ? "aspect-square" : "aspect-[2/3]";
-  const MediaIcon = isAudio ? Disc : BookOpen;
+  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isBook = !isAudio && !isVideo && !isGame;
+
+  const aspectClass = isAudio || isGame ? "aspect-square" : "aspect-[2/3]";
+  const MediaIcon = isAudio ? Disc : isVideo ? Film : isGame ? Gamepad2 : BookOpen;
 
   const statusInfo = STATUS_LABELS[item.status] ?? {
     label: item.status,
@@ -183,26 +187,54 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 </option>
               ))}
             </optgroup>
-            <optgroup
-              label="Reading Progress"
-              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-            >
-              {["unread", "reading", "read", "want_to_read"].map(key => (
-                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup
-              label="Listening Progress"
-              className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
-            >
-              {["want_to_listen", "listening", "listened"].map(key => (
-                <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
-                  {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
-                </option>
-              ))}
-            </optgroup>
+            {isBook && (
+              <optgroup
+                label="Reading Progress"
+                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+              >
+                {["unread", "reading", "read", "want_to_read"].map(key => (
+                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {isAudio && (
+              <optgroup
+                label="Listening Progress"
+                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+              >
+                {["want_to_listen", "listening", "listened"].map(key => (
+                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {isVideo && (
+              <optgroup
+                label="Watching Progress"
+                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+              >
+                {["want_to_watch", "watching", "watched"].map(key => (
+                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {isGame && (
+              <optgroup
+                label="Gaming Progress"
+                className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
+              >
+                {["playing", "played"].map(key => (
+                  <option key={key} value={key} className="text-foreground bg-card normal-case tracking-normal py-2">
+                    {STATUS_LABELS[key as keyof typeof STATUS_LABELS]?.label || key}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             <optgroup
               label="Acquisition"
               className="bg-card text-muted-foreground text-xs font-semibold uppercase tracking-wider"
