@@ -49,12 +49,33 @@ class LLMTelemetry(db.Model):  # type: ignore[name-defined]
     images_generated = db.Column(db.Integer, default=0)
     estimated_cost_usd = db.Column(db.Float, default=0.0)
     total_duration_seconds = db.Column(db.Float, default=0.0)
+    status = db.Column(db.String(20), nullable=False, default="success")  # success, failed, not_allowed
+    error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     __table_args__ = (
         db.Index("ix_llm_telemetry_provider_user_op_time", "provider", "user_id", "operation_type", "created_at"),
         {"schema": _INVENTORY} if _INVENTORY else {},
     )
+
+
+class ScanTelemetry(db.Model):  # type: ignore[name-defined]
+    """Records barcode scan and manual lookup attempts for auditing and link analysis."""
+
+    __tablename__ = "scan_telemetry"
+
+    id = db.Column(db.Integer, primary_key=True)
+    barcode = db.Column(db.String(50), nullable=False, index=True)
+    format_hint = db.Column(db.String(50), nullable=True)
+    provider = db.Column(db.String(50), nullable=False)  # e.g. "discogs", "isbn", "upc", "tmdb", "bgg"
+    status = db.Column(db.String(20), nullable=False)  # "success", "failed"
+    manifestation_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_CATALOG}.manifestations.id" if _CATALOG else "manifestations.id"), nullable=True
+    )
+    raw_request_url = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    __table_args__ = ({"schema": _INVENTORY} if _INVENTORY else {},)
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]

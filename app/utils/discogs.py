@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 def fetch_discogs_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from Discogs.
 
-    Requires DISCOGS_USER_TOKEN in environment variables.
+    Supports two authentication methods (priority fallback):
+    1. Preferred: DISCOGS_CONSUMER_KEY and DISCOGS_CONSUMER_SECRET (OAuth 1.0a consumer key/secret).
+    2. Legacy: DISCOGS_USER_TOKEN (Personal Access Token).
 
     Args:
         barcode (str): The UPC or EAN barcode.
@@ -35,13 +37,23 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
     Returns:
         dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
     """
-    token = os.environ.get("DISCOGS_USER_TOKEN")
-    if not token:
-        logger.warning("DISCOGS_USER_TOKEN not set. Skipping Discogs lookup.")
+    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
+    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
+    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
+
+    if consumer_key and consumer_secret:
+        # Preferred: OAuth 1.0a consumer credentials
+        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
+    elif legacy_token:
+        # Fallback: legacy personal access token (still valid, just deprecated)
+        logger.debug("Using legacy DISCOGS_USER_TOKEN; consider migrating to DISCOGS_CONSUMER_KEY/SECRET.")
+        auth_header = f"Discogs token={legacy_token}"
+    else:
+        logger.warning("No Discogs credentials found. Skipping Discogs lookup.")
         return None
 
     url = f"https://api.discogs.com/database/search?barcode={barcode}&type=release"
-    headers = {"User-Agent": "iqoqo/0.3.0 ( dev@kruk.me )", "Authorization": f"Discogs token={token}"}
+    headers = {"User-Agent": "iqoqo/0.4.0 ( dev@kruk.me )", "Authorization": auth_header}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)

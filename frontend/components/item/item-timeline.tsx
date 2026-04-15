@@ -33,7 +33,11 @@ interface StatusLog {
  * @returns {JSX.Element | null} The component or null if no logs.
  */
 export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
-  const { data: logs, isLoading, error } = useQuery<StatusLog[]>({
+  const {
+    data: logs,
+    isLoading,
+    error,
+  } = useQuery<StatusLog[]>({
     queryKey: ["item", itemId, "logs"],
     queryFn: async () => {
       const res = await apiClient.get(`/items/${itemId}/logs`);

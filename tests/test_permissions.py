@@ -47,3 +47,56 @@ def test_permission_enum_values_are_lowercase_verb_noun():
         assert val == val.lower(), f"Permission {p.name} value '{val}' must be lowercase"
         parts = val.split(":")
         assert len(parts) == 2, f"Permission {p.name} value '{val}' must be exactly verb:noun"
+
+
+def test_list_llm_permissions(app):
+    """Verify list_llm_permissions accurately reflects user permissions."""
+    from app.db.models import Permission, Role, User, db
+
+    with app.app_context():
+        # 1. Guest user
+        guest_perms = User.list_llm_permissions(None)
+        assert guest_perms["allow_generate_cover"] is False
+        assert guest_perms["allow_cloud_llm"] is False
+        assert guest_perms["allow_generate_metadata"] is False
+
+        # 2. User with no special permissions
+        user = User(email="test@example.local")
+        db.session.add(user)
+        db.session.commit()
+
+        user_perms = User.list_llm_permissions(user)
+        assert user_perms["allow_generate_cover"] is False
+        assert user_perms["allow_cloud_llm"] is False
+        assert user_perms["allow_generate_metadata"] is False
+
+        # 3. User with metadata permission only
+        meta_perm = Permission(name=PermissionName.LLM_GENERATE_METADATA.value)
+        db.session.add(meta_perm)
+
+        meta_role = Role(name="meta_role")
+        meta_role.permissions.append(meta_perm)
+        db.session.add(meta_role)
+
+        user.roles.append(meta_role)
+        db.session.commit()
+
+        meta_perms = User.list_llm_permissions(user)
+        assert meta_perms["allow_generate_cover"] is False
+        assert meta_perms["allow_cloud_llm"] is False
+        assert meta_perms["allow_generate_metadata"] is True
+
+        # 4. User with cloud permission
+        cloud_perm = Permission(name=PermissionName.LLM_GENERATE_CLOUD.value)
+        db.session.add(cloud_perm)
+
+        cloud_role = Role(name="cloud_role")
+        cloud_role.permissions.append(cloud_perm)
+        db.session.add(cloud_role)
+
+        user.roles.append(cloud_role)
+        db.session.commit()
+
+        all_perms = User.list_llm_permissions(user)
+        assert all_perms["allow_cloud_llm"] is True
+        assert all_perms["allow_generate_metadata"] is True
