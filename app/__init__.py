@@ -58,8 +58,9 @@ def _coerce_list(value, default=None):
 
 def create_app(config_class=Config, config_override=None):
     # Configure logging early
+    log_level = getattr(logging, Config.LOG_LEVEL, logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         force=True,
     )

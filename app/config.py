@@ -29,6 +29,7 @@ class Config:
     # Default secret key must be at least 32 bytes for HMAC-SHA256 (JWT requirement)
     SECRET_KEY = os.environ.get("SECRET_KEY", "iqoqo-default-secret-key-32-chars-at-least")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
     # Protect against huge payload attacks
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16 MB max
