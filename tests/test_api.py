@@ -282,12 +282,13 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client, normal
 @patch("app.api.manifestations.start_cover_processing")
 def test_regenerate_cover(mock_start, client, sample_book, admin_headers):
     """Test the regenerate cover endpoint triggers background processing."""
+    mock_start.return_value = "test-task-id"
     # 1. Call the endpoint
     response = client.post(f"/api/manifestations/{sample_book.id}/regenerate-cover", headers=admin_headers)
 
     # 2. Verify Response
     assert response.status_code == 202
-    assert response.json["status"] == "pending"
+    assert response.json["data"]["status"] == "pending"
 
     # 3. Verify DB State (Optimistic update)
     with client.application.app_context():
@@ -424,6 +425,7 @@ def test_vision_extract_api_unavailable(mock_get_result, client, vision_user_hea
 @patch("app.api.manifestations.start_cover_processing")
 def test_upload_cover(mock_start, client, sample_book, admin_headers):
     """POST /api/manifestations/<id>/cover returns 202 on success."""
+    mock_start.return_value = "test-task-id"
     from io import BytesIO
 
     jpeg_bytes = _make_minimal_jpeg()
@@ -434,7 +436,7 @@ def test_upload_cover(mock_start, client, sample_book, admin_headers):
         content_type="multipart/form-data",
     )
     assert response.status_code == 202
-    assert response.json["message"] == "Cover upload processing started"
+    assert response.json["data"]["message"] == "Cover upload processing started"
     mock_start.assert_called_once()
 
 

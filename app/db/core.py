@@ -32,8 +32,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import UUID
 
-from . import db
 from app.db.search_types import SearchVector
+
+from . import db
 
 # ---------------------------------------------------------------------------
 # Schema selector
@@ -137,11 +138,15 @@ class Work(db.Model):  # type: ignore[name-defined]
     # Computed columns are only generated on dialects that support them (PostgreSQL).
     fts_simple = db.Column(
         SearchVector(),
-        db.Computed(
-            "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
-            " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
-            persisted=True,
-        ) if _USE_PG else None,
+        (
+            db.Computed(
+                "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
+                " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
+                persisted=True,
+            )
+            if _USE_PG
+            else None
+        ),
         nullable=True,
     )
     search_vector = db.Column(
@@ -222,12 +227,16 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     # Dialect-aware full-text search column.
     fts_simple = db.Column(
         SearchVector(),
-        db.Computed(
-            "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text"
-            " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
-            " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
-            persisted=True,
-        ) if _USE_PG else None,
+        (
+            db.Computed(
+                "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text"
+                " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
+                " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
+                persisted=True,
+            )
+            if _USE_PG
+            else None
+        ),
         nullable=True,
     )
 

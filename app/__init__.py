@@ -128,6 +128,7 @@ def create_app(config_class=Config, config_override=None):
 
     # Initialize Celery
     from app.core.celery_app import init_celery
+
     init_celery(app)
 
     app.register_blueprint(api_bp)

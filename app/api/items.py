@@ -17,7 +17,7 @@
 #
 
 from flask import current_app, g, jsonify, request
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -56,6 +56,7 @@ def get_items():
 
     if q:
         from app.core.search_service import SearchService
+
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
         total, results = SearchService.search_items(q, user_id, limit, offset, statuses=statuses_list)
 
@@ -74,18 +75,13 @@ def get_items():
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
                     "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
-                    "updated_at": (row.get("updated_at") or row["added_at"]).isoformat() if hasattr((row.get("updated_at") or row["added_at"]), "isoformat") else (row.get("updated_at") or row["added_at"]),
+                    "updated_at": (
+                        (row.get("updated_at") or row["added_at"]).isoformat()
+                        if hasattr((row.get("updated_at") or row["added_at"]), "isoformat")
+                        else (row.get("updated_at") or row["added_at"])
+                    ),
                 }
             )
-
-        return jsonify(
-            {
-                "success": True,
-                "data": items_data,
-                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
-                "error": None,
-            }
-        )
 
         return jsonify(
             {

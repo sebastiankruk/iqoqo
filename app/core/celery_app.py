@@ -16,6 +16,7 @@
 """Celery application factory and Flask integration helpers."""
 
 import os
+
 from celery import Celery
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")

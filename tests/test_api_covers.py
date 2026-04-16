@@ -13,24 +13,28 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 
 @pytest.fixture(autouse=True)
 def setup_celery_eager(app):
     """Ensure Celery runs tasks synchronously for tests."""
     from app.core.celery_app import celery
-    celery.conf.broker_url = 'memory://'
-    celery.conf.result_backend = 'cache+memory://'
+
+    celery.conf.broker_url = "memory://"
+    celery.conf.result_backend = "cache+memory://"
     celery.conf.task_always_eager = True
     celery.conf.task_store_eager_result = True
     yield
     celery.conf.task_always_eager = False
     celery.conf.task_store_eager_result = False
 
+
 def test_regenerate_cover_returns_task_id(client, admin_headers):
-    from app.db.models import Manifestation, Expression, Work, db
-    
+    from app.db.models import Expression, Manifestation, Work, db
+
     with client.application.app_context():
         work = Work(title="Regen Test", meta={"authors": ["Author Regen"]})
         db.session.add(work)
@@ -50,9 +54,10 @@ def test_regenerate_cover_returns_task_id(client, admin_headers):
         assert data["success"] is True
         assert data["data"]["task_id"] == "fake-task-id"
 
+
 def test_get_cover_status_polling(client, normal_user_headers):
-    from app.db.models import Manifestation, Expression, Work, db
-    
+    from app.db.models import Expression, Manifestation, Work, db
+
     with client.application.app_context():
         work = Work(title="Status Test")
         db.session.add(work)

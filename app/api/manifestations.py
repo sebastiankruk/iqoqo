@@ -19,9 +19,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, current_app, g, jsonify, request
+from flask import Response, g, jsonify, request
 from PIL import Image
-from sqlalchemy import text
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -56,6 +55,7 @@ def get_manifestations() -> tuple[Response, int]:
 
     if q:
         from app.core.search_service import SearchService
+
         total, result_ids = SearchService.search_manifestations(q, limit, offset)
 
         if result_ids:
@@ -515,7 +515,12 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
         genre=genre,
     )
 
-    return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover regeneration scheduled", "status": "pending"}, "error": None}), 202
+    return (
+        jsonify(
+            {"success": True, "data": {"task_id": task_id, "message": "Cover regeneration scheduled", "status": "pending"}, "error": None}
+        ),
+        202,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover-status", methods=["GET"])
@@ -528,16 +533,22 @@ def get_cover_status(manifestation_id: int):
         m = db.session.get(Manifestation, manifestation_id)
         if not m:
             return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
-        return jsonify({
-            "success": True,
-            "data": {
-                "cover_url": m.cover_url,
-                "status": m.meta.get("cover_status") if m.meta else None,
-            },
-            "error": None,
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "cover_url": m.cover_url,
+                        "status": m.meta.get("cover_status") if m.meta else None,
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
 
     from app.core.tasks import get_task_result
+
     user_id = getattr(g, "user_id", None)
     result = get_task_result(task_id, user_id=str(user_id) if user_id else None)
 
@@ -547,20 +558,30 @@ def get_cover_status(manifestation_id: int):
     status = result.get("status")
     if status == "completed":
         m = db.session.get(Manifestation, manifestation_id)
-        return jsonify({
-            "success": True,
-            "data": {
-                "cover_url": m.cover_url if m else None,
-                "status": "ready",
-            },
-            "error": None,
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "cover_url": m.cover_url if m else None,
+                        "status": "ready",
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
 
-    return jsonify({
-        "success": True,
-        "data": {"status": status, "error": result.get("error")},
-        "error": None,
-    }), 202
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {"status": status, "error": result.get("error")},
+                "error": None,
+            }
+        ),
+        202,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["DELETE"])

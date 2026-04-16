@@ -14,39 +14,26 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import pytest
-from app.core.tasks import submit_task, get_task_result
+
+from app.core.tasks import get_task_result, submit_task
+
 
 def dummy_task(x, y):
     return x + y
 
+
 def failing_task():
     raise ValueError("Task failed spectacularly")
 
-@pytest.fixture(autouse=True)
-def setup_celery_eager(app):
-    """Ensure Celery runs tasks synchronously for tests."""
-    from app.core.celery_app import celery
-    old_broker = celery.conf.broker_url
-    old_backend = celery.conf.result_backend
-    old_eager = celery.conf.task_always_eager
-    old_store = celery.conf.task_store_eager_result
-    
-    celery.conf.broker_url = 'memory://'
-    celery.conf.result_backend = 'cache+memory://'
-    celery.conf.task_always_eager = True
-    celery.conf.task_store_eager_result = True
-    
-    yield
-    
-    celery.conf.broker_url = old_broker
-    celery.conf.result_backend = old_backend
-    celery.conf.task_always_eager = old_eager
-    celery.conf.task_store_eager_result = old_store
+
+# Celery eager mode is handled globally in conftest.py
+
 
 def test_submit_task_returns_id():
     task_id = submit_task(dummy_task, 10, 20)
     assert isinstance(task_id, str)
     assert len(task_id) > 0
+
 
 def test_get_task_result_success():
     task_id = submit_task(dummy_task, 1, 2)
@@ -55,6 +42,7 @@ def test_get_task_result_success():
     assert result["status"] == "completed"
     assert result["result"] == 3
 
+
 def test_get_task_result_failure():
     task_id = submit_task(failing_task)
     result = get_task_result(task_id)
@@ -62,17 +50,19 @@ def test_get_task_result_failure():
     assert result["status"] == "failed"
     assert "Task failed spectacularly" in result["error"]
 
+
 def test_get_task_result_user_isolation():
     task_id = submit_task(dummy_task, 5, 5, user_id="user_a")
-    
+
     # Poll as user_a -> should work
     result_a = get_task_result(task_id, user_id="user_a")
     assert result_a is not None
     assert result_a["result"] == 10
-    
+
     # Poll as user_b -> should return None (isolated)
     result_b = get_task_result(task_id, user_id="user_b")
     assert result_b is None
+
 
 def test_get_task_result_not_found():
     result = get_task_result("non_existent_id")

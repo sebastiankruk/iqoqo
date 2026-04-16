@@ -21,6 +21,7 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 
 import logging
 from collections.abc import Callable
+
 from celery.result import AsyncResult
 
 from app.core.celery_app import celery
@@ -48,6 +49,7 @@ def _task_wrapper(self, func_path: str, *args, user_id=None, **kwargs):
     """
     # Import function dynamically to avoid circular dependencies in worker
     import importlib
+
     module_path, func_name = func_path.rsplit(".", 1)
     module = importlib.import_module(module_path)
     func = getattr(module, func_name)
@@ -78,7 +80,7 @@ def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> 
     # Convert function to dotted path for Celery serialization
     func_path = f"{func.__module__}.{func.__name__}"
     result = _task_wrapper.delay(func_path, *args, user_id=user_id, **kwargs)
-    return result.id
+    return str(result.id)
 
 
 def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
@@ -117,7 +119,7 @@ def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
         # We might not have ownership info here if it failed early,
         # but the worker tries to store it in update_state before failure
         if hasattr(res, "info") and isinstance(res.info, dict):
-             task_user_id = res.info.get("user_id")
+            task_user_id = res.info.get("user_id")
 
     # Verify ownership if user_id is provided
     if user_id and task_user_id:
@@ -126,8 +128,11 @@ def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
 
     # Construct response matching legacy iqoqo format
     output = {"status": status, "user_id": task_user_id}
-    if actual_result is not None:
+    if res.state == "SUCCESS":
         output["result"] = actual_result
+    elif actual_result is not None:
+        output["result"] = actual_result
+
     if error_msg:
         output["error"] = error_msg
 

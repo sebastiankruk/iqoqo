@@ -17,8 +17,8 @@
 
 Compiles to ``TSVECTOR`` on PostgreSQL and ``TEXT`` on all other dialects.
 """
+
 from sqlalchemy import Text
-from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.ext.compiler import compiles
 
 
@@ -37,4 +37,4 @@ def compile_search_vector_pg(element, compiler, **kw) -> str:  # noqa: ARG001
 
 @compiles(SearchVector)
 def compile_search_vector_default(element, compiler, **kw) -> str:  # noqa: ARG001
-    return compiler.visit_TEXT(element, **kw)
+    return str(compiler.visit_TEXT(element, **kw))

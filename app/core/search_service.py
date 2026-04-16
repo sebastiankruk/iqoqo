@@ -17,11 +17,14 @@
 
 Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 """
+
 import logging
 from typing import Any
-from sqlalchemy import text, bindparam
+
+from sqlalchemy import bindparam, text
+
 from app.db import db
-from app.db.models import Manifestation, Expression, Work, Item
+from app.db.models import Expression, Item, Manifestation, Work
 
 logger = logging.getLogger(__name__)
 
@@ -180,18 +183,20 @@ class SearchService:
 
         mapped_results = []
         for item, manifestation, work in results:
-            mapped_results.append({
-                "item_id": item.id,
-                "owner_id": item.owner_id,
-                "status": item.status,
-                "collection_status": item.collection_status,
-                "manifestation_id": manifestation.id,
-                "isbn13": manifestation.isbn13,
-                "title": work.title,
-                "cover_url": manifestation.cover_url,
-                "manifestation_meta": manifestation.meta,
-                "work_meta": work.meta,
-                "added_at": item.added_at,
-                "updated_at": item.updated_at,
-            })
+            mapped_results.append(
+                {
+                    "item_id": item.id,
+                    "owner_id": item.owner_id,
+                    "status": item.status,
+                    "collection_status": item.collection_status,
+                    "manifestation_id": manifestation.id,
+                    "isbn13": manifestation.isbn13,
+                    "title": work.title,
+                    "cover_url": manifestation.cover_url,
+                    "manifestation_meta": manifestation.meta,
+                    "work_meta": work.meta,
+                    "added_at": item.added_at,
+                    "updated_at": item.updated_at,
+                }
+            )
         return total, mapped_results

@@ -45,6 +45,26 @@ def app():
         db.drop_all()
 
 
+@pytest.fixture(autouse=True)
+def celery_eager(app):
+    """Ensure Celery is in eager mode and isolated for all tests."""
+    from app.core.celery_app import celery
+    old_broker = celery.conf.broker_url
+    old_backend = celery.conf.result_backend
+    old_eager = celery.conf.task_always_eager
+    old_store = celery.conf.task_store_eager_result
+    
+    celery.conf.broker_url = 'memory://'
+    celery.conf.result_backend = 'cache+memory://'
+    celery.conf.task_always_eager = True
+    celery.conf.task_store_eager_result = True
+    yield
+    celery.conf.broker_url = old_broker
+    celery.conf.result_backend = old_backend
+    celery.conf.task_always_eager = old_eager
+    celery.conf.task_store_eager_result = old_store
+
+
 @pytest.fixture
 def client(app):
     """A test client for the app."""

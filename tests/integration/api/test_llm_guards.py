@@ -36,6 +36,8 @@ def test_extract_from_cover_global_llm_disabled(client, vision_user_headers):
             mock_gemini.return_value = None
             mock_ollama.return_value = None
             mock_tesseract.return_value = None
+            mock_extract.__name__ = "extract_metadata_from_cover"
+            mock_extract.__module__ = "app.api.scanner"
             mock_extract.return_value = None
 
             data = {"cover": (BytesIO(b"fake-image-data"), "test.jpg")}
