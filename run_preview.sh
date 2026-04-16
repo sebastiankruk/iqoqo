@@ -31,6 +31,24 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
+# 1a. Load and validate environment variables
+set -o allexport
+source "$ENV_FILE"
+set +o allexport
+
+REQUIRED_VARS=("DATABASE_URL" "REDIS_URL" "SECRET_KEY" "AUTH_SECRET")
+MISSING_VARS=()
+for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+        MISSING_VARS+=("$var")
+    fi
+done
+
+if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+    echo "❌ Error: Missing required environment variables in $ENV_FILE: ${MISSING_VARS[*]}"
+    exit 1
+fi
+
 # Activate Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "Virtual environment not found. Creating one..."

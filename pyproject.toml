@@ -17,6 +17,8 @@ dependencies = [
     "gunicorn",
     "flask-sqlalchemy",
     "flask-migrate",
+    "celery[redis]",
+    "redis",
 ]
 
 [project.optional-dependencies]

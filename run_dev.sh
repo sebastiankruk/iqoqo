@@ -24,7 +24,41 @@ MODE=${MODE:-dev}
 VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
 export APP_VERSION="${VERSION:-0}.dev"
 
-# 1. Start Database
+# 1. Load and validate environment variables
+if [ -f ".env" ]; then
+    set -o allexport
+    source .env
+    set +o allexport
+fi
+
+# Load Tunnel-specific overrides if in dev mode
+if [ "$MODE" == "dev" ] && [ -f ".env.dev" ]; then
+    echo "⚡ Loading Tunnel Configuration (.env.dev) for dev.iqoqo.cc"
+    set -o allexport
+    source .env.dev
+    set +o allexport
+else
+    echo "🏠 Running in Localhost mode"
+    export NEXTAUTH_URL="http://localhost:3000"
+    export AUTH_TRUST_HOST="false"
+fi
+
+# 1a. Validate required environment variables
+REQUIRED_VARS=("DATABASE_URL" "REDIS_URL" "SECRET_KEY")
+MISSING_VARS=()
+for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+        MISSING_VARS+=("$var")
+    fi
+done
+
+if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+    echo "❌ Error: Missing required environment variables: ${MISSING_VARS[*]}"
+    echo "   Please ensure they are defined in .env or .env.dev"
+    exit 1
+fi
+
+# 2. Start Database
 echo "Checking database status..."
 if docker compose version &> /dev/null; then
     if ! docker compose up -d db; then
@@ -68,24 +102,9 @@ else
     echo "Warning: docker compose not found. Please ensure your PostgreSQL database is running."
 fi
 
-# 1b. Load environment variables
-if [ -f ".env" ]; then
-    set -o allexport
-    source .env
-    set +o allexport
-fi
-
-# Load Tunnel-specific overrides if in dev mode
-if [ "$MODE" == "dev" ] && [ -f ".env.dev" ]; then
-    echo "⚡ Loading Tunnel Configuration (.env.dev) for dev.iqoqo.cc"
-    set -o allexport
-    source .env.dev
-    set +o allexport
-else
-    echo "🏠 Running in Localhost mode"
-    export NEXTAUTH_URL="http://localhost:3000"
-    export AUTH_TRUST_HOST="false"
-fi
+# 2a. Start Redis (broker for Celery task queue)
+echo "Starting Redis..."
+docker compose up -d redis
 
 WEB_PORT=${WEB_PORT:-5000}
 
@@ -142,6 +161,9 @@ echo "Cleaning up stale processes..."
 
 # Terminate Flask API process started by this script (if PID file exists)
 terminate_from_pidfile "${PID_DIR}/web_server.pid" "Flask API server"
+
+# Terminate Celery worker process started by this script (if PID file exists)
+terminate_from_pidfile "${PID_DIR}/celery_worker.pid" "Celery worker"
 
 # Terminate Next.js dev server started by this script (if PID file exists)
 NEXT_PORT=${NEXT_PORT:-3000}
@@ -222,6 +244,11 @@ flask run --port "${WEB_PORT}" &
 FLASK_PID=$!
 echo $FLASK_PID > "${PID_DIR}/web_server.pid"
 
+echo "Starting Celery worker..."
+.venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
+CELERY_PID=$!
+echo $CELERY_PID > "${PID_DIR}/celery_worker.pid"
+
 if [ -d "frontend" ]; then
     echo "Starting Next.js frontend (Mode: $MODE) ..."
     # NEXT_PUBLIC_API_URL="/api" triggers the Next.js config rewrites (proxy)
@@ -255,10 +282,13 @@ cleanup() {
     echo ""
     echo "Stopping servers..."
     kill "$FLASK_PID" 2>/dev/null
+    if [ -n "$CELERY_PID" ]; then
+        kill "$CELERY_PID" 2>/dev/null
+    fi
     if [ -d "frontend" ] && [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null
     fi
-    rm -f "${PID_DIR}/web_server.pid" "${PID_DIR}/next_dev.pid"
+    rm -f "${PID_DIR}/web_server.pid" "${PID_DIR}/celery_worker.pid" "${PID_DIR}/next_dev.pid"
     echo "Stopped."
     exit 0
 }

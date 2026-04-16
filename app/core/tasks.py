@@ -1,5 +1,3 @@
-"""Centralized task management using ThreadPoolExecutor."""
-
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -14,109 +12,60 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+"""Centralized task management using Celery.
 
-import atexit
+Preserves the public API (submit_task, get_task_result) while using
+Redis as a distributed broker to support multi-process Gunicorn scaling.
+"""
+
 import logging
-import threading
-import time
-import uuid
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING
+from celery.result import AsyncResult
 
-if TYPE_CHECKING:
-    from flask import Flask
+from app.core.celery_app import celery
 
 logger = logging.getLogger(__name__)
 
-# Centralized managed thread pool for the entire application.
-# Replaces unmanaged threading.Thread instances to prevent memory exhaustion.
-# Defaults to a reasonable number of workers to prevent system overload.
-global_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="iqoqo_worker")
 
-# In-memory store for tracking async task status and results
-# Protected by lock for thread-safe access
-_task_results: dict = {}
-_task_lock = threading.Lock()
-
-# TTL for task results: 1 hour
-_TASK_TTL_SECONDS = 3600
+# Legacy mapping for task status consistency
+# Celery -> iqoqo
+STATUS_MAP = {
+    "PENDING": "pending",
+    "STARTED": "processing",
+    "RETRY": "processing",
+    "SUCCESS": "completed",
+    "FAILURE": "failed",
+}
 
 
-def _cleanup_old_tasks() -> None:
-    """Remove tasks older than TTL to prevent unbounded memory growth."""
-    with _task_lock:
-        now = time.time()
-        expired = [tid for tid, data in _task_results.items() if data.get("_created_at", 0) + _TASK_TTL_SECONDS < now]
-        for tid in expired:
-            del _task_results[tid]
-        if expired:
-            logger.debug(f"Cleaned up {len(expired)} expired task results")
+@celery.task(bind=True)
+def _task_wrapper(self, func_path: str, *args, user_id=None, **kwargs):
+    """Wraps target functions for Celery execution.
 
-
-def _record_task(task_id: str, status: str, **kwargs) -> None:
-    """Thread-safe helper to record task status."""
-    with _task_lock:
-        _task_results[task_id] = {"status": status, "_created_at": time.time(), **kwargs}
-
-
-# Lazily cached Flask app reference — set on first submit_task call.
-# This allows tasks.py to remain import-time free of Flask so it can be
-# imported before the app is fully constructed.
-_flask_app: "Flask | None" = None
-
-
-def _get_flask_app() -> "Flask | None":
-    """Return the current Flask application if one is running."""
-    global _flask_app  # pylint: disable=global-statement
-    if _flask_app is not None:
-        return _flask_app
-    try:
-        from flask import current_app  # pylint: disable=import-outside-toplevel
-
-        _flask_app = current_app._get_current_object()  # type: ignore[attr-defined] # pylint: disable=protected-access
-    except RuntimeError:
-        # No application context (e.g. during tests without app context)
-        pass
-    return _flask_app
-
-
-def shutdown_executor() -> None:
-    """Gracefully shuts down the global ThreadPoolExecutor on exit."""
-    logger.info("Shutting down global ThreadPoolExecutor...")
-    global_executor.shutdown(wait=False)
-
-
-atexit.register(shutdown_executor)
-
-
-def _task_wrapper(task_id: str, app: "Flask | None", func: Callable, *args, user_id=None, **kwargs) -> None:
-    """Wraps the target function to record its outcome.
-
-    Pushes a Flask application context when one is available so that
-    database sessions and other Flask-bound resources work correctly
-    inside background threads.
+    Args:
+        func_path: Full dotted path to the function to execute (e.g. 'app.utils.vision.extract_metadata')
     """
-    _record_task(task_id, "processing", user_id=user_id)
+    # Import function dynamically to avoid circular dependencies in worker
+    import importlib
+    module_path, func_name = func_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    func = getattr(module, func_name)
+
+    # Store user_id in task metadata for ownership verification
+    self.update_state(state="STARTED", meta={"user_id": user_id})
+
     try:
-        if app is not None:
-            with app.app_context():
-                result = func(*args, **kwargs)
-        else:
-            result = func(*args, **kwargs)
-        _record_task(task_id, "completed", result=result, user_id=user_id)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.exception(f"Task {task_id} failed")
-        _record_task(task_id, "failed", error=str(e), user_id=user_id)
+        result = func(*args, **kwargs)
+        return {"result": result, "user_id": user_id}
+    except Exception as e:
+        logger.exception(f"Task {self.request.id} failed")
+        raise e
 
 
 def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> str:
     """
-    Submit a background task to the centralized thread pool.
-
-    The current Flask application context (if any) is captured at submission
-    time and replayed inside the worker thread, ensuring that SQLAlchemy
-    sessions and Flask config are available to the task function.
+    Submit a background task to the Celery queue.
 
     Args:
         func: The callable to execute in the background.
@@ -126,37 +75,65 @@ def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> 
     Returns:
         str: A unique task_id to poll for the result.
     """
-    task_id = str(uuid.uuid4())
-    _record_task(task_id, "pending", user_id=user_id)
-    app = _get_flask_app()
-    global_executor.submit(_task_wrapper, task_id, app, func, *args, **kwargs)
-    return task_id
+    # Convert function to dotted path for Celery serialization
+    func_path = f"{func.__module__}.{func.__name__}"
+    result = _task_wrapper.delay(func_path, *args, user_id=user_id, **kwargs)
+    return result.id
 
 
 def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
     """
-    Retrieve the current status or result of a background task.
-    Thread-safe read with TTL cleanup on access.
+    Retrieve the current status or result of a background task from Redis.
 
     Args:
         task_id: The task ID to retrieve.
-        user_id: Optional user ID to verify ownership. If provided and task
-                 has a different owner, returns None. Skips verification
-                 for None to maintain backward compatibility with tests.
+        user_id: Optional user ID to verify ownership.
 
     Returns:
         dict | None: Task result if found and owned by user, None otherwise.
     """
-    with _task_lock:
-        result = _task_results.get(task_id)
-        if result:
-            # Only verify ownership if user_id is truthy (not None, not empty string)
-            # This maintains test compatibility while still protecting in production
-            if user_id:
-                task_user_id = result.get("user_id")
-                # Compare as strings, allowing for UUID object vs string comparison
-                if task_user_id and str(task_user_id) != str(user_id):
-                    return None
-            # Create a copy without internal _created_at field
-            return {k: v for k, v in result.items() if k != "_created_at"}
-        return None
+    res = AsyncResult(task_id, app=celery)
+
+    # Basic state mapping
+    status = STATUS_MAP.get(res.state, "pending")
+
+    # In Celery, result can contain either the return value (on success)
+    # or the exception (on failure), or custom meta (if STARTED).
+    result_val = res.result
+
+    # Ownership check
+    task_user_id = None
+    actual_result = None
+    error_msg = None
+
+    if res.state == "STARTED":
+        task_user_id = result_val.get("user_id") if isinstance(result_val, dict) else None
+    elif res.state == "SUCCESS":
+        task_user_id = result_val.get("user_id") if isinstance(result_val, dict) else None
+        actual_result = result_val.get("result") if isinstance(result_val, dict) else result_val
+    elif res.state == "FAILURE":
+        # Failure result is usually the Exception object
+        error_msg = str(result_val)
+        # We might not have ownership info here if it failed early,
+        # but the worker tries to store it in update_state before failure
+        if hasattr(res, "info") and isinstance(res.info, dict):
+             task_user_id = res.info.get("user_id")
+
+    # Verify ownership if user_id is provided
+    if user_id and task_user_id:
+        if str(task_user_id) != str(user_id):
+            return None
+
+    # Construct response matching legacy iqoqo format
+    output = {"status": status, "user_id": task_user_id}
+    if actual_result is not None:
+        output["result"] = actual_result
+    if error_msg:
+        output["error"] = error_msg
+
+    return output
+
+
+def shutdown_executor() -> None:
+    """No-op for Celery migration."""
+    pass

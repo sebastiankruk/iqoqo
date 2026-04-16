@@ -318,9 +318,9 @@ def start_cover_processing(
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
-) -> None:
+) -> str:
     """Fires off the background executor using the centralized task pool."""
-    submit_task(
+    return submit_task(
         process_cover_pipeline,
         manifestation_id,
         identifier,

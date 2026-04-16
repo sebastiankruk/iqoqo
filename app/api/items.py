@@ -55,146 +55,37 @@ def get_items():
     offset = (page - 1) * limit
 
     if q:
-        w_tsvector_expr = "w.fts_simple"
-        m_tsvector_expr = "m.fts_simple"
-        # Include search_vector for video/board game Cast, Directors, Mechanics search
-        w_search_vector_expr = "w.search_vector"
-        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+        from app.core.search_service import SearchService
+        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+        total, results = SearchService.search_items(q, user_id, limit, offset, statuses=statuses_list)
 
-        # Set up explicit exact bindings for count/rows so FTS executes safely
-        params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
-        statuses_sql = " AND i.owner_id = :user_id"
-
-        if statuses_filter:
-            statuses_list = tuple(s.strip() for s in statuses_filter.split(",") if s.strip())
-            params["statuses"] = statuses_list
-            statuses_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
-
-        try:
-            # Safely grab exact total of matches natively
-            # Include w.search_vector for Cast, Directors, Mechanics (video/board games)
-            count_sql = f"""
-            SELECT count(i.id) FROM manifestations m
-            JOIN expressions e ON e.id = m.expression_id
-            JOIN works w ON w.id = e.work_id
-            JOIN items i ON i.manifestation_id = m.id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
-            {statuses_sql}
-            """
-
-            # Pull fully populated rows ordered gracefully by the computed FTS rank
-            rows_sql = f"""
-            SELECT i.id as item_id, i.owner_id, i.status, i.collection_status, m.id as manifestation_id,
-                   m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
-                   w.meta as work_meta, i.added_at, i.updated_at,
-                   ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-            FROM manifestations m
-            JOIN expressions e ON e.id = m.expression_id
-            JOIN works w ON w.id = e.work_id
-            JOIN items i ON i.manifestation_id = m.id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
-            {statuses_sql}
-            ORDER BY rank DESC
-            LIMIT :limit OFFSET :offset
-            """
-
-            count_stmt = text(count_sql)
-            rows_stmt = text(rows_sql)
-            if "statuses" in params:
-                from sqlalchemy import bindparam
-
-                count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
-                rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
-
-            total = int(db.session.execute(count_stmt, params).scalar() or 0)
-            results = db.session.execute(rows_stmt, params).mappings().all()
-
-            items_data = []
-            for row in results:
-                item_id = row.get("item_id")
-                manifestation_id = row.get("manifestation_id")
-                owner_id = row.get("owner_id")
-                added_at = row.get("added_at")
-                updated_at = row.get("updated_at")
-                manifestation_meta = row.get("manifestation_meta") or {}
-                work_meta = row.get("work_meta") or {}
-
-                items_data.append(
-                    {
-                        "id": item_id,
-                        "owner_id": str(owner_id) if owner_id else None,
-                        "status": row.get("status"),
-                        "collection_status": row.get("collection_status"),
-                        "manifestation_id": manifestation_id,
-                        "isbn": row.get("isbn13"),
-                        "title": row.get("title"),
-                        "cover_url": row.get("cover_url"),
-                        "cover_status": manifestation_meta.get("cover_status") if isinstance(manifestation_meta, dict) else None,
-                        "authors": work_meta.get("authors", []) if isinstance(work_meta, dict) else [],
-                        "added_at": added_at.isoformat() if added_at else None,
-                        "updated_at": (updated_at or added_at).isoformat() if (updated_at or added_at) else None,
-                    }
-                )
-
-        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
-            db.session.rollback()  # Crucial rollback so fallback queries don't trigger "InFailedSqlTransaction"
-            current_app.logger.exception("Error during FTS item search, attempting fallback", exc_info=exc)
-
-            # Subquery approach deduplicates successfully when FTS acts up
-            search_term = f"%{q}%"
-            matching_items = (
-                db.session.query(Item.id)
-                .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-                .outerjoin(Work, Expression.work_id == Work.id)
-                .filter(
-                    db.or_(
-                        Work.title.ilike(search_term),
-                        db.cast(Work.meta, db.String).ilike(search_term),
-                        Manifestation.isbn13.ilike(search_term),
-                    )
-                )
+        items_data = []
+        for row in results:
+            items_data.append(
+                {
+                    "id": row["item_id"],
+                    "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
+                    "status": row["status"],
+                    "collection_status": row["collection_status"],
+                    "manifestation_id": row["manifestation_id"],
+                    "isbn": row.get("isbn13") or row.get("isbn"),
+                    "title": row["title"],
+                    "cover_url": row["cover_url"],
+                    "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
+                    "authors": (row.get("work_meta") or {}).get("authors", []),
+                    "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
+                    "updated_at": (row.get("updated_at") or row["added_at"]).isoformat() if hasattr((row.get("updated_at") or row["added_at"]), "isoformat") else (row.get("updated_at") or row["added_at"]),
+                }
             )
 
-            base_query = (
-                db.session.query(Item, Manifestation, Expression, Work)
-                .select_from(Item)
-                .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                .join(Expression, Manifestation.expression_id == Expression.id)
-                .join(Work, Expression.work_id == Work.id)
-                .filter(Item.owner_id == user_id)
-                .filter(Item.id.in_(matching_items))
-            )
-
-            if statuses_filter:
-                statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-                base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
-
-            total = base_query.count()
-            results = base_query.offset(offset).limit(limit).all()
-
-            items_data = []
-            for item, manifestation, _expression, work in results:
-                w_meta = work.meta if work and work.meta else {}
-                m_meta = manifestation.meta if manifestation and manifestation.meta else {}
-
-                items_data.append(
-                    {
-                        "id": item.id,
-                        "owner_id": item.owner_id,
-                        "status": item.status,
-                        "manifestation_id": manifestation.id,
-                        "isbn": manifestation.isbn13,
-                        "title": work.title,
-                        "cover_url": manifestation.cover_url,
-                        "cover_status": m_meta.get("cover_status") if m_meta else None,
-                        "authors": w_meta.get("authors", []) if w_meta else [],
-                        "added_at": item.added_at.isoformat() if item and item.added_at else None,
-                        "updated_at": (
-                            (item.updated_at or item.added_at).isoformat() if item and (item.updated_at or item.added_at) else None
-                        ),
-                    }
-                )
+        return jsonify(
+            {
+                "success": True,
+                "data": items_data,
+                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "error": None,
+            }
+        )
 
         return jsonify(
             {

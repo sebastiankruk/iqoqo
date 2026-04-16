@@ -28,12 +28,12 @@ user ownership in the ``auth`` schema.
 from __future__ import annotations
 
 import os
-import sys
 from datetime import UTC, datetime
 
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import UUID
 
 from . import db
+from app.db.search_types import SearchVector
 
 # ---------------------------------------------------------------------------
 # Schema selector
@@ -41,11 +41,6 @@ from . import db
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-# In test environments (pytest), default to non-Postgres (no schemas/FTS) unless
-# FTS tests are explicitly enabled. This ensures tests run correctly on SQLite
-# even if DATABASE_URL is set in the environment.
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
@@ -138,32 +133,28 @@ class Work(db.Model):  # type: ignore[name-defined]
     title = db.Column(db.String(1000), nullable=False)
     meta = db.Column(db.JSON, default=dict)
 
-    # Full-text search column for PostgreSQL (production only; skipped in SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-    ):
-        fts_simple = db.Column(
-            TSVECTOR(),
-            db.Computed(
-                "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
-                " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
-                persisted=True,
-            ),
-            nullable=True,
-        )
-        search_vector = db.Column(
-            TSVECTOR(),
-            db.FetchedValue(),
-            nullable=True,
-        )
-        __table_args__: tuple = (
-            db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),
-            db.Index("ix_works_search_vector", search_vector, postgresql_using="gin"),
-            {"schema": _CATALOG},
-        )
-    else:
-        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
-        __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
+    # Dialect-aware full-text search columns using SearchVector type.
+    # Computed columns are only generated on dialects that support them (PostgreSQL).
+    fts_simple = db.Column(
+        SearchVector(),
+        db.Computed(
+            "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
+            " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
+            persisted=True,
+        ) if _USE_PG else None,
+        nullable=True,
+    )
+    search_vector = db.Column(
+        SearchVector(),
+        db.FetchedValue(),
+        nullable=True,
+    )
+
+    __table_args__: tuple = (
+        db.Index("ix_works_fts", fts_simple, postgresql_using="gin"),
+        db.Index("ix_works_search_vector", search_vector, postgresql_using="gin"),
+        {"schema": _CATALOG},
+    )
 
     # Relationships
     expressions = db.relationship("Expression", backref="work", lazy=True)
@@ -228,27 +219,22 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     cover_url = db.Column(db.String(255), nullable=True)
     meta = db.Column(db.JSON, default=dict)
 
-    # Full-text search column for PostgreSQL (production only; skipped in SQLite tests)
-    if os.environ.get("DATABASE_URL", "").startswith("postgresql") and (
-        "pytest" not in sys.modules or os.environ.get("ENABLE_FTS_TESTS") == "true"
-    ):
-        fts_simple = db.Column(
-            TSVECTOR(),
-            db.Computed(
-                "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text"
-                " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
-                " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
-                persisted=True,
-            ),
-            nullable=True,
-        )
-        __table_args__: tuple = (
-            db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),
-            {"schema": _CATALOG},
-        )
-    else:
-        fts_simple = db.Column(db.Text, db.FetchedValue(), nullable=True)
-        __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()  # type: ignore[assignment]
+    # Dialect-aware full-text search column.
+    fts_simple = db.Column(
+        SearchVector(),
+        db.Computed(
+            "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text"
+            " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
+            " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
+            persisted=True,
+        ) if _USE_PG else None,
+        nullable=True,
+    )
+
+    __table_args__: tuple = (
+        db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),
+        {"schema": _CATALOG},
+    )
 
     @property
     def title(self) -> str:
