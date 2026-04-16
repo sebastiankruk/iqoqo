@@ -19,6 +19,7 @@ Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 """
 
 import logging
+import os
 from typing import Any
 
 from sqlalchemy import bindparam, text
@@ -27,6 +28,14 @@ from app.db import db
 from app.db.models import Expression, Item, Manifestation, Work
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Schema prefixes — mirrors the logic in app/db/core.py.
+# Raw SQL must qualify table names when PostgreSQL named schemas are in use.
+# ---------------------------------------------------------------------------
+_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_CATALOG = "catalog." if _USE_PG else ""
+_INVENTORY = "inventory." if _USE_PG else ""
 
 
 class SearchService:
@@ -69,16 +78,16 @@ class SearchService:
         params = {"q": q, "limit": limit, "offset": offset}
 
         count_sql = f"""
-        SELECT count(*) FROM manifestations m
-        JOIN expressions e ON e.id = m.expression_id
-        JOIN works w ON w.id = e.work_id
+        SELECT count(*) FROM {_CATALOG}manifestations m
+        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
+        JOIN {_CATALOG}works w ON w.id = e.work_id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         """
         rows_sql = f"""
         SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-        FROM manifestations m
-        JOIN expressions e ON e.id = m.expression_id
-        JOIN works w ON w.id = e.work_id
+        FROM {_CATALOG}manifestations m
+        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
+        JOIN {_CATALOG}works w ON w.id = e.work_id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         ORDER BY rank DESC
         LIMIT :limit OFFSET :offset
@@ -115,10 +124,10 @@ class SearchService:
             statuses_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         count_sql = f"""
-        SELECT count(i.id) FROM manifestations m
-        JOIN expressions e ON e.id = m.expression_id
-        JOIN works w ON w.id = e.work_id
-        JOIN items i ON i.manifestation_id = m.id
+        SELECT count(i.id) FROM {_CATALOG}manifestations m
+        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
+        JOIN {_CATALOG}works w ON w.id = e.work_id
+        JOIN {_INVENTORY}items i ON i.manifestation_id = m.id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {statuses_sql}
         """
@@ -127,10 +136,10 @@ class SearchService:
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                w.meta as work_meta, i.added_at, i.updated_at,
                ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-        FROM manifestations m
-        JOIN expressions e ON e.id = m.expression_id
-        JOIN works w ON w.id = e.work_id
-        JOIN items i ON i.manifestation_id = m.id
+        FROM {_CATALOG}manifestations m
+        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
+        JOIN {_CATALOG}works w ON w.id = e.work_id
+        JOIN {_INVENTORY}items i ON i.manifestation_id = m.id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {statuses_sql}
         ORDER BY rank DESC

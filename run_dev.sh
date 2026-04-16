@@ -34,6 +34,11 @@ fi
 # Load Tunnel-specific overrides if in dev mode
 if [ "$MODE" == "dev" ] && [ -f ".env.dev" ]; then
     echo "⚡ Loading Tunnel Configuration (.env.dev) for dev.iqoqo.cc"
+    # If REDIS_URL is the production default (from .env), unset it
+    # so .env.dev MUST provide a local-compatible override.
+    if [[ "$REDIS_URL" == *"redis:6379"* ]]; then
+        unset REDIS_URL
+    fi
     set -o allexport
     source .env.dev
     set +o allexport

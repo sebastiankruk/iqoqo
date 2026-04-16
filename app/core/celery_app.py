@@ -35,6 +35,7 @@ celery.conf.update(
     timezone="UTC",
     enable_utc=True,
     result_expires=3600,  # 1-hour TTL matching old _TASK_TTL_SECONDS
+    broker_connection_retry_on_startup=True,
 )
 
 
