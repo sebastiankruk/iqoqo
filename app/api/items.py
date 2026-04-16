@@ -317,7 +317,7 @@ def get_items_by_isbn(isbn: str):
 def add_item(isbn: str):
     user_id = getattr(g, "user_id", None)
     if not user_id:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
@@ -326,7 +326,7 @@ def add_item(isbn: str):
         if isinstance(lookup_response, tuple):
             status_code = lookup_response[1] if len(lookup_response) > 1 else 404
             if status_code != 200:
-                return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
+                return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     metadata = request.get_json(silent=True)
@@ -344,9 +344,13 @@ def add_item(isbn: str):
 
     item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
     db.session.add(item)
-    db.session.commit()
-
-    return jsonify({"item_id": item.id, "manifestation_id": manifestation.id})
+    try:
+        db.session.commit()
+        return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to add item for ISBN %s for user %s: %s", isbn, user_id, e)
+        return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/add", methods=["POST"])
@@ -374,7 +378,7 @@ def add_item_manual():
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):

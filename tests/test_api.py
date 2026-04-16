@@ -254,7 +254,8 @@ def test_add_item(client, sample_book, normal_user_headers):
     response = client.post("/api/item/9780345391803", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
     data = response.json
-    assert "item_id" in data
+    assert data["success"] is True
+    assert "item_id" in data["data"]
 
     # Verify item was created
     with client.application.app_context():
@@ -462,3 +463,15 @@ def test_manifestation_user_owns_authenticated(client, sample_book):
     response = client.get(f"/api/manifestations/{sample_book.id}")
     assert response.status_code == 200
     assert response.json["data"]["user_owns"] is False
+
+
+def test_add_item_manual_standard_envelope(client, normal_user_headers):
+    """Test that manual item creation uses the standard {success, data, error} envelope."""
+    payload = {"Title": "Manual Test Book", "Authors": ["Manual Author"], "Format": "book"}
+    response = client.post("/api/items/manual", json=payload, headers=normal_user_headers)
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert "item_id" in data["data"]
+    assert "manifestation_id" in data["data"]
+    assert data["error"] is None

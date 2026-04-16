@@ -71,7 +71,8 @@ def get_users():
     search = request.args.get("search", "").strip()
     status = request.args.get("status", "").strip()
     page = request.args.get("page", 1, type=int)
-    limit = request.args.get("limit", 50, type=int)
+    # QA FIX: Clamp limit to prevent DB/Memory DoS attacks
+    limit = min(request.args.get("limit", 50, type=int), 100)
 
     query = User.query
 
@@ -91,7 +92,7 @@ def get_users():
         {
             "success": True,
             "data": [_format_user(u) for u in paginated.items],
-            "meta": {"total": paginated.total, "page": paginated.page, "pages": paginated.pages},
+            "meta": {"total": paginated.total, "page": paginated.page, "pages": paginated.pages, "limit": limit},
         }
     )
 
@@ -226,6 +227,10 @@ def manage_role_permissions(role_id):
                 },
             }
         )
+
+    # QA FIX: Prevent malicious or accidental stripping of admin role permissions
+    if role.name.lower() == "admin":
+        return jsonify({"success": False, "error": "Cannot modify permissions of the admin role"}), 400
 
     data = request.json or {}
     permission_ids = data.get("permission_ids", [])
