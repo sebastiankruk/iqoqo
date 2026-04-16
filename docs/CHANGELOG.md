@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Polymorphic Action Panel**: Integrated context-aware buttons for Books ("Log Reading Progress"), Audio ("Now Listening"), Video ("Now Watching"), and Games ("Log Play").
 - **Search Hardening**: Restored `search_vector` and FTS indexes to the `Work` model to ensure robust metadata searching for video and board game Cast, Directors, and Mechanics.
 
+- **Test Stability**: Resolved a SQLAlchemy `NoReferencedTableError` occurring during testing by correctly synchronizing the `_USE_PG` schema calculation flag in `app/db/core.py` with `app/db/audio.py` for test environment compatibility.
+- **Admin API Hardening**: Enforced immutability for the `admin` role's permissions API to prevent accidental lockout, and clamped pagination limits to 100 on the `/admin/users` endpoint to mitigate DoS vectors.
+
 ### Database Migrations
 
 - Added `item_status_logs` table for tracking history.
