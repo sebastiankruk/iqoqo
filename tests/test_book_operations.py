@@ -252,7 +252,7 @@ class TestAddingBooks:
         response = client.post("/api/item/9780544003415", json=metadata, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
         data = response.json
-        assert "item_id" in data
+        assert "item_id" in data["data"]
 
         # Verify new item was created (should be 2 total now)
         with client.application.app_context():
@@ -300,7 +300,7 @@ class TestAddingBooks:
         """Test adding item without providing metadata."""
         response = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response.status_code == 200
-        assert "item_id" in response.json
+        assert "item_id" in response.json["data"]
 
     def test_add_item_creates_correct_owner(self, client, sample_work_complete, normal_user_headers):
         """Test that adding an item associates it with correct owner."""
@@ -308,7 +308,7 @@ class TestAddingBooks:
         assert response.status_code == 200
 
         with client.application.app_context():
-            item = db.session.get(Item, response.json["item_id"])
+            item = db.session.get(Item, response.json["data"]["item_id"])
             user = User.query.filter_by(email="test_user@iqoqo.local").first()
             assert item.owner_id == user.id
 
@@ -317,12 +317,12 @@ class TestAddingBooks:
         # Add first item
         response1 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response1.status_code == 200
-        item_id_1 = response1.json["item_id"]
+        item_id_1 = response1.json["data"]["item_id"]
 
         # Add second item
         response2 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response2.status_code == 200
-        item_id_2 = response2.json["item_id"]
+        item_id_2 = response2.json["data"]["item_id"]
 
         # Verify both items exist and are different
         assert item_id_1 != item_id_2
@@ -344,7 +344,7 @@ class TestAddingBooks:
         assert response.status_code == 200
 
         with client.application.app_context():
-            item = db.session.get(Item, response.json["item_id"])
+            item = db.session.get(Item, response.json["data"]["item_id"])
             assert item.status == "unread"
             assert item.collection_status == "available"
 
@@ -612,7 +612,7 @@ class TestBookOperationsIntegration:
         # Step 2: Add an item
         add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
         assert add_response.status_code == 200
-        item_id = add_response.json["item_id"]
+        item_id = add_response.json["data"]["item_id"]
 
         # Step 3: Update metadata
         update_data = {"Title": "The Hobbit: Annotated Edition", "Authors": ["J.R.R. Tolkien"]}
@@ -656,12 +656,12 @@ class TestBookOperationsIntegration:
         # Add item for first owner
         response1 = client.post("/api/item/9780544003415", json={}, headers=normal_user_headers, content_type="application/json")
         assert response1.status_code == 200
-        assert "item_id" in response1.json
+        assert "item_id" in response1.json["data"]
 
         # Add item for second owner (in real app, would be different session)
         response2 = client.post("/api/item/9780544003415", json={}, headers=admin_headers, content_type="application/json")
         assert response2.status_code == 200
-        assert "item_id" in response2.json
+        assert "item_id" in response2.json["data"]
 
         # Verify both items exist
         with client.application.app_context():

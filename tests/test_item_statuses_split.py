@@ -67,7 +67,7 @@ def test_add_item_defaults(client, normal_user_headers):
 
     response = client.post("/api/item/9998887776665", json={}, headers=normal_user_headers)
     assert response.status_code == 200
-    item_id = response.json.get("item_id")
+    item_id = response.json["data"]["item_id"]
 
     with client.application.app_context():
         item = db.session.get(Item, item_id)
