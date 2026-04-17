@@ -144,6 +144,7 @@ class Work(db.Model):  # type: ignore[name-defined]
                 "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
                 " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
                 persisted=True,
+                include_in_insert=False,
             )
             if _USE_PG
             else db.FetchedValue()
@@ -234,6 +235,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
                 " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
                 " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
                 persisted=True,
+                include_in_insert=False,
             )
             if _USE_PG
             else db.FetchedValue()
