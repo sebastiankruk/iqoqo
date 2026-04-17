@@ -87,14 +87,40 @@ for i in {1..30}; do
 done
 
 # 1d. Check current migration state
-CURRENT_MIGRATION=$(docker compose -f docker-compose.prod.yml exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -t -c "SELECT version_num FROM alembic_version;" 2>/dev/null | tr -d '[:space:]')
+# Use -At to get one row per line (unaligned, tuple-only) and capture all rows.
+# If multiple rows are returned (multi-head state), warn rather than concatenate.
+MIGRATION_ROWS=$(docker compose -f docker-compose.prod.yml exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -At -c "SELECT version_num FROM alembic_version;" 2>/dev/null)
+MIGRATION_COUNT=$(echo "$MIGRATION_ROWS" | grep -c '[^[:space:]]' || true)
 
-# Get expected migration version from pyproject.toml
-EXPECTED_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('tool', {}).get('alembic', {}).get('upgrade', '').split()[-1] if 'upgrade' in tomllib.load(open('pyproject.toml', 'rb')).get('tool', {}) else '')" 2>/dev/null || echo "")
+if [ "$MIGRATION_COUNT" -gt 1 ]; then
+    echo "⚠️  WARNING: Multiple Alembic heads detected in the database:"
+    echo "$MIGRATION_ROWS" | sed 's/^/   /'
+    CURRENT_MIGRATION=""
+elif [ "$MIGRATION_COUNT" -eq 1 ]; then
+    CURRENT_MIGRATION=$(echo "$MIGRATION_ROWS" | tr -d '[:space:]')
+else
+    CURRENT_MIGRATION=""
+fi
 
-# Fallback: get expected version from latest migration file
+# Get expected migration head from Alembic itself (most reliable method)
+EXPECTED_VERSION=$(python3 -c "
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+config = Config('migrations/alembic.ini')
+heads = ScriptDirectory.from_config(config).get_heads()
+print(heads[0] if len(heads) == 1 else '')
+" 2>/dev/null || echo "")
+
+# Fallback: get expected version from Alembic script directory without alembic.ini
 if [ -z "$EXPECTED_VERSION" ] || [ "$EXPECTED_VERSION" = "None" ]; then
-    EXPECTED_VERSION=$(ls -1 migrations/versions/*.py 2>/dev/null | grep -v __pycache__ | tail -1 | xargs basename -s .py | head -1)
+    EXPECTED_VERSION=$(python3 -c "
+from alembic.script import ScriptDirectory
+try:
+    heads = ScriptDirectory('migrations').get_heads()
+    print(heads[0] if len(heads) == 1 else '')
+except Exception:
+    print('')
+" 2>/dev/null || echo "")
 fi
 
 if [ -n "$CURRENT_MIGRATION" ] && [ -n "$EXPECTED_VERSION" ]; then
