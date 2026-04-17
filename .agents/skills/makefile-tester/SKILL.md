@@ -1,12 +1,24 @@
 ---
+name: makefile-tester
 description: "Skill for intelligently running lint and test suites using Makefile sub-tasks to save time."
+license: AGPL
+compatibility:
+  - opencode
+  - antigravity
+metadata:
+  audience: testers
 ---
-
 # Smart Makefile Tester
 
 ## Context
 
 You must optimize the feedback loop to save time and tokens. Prevent trivial linting failures by formatting first. Project iqoqo uses a Makefile for testing and linting. Full runs (`make lint`, `make test`) can be time-consuming. You must optimize the feedback loop.
+
+### Verified Binary Paths
+
+- **Python Venv:** `.venv/bin/python` (use with `-m pytest`, `-m ruff`, etc.)
+- **Node/NPM/NPX:** `/Users/sebastiankruk/.nvm/versions/node/v20.10.0/bin`
+  - Prepend this to `PATH` before running `npx` or `npm` commands.
 
 ## Instructions
 
@@ -20,6 +32,7 @@ You must optimize the feedback loop to save time and tokens. Prevent trivial lin
 1. **Targeted Re-runs:** Fix the underlying code issue. Do **not** run the master command again yet. Instead, run the specific failing sub-task command directly to verify the fix quickly. Always prioritize `.venv/bin/` paths for Python tools:
    - Example: `.venv/bin/pytest tests/test_api.py -k test_name`
    - Example: `.venv/bin/python -m ruff check app/`
+   - Example: `export PATH="/Users/sebastiankruk/.nvm/versions/node/v20.10.0/bin:$PATH" && cd frontend && npx playwright test`
 
 - lint - Run all linting checks
 - lint-python - Run Python linters (ruff, mypy, pylint)

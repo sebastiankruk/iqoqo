@@ -81,36 +81,16 @@ def _parse_ts_const_array(ts_source: str, const_name: str) -> frozenset[str]:
     return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
 
-def _parse_item_status_from_ts(ts_source: str) -> frozenset[str]:
-    """
-    Extract the union members from the ``ItemStatus`` type alias.
-
-    Parses a declaration of the form::
-
-        export type ItemStatus = "a" | "b" | "c";
-
-    and returns ``frozenset({"a", "b", "c"})``.
-
-    Args:
-        ts_source: Full source text of the TypeScript file.
-
-    Returns:
-        A frozenset of status string literals extracted from the union.
-
-    Raises:
-        ValueError: If the ``ItemStatus`` declaration cannot be found.
-    """
+def _parse_union_type_from_ts(ts_source: str, type_name: str) -> frozenset[str]:
+    """Extract union members from a TypeScript type alias."""
     pattern = re.compile(
-        r"export\s+type\s+ItemStatus\s*=\s*([^;]+);",
+        rf"export\s+type\s+{re.escape(type_name)}\s*=\s*([^;]+);",
         re.DOTALL,
     )
     match = pattern.search(ts_source)
     if not match:
-        raise ValueError("Could not locate 'ItemStatus' type alias in frbr.ts")
-
-    union_body = match.group(1)
-    # Extract all string literals from the union body (single or double quotes)
-    return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", union_body))
+        raise ValueError(f"Could not locate '{type_name}' type alias in frbr.ts")
+    return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
 
 # ---------------------------------------------------------------------------
@@ -124,15 +104,14 @@ def test_frbr_ts_exists() -> None:
 
 
 def test_item_status_ontology_in_sync() -> None:
-    """
-    Ensure that ITEM_STATUSES (Python) and ItemStatus (TypeScript) are identical.
-
-    This is the primary cross-subsystem contract test.  It will fail whenever
-    a status value is added, removed, or renamed in one subsystem without a
-    corresponding change in the other.
-    """
+    """Ensure that ITEM_STATUSES (Python) and the union of statuses (TypeScript) are identical."""
     ts_source = FRBR_TS.read_text(encoding="utf-8")
-    ts_statuses = _parse_item_status_from_ts(ts_source)
+
+    # ProgressStatus and CollectionStatus should equal ITEM_STATUSES
+    ts_progress = _parse_union_type_from_ts(ts_source, "ProgressStatus")
+    ts_collection = _parse_union_type_from_ts(ts_source, "CollectionStatus")
+    ts_statuses = ts_progress | ts_collection
+
     py_statuses = frozenset(ITEM_STATUSES)
 
     only_in_python = py_statuses - ts_statuses
@@ -140,9 +119,9 @@ def test_item_status_ontology_in_sync() -> None:
 
     messages: list[str] = []
     if only_in_python:
-        messages.append(f"Statuses present in ITEM_STATUSES (Python) but missing from ItemStatus (TypeScript): {sorted(only_in_python)}")
+        messages.append(f"Statuses in ITEM_STATUSES (Python) but missing from TS: {sorted(only_in_python)}")
     if only_in_ts:
-        messages.append(f"Statuses present in ItemStatus (TypeScript) but missing from ITEM_STATUSES (Python): {sorted(only_in_ts)}")
+        messages.append(f"Statuses in TS but missing from ITEM_STATUSES (Python): {sorted(only_in_ts)}")
 
     assert not messages, "\n".join(messages)
 

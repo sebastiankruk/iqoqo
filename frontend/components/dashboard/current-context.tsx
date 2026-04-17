@@ -29,7 +29,7 @@ export function CurrentContext() {
   const { data, isLoading } = useItems(1, 10, ["wish_list", "reading"]);
 
   const readingItems = data?.data?.filter(item => item.status === "reading") ?? [];
-  const wishListItems = data?.data?.filter(item => item.status === "wish_list") ?? [];
+  const wishListItems = data?.data?.filter(item => item.collection_status === "wish_list") ?? [];
 
   if (isLoading) {
     return (

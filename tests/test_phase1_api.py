@@ -463,13 +463,12 @@ def test_get_items_status_filter_no_matches(client, sample_work, admin_headers):
 # =============================================================================
 
 
-def test_get_item_detail(client, sample_work):
+def test_get_item_detail(client, sample_work, admin_headers):
     """Test getting detailed item information."""
 
     item_id = sample_work["item"].id
-    owner_id = sample_work["item"].owner_id
 
-    response = client.get(f"/api/items/{item_id}")
+    response = client.get(f"/api/items/{item_id}", headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
@@ -477,13 +476,27 @@ def test_get_item_detail(client, sample_work):
 
     item = data["data"]
     assert item["id"] == item_id
-    assert item["owner_id"] == str(owner_id)
+    assert item["owner_id"] != "Unavailable"
     assert item["status"] == "available"
     assert item["isbn"] == "9781234567890"
     assert item["work"]["title"] == "Test Book"
     assert item["work"]["authors"] == ["Test Author"]
     assert item["expression"]["content_type"] == "text"
     assert item["expression"]["language"] == "en"
+
+
+def test_get_item_detail_unauthenticated(client, sample_work):
+    """Test getting detailed item information as guest returns anonymized owner."""
+
+    item_id = sample_work["item"].id
+
+    response = client.get(f"/api/items/{item_id}")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+
+    item = data["data"]
+    assert item["owner_id"] == "Unavailable"
 
 
 def test_get_item_detail_not_found(client):
@@ -500,36 +513,36 @@ def test_get_item_detail_not_found(client):
 # =============================================================================
 
 
-def test_update_item_status(client, sample_work):
+def test_update_item_status(client, sample_work, admin_headers):
     """Test updating item status."""
     item_id = sample_work["item"].id
 
-    response = client.put(f"/api/items/{item_id}", json={"status": "reading"}, content_type="application/json")
+    response = client.put(f"/api/items/{item_id}", json={"status": "reading"}, headers=admin_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
 
     # Verify update
-    response = client.get(f"/api/items/{item_id}")
+    response = client.get(f"/api/items/{item_id}", headers=admin_headers)
     assert response.json["data"]["status"] == "reading"
 
 
-def test_update_item_meta(client, sample_work):
+def test_update_item_meta(client, sample_work, admin_headers):
     """Test updating item metadata."""
     item_id = sample_work["item"].id
 
     new_meta = {"notes": "Great book!", "rating": 5}
-    response = client.put(f"/api/items/{item_id}", json={"meta": new_meta}, content_type="application/json")
+    response = client.put(f"/api/items/{item_id}", json={"meta": new_meta}, headers=admin_headers)
     assert response.status_code == 200
 
     # Verify update
-    response = client.get(f"/api/items/{item_id}")
+    response = client.get(f"/api/items/{item_id}", headers=admin_headers)
     assert response.json["data"]["meta"] == new_meta
 
 
-def test_update_item_not_found(client):
+def test_update_item_not_found(client, admin_headers):
     """Test updating non-existent item returns 404."""
-    response = client.put("/api/items/99999", json={"status": "reading"}, content_type="application/json")
+    response = client.put("/api/items/99999", json={"status": "reading"}, headers=admin_headers)
     assert response.status_code == 404
     data = response.json
     assert data["success"] is False

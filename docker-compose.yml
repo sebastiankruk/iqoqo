@@ -52,6 +52,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -91,6 +93,38 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    command: >-
+      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info"
+    env_file:
+      - .env
+    volumes:
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

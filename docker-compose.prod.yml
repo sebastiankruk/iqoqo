@@ -40,6 +40,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers
@@ -81,6 +83,37 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-prod}
+    restart: always
+    command: >-
+      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info"
+    env_file:
+      - ${ENV_FILE:-.env}
+    volumes:
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

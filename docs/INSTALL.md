@@ -158,6 +158,32 @@ After installation, make sure the Docker daemon is running.
 
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
+## Environment Variable Hierarchy
+
+iqoqo uses a layered approach to configuration to support seamless switching between local development, tunneled development, and production Docker environments.
+
+### Backend (Flask & Celery)
+
+| File           | Loaded By    | Purpose                                                                                                                                                |
+|:---------------|:-------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`.env`**     | Global       | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
+| **`.env.dev`** | `run_dev.sh` | **Local Overrides.** Only loaded during `./run_dev.sh`. Use this to override container hostnames with `localhost` or change ports for local processes. |
+
+**Inheritance Logic:**
+
+1. The startup script loads `.env` first.
+2. If in dev mode, it then loads `.env.dev`, which **overwrites** any values set in `.env`.
+3. Note: Commenting out a variable in `.env.dev` does **not** unset it from the environment; it will simply fall back to the value defined in `.env`. To "disable" a variable in dev mode, set it to an empty string (`VAR=`).
+
+### Frontend (Next.js)
+
+| File             | Loaded By | Purpose                                                                                                                                                  |
+|:-----------------|:----------|:---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`.env`**       | Next.js   | Shared defaults for the frontend.                                                                                                                        |
+| **`.env.local`** | Next.js   | **Local Overrides.** Standard Next.js file for local machine settings. This file is git-ignored and should be used for secrets or machine-specific URLs. |
+
+**Note:** Only variables prefixed with `NEXT_PUBLIC_` are accessible in the browser.
+
 ## Database Setup
 
 This project uses PostgreSQL as its database. You have two options:

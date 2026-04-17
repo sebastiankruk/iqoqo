@@ -222,11 +222,11 @@ export function useAddItem() {
         );
         return res.data.data!;
       } else if (isbn) {
-        const res = await apiClient.post<{ item_id: number; manifestation_id: number }>(
+        const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
           `/item/${isbn}`,
           metadata ?? {}
         );
-        return res.data;
+        return res.data.data!;
       }
       throw new Error("Either isbn or manifestation_id must be provided");
     },

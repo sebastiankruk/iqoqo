@@ -419,10 +419,10 @@ class TestManifestationImages:
 
         assert res.status_code == 201
         assert res.json["success"] is True
-        images = res.json["data"]
-        assert len(images) == 1
-        assert images[0]["label"] == "disc"
-        assert "disc.jpg" in images[0]["url"]
+        image_data = res.json["data"]
+        # In POST /images, 'data' is the single newly created image object
+        assert image_data["label"] == "disc"
+        assert "disc.jpg" in image_data["url"]
 
         # 3. Verify in DB
         with app.app_context():

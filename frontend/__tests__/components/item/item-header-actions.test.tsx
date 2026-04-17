@@ -34,7 +34,8 @@ vi.mock("next/navigation", () => ({
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",
-  status: "available",
+  status: "unread",
+  collection_status: "available",
   manifestation_id: 123,
   title: "Fallback Title",
   work: {

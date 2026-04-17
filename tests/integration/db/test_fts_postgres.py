@@ -17,11 +17,9 @@
 #
 
 import os
-import time
 
 import pytest
 from sqlalchemy import text
-from testcontainers.postgres import PostgresContainer
 
 from app import create_app
 from app.db import db
@@ -30,44 +28,38 @@ from app.db.models import Expression, Manifestation, Work
 
 @pytest.fixture(scope="module")
 def postgres_db():
-    """Spin up a fresh PostgreSQL container for the duration of the module."""
-    try:
-        import docker  # noqa: PLC0415 – deferred to keep import fast when Docker absent
+    """Use the PostgreSQL service from GitHub Actions workflow or skip if unavailable."""
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url.startswith("postgresql"):
+        pytest.skip("PostgreSQL DATABASE_URL not available – skipping PostgreSQL integration tests.")
 
-        docker.from_env().ping()
-    except Exception:  # pylint: disable=broad-exception-caught
-        pytest.skip("Docker is not available – skipping PostgreSQL integration tests.")
+    os.environ["DATABASE_URL"] = db_url
+    os.environ["ENABLE_FTS_TESTS"] = "true"
 
-    with PostgresContainer("postgres:15-alpine") as postgres:
-        os.environ["DATABASE_URL"] = postgres.get_connection_url()
-        os.environ["ENABLE_FTS_TESTS"] = "true"
+    app = create_app()
+    with app.app_context():
+        db.create_all()
 
-        app = create_app()
-        with app.app_context():
-            # Create all tables (this defaults to TEXT if models were loaded into sys.modules during generic SQLite tests)
-            db.create_all()
-
-            # Forcibly create the TSVECTOR columns ignoring initial SQLAlchemy state
-            db.session.execute(text("ALTER TABLE works DROP COLUMN IF EXISTS fts_simple CASCADE"))
-            db.session.execute(
-                text(
-                    "ALTER TABLE works ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))) STORED"
-                )
+        db.session.execute(text("ALTER TABLE works DROP COLUMN IF EXISTS fts_simple CASCADE"))
+        db.session.execute(
+            text(
+                "ALTER TABLE works ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))) STORED"
             )
-            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_works_fts ON works USING gin(fts_simple)"))
+        )
+        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_works_fts ON works USING gin(fts_simple)"))
 
-            db.session.execute(text("ALTER TABLE manifestations DROP COLUMN IF EXISTS fts_simple CASCADE"))
-            db.session.execute(
-                text(
-                    "ALTER TABLE manifestations ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))) STORED"
-                )
+        db.session.execute(text("ALTER TABLE manifestations DROP COLUMN IF EXISTS fts_simple CASCADE"))
+        db.session.execute(
+            text(
+                "ALTER TABLE manifestations ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))) STORED"
             )
-            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON manifestations USING gin(fts_simple)"))
-            db.session.commit()
+        )
+        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON manifestations USING gin(fts_simple)"))
+        db.session.commit()
 
-            yield app
-            db.session.remove()
-            db.drop_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
 
 
 def test_fts_works_computation(postgres_db):

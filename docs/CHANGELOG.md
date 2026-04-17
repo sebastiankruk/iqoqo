@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-15
+
+### Added
+
+- **Item Interaction & Provenance**:
+  - **Status Change Logging**: Automated tracking of item status history in the `ItemStatusLog` table, reachable via `GET /items/<id>/logs`.
+  - **Item Provenance Timeline**: New **History** tab in the item UI displaying a chronological log of all lifecycle events.
+  - **Multi-Scan Gallery**: Support for storing and viewing additional manifestation scans (discs, booklets, back covers) via the `ImageScan` model and a dedicated **Gallery** tab.
+  - **Custom Provenance Headers**: Modified cover image serving to inject `X-Manifestation-ID` and `X-Image-Source` HTTP headers for asset traceability.
+  - **Metadata Attribution**: Display of metadata source (e.g., "Sourced from Google Books") in the item details view.
+- **Media-Specific UX**:
+  - **Polymorphic Action Panel**: Integrated context-aware buttons for Books ("Log Reading Progress"), Audio ("Now Listening"), Video ("Now Watching"), and Games ("Log Play").
+- **Search Hardening**: Restored `search_vector` and FTS indexes to the `Work` model to ensure robust metadata searching for video and board game Cast, Directors, and Mechanics.
+
+- **Test Stability**: Resolved a SQLAlchemy `NoReferencedTableError` occurring during testing by correctly synchronizing the `_USE_PG` schema calculation flag in `app/db/core.py` with `app/db/audio.py` for test environment compatibility.
+- **Admin API Hardening**: Enforced immutability for the `admin` role's permissions API to prevent accidental lockout, and clamped pagination limits to 100 on the `/admin/users` endpoint to mitigate DoS vectors.
+
+### Database Migrations
+
+- Added `item_status_logs` table for tracking history.
+- Added `image_scans` table for manifestation galleries.
+- Re-initialized Postgres-specific search vectors for the `Work` model.
+
 ## [0.3.0] - 2026-04-11
 
 ### Added

@@ -18,12 +18,15 @@
 from __future__ import annotations
 
 import os
-import sys
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.dialects.postgresql import UUID
 from werkzeug.security import check_password_hash, generate_password_hash
+
+if TYPE_CHECKING:
+    from app.core.permissions import PermissionName
 
 from . import db
 
@@ -31,8 +34,6 @@ from . import db
 # Schema selector
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 _AUTH: str | None = "auth" if _USE_PG else None
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
@@ -132,11 +133,12 @@ class User(db.Model):  # type: ignore[name-defined]
             return False
         return check_password_hash(self.password_hash, password)
 
-    def has_permission(self, permission_name: str) -> bool:
+    def has_permission(self, permission_name: PermissionName | str) -> bool:
         """Return True if the user holds *permission_name* through any role."""
+        perm_val = permission_name.value if hasattr(permission_name, "value") else permission_name
         for role in self.roles:  # type: ignore[attr-defined]
             for perm in role.permissions:  # type: ignore[attr-defined]
-                if perm.name == permission_name:
+                if perm.name == perm_val:
                     return True
         return False
 
@@ -158,13 +160,15 @@ class User(db.Model):  # type: ignore[name-defined]
             return {
                 "allow_generate_cover": False,
                 "allow_cloud_llm": False,
+                "allow_generate_metadata": False,
             }
 
-        from app.core.permissions import ItemPermissions
+        from app.core.permissions import PermissionName
 
         return {
-            "allow_generate_cover": user.has_permission(ItemPermissions.LLM_GENERATE_COVER.value),
-            "allow_cloud_llm": user.has_permission(ItemPermissions.LLM_GENERATE_CLOUD.value),
+            "allow_generate_cover": user.has_permission(PermissionName.LLM_GENERATE_COVER),
+            "allow_cloud_llm": user.has_permission(PermissionName.LLM_GENERATE_CLOUD),
+            "allow_generate_metadata": user.has_permission(PermissionName.LLM_GENERATE_METADATA),
         }
 
 

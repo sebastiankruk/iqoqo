@@ -1,5 +1,12 @@
 ---
+name: github-pr-reviewer
 description: "Skill for fetching Pull Request diffs, reviews, and comments using the GitHub MCP Server efficiently and GitHub CLI as fallback."
+license: AGPL
+compatibility:
+  - opencode
+  - antigravity
+metadata:
+  audience: developers
 ---
 # GitHub PR Reviewer
 

@@ -15,95 +15,497 @@
 //
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import {
+  Loader2,
+  Settings,
+  Users,
+  User,
+  Shield,
+  BadgeCheck,
+  Key,
+  Building2,
+  DollarSign,
+  Database,
+  Search,
+  X,
+  Image as ImageIcon,
+} from "lucide-react";
+import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
+import { FrbrEditor } from "@/components/admin/frbr-editor";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+import type React from "react";
+import Link from "next/link";
+
+interface NavItemProps {
+  label: string;
+  icon: LucideIcon;
+  isActive: boolean;
+  onClick: () => void;
+  href?: string;
+}
 
 /**
- * Admin settings page component.
- *
- * @returns {JSX.Element} The page component
+ * Navigation item for settings sidebar.
+ * @param props - Navigation item properties
+ * @param props.label - Display label
+ * @param props.icon - Lucide icon component
+ * @param props.isActive - Whether this item is currently active
+ * @param props.onClick - Click handler
+ * @param props.href - Optional href for external navigation
+ * @returns Navigation item JSX element
  */
-export default function AdminSettingsPage() {
-  const { data: profile, isLoading } = useProfile();
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState("instance");
+function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps): React.JSX.Element {
+  const className = cn(
+    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+  );
 
-  useEffect(() => {
-    if (!isLoading && (!profile || !profile.roles?.includes("admin"))) {
-      router.push("/"); // Redirect non-admins
-    }
-  }, [profile, isLoading, router]);
+  const content = (
+    <>
+      <Icon className="h-4 w-4" />
+      {label}
+    </>
+  );
 
-  if (isLoading || !profile)
+  if (href) {
     return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="animate-spin h-8 w-8" />
-      </div>
+      <Link href={href} onClick={onClick} className={className}>
+        {content}
+      </Link>
     );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  );
+}
+
+/**
+ * Inner settings content component that uses useSearchParams.
+ * Must be wrapped in Suspense boundary.
+ * @returns Settings page JSX element
+ */
+function SettingsContent(): React.JSX.Element {
+  const searchParams = useSearchParams();
+  const { data: profile, isLoading } = useProfile();
+  const [internalTab, setInternalTab] = useState<string | null>(null);
+
+  const activeTab = internalTab || searchParams.get("tab") || "profile";
+
+  const handleTabChange = (tab: string) => {
+    setInternalTab(tab);
+  };
+
+  if (isLoading || !profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const permissions = profile.permissions ?? [];
+  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
+
+  const canViewSettings =
+    hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) ||
+    hasPermission(PermissionName.CONFIG_FEDERATION) ||
+    hasPermission(PermissionName.CONFIG_AFFILIATE) ||
+    hasPermission(PermissionName.CONFIG_INTERNAL);
+  const canViewUsers = hasPermission(PermissionName.READ_USERS);
+  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
+  const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
+  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+
+  const hasCustodianAccess = canViewMetadata || canEditCover;
+
+  return (
+    <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
       <Navbar />
-      <main className="max-w-6xl mx-auto py-10 px-6">
-        <h1 className="text-3xl font-serif font-bold mb-8">Admin Settings</h1>
 
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Nav */}
-          <aside className="w-full md:w-64 shrink-0">
-            <nav className="flex flex-col gap-2">
-              <button
-                onClick={() => setActiveTab("instance")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "instance" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                Instance Settings
-              </button>
-              <button
-                onClick={() => setActiveTab("users")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "users" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                User Management
-              </button>
-              <button
-                onClick={() => setActiveTab("integrations")}
-                className={`text-left px-4 py-2 rounded-md ${activeTab === "integrations" ? "bg-accent text-accent-foreground font-medium" : "hover:bg-primary-foreground/10"}`}
-              >
-                Integrations & Monetization
-              </button>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
+        {/* Left Sidebar Navigation */}
+        <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
+            <nav className="flex flex-col gap-1">
+              <NavItem
+                label="Profile"
+                icon={User}
+                isActive={activeTab === "profile"}
+                onClick={() => handleTabChange("profile")}
+              />
             </nav>
-          </aside>
+          </div>
 
-          {/* Main Content Area */}
-          <main className="flex-1 bg-white dark:bg-[#0a0c10] border border-primary/10 dark:border-white/10 rounded-lg p-6">
-            {activeTab === "instance" && (
+          {hasCustodianAccess && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
+              <nav className="flex flex-col gap-1">
+                {canViewMetadata && (
+                  <NavItem
+                    label="Metadata"
+                    icon={Database}
+                    isActive={activeTab === "metadata"}
+                    onClick={() => handleTabChange("metadata")}
+                  />
+                )}
+                {canEditCover && (
+                  <NavItem
+                    label="Cover Art"
+                    icon={ImageIcon}
+                    isActive={activeTab === "cover-art"}
+                    onClick={() => handleTabChange("cover-art")}
+                    href="/admin/content?tab=cover-art"
+                  />
+                )}
+              </nav>
+            </div>
+          )}
+
+          {canViewSettings && (
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
+              <nav className="flex flex-col gap-1">
+                <NavItem
+                  label="Settings"
+                  icon={Settings}
+                  isActive={activeTab === "instance"}
+                  onClick={() => handleTabChange("instance")}
+                />
+                {hasPermission(PermissionName.CONFIG_FEDERATION) && (
+                  <NavItem
+                    label="Federation"
+                    icon={Building2}
+                    isActive={activeTab === "federation"}
+                    onClick={() => handleTabChange("federation")}
+                  />
+                )}
+                {hasPermission(PermissionName.CONFIG_AFFILIATE) && (
+                  <NavItem
+                    label="Monetization"
+                    icon={DollarSign}
+                    isActive={activeTab === "monetization"}
+                    onClick={() => handleTabChange("monetization")}
+                  />
+                )}
+                {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
+                  <NavItem
+                    label="API Integrations"
+                    icon={Key}
+                    isActive={activeTab === "apikeys"}
+                    onClick={() => handleTabChange("apikeys")}
+                  />
+                )}
+                {canViewUsers && (
+                  <NavItem
+                    label="Users"
+                    icon={Users}
+                    isActive={activeTab === "users"}
+                    onClick={() => handleTabChange("users")}
+                  />
+                )}
+                {canViewRoles && (
+                  <NavItem
+                    label="Roles"
+                    icon={BadgeCheck}
+                    isActive={activeTab === "roles"}
+                    onClick={() => handleTabChange("roles")}
+                    href="/admin/groups"
+                  />
+                )}
+                {hasPermission(PermissionName.CONFIG_INTERNAL) && (
+                  <NavItem
+                    label="Security"
+                    icon={Shield}
+                    isActive={activeTab === "security"}
+                    onClick={() => handleTabChange("security")}
+                  />
+                )}
+              </nav>
+            </div>
+          )}
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="flex-1 min-w-0 pb-20">
+          {activeTab === "profile" && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">Instance Settings</h2>
-                <p className="text-sm text-muted-foreground mb-6">Manage global configuration for your iqoqo node.</p>
-                <InstanceSettings />
+                <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage your personal account settings and preferences.
+                </p>
               </div>
-            )}
-            {activeTab === "users" && (
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <h3 className="text-lg font-medium">Display Name</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This is your public display name on this instance.
+                  </p>
+                  <input
+                    className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={profile.display_name || ""}
+                    readOnly
+                  />
+                </div>
+                <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
+                  <button className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium">
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "instance" && canViewSettings && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">User Management</h2>
-                <UserManagement />
+                <h1 className="text-2xl font-semibold tracking-tight">Instance Settings</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Configure instance-wide settings for this deployment.
+                </p>
               </div>
-            )}
-            {activeTab === "integrations" && (
+              <InstanceSettings category="internal" />
+            </div>
+          )}
+
+          {activeTab === "federation" && (
+            <div className="flex flex-col gap-8">
               <div>
-                <h2 className="text-xl font-semibold mb-4">Integrations & Monetization</h2>
-                {/* Add Affiliate IDs / Federation forms here (reuse InstanceSettings inputs if needed) */}
-                <InstanceSettings />
+                <h1 className="text-2xl font-semibold tracking-tight">Federation</h1>
+                <p className="text-sm text-muted-foreground mt-1">Manage federated instances and partnerships.</p>
               </div>
-            )}
-          </main>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "monetization" && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Monetization</h1>
+                <p className="text-sm text-muted-foreground mt-1">Configure affiliate programs and revenue sharing.</p>
+              </div>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "apikeys" && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">API Integrations</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage external API keys for third-party integrations.
+                </p>
+              </div>
+              <InstanceSettings category="external_apis" showApiKeys />
+            </div>
+          )}
+
+          {activeTab === "users" && canViewUsers && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  View and manage roles for users registered on this instance.
+                </p>
+              </div>
+              <UserManagement canEdit={canEditUsers} />
+            </div>
+          )}
+
+          {activeTab === "security" && hasPermission(PermissionName.CONFIG_INTERNAL) && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
+                <p className="text-sm text-muted-foreground mt-1">Configure internal security settings.</p>
+              </div>
+              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Coming soon</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "metadata" && canViewMetadata && (
+            <div className="flex flex-col gap-8">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">FRBR Metadata Editor</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage Works, Expressions, and Manifestations through the FRBR hierarchy.
+                </p>
+              </div>
+              <FrbrEditorWrapper />
+            </div>
+          )}
         </div>
       </main>
       <Footer />
     </div>
+  );
+}
+
+/**
+ * Unified settings hub page - serves as Profile for regular users and Admin panel for administrators.
+ *
+ * @returns The settings hub page component
+ */
+export default function SettingsHubPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+/**
+ * Wrapper for the FRBR Editor that handles manifestation search and selection.
+ *
+ * @returns The wrapped FRBR Editor component
+ */
+function FrbrEditorWrapper() {
+  const [selectedManifestationId, setSelectedManifestationId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setSearching(true);
+    setSearchError(null);
+    setSearchResults([]);
+
+    try {
+      const results = await searchFrbrEntities(searchQuery.trim(), "manifestation", 20);
+      setSearchResults(results);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const handleSelectManifestation = (id: number) => {
+    setSelectedManifestationId(id);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedManifestationId(null);
+  };
+
+  if (!selectedManifestationId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Find Manifestation</CardTitle>
+          <CardDescription>
+            Search by ISBN-13, UPC, or EAN to locate the manifestation you want to edit.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <input
+              placeholder="Enter ISBN-13, UPC, or EAN"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <Button onClick={handleSearch} disabled={searching}>
+              {searching ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+              Search
+            </Button>
+          </div>
+
+          {searchError && <p className="text-destructive mt-4">{searchError}</p>}
+
+          {searchResults.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium mb-3">Search Results</h3>
+              <div className="border rounded-lg divide-y">
+                {searchResults.map(result => (
+                  <div
+                    key={result.id}
+                    className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                    onClick={() => handleSelectManifestation(result.id)}
+                  >
+                    <div>
+                      <p className="font-medium">{result.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        ID: {result.id}
+                        {result.isbn13 && ` | ISBN: ${result.isbn13}`}
+                        {result.upc && ` | UPC: ${result.upc}`}
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      Edit
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchResults.length === 0 && !searching && !searchError && searchQuery && (
+            <p className="text-muted-foreground mt-4">No results found. Try a different search term.</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Editing Manifestation #{selectedManifestationId}</CardTitle>
+          <CardDescription>Navigate through the FRBR hierarchy using the tabs below.</CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+          <X className="h-4 w-4 mr-2" />
+          Clear
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <FrbrEditor manifestationId={selectedManifestationId} />
+      </CardContent>
+    </Card>
   );
 }

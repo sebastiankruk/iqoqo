@@ -26,7 +26,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Item, ItemStatus } from "@/types/frbr";
+import type { Item, ProgressStatus, CollectionStatus } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useItems: vi.fn(),
@@ -57,31 +57,33 @@ function makeApiResponse(items: Item[]) {
  * Make a mock Item.
  *
  * @param id - Item ID
- * @param status - Item status
+ * @param progress - Item progress status
+ * @param collection - Item collection status
  * @param title - Item title
  * @returns {Item} Mock Item
  */
-function makeItem(id: number, status: ItemStatus, title: string): Item {
+function makeItem(id: number, progress: ProgressStatus, collection: CollectionStatus, title: string): Item {
   return {
     id,
     manifestation_id: id,
     owner_id: "u1",
-    status,
+    status: progress,
+    collection_status: collection,
     meta: {},
     title,
     authors: ["Test Author"],
   };
 }
 
-const READING_ITEM = makeItem(4, "reading", "1984");
-const WISH_LIST_ITEM = makeItem(5, "wish_list", "Project Hail Mary");
+const READING_ITEM = makeItem(4, "reading", "available", "1984");
+const WISH_LIST_ITEM = makeItem(5, "unread", "wish_list", "Project Hail Mary");
 
 /** Items with statuses that should never appear in either section. */
 const IRRELEVANT_ITEMS: Item[] = [
-  makeItem(1, "available", "The Martian"),
-  makeItem(2, "lent", "Dune"),
-  makeItem(3, "lost", "Fahrenheit 451"),
-  makeItem(6, "read", "Brave New World"),
+  makeItem(1, "unread", "available", "The Martian"),
+  makeItem(2, "read", "lent", "Dune"),
+  makeItem(3, "read", "lost", "Fahrenheit 451"),
+  makeItem(6, "read", "available", "Brave New World"),
 ];
 
 describe("CurrentContext", () => {
@@ -204,14 +206,12 @@ describe("CurrentContext", () => {
     expect(screen.getByText("Project Hail Mary")).toBeInTheDocument();
   });
 
-  // ── Items with irrelevant statuses are never shown ───────────────────────
-
-  it.each(IRRELEVANT_ITEMS.map(item => [item.status, item.title as string]))(
-    "never renders items with status '%s' (%s)",
-    (_status, title) => {
-      mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, WISH_LIST_ITEM, ...IRRELEVANT_ITEMS]));
-      render(<CurrentContext />);
-      expect(screen.queryByText(title)).not.toBeInTheDocument();
+  // IRRELEVANT_ITEMS test is now slightly different as tests for BOTH fields
+  it("never renders items that are neither 'reading' nor 'wish_list'", () => {
+    mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, WISH_LIST_ITEM, ...IRRELEVANT_ITEMS]));
+    render(<CurrentContext />);
+    for (const item of IRRELEVANT_ITEMS) {
+      expect(screen.queryByText(item.title as string)).not.toBeInTheDocument();
     }
-  );
+  });
 });

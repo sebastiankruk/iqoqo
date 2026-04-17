@@ -19,9 +19,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, current_app, jsonify, request
+from flask import Response, g, jsonify, request
 from PIL import Image
-from sqlalchemy import text
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -29,7 +28,8 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.core.permissions import PermissionName
+from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image
 
@@ -37,7 +37,7 @@ from app.utils.images import save_upload_image
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
@@ -54,60 +54,20 @@ def get_manifestations() -> tuple[Response, int]:
     offset = (page - 1) * limit
 
     if q:
-        w_tsvector_expr = "w.fts_simple"
-        m_tsvector_expr = "m.fts_simple"
-        # Include search_vector for video/board game Cast, Directors, Mechanics search
-        w_search_vector_expr = "w.search_vector"
-        tsquery_expr = "websearch_to_tsquery('simple', :q)"
-        params = {"q": q, "limit": limit, "offset": offset}
+        from app.core.search_service import SearchService
 
-        try:
-            # Include search_vector for Cast, Directors, Mechanics (video/board games)
-            count_sql = f"""
-            SELECT count(*) FROM manifestations m
-            JOIN expressions e ON e.id = m.expression_id
-            JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
-            """
-            rows_sql = f"""
-            SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-            FROM manifestations m
-            JOIN expressions e ON e.id = m.expression_id
-            JOIN works w ON w.id = e.work_id
-            WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
-            ORDER BY rank DESC
-            LIMIT :limit OFFSET :offset
-            """
-            count_stmt = text(count_sql)
-            rows_stmt = text(rows_sql)
-            total = int(db.session.execute(count_stmt, params).scalar() or 0)
-            result_ids = [row[0] for row in db.session.execute(rows_stmt, params).all()]
+        total, result_ids = SearchService.search_manifestations(q, limit, offset)
 
-            if result_ids:
-                manifestations_unordered = (
-                    Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
-                    .filter(Manifestation.id.in_(result_ids))
-                    .all()
-                )
-                m_dict = {m.id: m for m in manifestations_unordered}
-                manifestations = [m_dict[m_id] for m_id in result_ids if m_id in m_dict]
-            else:
-                manifestations = []
-
-        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
-            current_app.logger.exception("Error during FTS manifestation search, attempting fallback", exc_info=exc)
-            if db.engine.dialect.name == "postgresql":
-                return jsonify({"success": False, "data": None, "error": "Search backend error"}), 500
-
-            pattern = f"%{q}%"
-            base_query = (
-                db.session.query(Manifestation)
-                .join(Expression, Manifestation.expression_id == Expression.id)
-                .join(Work, Expression.work_id == Work.id)
-                .filter((Work.title.ilike(pattern)) | (Manifestation.isbn13.ilike(pattern)))
+        if result_ids:
+            manifestations_unordered = (
+                Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                .filter(Manifestation.id.in_(result_ids))
+                .all()
             )
-            total = base_query.count()
-            manifestations = base_query.offset(offset).limit(limit).all()
+            m_dict = {m.id: m for m in manifestations_unordered}
+            manifestations = [m_dict[m_id] for m_id in result_ids if m_id in m_dict]
+        else:
+            manifestations = []
     else:
         query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
             Manifestation.id.desc()
@@ -173,7 +133,7 @@ def get_manifestations() -> tuple[Response, int]:
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
 @optional_auth
 def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
 
     if not m:
@@ -187,10 +147,12 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         authors = work.meta.get("authors", []) if work.meta else []
 
     user_owns = False
+    owner_count = 0
     if user_id:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
+    owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -206,6 +168,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
+        "owner_count": owner_count,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 
@@ -292,7 +255,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             manifestation.update_meta(cover_status="pending")
             title = work.title or "Unknown"
             author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-            user_id = getattr(request, "user_id", None)
+            user_id = getattr(g, "user_id", None)
             user_id_str = str(user_id) if user_id else "anonymous"
             user = db.session.get(User, user_id) if user_id else None
             llm_permissions = User.list_llm_permissions(user)
@@ -339,7 +302,7 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/refetch-metadata", methods=["POST"])
 @require_auth
-@require_permission("refetch:metadata")
+@require_permission(PermissionName.REFETCH_METADATA)
 def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     if not manif.isbn13:
@@ -368,7 +331,7 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/<int:manifestation_id>/cover", methods=["POST"])
 @require_auth
-@require_permission("upload:cover")
+@require_permission(PermissionName.UPLOAD_COVER)
 def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -410,20 +373,46 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     title = work.title if work else "Unknown Title"
     author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
 
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
-    start_cover_processing(
+    task_id = start_cover_processing(
         manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
     )
 
-    return jsonify({"message": "Cover upload processing started"}), 202
+    return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover upload processing started"}, "error": None}), 202
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["GET"])
+@optional_auth
+def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
+    """Get all additional scans for a manifestation."""
+    scans = ImageScan.query.filter_by(manifestation_id=manifestation_id).order_by(ImageScan.created_at.desc()).all()
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": [
+                    {
+                        "id": s.id,
+                        "url": s.file_path,
+                        "label": s.scan_type,
+                        "source": s.source,
+                        "added_at": s.created_at.isoformat(),
+                    }
+                    for s in scans
+                ],
+                "error": None,
+            }
+        ),
+        200,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
 @require_auth
-@require_permission("edit:manifestation")
+@require_permission(PermissionName.WRITE_METADATA)
 def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     # pylint: disable=too-many-return-statements
     """Upload an additional image (inlay, disc, back) for a manifestation."""
@@ -465,27 +454,38 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
-    # Update JSONB meta field
+    # Save to ImageScan table
+    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source="user_upload")
+    db.session.add(scan)
 
+    # Keep compatibility with old JSONB field for now
     meta = dict(manifestation.meta or {})
     additional_images = meta.get("additional_images", [])
     additional_images.append({"url": image_url, "label": image_label, "added_at": datetime.now(UTC).isoformat()})
     meta["additional_images"] = additional_images
     manifestation.meta = meta
-
-    # SQLAlchemy requires this to detect JSON mutations if we didn't re-assign,
-    # but since we did manifestation.meta = meta above, it might be redundant.
-    # Still, good practice for JSONB.
     flag_modified(manifestation, "meta")
 
     db.session.commit()
 
-    return jsonify({"success": True, "data": meta["additional_images"]}), 201
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "url": image_url,
+                    "label": image_label,
+                    "added_at": scan.created_at.isoformat(),
+                },
+            }
+        ),
+        201,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])
 @require_auth
-@require_permission("regenerate:cover")
+@require_permission(PermissionName.REGENERATE_COVER)
 def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
@@ -500,11 +500,11 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     description = meta.get("Description", "")
     categories = meta.get("Categories", [])
     genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
-    user_id = getattr(request, "user_id", None)
+    user_id = getattr(g, "user_id", None)
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
-    start_cover_processing(
+    task_id = start_cover_processing(
         manif.id,
         identifier,
         title,
@@ -515,12 +515,78 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
         genre=genre,
     )
 
-    return jsonify({"message": "Cover regeneration scheduled", "status": "pending"}), 202
+    return (
+        jsonify(
+            {"success": True, "data": {"task_id": task_id, "message": "Cover regeneration scheduled", "status": "pending"}, "error": None}
+        ),
+        202,
+    )
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/cover-status", methods=["GET"])
+@require_auth
+def get_cover_status(manifestation_id: int):
+    """Polling endpoint for async cover generation task."""
+    task_id = request.args.get("task_id")
+    if not task_id:
+        # Fallback to DB status if no specific task ID provided
+        m = db.session.get(Manifestation, manifestation_id)
+        if not m:
+            return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "cover_url": m.cover_url,
+                        "status": m.meta.get("cover_status") if m.meta else None,
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    from app.core.tasks import get_task_result
+
+    user_id = getattr(g, "user_id", None)
+    result = get_task_result(task_id, user_id=str(user_id) if user_id else None)
+
+    if not result:
+        return jsonify({"success": False, "data": None, "error": "Task not found"}), 404
+
+    status = result.get("status")
+    if status == "completed":
+        m = db.session.get(Manifestation, manifestation_id)
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "cover_url": m.cover_url if m else None,
+                        "status": "ready",
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {"status": status, "error": result.get("error")},
+                "error": None,
+            }
+        ),
+        202,
+    )
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["DELETE"])
 @require_auth
-@require_permission("delete:manifestation")
+@require_permission(PermissionName.DELETE_MANIFESTATION)
 def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:

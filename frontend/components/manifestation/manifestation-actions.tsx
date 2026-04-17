@@ -17,13 +17,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, ImagePlus } from "lucide-react";
+import { Trash2, RefreshCw, CloudDownload, ImagePlus, Pencil, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
 import {
   AlertDialog,
@@ -77,7 +78,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   if (!profile) return null;
 
-  const hasPermission = (perm: string): boolean => Boolean(profile.permissions?.includes(perm));
+  const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
 
   /**
    * Handles the confirmation of manifestation deletion.
@@ -161,29 +162,41 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   return (
     <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission("refetch:metadata") && (
-        <button
-          onClick={handleRefetch}
-          disabled={isRefetching}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
+      {hasPermission(PermissionName.REFETCH_METADATA) && (
+        <button onClick={handleRefetch} disabled={isRefetching} className="btn-action-dashed">
           <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
           {isRefetching ? "Fetching..." : "Refetch Metadata"}
         </button>
       )}
 
-      {hasPermission("regenerate:cover") && (
-        <button
-          onClick={handleRegenerateClick}
-          disabled={isPending || isRequesting}
-          className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-        >
+      {hasPermission(PermissionName.REGENERATE_COVER) && (
+        <button onClick={handleRegenerateClick} disabled={isPending || isRequesting} className="btn-action-dashed">
           <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
           {isPending ? "Generating..." : "Regenerate Cover"}
         </button>
       )}
 
-      {hasPermission("upload:cover") && (
+      {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${manifestation.id}`)}
+          className="btn-action-dashed"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit FRBR
+        </button>
+      )}
+
+      {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
+        <button
+          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${manifestation.id}`)}
+          className="btn-action-dashed"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Edit Cover Art
+        </button>
+      )}
+
+      {hasPermission(PermissionName.UPLOAD_COVER) && (
         <CameraCapture
           manifestation_id={manifestation.id}
           onUploadComplete={() => {
@@ -202,15 +215,18 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
               ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
               : undefined
           }
-          className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
+          inline
+          variant="ghost"
+          className="p-0 m-0 w-auto"
+          buttonClassName="btn-action-dashed h-auto"
         />
       )}
 
-      {hasPermission("delete:manifestation") && (
+      {hasPermission(PermissionName.DELETE_MANIFESTATION) && (
         <button
           onClick={() => setDeleteConfirmOpen(true)}
           disabled={isDeleting}
-          className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
+          className="btn-action-dashed-destructive"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Delete manifestation

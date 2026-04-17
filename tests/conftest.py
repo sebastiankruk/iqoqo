@@ -24,6 +24,12 @@ import pytest
 
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
+# Force isolation from developer's shell environment for basic tests.
+# If ENABLE_FTS_TESTS is not explicitly set, we default to SQLite to prevent
+# model classes from being defined with PostgreSQL-only schemas/features.
+if os.environ.get("ENABLE_FTS_TESTS") != "true":
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
 from app import create_app
 
 
@@ -45,6 +51,27 @@ def app():
         db.drop_all()
 
 
+@pytest.fixture(autouse=True)
+def celery_eager(app):
+    """Ensure Celery is in eager mode and isolated for all tests."""
+    from app.core.celery_app import celery
+
+    old_broker = celery.conf.broker_url
+    old_backend = celery.conf.result_backend
+    old_eager = celery.conf.task_always_eager
+    old_store = celery.conf.task_store_eager_result
+
+    celery.conf.broker_url = "memory://"
+    celery.conf.result_backend = "cache+memory://"
+    celery.conf.task_always_eager = True
+    celery.conf.task_store_eager_result = True
+    yield
+    celery.conf.broker_url = old_broker
+    celery.conf.result_backend = old_backend
+    celery.conf.task_always_eager = old_eager
+    celery.conf.task_store_eager_result = old_store
+
+
 @pytest.fixture
 def client(app):
     """A test client for the app."""
@@ -60,13 +87,29 @@ def admin_headers(app):
     from app.db.models import Permission, Role, User, db
 
     with app.app_context():
-        # Create permissions
+        # Create permissions (including new config/user/role permissions for v0.4.0)
         perms = [
             Permission(name="regenerate:cover"),
             Permission(name="refetch:metadata"),
             Permission(name="delete:item"),
-            Permission(name="edit:manifestation"),
+            Permission(name="update:item"),
+            Permission(name="read:owners"),
+            Permission(name="write:metadata"),
             Permission(name="upload:cover"),
+            Permission(name="config:external_apis"),
+            Permission(name="config:federation"),
+            Permission(name="config:affiliate"),
+            Permission(name="config:internal"),
+            Permission(name="read:users"),
+            Permission(name="write:users"),
+            Permission(name="read:roles"),
+            Permission(name="write:roles"),
+            Permission(name="read:metadata"),
+            Permission(name="delete:manifestation"),
+            Permission(name="llm_generate:metadata"),
+            Permission(name="llm_generate:cover"),
+            Permission(name="llm_generate:cloud"),
+            Permission(name="edit:cover"),
         ]
         db.session.add_all(perms)
 

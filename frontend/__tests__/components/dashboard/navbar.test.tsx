@@ -93,10 +93,10 @@ describe("Navbar Auth State", () => {
 
     // Use findByText to await the asynchronous opening of the Radix dropdown
     expect(await screen.findByText("Profile Settings")).toBeInTheDocument();
-    expect(screen.queryByText("Admin Settings")).toBeNull();
+    expect(screen.queryByText("Admin Configuration")).toBeNull();
   });
 
-  it("shows Admin Settings for admin users", async () => {
+  it("shows Admin Configuration for admin users", async () => {
     const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "admin@example.com", display_name: "Admin", roles: ["admin"] },
@@ -109,6 +109,6 @@ describe("Navbar Auth State", () => {
     await user.click(avatarBtn);
 
     // Use findByText to await the asynchronous opening of the Radix dropdown
-    expect(await screen.findByText("Admin Settings")).toBeInTheDocument();
+    expect(await screen.findByText("Admin Configuration")).toBeInTheDocument();
   });
 });

@@ -51,7 +51,8 @@ vi.mock("next/image", () => ({
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",
-  status: "available",
+  status: "unread",
+  collection_status: "available",
   title: "Test Book",
   authors: ["Test Author"],
   manifestation_id: 100,

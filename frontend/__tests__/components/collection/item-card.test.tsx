@@ -35,7 +35,8 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     id: 1,
     manifestation_id: 1,
     owner_id: "user1",
-    status: "available",
+    status: "unread",
+    collection_status: "available",
     meta: {},
     title: "Dune",
     authors: ["Frank Herbert"],
@@ -93,22 +94,22 @@ describe("ItemCard", () => {
   });
 
   it("shows a status dot with the correct title for 'available'", () => {
-    render(<ItemCard item={makeItem({ status: "available" })} />);
-    expect(screen.getByTitle("On Shelf")).toBeInTheDocument();
+    render(<ItemCard item={makeItem({ collection_status: "available", status: "unread" })} />);
+    expect(screen.getByTitle("Unread")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lent'", () => {
-    render(<ItemCard item={makeItem({ status: "lent" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "lent" })} />);
     expect(screen.getByTitle("Lent Out")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'wish_list'", () => {
-    render(<ItemCard item={makeItem({ status: "wish_list" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "wish_list" })} />);
     expect(screen.getByTitle("On Wish List")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lost'", () => {
-    render(<ItemCard item={makeItem({ status: "lost" })} />);
+    render(<ItemCard item={makeItem({ collection_status: "lost" })} />);
     expect(screen.getByTitle("Lost")).toBeInTheDocument();
   });
 
@@ -140,7 +141,12 @@ describe("ItemCard", () => {
   });
 
   it("renders a cover image in horizontal variant when coverUrl is provided", () => {
-    render(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })} variant="horizontal" />);
+    render(
+      <ItemCard
+        item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })}
+        variant="horizontal"
+      />
+    );
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/horizontal-cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
@@ -149,5 +155,10 @@ describe("ItemCard", () => {
   it("renders a cover placeholder in horizontal variant when coverUrl is absent", () => {
     render(<ItemCard item={makeItem({ meta: {} })} variant="horizontal" />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("does not show 'In Collection' badge when owner_id is 'Unavailable'", () => {
+    render(<ItemCard item={makeItem({ owner_id: "Unavailable" })} />);
+    expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
   });
 });

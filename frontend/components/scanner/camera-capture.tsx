@@ -32,7 +32,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonVariant } from "@/components/ui/button";
 import { MediaFormat } from "@/types/frbr";
 import {
   AlertDialog,
@@ -78,6 +78,12 @@ interface CameraCaptureProps {
   confirmMessage?: string;
   /** Initial media format */
   format?: MediaFormat;
+  /** Button variant */
+  variant?: ButtonVariant;
+  /** Optional CSS class name applied directly to the button */
+  buttonClassName?: string;
+  /** If true, forces the simplified button layout and applies to button */
+  inline?: boolean;
 }
 
 /**
@@ -89,12 +95,15 @@ interface CameraCaptureProps {
  * @param props.onUploadComplete - Called after a successful cover upload (mode 1).
  * @param props.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
  * @param props.className - Optional CSS class name applied to the wrapper div.
- * @param props.capture - Whether to force the camera or omit for gallery
- * @param props.label - Label for the button
- * @param props.icon - Optional icon component
- * @param props.confirmTitle - If set, shows a confirmation dialog before opening the camera
- * @param props.confirmMessage - Confirmation message
- * @param props.format - Initial media format
+ * @param props.capture - Whether to force the camera or omit for gallery.
+ * @param props.label - Label for the button.
+ * @param props.icon - Optional icon component.
+ * @param props.confirmTitle - If set, shows a confirmation dialog before opening the camera.
+ * @param props.confirmMessage - Confirmation message.
+ * @param props.format - Initial media format.
+ * @param props.variant - Button variant.
+ * @param props.buttonClassName - Optional CSS class name applied directly to the button.
+ * @param props.inline - If true, forces the simplified button layout and applies to button.
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
@@ -108,6 +117,9 @@ export function CameraCapture({
   confirmTitle,
   confirmMessage,
   format = "book",
+  variant,
+  buttonClassName,
+  inline,
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -244,7 +256,55 @@ export function CameraCapture({
   };
 
   // Determine if we should show the drag & drop standard layout (desktop / no camera)
-  const isDesktopMode = hasCamera === false || capture === false;
+  const isDesktopMode = !inline && (hasCamera === false || capture === false);
+
+  const inputNode = (
+    <input
+      type="file"
+      accept="image/*"
+      {...(capture !== false && hasCamera !== false ? { capture } : {})}
+      ref={fileInputRef}
+      onChange={handleCapture}
+      className="hidden"
+    />
+  );
+
+  const confirmNode = confirmTitle && (
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+          <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  if (inline) {
+    return (
+      <>
+        {inputNode}
+        <Button onClick={handleClick} disabled={uploading} variant={variant || "outline"} className={buttonClassName}>
+          {uploading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              {icon || <Camera className="mr-2 h-4 w-4" />}
+              {label}
+            </>
+          )}
+        </Button>
+        {confirmNode}
+      </>
+    );
+  }
 
   return (
     <div
@@ -263,14 +323,7 @@ export function CameraCapture({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      <input
-        type="file"
-        accept="image/*"
-        {...(capture !== false && hasCamera !== false ? { capture } : {})}
-        ref={fileInputRef}
-        onChange={handleCapture}
-        className="hidden"
-      />
+      {inputNode}
 
       {isDesktopMode ? (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
@@ -293,7 +346,12 @@ export function CameraCapture({
         </div>
       ) : (
         <div className="flex flex-col gap-4 w-full">
-          <Button onClick={handleClick} disabled={uploading} variant="outline" className="w-full">
+          <Button
+            onClick={handleClick}
+            disabled={uploading}
+            variant={variant || "outline"}
+            className={buttonClassName || "w-full"}
+          >
             {uploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -309,20 +367,7 @@ export function CameraCapture({
         </div>
       )}
 
-      {confirmTitle && (
-        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-              <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {confirmNode}
     </div>
   );
 }

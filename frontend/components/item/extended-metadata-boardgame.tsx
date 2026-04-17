@@ -67,7 +67,7 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
           </div>
         )}
       </div>
-      
+
       {source === "BGG" && (
         <div className="mt-4 pt-4 border-t border-border/50">
           <BggAttribution />

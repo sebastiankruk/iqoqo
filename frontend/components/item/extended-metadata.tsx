@@ -19,13 +19,15 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { isAudioMedia } from "@/lib/utils";
+import { cn, isAudioMedia } from "@/lib/utils";
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
+  owner_name?: string | null;
+  owner_count?: number;
 }
 
 /**
@@ -33,9 +35,11 @@ interface ExtendedMetadataProps {
  *
  * @param root0 - The props object
  * @param root0.meta - The metadata to display
+ * @param root0.owner_name - The owner name to display
+ * @param root0.owner_count - The number of owners for this manifestation
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
+export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
@@ -67,6 +71,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "cover_status",
     "cover_source",
     "cover_url",
+    "cover_status_updated_at",
     "local_cover",
     "tags",
     "year",
@@ -79,6 +84,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     "tracks",
     "Tracks",
     "additional_images",
+    "imageLinks",
     "format",
     "publisher",
     "label",
@@ -132,7 +138,9 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
     !isBoardGame &&
     !isPuzzle &&
     !trackList &&
-    extraKeys.length === 0
+    extraKeys.length === 0 &&
+    !owner_name &&
+    !owner_count
   )
     return null;
 
@@ -229,7 +237,7 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
         </div>
       )}
 
-      {extraKeys.length > 0 && (
+      {(extraKeys.length > 0 || owner_name) && (
         <div className="border rounded-xl p-2 bg-muted/10">
           <Button
             variant="ghost"
@@ -245,16 +253,65 @@ export function ExtendedMetadata({ meta }: ExtendedMetadataProps) {
 
           {isExpanded && (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 text-sm bg-background/50 rounded-lg mt-2 border border-border/40">
-              {extraKeys.map(key => (
-                <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
-                  <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                    {key.replace(/_/g, " ")}
-                  </dt>
-                  <dd className="font-medium text-foreground break-words">{String(meta[key])}</dd>
+              {(owner_name || owner_count) && (
+                <div className="flex flex-col gap-1 pb-2 border-b border-border/20">
+                  <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Owner</dt>
+                  <dd className="font-medium text-foreground">
+                    {owner_name}
+                    {owner_count && owner_count > 1 && (
+                      <span className={cn("text-muted-foreground", owner_name && "ml-1")}>
+                        (<strong>{owner_count}</strong> owners)
+                      </span>
+                    )}
+                  </dd>
                 </div>
-              ))}
+              )}
+              {extraKeys.map(key => {
+                const value = meta[key];
+                let displayValue: React.ReactNode;
+
+                if (value === null || value === undefined) {
+                  displayValue = <span className="text-muted-foreground italic">null</span>;
+                } else if (Array.isArray(value)) {
+                  displayValue = (
+                    <div className="flex flex-wrap gap-1">
+                      {value.map((item, idx) => (
+                        <span key={idx} className="bg-muted px-2 py-0.5 rounded text-xs">
+                          {String(item)}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                } else if (typeof value === "object") {
+                  displayValue = (
+                    <pre className="text-xs bg-muted/30 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(value, null, 2)}
+                    </pre>
+                  );
+                } else {
+                  displayValue = String(value);
+                }
+
+                return (
+                  <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
+                    <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
+                      {key.replace(/_/g, " ")}
+                    </dt>
+                    <dd className="font-medium text-foreground break-words">{displayValue}</dd>
+                  </div>
+                );
+              })}
             </dl>
           )}
+        </div>
+      )}
+
+      {Boolean(meta.metadata_provenance && typeof meta.metadata_provenance === "object") && (
+        <div className="mt-6 flex items-center justify-end text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 gap-2 border-t border-border/20 pt-4">
+          <span>Sourced from</span>
+          <span className="text-muted-foreground/60">
+            {(meta.metadata_provenance as { source?: string }).source || "Unknown API"}
+          </span>
         </div>
       )}
     </div>

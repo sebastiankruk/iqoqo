@@ -20,9 +20,9 @@ import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 /** Button variant type */
-type ButtonVariant = "default" | "ghost" | "outline" | "secondary" | "destructive";
+export type ButtonVariant = "default" | "ghost" | "outline" | "secondary" | "destructive" | "link";
 /** Button size type */
-type ButtonSize = "default" | "icon" | "sm";
+export type ButtonSize = "default" | "icon" | "sm";
 
 /** Props for Button component */
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,6 +37,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   outline: "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
   secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
   destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+  link: "text-primary underline-offset-4 hover:underline",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

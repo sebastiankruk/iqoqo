@@ -15,71 +15,149 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
-import { getUsers } from "@/lib/api/admin";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { getUsers, AdminUser } from "@/lib/api/admin";
+import { Loader2, Search, Filter } from "lucide-react";
+import { RbacSheet } from "./rbac-sheet";
 
-/**
- * Admin user details
- */
-interface AdminUser {
-  id: string;
-  email: string;
-  display_name?: string | null;
-  roles?: string[];
-  is_active?: boolean;
+interface UserManagementProps {
+  canEdit?: boolean;
 }
 
 /**
- * Component for managing users.
+ * Component for managing users, displaying data table with search/filtering
+ * and invoking the RBAC Sheet.
  *
+ * @param props - Component props
+ * @param props.canEdit - Whether user has write:users permission
  * @returns {JSX.Element} The component
  */
-export function UserManagement() {
+export function UserManagement({ canEdit = false }: UserManagementProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await getUsers({ search: searchQuery, status: statusFilter });
+      setUsers(response.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, statusFilter]);
+
+  // Debounced search effect
   useEffect(() => {
-    getUsers()
-      // Double cast via unknown to satisfy TypeScript's overlap rules
-      .then(data => setUsers(data as unknown as AdminUser[]))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    const handler = setTimeout(() => fetchUsers(), 300);
+    return () => clearTimeout(handler);
+  }, [fetchUsers]);
 
-  if (loading)
-    return (
-      <div className="p-4 flex justify-center">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
+  const handleUserUpdate = (updatedUser: AdminUser) => {
+    setUsers(prev => prev.map(u => (u.id === updatedUser.id ? updatedUser : u)));
+  };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm text-left border-collapse">
-        <thead className="text-xs uppercase bg-accent/50 text-accent-foreground">
-          <tr>
-            <th className="px-6 py-3 rounded-tl-md">Email</th>
-            <th className="px-6 py-3">Display Name</th>
-            <th className="px-6 py-3">Roles</th>
-            <th className="px-6 py-3 rounded-tr-md">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(u => (
-            <tr key={u.id} className="border-b dark:border-white/10 hover:bg-accent/20 transition-colors">
-              <td className="px-6 py-4 font-medium">{u.email}</td>
-              <td className="px-6 py-4">{u.display_name}</td>
-              <td className="px-6 py-4">
-                <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                  {u.roles?.join(", ") || "user"}
-                </span>
-              </td>
-              <td className="px-6 py-4">{u.is_active ? "Active" : "Inactive"}</td>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search users..."
+            className="w-full pl-9 pr-4 py-2 text-sm border rounded-md bg-background focus:ring-1 focus:ring-primary outline-none"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="relative w-full sm:w-auto flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            className="border rounded-md py-2 px-3 text-sm bg-background outline-none"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Suspended</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="border rounded-md overflow-x-auto bg-card">
+        <table className="w-full text-sm text-left border-collapse">
+          <thead className="text-xs uppercase bg-accent/30 text-accent-foreground border-b">
+            <tr>
+              <th className="px-6 py-4 font-semibold">Email</th>
+              <th className="px-6 py-4 font-semibold">Display Name</th>
+              <th className="px-6 py-4 font-semibold">Roles</th>
+              <th className="px-6 py-4 font-semibold text-right">Status</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y">
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="py-12 text-center text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                </td>
+              </tr>
+            ) : users.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                  No users found.
+                </td>
+              </tr>
+            ) : (
+              users.map(u => (
+                <tr
+                  key={u.id}
+                  onClick={canEdit ? () => setSelectedUser(u) : undefined}
+                  className={canEdit ? "hover:bg-accent/20 transition-colors cursor-pointer" : ""}
+                >
+                  <td className="px-6 py-4 font-medium">{u.email}</td>
+                  <td className="px-6 py-4 text-muted-foreground">{u.display_name || "—"}</td>
+                  <td className="px-6 py-4 flex gap-2 flex-wrap">
+                    {u.roles && u.roles.length > 0 ? (
+                      u.roles.map(role => (
+                        <span
+                          key={role}
+                          className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full capitalize"
+                        >
+                          {role}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground text-xs">User</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${u.is_active ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}
+                    >
+                      {u.is_active ? "Active" : "Suspended"}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedUser && (
+        <RbacSheet
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onUpdate={handleUserUpdate}
+          canEdit={canEdit}
+        />
+      )}
     </div>
   );
 }

@@ -14,19 +14,45 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 permissions:
-  - name: refetch:metadata
-    description: "Allow refetching manifestation metadata"
-  - name: regenerate:cover
-    description: "Allow regenerating covers"
-  - name: delete:item
+  - name: "config:affiliate"
+    description: "Manage affiliate tracking IDs"
+  - name: "config:external_apis"
+    description: "Manage external API keys and integrations"
+  - name: "config:federation"
+    description: "Manage federation settings"
+  - name: "config:internal"
+    description: "Manage internal instance settings"
+  - name: "delete:item"
     description: "Allow deletion of items"
-  - name: delete:manifestation
+  - name: "delete:manifestation"
     description: "Allow deletion of manifestations"
-  - name: llm_generate:cover
-    description: "Allow LLM to generate covers"
-  - name: llm_generate:metadata
-    description: "Allow LLM to extract metadata from cover image"
-  - name: llm_generate:cloud
+  - name: "edit:cover"
+    description: "Allow opening the cover art editor to manipulate (crop/rotate/flip) and upload manifestation covers. Includes upload:cover rights."
+  - name: "llm_generate:cloud"
     description: "Allow LLM to generate content using cloud resources"
-  - name: upload:cover
-    description: "Allow uploading/contributing manifestation covers"
+  - name: "llm_generate:cover"
+    description: "Allow LLM to generate covers"
+  - name: "llm_generate:metadata"
+    description: "Allow LLM to extract metadata from cover image"
+  - name: "read:metadata"
+    description: "Allow viewing manifestation and item metadata"
+  - name: "read:owners"
+    description: "View owner names of items (admin only by default)"
+  - name: "read:roles"
+    description: "View roles list"
+  - name: "read:users"
+    description: "View users list"
+  - name: "refetch:metadata"
+    description: "Allow refetching manifestation metadata from external sources"
+  - name: "regenerate:cover"
+    description: "Allow regenerating covers using AI"
+  - name: "update:item"
+    description: "Allow updating item status and metadata"
+  - name: "upload:cover"
+    description: "Allow uploading or contributing cover images for manifestations via scan or item pages. Does not grant access to the cover art editor."
+  - name: "write:metadata"
+    description: "Allow modifying manifestation and item metadata"
+  - name: "write:roles"
+    description: "Create/delete roles and assign permissions"
+  - name: "write:users"
+    description: "Modify user roles and active status"

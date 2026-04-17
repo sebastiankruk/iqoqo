@@ -110,8 +110,9 @@ def test_extract_from_cover_success(mock_submit, mock_image_open, client, vision
 def test_get_extract_status_not_found(client, vision_user_headers):
     """Test polling for a non-existent task."""
     response = client.get("/api/vision/extract/invalid-id", headers=vision_user_headers)
-    assert response.status_code == 404
-    assert response.json["error"] == "Task not found"
+    # With Celery, unknown IDs default to PENDING (202) until we have a task store
+    assert response.status_code == 202
+    assert response.json["data"]["status"] == "pending"
 
 
 @patch("app.api.scanner.get_task_result")

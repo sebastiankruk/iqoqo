@@ -34,7 +34,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
             email: "test@example.com",
             display_name: "Test User",
             roles: ["user"],
-            permissions: ["upload:cover", "edit:manifestation"],
+            permissions: ["upload:cover", "write:metadata", "update:item"],
           },
         },
       })
@@ -172,13 +172,8 @@ test.describe("Item Acquisition and Collection Workflow", () => {
         })
       );
 
-      // Submit Form
-      await page.getByRole("button", { name: "Save Manual Entry" }).click();
-
-      // Verify Redirect to Item Page
-      await expect(page).toHaveURL(/.*\/item\/789/);
-
-      // Mock item details for the sidebar
+      // Mock item details BEFORE submitting – the page fetches this immediately
+      // after the redirect, so the mock must be registered before the click.
       await page.route("**/api/items/789", async route =>
         route.fulfill({
           status: 200,
@@ -198,10 +193,16 @@ test.describe("Item Acquisition and Collection Workflow", () => {
         })
       );
 
-      // 5. Contribute Cover
+      // Mock cover contribution endpoint
       await page.route("**/api/manifestations/101/cover", route =>
         route.fulfill({ status: 200, json: { success: true } })
       );
+
+      // Submit Form
+      await page.getByRole("button", { name: "Save Manual Entry" }).click();
+
+      // Verify Redirect to Item Page
+      await expect(page).toHaveURL(/.*\/item\/789/);
 
       // Check the sidebar button - it should be 'Contribute Cover' because it has no cover yet
       const contributeBtn = page.getByRole("button", { name: "Contribute Cover" });
@@ -219,7 +220,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       // 2. Open mobile scanner
       // Click the big round camera button
       // Using force: true because sometimes toasts or other overlays might intercept the click check
-      await page.locator("button:has(svg.lucide-camera)").click({ force: true });
+      await page.locator("button.group.relative.flex.items-center").click({ force: true });
 
       // 3. Verify scanner starts
       // 3. Verify scanner starts (wait longer for the camera to 'turn on')

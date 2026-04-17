@@ -70,11 +70,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
       </div>
 
       <div className="flex flex-col flex-1 w-full">
-        {/* Status Pills immediately below image on mobile */}
+        {/* Media type Badge */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Badge variant="default" className="capitalize px-3 py-1 text-xs font-semibold tracking-wide">
-            {item.status?.replace("_", " ") ?? "Unknown"}
-          </Badge>
           {isAudio && (
             <Badge
               variant="secondary"
@@ -151,7 +148,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
                 {isAudio ? "Tracks" : "Pages"}
               </span>
               <span className="font-semibold">
-                {String(meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"])}
+                {(() => {
+                  const val = meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"];
+                  if (val === null || val === undefined) return "";
+                  if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
+                  return String(val).slice(0, 50);
+                })()}
               </span>
             </div>
           )}

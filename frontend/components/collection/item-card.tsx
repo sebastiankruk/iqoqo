@@ -18,32 +18,41 @@
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
-import type { Item, ItemStatus, CatalogEntry } from "@/types/frbr";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
-const statusDotColor: Record<ItemStatus, string> = {
+const statusDotColor: Record<string, string> = {
+  // Collection
   available: "bg-chart-3",
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
   ordered: "bg-amber-400",
   damaged: "bg-orange-600",
+  // Progress
   reading: "bg-green-500",
   read: "bg-blue-500",
-  unread: "bg-purple-500",
+  unread: "bg-zinc-400",
   want_to_read: "bg-primary",
   listening: "bg-teal-500",
   listened: "bg-cyan-500",
   want_to_listen: "bg-sky-400",
+  watching: "bg-indigo-500",
+  watched: "bg-violet-500",
+  want_to_watch: "bg-purple-500",
+  played: "bg-rose-500",
+  playing: "bg-pink-500",
 };
 
-const statusDotTitle: Record<ItemStatus, string> = {
+const statusDotTitle: Record<string, string> = {
+  // Collection
   available: "On Shelf",
   wish_list: "On Wish List",
   lent: "Lent Out",
   lost: "Lost",
   ordered: "Ordered",
   damaged: "Damaged",
+  // Progress
   reading: "Reading",
   read: "Read",
   unread: "Unread",
@@ -51,6 +60,11 @@ const statusDotTitle: Record<ItemStatus, string> = {
   listening: "Listening",
   listened: "Listened",
   want_to_listen: "Want to Listen",
+  watching: "Watching",
+  watched: "Watched",
+  want_to_watch: "Want to Watch",
+  played: "Played",
+  playing: "Playing",
 };
 
 interface ItemCardProps {
@@ -73,8 +87,13 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
 
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
-  const status = isCatalog ? undefined : (item as Item).status;
-  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : true;
+
+  // Decide which status is more "interesting" to show on the card dot/badge
+  const progressStatus = isCatalog ? undefined : (item as Item).status;
+  const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
+  const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
+
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).owner_id !== "Unavailable";
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
@@ -123,7 +142,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
       >
         <div className="flex h-full p-5 gap-4 items-center">
-          <div className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}>
+          <div
+            className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}
+          >
             {(isProcessing || coverStatus === "pending") && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -148,9 +169,13 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
             <div>
               <div className="mb-1.5 flex items-center gap-1.5">
                 <MediaIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">{mediaLabel}</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">
+                  {mediaLabel}
+                </span>
               </div>
-              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">{title}</h3>
+              <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">
+                {title}
+              </h3>
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{authors}</p>
               <div className="mt-2.5 flex items-center gap-2">
                 {!isCatalog && (
