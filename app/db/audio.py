@@ -32,7 +32,6 @@ Audio-specific ``Manifestation.meta`` keys are documented in
 from __future__ import annotations
 
 import os
-import sys
 
 from . import db
 
@@ -40,8 +39,6 @@ from . import db
 # Schema selector — mirrors the logic in app.db.core
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 _CATALOG: str | None = "catalog" if _USE_PG else None
 _CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""

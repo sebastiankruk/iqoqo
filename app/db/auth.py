@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -35,8 +34,6 @@ from . import db
 # Schema selector
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 _AUTH: str | None = "auth" if _USE_PG else None
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""

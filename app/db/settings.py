@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from datetime import UTC, datetime
 
 from . import db
@@ -27,11 +26,6 @@ from . import db
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-# In test environments (pytest), default to non-Postgres (no schemas/FTS) unless
-# FTS tests are explicitly enabled. This ensures tests run correctly on SQLite
-# even if DATABASE_URL is set in the environment.
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 _INVENTORY = "inventory" if _USE_PG else None
 _CATALOG = "catalog" if _USE_PG else None

@@ -34,7 +34,6 @@ import os
 # Use the "catalog" PostgreSQL schema in production.  SQLite (used in tests)
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
-import sys
 from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,8 +43,6 @@ from app.db.search_types import SearchVector
 from . import db
 
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
-if "pytest" in sys.modules and os.environ.get("ENABLE_FTS_TESTS") != "true":
-    _USE_PG = False
 
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
@@ -149,7 +146,7 @@ class Work(db.Model):  # type: ignore[name-defined]
                 persisted=True,
             )
             if _USE_PG
-            else None
+            else db.FetchedValue()
         ),
         nullable=True,
     )
@@ -239,7 +236,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
                 persisted=True,
             )
             if _USE_PG
-            else None
+            else db.FetchedValue()
         ),
         nullable=True,
     )

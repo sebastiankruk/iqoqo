@@ -24,6 +24,12 @@ import pytest
 
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
+# Force isolation from developer's shell environment for basic tests.
+# If ENABLE_FTS_TESTS is not explicitly set, we default to SQLite to prevent
+# model classes from being defined with PostgreSQL-only schemas/features.
+if os.environ.get("ENABLE_FTS_TESTS") != "true":
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
 from app import create_app
 
 
