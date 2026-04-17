@@ -65,7 +65,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           className="object-cover"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
           priority
-          unoptimized={coverUrl.startsWith("http")}
+          unoptimized
         />
       </div>
 
