@@ -166,9 +166,13 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
         return None
 
     res = None
-    # 1. Open Library (Direct)
-    ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
-    res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+    # 1. Open Library - try original (full resolution) first, then fall back to L
+    ol_url_original = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}.jpg"
+    res = download_direct_url(identifier, ol_url_original, "api_openlibrary", suffix="ol_orig")
+
+    if not res:
+        ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
+        res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
 
     if not res:
         # 2. Google Books (Search -> Thumbnail)

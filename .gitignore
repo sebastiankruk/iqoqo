@@ -18,6 +18,9 @@ build/
 .dockerignore
 docker-compose.override.yml
 
+# Backup
+backups/*
+
 # Environment
 .env
 .env.*
