@@ -58,10 +58,13 @@ export default function ScanPage() {
   const router = useRouter();
 
   const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
+    // Prefer the backend-normalized identifier/barcode if available
+    const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
+
     if (meta.candidates && meta.candidates.length > 1) {
-      setCandidates({ isbn, items: meta.candidates });
+      setCandidates({ isbn: canonicalId, items: meta.candidates });
     } else {
-      setResult({ isbn, meta });
+      setResult({ isbn: canonicalId, meta });
     }
   }, []);
 
@@ -180,7 +183,17 @@ export default function ScanPage() {
           candidates={candidates.items}
           onSelect={choice => {
             setCandidates(null);
-            setResult({ isbn: candidates.isbn, meta: choice });
+            // Derive a stable identifier from the selected candidate
+            const selectedIdentifier =
+              (typeof choice === "object" &&
+                choice !== null &&
+                "identifier" in choice &&
+                (choice.identifier as string)) ||
+              (typeof choice === "object" && choice !== null && "barcode" in choice && (choice.barcode as string)) ||
+              (typeof choice === "object" && choice !== null && "isbn" in choice && (choice.isbn as string)) ||
+              candidates.isbn;
+
+            setResult({ isbn: selectedIdentifier, meta: choice });
           }}
           onDismiss={handleDismiss}
         />

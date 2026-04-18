@@ -132,7 +132,9 @@ describe("SuccessCard", () => {
   });
 
   it("displays the barcode under the title", () => {
-    render(<SuccessCard isbn="074646493524" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+    // Provide meta without its own ISBN to test fallback to the 'isbn' prop
+    const metaWithoutIsbn = { ...SAMPLE_META, isbn: undefined, barcode: undefined, identifier: undefined };
+    render(<SuccessCard isbn="074646493524" meta={metaWithoutIsbn as IsbnMeta} onDismiss={vi.fn()} />);
     expect(screen.getByText("074646493524")).toBeInTheDocument();
   });
 

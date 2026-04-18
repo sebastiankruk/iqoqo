@@ -48,8 +48,22 @@ interface SuccessCardProps {
  * @returns {JSX.Element} The component
  */
 export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover }: SuccessCardProps) {
+  const normalizeFormat = (f: string): string => {
+    const low = f.toLowerCase();
+    if (["book", "text", "standard"].includes(low)) return "book";
+    if (["video", "dvd", "bluray", "movie", "moving image"].includes(low)) return "video";
+    if (["audio", "cd", "vinyl", "sound", "lp", "music"].includes(low)) {
+      if (low === "vinyl" || low === "lp") return "vinyl";
+      if (low === "cd") return "cd";
+      return "audio";
+    }
+    if (["game", "boardgame"].includes(low)) return "boardgame";
+    if (["puzzle", "jigsaw"].includes(low)) return "puzzle";
+    return "book"; // Default fallback
+  };
+
   const [adding, setAdding] = useState(false);
-  const [selectedFormat, setSelectedFormat] = useState((meta.format || meta.Format || "book").toLowerCase());
+  const [selectedFormat, setSelectedFormat] = useState(normalizeFormat(meta.format || meta.Format || "book"));
   const router = useRouter();
 
   // Normalize metadata for display
@@ -63,8 +77,9 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
   const isVideo = ["video", "dvd", "bluray", "moving image"].includes(format);
   const isGame = ["boardgame", "game"].includes(format);
 
-  // Only surface the identifier if it looks like a real barcode/ISBN — not a free-text search query
-  const rawIdentifier = isbn || meta.barcode || meta.isbn || meta.identifier || "";
+  // Derive stable identifier: prefer meta fields from backend over raw scan prop
+  const canonicalIdentifier = meta.identifier || meta.barcode || meta.isbn;
+  const rawIdentifier = canonicalIdentifier || isbn || "";
   const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
   const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
   const isMissingID = !identifier;
@@ -154,7 +169,6 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
       setAdding(false);
     }
   };
-
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
@@ -294,21 +308,21 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
                     View in Collection
                   </Button>
                 ) : (
-                    <Button
-                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                      variant="default"
-                      disabled={adding}
-                      onClick={handleAdd}
-                    >
-                      {adding ? (
-                        "Adding..."
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                          Add to My Collection
-                        </>
-                      )}
-                    </Button>
+                  <Button
+                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                    variant="default"
+                    disabled={adding}
+                    onClick={handleAdd}
+                  >
+                    {adding ? (
+                      "Adding..."
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                        Add to My Collection
+                      </>
+                    )}
+                  </Button>
                 )}
                 <Button
                   variant="outline"

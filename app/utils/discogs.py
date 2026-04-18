@@ -35,9 +35,35 @@ def _normalize_release_data(release: dict) -> dict:
     publisher = release.get("label", [None])[0] if isinstance(release.get("label"), list) else release.get("label")
     cover_url = release.get("cover_image") or release.get("thumb")
 
-    # Determine specific format
-    formats = release.get("format", [])
-    media_format = "vinyl" if "Vinyl" in formats else "cd" if "CD" in formats else "audio"
+    # Determine specific format. Discogs search results provide a "format" list of strings,
+    # while /releases/{id} provides a "formats" list of objects.
+    format_labels = []
+
+    search_formats = release.get("format", [])
+    if isinstance(search_formats, str):
+        format_labels.append(search_formats)
+    elif isinstance(search_formats, list):
+        format_labels.extend(item for item in search_formats if isinstance(item, str))
+
+    release_formats = release.get("formats", [])
+    if isinstance(release_formats, list):
+        for item in release_formats:
+            if isinstance(item, dict):
+                name = item.get("name")
+                if isinstance(name, str):
+                    format_labels.append(name)
+                # Expand descriptions if present
+                descriptions = item.get("descriptions", [])
+                if isinstance(descriptions, str):
+                    format_labels.append(descriptions)
+                elif isinstance(descriptions, list):
+                    format_labels.extend(desc for desc in descriptions if isinstance(desc, str))
+            elif isinstance(item, str):
+                format_labels.append(item)
+
+    media_format = (
+        "vinyl" if any(label == "Vinyl" for label in format_labels) else "cd" if any(label == "CD" for label in format_labels) else "audio"
+    )
 
     return {
         "title": title,
