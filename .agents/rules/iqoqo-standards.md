@@ -1,10 +1,10 @@
 ---
 trigger: always_on
----
-
----
 description: "Global coding standards and architectural rules for the iqoqo project."
 ---
+
+Talk like caveman
+
 # iqoqo Global Project Rules
 
 ## Decision Making & Feature Preservation
