@@ -93,9 +93,9 @@ class TestRunScripts(unittest.TestCase):
         # Test that 'prod' mode loads .env.prod
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
         mode_env = "SECRET_KEY=prod-secret"
-        
+
         result = self.run_script(args=["prod"], env_content=env_content, mode_env=mode_env)
-        
+
         self.assertIn("Entering mode 'prod'", result.stdout)
         self.assertIn("Loading overrides from .env.prod", result.stdout)
 
@@ -121,7 +121,7 @@ fi
 
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
         result = self.run_script(args=["prod"], env_content=env_content)
-        
+
         self.assertIn("Migration state: mock-version-123", result.stdout)
 
     def test_alembic_mismatch_warning(self):
@@ -143,16 +143,17 @@ else
     echo "0.5.0"
 fi
 """)
+
     def test_tunnel_flag(self):
         # Test that --tunnel loads .env.dev even in dev mode (normally .env.dev is optional)
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
         mode_env = "TUNNEL_VAR=activated"
-        
+
         # We need to mock .env.dev because run.sh check [ "$TUNNEL" = true ] && [ -f ".env.dev" ]
         (self.work_dir / ".env.dev").write_text(mode_env)
-        
+
         result = self.run_script(args=["dev", "--tunnel"], env_content=env_content)
-        
+
         self.assertIn("Loading Tunnel Configuration (.env.dev)", result.stdout)
 
     def test_clean_flag(self):
@@ -166,7 +167,7 @@ exit 0
 """)
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
         result = self.run_script(args=["prod", "--clean"], env_content=env_content)
-        
+
         self.assertIn("Cleaning up previous instances", result.stdout)
         self.assertIn("DOCKER_DOWN_TRIGGERED", result.stdout)
 

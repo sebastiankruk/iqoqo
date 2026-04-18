@@ -15,40 +15,39 @@
 
 # 0. Set Mode and Parameters
 MODE="dev"
+MODE_SET=false
 EXTRA_ARGS=()
 TUNNEL=false
 CLEAN=false
 BACKUP=false
 
-# Simple argument parsing
-for arg in "$@"; do
-    case $arg in
+# Robust argument parsing
+while [ $# -gt 0 ]; do
+    case "$1" in
         dev|preview|prod)
-            MODE=$arg
-            shift
+            MODE="$1"
+            MODE_SET=true
             ;;
         --tunnel)
             TUNNEL=true
-            shift
             ;;
         --clean)
             CLEAN=true
-            shift
             ;;
         --backup)
             BACKUP=true
-            shift
             ;;
         *)
             # Non-flag positional arg (if first) is treated as mode
-            if [[ "$arg" != -* ]] && [[ -z "$MODE_SET" ]]; then
-                MODE=$arg
+            if [[ "$1" != -* ]] && [[ "$MODE_SET" = false ]]; then
+                MODE="$1"
                 MODE_SET=true
             else
-                EXTRA_ARGS+=("$arg")
+                EXTRA_ARGS+=("$1")
             fi
             ;;
     esac
+    shift
 done
 
 echo "🚀 iqoqo Management: Entering mode '$MODE'..."
