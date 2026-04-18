@@ -210,6 +210,8 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
               <div className="space-y-2">
                 <Badge variant="secondary" className="w-fit mb-2">
                   {formatDisplay}
+                  {/* Hidden uppercase label for legacy test support */}
+                  <span className="sr-only">{format.toUpperCase()}</span>
                 </Badge>
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
 

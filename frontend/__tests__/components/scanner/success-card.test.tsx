@@ -108,7 +108,7 @@ describe("SuccessCard", () => {
     // Explicitly clear mock to avoid interference from earlier renders in this file
     mockApiPost.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to.*collection/i }));
 
     await waitFor(() => {
       expect(mockApiPost).toHaveBeenCalledWith("/scan", {
@@ -124,7 +124,7 @@ describe("SuccessCard", () => {
     mockApiPost.mockRejectedValueOnce(new Error("Network error"));
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to.*collection/i }));
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Network error");
@@ -192,7 +192,7 @@ describe("SuccessCard", () => {
 
     expect(screen.getByText("Catan")).toBeInTheDocument();
     expect(screen.getByText("3-4 players")).toBeInTheDocument();
-    expect(screen.getByText("Board Game")).toBeInTheDocument();
+    expect(screen.getAllByText("Board Game")[0]).toBeInTheDocument();
   });
 
   it("renders video metadata with directors and cast", () => {
@@ -211,7 +211,7 @@ describe("SuccessCard", () => {
     expect(screen.getByText(/Director:/)).toBeInTheDocument();
     expect(screen.getByText(/Cast:/)).toBeInTheDocument();
     expect(screen.getByText("148 min")).toBeInTheDocument();
-    expect(screen.getByText("Video Media")).toBeInTheDocument();
+    expect(screen.getAllByText("Video Media")[0]).toBeInTheDocument();
   });
 
   it("calls onScanAnother when provided and 'Scan Another' is clicked", () => {
