@@ -1,4 +1,19 @@
 #!/bin/bash
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 # iqoqo Unified Management Script
 #
 # Usage: ./run.sh [mode] [--clean] [--backup] [--tunnel]
@@ -113,7 +128,7 @@ fi
 # 3. Execution Dispatch
 if [ "$MODE" == "dev" ]; then
     # --- LOCAL DEV MODE ---
-    
+
     # Load Tunnel Configuration if requested
     if [ "$TUNNEL" = true ] && [ -f ".env.dev" ]; then
         echo "⚡ Loading Tunnel Configuration (.env.dev)"
@@ -225,7 +240,7 @@ if [ "$MODE" == "dev" ]; then
     terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
     terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
     terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
-    
+
     # Legacy cleanups
     terminate_from_pidfile ".flask.pid" "Legacy Flask"
     terminate_from_pidfile ".frontend.pid" "Legacy Frontend"
@@ -312,7 +327,7 @@ if [ "$MODE" == "dev" ]; then
 
 else
     # --- FULL DOCKER MODE ---
-    
+
     export ENV_FILE="$ENV_FILE" # Injected into compose
     export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
     if [ "$MODE" == "prod" ]; then
@@ -344,7 +359,7 @@ else
     # Pre-flight migration checks
     MIGRATION_ROWS=$(docker compose exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -At -c "SELECT version_num FROM alembic_version;" 2>/dev/null || echo "")
     MIGRATION_COUNT=$(echo "$MIGRATION_ROWS" | grep -c '[^[:space:]]' || true)
-    
+
     EXPECTED_VERSION=$(python3 -c "
 from alembic.config import Config
 from alembic.script import ScriptDirectory

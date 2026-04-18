@@ -46,6 +46,7 @@ help:
 	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
 	@echo "  lint-css       - Run CSS linter (stylelint)"
 	@echo "  lint-markdown  - Run Markdown linter"
+	@echo "  lint-license   - Check copyright headers"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
