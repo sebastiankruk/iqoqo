@@ -47,7 +47,12 @@ describe("MultiImageUploader", () => {
   it("uploads image successfully, invalidates queries, and calls onUploadComplete", async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
 
-    render(<MultiImageUploader manifestationId={999} onUploadComplete={mockOnUploadComplete} />);
+    render(
+      <MultiImageUploader
+        manifestationId={999}
+        onUploadComplete={mockOnUploadComplete}
+      />
+    );
 
     // Grab the hidden/standard file input
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
