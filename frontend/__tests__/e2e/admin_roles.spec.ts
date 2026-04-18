@@ -50,7 +50,7 @@ test.describe("Admin Roles Management Workflow", () => {
     await page.route("**/api/config**", route =>
       route.fulfill({
         status: 200,
-        json: { success: true, data: { federation_enabled: false, version: "0.4.0" } },
+        json: { success: true, data: { federation_enabled: false, version: "0.5.0" } },
       })
     );
 

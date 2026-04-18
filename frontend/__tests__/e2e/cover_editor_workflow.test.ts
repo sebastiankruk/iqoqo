@@ -44,7 +44,7 @@ test.describe("Cover Editor Workflow", () => {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { federation_enabled: false, version: "0.4.0" },
+          data: { federation_enabled: false, version: "0.5.0" },
         }),
       });
     });
