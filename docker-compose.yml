@@ -72,6 +72,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: always
+    ports:
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
@@ -88,6 +90,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

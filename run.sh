@@ -13,8 +13,6 @@
 #   --backup Create a pre-deployment database backup (Docker modes only).
 #   --tunnel Load dev.iqoqo.cc configuration (dev mode only).
 
-set -e
-
 # 0. Set Mode and Parameters
 MODE="dev"
 EXTRA_ARGS=()
@@ -126,11 +124,50 @@ if [ "$MODE" == "dev" ]; then
     elif [ "$TUNNEL" = false ]; then
         export NEXTAUTH_URL="http://localhost:3000"
         export AUTH_TRUST_HOST="false"
+        # Ensure URLs point to localhost for host-side processes
+        export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@db:/@localhost:/')
+        export REDIS_URL="redis://localhost:6379/0"
     fi
 
     # Start DB/Redis in Docker (slim mode)
-    echo "🔧 Starting background services (db, redis)..."
-    docker compose up -d db redis
+    echo "🔧 Checking background services (db, redis)..."
+    if ! docker compose up -d db redis &>/dev/null; then
+        echo "Docker command failed. Checking for Colima..."
+        if command -v colima &> /dev/null; then
+            if colima status &> /dev/null; then
+                echo "Colima is running but Docker failed. Restarting Colima..."
+                colima stop
+            fi
+            echo "Starting Colima with DNS fix..."
+            if ! colima start --dns 8.8.8.8; then
+                echo "Colima start failed. Attempting to force stop and restart..."
+                colima stop --force
+                if ! colima start --dns 8.8.8.8; then
+                    echo "Error: Failed to start Colima."
+                    if [ -t 0 ]; then
+                        read -p "Do you want to reset Colima (delete and restart)? This will delete all Docker data! [y/N] " -n 1 -r
+                        echo
+                        if [[ $REPLY =~ ^[Yy]$ ]]; then
+                            colima delete --force
+                            if ! colima start --dns 8.8.8.8; then
+                                echo "Error: Still failed to start Colima."
+                                exit 1
+                            fi
+                        else
+                            exit 1
+                        fi
+                    else
+                        echo "Hint: Try running 'colima delete' and then 'colima start' in a terminal to reset the VM."
+                        exit 1
+                    fi
+                fi
+            fi
+            docker compose up -d db redis || exit 1
+        else
+            echo "Error: Docker is not running. Please start Docker."
+            exit 1
+        fi
+    fi
 
     # Wait for DB readiness
     for i in {1..15}; do
@@ -140,9 +177,99 @@ if [ "$MODE" == "dev" ]; then
         sleep 1
     done
 
-    # PID Management
+    # PID Management & Cleanup
     PID_DIR=".pids"
     mkdir -p "$PID_DIR"
+
+    terminate_from_pidfile() {
+        pidfile="$1"
+        desc="$2"
+
+        if [ ! -f "${pidfile}" ]; then
+            return 0
+        fi
+
+        pid="$(cat "${pidfile}" 2>/dev/null || true)"
+        if [ -z "${pid}" ]; then
+            rm -f "${pidfile}"
+            return 0
+        fi
+
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            # Process is already gone; clean up stale pidfile.
+            rm -f "${pidfile}"
+            return 0
+        fi
+
+        echo "🧹 Terminating ${desc} (PID ${pid})..."
+        # First try graceful shutdown (SIGTERM).
+        kill "${pid}" 2>/dev/null || true
+
+        # Wait up to 5 seconds for the process to exit.
+        for _ in 1 2 3 4 5; do
+            if ! kill -0 "${pid}" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+
+        # If still running, escalate to SIGKILL.
+        if kill -0 "${pid}" 2>/dev/null; then
+            echo "⚠️  ${desc} did not exit gracefully; sending SIGKILL..."
+            kill -9 "${pid}" 2>/dev/null || true
+        fi
+
+        rm -f "${pidfile}"
+    }
+
+    echo "🧹 Cleaning up previous dev processes..."
+    terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
+    terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
+    terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
+    
+    # Legacy cleanups
+    terminate_from_pidfile ".flask.pid" "Legacy Flask"
+    terminate_from_pidfile ".frontend.pid" "Legacy Frontend"
+    terminate_from_pidfile ".celery.pid" "Legacy Celery"
+    terminate_from_pidfile "$PID_DIR/web_server.pid" "Legacy Flask (New naming)"
+    terminate_from_pidfile "$PID_DIR/celery_worker.pid" "Legacy Celery (New naming)"
+    terminate_from_pidfile "$PID_DIR/next_dev.pid" "Legacy Next.js (New naming)"
+
+    # Ensure ports are free (aggressive cleanup for common ports)
+    for port in "$WEB_PORT" 3000; do
+        port_pid=$(lsof -t -i:"$port" 2>/dev/null)
+        if [ -n "$port_pid" ]; then
+            echo "⚠️  Port $port still occupied by PID $port_pid. Killing..."
+            kill -9 "$port_pid" 2>/dev/null
+        fi
+    done
+
+    # Next.js Stale Lock Detection
+    for LOCK in "frontend/.next/lock" "frontend/.next/dev/lock"; do
+        if [ -f "$LOCK" ]; then
+            echo "⚠️  Stale Next.js lock file detected: $LOCK"
+            if [ -t 0 ]; then
+                read -p "Do you want to fix this (kill zombie processes and clear cache)? [y/N] " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    ZOMBIE_PIDS=$(lsof -t -i :3000 2>/dev/null || true)
+                    if [ -n "$ZOMBIE_PIDS" ]; then
+                        echo "⚠️  Killing zombie process(es) on port 3000 (PIDs: $ZOMBIE_PIDS)..."
+                        kill -9 $ZOMBIE_PIDS 2>/dev/null || true
+                    fi
+                    echo "🧹 Clearing corrupted Next.js cache..."
+                    rm -rf "frontend/.next"
+                    echo "✅ Cleanup complete."
+                else
+                    echo "❌ Exiting. Please remove the lock file manually."
+                    exit 1
+                fi
+            else
+                 echo "❌ Lock file exists and script is non-interactive. Please remove $LOCK manually."
+                 exit 1
+            fi
+        fi
+    done
 
     # Termination Helper
     cleanup() {
@@ -193,6 +320,10 @@ else
         # Maintain volume continuity for 'prod' mode if preferred
         export COMPOSE_PROJECT_NAME="iqoqo"
     fi
+
+    # Ensure URLs point to service names for container-internal networking
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@localhost:/@db:/')
+    export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@localhost:/@redis:/')
 
     if [ "$CLEAN" = true ]; then
         echo "🧹 Cleaning up previous instances for $COMPOSE_PROJECT_NAME..."
