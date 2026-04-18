@@ -24,6 +24,32 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _normalize_release_data(release: dict) -> dict:
+    """Helper to convert Discogs release JSON into iqoqo metadata format."""
+    # Discogs format: "Artist - Title"
+    title_raw = release.get("title", "Unknown Artist - Unknown Title")
+    parts = title_raw.split(" - ", 1)
+    artist = parts[0] if len(parts) > 1 else "Unknown Artist"
+    title = parts[1] if len(parts) > 1 else title_raw
+
+    publisher = release.get("label", [None])[0] if isinstance(release.get("label"), list) else release.get("label")
+    cover_url = release.get("cover_image") or release.get("thumb")
+
+    # Determine specific format
+    formats = release.get("format", [])
+    media_format = "vinyl" if "Vinyl" in formats else "cd" if "CD" in formats else "audio"
+
+    return {
+        "title": title,
+        "author": artist,
+        "publisher": publisher,
+        "cover_url": cover_url,
+        "format": media_format,
+        "language": "en",
+        "discogs_id": str(release.get("id")),
+    }
+
+
 def fetch_discogs_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from Discogs.
 
@@ -64,21 +90,56 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
             return None
 
         release = data["results"][0]
+        return _normalize_release_data(release)
 
-        # Discogs format: "Artist - Title"
-        title_raw = release.get("title", "Unknown Artist - Unknown Title")
-        parts = title_raw.split(" - ", 1)
-        artist = parts[0] if len(parts) > 1 else "Unknown Artist"
-        title = parts[1] if len(parts) > 1 else title_raw
-
-        publisher = release.get("label", [None])[0]
-        cover_url = release.get("cover_image")
-
-        # Determine specific format
-        formats = release.get("format", [])
-        media_format = "vinyl" if "Vinyl" in formats else "cd" if "CD" in formats else "audio"
-
-        return {"title": title, "author": artist, "publisher": publisher, "cover_url": cover_url, "format": media_format, "language": "en"}
     except requests.RequestException as e:
         logger.error(f"Failed to fetch Discogs metadata for {barcode}: {e}")
+        return None
+
+
+def fetch_discogs_by_id(discogs_id: str) -> dict | None:
+    """Fetch metadata for an audio item using its Discogs Release ID.
+
+    Args:
+        discogs_id (str): The Discogs release ID.
+
+    Returns:
+        dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
+    """
+    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
+    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
+    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
+
+    if consumer_key and consumer_secret:
+        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
+    elif legacy_token:
+        auth_header = f"Discogs token={legacy_token}"
+    else:
+        return None
+
+    url = f"https://api.discogs.com/releases/{discogs_id}"
+    headers = {"User-Agent": "iqoqo/0.5.0 ( dev@kruk.me )", "Authorization": auth_header}
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        release = response.json()
+
+        # Releases endpoint sometimes has artists and labels as nested objects
+        normalized = _normalize_release_data(release)
+
+        # Fix artists if they come from the 'artists' array
+        artists = release.get("artists", [])
+        if artists:
+            normalized["author"] = artists[0].get("name", normalized["author"])
+
+        # Fix labels
+        labels = release.get("labels", [])
+        if labels:
+            normalized["publisher"] = labels[0].get("name", normalized["publisher"])
+
+        return normalized
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch Discogs metadata for ID {discogs_id}: {e}")
         return None

@@ -47,12 +47,7 @@ describe("MultiImageUploader", () => {
   it("uploads image successfully, invalidates queries, and calls onUploadComplete", async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
 
-    render(
-      <MultiImageUploader
-        manifestationId={999}
-        onUploadComplete={mockOnUploadComplete}
-      />
-    );
+    render(<MultiImageUploader manifestationId={999} onUploadComplete={mockOnUploadComplete} />);
 
     // Grab the hidden/standard file input
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -70,7 +65,7 @@ describe("MultiImageUploader", () => {
     // Assert cache invalidations occurred correctly
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["manifestation", 999] });
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["manifestations"] });
-    
+
     // Assert the parent callback was triggered
     expect(mockOnUploadComplete).toHaveBeenCalledOnce();
   });

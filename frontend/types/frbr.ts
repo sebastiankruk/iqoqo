@@ -201,6 +201,7 @@ export interface IsbnMeta {
   format?: string;
   barcode?: string;
   isbn?: string;
+  identifier?: string;
   cover_url?: string;
   directors?: string[];
   Director?: string[];
@@ -218,6 +219,11 @@ export interface IsbnMeta {
   runtime?: number;
   Runtime?: number;
   meta?: Record<string, unknown>;
+  already_in_collection?: boolean;
+  item_id?: number | null;
+  manifestation_id?: number | null;
+  already_in_db?: boolean;
+  candidates?: IsbnMeta[];
 }
 
 /** User profile */

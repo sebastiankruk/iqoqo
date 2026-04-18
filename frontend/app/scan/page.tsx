@@ -25,6 +25,7 @@ import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
+import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
@@ -41,6 +42,7 @@ import { mapFormatToApi } from "@/lib/media";
  */
 export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
+  const [candidates, setCandidates] = useState<{ isbn: string; items: IsbnMeta[] } | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -56,11 +58,16 @@ export default function ScanPage() {
   const router = useRouter();
 
   const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
-    setResult({ isbn, meta });
+    if (meta.candidates && meta.candidates.length > 1) {
+      setCandidates({ isbn, items: meta.candidates });
+    } else {
+      setResult({ isbn, meta });
+    }
   }, []);
 
   const handleDismiss = useCallback(() => {
     setResult(null);
+    setCandidates(null);
   }, []);
 
   const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }, file?: File) => {
@@ -166,6 +173,17 @@ export default function ScanPage() {
       )}
       {result && (
         <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />
+      )}
+
+      {candidates && (
+        <DisambiguationSheet
+          candidates={candidates.items}
+          onSelect={choice => {
+            setCandidates(null);
+            setResult({ isbn: candidates.isbn, meta: choice });
+          }}
+          onDismiss={handleDismiss}
+        />
       )}
 
       {showManual && (

@@ -49,6 +49,8 @@ interface SuccessCardProps {
  */
 export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
+  const [savingCatalog, setSavingCatalog] = useState(false);
+  const [selectedFormat, setSelectedFormat] = useState((meta.format || meta.Format || "book").toLowerCase());
   const router = useRouter();
 
   // Normalize metadata for display
@@ -57,10 +59,10 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
   const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
   const coverUrl = meta.cover_url || "/file.svg";
 
-  const format = (meta.format || meta.Format || "book").toLowerCase();
+  const format = selectedFormat;
   const isAudio = isAudioMedia(format);
-  const isVideo = format === "video" || format === "dvd" || format === "bluray";
-  const isGame = format === "boardgame" || format === "game";
+  const isVideo = ["video", "dvd", "bluray", "moving image"].includes(format);
+  const isGame = ["boardgame", "game"].includes(format);
 
   const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
   const isMissingID = identifier === "No ID Available";
@@ -148,6 +150,26 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleSaveToCatalog = async () => {
+    setSavingCatalog(true);
+    try {
+      const res = await apiClient.post<ApiResponse<{ manifestation_id: number }>>("/lookup/save", {
+        identifier: identifier,
+        format: format,
+      });
+      if (res.data.success) {
+        toast.success(`"${title}" saved to global catalog!`);
+        onDismiss();
+      } else {
+        throw new Error(res.data.error || "Failed to save");
+      }
+    } catch (e) {
+      toast.error((e as Error).message ?? "Failed to save to catalog");
+    } finally {
+      setSavingCatalog(false);
     }
   };
 
@@ -248,31 +270,69 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
                 <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
                 <div className="font-mono text-xs break-all">{identifier}</div>
-                {format && (
-                  <>
-                    <div className="text-muted-foreground font-semibold">Format</div>
-                    <div>{format.toUpperCase()}</div>
-                  </>
-                )}
+                <div className="text-muted-foreground font-semibold flex items-center">Format</div>
+                <div>
+                  <select
+                    value={format}
+                    onChange={(e) => setSelectedFormat(e.target.value)}
+                    className="h-8 w-full bg-transparent text-sm font-normal focus:outline-none cursor-pointer hover:text-primary transition-colors appearance-none"
+                  >
+                    <option value="book">Book / Text</option>
+                    <option value="cd">Audio CD</option>
+                    <option value="vinyl">Vinyl Record</option>
+                    <option value="audio">Generic Audio</option>
+                    <option value="video">Video / Movie</option>
+                    <option value="boardgame">Board Game</option>
+                    <option value="puzzle">Jigsaw Puzzle</option>
+                  </select>
+                </div>
               </div>
 
+              {meta.already_in_collection && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-xs text-green-600 dark:text-green-400 font-semibold flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Already in your collection
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
-                <Button
-                  className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                  variant="default"
-                  disabled={adding}
-                  onClick={handleAdd}
-                  aria-label="Add to Collection"
-                >
-                  {adding ? (
-                    "Adding..."
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                      Add to Collection
-                    </>
-                  )}
-                </Button>
+                {meta.already_in_collection ? (
+                  <Button
+                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                    variant="default"
+                    onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
+                  >
+                    View in Collection
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                      variant="default"
+                      disabled={adding || savingCatalog}
+                      onClick={handleAdd}
+                    >
+                      {adding ? (
+                        "Adding..."
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                          Add to My Collection
+                        </>
+                      )}
+                    </Button>
+                    {!meta.manifestation_id && (
+                      <Button
+                        variant="secondary"
+                        className="flex-1 min-w-[140px] h-12 rounded-xl"
+                        disabled={adding || savingCatalog}
+                        onClick={handleSaveToCatalog}
+                      >
+                        {savingCatalog ? "Saving..." : "Save to Catalog Only"}
+                      </Button>
+                    )}
+                  </>
+                )}
                 <Button
                   variant="outline"
                   className="flex-1 min-w-[140px] h-12 rounded-xl"
