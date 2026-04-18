@@ -31,6 +31,7 @@ interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
   onDismiss: () => void;
+  onScanAnother?: () => void;
   snappedCover?: File | null;
 }
 
@@ -42,10 +43,11 @@ interface SuccessCardProps {
  * @param props.isbn - The barcode that was scanned
  * @param props.meta - The metadata found for the barcode
  * @param props.onDismiss - Function to call when the card is dismissed
+ * @param props.onScanAnother - Optional function for rapid sequential scanning
  * @param props.snappedCover - Optional file of a cover snapped from video
  * @returns {JSX.Element} The component
  */
-export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCardProps) {
+export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
@@ -274,7 +276,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                 <Button
                   variant="outline"
                   className="flex-1 min-w-[140px] h-12 rounded-xl"
-                  onClick={onDismiss}
+                  onClick={onScanAnother ?? onDismiss}
                   aria-label="Scan Another"
                 >
                   Scan Another

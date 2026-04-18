@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { CopyPlus, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface MultiImageUploaderProps {
   manifestationId: number;
@@ -37,6 +38,7 @@ interface MultiImageUploaderProps {
 export function MultiImageUploader({ manifestationId, onUploadComplete }: MultiImageUploaderProps) {
   const [label, setLabel] = useState<"front" | "back" | "disc" | "inlay" | "box" | "other">("disc");
   const [isUploading, setIsUploading] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,6 +54,9 @@ export function MultiImageUploader({ manifestationId, onUploadComplete }: MultiI
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success(`${label} image uploaded successfully!`);
+      // Invalidate both manifestation and catalog queries to ensure UI refreshes everywhere
+      await queryClient.invalidateQueries({ queryKey: ["manifestation", manifestationId] });
+      await queryClient.invalidateQueries({ queryKey: ["catalog"] });
       // Reset input
       e.target.value = "";
       onUploadComplete();

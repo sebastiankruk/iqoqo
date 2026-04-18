@@ -213,4 +213,20 @@ describe("SuccessCard", () => {
     expect(screen.getByText("148 min")).toBeInTheDocument();
     expect(screen.getByText("Video Media")).toBeInTheDocument();
   });
+
+  it("calls onScanAnother when provided and 'Scan Another' is clicked", () => {
+    const onScanAnother = vi.fn();
+    render(<SuccessCard isbn="123" meta={SAMPLE_META} onDismiss={vi.fn()} onScanAnother={onScanAnother} />);
+    
+    fireEvent.click(screen.getByRole("button", { name: "Scan Another" }));
+    expect(onScanAnother).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to onDismiss when onScanAnother is not provided and 'Scan Another' is clicked", () => {
+    const onDismiss = vi.fn();
+    render(<SuccessCard isbn="123" meta={SAMPLE_META} onDismiss={onDismiss} />);
+    
+    fireEvent.click(screen.getByRole("button", { name: "Scan Another" }));
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
 });
