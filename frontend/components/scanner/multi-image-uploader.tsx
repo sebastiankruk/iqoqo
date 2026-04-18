@@ -54,9 +54,9 @@ export function MultiImageUploader({ manifestationId, onUploadComplete }: MultiI
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success(`${label} image uploaded successfully!`);
-      // Invalidate both manifestation and catalog queries to ensure UI refreshes everywhere
+      // Invalidate both manifestation detail and manifestations list queries to ensure UI refreshes everywhere
       await queryClient.invalidateQueries({ queryKey: ["manifestation", manifestationId] });
-      await queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      await queryClient.invalidateQueries({ queryKey: ["manifestations"] });
       // Reset input
       e.target.value = "";
       onUploadComplete();
