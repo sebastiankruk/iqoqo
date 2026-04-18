@@ -86,7 +86,6 @@ export function BottomSheet({
     [onTabChange]
   );
   const [manualIsbn, setManualIsbn] = useState("");
-  const [manualDiscogsId, setManualDiscogsId] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -303,7 +302,14 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupBarcode(manualIsbn, true);
+    const trimmed = manualIsbn.trim();
+    // Pure integers that are too short to be a barcode (< 8 digits) are Discogs Release IDs
+    const isDiscogsId = /^\d{1,7}$/.test(trimmed);
+    if (isDiscogsId) {
+      lookupDiscogsId(trimmed);
+    } else {
+      lookupBarcode(trimmed, true);
+    }
   };
 
   return (
@@ -387,7 +393,7 @@ export function BottomSheet({
                   type="text"
                   value={manualIsbn}
                   onChange={e => setManualIsbn(e.target.value)}
-                  placeholder="Enter barcode or title..."
+                  placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"
                   className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
                 />
                 <button
@@ -399,33 +405,8 @@ export function BottomSheet({
                 </button>
               </div>
             </form>
-
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                lookupDiscogsId(manualDiscogsId);
-              }}
-              className="mt-3 w-full"
-            >
-              <div className="relative">
-                <input
-                  type="text"
-                  value={manualDiscogsId}
-                  onChange={e => setManualDiscogsId(e.target.value)}
-                  placeholder="Or Discogs Release ID..."
-                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
-                />
-                <button
-                  type="submit"
-                  disabled={isSearching || !manualDiscogsId}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              </div>
-            </form>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {isSearching ? "Looking up…" : "Try ISBN, UPC, or Artist - Title"}
+              {isSearching ? "Looking up…" : "Enter barcode, Discogs Release ID, or Artist – Title"}
             </p>
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button

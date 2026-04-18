@@ -17,6 +17,7 @@
 #
 import hashlib
 import io
+import re
 
 from flask import current_app, g, jsonify, request
 from PIL import Image
@@ -29,7 +30,7 @@ from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Item, Manifestation, ScanTelemetry, db
 from app.utils.bgg import fetch_bgg_metadata
-from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_metadata
+from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates, fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import clean_video_title, fetch_video_metadata
@@ -166,7 +167,8 @@ def lookup_barcode_preview(query: str):
         data = dict(manifestation.meta)
         data["manifestation_id"] = manifestation.id
         data["already_in_db"] = True
-        data["identifier"] = canonical_id
+        # Show the original human-readable query, not the internal hash
+        data["identifier"] = query
         if candidates:
             data["candidates"] = candidates
 
@@ -184,6 +186,25 @@ def lookup_barcode_preview(query: str):
     barcode = query if not is_barcode else canonical_id  # Use raw text for external search if not barcode
 
     is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
+
+    # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
+    # so the user can disambiguate between different releases/editions.
+    if not is_barcode and format_hint in ("audio", "cd", "vinyl", "sound", None, ""):
+        discogs_results = fetch_discogs_candidates(query)
+        if len(discogs_results) > 1:
+            # Return candidates for the frontend disambiguation sheet
+            # Build response from a copy — top must NOT be mutated because it
+            # already lives inside discogs_results, which becomes candidates.
+            response_data = dict(discogs_results[0])
+            response_data["candidates"] = discogs_results
+            response_data["identifier"] = query
+            response_data["already_in_collection"] = False
+            response_data["item_id"] = None
+            _record_scan_telemetry(query, format_hint, "discogs", "success")
+            return jsonify({"success": True, "data": response_data, "error": None}), 200
+        if len(discogs_results) == 1:
+            meta = discogs_results[0]
+            provider = "discogs"
 
     # Route based on format hint first, fallback to heuristics
     if format_hint in ("video", "dvd", "bluray", "movie"):
@@ -308,12 +329,39 @@ def lookup_barcode_preview(query: str):
         }
         meta["format"] = format_map.get(format_hint, format_hint.upper())
 
-    # Add identifier to meta
-    meta["identifier"] = canonical_id
+    # Add identifier to meta — use original human-readable query, not internal hash
+    meta["identifier"] = query
     meta["already_in_collection"] = False
 
+    # Auto-save to catalog so the user never has to click an extra button.
+    # This is a best-effort fire-and-return; we never block the preview on failure.
+    manifestation_id: int | None = None
+    try:
+        meta_to_store = {k: v for k, v in meta.items() if k not in ("already_in_collection", "item_id", "candidates", "already_in_db")}
+        if not is_barcode and canonical_id:
+            meta_to_store["hash_id"] = canonical_id
+        if is_barcode and canonical_id and "barcode" not in meta_to_store:
+            meta_to_store["barcode"] = canonical_id
+        saved = IngestService.ingest_from_meta(meta_to_store)
+        manifestation_id = saved.id
+    except Exception:  # pylint: disable=broad-except
+        current_app.logger.debug("Auto-save to catalog skipped (manifestation may already exist or error occurred)")
+        # Try finding it in case it already exists
+        existing = _find_locally(canonical_id)
+        if existing:
+            manifestation_id = existing.id
+
+    meta["manifestation_id"] = manifestation_id
+
+    # Check collection ownership with the now-known manifestation_id
+    if manifestation_id:
+        user_id = getattr(g, "user_id", None)
+        item = Item.query.filter_by(manifestation_id=manifestation_id, owner_id=user_id).first()
+        meta["already_in_collection"] = item is not None
+        meta["item_id"] = item.id if item else None
+
     # Record successful external lookup
-    _record_scan_telemetry(barcode, format_hint, provider=provider or "external", status="success")
+    _record_scan_telemetry(barcode, format_hint, provider=provider or "external", status="success", manifestation_id=manifestation_id)
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
@@ -321,37 +369,62 @@ def lookup_barcode_preview(query: str):
 @api_bp.route("/lookup/save", methods=["POST"])
 @require_auth
 def save_manifestation_only():
-    """Ingest a manifestation into the catalog without adding it to the user's collection."""
+    """Ingest a manifestation into the catalog without adding it to the user's collection.
+
+    Accepts pre-fetched metadata from the frontend to avoid redundant API calls.
+    Falls back to IngestService only when no meta is provided.
+    """
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()
 
     identifier = data.get("barcode") or data.get("identifier")
     format_hint = data.get("format")
+    # Pre-fetched metadata sent from the frontend SuccessCard
+    prefetched_meta: dict | None = data.get("meta")
 
     if not identifier:
         return jsonify({"success": False, "data": None, "error": "Identifier is required"}), 400
 
-    # Check DB first
-    manifestation = _find_locally(identifier)
+    # Compute hash for name-based identifiers so we can find it again later
+    is_barcode = bool(re.match(r"^[\dX]{8,14}$", identifier.strip().upper()))
+    hash_id = None
+    if not is_barcode:
+        hash_id = hashlib.sha256(identifier.strip().lower().encode()).hexdigest()[:16]
+
+    # Check DB first using broad helper (covers hash_id too)
+    canonical = hash_id if hash_id else identifier
+    manifestation = _find_locally(canonical)
     if manifestation:
         return jsonify({"success": True, "data": {"manifestation_id": manifestation.id, "title": manifestation.title}, "error": None}), 200
 
     try:
-        # Re-use existing IngestService logic
-        if format_hint in ("audio", "cd", "vinyl", "sound"):
-            manifestation = IngestService.ingest_audio_from_barcode(identifier)
-        elif format_hint in ("video", "dvd", "bluray", "movie"):
-            manifestation = IngestService.ingest_video_from_barcode(identifier)
-        elif format_hint in ("game", "boardgame"):
-            manifestation = IngestService.ingest_game_from_barcode(identifier)
-        elif format_hint in ("puzzle", "jigsaw"):
-            manifestation = IngestService.ingest_puzzle_from_barcode(identifier)
-        elif format_hint in ("book", "text"):
-            manifestation = IngestService.ingest_from_isbn(identifier)
+        if prefetched_meta:
+            # Fast path: use the metadata already fetched by the lookup endpoint
+            meta_to_store = dict(prefetched_meta)
+            # Strip internal-only fields that shouldn't be persisted
+            for key in ("already_in_collection", "item_id", "candidates", "already_in_db"):
+                meta_to_store.pop(key, None)
+            if hash_id:
+                meta_to_store["hash_id"] = hash_id
+            meta_to_store["identifier"] = identifier
+            meta_to_store.setdefault("format", format_hint or "audio")
+
+            manifestation = IngestService.ingest_from_meta(meta_to_store)
         else:
-            # Fallback
-            manifestation = IngestService.ingest_audio_from_barcode(identifier)
+            # Slow path: re-fetch from external APIs (legacy behaviour)
+            if format_hint in ("audio", "cd", "vinyl", "sound"):
+                manifestation = IngestService.ingest_audio_from_barcode(identifier)
+            elif format_hint in ("video", "dvd", "bluray", "movie"):
+                manifestation = IngestService.ingest_video_from_barcode(identifier)
+            elif format_hint in ("game", "boardgame"):
+                manifestation = IngestService.ingest_game_from_barcode(identifier)
+            elif format_hint in ("puzzle", "jigsaw"):
+                manifestation = IngestService.ingest_puzzle_from_barcode(identifier)
+            elif format_hint in ("book", "text"):
+                manifestation = IngestService.ingest_from_isbn(identifier)
+            else:
+                manifestation = IngestService.ingest_audio_from_barcode(identifier)
 
         return jsonify({"success": True, "data": {"manifestation_id": manifestation.id, "title": manifestation.title}, "error": None}), 201
 
@@ -429,6 +502,16 @@ def scan_barcode():
 
     new_item = Item(manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status="available")
     db.session.add(new_item)
+
+    # For name-based lookups (no barcode), store the hash_id in meta so future
+    # local lookups can find this manifestation without hitting external APIs again.
+    is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
+    if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
+        computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
+        updated_meta = dict(manifestation.meta)
+        updated_meta["hash_id"] = computed_hash
+        manifestation.meta = updated_meta
+
     db.session.commit()
 
     # Success: record telemetry with manifestation_id

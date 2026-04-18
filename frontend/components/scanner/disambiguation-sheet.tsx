@@ -31,7 +31,7 @@ interface DisambiguationSheetProps {
 
 /**
  * DisambiguationSheet component shown when multiple potential matches are found.
- * 
+ *
  * @param props - Component props
  * @param props.candidates - List of metadata candidates to choose from
  * @param props.onSelect - Function to call when a candidate is selected

@@ -222,6 +222,7 @@ export interface IsbnMeta {
   already_in_collection?: boolean;
   item_id?: number | null;
   manifestation_id?: number | null;
+  discogs_id?: string;
   already_in_db?: boolean;
   candidates?: IsbnMeta[];
 }

@@ -97,6 +97,44 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
         return None
 
 
+def fetch_discogs_candidates(query: str, max_results: int = 5) -> list[dict]:
+    """Search Discogs by text query and return up to max_results normalised candidates.
+
+    Used for disambiguation when searching by artist/title rather than a barcode.
+
+    Args:
+        query (str): Free-text search term (e.g. ``"Stachura – SDM*"``).
+        max_results (int): Maximum number of results to return (default 5).
+
+    Returns:
+        list[dict]: List of normalised release metadata dicts, possibly empty.
+    """
+    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
+    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
+    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
+
+    if consumer_key and consumer_secret:
+        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
+    elif legacy_token:
+        auth_header = f"Discogs token={legacy_token}"
+    else:
+        logger.warning("No Discogs credentials found. Skipping Discogs candidate search.")
+        return []
+
+    url = f"https://api.discogs.com/database/search?q={query}&type=release"
+    headers = {"User-Agent": "iqoqo/0.5.0 ( dev@kruk.me )", "Authorization": auth_header}
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results") or []
+        return [_normalize_release_data(r) for r in results[:max_results]]
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch Discogs candidates for '{query}': {e}")
+        return []
+
+
 def fetch_discogs_by_id(discogs_id: str) -> dict | None:
     """Fetch metadata for an audio item using its Discogs Release ID.
 

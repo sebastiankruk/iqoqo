@@ -49,7 +49,6 @@ interface SuccessCardProps {
  */
 export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover }: SuccessCardProps) {
   const [adding, setAdding] = useState(false);
-  const [savingCatalog, setSavingCatalog] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState((meta.format || meta.Format || "book").toLowerCase());
   const router = useRouter();
 
@@ -64,8 +63,11 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
   const isVideo = ["video", "dvd", "bluray", "moving image"].includes(format);
   const isGame = ["boardgame", "game"].includes(format);
 
-  const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
-  const isMissingID = identifier === "No ID Available";
+  // Only surface the identifier if it looks like a real barcode/ISBN — not a free-text search query
+  const rawIdentifier = isbn || meta.barcode || meta.isbn || meta.identifier || "";
+  const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
+  const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
+  const isMissingID = !identifier;
 
   // Extract extended meta attributes for video/games
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
@@ -153,25 +155,6 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
     }
   };
 
-  const handleSaveToCatalog = async () => {
-    setSavingCatalog(true);
-    try {
-      const res = await apiClient.post<ApiResponse<{ manifestation_id: number }>>("/lookup/save", {
-        identifier: identifier,
-        format: format,
-      });
-      if (res.data.success) {
-        toast.success(`"${title}" saved to global catalog!`);
-        onDismiss();
-      } else {
-        throw new Error(res.data.error || "Failed to save");
-      }
-    } catch (e) {
-      toast.error((e as Error).message ?? "Failed to save to catalog");
-    } finally {
-      setSavingCatalog(false);
-    }
-  };
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
@@ -268,13 +251,17 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
               )}
 
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
-                <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
-                <div className="font-mono text-xs break-all">{identifier}</div>
+                {identifier && (
+                  <>
+                    <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
+                    <div className="font-mono text-xs break-all">{identifier}</div>
+                  </>
+                )}
                 <div className="text-muted-foreground font-semibold flex items-center">Format</div>
                 <div>
                   <select
                     value={format}
-                    onChange={(e) => setSelectedFormat(e.target.value)}
+                    onChange={e => setSelectedFormat(e.target.value)}
                     className="h-8 w-full bg-transparent text-sm font-normal focus:outline-none cursor-pointer hover:text-primary transition-colors appearance-none"
                   >
                     <option value="book">Book / Text</option>
@@ -305,11 +292,10 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
                     View in Collection
                   </Button>
                 ) : (
-                  <>
                     <Button
                       className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
                       variant="default"
-                      disabled={adding || savingCatalog}
+                      disabled={adding}
                       onClick={handleAdd}
                     >
                       {adding ? (
@@ -321,17 +307,6 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
                         </>
                       )}
                     </Button>
-                    {!meta.manifestation_id && (
-                      <Button
-                        variant="secondary"
-                        className="flex-1 min-w-[140px] h-12 rounded-xl"
-                        disabled={adding || savingCatalog}
-                        onClick={handleSaveToCatalog}
-                      >
-                        {savingCatalog ? "Saving..." : "Save to Catalog Only"}
-                      </Button>
-                    )}
-                  </>
                 )}
                 <Button
                   variant="outline"
