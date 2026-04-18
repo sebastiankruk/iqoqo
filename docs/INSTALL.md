@@ -164,16 +164,16 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 
 ### Backend (Flask & Celery)
 
-| File           | Loaded By    | Purpose                                                                                                                                                |
-|:---------------|:-------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`.env`**     | Global       | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
-| **`.env.dev`** | `run_dev.sh` | **Local Overrides.** Only loaded during `./run_dev.sh`. Use this to override container hostnames with `localhost` or change ports for local processes. |
+| File           | Loaded By | Purpose                                                                                                                                                |
+|:---------------|:----------|:-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`.env`**     | Global    | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
+| **`.env.dev`** | `run.sh`  | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |
 
 **Inheritance Logic:**
 
 1. The startup script loads `.env` first.
-2. If in dev mode, it then loads `.env.dev`, which **overwrites** any values set in `.env`.
-3. Note: Commenting out a variable in `.env.dev` does **not** unset it from the environment; it will simply fall back to the value defined in `.env`. To "disable" a variable in dev mode, set it to an empty string (`VAR=`).
+2. If in a specific mode (e.g., `preview`), it then loads `.env.preview`, which **overwrites** any values set in `.env`.
+3. Note: Commenting out a variable in a mode-specific `.env` file does **not** unset it from the environment; it will simply fall back to the value defined in `.env`. To "disable" a variable, set it to an empty string (`VAR=`).
 
 ### Frontend (Next.js)
 
@@ -211,10 +211,10 @@ Use this option if you want to run the Flask application on your host machine bu
 2. **Start the application (migrations run automatically):**
 
    ```bash
-   ./run_dev.sh
+   ./run.sh dev
    ```
 
-   `run_dev.sh` activates the virtual environment, runs `flask db upgrade` to apply any
+   `run.sh dev` activates the virtual environment, runs `flask db upgrade` to apply any
    pending migrations, and then starts both the Flask API and Next.js dev server.
 
 3. **Initialize with seed data (optional):**
@@ -262,17 +262,16 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
 2. **Start Production Services:**
 
-   Use the provided production script to build and launch the stack using Nginx:
+   Use the provided production command to build and launch the stack using Nginx:
 
    ```bash
-   chmod +x run_prod.sh
-   ./run_prod.sh
+   ./run.sh prod
    ```
 
    If you need to use `sudo` with Docker:
 
    ```bash
-   sudo ./run_prod.sh
+   sudo ./run.sh prod
    ```
 
 3. **Initialize with seed data (optional):**
@@ -336,9 +335,9 @@ new indexes — is captured in a versioned migration file under `migrations/vers
 
 | Workflow                                                         | How migrations run                                                                                              |
 |------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
-| **Local dev** (`./run_dev.sh`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
+| **Local dev** (`./run.sh dev`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
 | **Docker dev** (`docker compose up`)                             | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
-| **Docker prod** (`docker compose -f docker-compose.prod.yml up`) | Same as Docker dev — automatic on every container start.                                                        |
+| **Docker prod** (`./run.sh prod`)                                | Same as Docker dev — automatic on every container start.                                                        |
 
 `flask db upgrade` is **idempotent**: running it when the schema is already current is
 completely safe and takes only a fraction of a second. It is therefore safe to run on
@@ -564,7 +563,7 @@ For exporting and importing covers/images (artefacts) between instances, see the
 - **`FATAL: role "iqoqo" does not exist`** (stale Docker volume): PostgreSQL only runs its
   initialisation scripts when the data directory is **empty**. If your Docker volume was
   previously created with a different `POSTGRES_USER` value, the `iqoqo` role is never
-  created on subsequent starts. Running `./run_dev.sh` handles this automatically via
+  created on subsequent starts. Running `./run.sh dev` handles this automatically via
   `scripts/setup_db.sh`. To run the fix manually:
 
   ```bash
@@ -591,7 +590,7 @@ For exporting and importing covers/images (artefacts) between instances, see the
 - **Port conflicts**: If you see "port already in use" errors:
   - Check what's using the port: `sudo lsof -i :5432` (database) or `sudo lsof -i :5000` (default `WEB_PORT`, or your configured port, e.g., `:5001`)
   - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
-  - `./run_dev.sh` automatically kills stale processes on `WEB_PORT` and `3000` at startup
+  - `./run.sh dev` automatically kills stale processes on `WEB_PORT` and `3000` at startup
   - Restart the services: `docker compose down && docker compose up -d`
 
 - **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds to port 5000 (the default `WEB_PORT` when not overridden) on macOS Monterey and later. Set `WEB_PORT=5001` (or any other free port) in your `.env` to move Flask off port 5000:
@@ -622,12 +621,12 @@ For exporting and importing covers/images (artefacts) between instances, see the
 
 - **`Unable to acquire lock at frontend/.next/dev/lock`**: This happens when a previous
   Next.js dev process crashed or was killed without cleaning up its lock file.
-  `./run_dev.sh` removes this file automatically at startup. To fix manually:
+  `./run.sh dev` removes this file automatically at startup. To fix manually:
 
   ```bash
   rm -f frontend/.next/dev/lock
   # Then restart:
-  ./run_dev.sh
+  ./run.sh dev
   ```
 
 - **CORS errors (`Origin ... is not allowed`)**: The Flask CORS configuration must
@@ -644,7 +643,7 @@ For exporting and importing covers/images (artefacts) between instances, see the
   NEXT_PUBLIC_API_URL=http://localhost:5001/api   # match WEB_PORT in .env
   ```
 
-  After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run_dev.sh`
+  After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run.sh dev`
 
   ```bash
   # Wait for database to be ready
@@ -683,7 +682,7 @@ To run the Flask development server:
 docker compose up -d db
 
 # Run the development server
-./run_dev.sh
+./run.sh dev
 ```
 
 **Manual start:**

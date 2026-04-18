@@ -72,7 +72,7 @@ init:
 
 start:
 	@echo "Starting development environment..."
-	@./run_dev.sh
+	@./run.sh dev
 
 stop:
 	@echo "Stopping Flask server..."
