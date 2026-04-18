@@ -76,33 +76,41 @@ start:
 
 stop:
 	@echo "Stopping Flask server..."
-	@if [ -f .flask.pid ]; then \
-		FLASK_PID=$$(cat .flask.pid); \
+	@if [ -f .pids/flask.pid ]; then \
+		FLASK_PID=$$(cat .pids/flask.pid); \
 		if kill -0 $$FLASK_PID 2>/dev/null; then \
 			kill $$FLASK_PID; \
 			echo "Sent SIGTERM to Flask (PID $$FLASK_PID)."; \
 		else \
 			echo "Flask PID $$FLASK_PID is not running."; \
 		fi; \
-		rm -f .flask.pid; \
-	else \
-		echo "No Flask PID file found (.flask.pid); skipping Flask stop."; \
+		rm -f .pids/flask.pid; \
+	fi
+	@echo "Stopping Celery worker..."
+	@if [ -f .pids/celery.pid ]; then \
+		CELERY_PID=$$(cat .pids/celery.pid); \
+		if kill -0 $$CELERY_PID 2>/dev/null; then \
+			kill $$CELERY_PID; \
+			echo "Sent SIGTERM to Celery (PID $$CELERY_PID)."; \
+		else \
+			echo "Celery PID $$CELERY_PID is not running."; \
+		fi; \
+		rm -f .pids/celery.pid; \
 	fi
 	@echo "Stopping Next.js frontend..."
-	@if [ -f .frontend.pid ]; then \
-		FRONTEND_PID=$$(cat .frontend.pid); \
-		if kill -0 $$FRONTEND_PID 2>/dev/null; then \
-			kill $$FRONTEND_PID; \
-			echo "Sent SIGTERM to Next.js (PID $$FRONTEND_PID)."; \
+	@if [ -f .pids/next.pid ]; then \
+		NEXT_PID=$$(cat .pids/next.pid); \
+		if kill -0 $$NEXT_PID 2>/dev/null; then \
+			kill $$NEXT_PID; \
+			echo "Sent SIGTERM to Next.js (PID $$NEXT_PID)."; \
 		else \
-			echo "Frontend PID $$FRONTEND_PID is not running."; \
+			echo "Frontend PID $$NEXT_PID is not running."; \
 		fi; \
-		rm -f .frontend.pid; \
-	else \
-		echo "No frontend PID file found (.frontend.pid); skipping frontend stop."; \
+		rm -f .pids/next.pid; \
 	fi
 	@echo "Stopping database containers..."
 	@docker compose stop
+	@rm -rf .pids
 	@echo "Development environment stopped."
 
 # Linting targets

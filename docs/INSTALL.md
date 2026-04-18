@@ -16,8 +16,7 @@ cp .env.example .env
 # Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed
 
 # 3. Build and start services (migrations run automatically on first start)
-docker compose build
-docker compose up -d
+./run.sh prod
 
 # (Optional) To enable local AI generation (requires powerful hardware):
 # docker compose --profile local-ai up -d
@@ -277,17 +276,17 @@ Use this option to run both the Flask application and PostgreSQL database in con
 3. **Initialize with seed data (optional):**
 
    ```bash
-   docker compose -f docker-compose.prod.yml exec web python scripts/init_db.py --seed-file data/seed_example.json
+   docker compose exec web python scripts/init_db.py --seed-file data/seed_example.json
    ```
 
 4. **Verify deployment:**
 
    ```bash
    # Check container status
-   docker compose -f docker-compose.prod.yml ps
+   docker compose ps
 
    # View logs
-   docker compose -f docker-compose.prod.yml logs -f web
+   docker compose logs -f web
 
    # Test the application
    curl http://localhost:8000/api/stats
