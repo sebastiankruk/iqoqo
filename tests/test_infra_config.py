@@ -91,7 +91,7 @@ class TestRunScripts(unittest.TestCase):
 
     def test_mode_switching_and_env_loading(self):
         # Test that 'prod' mode loads .env.prod
-        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         mode_env = "SECRET_KEY=prod-secret"
 
         result = self.run_script(args=["prod"], env_content=env_content, mode_env=mode_env)
@@ -119,7 +119,7 @@ else
 fi
 """)
 
-        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         result = self.run_script(args=["prod"], env_content=env_content)
 
         self.assertIn("Migration state: mock-version-123", result.stdout)
@@ -143,6 +143,10 @@ else
     echo "0.5.0"
 fi
 """)
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
+        result = self.run_script(args=["prod"], env_content=env_content)
+
+        self.assertIn("Migration mismatch! DB: current-version → Expected: expected-version", result.stdout)
 
     def test_tunnel_flag(self):
         # Test that --tunnel loads .env.dev even in dev mode (normally .env.dev is optional)
@@ -165,7 +169,7 @@ if [[ "$*" == *"compose down"* ]]; then
 fi
 exit 0
 """)
-        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base"
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         result = self.run_script(args=["prod", "--clean"], env_content=env_content)
 
         self.assertIn("Cleaning up previous instances", result.stdout)
