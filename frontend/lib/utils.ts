@@ -83,6 +83,10 @@ export function resolveApiUrl(path: string, isServer = false): string {
   const apiBase = publicApiUrl.startsWith("http") ? "/api" : publicApiUrl;
   const cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
 
+  if (cleanBase && cleanPath.startsWith(cleanBase)) {
+    return cleanPath;
+  }
+
   return `${cleanBase}${cleanPath}`;
 }
 

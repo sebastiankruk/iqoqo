@@ -179,7 +179,7 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 33vw"
-                  unoptimized={coverUrl.startsWith("http")}
+                  unoptimized
                 />
               ) : (
                 <div className="flex h-full items-center justify-center">
