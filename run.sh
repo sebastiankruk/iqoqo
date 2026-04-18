@@ -103,7 +103,10 @@ if [ ${#MISSING_VARS[@]} -ne 0 ]; then
 fi
 
 # Warning for production-critical variables
-if [ -z "$AUTH_SECRET" ]; then
+if [ "$MODE" != "dev" ] && [ -z "$AUTH_SECRET" ]; then
+    echo "❌ Error: AUTH_SECRET is required for '$MODE' mode but is not set."
+    exit 1
+elif [ -z "$AUTH_SECRET" ]; then
     echo "⚠️  Warning: AUTH_SECRET is not set. Auth might fail in $MODE mode."
 fi
 
@@ -349,37 +352,62 @@ else
 
     # Wait for DB to be ready
     echo "⏳ Waiting for database..."
+    DB_READY=false
     for i in {1..30}; do
         if docker compose exec -T db pg_isready -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" &>/dev/null; then
+            echo "✅ Database is ready"
+            DB_READY=true
             break
         fi
         sleep 1
     done
+    if [ "$DB_READY" = false ]; then
+        echo "❌ Database failed to become ready after 30 seconds"
+        exit 1
+    fi
 
     # Pre-flight migration checks
     MIGRATION_ROWS=$(docker compose exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -At -c "SELECT version_num FROM alembic_version;" 2>/dev/null || echo "")
     MIGRATION_COUNT=$(echo "$MIGRATION_ROWS" | grep -c '[^[:space:]]' || true)
 
-    EXPECTED_VERSION=$(python3 -c "
-from alembic.config import Config
-from alembic.script import ScriptDirectory
+    if [ "$MIGRATION_COUNT" -gt 1 ]; then
+        echo "⚠️  WARNING: Multiple Alembic heads detected in the database:"
+        echo "$MIGRATION_ROWS" | sed 's/^/   /'
+        CURRENT_MIGRATION=""
+    elif [ "$MIGRATION_COUNT" -eq 1 ]; then
+        CURRENT_MIGRATION=$(echo "$MIGRATION_ROWS" | tr -d '[:space:]')
+    else
+        CURRENT_MIGRATION=""
+    fi
+
+    # Get expected Alembic heads from source code (most reliable method)
+    EXPECTED_HEADS=$(python3 -c "
 try:
-    config = Config('migrations/alembic.ini')
-    heads = ScriptDirectory.from_config(config).get_heads()
-    print(heads[0] if heads else '')
+    from alembic.script import ScriptDirectory
+    heads = ScriptDirectory('migrations').get_heads()
+    print(' '.join(heads))
 except Exception:
     print('')
 " 2>/dev/null || echo "")
+    HEAD_COUNT=$(echo "$EXPECTED_HEADS" | wc -w | tr -d ' ')
 
-    if [ -n "$MIGRATION_ROWS" ] && [ "$MIGRATION_COUNT" -eq 1 ]; then
-        CURRENT=$(echo "$MIGRATION_ROWS" | tr -d '[:space:]')
-        if [ "$CURRENT" != "$EXPECTED_VERSION" ]; then
-            echo "⚠️  Migration mismatch (DB: $CURRENT, Code: $EXPECTED_VERSION). Upgrading..."
+    if [ "$HEAD_COUNT" -eq 1 ]; then
+        EXPECTED_VERSION="$EXPECTED_HEADS"
+    elif [ "$HEAD_COUNT" -gt 1 ]; then
+        echo "⚠️  WARNING: Multiple Alembic heads in source scripts: $EXPECTED_HEADS"
+        EXPECTED_VERSION=""
+    else
+        EXPECTED_VERSION=""
+    fi
+
+    if [ -n "$CURRENT_MIGRATION" ] && [ -n "$EXPECTED_VERSION" ]; then
+        if [ "$CURRENT_MIGRATION" != "$EXPECTED_VERSION" ]; then
+            echo "⚠️  Migration mismatch! DB: $CURRENT_MIGRATION → Expected: $EXPECTED_VERSION. Upgrading..."
         else
-            echo "✅ Migration state: $CURRENT"
+            echo "✅ Migration state: $CURRENT_MIGRATION"
         fi
-    elif [ "$MIGRATION_COUNT" -gt 1 ]; then
-        echo "⚠️  Multiple Alembic heads detected!"
+    else
+        echo "ℹ️  Could not determine migration state (current: '${CURRENT_MIGRATION:-none}', expected: '${EXPECTED_VERSION:-unknown}')"
     fi
 
     # Backup logic
