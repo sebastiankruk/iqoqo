@@ -79,9 +79,9 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
 
                     assert result is not None
                 path, source = result
-                assert path == "/static/covers/9780553380163_ol.jpg"
+                assert path == "/static/covers/9780553380163_ol_orig.jpg"
                 assert source == "api_openlibrary"
-                assert (tmp_path / "9780553380163_ol.jpg").exists()
+                assert (tmp_path / "9780553380163_ol_orig.jpg").exists()
                 # Verify URL
                 args, _ = mock_requests_get.call_args
                 assert "covers.openlibrary.org" in args[0]

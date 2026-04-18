@@ -102,25 +102,25 @@ else
     CURRENT_MIGRATION=""
 fi
 
-# Get expected migration head from Alembic itself (most reliable method)
-EXPECTED_VERSION=$(python3 -c "
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-config = Config('migrations/alembic.ini')
-heads = ScriptDirectory.from_config(config).get_heads()
-print(heads[0] if len(heads) == 1 else '')
-" 2>/dev/null || echo "")
-
-# Fallback: get expected version from Alembic script directory without alembic.ini
-if [ -z "$EXPECTED_VERSION" ] || [ "$EXPECTED_VERSION" = "None" ]; then
-    EXPECTED_VERSION=$(python3 -c "
+# Get expected migration head(s) from Alembic itself (most reliable method)
+EXPECTED_HEADS=$(python3 -c "
 from alembic.script import ScriptDirectory
 try:
     heads = ScriptDirectory('migrations').get_heads()
-    print(heads[0] if len(heads) == 1 else '')
+    print(' '.join(heads))
 except Exception:
     print('')
 " 2>/dev/null || echo "")
+
+HEAD_COUNT=$(echo "$EXPECTED_HEADS" | wc -w)
+
+if [ "$HEAD_COUNT" -eq 1 ]; then
+    EXPECTED_VERSION="$EXPECTED_HEADS"
+elif [ "$HEAD_COUNT" -gt 1 ]; then
+    echo "⚠️  WARNING: Multiple Alembic heads detected in the source code scripts: $EXPECTED_HEADS"
+    EXPECTED_VERSION=""
+else
+    EXPECTED_VERSION=""
 fi
 
 if [ -n "$CURRENT_MIGRATION" ] && [ -n "$EXPECTED_VERSION" ]; then
