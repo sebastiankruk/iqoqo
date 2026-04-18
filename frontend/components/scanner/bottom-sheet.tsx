@@ -185,6 +185,30 @@ export function BottomSheet({
     [onFound, format]
   );
 
+  /* ── Discogs ID lookup ── */
+  const lookupDiscogsId = useCallback(
+    async (id: string) => {
+      if (!id) return;
+
+      setIsSearching(true);
+      setError(null);
+      try {
+        const { apiFetch } = await import("@/lib/api/client");
+        const data = await apiFetch<IsbnMeta>(`/lookup/discogs/${encodeURIComponent(id)}`);
+        onFound(id, data);
+      } catch (e: unknown) {
+        if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
+          setError(e.message);
+        } else {
+          setError("Could not find this Discogs release.");
+        }
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [onFound]
+  );
+
   /* ── Start camera + ZXing scan loop ── */
   const startScanner = useCallback(async () => {
     setError(null);
@@ -278,7 +302,14 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupBarcode(manualIsbn, true);
+    const trimmed = manualIsbn.trim();
+    // Pure integers that are too short to be a barcode (< 8 digits) are Discogs Release IDs
+    const isDiscogsId = /^\d{1,7}$/.test(trimmed);
+    if (isDiscogsId) {
+      lookupDiscogsId(trimmed);
+    } else {
+      lookupBarcode(trimmed, true);
+    }
   };
 
   return (
@@ -362,7 +393,7 @@ export function BottomSheet({
                   type="text"
                   value={manualIsbn}
                   onChange={e => setManualIsbn(e.target.value)}
-                  placeholder="Enter barcode or title..."
+                  placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"
                   className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
                 />
                 <button
@@ -373,10 +404,10 @@ export function BottomSheet({
                   <Search className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                {isSearching ? "Looking up…" : "Try ISBN or UPC"}
-              </p>
             </form>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {isSearching ? "Looking up…" : "Enter barcode, Discogs Release ID, or Artist – Title"}
+            </p>
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button
                 type="button"

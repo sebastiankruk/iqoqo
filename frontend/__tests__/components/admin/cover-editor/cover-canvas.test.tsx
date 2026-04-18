@@ -23,7 +23,7 @@ describe("CoverCanvas Component", () => {
   const mockSetCrop = vi.fn();
   const mockSetCompletedCrop = vi.fn();
   const mockImgRef = {
-    current: { width: 1000, height: 1500 }
+    current: { width: 1000, height: 1500 },
   } as unknown as React.RefObject<HTMLImageElement>;
 
   it("re-calculates crop when aspect ratio changes", () => {
@@ -58,7 +58,6 @@ describe("CoverCanvas Component", () => {
         flipV={false}
       />
     );
-    
     // The useEffect should have triggered setCrop
     expect(mockSetCrop).toHaveBeenCalled();
     expect(screen.getByAltText("Source preview")).toBeInTheDocument();
