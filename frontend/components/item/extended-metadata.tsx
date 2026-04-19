@@ -24,7 +24,7 @@ import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
-import { IsbnDbAttribution } from "@/components/ui/isbndb-attribution";
+import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
@@ -311,8 +311,11 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
       )}
 
       {/* Attribution badges based on metadata source */}
-      {(meta["data_source"] as string) === "discogs" && <DiscogsAttribution />}
-      {(["google_books", "open_library"] as string[]).includes(meta["data_source"] as string) && <IsbnDbAttribution />}
+      {meta["data_source"] === "discogs" ? (
+        <DiscogsAttribution />
+      ) : (
+        <BibliographicAttribution source={meta["data_source"] as string} />
+      )}
 
       {Boolean(meta.metadata_provenance && typeof meta.metadata_provenance === "object") && (
         <div className="mt-6 flex items-center justify-end text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 gap-2 border-t border-border/20 pt-4">

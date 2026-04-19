@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import copy
 import hashlib
 import io
 import re
@@ -221,12 +222,14 @@ def lookup_barcode_preview(query: str):
             # Return candidates for the frontend disambiguation sheet
             # Build response from a copy — top must NOT be mutated because it
             # already lives inside discogs_results, which becomes candidates.
-            response_data = dict(discogs_results[0])
+            response_data = copy.deepcopy(discogs_results[0])
             response_data["candidates"] = discogs_results
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
             response_data["data_source"] = "discogs"
+            for candidate in discogs_results:
+                candidate["data_source"] = "discogs"
             _record_scan_telemetry(query, format_hint, "discogs", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
         if len(discogs_results) == 1:

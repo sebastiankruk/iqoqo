@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",
-  status: "unread",
+  status: "want_to_read",
   collection_status: "available",
   title: "Test Book",
   authors: ["Test Author"],

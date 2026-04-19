@@ -35,7 +35,7 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     id: 1,
     manifestation_id: 1,
     owner_id: "user1",
-    status: "unread",
+    status: "want_to_read",
     collection_status: "available",
     meta: {},
     title: "Dune",
@@ -94,8 +94,8 @@ describe("ItemCard", () => {
   });
 
   it("shows a status dot with the correct title for 'available'", () => {
-    render(<ItemCard item={makeItem({ collection_status: "available", status: "unread" })} />);
-    expect(screen.getByTitle("Unread")).toBeInTheDocument();
+    render(<ItemCard item={makeItem({ collection_status: "available", status: "want_to_read" })} />);
+    expect(screen.getByTitle("Want to Read")).toBeInTheDocument();
   });
 
   it("shows a status dot with the correct title for 'lent'", () => {

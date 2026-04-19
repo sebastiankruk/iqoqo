@@ -38,7 +38,7 @@ function makeItem(id: number, title: string, author: string): Item {
     id,
     manifestation_id: id,
     owner_id: "user1",
-    status: "unread",
+    status: "want_to_read",
     collection_status: "available",
     meta: {},
     title,

@@ -17,6 +17,9 @@ These statuses track the physical or ownership state of an item in a collection.
 
 **Default Value**: `available` (when adding new items via scanner).
 
+- Use **Collection Status** to track where the object is (physical state).
+- Use **Progress Status** to track your engagement with the content (intellectual state).
+
 ---
 
 ## 2. Consumption Progress (`PROGRESS_STATUSES`)
@@ -60,6 +63,6 @@ These statuses track the user's interaction progress with the content, categoriz
 ## 3. UI/UX Implementation Notes
 
 - **Sensible Defaults**:
-    - **Scanner**: Use `available` + `want_to_read`/`play` based on format.
-    - **Wish List**: Use `wish_list` (Collection) + `want_to_read`/`play` (Progress).
+  - **Scanner**: Use `available` + `want_to_read`/`play` based on format.
+  - **Wish List**: Use `wish_list` (Collection) + `want_to_read`/`play` (Progress).
 - **Ordering**: When displaying status filters or dropdowns, follow the numerical ordering in the tables above to group "active" states (available, reading, playing) before "passive" or "missing" states.
