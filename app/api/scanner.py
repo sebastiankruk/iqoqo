@@ -507,17 +507,18 @@ def scan_barcode():
 
     # For name-based lookups (no barcode), store the hash_id in meta so future
     # local lookups can find this manifestation without hitting external APIs again.
-    is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
-    if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
-        computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
-        updated_meta = dict(manifestation.meta)
-        updated_meta["hash_id"] = computed_hash
-        manifestation.meta = updated_meta
+    if barcode:
+        is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
+        if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
+            computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
+            updated_meta = dict(manifestation.meta)
+            updated_meta["hash_id"] = computed_hash
+            manifestation.meta = updated_meta
 
     db.session.commit()
 
     # Success: record telemetry with manifestation_id
-    _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id)
+    _record_scan_telemetry(barcode or manifestation.title, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id)
 
     return (
         jsonify(
