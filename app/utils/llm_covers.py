@@ -43,6 +43,28 @@ PRICING = {
     "local": 0.000,
 }
 
+MEDIA_PROMPT_PREFIX: dict[str, str] = {
+    "boardgame": "A dynamic and colorful board game box art representing",
+    "board_game": "A dynamic and colorful board game box art representing",
+    "puzzle": "A detailed and richly illustrated jigsaw puzzle box cover for",
+    "jigsaw": "A detailed and richly illustrated jigsaw puzzle box cover for",
+    "audio": "A stylized vinyl record album cover or CD artwork for",
+    "cd": "A stylized vinyl record album cover or CD artwork for",
+    "vinyl": "A stylized vinyl record album cover or CD artwork for",
+    "lp": "A stylized vinyl record album cover or CD artwork for",
+    "video": "A cinematic movie poster or Blu-ray cover for",
+    "dvd": "A cinematic movie poster or Blu-ray cover for",
+    "bluray": "A cinematic movie poster or Blu-ray cover for",
+    "blu-ray": "A cinematic movie poster or Blu-ray cover for",
+}
+
+
+def build_media_prompt_prefix(format_type: str | None) -> str:
+    """Returns a media-appropriate prompt prefix for LLM image generation."""
+    if not format_type:
+        return "A high-quality, minimalist book cover design for"
+    return MEDIA_PROMPT_PREFIX.get(format_type.lower(), "A high-quality, minimalist book cover design for")
+
 
 def record_telemetry(
     provider: str,
@@ -92,7 +114,7 @@ def build_context(description: str, genre: str) -> str:
 
 
 def generate_cover_cloud(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
 ) -> tuple[str, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -103,7 +125,8 @@ def generate_cover_cloud(
     try:
         client = OpenAI(api_key=api_key)
         context = build_context(description, genre)
-        prompt = f"A high-quality, minimalist book cover design for '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
+        prefix = build_media_prompt_prefix(format_type)
+        prompt = f"{prefix} '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
 
         response = client.images.generate(
             model="dall-e-3",
@@ -139,7 +162,7 @@ def generate_cover_cloud(
 
 
 def generate_cover_gemini(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
 ) -> tuple[str, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -153,7 +176,8 @@ def generate_cover_gemini(
 
         client = genai.Client(api_key=api_key)
         context = build_context(description, genre)
-        prompt = f"Minimalist book cover, highly detailed, title '{title}', author '{author}'.{context}"
+        prefix = build_media_prompt_prefix(format_type)
+        prompt = f"{prefix} highly detailed, title '{title}', author '{author}'.{context}"
 
         response = client.models.generate_content(
             model="gemini-2.5-flash-image",
@@ -181,7 +205,7 @@ def generate_cover_gemini(
 
 
 def generate_cover_local(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = ""
+    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
 ) -> tuple[str, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
@@ -191,8 +215,9 @@ def generate_cover_local(
     # Trimming for prompt is now removed to give full context to LLM.
     # Trimming for overlay is applied further below.
     context = build_context(description, genre)
+    prefix = build_media_prompt_prefix(format_type)
     payload = {
-        "prompt": f"masterpiece, best quality, book cover art, minimalist, aesthetic, representing '{title}' by {author}, clean background, no text.{context}",
+        "prompt": f"masterpiece, best quality, {prefix.lower()} minimalist, aesthetic, '{title}' by {author}, clean background, no text.{context}",
         "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
@@ -232,11 +257,18 @@ def generate_cover_local(
 
 
 def fetch_llm_cover(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", allow_cloud_llm: bool = False
+    identifier: str,
+    title: str,
+    author: str,
+    user_id: str,
+    description: str = "",
+    genre: str = "",
+    format_type: str | None = None,
+    allow_cloud_llm: bool = False,
 ) -> tuple[str, str] | None:
     """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
     # 1. Local (Free)
-    result = generate_cover_local(identifier, title, author, user_id, description, genre)
+    result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type)
     if result:
         return result
 
@@ -244,16 +276,20 @@ def fetch_llm_cover(
     if not allow_cloud_llm:
         logger.debug(f"Cloud LLM generation skipped: user lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission.")
         record_telemetry(
-            "cloud", user_id, 0.0, status="not_allowed", error_message=f"User lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission"
+            "cloud",
+            user_id,
+            0.0,
+            status="not_allowed",
+            error_message=f"User lacks {PermissionName.LLM_GENERATE_CLOUD.value} permission",
         )
         return None
 
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(identifier, title, author, user_id, description, genre)
+        result = generate_cover_gemini(identifier, title, author, user_id, description, genre, format_type)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(identifier, title, author, user_id, description, genre)
+        return generate_cover_cloud(identifier, title, author, user_id, description, genre, format_type)
 
     return None

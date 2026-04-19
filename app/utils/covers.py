@@ -286,8 +286,18 @@ def process_cover_pipeline(
         # Tier 3/4: LLM Generation
         allow_generate_cover = Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover", False)
         if not local_cover_url and allow_generate_cover:
+            # Extract format for media-aware prompts
+            format_type = manifestation.meta.get("format") if manifestation.meta else None
+
             result = fetch_llm_cover(
-                identifier, title, author, user_id, description, genre, allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False)
+                identifier,
+                title,
+                author,
+                user_id,
+                description,
+                genre,
+                format_type=format_type,
+                allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
             )
             if result:
                 local_cover_url, source = result

@@ -87,6 +87,7 @@ PROGRESS_STATUSES: tuple[str, ...] = (
     "watching",
     "watched",
     "want_to_watch",
+    "want_to_play",
     "playing",
     "played",
 )

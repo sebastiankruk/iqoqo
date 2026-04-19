@@ -15,9 +15,11 @@
 //
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
+import { toast } from "sonner";
+import { apiClient } from "@/lib/api/client";
 import {
   Loader2,
   Settings,
@@ -102,8 +104,33 @@ function SettingsContent(): React.JSX.Element {
   const searchParams = useSearchParams();
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const activeTab = internalTab || searchParams.get("tab") || "profile";
+
+  // Initialize local state when profile loads
+  useEffect(() => {
+    if (profile?.display_name) {
+      setDisplayName(profile.display_name);
+    } else if (profile?.email) {
+      setDisplayName("");
+    }
+  }, [profile?.display_name, profile?.email, activeTab]);
+
+  const handleSaveDisplayName = async () => {
+    if (!displayName.trim()) return;
+    setIsSaving(true);
+    try {
+      await apiClient.put("/profile/", { display_name: displayName });
+      toast.success("Display name updated successfully");
+    } catch (err) {
+      toast.error("Failed to update profile");
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
@@ -259,13 +286,19 @@ function SettingsContent(): React.JSX.Element {
                   </p>
                   <input
                     className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    value={profile.display_name || ""}
-                    readOnly
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    placeholder="Enter your display name"
                   />
                 </div>
                 <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
-                  <button className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium">
-                    Save
+                  <button
+                    className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+                    onClick={handleSaveDisplayName}
+                    disabled={isSaving || !displayName.trim() || displayName === profile.display_name}
+                  >
+                    {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isSaving ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>

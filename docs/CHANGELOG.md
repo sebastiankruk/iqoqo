@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2026-04-24
 
+### Added
+- **Ontology & Tracking**:
+  - **Board Game Statuses**: Added `want_to_play` to the canonical status list to support game wishlisting.
+  - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and ISBN-DB lookups, providing clear attribution badges in the UI.
+- **Smart AI Capabilities**:
+  - **Media-Aware AI Art**: Expanded LLM image generation prompts to use media-specific prefixes (e.g., "Cinematic movie poster" for films, "Box art" for games), significantly improving the quality of AI-generated covers for non-book items.
+- **Admin UX**:
+  - **RBAC Descriptions**: Added descriptive tooltips to the Role-Based Access Control sheet to clarify user permission boundaries.
+
+### Fixed
+- **Profile Settings**: Resolved a critical bug where the "Display Name" field was read-only and didn't persist changes to the database.
+- **Aesthetic Consistency**: Standardized user metadata table colors to use semantic theme tokens instead of hardcoded classes.
+- **Image Resolution**: Fixed broken fallback cover image paths on production environments by routing all asset resolution through the centralized `getCoverUrl` utility.
+- **Component Stability**: Resolved JSX syntax errors in the Puzzle and Video metadata components.
+
 ## [0.4.0] - 2026-04-15
 
 ### Added
