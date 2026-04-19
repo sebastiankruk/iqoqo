@@ -140,7 +140,8 @@ def get_items():
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
-                "cover_url": manifestation.cover_url if manifestation else None,
+                "cover_url": manifestation.cover_url
+                or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "added_at": item.added_at.isoformat() if item.added_at else None,

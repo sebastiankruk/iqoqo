@@ -113,7 +113,7 @@ services:
       args:
         APP_VERSION: ${APP_VERSION:-dev}
     command: >-
-      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info"
+      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info --pool=solo"
     env_file:
       - .env
     volumes:

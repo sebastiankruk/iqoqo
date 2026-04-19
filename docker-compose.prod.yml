@@ -102,7 +102,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info"
+      sh -c "celery -A app.core.celery_app:celery worker --loglevel=info --pool=solo"
     env_file:
       - ${ENV_FILE:-.env}
     volumes:
