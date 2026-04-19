@@ -231,7 +231,7 @@ test.describe("Audio Media Workflow", () => {
     await page.getByText("Manual Search").click();
 
     // 5. Submit 12-digit UPC (validates updated frontend regex rules)
-    await page.fill('input[placeholder="Enter barcode or title..."]', testBarcode);
+    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', testBarcode);
     await page.locator('button[type="submit"]').click();
 
     // 6. Verify the Success Card renders parsed audio metadata
@@ -245,7 +245,7 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByRole("button", { name: "CD" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 8. Expect routing to newly ingested item details page
     await expect(page).toHaveURL(/.*\/item\/2/);

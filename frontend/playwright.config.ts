@@ -47,7 +47,6 @@ export default defineConfig({
     command: "npm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    // Increased from 120s to 240s: Next.js dev server in CI can be slow on first compile
-    timeout: 240000,
+    timeout: 120000,
   },
 });

@@ -118,7 +118,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await page.getByRole("button", { name: "Manual Search" }).click();
 
     // 8. Enter barcode for a DVD
-    const barcodeInput = page.getByPlaceholder("Enter barcode or title...");
+    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 
@@ -128,7 +128,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Inception" added to your library!/i)).toBeVisible();

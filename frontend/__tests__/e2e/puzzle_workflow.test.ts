@@ -92,14 +92,14 @@ test.describe("Jigsaw Puzzle Workflow", () => {
     await page.getByRole("button", { name: "Manual Search" }).click();
 
     // 5. Fill in the barcode
-    await page.fill('input[placeholder="Enter barcode or title..."]', "4005556199999");
+    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', "4005556199999");
     await page.keyboard.press("Enter");
 
     // 6. Verify Item Card is created (title is visible in success card)
     await expect(page.locator("text=Starry Night 1000pc")).toBeVisible();
 
     // 7. Confirm addition
-    await page.click('button:has-text("Add to Collection")');
+    await page.click('button:has-text("Add to My Collection")');
     await expect(page).toHaveURL(/\/item\/.*/);
   });
 });
