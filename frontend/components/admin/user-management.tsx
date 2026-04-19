@@ -90,9 +90,9 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
         </div>
       </div>
 
-      <div className="border rounded-md overflow-x-auto bg-card">
+      <div className="border rounded-md overflow-x-auto bg-card border-border/50">
         <table className="w-full text-sm text-left border-collapse">
-          <thead className="text-xs uppercase bg-accent/30 text-accent-foreground border-b">
+          <thead className="text-xs uppercase bg-muted/50 text-muted-foreground border-b border-border/50">
             <tr>
               <th className="px-6 py-4 font-semibold">Email</th>
               <th className="px-6 py-4 font-semibold">Display Name</th>
@@ -118,7 +118,7 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
                 <tr
                   key={u.id}
                   onClick={canEdit ? () => setSelectedUser(u) : undefined}
-                  className={canEdit ? "hover:bg-accent/20 transition-colors cursor-pointer" : ""}
+                  className={canEdit ? "hover:bg-muted/30 transition-colors cursor-pointer" : ""}
                 >
                   <td className="px-6 py-4 font-medium">{u.email}</td>
                   <td className="px-6 py-4 text-muted-foreground">{u.display_name || "—"}</td>
