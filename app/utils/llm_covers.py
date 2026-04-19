@@ -59,6 +59,14 @@ MEDIA_PROMPT_PREFIX: dict[str, str] = {
 }
 
 
+def is_placeholder(text: str | None) -> bool:
+    """Returns True if the text is a placeholder like 'Unknown', 'None', or 'Null'."""
+    if not text:
+        return True
+    placeholders = {"unknown", "none", "null", "undefined", "unknown author", "unknown artist", "unknown title", "n/a"}
+    return text.lower().strip() in placeholders
+
+
 def build_media_prompt_prefix(format_type: str | None) -> str:
     """Returns a media-appropriate prompt prefix for LLM image generation."""
     if not format_type:
@@ -106,10 +114,11 @@ def save_image(image_data: bytes, identifier: str, suffix: str) -> str:
 
 def build_context(description: str, genre: str) -> str:
     ctx = ""
-    if genre:
-        ctx += f" Genre: {genre}."
-    if description:
-        ctx += f" Theme/Description: {description[:300]}."
+    if not is_placeholder(genre):
+        ctx += f" Genre: {genre.strip()}."
+    if not is_placeholder(description):
+        # Trim description to avoid token limits while keeping context
+        ctx += f" Theme/Description: {description.strip()[:300]}."
     return ctx
 
 
@@ -126,7 +135,16 @@ def generate_cover_cloud(
         client = OpenAI(api_key=api_key)
         context = build_context(description, genre)
         prefix = build_media_prompt_prefix(format_type)
-        prompt = f"{prefix} '{title}' by {author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
+
+        clean_title = title if not is_placeholder(title) else ""
+        clean_author = author if not is_placeholder(author) else ""
+
+        if clean_title and clean_author:
+            prompt = f"{prefix} '{clean_title}' by {clean_author}.{context} No text other than the title and author. Clean typography, modern aesthetic."
+        elif clean_title:
+            prompt = f"{prefix} '{clean_title}'.{context} No text other than the title. Clean typography, modern aesthetic."
+        else:
+            prompt = f"{prefix} highly detailed representation.{context} Clean typography, modern aesthetic."
 
         response = client.images.generate(
             model="dall-e-3",
@@ -177,7 +195,16 @@ def generate_cover_gemini(
         client = genai.Client(api_key=api_key)
         context = build_context(description, genre)
         prefix = build_media_prompt_prefix(format_type)
-        prompt = f"{prefix} highly detailed, title '{title}', author '{author}'.{context}"
+
+        clean_title = title if not is_placeholder(title) else ""
+        clean_author = author if not is_placeholder(author) else ""
+
+        if clean_title and clean_author:
+            prompt = f"{prefix} highly detailed, title '{clean_title}', author '{clean_author}'.{context}"
+        elif clean_title:
+            prompt = f"{prefix} highly detailed, title '{clean_title}'.{context}"
+        else:
+            prompt = f"{prefix} highly detailed representation.{context}"
 
         response = client.models.generate_content(
             model="gemini-2.5-flash-image",
@@ -216,8 +243,19 @@ def generate_cover_local(
     # Trimming for overlay is applied further below.
     context = build_context(description, genre)
     prefix = build_media_prompt_prefix(format_type)
+
+    clean_title = title if not is_placeholder(title) else ""
+    clean_author = author if not is_placeholder(author) else ""
+
+    if clean_title and clean_author:
+        main_subject = f"'{clean_title}' by {clean_author}"
+    elif clean_title:
+        main_subject = f"'{clean_title}'"
+    else:
+        main_subject = "highly detailed representation"
+
     payload = {
-        "prompt": f"masterpiece, best quality, {prefix.lower()} minimalist, aesthetic, '{title}' by {author}, clean background, no text.{context}",
+        "prompt": f"masterpiece, best quality, {prefix.lower()} minimalist, aesthetic, {main_subject}, clean background, no text.{context}",
         "negative_prompt": "text, title, author, writing, letters, watermark, signature, blurry, low quality, cropped, ugly",
         "steps": 20,
         "width": 512,
