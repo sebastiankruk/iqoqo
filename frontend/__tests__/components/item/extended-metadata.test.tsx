@@ -80,7 +80,7 @@ describe("ExtendedMetadata", () => {
     };
     render(<ExtendedMetadata meta={meta} />);
     expect(screen.getByText("Discogs")).toBeInTheDocument();
-    expect(screen.getByText("Powered by")).toBeInTheDocument();
+    expect(screen.getByText("Source")).toBeInTheDocument();
   });
 
   it("renders Google Books attribution badge when data_source is google_books", () => {
@@ -90,7 +90,7 @@ describe("ExtendedMetadata", () => {
     };
     render(<ExtendedMetadata meta={meta} />);
     expect(screen.getByText("Google Books")).toBeInTheDocument();
-    expect(screen.getByText("Powered by")).toBeInTheDocument();
+    expect(screen.getByText("Source")).toBeInTheDocument();
   });
 
   it("renders Open Library attribution badge when data_source is open_library", () => {
@@ -100,7 +100,7 @@ describe("ExtendedMetadata", () => {
     };
     render(<ExtendedMetadata meta={meta} />);
     expect(screen.getByText("Open Library")).toBeInTheDocument();
-    expect(screen.getByText("Powered by")).toBeInTheDocument();
+    expect(screen.getByText("Source")).toBeInTheDocument();
   });
 
   it("does not render attributions for unknown data sources", () => {
