@@ -143,7 +143,8 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
     !trackList &&
     extraKeys.length === 0 &&
     !owner_name &&
-    !owner_count
+    !owner_count &&
+    !meta["data_source"]
   )
     return null;
 
@@ -311,7 +312,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
 
       {/* Attribution badges based on metadata source */}
       {(meta["data_source"] as string) === "discogs" && <DiscogsAttribution />}
-      {(meta["data_source"] as string) === "isbn_db" && <IsbnDbAttribution />}
+      {(["google_books", "open_library"] as string[]).includes(meta["data_source"] as string) && <IsbnDbAttribution />}
 
       {Boolean(meta.metadata_provenance && typeof meta.metadata_provenance === "object") && (
         <div className="mt-6 flex items-center justify-end text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 gap-2 border-t border-border/20 pt-4">

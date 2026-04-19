@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Ontology & Tracking**:
   - **Board Game Statuses**: Added `want_to_play` to the canonical status list to support game wishlisting.
-  - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and ISBN-DB lookups, providing clear attribution badges in the UI.
+  - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and Google Books/Open Library lookups, providing clear attribution badges in the UI.
 - **Smart AI Capabilities**:
   - **Media-Aware AI Art**: Expanded LLM image generation prompts to use media-specific prefixes (e.g., "Cinematic movie poster" for films, "Box art" for games), significantly improving the quality of AI-generated covers for non-book items.
 - **Admin UX**:

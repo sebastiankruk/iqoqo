@@ -18,6 +18,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import {
@@ -103,6 +104,7 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps): 
 function SettingsContent(): React.JSX.Element {
   const searchParams = useSearchParams();
   const { data: profile, isLoading } = useProfile();
+  const queryClient = useQueryClient();
   const [internalTab, setInternalTab] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
@@ -119,10 +121,13 @@ function SettingsContent(): React.JSX.Element {
   }, [profile?.display_name, profile?.email, activeTab]);
 
   const handleSaveDisplayName = async () => {
-    if (!displayName.trim()) return;
+    const trimmedName = displayName.trim();
+    if (!trimmedName) return;
     setIsSaving(true);
     try {
-      await apiClient.put("/profile/", { display_name: displayName });
+      await apiClient.put("/profile/", { display_name: trimmedName });
+      // Invalidate so the navbar and other consumers refresh immediately
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Display name updated successfully");
     } catch (err) {
       toast.error("Failed to update profile");

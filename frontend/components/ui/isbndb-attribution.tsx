@@ -18,27 +18,46 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 /**
- * Component to display mandatory attribution to ISBNdb or Open Library.
+ * Component to display attribution for the book metadata providers
+ * currently used by the backend fetcher (Google Books and Open Library).
  *
- * @returns {JSX.Element} The rendered attribution badge.
+ * The exported name is kept for compatibility with existing imports.
+ *
+ * @returns {JSX.Element} The rendered attribution badges.
  */
 export function IsbnDbAttribution() {
   return (
     <div className="flex items-center justify-center pt-2 pb-1 w-full">
-      <Link
-        href="https://isbndb.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
+      <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <span>Powered by</span>
-        <Badge
-          variant="outline"
-          className="font-semibold bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 border-blue-200 dark:border-blue-900"
+        <Link
+          href="https://books.google.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center hover:text-foreground transition-colors"
         >
-          ISBNdb
-        </Badge>
-      </Link>
+          <Badge
+            variant="outline"
+            className="font-semibold bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 border-blue-200 dark:border-blue-900"
+          >
+            Google Books
+          </Badge>
+        </Link>
+        <span aria-hidden="true">&amp;</span>
+        <Link
+          href="https://openlibrary.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center hover:text-foreground transition-colors"
+        >
+          <Badge
+            variant="outline"
+            className="font-semibold bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-amber-200 dark:border-amber-900"
+          >
+            Open Library
+          </Badge>
+        </Link>
+      </div>
     </div>
   );
 }

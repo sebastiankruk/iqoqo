@@ -103,16 +103,22 @@ def test_data_source_injection_barcode_bgg(client, normal_user_headers, app):
 
 
 def test_data_source_injection_barcode_isbn(client, normal_user_headers, app):
-    """Verify that barcode lookups for books inject 'data_source': 'isbn_db'."""
+    """Verify that barcode lookups for books expose the real metadata provider in data_source.
+
+    The backend fetch_isbn_metadata sets meta['Source'] to 'Google Books' or
+    'Open Library'. The scanner converts this to a snake_case data_source value.
+    """
     with patch("app.api.scanner.fetch_isbn_metadata") as mock_isbn, patch("app.api.scanner.canonicalize_isbn") as mock_canon:
 
         mock_canon.return_value = "9781234567890"
-        mock_isbn.return_value = {"title": "The Book", "authors": ["Me"]}
+        # Include the Source field that fetch_isbn_metadata always sets
+        mock_isbn.return_value = {"title": "The Book", "authors": ["Me"], "Source": "Google Books"}
 
         # Call lookup with book hint
         resp = client.get("/api/lookup/9781234567890?format=book", headers=normal_user_headers)
         assert resp.status_code == 200
         data = resp.get_json()["data"]
 
-        assert data["data_source"] == "isbn_db"
+        # data_source should now reflect the actual upstream provider
+        assert data["data_source"] in {"google_books", "open_library"}
         assert data["title"] == "The Book"

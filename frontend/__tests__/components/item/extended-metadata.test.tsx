@@ -72,4 +72,45 @@ describe("ExtendedMetadata", () => {
     fireEvent.click(button);
     expect(screen.getByText("Test Publisher")).toBeInTheDocument();
   });
+
+  it("renders Discogs attribution badge when data_source is discogs", () => {
+    const meta = {
+      title: "Dark Side of the Moon",
+      data_source: "discogs",
+    };
+    render(<ExtendedMetadata meta={meta} />);
+    expect(screen.getByText("Discogs")).toBeInTheDocument();
+    expect(screen.getByText("Powered by")).toBeInTheDocument();
+  });
+
+  it("renders Google Books attribution badge when data_source is google_books", () => {
+    const meta = {
+      title: "Dune",
+      data_source: "google_books",
+    };
+    render(<ExtendedMetadata meta={meta} />);
+    expect(screen.getByText("Google Books")).toBeInTheDocument();
+    expect(screen.getByText("Powered by")).toBeInTheDocument();
+  });
+
+  it("renders Open Library attribution badge when data_source is open_library", () => {
+    const meta = {
+      title: "1984",
+      data_source: "open_library",
+    };
+    render(<ExtendedMetadata meta={meta} />);
+    expect(screen.getByText("Open Library")).toBeInTheDocument();
+    expect(screen.getByText("Powered by")).toBeInTheDocument();
+  });
+
+  it("does not render attributions for unknown data sources", () => {
+    const meta = {
+      title: "Some unknown item",
+      data_source: "unknown_source",
+    };
+    render(<ExtendedMetadata meta={meta} />);
+    expect(screen.queryByText("Discogs")).not.toBeInTheDocument();
+    expect(screen.queryByText("Google Books")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open Library")).not.toBeInTheDocument();
+  });
 });

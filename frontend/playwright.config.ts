@@ -22,9 +22,14 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
+  // Global per-test timeout: 60s in CI, default in dev
+  timeout: process.env.CI ? 60000 : 30000,
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    // Navigation timeout: give pages longer to load in CI
+    navigationTimeout: process.env.CI ? 30000 : 10000,
+    actionTimeout: process.env.CI ? 15000 : 5000,
   },
   projects: [
     {
@@ -42,6 +47,7 @@ export default defineConfig({
     command: "npm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    // Increased from 120s to 240s: Next.js dev server in CI can be slow on first compile
+    timeout: 240000,
   },
 });

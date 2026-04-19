@@ -226,6 +226,7 @@ def lookup_barcode_preview(query: str):
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
+            response_data["data_source"] = "discogs"
             _record_scan_telemetry(query, format_hint, "discogs", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
         if len(discogs_results) == 1:
@@ -283,7 +284,8 @@ def lookup_barcode_preview(query: str):
         if canonical:
             meta = fetch_isbn_metadata(canonical)
             if meta:
-                meta["data_source"] = "isbn_db"
+                # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
+                meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
             provider = "isbn" if meta else None
 
         # Fallback to audio if book fails
@@ -312,7 +314,8 @@ def lookup_barcode_preview(query: str):
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
                 if meta:
-                    meta["data_source"] = "isbn_db"
+                    # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
+                    meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
                 provider = "isbn" if meta else None
 
         # Final fallback to video/game if all else fails
