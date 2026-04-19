@@ -28,13 +28,15 @@ interface SidebarFiltersProps {
 }
 
 const statusOptions: { value: string; label: string; dot: string }[] = [
-  { value: "available", label: "On Shelf", dot: "bg-chart-3" },
-  { value: "unread", label: "Unread", dot: "bg-purple-500" },
-  { value: "reading", label: "Reading", dot: "bg-green-500" },
   { value: "wish_list", label: "On Wish List", dot: "bg-primary" },
-  { value: "lent", label: "Lent Out", dot: "bg-accent" },
-  { value: "lost", label: "Lost", dot: "bg-destructive" },
+  { value: "ordered", label: "Ordered", dot: "bg-orange-400" },
+  { value: "available", label: "On Shelf", dot: "bg-chart-3" },
+  { value: "want_to_read", label: "Want to Read", dot: "bg-purple-500" },
+  { value: "reading", label: "Reading", dot: "bg-green-500" },
   { value: "read", label: "Read", dot: "bg-blue-500" },
+  { value: "lent", label: "Lent Out", dot: "bg-accent" },
+  { value: "damaged", label: "Damaged", dot: "bg-yellow-600" },
+  { value: "lost", label: "Lost", dot: "bg-destructive" },
 ];
 
 /**

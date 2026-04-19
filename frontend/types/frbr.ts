@@ -131,7 +131,6 @@ export type CollectionStatus = "available" | "lent" | "lost" | "wish_list" | "or
 
 /** Media-specific progress status type */
 export type ProgressStatus =
-  | "unread"
   | "reading"
   | "read"
   | "want_to_read"
@@ -179,7 +178,7 @@ export interface DashboardStats {
   lent_items: number;
   to_read: number;
   items_available: number;
-  items_unread: number;
+  items_want_to_read: number;
   items_lent: number;
   items_lost: number;
   items_wish_list: number;

@@ -157,3 +157,49 @@
 :MediaFormatPuzzle a :MediaFormat ;
     rdfs:label "puzzle" ;
     rdfs:comment "Jigsaw puzzle. Maps to MediaCategory 'three-dimensional object'." .
+# ---------------------------------------------------------------------------
+# Status and Progress Registry (v0.5.0)
+# ---------------------------------------------------------------------------
+
+:CollectionStatus a owl:Class ;
+    rdfs:label "CollectionStatus" ;
+    rdfs:comment "The physical or ownership state of an Item." .
+
+:ProgressStatus a owl:Class ;
+    rdfs:label "ProgressStatus" ;
+    rdfs:comment "The consumption progress of an Item's content." .
+
+:hasCollectionStatus a owl:ObjectProperty ;
+    rdfs:domain :Item ;
+    rdfs:range :CollectionStatus ;
+    rdfs:label "hasCollectionStatus" .
+
+:hasProgressStatus a owl:ObjectProperty ;
+    rdfs:domain :Item ;
+    rdfs:range :ProgressStatus ;
+    rdfs:label "hasProgressStatus" .
+
+# Individuals for CollectionStatus
+:StatusWishList a :CollectionStatus ; rdfs:label "wish_list" .
+:StatusOrdered a :CollectionStatus ; rdfs:label "ordered" .
+:StatusAvailable a :CollectionStatus ; rdfs:label "available" .
+:StatusLent a :CollectionStatus ; rdfs:label "lent" .
+:StatusDamaged a :CollectionStatus ; rdfs:label "damaged" .
+:StatusLost a :CollectionStatus ; rdfs:label "lost" .
+
+# Individuals for ProgressStatus (Unified 3-stage model)
+:StatusWantToRead a :ProgressStatus ; rdfs:label "want_to_read" .
+:StatusReading a :ProgressStatus ; rdfs:label "reading" .
+:StatusRead a :ProgressStatus ; rdfs:label "read" .
+
+:StatusWantToListen a :ProgressStatus ; rdfs:label "want_to_listen" .
+:StatusListening a :ProgressStatus ; rdfs:label "listening" .
+:StatusListened a :ProgressStatus ; rdfs:label "listened" .
+
+:StatusWantToWatch a :ProgressStatus ; rdfs:label "want_to_watch" .
+:StatusWatching a :ProgressStatus ; rdfs:label "watching" .
+:StatusWatched a :ProgressStatus ; rdfs:label "watched" .
+
+:StatusWantToPlay a :ProgressStatus ; rdfs:label "want_to_play" .
+:StatusPlaying a :ProgressStatus ; rdfs:label "playing" .
+:StatusPlayed a :ProgressStatus ; rdfs:label "played" .

@@ -65,19 +65,18 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #:
 #: Statuses are grouped by media type for readability:
 #:   - generic:       available, lent, lost, wish_list, ordered, damaged
-#:   - text media:    reading, read, unread, want_to_read (alias: wish_list)
+#:   - text media:    reading, read, want_to_read (alias: wish_list)
 #:   - audio media:   listening, listened, want_to_listen
 COLLECTION_STATUSES: tuple[str, ...] = (
-    "available",
-    "lent",
-    "lost",
-    "damaged",
     "wish_list",
     "ordered",
+    "available",
+    "lent",
+    "damaged",
+    "lost",
 )
 
 PROGRESS_STATUSES: tuple[str, ...] = (
-    "unread",
     "reading",
     "read",
     "want_to_read",
@@ -303,7 +302,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id"), nullable=False)
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    status = db.Column(db.String(50), default="unread")  # see PROGRESS_STATUSES for valid values
+    status = db.Column(db.String(50), default="want_to_read")  # see PROGRESS_STATUSES for valid values
     collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
 
