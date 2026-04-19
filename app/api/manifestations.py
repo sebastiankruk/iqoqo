@@ -196,7 +196,7 @@ def get_recent_manifestations() -> tuple[Response, int]:
                 {
                     "id": m.id,
                     "title": title,
-                    "cover_url": m.cover_url,
+                    "cover_url": m.cover_url or (m.meta.get("cover_url") if m.meta else None),
                     "cover_status": m.meta.get("cover_status") if m.meta else None,
                     "meta": m.meta,
                     "author": author,
