@@ -127,7 +127,17 @@ const FULL_STATS: DashboardStats = {
   items_wish_list: 21,
   items_reading: 10,
   items_read: 50,
-  items_unread: 23,
+  items_unread: 0,
+  items_want_to_read: 23,
+  items_want_to_listen: 0,
+  items_listening: 0,
+  items_listened: 0,
+  items_want_to_watch: 0,
+  items_watching: 0,
+  items_watched: 0,
+  items_want_to_play: 0,
+  items_playing: 0,
+  items_played: 0,
 };
 
 /** Mock user profile */
@@ -148,7 +158,7 @@ function makeItemsResponse(
     id: i + 1,
     manifestation_id: i + 1,
     owner_id: "user1",
-    status: "unread",
+    status: "want_to_read",
     collection_status: "available",
     meta: {},
     title: `Book ${i + 1}`,
@@ -239,7 +249,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
       isLoading: true,
     } as ReturnType<typeof useItems>);
     render(<CollectionPage />);
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByTestId("result-count")).toHaveTextContent("0 items");
   });
 });
 
