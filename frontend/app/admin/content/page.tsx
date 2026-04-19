@@ -160,8 +160,9 @@ function ContentManagementContent(): React.JSX.Element {
               <NavItem
                 label="Profile"
                 icon={User}
-                isActive={effectiveTab === "profile"}
-                onClick={() => handleTabChange("profile")}
+                isActive={false}
+                onClick={() => {}}
+                href="/admin/settings"
               />
             </nav>
           </div>

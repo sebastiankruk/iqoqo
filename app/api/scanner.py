@@ -429,15 +429,22 @@ def scan_barcode():
         return invalid_json_payload_response()
 
     barcode = data.get("barcode")
+    manifestation_id = data.get("manifestation_id")
     format_hint = data.get("format")
 
-    if not barcode:
-        return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
+    if not barcode and not manifestation_id:
+        return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
 
     is_new_manifestation = False
+    manifestation = None
 
-    # Check DB first with broad helper
-    manifestation = _find_locally(barcode)
+    # Priority 1: Direct Manifestation ID (Safe and stable for name-lookups)
+    if manifestation_id:
+        manifestation = db.session.get(Manifestation, manifestation_id)
+
+    # Priority 2: Check DB by barcode
+    if not manifestation and barcode:
+        manifestation = _find_locally(barcode)
 
     if not manifestation:
         try:

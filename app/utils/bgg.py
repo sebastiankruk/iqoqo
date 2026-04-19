@@ -45,14 +45,26 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
 
     token = os.getenv("BGG_API_TOKEN")
     if not token:
-        logger.warning("BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized.")
+        logger.warning(
+            "BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized."
+        )
 
     headers = get_bgg_headers()
 
+    import re
+
+    # Step 0: Clean query — BGG search performs much better without parenthetical years
+    # e.g., "Brass: Pittsburgh (2027)" -> "Brass: Pittsburgh"
+    cleaned_query = re.sub(r"\s*\([^)]*\)", "", query).strip()
+
     try:
         # Step 1: Search for the exact or closest match to get the BGG ID
+        # We use the cleaned query for searching
         search_resp = requests.get(
-            search_url, params={"query": query, "type": "boardgame"}, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT)
+            search_url,
+            params={"query": cleaned_query, "type": "boardgame"},
+            headers=headers,
+            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         search_resp.raise_for_status()
 
