@@ -518,7 +518,9 @@ def scan_barcode():
     db.session.commit()
 
     # Success: record telemetry with manifestation_id
-    _record_scan_telemetry(barcode or manifestation.title, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id)
+    _record_scan_telemetry(
+        barcode or manifestation.title, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id
+    )
 
     return (
         jsonify(

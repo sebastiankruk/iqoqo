@@ -56,9 +56,7 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
 
     token = os.getenv("BGG_API_TOKEN")
     if not token:
-        logger.warning(
-            "BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized."
-        )
+        logger.warning("BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized.")
 
     headers = get_bgg_headers()
 
