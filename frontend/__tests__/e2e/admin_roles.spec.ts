@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { test, expect } from "@playwright/test";
-import packageJson from "../../package.json";
+import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Admin Roles Management Workflow", () => {
   test.beforeEach(async ({ page }) => {

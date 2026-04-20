@@ -16,7 +16,7 @@
 // E2E tests for cover editor functionality at /admin/content?tab=cover-art
 
 import { test, expect } from "@playwright/test";
-import packageJson from "../../package.json";
+import packageJson from "../../package.json" assert { type: "json" };
 
 const COVER_EDITOR_URL = (manifestationId: number) => `/admin/content?tab=cover-art&manifestationId=${manifestationId}`;
 

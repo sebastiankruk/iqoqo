@@ -37,7 +37,6 @@ import sys
 import tomllib
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Paths (all relative to the repo root, which is the parent of this script)
 # ---------------------------------------------------------------------------
@@ -52,6 +51,7 @@ PACKAGE_JSON_PATHS: list[Path] = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def read_version() -> str:
     """Return the version string from pyproject.toml."""
@@ -88,7 +88,7 @@ def write_pyproject_version(new_version: str) -> None:
     # Match 'version = "..."' inside [project] section only (first occurrence).
     updated, count = re.subn(
         r'(?m)^(version\s*=\s*")[^"]+(")',
-        rf'\g<1>{new_version}\g<2>',
+        rf"\g<1>{new_version}\g<2>",
         text,
         count=1,
     )
@@ -110,6 +110,7 @@ def write_package_json_version(path: Path, new_version: str) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Entry point: parse args, compute new version, write all files."""
@@ -151,7 +152,7 @@ def main() -> None:
     print(f"\nDone! Version is now {new_version}.")
     if new_version != current:
         print("Remember to commit all changed files and tag the release:")
-        print(f"  git add pyproject.toml package.json frontend/package.json")
+        print("  git add pyproject.toml package.json frontend/package.json")
         print(f"  git commit -m 'chore: bump version to {new_version}'")
         print(f"  git tag v{new_version}")
 
