@@ -15,8 +15,9 @@
 #
 
 import pytest
-from app.db.models import Item, Manifestation, User, Work, db
+
 from app.api.auth import generate_internal_jwt
+from app.db.models import Item, Manifestation, User, Work, db
 
 
 @pytest.fixture
@@ -26,24 +27,25 @@ def test_data(app):
         user2 = User(display_name="user2", email="user2@example.com")
         db.session.add_all([user1, user2])
         db.session.commit()
-        
+
         work = Work(title="Test Work")
         db.session.add(work)
         db.session.flush()
-        
+
         from app.db.models import Expression
+
         expr = Expression(work_id=work.id, content_type="text", language="en")
         db.session.add(expr)
         db.session.flush()
-        
+
         manif = Manifestation(expression_id=expr.id, isbn13="1234567890123")
         db.session.add(manif)
         db.session.flush()
-        
+
         item1 = Item(manifestation_id=manif.id, owner_id=user1.id, status="owned")
         db.session.add(item1)
         db.session.commit()
-        
+
         # Return IDs to avoid DetachedInstanceError
         return user1.id, user2.id, item1.id
 
@@ -51,13 +53,13 @@ def test_data(app):
 def test_get_item_detail_is_owner(app, client, test_data):
     """Test that is_owner is true when the requesting user owns the item."""
     user1_id, _, item1_id = test_data
-    
+
     with app.app_context():
         user1 = db.session.get(User, user1_id)
         token = generate_internal_jwt(user1)
-        
+
     resp = client.get(f"/api/items/{item1_id}", headers={"Authorization": f"Bearer {token}"})
-        
+
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["is_owner"] is True
@@ -67,13 +69,13 @@ def test_get_item_detail_is_owner(app, client, test_data):
 def test_get_item_detail_not_owner(app, client, test_data):
     """Test that is_owner is false when someone else owns the item."""
     _, user2_id, item1_id = test_data
-    
+
     with app.app_context():
         user2 = db.session.get(User, user2_id)
         token = generate_internal_jwt(user2)
-        
+
     resp = client.get(f"/api/items/{item1_id}", headers={"Authorization": f"Bearer {token}"})
-        
+
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["is_owner"] is False
@@ -83,9 +85,9 @@ def test_get_item_detail_not_owner(app, client, test_data):
 def test_get_item_detail_anonymous(client, test_data):
     """Test that is_owner is false for anonymous users."""
     _, _, item1_id = test_data
-    
+
     resp = client.get(f"/api/items/{item1_id}")
-    
+
     assert resp.status_code == 200
     data = resp.get_json()["data"]
     assert data["is_owner"] is False

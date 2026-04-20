@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image as PILImage
+
 from app.utils.images import validate_upload_file
 
 
@@ -29,7 +30,7 @@ def test_validate_upload_file_valid_jpg():
     img.save(bio, format="JPEG")
     bio.filename = "test.jpg"
     bio.seek(0)
-    
+
     assert validate_upload_file(bio) == "jpg"
 
 
@@ -37,7 +38,7 @@ def test_validate_upload_file_invalid_extension():
     """Test invalid extension fails validation."""
     mock_file = MagicMock()
     mock_file.filename = "malicious.exe"
-    
+
     with pytest.raises(ValueError, match="Invalid file type"):
         validate_upload_file(mock_file)
 
@@ -48,7 +49,7 @@ def test_validate_upload_file_too_large():
     mock_file.filename = "huge.png"
     mock_file.seek.side_effect = lambda *args, **kwargs: None
     mock_file.tell.return_value = 20 * 1024 * 1024  # 20MB
-    
+
     with pytest.raises(ValueError, match="File too large"):
         validate_upload_file(mock_file, max_size_bytes=10 * 1024 * 1024)
 
@@ -57,7 +58,7 @@ def test_validate_upload_file_corrupt_image():
     """Test corrupt image data fails validation."""
     bio = io.BytesIO(b"not an image at all")
     bio.filename = "fake.webp"
-    
+
     with pytest.raises(ValueError, match="Invalid or corrupted image file"):
         validate_upload_file(bio)
 
@@ -66,7 +67,7 @@ def test_validate_upload_file_no_file():
     """Test missing file fails validation."""
     with pytest.raises(ValueError, match="No file provided"):
         validate_upload_file(None)
-    
+
     mock_file = MagicMock()
     mock_file.filename = ""
     with pytest.raises(ValueError, match="No file provided"):

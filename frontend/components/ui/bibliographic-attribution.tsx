@@ -87,7 +87,10 @@ export function BibliographicAttribution({ source, centered = true }: { source?:
           rel="noopener noreferrer"
           className="inline-flex items-center hover:opacity-80 transition-opacity"
         >
-          <Badge variant="outline" className={cn("text-[10px] font-bold py-0 h-5 lowercase px-2", config.color, config.border)}>
+          <Badge
+            variant="outline"
+            className={cn("text-[10px] font-bold py-0 h-5 lowercase px-2", config.color, config.border)}
+          >
             {config.label}
           </Badge>
         </Link>
@@ -96,7 +99,7 @@ export function BibliographicAttribution({ source, centered = true }: { source?:
   );
 }
 
-// Keep the old name as a wrapper for backward compatibility if needed, 
+// Keep the old name as a wrapper for backward compatibility if needed,
 // but pointing to the two primary book sources by default.
 /**
  * Compatibility shim for the old IsbnDbAttribution name.

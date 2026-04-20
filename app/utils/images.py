@@ -281,4 +281,4 @@ def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> s
     except (OSError, SyntaxError) as exc:
         raise ValueError("Invalid or corrupted image file") from exc
 
-    return file.filename.rsplit(".", 1)[-1].lower()
+    return str(file.filename.rsplit(".", 1)[-1].lower())

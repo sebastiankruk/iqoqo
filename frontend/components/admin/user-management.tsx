@@ -138,9 +138,11 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span
-                      className={u.is_active
-                        ? "px-2 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-900"
-                        : "px-2 py-1 text-xs rounded-full bg-destructive/10 text-destructive ring-1 ring-destructive/20"}
+                      className={
+                        u.is_active
+                          ? "px-2 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-900"
+                          : "px-2 py-1 text-xs rounded-full bg-destructive/10 text-destructive ring-1 ring-destructive/20"
+                      }
                     >
                       {u.is_active ? "Active" : "Suspended"}
                     </span>

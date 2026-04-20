@@ -20,7 +20,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from flask import Response, g, jsonify, request
-from PIL import Image
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -341,7 +340,7 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"error": "No selected file"}), 400
 
     try:
-        ext = validate_upload_file(file)
+        validate_upload_file(file)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -415,7 +414,7 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
 
     try:
         # Use common validation helper
-        ext = validate_upload_file(file)
+        validate_upload_file(file)
 
         image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
 
