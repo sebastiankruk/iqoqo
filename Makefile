@@ -62,6 +62,21 @@ help:
 	@echo "  db-export     - Export database to data/backup.json"
 	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics"
+	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
+	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
+
+# Versioning targets
+sync-version:
+	@echo "Syncing version from pyproject.toml to package.json files..."
+	@.venv/bin/python scripts/sync_version.py
+
+bump-version:
+	@if [ -z "$(v)" ]; then \
+		echo "Usage: make bump-version v=[major|minor|patch]"; \
+		exit 1; \
+	fi
+	@echo "Bumping version ($(v))..."
+	@.venv/bin/python scripts/sync_version.py --bump $(v)
 
 # Development targets
 init:

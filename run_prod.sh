@@ -58,7 +58,13 @@ fi
 
 # Set APP_VERSION if not already set
 if [ -z "$APP_VERSION" ]; then
-    VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
+    if [ -f ".venv/bin/python" ]; then
+        VERSION=$(.venv/bin/python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))" 2>/dev/null)
+    fi
+    if [ -z "$VERSION" ]; then
+        VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))" 2>/dev/null || \
+                  grep '^version = ' pyproject.toml | head -1 | cut -d '"' -f 2)
+    fi
     export APP_VERSION="${VERSION:-prod}"
 fi
 

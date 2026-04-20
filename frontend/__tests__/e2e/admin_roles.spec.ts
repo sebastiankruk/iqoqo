@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { test, expect } from "@playwright/test";
+import packageJson from "../../package.json";
 
 test.describe("Admin Roles Management Workflow", () => {
   test.beforeEach(async ({ page }) => {
@@ -50,7 +51,7 @@ test.describe("Admin Roles Management Workflow", () => {
     await page.route("**/api/config**", route =>
       route.fulfill({
         status: 200,
-        json: { success: true, data: { federation_enabled: false, version: "0.4.0" } },
+        json: { success: true, data: { federation_enabled: false, version: packageJson.version } },
       })
     );
 
