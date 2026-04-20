@@ -25,8 +25,6 @@ This was missing from the original llm_telemetry table creation.
 """
 
 from alembic import op
-import sqlalchemy as sa
-
 
 revision = "fix_llm_telemetry_sequence"
 down_revision = "9ed9e764c2b0"
@@ -36,8 +34,10 @@ depends_on = None
 
 def upgrade():
     op.execute("""
-        SELECT setval('inventory.llm_telemetry_id_seq', 
-                   COALESCE((SELECT MAX(id) FROM inventory.llm_telemetry), 0))
+        SELECT setval(
+            pg_get_serial_sequence('inventory.llm_telemetry', 'id'),
+            COALESCE((SELECT MAX(id) FROM inventory.llm_telemetry), 0)
+        )
     """)
 
 

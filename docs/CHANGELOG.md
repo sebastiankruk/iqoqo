@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-20
+
+### Added
+
+- **API Cover Fallback**: All item and manifestation endpoints now fallback to `meta['cover_url']` if the primary `cover_url` column is missing (e.g., from external metadata extraction).
+- **Comprehensive Infrastructure Tests**: 10 new tests covering API fallbacks and DB connection pool configuration.
+
+### Fixed
+
+- **Database Stability**: Implemented explicit `db.session.remove()` in `@app.teardown_appcontext` to resolve connection pool exhaustion under load.
+- **Celery Worker Deadlocks**: Replaced `--pool=solo` band-aid with a thread-safe `--pool=threads` configuration (configurable via `CELERY_POOL`) and added `worker_process_init` signal to ensure clean database engine disposal after process forks.
+- **Sequence Desync**: Fixed PostgreSQL identity sequence desync for the `llm_telemetry` table using a dynamic sequence lookup migration.
+- **Retry Script**: Hardened `retry_missing_covers.py` query filters and added type-safe dry-run output.
+
+### Changed
+
+- **Config**: Added `CELERY_POOL`, `CELERY_CONCURRENCY`, and SQLAlchemy pool settings to `.env.example`.
+
 ## [0.4.0] - 2026-04-15
 
 ### Added

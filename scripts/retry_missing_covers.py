@@ -33,6 +33,7 @@ root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 
 from app import create_app
+from app.db import db
 from app.db.models import Manifestation
 from app.utils.covers import process_cover_pipeline
 
@@ -41,9 +42,13 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
     app = create_app()
     with app.app_context():
         query = Manifestation.query.filter(
-            Manifestation.cover_url.is_(None),
+            db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
             Manifestation.meta["cover_url"].as_string() != "",
             Manifestation.meta["cover_url"].isnot(None),
+            db.or_(
+                Manifestation.meta["cover_status"].as_string() != "ready",
+                Manifestation.meta["cover_status"].is_(None),
+            ),
         )
 
         if batch_limit:
@@ -55,8 +60,11 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
         if dry_run:
             print("DRY RUN - no changes will be made")
             for m in missing[:10]:
-                meta_cover = m.meta.get("cover_url") if m.meta else None
-                print(f"  ID {m.id}: {m.meta.get('title', 'Unknown')[:40]} -> {meta_cover[:50]}...")
+                meta_cover = m.meta.get("cover_url") if m.meta else "None"
+                meta_cover_text = str(meta_cover)
+                meta_title = m.meta.get("title", "Unknown") if m.meta else "Unknown"
+                meta_title_text = str(meta_title)
+                print(f"  ID {m.id}: {meta_title_text[:40]} -> {meta_cover_text[:50]}...")
             return
 
         processed = 0

@@ -200,7 +200,9 @@ def get_item_detail(item_id: int):
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
-        item_data["cover_url"] = manifestation.cover_url
+        item_data["cover_url"] = manifestation.cover_url or (
+            manifestation.meta.get("cover_url") if manifestation.meta else None
+        )
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
         if manifestation.expression:
