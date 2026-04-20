@@ -184,6 +184,7 @@ def get_item_detail(item_id: int):
     item_data = {
         "id": item.id,
         "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
+        "is_owner": is_owner,
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,

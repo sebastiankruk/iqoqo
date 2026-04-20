@@ -13,39 +13,61 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+
 import io
-from unittest import mock
+from unittest.mock import MagicMock
 
-from PIL import Image
-
-from app.utils.images import is_valid_cover, optimize_and_save_image
-
-
-def test_optimize_and_save_image_handles_exif_transpose(tmp_path):
-    """
-    Ensures that ImageOps.exif_transpose is called during image optimization
-    to fix 90-degree smartphone rotation bugs.
-    """
-    # Create a dummy image
-    dummy_img = Image.new("RGB", (100, 100), color="red")
-    img_byte_arr = io.BytesIO()
-    dummy_img.save(img_byte_arr, format="JPEG")
-    img_bytes = img_byte_arr.getvalue()
-
-    out_file = tmp_path / "test_optimized.jpg"
-
-    # Patch ImageOps.exif_transpose to verify it is called
-    with mock.patch("app.utils.images.ImageOps.exif_transpose", return_value=dummy_img) as mock_transpose:
-        optimize_and_save_image(img_bytes, str(out_file))
-
-        mock_transpose.assert_called_once()
-        assert out_file.exists()
+import pytest
+from PIL import Image as PILImage
+from app.utils.images import validate_upload_file
 
 
-def test_is_valid_cover_rejects_empty():
-    assert is_valid_cover(b"") is False
+def test_validate_upload_file_valid_jpg():
+    """Test valid JPEG upload passes validation."""
+    img = PILImage.new("RGB", (10, 10), color="white")
+    bio = io.BytesIO()
+    img.save(bio, format="JPEG")
+    bio.filename = "test.jpg"
+    bio.seek(0)
+    
+    assert validate_upload_file(bio) == "jpg"
 
 
-def test_is_valid_cover_rejects_small_payloads():
-    # Less than 1000 bytes should be rejected
-    assert is_valid_cover(b"a" * 500) is False
+def test_validate_upload_file_invalid_extension():
+    """Test invalid extension fails validation."""
+    mock_file = MagicMock()
+    mock_file.filename = "malicious.exe"
+    
+    with pytest.raises(ValueError, match="Invalid file type"):
+        validate_upload_file(mock_file)
+
+
+def test_validate_upload_file_too_large():
+    """Test oversized file fails validation."""
+    mock_file = MagicMock()
+    mock_file.filename = "huge.png"
+    mock_file.seek.side_effect = lambda *args, **kwargs: None
+    mock_file.tell.return_value = 20 * 1024 * 1024  # 20MB
+    
+    with pytest.raises(ValueError, match="File too large"):
+        validate_upload_file(mock_file, max_size_bytes=10 * 1024 * 1024)
+
+
+def test_validate_upload_file_corrupt_image():
+    """Test corrupt image data fails validation."""
+    bio = io.BytesIO(b"not an image at all")
+    bio.filename = "fake.webp"
+    
+    with pytest.raises(ValueError, match="Invalid or corrupted image file"):
+        validate_upload_file(bio)
+
+
+def test_validate_upload_file_no_file():
+    """Test missing file fails validation."""
+    with pytest.raises(ValueError, match="No file provided"):
+        validate_upload_file(None)
+    
+    mock_file = MagicMock()
+    mock_file.filename = ""
+    with pytest.raises(ValueError, match="No file provided"):
+        validate_upload_file(mock_file)

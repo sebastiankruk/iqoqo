@@ -31,7 +31,7 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
-from app.utils.images import save_upload_image
+from app.utils.images import save_upload_image, validate_upload_file
 
 
 @api_bp.route("/manifestations", methods=["GET"])
@@ -340,24 +340,10 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if not file.filename:
         return jsonify({"error": "No selected file"}), 400
 
-    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
-    if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
-        return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
-
-    max_size = 10 * 1024 * 1024
-    file.seek(0, os.SEEK_END)
-    actual_size = file.tell()
-    file.seek(0)
-
-    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
-        return jsonify({"error": "File too large. Max size: 10MB"}), 413
-
     try:
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
-    except (OSError, SyntaxError):
-        return jsonify({"error": "Invalid or corrupted image file"}), 400
+        ext = validate_upload_file(file)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     manifestation = db.get_or_404(Manifestation, manifestation_id)
     identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
@@ -427,30 +413,17 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     if not file.filename:
         return jsonify({"success": False, "error": "No selected file"}), 400
 
-    # Validation
-    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
-    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
-        return jsonify({"success": False, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
-
-    max_size = 10 * 1024 * 1024
-    file.seek(0, os.SEEK_END)
-    actual_size = file.tell()
-    file.seek(0)
-
-    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
-        return jsonify({"success": False, "error": "File too large. Max size: 10MB"}), 413
-
-    image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
-
     try:
-        # PIL Content check
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
+        # Use common validation helper
+        ext = validate_upload_file(file)
+
+        image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
 
         # Save and optimize
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 

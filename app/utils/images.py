@@ -19,6 +19,7 @@ import io
 import logging
 import os
 import textwrap
+from typing import Any
 
 import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -249,3 +250,35 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
 
     # Return public URL
     return f"/static/{subfolder}/{target_filename}"
+
+
+def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> str:
+    """Validate an uploaded image file: extension, size, and PIL integrity check.
+
+    Returns:
+        The file extension (lowercase, e.g. 'jpg') if valid.
+
+    Raises:
+        ValueError: With a user-facing message if validation fails.
+    """
+    if not file or not file.filename:
+        raise ValueError("No file provided")
+
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
+        raise ValueError(f"Invalid file type. Allowed: {', '.join(sorted(allowed_extensions))}")
+
+    file.seek(0, os.SEEK_END)
+    actual_size = file.tell()
+    file.seek(0)
+    if actual_size > max_size_bytes:
+        raise ValueError(f"File too large. Max size: {max_size_bytes // (1024 * 1024)}MB")
+
+    try:
+        img = Image.open(file)
+        img.verify()
+        file.seek(0)
+    except (OSError, SyntaxError) as exc:
+        raise ValueError("Invalid or corrupted image file") from exc
+
+    return file.filename.rsplit(".", 1)[-1].lower()
