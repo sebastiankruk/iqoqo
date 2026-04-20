@@ -185,30 +185,6 @@ export function BottomSheet({
     [onFound, format]
   );
 
-  /* ── Discogs ID lookup ── */
-  const lookupDiscogsId = useCallback(
-    async (id: string) => {
-      if (!id) return;
-
-      setIsSearching(true);
-      setError(null);
-      try {
-        const { apiFetch } = await import("@/lib/api/client");
-        const data = await apiFetch<IsbnMeta>(`/lookup/discogs/${encodeURIComponent(id)}`);
-        onFound(id, data);
-      } catch (e: unknown) {
-        if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
-          setError(e.message);
-        } else {
-          setError("Could not find this Discogs release.");
-        }
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    [onFound]
-  );
-
   /* ── Start camera + ZXing scan loop ── */
   const startScanner = useCallback(async () => {
     setError(null);
@@ -302,14 +278,7 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = manualIsbn.trim();
-    // Pure integers that are too short to be a barcode (< 8 digits) are Discogs Release IDs
-    const isDiscogsId = /^\d{1,7}$/.test(trimmed);
-    if (isDiscogsId) {
-      lookupDiscogsId(trimmed);
-    } else {
-      lookupBarcode(trimmed, true);
-    }
+    lookupBarcode(manualIsbn.trim(), true);
   };
 
   return (

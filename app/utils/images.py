@@ -24,6 +24,9 @@ from typing import Any
 import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+# Safety threshold for decompression bombs (set to 100MP to allow large mobile photos)
+Image.MAX_IMAGE_PIXELS = 100000000
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,7 +123,7 @@ def add_text_overlay(
             max_text_width = int(width * 0.90)  # Keep 5% margin on sides
 
             # Define bounding boxes (y_start, y_end) as ratios of height
-            # Title: 40%-25% of bottom -> 0.60 to 0.75
+
             title_box = (height * 0.60, height * 0.75)
             # Author: 20%-10% of bottom -> 0.80 to 0.90
             author_box = (height * 0.80, height * 0.90)

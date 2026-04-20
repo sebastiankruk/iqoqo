@@ -61,8 +61,8 @@ def test_data_source_injection_discogs(client, normal_user_headers, app):
     with patch("app.api.scanner.fetch_discogs_by_id") as mock_fetch:
         mock_fetch.return_value = {"title": "Test Discogs Release", "artist": "Test Artist", "thumb": "http://example.com/cover.jpg"}
 
-        # Call the Discogs ID lookup
-        resp = client.get("/api/lookup/discogs/R12345", headers=normal_user_headers)
+        # Call lookup with audio hint
+        resp = client.get("/api/lookup/12345?format=audio", headers=normal_user_headers)
         assert resp.status_code == 200
         data = resp.get_json()["data"]
 

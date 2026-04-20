@@ -300,6 +300,7 @@ if [ "$MODE" == "dev" ]; then
         [ -f "$PID_DIR/celery.pid" ] && kill $(cat "$PID_DIR/celery.pid") 2>/dev/null || true
         [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
         rm -rf "$PID_DIR"
+        sleep 1
         exit 0
     }
     trap cleanup INT TERM
