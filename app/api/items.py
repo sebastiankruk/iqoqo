@@ -144,6 +144,7 @@ def get_items():
                 or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
+                "is_owner": str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }

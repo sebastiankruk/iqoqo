@@ -14,8 +14,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-import pytest
-
 
 def test_admin_stats_requires_auth(client):
     """Test that /admin/stats requires authentication."""

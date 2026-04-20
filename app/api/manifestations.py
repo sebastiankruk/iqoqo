@@ -342,7 +342,9 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     try:
         validate_upload_file(file)
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        error_message = str(e)
+        status_code = 413 if "too large" in error_message.lower() else 400
+        return jsonify({"error": error_message}), status_code
 
     manifestation = db.get_or_404(Manifestation, manifestation_id)
     identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
@@ -422,7 +424,9 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+        error_message = str(e)
+        status_code = 413 if "too large" in error_message.lower() else 400
+        return jsonify({"success": False, "error": error_message}), status_code
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 

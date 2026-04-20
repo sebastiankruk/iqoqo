@@ -275,8 +275,8 @@ def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> s
         raise ValueError(f"File too large. Max size: {max_size_bytes // (1024 * 1024)}MB")
 
     try:
-        img = Image.open(file)
-        img.verify()
+        with Image.open(file) as img:
+            img.verify()
         file.seek(0)
     except (OSError, SyntaxError) as exc:
         raise ValueError("Invalid or corrupted image file") from exc
