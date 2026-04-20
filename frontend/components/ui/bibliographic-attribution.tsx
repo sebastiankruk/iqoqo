@@ -60,6 +60,18 @@ export function BibliographicAttribution({ source, centered = true }: { source?:
       color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 hover:bg-orange-500/20",
       border: "border-orange-200 dark:border-orange-900",
     },
+    musicbrainz: {
+      label: "MusicBrainz",
+      href: "https://musicbrainz.org/",
+      color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 hover:bg-purple-500/20",
+      border: "border-purple-200 dark:border-purple-900",
+    },
+    upc: {
+      label: "UPCitemdb",
+      href: "https://www.upcitemdb.com/",
+      color: "bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20",
+      border: "border-rose-200 dark:border-rose-900",
+    },
   };
 
   const config = providers[source.toLowerCase().replace(" ", "_")];

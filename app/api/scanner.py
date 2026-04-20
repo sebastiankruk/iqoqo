@@ -250,6 +250,7 @@ def lookup_barcode_preview(query: str):
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
+                meta["data_source"] = "upc"
         if not meta:
             meta = fetch_video_metadata(barcode)
             if meta:
@@ -266,6 +267,7 @@ def lookup_barcode_preview(query: str):
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
+                meta["data_source"] = "upc"
         if not meta:
             meta = fetch_bgg_metadata(barcode)
             if meta:
@@ -273,6 +275,8 @@ def lookup_barcode_preview(query: str):
             provider = "bgg" if meta else None
     elif format_hint in ("puzzle", "jigsaw"):
         meta = resolve_physical_media(barcode)
+        if meta:
+            meta["data_source"] = "upc"
         provider = "upc" if meta else None
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
         meta = fetch_discogs_metadata(barcode)
@@ -281,6 +285,8 @@ def lookup_barcode_preview(query: str):
         provider = "discogs" if meta else None
         if not meta:
             meta = fetch_audio_metadata(barcode)
+            if meta:
+                meta["data_source"] = "musicbrainz"
             provider = "musicbrainz" if meta else None
     elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
@@ -299,6 +305,8 @@ def lookup_barcode_preview(query: str):
             provider = "discogs" if meta else None
             if not meta:
                 meta = fetch_audio_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "musicbrainz"
                 provider = "musicbrainz" if meta else None
     else:
         # No format hint: auto-fallback strategy for non-ISBN barcodes
@@ -309,6 +317,8 @@ def lookup_barcode_preview(query: str):
         provider = "discogs" if meta else None
         if not meta:
             meta = fetch_audio_metadata(barcode)
+            if meta:
+                meta["data_source"] = "musicbrainz"
             provider = "musicbrainz" if meta else None
 
         # Fallback to book if audio fails
