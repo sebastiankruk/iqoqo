@@ -32,7 +32,7 @@ export function DiscogsAttribution() {
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span>Powered by</span>
+        <span>Source</span>
         <Badge
           variant="outline"
           className="font-semibold bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20 border-yellow-200 dark:border-yellow-900"
