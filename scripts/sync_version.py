@@ -46,6 +46,11 @@ PACKAGE_JSON_PATHS: list[Path] = [
     REPO_ROOT / "package.json",
     REPO_ROOT / "frontend" / "package.json",
 ]
+PACKAGE_LOCK_JSON_PATHS: list[Path] = [
+    REPO_ROOT / "package-lock.json",
+    REPO_ROOT / "frontend" / "package-lock.json",
+]
+TEST_INFRA_CONFIG_PATH = REPO_ROOT / "tests" / "test_infra_config.py"
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +112,32 @@ def write_package_json_version(path: Path, new_version: str) -> None:
     print(f"  ✓ {path.relative_to(REPO_ROOT)}")
 
 
+def write_package_lock_json_version(path: Path, new_version: str) -> None:
+    """Update the 'version' field in a package-lock.json file in-place."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["version"] = new_version
+    # Usually also in packages[""]
+    if "packages" in data and "" in data["packages"]:
+        data["packages"][""]["version"] = new_version
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"  ✓ {path.relative_to(REPO_ROOT)}")
+
+
+def write_test_infra_version(new_version: str) -> None:
+    """Update the mock version in test_infra_config.py."""
+    if not TEST_INFRA_CONFIG_PATH.exists():
+        return
+    text = TEST_INFRA_CONFIG_PATH.read_text(encoding="utf-8")
+    updated, count = re.subn(
+        r'version = "[^"]+"',
+        f'version = "{new_version}"',
+        text,
+    )
+    if count > 0:
+        TEST_INFRA_CONFIG_PATH.write_text(updated, encoding="utf-8")
+        print(f"  ✓ {TEST_INFRA_CONFIG_PATH.relative_to(REPO_ROOT)}")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -148,11 +179,17 @@ def main() -> None:
     write_pyproject_version(new_version)
     for pkg_path in PACKAGE_JSON_PATHS:
         write_package_json_version(pkg_path, new_version)
+    for lock_path in PACKAGE_LOCK_JSON_PATHS:
+        if lock_path.exists():
+            write_package_lock_json_version(lock_path, new_version)
+    write_test_infra_version(new_version)
 
     print(f"\nDone! Version is now {new_version}.")
     if new_version != current:
         print("Remember to commit all changed files and tag the release:")
-        print("  git add pyproject.toml package.json frontend/package.json")
+        git_add_files = ["pyproject.toml", "package.json", "package-lock.json", "frontend/package.json", "frontend/package-lock.json", "tests/test_infra_config.py"]
+        existing_files = [f for f in git_add_files if (REPO_ROOT / f).exists()]
+        print(f"  git add {' '.join(existing_files)}")
         print(f"  git commit -m 'chore: bump version to {new_version}'")
         print(f"  git tag v{new_version}")
 
