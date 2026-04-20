@@ -18,6 +18,7 @@
 import os
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -48,3 +49,15 @@ def init_celery(app) -> None:
                 return self.run(*args, **kwargs)
 
     celery.Task = ContextTask
+
+
+@worker_process_init.connect
+def _dispose_db_connections(**kwargs) -> None:
+    """Dispose inherited DB connections after fork to prevent socket corruption."""
+    try:
+        from app.db import db
+
+        if db.engine:
+            db.engine.dispose()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass  # Worker context or DB might not be fully ready yet

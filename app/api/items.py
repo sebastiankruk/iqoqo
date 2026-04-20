@@ -140,7 +140,8 @@ def get_items():
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
-                "cover_url": manifestation.cover_url if manifestation else None,
+                "cover_url": manifestation.cover_url
+                or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
@@ -199,7 +200,7 @@ def get_item_detail(item_id: int):
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
-        item_data["cover_url"] = manifestation.cover_url
+        item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
         if manifestation.expression:

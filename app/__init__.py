@@ -135,4 +135,9 @@ def create_app(config_class=Config, config_override=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
 
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):  # pylint: disable=unused-argument
+        """Ensure scoped sessions are returned to the pool after each request."""
+        db.session.remove()
+
     return app

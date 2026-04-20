@@ -15,6 +15,7 @@
 //
 // frontend/__tests__/e2e/acquisition_workflow.spec.ts
 import { test, expect } from "@playwright/test";
+import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Item Acquisition and Collection Workflow", () => {
   test.beforeEach(async ({ page }) => {
@@ -45,7 +46,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
         status: 200,
         json: {
           success: true,
-          data: { federation_enabled: false, version: "0.3.0" },
+          data: { federation_enabled: false, version: packageJson.version },
         },
       })
     );

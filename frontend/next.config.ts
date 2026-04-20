@@ -15,8 +15,18 @@
 //
 import type { NextConfig } from "next";
 import path from "path";
+import { createRequire } from "module";
+
+// Read version from package.json so NEXT_PUBLIC_APP_VERSION is always in sync
+// with the canonical semver set by `make bump-version` / `scripts/sync_version.py`.
+const require = createRequire(import.meta.url);
+const { version: APP_VERSION } = require("./package.json") as { version: string };
 
 const nextConfig: NextConfig = {
+  // Expose the canonical version to client-side code via lib/version.ts
+  env: {
+    NEXT_PUBLIC_APP_VERSION: APP_VERSION,
+  },
   // Remove the X-Powered-By: Next.js response header
   poweredByHeader: false,
   // Silence the "multiple lockfiles" workspace-root warning during dev

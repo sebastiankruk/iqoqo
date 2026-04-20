@@ -104,8 +104,10 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
         logger.warning("No Discogs credentials found. Skipping Discogs lookup.")
         return None
 
+    from app.config import Config
+
     url = f"https://api.discogs.com/database/search?barcode={barcode}&type=release"
-    headers = {"User-Agent": "iqoqo/0.5.0 ( dev@kruk.me )", "Authorization": auth_header}
+    headers = {"User-Agent": f"iqoqo/{Config.VERSION} ( info@iqoqo.cc )", "Authorization": auth_header}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)

@@ -20,7 +20,7 @@ from pathlib import Path
 
 def test_versions_are_in_sync() -> None:
     """
-    Ensure that the version in pyproject.toml matches the version in package.json.
+    Ensure that the version in pyproject.toml matches the version in both package.json files.
     """
     root_dir = Path(__file__).parents[1]
 
@@ -29,9 +29,18 @@ def test_versions_are_in_sync() -> None:
         pyproject_data = tomllib.load(f)
         py_version = pyproject_data["project"]["version"]
 
-    # Read package.json
+    # Read package.json (root)
     with open(root_dir / "package.json", encoding="utf-8") as f:
-        package_data = json.load(f)
-        js_version = package_data["version"]
+        root_package_data = json.load(f)
+        root_js_version = root_package_data["version"]
 
-    assert py_version == js_version, f"Version mismatch: pyproject.toml has {py_version}, but package.json has {js_version}."
+    assert py_version == root_js_version, f"Version mismatch: pyproject.toml has {py_version}, but root package.json has {root_js_version}."
+
+    # Read package.json (frontend)
+    with open(root_dir / "frontend" / "package.json", encoding="utf-8") as f:
+        frontend_package_data = json.load(f)
+        frontend_js_version = frontend_package_data["version"]
+
+    assert (
+        py_version == frontend_js_version
+    ), f"Version mismatch: pyproject.toml has {py_version}, but frontend/package.json has {frontend_js_version}."

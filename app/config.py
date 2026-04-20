@@ -38,6 +38,19 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console
     SQLALCHEMY_ECHO = os.environ.get("SQLALCHEMY_ECHO", "false").lower() in {"true", "1", "yes"}
+    # Connection pool settings to prevent exhaustion under concurrent workloads
+    # Only apply to PostgreSQL, not SQLite (tests use SQLite which doesn't support pooling)
+    _is_postgres = bool(SQLALCHEMY_DATABASE_URI and "postgres" in SQLALCHEMY_DATABASE_URI.lower())
+    SQLALCHEMY_ENGINE_OPTIONS = (
+        {
+            "pool_size": int(os.environ.get("SQLALCHEMY_POOL_SIZE", 5)),
+            "max_overflow": int(os.environ.get("SQLALCHEMY_MAX_OVERFLOW", 10)),
+            "pool_recycle": 300,
+            "pool_pre_ping": True,
+        }
+        if _is_postgres
+        else {}
+    )
 
     # CORS setup...
     CORS_ENABLED = os.environ.get("CORS_ENABLED", "false")

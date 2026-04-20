@@ -13,27 +13,20 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-"use client";
- 
-import { APP_VERSION } from "@/lib/version";
 
 /**
- * Site footer displaying the iqoqo brand name and the current UI version string.
+ * Application version exported as a typed constant.
  *
- * @returns {JSX.Element} The footer component
+ * The value is injected at build time by Next.js via the `NEXT_PUBLIC_APP_VERSION`
+ * environment variable, which `next.config.ts` derives from `package.json` so that
+ * `pyproject.toml` remains the single source of truth for the semver string.
+ *
+ * Falls back to `"dev"` in local development when the env variable is absent.
+ *
+ * Usage:
+ * ```ts
+ * import { APP_VERSION } from "@/lib/version";
+ * console.log(APP_VERSION); // e.g. "0.4.1"
+ * ```
  */
-export function Footer() {
-  const uiVersion = APP_VERSION;
-
-  return (
-    <footer className="border-t border-border bg-card">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; The Library of Everything{" "}
-          &middot; {uiVersion}
-        </p>
-        <p className="text-xs text-muted-foreground">Your library, your rules.</p>
-      </div>
-    </footer>
-  );
-}
+export const APP_VERSION: string = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";

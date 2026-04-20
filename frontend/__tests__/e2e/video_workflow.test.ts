@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { test, expect } from "@playwright/test";
+import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Video Media Ingestion Workflow", () => {
   test("should allow user to scan a DVD barcode and add to collection", async ({ page }) => {
@@ -39,7 +40,7 @@ test.describe("Video Media Ingestion Workflow", () => {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { federation_enabled: false, version: "0.3.0" },
+          data: { federation_enabled: false, version: packageJson.version },
         }),
       });
     });
