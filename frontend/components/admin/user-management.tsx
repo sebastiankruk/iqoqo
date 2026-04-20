@@ -90,9 +90,9 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
         </div>
       </div>
 
-      <div className="border rounded-md overflow-x-auto bg-card">
+      <div className="border rounded-md overflow-x-auto bg-card border-border/50">
         <table className="w-full text-sm text-left border-collapse">
-          <thead className="text-xs uppercase bg-accent/30 text-accent-foreground border-b">
+          <thead className="text-xs uppercase bg-muted/50 text-muted-foreground border-b border-border/50">
             <tr>
               <th className="px-6 py-4 font-semibold">Email</th>
               <th className="px-6 py-4 font-semibold">Display Name</th>
@@ -118,7 +118,7 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
                 <tr
                   key={u.id}
                   onClick={canEdit ? () => setSelectedUser(u) : undefined}
-                  className={canEdit ? "hover:bg-accent/20 transition-colors cursor-pointer" : ""}
+                  className={canEdit ? "hover:bg-muted/30 transition-colors cursor-pointer" : ""}
                 >
                   <td className="px-6 py-4 font-medium">{u.email}</td>
                   <td className="px-6 py-4 text-muted-foreground">{u.display_name || "—"}</td>
@@ -138,7 +138,9 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span
-                      className={`px-2 py-1 text-xs rounded-full ${u.is_active ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}
+                      className={u.is_active
+                        ? "px-2 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-900"
+                        : "px-2 py-1 text-xs rounded-full bg-destructive/10 text-destructive ring-1 ring-destructive/20"}
                     >
                       {u.is_active ? "Active" : "Suspended"}
                     </span>

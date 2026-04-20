@@ -42,7 +42,7 @@ def sample_item(app, normal_user_headers):
 
         user = User.query.filter_by(email="test_user@iqoqo.local").first()
 
-        item = Item(manifestation_id=m.id, owner_id=user.id, status="unread", collection_status="available")
+        item = Item(manifestation_id=m.id, owner_id=user.id, status="want_to_read", collection_status="available")
         db.session.add(item)
         db.session.commit()
 
@@ -71,7 +71,7 @@ def test_add_item_defaults(client, normal_user_headers):
 
     with client.application.app_context():
         item = db.session.get(Item, item_id)
-        assert item.status == "unread"
+        assert item.status == "want_to_read"
         assert item.collection_status == "available"
 
 
@@ -99,7 +99,7 @@ def test_update_item_collection_status(client, sample_item, normal_user_headers)
 
     with client.application.app_context():
         item = db.session.get(Item, item_id)
-        assert item.status == "unread"  # Unchanged
+        assert item.status == "want_to_read"  # Unchanged
         assert item.collection_status == "lent"
         assert item.status_logs.count() >= 1
         assert item.status_logs.order_by(db.desc("changed_at")).first().new_status == "lent"

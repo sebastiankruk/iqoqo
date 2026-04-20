@@ -37,13 +37,24 @@ interface FilterBarProps {
 }
 
 const statusLabel: Record<string, string> = {
-  available: "On Shelf",
-  unread: "Unread",
-  reading: "Reading",
-  lent: "Lent Out",
-  lost: "Lost",
   wish_list: "On Wish List",
+  ordered: "Ordered",
+  available: "On Shelf",
+  lent: "Lent Out",
+  damaged: "Damaged",
+  lost: "Lost",
+  want_to_read: "Want to Read",
+  reading: "Reading",
   read: "Read",
+  want_to_listen: "Want to Listen",
+  listening: "Listening",
+  listened: "Listened",
+  want_to_watch: "Want to Watch",
+  watching: "Watching",
+  watched: "Watched",
+  want_to_play: "Want to Play",
+  playing: "Playing",
+  played: "Played",
 };
 
 /**
@@ -89,7 +100,7 @@ export function FilterBar({
 }: FilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <p className="mr-1 text-sm text-muted-foreground">
+      <p className="mr-1 text-sm text-muted-foreground" data-testid="result-count">
         <span className="font-semibold text-foreground">{resultCount}</span> items
       </p>
 

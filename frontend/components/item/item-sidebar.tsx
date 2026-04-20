@@ -44,7 +44,8 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
   watching: { label: "Watching...", class: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
   watched: { label: "Watched", class: "bg-violet-50 text-violet-700 ring-violet-200" },
-  want_to_watch: { label: "Want to Watch", class: "bg-purple-50 text-purple-700 ring-purple-200" },
+  want_to_watch: { label: "Want to Watch", class: "bg-indigo-50/50 text-indigo-600 ring-indigo-200" },
+  want_to_play: { label: "Want to Play", class: "bg-rose-50/50 text-rose-600 ring-rose-200" },
   played: { label: "Played", class: "bg-rose-50 text-rose-700 ring-rose-200" },
   playing: { label: "Playing...", class: "bg-pink-50 text-pink-700 ring-pink-200" },
 };
@@ -68,8 +69,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const coverUrl =
     getCoverUrl(item.cover_url || undefined, timestamp) ??
-    (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-    (item.meta?.["cover_url"] as string | undefined);
+    getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ??
+    getCoverUrl(item.meta?.["cover_url"] as string | undefined, timestamp);
 
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
@@ -269,9 +270,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 )}
                 {isGame && (
                   <optgroup label="Gaming Progress">
-                    {["playing", "played"].map(key => (
-                      <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
-                        {STATUS_LABELS[key]?.label || key}
+                    {["want_to_play", "playing", "played"].map(s => (
+                      <option key={s} value={s} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[s]?.label || s}
                       </option>
                     ))}
                   </optgroup>

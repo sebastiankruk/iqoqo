@@ -342,7 +342,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
     db.session.add(item)
     try:
         db.session.commit()
@@ -365,7 +365,7 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -414,7 +414,7 @@ def add_item_manual():
         db.session.add(manifestation)
         db.session.flush()
 
-        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
         db.session.add(item)
         db.session.commit()
 

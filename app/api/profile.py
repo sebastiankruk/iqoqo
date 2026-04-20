@@ -81,7 +81,7 @@ def update_consent():
 # Add PUT and DELETE to profile_bp in app/api/profile.py
 
 
-@profile_bp.route("/", methods=["PUT"])
+@profile_bp.route("/", methods=["PUT"], strict_slashes=False)
 @require_auth
 def update_profile():
     data = request.get_json()
@@ -96,7 +96,7 @@ def update_profile():
     return jsonify({"message": "Profile updated successfully", "display_name": user.display_name})
 
 
-@profile_bp.route("/", methods=["DELETE"])
+@profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
 @require_auth
 def delete_profile():
     """Right to be forgotten: Deletes user, their items, and consents."""

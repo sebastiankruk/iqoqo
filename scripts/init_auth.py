@@ -39,21 +39,25 @@ def run_init_auth(app=None):
         with open(permissions_path, encoding="utf-8") as f:
             permissions_data = yaml.safe_load(f)
 
-        perms = [p["name"] for p in permissions_data.get("permissions", [])]
+        permissions_list = permissions_data.get("permissions", [])
 
         # Validate that all permissions in YAML are also in the Enum
         enum_values = {p.value for p in PermissionName}
-        for p in perms:
-            if p not in enum_values:
-                print(f"WARNING: Permission '{p}' found in YAML but not in PermissionName Enum!")
+        for p_data in permissions_list:
+            name = p_data["name"]
+            if name not in enum_values:
+                print(f"WARNING: Permission '{name}' found in YAML but not in PermissionName Enum!")
 
-        for p in perms:
-            existing = Permission.query.filter_by(name=p).first()
+        for p_data in permissions_list:
+            name = p_data["name"]
+            description = p_data.get("description", "")
+            existing = Permission.query.filter_by(name=name).first()
             if not existing:
-                db.session.add(Permission(name=p))
+                db.session.add(Permission(name=name, description=description))
             else:
-                # Update description if needed (not implemented here but good to have)
-                pass
+                if existing.description != description:
+                    existing.description = description
+                    print(f"Updated description for permission: {name}")
         db.session.commit()
 
         # 2. Create Roles

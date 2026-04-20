@@ -76,11 +76,11 @@ function makeItem(id: number, progress: ProgressStatus, collection: CollectionSt
 }
 
 const READING_ITEM = makeItem(4, "reading", "available", "1984");
-const WISH_LIST_ITEM = makeItem(5, "unread", "wish_list", "Project Hail Mary");
+const WISH_LIST_ITEM = makeItem(5, "want_to_read", "wish_list", "Project Hail Mary");
 
 /** Items with statuses that should never appear in either section. */
 const IRRELEVANT_ITEMS: Item[] = [
-  makeItem(1, "unread", "available", "The Martian"),
+  makeItem(1, "want_to_read", "available", "The Martian"),
   makeItem(2, "read", "lent", "Dune"),
   makeItem(3, "read", "lost", "Fahrenheit 451"),
   makeItem(6, "read", "available", "Brave New World"),

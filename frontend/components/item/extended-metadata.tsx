@@ -23,6 +23,8 @@ import { cn, isAudioMedia } from "@/lib/utils";
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
+import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
+import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
@@ -116,6 +118,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
     "artist",
     "manufacturer",
     "puzzle_type",
+    "data_source",
   ]);
 
   const extraKeys = Object.entries(meta)
@@ -140,7 +143,8 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
     !trackList &&
     extraKeys.length === 0 &&
     !owner_name &&
-    !owner_count
+    !owner_count &&
+    !meta["data_source"]
   )
     return null;
 
@@ -304,6 +308,13 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
             </dl>
           )}
         </div>
+      )}
+
+      {/* Attribution badges based on metadata source */}
+      {meta["data_source"] === "discogs" ? (
+        <DiscogsAttribution />
+      ) : (
+        <BibliographicAttribution source={meta["data_source"] as string} />
       )}
 
       {Boolean(meta.metadata_provenance && typeof meta.metadata_provenance === "object") && (

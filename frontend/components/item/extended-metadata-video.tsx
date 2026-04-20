@@ -15,6 +15,7 @@
 //
 import { Badge } from "@/components/ui/badge";
 import { TmdbAttribution } from "@/components/ui/tmdb-attribution";
+import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 
 interface ExtendedMetadataVideoProps {
   meta: Record<string, unknown>;
@@ -31,11 +32,21 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
   const cast = (meta.cast || meta.Cast) as string[] | undefined;
   const directors = (meta.directors || meta.Director) as string[] | undefined;
   const runtime = (meta.runtime || meta.Runtime) as number | undefined;
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
 
-  if (!cast?.length && !directors?.length && !runtime && meta.Source !== "TMDB") return null;
+  if (!cast?.length && !directors?.length && !runtime && meta.Source !== "TMDB" && !coverUrl) return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
+      {coverUrl && (
+        <div className="flex justify-center mb-4">
+          <div className="w-full max-w-[240px] aspect-[2/3] rounded-xl overflow-hidden shadow-md border bg-secondary/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={coverUrl} alt="Movie Poster" className="h-full w-full object-cover" />
+          </div>
+        </div>
+      )}
       <h3 className="font-bold text-lg text-foreground font-serif">Video Details</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
         {runtime && (

@@ -82,7 +82,8 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
   const rawIdentifier = canonicalIdentifier || isbn || "";
   const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
   const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
-  const isMissingID = !identifier;
+  // Relax missing ID check if we already have a manifestation_id from the backend lookup
+  const isMissingID = !identifier && !meta.manifestation_id;
 
   // Extract extended meta attributes for video/games
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
@@ -131,7 +132,8 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
     setAdding(true);
     try {
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
-        barcode: identifier,
+        barcode: identifier || rawIdentifier,
+        manifestation_id: meta.manifestation_id,
         format: format,
       });
 

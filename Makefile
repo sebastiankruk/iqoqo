@@ -229,9 +229,11 @@ db-stats:
 			print(f\"  Items: {stats['items']}\"); \
 			print(f\"  Total: {sum(stats.values())}\")"
 
-sync-perms:
-	@echo "Syncing permissions from shared/permissions.yaml"
-	.venv/bin/python scripts/sync_permissions.py
+sync-permissions:
+	@echo "Synchronizing permissions (Code & Database)..."
+	@PYTHONPATH=. .venv/bin/python scripts/sync_permissions.py
+	@PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+	@echo "Permissions synchronized successfully."
 
 verify-perms:
 	@echo "Verifying permissions are synchronized"

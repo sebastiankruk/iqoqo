@@ -121,7 +121,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await page.getByRole("button", { name: "Manual Search" }).click();
 
     // 8. Enter barcode for a board game
-    const barcodeInput = page.getByPlaceholder("Enter barcode or title...");
+    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 
@@ -131,7 +131,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("Dice Rolling")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Catan" added to your library!/i)).toBeVisible();
@@ -218,7 +218,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await page.getByRole("button", { name: "Manual Search" }).click();
 
     // 6. Enter board game barcode
-    const searchInput = page.getByPlaceholder("Enter barcode or title...");
+    const searchInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
     await searchInput.fill(testBarcode);
     await searchInput.press("Enter");
 
@@ -227,7 +227,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("2-5 players")).toBeVisible();
 
     // 8. Add to collection
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 9. Verify success
     await expect(page.getByText(/"Carcassonne" added to your library!/i)).toBeVisible();

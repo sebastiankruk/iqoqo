@@ -82,7 +82,14 @@ describe("ItemSidebar Media Filtering", () => {
     const gameItem = { ...baseItem, meta: { format: "BoardGame" } } as unknown as Item;
     const { container } = render(<ItemSidebar item={gameItem} />);
 
-    expect(container.querySelector('optgroup[label="Gaming Progress"]')).toBeInTheDocument();
+    const optgroup = container.querySelector('optgroup[label="Gaming Progress"]');
+    expect(optgroup).toBeInTheDocument();
+
+    // Assert all required game statuses are present, including the newly added 'want_to_play'
+    expect(optgroup?.querySelector('option[value="want_to_play"]')).toBeInTheDocument();
+    expect(optgroup?.querySelector('option[value="playing"]')).toBeInTheDocument();
+    expect(optgroup?.querySelector('option[value="played"]')).toBeInTheDocument();
+
     expect(container.querySelector('optgroup[label="Reading Progress"]')).not.toBeInTheDocument();
     expect(container.querySelector('optgroup[label="Listening Progress"]')).not.toBeInTheDocument();
     expect(container.querySelector('optgroup[label="Watching Progress"]')).not.toBeInTheDocument();

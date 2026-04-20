@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import copy
 import hashlib
 import io
 import re
@@ -128,6 +129,7 @@ def lookup_discogs_id(discogs_id: str):
     if meta:
         # Enrich meta with scanner flags for consistent response shape
         meta = dict(meta)
+        meta["data_source"] = "discogs"
         meta["identifier"] = discogs_id
         meta["already_in_db"] = False
         meta["already_in_collection"] = False
@@ -220,15 +222,19 @@ def lookup_barcode_preview(query: str):
             # Return candidates for the frontend disambiguation sheet
             # Build response from a copy — top must NOT be mutated because it
             # already lives inside discogs_results, which becomes candidates.
-            response_data = dict(discogs_results[0])
+            response_data = copy.deepcopy(discogs_results[0])
             response_data["candidates"] = discogs_results
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
+            response_data["data_source"] = "discogs"
+            for candidate in discogs_results:
+                candidate["data_source"] = "discogs"
             _record_scan_telemetry(query, format_hint, "discogs", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
         if len(discogs_results) == 1:
-            meta = discogs_results[0]
+            meta = dict(discogs_results[0])
+            meta["data_source"] = "discogs"
             provider = "discogs"
 
     # Route based on format hint first, fallback to heuristics
@@ -237,55 +243,82 @@ def lookup_barcode_preview(query: str):
         if upc_meta and upc_meta.get("title"):
             title = clean_video_title(upc_meta["title"])
             meta = fetch_video_metadata(title)
+            if meta:
+                meta["data_source"] = "tmdb"
             provider = "tmdb" if meta else "upc"
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
+                meta["data_source"] = "upc"
         if not meta:
             meta = fetch_video_metadata(barcode)
+            if meta:
+                meta["data_source"] = "tmdb"
             provider = "tmdb" if meta else None
     elif format_hint in ("game", "boardgame"):
         upc_meta = resolve_physical_media(barcode)
         if upc_meta and upc_meta.get("title"):
             meta = fetch_bgg_metadata(upc_meta["title"])
+            if meta:
+                meta["data_source"] = "bgg"
             provider = "bgg" if meta else "upc"
             if meta:
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
+                meta["data_source"] = "upc"
         if not meta:
             meta = fetch_bgg_metadata(barcode)
+            if meta:
+                meta["data_source"] = "bgg"
             provider = "bgg" if meta else None
     elif format_hint in ("puzzle", "jigsaw"):
         meta = resolve_physical_media(barcode)
+        if meta:
+            meta["data_source"] = "upc"
         provider = "upc" if meta else None
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
         meta = fetch_discogs_metadata(barcode)
+        if meta:
+            meta["data_source"] = "discogs"
         provider = "discogs" if meta else None
         if not meta:
             meta = fetch_audio_metadata(barcode)
+            if meta:
+                meta["data_source"] = "musicbrainz"
             provider = "musicbrainz" if meta else None
     elif is_book or format_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
+            if meta:
+                # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
+                meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
             provider = "isbn" if meta else None
 
         # Fallback to audio if book fails
         if not meta:
             meta = fetch_discogs_metadata(barcode)
+            if meta:
+                meta["data_source"] = "discogs"
             provider = "discogs" if meta else None
             if not meta:
                 meta = fetch_audio_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "musicbrainz"
                 provider = "musicbrainz" if meta else None
     else:
         # No format hint: auto-fallback strategy for non-ISBN barcodes
         # Try audio sources first (UPC/EAN codes commonly map to audio)
         meta = fetch_discogs_metadata(barcode)
+        if meta:
+            meta["data_source"] = "discogs"
         provider = "discogs" if meta else None
         if not meta:
             meta = fetch_audio_metadata(barcode)
+            if meta:
+                meta["data_source"] = "musicbrainz"
             provider = "musicbrainz" if meta else None
 
         # Fallback to book if audio fails
@@ -293,6 +326,9 @@ def lookup_barcode_preview(query: str):
             canonical = canonicalize_isbn(barcode)
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
+                if meta:
+                    # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
+                    meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
                 provider = "isbn" if meta else None
 
         # Final fallback to video/game if all else fails
@@ -302,11 +338,13 @@ def lookup_barcode_preview(query: str):
                 title = clean_video_title(upc_meta["title"])
                 meta = fetch_video_metadata(title)
                 if meta:
+                    meta["data_source"] = "tmdb"
                     provider = "tmdb"
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                 else:
                     meta = fetch_bgg_metadata(upc_meta["title"])
                     if meta:
+                        meta["data_source"] = "bgg"
                         provider = "bgg"
                         meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                     else:
@@ -315,9 +353,12 @@ def lookup_barcode_preview(query: str):
             if not meta:
                 meta = fetch_video_metadata(barcode)
                 if meta:
+                    meta["data_source"] = "tmdb"
                     provider = "tmdb"
                 else:
                     meta = fetch_bgg_metadata(barcode)
+                    if meta:
+                        meta["data_source"] = "bgg"
                     provider = "bgg" if meta else None
 
     if not meta:
@@ -401,15 +442,22 @@ def scan_barcode():
         return invalid_json_payload_response()
 
     barcode = data.get("barcode")
+    manifestation_id = data.get("manifestation_id")
     format_hint = data.get("format")
 
-    if not barcode:
-        return jsonify({"success": False, "data": None, "error": "Barcode is required"}), 400
+    if not barcode and not manifestation_id:
+        return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
 
     is_new_manifestation = False
+    manifestation = None
 
-    # Check DB first with broad helper
-    manifestation = _find_locally(barcode)
+    # Priority 1: Direct Manifestation ID (Safe and stable for name-lookups)
+    if manifestation_id:
+        manifestation = db.session.get(Manifestation, manifestation_id)
+
+    # Priority 2: Check DB by barcode
+    if not manifestation and barcode:
+        manifestation = _find_locally(barcode)
 
     if not manifestation:
         try:
@@ -472,17 +520,20 @@ def scan_barcode():
 
     # For name-based lookups (no barcode), store the hash_id in meta so future
     # local lookups can find this manifestation without hitting external APIs again.
-    is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
-    if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
-        computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
-        updated_meta = dict(manifestation.meta)
-        updated_meta["hash_id"] = computed_hash
-        manifestation.meta = updated_meta
+    if barcode:
+        is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
+        if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
+            computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
+            updated_meta = dict(manifestation.meta)
+            updated_meta["hash_id"] = computed_hash
+            manifestation.meta = updated_meta
 
     db.session.commit()
 
     # Success: record telemetry with manifestation_id
-    _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id)
+    _record_scan_telemetry(
+        barcode or manifestation.title, format_hint, provider=format_hint or "ingest", status="success", manifestation_id=manifestation.id
+    )
 
     return (
         jsonify(

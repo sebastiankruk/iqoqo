@@ -39,6 +39,17 @@ def get_bgg_headers() -> dict[str, str]:
     return headers
 
 
+def clean_bgg_query(query: str) -> str:
+    """Removes parenthetical metadata from query for better BGG matching."""
+    if not query:
+        return ""
+    import re
+
+    # Strip (Year), [Edition], (Big Box) etc
+    cleaned = re.sub(r"[\(\[].*?[\)\]]", "", query)
+    return " ".join(cleaned.split()).strip()
+
+
 def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
     """Fetch board game metadata from BoardGameGeek XML API v2."""
     search_url = "https://boardgamegeek.com/xmlapi2/search"
@@ -49,10 +60,18 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
 
     headers = get_bgg_headers()
 
+    # Step 0: Clean query — BGG search performs much better without parenthetical years
+    # e.g., "Brass: Pittsburgh (2027)" -> "Brass: Pittsburgh"
+    cleaned_query = clean_bgg_query(query)
+
     try:
         # Step 1: Search for the exact or closest match to get the BGG ID
+        # We use the cleaned query for searching
         search_resp = requests.get(
-            search_url, params={"query": query, "type": "boardgame"}, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT)
+            search_url,
+            params={"query": cleaned_query, "type": "boardgame"},
+            headers=headers,
+            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         search_resp.raise_for_status()
 

@@ -42,7 +42,7 @@ def test_item_status_logging(client, normal_user_headers, app):
         db.session.flush()
 
         # Create item with proper field split
-        item = Item(manifestation_id=manif.id, owner_id=user_id, status="unread", collection_status="available")
+        item = Item(manifestation_id=manif.id, owner_id=user_id, status="want_to_read", collection_status="available")
         db.session.add(item)
         db.session.commit()
         item_id = item.id
@@ -55,7 +55,7 @@ def test_item_status_logging(client, normal_user_headers, app):
     with app.app_context():
         logs = ItemStatusLog.query.filter_by(item_id=item_id).all()
         assert len(logs) == 1
-        assert logs[0].old_status == "unread"
+        assert logs[0].old_status == "want_to_read"
         assert logs[0].new_status == "reading"
         assert logs[0].user_id == user_id
 
