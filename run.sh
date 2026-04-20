@@ -111,7 +111,12 @@ elif [ -z "$AUTH_SECRET" ]; then
 fi
 
 # 2. Version and Metadata
-VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))" 2>/dev/null || echo "0.0.0")
+# Robustly extract version from pyproject.toml even on older python environments
+VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])" 2>/dev/null \
+    || python3 -c "import re; print(re.search(r'version\s*=\s*\"([^\"]+)\"', open('pyproject.toml').read()).group(1))" 2>/dev/null \
+    || grep -m 1 "version =" pyproject.toml | cut -d '"' -f 2 \
+    || echo "0.0.0")
+
 if [ "$MODE" == "dev" ]; then
     export APP_VERSION="${VERSION}.dev"
 else
@@ -299,12 +304,18 @@ if [ "$MODE" == "dev" ]; then
     }
     trap cleanup INT TERM
 
-    # Setup DB role and run migrations
+    # 4. Install frontend dependencies if needed
+    if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
+        echo "📦 Installing frontend dependencies..."
+        (cd frontend && npm install)
+    fi
+
+    # 4a. Setup DB role and run migrations
     [ -f "scripts/setup_db.sh" ] && bash scripts/setup_db.sh
     python scripts/fix_alembic.py
     flask db upgrade
 
-    # Start Flask API
+    # 5. Run Flask API (background) + Next.js frontend
     export FLASK_APP=run.py
     export FLASK_DEBUG=1
     WEB_PORT=${WEB_PORT:-5000}
@@ -320,12 +331,27 @@ if [ "$MODE" == "dev" ]; then
         (cd frontend && \
          NEXT_PUBLIC_API_URL="/api" \
          FLASK_API_URL="http://127.0.0.1:${WEB_PORT}/api" \
+         NEXT_PUBLIC_FRONTEND_URL="${NEXT_PUBLIC_FRONTEND_URL}" \
+         NEXTAUTH_URL="${NEXTAUTH_URL}" \
+         AUTH_URL="${AUTH_URL}" \
+         AUTH_TRUST_HOST="${AUTH_TRUST_HOST}" \
          NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" \
          npm run dev) &
         echo $! > "$PID_DIR/next.pid"
     fi
 
-    echo "✅ Dev servers running (API: $WEB_PORT, Next: 3000)"
+    echo ""
+    echo "════════════════════════════════════════════════"
+    echo "  iqoqo v${APP_VERSION} (${MODE}) servers running"
+    echo "  Flask API  → http://127.0.0.1:${WEB_PORT}"
+    if [ "$TUNNEL" = true ]; then
+        echo "  Public URL → https://dev.iqoqo.cc"
+    else
+        echo "  Local URL  → http://localhost:3000"
+    fi
+    echo "  Press Ctrl+C to stop all servers"
+    echo "════════════════════════════════════════════════"
+    echo ""
     wait
 
 else
