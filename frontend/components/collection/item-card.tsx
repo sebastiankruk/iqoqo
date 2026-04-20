@@ -93,9 +93,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
   const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
 
-  const userOwns = isCatalog
-    ? (item as CatalogEntry).user_owns
-    : (item as Item).is_owner;
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
