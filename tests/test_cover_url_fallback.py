@@ -41,7 +41,7 @@ def test_data(app):
             expression_id=expr.id,
             isbn13="1111111111111",
             cover_url=None,
-            meta={"cover_url": "http://external.com/cover1.jpg", "cover_status": "pending"}
+            meta={"cover_url": "http://external.com/cover1.jpg", "cover_status": "pending"},
         )
 
         # Manifestation with cover_url in BOTH column and meta (column should win)
@@ -49,7 +49,7 @@ def test_data(app):
             expression_id=expr.id,
             isbn13="2222222222222",
             cover_url="/static/covers/local2.jpg",
-            meta={"cover_url": "http://external.com/ignored.jpg"}
+            meta={"cover_url": "http://external.com/ignored.jpg"},
         )
 
         db.session.add_all([m1, m2])
@@ -61,13 +61,8 @@ def test_data(app):
         db.session.commit()
 
         token = generate_internal_jwt(user)
-        return {
-            "token": token,
-            "manif1_id": m1.id,
-            "manif2_id": m2.id,
-            "item1_id": item1.id,
-            "item2_id": item2.id
-        }
+        return {"token": token, "manif1_id": m1.id, "manif2_id": m2.id, "item1_id": item1.id, "item2_id": item2.id}
+
 
 def test_items_list_cover_url_fallback(client, test_data):
     """GET /api/items should fallback to meta['cover_url'] if column is null."""
@@ -87,6 +82,7 @@ def test_items_list_cover_url_fallback(client, test_data):
     assert items[1]["isbn"] == "2222222222222"
     assert items[1]["cover_url"] == "/static/covers/local2.jpg"
 
+
 def test_item_detail_cover_url_fallback(client, test_data):
     """GET /api/items/<id> should fallback to meta['cover_url'] if column is null."""
     headers = {"Authorization": f"Bearer {test_data['token']}"}
@@ -100,6 +96,7 @@ def test_item_detail_cover_url_fallback(client, test_data):
     response = client.get(f"/api/items/{test_data['item2_id']}", headers=headers)
     assert response.status_code == 200
     assert response.json["data"]["cover_url"] == "/static/covers/local2.jpg"
+
 
 def test_recent_manifestations_cover_url_fallback(client, test_data):
     """GET /api/manifestations/recent should fallback to meta['cover_url']."""

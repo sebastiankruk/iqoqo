@@ -35,16 +35,14 @@ def test_sqlite_engine_has_no_pool_options():
         assert "pool_size" not in engine_options
         assert "max_overflow" not in engine_options
 
+
 def test_postgres_engine_options_applied():
     """PostgreSQL should have pool settings applied if configured."""
     pg_url = "postgresql://user:pass@localhost/db"
-    with patch.dict(os.environ, {
-        "DATABASE_URL": pg_url,
-        "SQLALCHEMY_POOL_SIZE": "7",
-        "SQLALCHEMY_MAX_OVERFLOW": "13"
-    }):
+    with patch.dict(os.environ, {"DATABASE_URL": pg_url, "SQLALCHEMY_POOL_SIZE": "7", "SQLALCHEMY_MAX_OVERFLOW": "13"}):
         # Mocking create_app/Config to avoid needing a real PG driver just for config check
         from app.config import Config
+
         # We can directly inspect the Config class logic
         class TestConfig(Config):
             SQLALCHEMY_DATABASE_URI = pg_url
@@ -61,11 +59,13 @@ def test_postgres_engine_options_applied():
         assert opts["max_overflow"] == 13
         assert opts["pool_pre_ping"] is True
 
+
 def test_session_teardown_registered(app):
     """Verify that the shutdown_session handler is registered in the app."""
     # In Flask 3.x, app.teardown_appcontext_funcs is a list of functions
     handler_names = [f.__name__ for f in app.teardown_appcontext_funcs]
     assert "shutdown_session" in handler_names
+
 
 def test_session_remove_called_on_teardown(app):
     """Verify that db.session.remove() is called when the app context is torn down."""
