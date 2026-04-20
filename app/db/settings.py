@@ -64,7 +64,9 @@ class ScanTelemetry(db.Model):  # type: ignore[name-defined]
     provider = db.Column(db.String(50), nullable=False)  # e.g. "discogs", "isbn", "upc", "tmdb", "bgg"
     status = db.Column(db.String(20), nullable=False)  # "success", "failed"
     manifestation_id = db.Column(
-        db.Integer, db.ForeignKey(f"{_CATALOG}.manifestations.id" if _CATALOG else "manifestations.id"), nullable=True
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG}.manifestations.id" if _CATALOG else "manifestations.id", ondelete="SET NULL"),
+        nullable=True,
     )
     raw_request_url = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)

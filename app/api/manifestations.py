@@ -569,6 +569,11 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
     try:
+        # Manually nullify scan telemetry to avoid ForeignKeyViolation on delete
+        from app.db.models import ScanTelemetry
+
+        ScanTelemetry.query.filter_by(manifestation_id=manifestation_id).update({"manifestation_id": None})
+
         db.session.delete(manif)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200

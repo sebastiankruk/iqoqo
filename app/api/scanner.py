@@ -105,9 +105,6 @@ def _find_locally(code: str) -> Manifestation | None:
     return result if isinstance(result, Manifestation) else None
 
 
-
-
-
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
 def lookup_barcode_preview(query: str):
@@ -241,34 +238,29 @@ def lookup_barcode_preview(query: str):
             if meta:
                 meta["data_source"] = "bgg"
                 provider = "bgg"
-
-        if not meta:
+        else:
+            # Full waterfall for barcodes
             upc_meta = resolve_physical_media(barcode)
             if upc_meta and upc_meta.get("title"):
+                # Try BGG by title first
                 meta = fetch_bgg_metadata(upc_meta["title"])
                 if meta:
                     meta["data_source"] = "bgg"
                     provider = "bgg"
-                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                    # Merge UPC data (like high-res covers from Allegro) if it doesn't overwrite BGG
+                    if isinstance(meta, dict):
+                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                 else:
                     meta = upc_meta
                     meta["data_source"] = "upc"
                     provider = "upc"
 
-        if not meta and not is_short_numeric:
-            meta = fetch_bgg_metadata(barcode)
-            if meta:
-                meta["data_source"] = "bgg"
-                provider = "bgg"
-                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-            else:
-                meta = upc_meta
-                meta["data_source"] = "upc"
-        if not meta:
-            meta = fetch_bgg_metadata(barcode)
-            if meta:
-                meta["data_source"] = "bgg"
-            provider = "bgg" if meta else None
+            if not meta:
+                # Last resort: try BGG with raw identifier
+                meta = fetch_bgg_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "bgg"
+                    provider = "bgg"
     elif format_hint in ("puzzle", "jigsaw"):
         meta = resolve_physical_media(barcode)
         if meta:
@@ -281,13 +273,13 @@ def lookup_barcode_preview(query: str):
             if meta:
                 meta["data_source"] = "discogs"
                 provider = "discogs"
-        
+
         if not meta:
             meta = fetch_discogs_metadata(barcode)
             if meta:
                 meta["data_source"] = "discogs"
                 provider = "discogs"
-        
+
         if not meta:
             provider = "discogs" if meta else None
         if not meta:
