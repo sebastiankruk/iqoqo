@@ -87,7 +87,7 @@ def admin_headers(app):
     from app.db.models import Permission, Role, User, db
 
     with app.app_context():
-        # Create permissions (including new config/user/role permissions for v0.4.0)
+        # Create permissions
         perms = [
             Permission(name="regenerate:cover"),
             Permission(name="refetch:metadata"),

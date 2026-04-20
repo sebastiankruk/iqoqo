@@ -21,8 +21,16 @@ cd "$(dirname "$0")"
 # 0. Set Mode (Default to dev/tunnel if not specified)
 MODE=${MODE:-dev}
 
-VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))")
-export APP_VERSION="${VERSION:-0}.dev"
+# Extract version from pyproject.toml (Authoritative source)
+if [ -f ".venv/bin/python" ]; then
+    VERSION=$(.venv/bin/python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))" 2>/dev/null)
+fi
+if [ -z "$VERSION" ]; then
+    # Fallback to system python or simple grep
+    VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('version'))" 2>/dev/null || \
+              grep '^version = ' pyproject.toml | head -1 | cut -d '"' -f 2)
+fi
+export APP_VERSION="${VERSION:-0.0.0}.dev"
 
 # 1. Load and validate environment variables
 if [ -f ".env" ]; then
