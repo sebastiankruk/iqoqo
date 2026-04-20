@@ -128,7 +128,12 @@ def test_admin_import_multipart_file(client, admin_headers, sample_export_data):
     """Test /api/admin/import with multipart file upload."""
     file_content = json.dumps(sample_export_data).encode("utf-8")
 
-    response = client.post("/api/admin/import", data={"file": (BytesIO(file_content), "export.json")}, content_type="multipart/form-data", headers=admin_headers)
+    response = client.post(
+        "/api/admin/import",
+        data={"file": (BytesIO(file_content), "export.json")},
+        content_type="multipart/form-data",
+        headers=admin_headers,
+    )
 
     assert response.status_code == 200
     data = response.json
@@ -144,7 +149,9 @@ def test_admin_import_with_clear(app, client, admin_headers, sample_export_data)
         assert Work.query.count() == 1
 
     # Import again with clear
-    response = client.post("/api/admin/import?clear_existing=true", data=json.dumps(sample_export_data), content_type="application/json", headers=admin_headers)
+    response = client.post(
+        "/api/admin/import?clear_existing=true", data=json.dumps(sample_export_data), content_type="application/json", headers=admin_headers
+    )
 
     assert response.status_code == 200
 
@@ -201,7 +208,9 @@ def test_admin_clear_with_confirmation(app, client, admin_headers, sample_export
 
 def test_admin_clear_with_false_confirmation(client, admin_headers):
     """Test /api/admin/clear with confirm=false."""
-    response = client.delete("/api/admin/clear", data=json.dumps({"confirm": False}), content_type="application/json", headers=admin_headers)
+    response = client.delete(
+        "/api/admin/clear", data=json.dumps({"confirm": False}), content_type="application/json", headers=admin_headers
+    )
 
     assert response.status_code == 400
     assert "error" in response.json
@@ -242,7 +251,9 @@ def test_full_export_import_cycle(app, client, admin_headers, sample_export_data
     exported_data = json.loads(export_response.data)
 
     # 3. Clear database
-    clear_response = client.delete("/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json", headers=admin_headers)
+    clear_response = client.delete(
+        "/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json", headers=admin_headers
+    )
     assert clear_response.status_code == 200
 
     # 4. Verify empty
@@ -250,7 +261,9 @@ def test_full_export_import_cycle(app, client, admin_headers, sample_export_data
         assert Work.query.count() == 0
 
     # 5. Re-import the exported data
-    import_response = client.post("/api/admin/import", data=json.dumps(exported_data), content_type="application/json", headers=admin_headers)
+    import_response = client.post(
+        "/api/admin/import", data=json.dumps(exported_data), content_type="application/json", headers=admin_headers
+    )
     assert import_response.status_code == 200
 
     # 6. Verify data is back
