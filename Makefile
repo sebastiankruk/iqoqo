@@ -62,6 +62,8 @@ help:
 	@echo "  db-export     - Export database to data/backup.json"
 	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics"
+	@echo ""
+	@echo "Version updates:"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
 

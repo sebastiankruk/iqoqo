@@ -187,7 +187,14 @@ def main() -> None:
     print(f"\nDone! Version is now {new_version}.")
     if new_version != current:
         print("Remember to commit all changed files and tag the release:")
-        git_add_files = ["pyproject.toml", "package.json", "package-lock.json", "frontend/package.json", "frontend/package-lock.json", "tests/test_infra_config.py"]
+        git_add_files = [
+            "pyproject.toml",
+            "package.json",
+            "package-lock.json",
+            "frontend/package.json",
+            "frontend/package-lock.json",
+            "tests/test_infra_config.py",
+        ]
         existing_files = [f for f in git_add_files if (REPO_ROOT / f).exists()]
         print(f"  git add {' '.join(existing_files)}")
         print(f"  git commit -m 'chore: bump version to {new_version}'")
