@@ -145,7 +145,8 @@ export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, di
                 className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/10 text-foreground ring-1 ring-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
               >
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="category"
                   checked={active}
                   onChange={() => onToggleFilter({ type: "category", value: id })}
                   className="sr-only"
@@ -172,7 +173,8 @@ export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, di
                   className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-accent/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
                 >
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="format"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
                     className="h-3.5 w-3.5 rounded border-border accent-primary"

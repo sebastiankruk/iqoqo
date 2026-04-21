@@ -305,7 +305,18 @@ export function BottomSheet({
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-        {error && <p className="text-center text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex w-full flex-col gap-3">
+            <p className="text-center text-xs text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={onShowManualForm}
+              className="w-full rounded-xl bg-secondary px-4 py-2 text-sm font-semibold shadow-sm hover:bg-secondary/80"
+            >
+              Enter Manually
+            </button>
+          </div>
+        )}
 
         {activeTab === "barcode" && (
           <div className="flex w-full flex-col items-center gap-4">
@@ -350,7 +361,7 @@ export function BottomSheet({
               className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />
 
-            {error && <p className="text-center text-xs text-destructive">{error}</p>}
+            {/* Error is already handled at the top */}
           </div>
         )}
 

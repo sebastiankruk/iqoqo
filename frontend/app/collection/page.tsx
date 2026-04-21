@@ -57,6 +57,14 @@ function CollectionContent() {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
 
+  // Keep search queries in sync if URL changes externally (e.g. from Navbar)
+  const [lastUrlQuery, setLastUrlQuery] = useState(initialQuery);
+  if (initialQuery !== lastUrlQuery) {
+    setLastUrlQuery(initialQuery);
+    setSearchQuery(initialQuery);
+    setAppliedQuery(initialQuery);
+  }
+
   const limit = 40;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
@@ -93,20 +101,34 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const categoryFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "category").map(f => f.value),
+    [activeFilters]
+  );
+  
+  const formatFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "format").map(f => f.value),
+    [activeFilters]
+  );
+
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
     sortBy,
-    viewMode === "items" && isLoggedIn
+    viewMode === "items" && isLoggedIn,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
     appliedQuery,
-    viewMode === "manifestations"
+    viewMode === "manifestations",
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined
   );
 
   const { data: statsData } = useStats();
@@ -126,7 +148,15 @@ function CollectionContent() {
     setPage(1);
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
-      return exists ? prev.filter(f => !(f.type === filter.type && f.value === filter.value)) : [...prev, filter];
+      if (exists) {
+        return prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+      } else {
+        // Enforce single-select for category and format
+        if (filter.type === "category" || filter.type === "format") {
+          return [...prev.filter(f => f.type !== filter.type), filter];
+        }
+        return [...prev, filter];
+      }
     });
   }, []);
 

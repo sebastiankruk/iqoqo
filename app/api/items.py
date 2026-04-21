@@ -78,6 +78,7 @@ def get_items():
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
+                    "content_type": row.get("content_type"),
                     "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
                     "updated_at": (
                         (row.get("updated_at") or row["added_at"]).isoformat()
@@ -154,6 +155,7 @@ def get_items():
                 or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
+                "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                 "is_owner": str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,

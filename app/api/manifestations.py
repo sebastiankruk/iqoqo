@@ -40,6 +40,8 @@ def get_manifestations() -> tuple[Response, int]:
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
+    category_filter = request.args.get("category")
+    format_filter = request.args.get("format")
 
     try:
         page = int(page_param)
@@ -55,7 +57,7 @@ def get_manifestations() -> tuple[Response, int]:
     if q:
         from app.core.search_service import SearchService
 
-        total, result_ids = SearchService.search_manifestations(q, limit, offset)
+        total, result_ids = SearchService.search_manifestations(q, limit, offset, category=category_filter, format_filter=format_filter)
 
         if result_ids:
             manifestations_unordered = (
@@ -68,9 +70,14 @@ def get_manifestations() -> tuple[Response, int]:
         else:
             manifestations = []
     else:
-        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
-            Manifestation.id.desc()
-        )
+        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression)
+
+        if category_filter:
+            query = query.filter(Expression.content_type == category_filter)
+        if format_filter:
+            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+
+        query = query.order_by(Manifestation.id.desc())
         total = query.count()
         manifestations = query.offset(offset).limit(limit).all()
 
