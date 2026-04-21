@@ -129,9 +129,9 @@ def lookup_barcode_preview(query: str):
         from app.db.core import MediaCategory
 
         content_type = None
-        if format_hint in ("game", "boardgame"):
+        if format_hint in ("game", "boardgame", "board_game"):
             content_type = MediaCategory.BOARD_GAME
-        elif format_hint in ("audio", "cd", "vinyl", "sound"):
+        elif format_hint in ("audio", "cd", "vinyl", "sound", "music"):
             content_type = MediaCategory.MUSIC
         elif format_hint in ("video", "dvd", "bluray", "movie"):
             content_type = MediaCategory.MOVIE
@@ -189,7 +189,7 @@ def lookup_barcode_preview(query: str):
 
     # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
     # so the user can disambiguate between different releases/editions.
-    if not is_barcode and format_hint in ("audio", "cd", "vinyl", "sound", None, ""):
+    if not is_barcode and format_hint in ("audio", "cd", "vinyl", "sound", "music", None, ""):
         discogs_results = fetch_discogs_candidates(query)
         if len(discogs_results) > 1:
             # Return candidates for the frontend disambiguation sheet
@@ -229,7 +229,7 @@ def lookup_barcode_preview(query: str):
             if meta:
                 meta["data_source"] = "tmdb"
             provider = "tmdb" if meta else None
-    elif format_hint in ("game", "boardgame"):
+    elif format_hint in ("game", "boardgame", "board_game"):
         # Heuristic: 1-7 digits are likely BGG IDs, not barcodes
         is_short_numeric = barcode.isdigit() and len(barcode) <= 7
 
@@ -266,7 +266,7 @@ def lookup_barcode_preview(query: str):
         if meta:
             meta["data_source"] = "upc"
         provider = "upc" if meta else None
-    elif format_hint in ("audio", "cd", "vinyl", "sound"):
+    elif format_hint in ("audio", "cd", "vinyl", "sound", "music"):
         # Heuristic: 1-7 digits are likely Discogs Release IDs
         if barcode.isdigit() and len(barcode) <= 7:
             meta = fetch_discogs_by_id(barcode)
@@ -464,17 +464,17 @@ def scan_barcode():
         try:
             # Support pure numeric Discogs Release IDs (heuristic: <= 8 digits and audio-ish)
             is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
-            if is_discogs_numeric and format_hint in ("audio", "cd", "vinyl", "sound", None):
+            if is_discogs_numeric and format_hint in ("audio", "cd", "vinyl", "sound", "music", None):
                 meta = fetch_discogs_by_id(barcode)
                 if meta:
                     # Ingest using pre-fetched meta
                     manifestation = IngestService.ingest_from_meta(meta)
 
-            if not manifestation and format_hint in ("audio", "cd", "vinyl", "sound"):
+            if not manifestation and format_hint in ("audio", "cd", "vinyl", "sound", "music"):
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
             elif format_hint in ("video", "dvd", "bluray", "movie"):
                 manifestation = IngestService.ingest_video_from_barcode(barcode)
-            elif format_hint in ("game", "boardgame"):
+            elif format_hint in ("game", "boardgame", "board_game"):
                 manifestation = IngestService.ingest_game_from_barcode(barcode)
             elif format_hint in ("puzzle", "jigsaw"):
                 manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
