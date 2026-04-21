@@ -128,6 +128,8 @@ class MediaFormat:
     BOARD_GAME = "board_game"
     CARDS = "cards"
     PUZZLE = "puzzle"
+    MUSIC = "music"
+    MOVIE = "movie"
 
     ALL = (
         BOOK,
@@ -140,8 +142,8 @@ class MediaFormat:
         BOARD_GAME,
         CARDS,
         PUZZLE,
-        "music",
-        "movie",
+        MUSIC,
+        MOVIE,
     )
 
 

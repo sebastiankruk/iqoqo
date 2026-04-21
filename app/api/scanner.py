@@ -375,20 +375,22 @@ def lookup_barcode_preview(query: str):
         )
 
     if "format" not in meta and format_hint:
-        from app.db.core import MediaFormat
+        from app.db.core import MediaCategory, MediaFormat
 
         format_map = {
-            "video": "movie",
+            "audio": MediaFormat.MUSIC,
+            "music": MediaFormat.MUSIC,
+            "cd": MediaFormat.CD,
+            "vinyl": MediaFormat.VINYL,
+            "sound": MediaFormat.MUSIC,
+            "video": MediaFormat.MOVIE,
+            "movie": MediaFormat.MOVIE,
             "dvd": MediaFormat.DVD,
             "bluray": MediaFormat.BLURAY,
-            "movie": "movie",
             "game": MediaFormat.BOARD_GAME,
             "boardgame": MediaFormat.BOARD_GAME,
+            "board_game": MediaFormat.BOARD_GAME,
             "puzzle": MediaFormat.PUZZLE,
-            "jigsaw": MediaFormat.PUZZLE,
-            "cd": MediaFormat.CD,
-            "audio": "music",
-            "vinyl": MediaFormat.VINYL,
             "book": MediaFormat.BOOK,
             "text": MediaFormat.BOOK,
         }

@@ -148,7 +148,7 @@ export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, di
                   type="checkbox"
                   checked={active}
                   onChange={() => onToggleFilter({ type: "category", value: id })}
-                  className="hidden"
+                  className="sr-only"
                 />
                 <span className={active ? "text-primary" : "text-muted-foreground"}>
                   {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}

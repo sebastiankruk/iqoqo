@@ -41,11 +41,11 @@ export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(searchParams?.get("search") || "");
+  const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || searchParams?.get("search") || "");
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    setSearchQuery(searchParams?.get("search") || "");
+    setSearchQuery(searchParams?.get("q") || searchParams?.get("search") || "");
   }, [searchParams]);
 
   /**
@@ -74,8 +74,10 @@ export function Navbar() {
     e.preventDefault();
     const params = new URLSearchParams(searchParams?.toString() || "");
     if (searchQuery.trim()) {
-      params.set("search", searchQuery.trim());
+      params.set("q", searchQuery.trim());
+      params.delete("search");
     } else {
+      params.delete("q");
       params.delete("search");
     }
     params.set("page", "1");

@@ -18,14 +18,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import RegisterPage from "@/app/register/page";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("next/navigation", () => ({
-  /**
-   * Mock for useRouter.
-   *
-   * @returns {object} The mocked router object.
-   */
-  useRouter: () => ({ push: vi.fn() }),
-}));
+// Rely on global mock from vitest.setup.ts
 
 /**
  * Creates a test query client with retries disabled.

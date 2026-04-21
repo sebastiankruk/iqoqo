@@ -44,12 +44,14 @@ class IngestService:
         # Map format string → FRBR content type
         if raw_format in ("video", "dvd", "bluray", "movie", "moving image"):
             content_type = MediaCategory.MOVIE
-        elif raw_format in ("game", "boardgame"):
+        elif raw_format in ("game", "boardgame", "board_game"):
             content_type = MediaCategory.BOARD_GAME
         elif raw_format in ("book", "text"):
             content_type = MediaCategory.TEXT
         elif raw_format == "puzzle":
             content_type = MediaCategory.PUZZLE
+        elif raw_format in ("music", "sound", "audio", "cd", "vinyl", "sacd"):
+            content_type = MediaCategory.MUSIC
         else:
             content_type = MediaCategory.MUSIC
 

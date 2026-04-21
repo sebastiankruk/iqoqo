@@ -298,7 +298,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                         <span key={idx}>
                           {isContributorField ? (
                             <Link
-                              href={`/collection?search=${encodeURIComponent(String(item))}`}
+                              href={`/collection?q=${encodeURIComponent(String(item))}`}
                               className="text-primary hover:underline hover:text-accent transition-colors font-medium"
                             >
                               {String(item)}

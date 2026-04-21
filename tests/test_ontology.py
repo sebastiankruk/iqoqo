@@ -192,9 +192,7 @@ def test_media_category_all_in_sync() -> None:
     match = pattern.search(ts_source)
 
     if not match:
-        # If CATEGORY_STATUS_MAP is not yet implemented in TS, we skip for now
-        # or assert failure if we want to enforce it.
-        return
+        pytest.fail("CATEGORY_STATUS_MAP is missing in frbr.ts")
 
     ts_categories = frozenset(re.findall(r"([a-z_]+)\s*:", match.group(1)))
     py_categories = frozenset(MediaCategory.ALL)

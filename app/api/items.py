@@ -60,7 +60,9 @@ def get_items():
         from app.core.search_service import SearchService
 
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
-        total, results = SearchService.search_items(q, user_id, limit, offset, statuses=statuses_list)
+        total, results = SearchService.search_items(
+            q, user_id, limit, offset, statuses=statuses_list, category=category_filter, format_filter=format_filter
+        )
 
         items_data = []
         for row in results:
@@ -108,7 +110,7 @@ def get_items():
         query = query.filter(Expression.content_type == category_filter)
 
     if format_filter:
-        query = query.filter(Manifestation.meta["format"].astext.ilike(f"%{format_filter}%"))
+        query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]

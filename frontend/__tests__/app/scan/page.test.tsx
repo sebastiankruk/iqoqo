@@ -107,7 +107,7 @@ describe("ScanPage", () => {
     // Assert mutate was called
     expect(mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "sound" }),
+      expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "music" }),
       expect.any(Object)
     );
   });
