@@ -109,6 +109,7 @@ export interface Item {
   id: number;
   manifestation_id: number;
   owner_id: string;
+  is_owner?: boolean;
   owner_name?: string | null;
   owner_count?: number;
   status: ProgressStatus;

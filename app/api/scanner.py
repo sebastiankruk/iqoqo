@@ -29,7 +29,7 @@ from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Item, Manifestation, ScanTelemetry, db
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates, fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
@@ -105,52 +105,6 @@ def _find_locally(code: str) -> Manifestation | None:
     return result if isinstance(result, Manifestation) else None
 
 
-@api_bp.route("/lookup/discogs/<discogs_id>", methods=["GET"])
-@require_auth
-def lookup_discogs_id(discogs_id: str):
-    """Specific lookup by Discogs Release ID."""
-    manifestation = _find_locally(discogs_id)
-
-    if manifestation:
-        data = dict(manifestation.meta)
-        data["manifestation_id"] = manifestation.id
-        data["already_in_db"] = True
-
-        # Check if user owns it
-        user_id = getattr(g, "user_id", None)
-        item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
-        data["already_in_collection"] = item is not None
-        data["item_id"] = item.id if item else None
-
-        _record_scan_telemetry(discogs_id, "audio", "database", "success", manifestation.id)
-        return jsonify({"success": True, "data": data, "error": None}), 200
-
-    meta = fetch_discogs_by_id(discogs_id)
-    if meta:
-        # Enrich meta with scanner flags for consistent response shape
-        meta = dict(meta)
-        meta["data_source"] = "discogs"
-        meta["identifier"] = discogs_id
-        meta["already_in_db"] = False
-        meta["already_in_collection"] = False
-        meta["item_id"] = None
-
-        # Auto-save manifestation to catalog to streamline ingestion
-        try:
-            stored_manifestation = IngestService.ingest_from_meta(meta)
-            meta["manifestation_id"] = stored_manifestation.id
-            meta["already_in_db"] = True
-            _record_scan_telemetry(discogs_id, "audio", "discogs", "success", stored_manifestation.id)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            current_app.logger.warning(f"Failed to auto-save Discogs manifestation {discogs_id}: {e}")
-            meta["manifestation_id"] = None
-            _record_scan_telemetry(discogs_id, "audio", "discogs", "success")
-
-        return jsonify({"success": True, "data": meta, "error": None}), 200
-
-    return jsonify({"success": False, "data": None, "error": f"Discogs Release {discogs_id} not found"}), 404
-
-
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
 def lookup_barcode_preview(query: str):
@@ -168,7 +122,26 @@ def lookup_barcode_preview(query: str):
         current_app.logger.debug(f"Hashed search '{query}' to {canonical_id}")
 
     # Check DB first
-    all_manifestations = Manifestation.query.filter(or_(*_get_manifestation_filters(canonical_id))).all()
+    query_obj = Manifestation.query.join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
+
+    # Filter by format if hint is provided to avoid cross-media collisions
+    if format_hint:
+        from app.db.core import MediaCategory
+
+        content_type = None
+        if format_hint in ("game", "boardgame"):
+            content_type = MediaCategory.GAME
+        elif format_hint in ("audio", "cd", "vinyl", "sound"):
+            content_type = MediaCategory.SOUND
+        elif format_hint in ("video", "dvd", "bluray", "movie"):
+            content_type = MediaCategory.VIDEO
+        elif format_hint in ("book", "text"):
+            content_type = MediaCategory.TEXT
+
+        if content_type:
+            query_obj = query_obj.filter(Expression.content_type == content_type)
+
+    all_manifestations = query_obj.all()
     manifestation = all_manifestations[0] if all_manifestations else None
 
     if manifestation and manifestation.meta:
@@ -257,32 +230,58 @@ def lookup_barcode_preview(query: str):
                 meta["data_source"] = "tmdb"
             provider = "tmdb" if meta else None
     elif format_hint in ("game", "boardgame"):
-        upc_meta = resolve_physical_media(barcode)
-        if upc_meta and upc_meta.get("title"):
-            meta = fetch_bgg_metadata(upc_meta["title"])
-            if meta:
-                meta["data_source"] = "bgg"
-            provider = "bgg" if meta else "upc"
-            if meta:
-                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-            else:
-                meta = upc_meta
-                meta["data_source"] = "upc"
-        if not meta:
+        # Heuristic: 1-7 digits are likely BGG IDs, not barcodes
+        is_short_numeric = barcode.isdigit() and len(barcode) <= 7
+
+        if is_short_numeric:
             meta = fetch_bgg_metadata(barcode)
             if meta:
                 meta["data_source"] = "bgg"
-            provider = "bgg" if meta else None
+                provider = "bgg"
+        else:
+            # Full waterfall for barcodes
+            upc_meta = resolve_physical_media(barcode)
+            if upc_meta and upc_meta.get("title"):
+                # Try BGG by title first
+                meta = fetch_bgg_metadata(upc_meta["title"])
+                if meta:
+                    meta["data_source"] = "bgg"
+                    provider = "bgg"
+                    # Merge UPC data (like high-res covers from Allegro) if it doesn't overwrite BGG
+                    if isinstance(meta, dict):
+                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                else:
+                    meta = upc_meta
+                    meta["data_source"] = "upc"
+                    provider = "upc"
+
+            if not meta:
+                # Last resort: try BGG with raw identifier
+                meta = fetch_bgg_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "bgg"
+                    provider = "bgg"
     elif format_hint in ("puzzle", "jigsaw"):
         meta = resolve_physical_media(barcode)
         if meta:
             meta["data_source"] = "upc"
         provider = "upc" if meta else None
     elif format_hint in ("audio", "cd", "vinyl", "sound"):
-        meta = fetch_discogs_metadata(barcode)
-        if meta:
-            meta["data_source"] = "discogs"
-        provider = "discogs" if meta else None
+        # Heuristic: 1-7 digits are likely Discogs Release IDs
+        if barcode.isdigit() and len(barcode) <= 7:
+            meta = fetch_discogs_by_id(barcode)
+            if meta:
+                meta["data_source"] = "discogs"
+                provider = "discogs"
+
+        if not meta:
+            meta = fetch_discogs_metadata(barcode)
+            if meta:
+                meta["data_source"] = "discogs"
+                provider = "discogs"
+
+        if not meta:
+            provider = "discogs" if meta else None
         if not meta:
             meta = fetch_audio_metadata(barcode)
             if meta:

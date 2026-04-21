@@ -49,9 +49,9 @@ def sample_export_data():
     }
 
 
-def test_admin_stats_empty(client):
+def test_admin_stats_empty(client, admin_headers):
     """Test /api/admin/stats with empty database."""
-    response = client.get("/api/admin/stats")
+    response = client.get("/api/admin/stats", headers=admin_headers)
     assert response.status_code == 200
 
     data = response.json
@@ -61,12 +61,12 @@ def test_admin_stats_empty(client):
     assert data["items"] == 0
 
 
-def test_admin_stats_with_data(app, client, sample_export_data):
+def test_admin_stats_with_data(app, client, admin_headers, sample_export_data):
     """Test /api/admin/stats with data in database."""
     with app.app_context():
         DataManager.import_data(sample_export_data, clear_existing=False)
 
-    response = client.get("/api/admin/stats")
+    response = client.get("/api/admin/stats", headers=admin_headers)
     assert response.status_code == 200
 
     data = response.json
@@ -76,9 +76,9 @@ def test_admin_stats_with_data(app, client, sample_export_data):
     assert data["items"] == 1
 
 
-def test_admin_export_empty(client):
+def test_admin_export_empty(client, admin_headers):
     """Test /api/admin/export with empty database."""
-    response = client.get("/api/admin/export")
+    response = client.get("/api/admin/export", headers=admin_headers)
     assert response.status_code == 200
     assert response.content_type == "application/json"
 
@@ -95,12 +95,12 @@ def test_admin_export_empty(client):
     assert data["items"] == []
 
 
-def test_admin_export_with_data(app, client, sample_export_data):
+def test_admin_export_with_data(app, client, admin_headers, sample_export_data):
     """Test /api/admin/export with data in database."""
     with app.app_context():
         DataManager.import_data(sample_export_data, clear_existing=False)
 
-    response = client.get("/api/admin/export")
+    response = client.get("/api/admin/export", headers=admin_headers)
     assert response.status_code == 200
 
     data = json.loads(response.data)
@@ -111,9 +111,9 @@ def test_admin_export_with_data(app, client, sample_export_data):
     assert data["manifestations"][0]["isbn13"] == "9780451524935"
 
 
-def test_admin_import_json_body(client, sample_export_data):
+def test_admin_import_json_body(client, admin_headers, sample_export_data):
     """Test /api/admin/import with JSON in request body."""
-    response = client.post("/api/admin/import", data=json.dumps(sample_export_data), content_type="application/json")
+    response = client.post("/api/admin/import", data=json.dumps(sample_export_data), content_type="application/json", headers=admin_headers)
 
     assert response.status_code == 200
     data = response.json
@@ -124,11 +124,16 @@ def test_admin_import_json_body(client, sample_export_data):
     assert data["imported"]["items"] == 1
 
 
-def test_admin_import_multipart_file(client, sample_export_data):
+def test_admin_import_multipart_file(client, admin_headers, sample_export_data):
     """Test /api/admin/import with multipart file upload."""
     file_content = json.dumps(sample_export_data).encode("utf-8")
 
-    response = client.post("/api/admin/import", data={"file": (BytesIO(file_content), "export.json")}, content_type="multipart/form-data")
+    response = client.post(
+        "/api/admin/import",
+        data={"file": (BytesIO(file_content), "export.json")},
+        content_type="multipart/form-data",
+        headers=admin_headers,
+    )
 
     assert response.status_code == 200
     data = response.json
@@ -136,7 +141,7 @@ def test_admin_import_multipart_file(client, sample_export_data):
     assert data["imported"]["works"] == 1
 
 
-def test_admin_import_with_clear(app, client, sample_export_data):
+def test_admin_import_with_clear(app, client, admin_headers, sample_export_data):
     """Test /api/admin/import with clear_existing parameter."""
     # First import
     with app.app_context():
@@ -144,7 +149,9 @@ def test_admin_import_with_clear(app, client, sample_export_data):
         assert Work.query.count() == 1
 
     # Import again with clear
-    response = client.post("/api/admin/import?clear_existing=true", data=json.dumps(sample_export_data), content_type="application/json")
+    response = client.post(
+        "/api/admin/import?clear_existing=true", data=json.dumps(sample_export_data), content_type="application/json", headers=admin_headers
+    )
 
     assert response.status_code == 200
 
@@ -153,30 +160,30 @@ def test_admin_import_with_clear(app, client, sample_export_data):
         assert Work.query.count() == 1
 
 
-def test_admin_import_invalid_json(client):
+def test_admin_import_invalid_json(client, admin_headers):
     """Test /api/admin/import with invalid JSON."""
-    response = client.post("/api/admin/import", data="not valid json", content_type="application/json")
+    response = client.post("/api/admin/import", data="not valid json", content_type="application/json", headers=admin_headers)
 
     # Flask returns 400 for JSON parsing errors
     assert response.status_code == 400
 
 
-def test_admin_import_no_data(client):
+def test_admin_import_no_data(client, admin_headers):
     """Test /api/admin/import without data or file."""
-    response = client.post("/api/admin/import")
+    response = client.post("/api/admin/import", headers=admin_headers)
 
     assert response.status_code == 400
     assert "error" in response.json
 
 
-def test_admin_clear_without_confirmation(client):
+def test_admin_clear_without_confirmation(client, admin_headers):
     """Test /api/admin/clear without confirmation."""
-    response = client.delete("/api/admin/clear", data=json.dumps({}), content_type="application/json")
+    response = client.delete("/api/admin/clear", data=json.dumps({}), content_type="application/json", headers=admin_headers)
     assert "error" in response.json
     assert "confirm" in response.json["error"].lower()
 
 
-def test_admin_clear_with_confirmation(app, client, sample_export_data):
+def test_admin_clear_with_confirmation(app, client, admin_headers, sample_export_data):
     """Test /api/admin/clear with proper confirmation."""
     # Import some data first
     with app.app_context():
@@ -184,7 +191,7 @@ def test_admin_clear_with_confirmation(app, client, sample_export_data):
         assert Work.query.count() == 1
 
     # Clear with confirmation
-    response = client.delete("/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json")
+    response = client.delete("/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json", headers=admin_headers)
 
     assert response.status_code == 200
     data = response.json
@@ -199,9 +206,11 @@ def test_admin_clear_with_confirmation(app, client, sample_export_data):
         assert Item.query.count() == 0
 
 
-def test_admin_clear_with_false_confirmation(client):
+def test_admin_clear_with_false_confirmation(client, admin_headers):
     """Test /api/admin/clear with confirm=false."""
-    response = client.delete("/api/admin/clear", data=json.dumps({"confirm": False}), content_type="application/json")
+    response = client.delete(
+        "/api/admin/clear", data=json.dumps({"confirm": False}), content_type="application/json", headers=admin_headers
+    )
 
     assert response.status_code == 400
     assert "error" in response.json
@@ -214,9 +223,9 @@ def test_admin_clear_with_false_confirmation(client):
         (None, "application/json"),  # missing JSON body
     ],
 )
-def test_admin_clear_invalid_or_missing_json_payload(client, payload, content_type):
+def test_admin_clear_invalid_or_missing_json_payload(client, admin_headers, payload, content_type):
     """Test /api/admin/clear returns standardized 400 for invalid or missing JSON payload."""
-    request_kwargs = {"content_type": content_type}
+    request_kwargs = {"content_type": content_type, "headers": admin_headers}
     if payload is not None:
         request_kwargs["data"] = payload
 
@@ -230,19 +239,21 @@ def test_admin_clear_invalid_or_missing_json_payload(client, payload, content_ty
     }
 
 
-def test_full_export_import_cycle(app, client, sample_export_data):
+def test_full_export_import_cycle(app, client, admin_headers, sample_export_data):
     """Test complete export-import-export cycle."""
     # 1. Import initial data
     with app.app_context():
         DataManager.import_data(sample_export_data, clear_existing=False)
 
     # 2. Export via API
-    export_response = client.get("/api/admin/export")
+    export_response = client.get("/api/admin/export", headers=admin_headers)
     assert export_response.status_code == 200
     exported_data = json.loads(export_response.data)
 
     # 3. Clear database
-    clear_response = client.delete("/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json")
+    clear_response = client.delete(
+        "/api/admin/clear", data=json.dumps({"confirm": True}), content_type="application/json", headers=admin_headers
+    )
     assert clear_response.status_code == 200
 
     # 4. Verify empty
@@ -250,7 +261,9 @@ def test_full_export_import_cycle(app, client, sample_export_data):
         assert Work.query.count() == 0
 
     # 5. Re-import the exported data
-    import_response = client.post("/api/admin/import", data=json.dumps(exported_data), content_type="application/json")
+    import_response = client.post(
+        "/api/admin/import", data=json.dumps(exported_data), content_type="application/json", headers=admin_headers
+    )
     assert import_response.status_code == 200
 
     # 6. Verify data is back
@@ -260,7 +273,7 @@ def test_full_export_import_cycle(app, client, sample_export_data):
         assert work.title == "1984"
 
 
-def test_admin_import_handles_exceptions(client):
+def test_admin_import_handles_exceptions(client, admin_headers):
     """Test that import endpoint handles database errors gracefully."""
     # Missing required fields
     invalid_data = {
@@ -271,7 +284,7 @@ def test_admin_import_handles_exceptions(client):
         "items": [],
     }
 
-    response = client.post("/api/admin/import", data=json.dumps(invalid_data), content_type="application/json")
+    response = client.post("/api/admin/import", data=json.dumps(invalid_data), content_type="application/json", headers=admin_headers)
 
     # Should return error, not crash
     assert response.status_code in [400, 500]

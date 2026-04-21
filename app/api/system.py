@@ -22,7 +22,7 @@ from flask import g, jsonify, make_response, request, send_file, send_from_direc
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth
+from app.api.decorators import admin_required, require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.db.models import Item, Manifestation, User, Work, db
@@ -125,12 +125,14 @@ def get_global_stats():
 
 
 @api_bp.route("/admin/stats", methods=["GET"])
+@admin_required
 def get_stats():
     stats = DataManager.get_stats()
     return jsonify(stats)
 
 
 @api_bp.route("/admin/export", methods=["GET"])
+@admin_required
 def export_data():
     try:
         data = DataManager.export_all()
@@ -143,6 +145,7 @@ def export_data():
 
 
 @api_bp.route("/admin/import", methods=["POST"])
+@admin_required
 def import_data():
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
@@ -164,6 +167,7 @@ def import_data():
 
 
 @api_bp.route("/admin/clear", methods=["DELETE"])
+@admin_required
 def clear_data():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):

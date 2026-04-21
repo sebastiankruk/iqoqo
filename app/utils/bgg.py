@@ -1,4 +1,11 @@
-"""BoardGameGeek (BGG) metadata lookup utilities."""
+"""BoardGameGeek (BGG) metadata lookup utilities.
+
+Implementation note: This module uses raw HTTP requests to the BGG XML API v2 rather than
+the `boardgamegeek2` PyPI library. Reason: the library does not support custom Authorization
+headers (required for BGG_API_TOKEN), and our response dict maps to FRBR-specific keys
+(`Title`, `Designers`, `PublicationYear`, `Source`, `Format`) that would need a new mapping
+layer over the library's objects. Migration to `boardgamegeek2` is tracked for a future release.
+"""
 
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
@@ -136,6 +143,6 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
             "format": "boardgame",
             "Source": "BGG",
         }
-    except (requests.RequestException, ET.ParseError) as e:
+    except (requests.RequestException, ET.ParseError, ValueError, KeyError) as e:
         logger.warning(f"BGG fetch failed for {query}: {e}")
         return None

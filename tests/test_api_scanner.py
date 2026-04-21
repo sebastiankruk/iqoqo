@@ -296,9 +296,9 @@ def test_lookup_title_video_tmdb(mock_tmdb, mock_upc, client, normal_user_header
 @patch("app.api.scanner.fetch_bgg_metadata")
 def test_lookup_barcode_boardgame_bgg(mock_bgg, mock_resolve, client, normal_user_headers):
     """Test looking up game format."""
-    mock_resolve.return_value = {"title": "Catan", "barcode": "54321"}
+    mock_resolve.return_value = {"title": "Catan", "barcode": "5432154321"}
     mock_bgg.return_value = {"Title": "Catan", "title": "Catan", "Format": "boardgame"}
-    response = client.get("/api/lookup/54321?format=game", headers=normal_user_headers)
+    response = client.get("/api/lookup/5432154321?format=game", headers=normal_user_headers)
 
     assert response.status_code == 200
     assert response.json["data"]["title"] == "Catan"
@@ -366,3 +366,19 @@ def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_header
 
     assert response.status_code == 200
     assert response.json["data"]["format"] == "video"
+
+
+@patch("app.api.scanner.resolve_physical_media")
+@patch("app.api.scanner.fetch_bgg_metadata")
+def test_lookup_bgg_id_skips_upc(mock_bgg, mock_resolve, client, normal_user_headers):
+    """Verify that short numeric IDs skip the UPC waterfall (prevention of Skil Drill bug)."""
+    mock_bgg.return_value = {"title": "The Settlers of Canaan"}
+
+    # Use a short numeric query
+    response = client.get("/api/lookup/3075?format=game", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "The Settlers of Canaan"
+
+    mock_bgg.assert_called_with("3075")
+    mock_resolve.assert_not_called()
