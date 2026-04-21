@@ -110,21 +110,21 @@
     rdfs:label "text" ;
     rdfs:comment "Text-based works (books, articles). Maps to Expression.content_type = 'text'." .
 
-:MediaCategorySound a :MediaCategory ;
-    rdfs:label "sound" ;
-    rdfs:comment "Sound-based works (CDs, vinyl). Maps to Expression.content_type = 'sound'." .
+:MediaCategoryMusic a :MediaCategory ;
+    rdfs:label "music" ;
+    rdfs:comment "Music-based works (CDs, vinyl). Maps to Expression.content_type = 'music'." .
 
-:MediaCategoryVideo a :MediaCategory ;
-    rdfs:label "moving image" ;
-    rdfs:comment "Moving image works (films, DVDs, Blu-rays). Maps to Expression.content_type = 'moving image'." .
+:MediaCategoryMovie a :MediaCategory ;
+    rdfs:label "movie" ;
+    rdfs:comment "Moving image works (films, DVDs, Blu-rays). Maps to Expression.content_type = 'movie'." .
 
-:MediaCategoryGame a :MediaCategory ;
-    rdfs:label "boardgame" ;
-    rdfs:comment "Board game works. Maps to Expression.content_type = 'boardgame'." .
+:MediaCategoryBoardGame a :MediaCategory ;
+    rdfs:label "board_game" ;
+    rdfs:comment "Board game works. Maps to Expression.content_type = 'board_game'." .
 
-:MediaCategoryObject a :MediaCategory ;
-    rdfs:label "three-dimensional object" ;
-    rdfs:comment "Three-dimensional objects (jigsaw puzzles). Maps to Expression.content_type = 'three-dimensional object'." .
+:MediaCategoryPuzzle a :MediaCategory ;
+    rdfs:label "puzzle" ;
+    rdfs:comment "Jigsaw puzzles. Maps to Expression.content_type = 'puzzle'." .
 
 :MediaFormat a owl:Class ;
     rdfs:label "MediaFormat" ;
@@ -134,29 +134,41 @@
     rdfs:label "book" ;
     rdfs:comment "Printed book. Maps to MediaCategory 'text'." .
 
+:MediaFormatAudiobookCD a :MediaFormat ;
+    rdfs:label "audiobook_cd" ;
+    rdfs:comment "Audiobook on CD. Maps to MediaCategory 'text'." .
+
 :MediaFormatCD a :MediaFormat ;
     rdfs:label "cd" ;
-    rdfs:comment "Audio Compact Disc. Maps to MediaCategory 'sound'. Sub-format of 'audio'." .
+    rdfs:comment "Audio Compact Disc. Maps to MediaCategory 'music'." .
 
 :MediaFormatVinyl a :MediaFormat ;
     rdfs:label "vinyl" ;
-    rdfs:comment "Vinyl record (LP/EP/45). Maps to MediaCategory 'sound'. Sub-format of 'audio'." .
+    rdfs:comment "Vinyl record (LP/EP/45). Maps to MediaCategory 'music'." .
 
-:MediaFormatAudio a :MediaFormat ;
-    rdfs:label "audio" ;
-    rdfs:comment "Generic audio (scanner-level grouping for CD/Vinyl). Maps to MediaCategory 'sound'." .
+:MediaFormatSACD a :MediaFormat ;
+    rdfs:label "sacd" ;
+    rdfs:comment "Super Audio CD. Maps to MediaCategory 'music'." .
 
-:MediaFormatVideo a :MediaFormat ;
-    rdfs:label "video" ;
-    rdfs:comment "Video release (DVD, Blu-ray, VHS). Maps to MediaCategory 'moving image'." .
+:MediaFormatDVD a :MediaFormat ;
+    rdfs:label "dvd" ;
+    rdfs:comment "Digital Versatile Disc. Maps to MediaCategory 'movie'." .
+
+:MediaFormatBluRay a :MediaFormat ;
+    rdfs:label "bluray" ;
+    rdfs:comment "Blu-ray Disc. Maps to MediaCategory 'movie'." .
 
 :MediaFormatBoardgame a :MediaFormat ;
-    rdfs:label "boardgame" ;
-    rdfs:comment "Board game. Maps to MediaCategory 'boardgame'." .
+    rdfs:label "board_game" ;
+    rdfs:comment "Board game. Maps to MediaCategory 'board_game'." .
+
+:MediaFormatCards a :MediaFormat ;
+    rdfs:label "cards" ;
+    rdfs:comment "Card game. Maps to MediaCategory 'board_game'." .
 
 :MediaFormatPuzzle a :MediaFormat ;
     rdfs:label "puzzle" ;
-    rdfs:comment "Jigsaw puzzle. Maps to MediaCategory 'three-dimensional object'." .
+    rdfs:comment "Jigsaw puzzle. Maps to MediaCategory 'puzzle'." .
 # ---------------------------------------------------------------------------
 # Status and Progress Registry (v0.5.0)
 # ---------------------------------------------------------------------------
@@ -179,6 +191,12 @@
     rdfs:range :ProgressStatus ;
     rdfs:label "hasProgressStatus" .
 
+:applicableToCategory a owl:ObjectProperty ;
+    rdfs:domain :ProgressStatus ;
+    rdfs:range :MediaCategory ;
+    rdfs:label "applicableToCategory" ;
+    rdfs:comment "Links a progress status to the media category it applies to." .
+
 # Individuals for CollectionStatus
 :StatusWishList a :CollectionStatus ; rdfs:label "wish_list" .
 :StatusOrdered a :CollectionStatus ; rdfs:label "ordered" .
@@ -188,18 +206,18 @@
 :StatusLost a :CollectionStatus ; rdfs:label "lost" .
 
 # Individuals for ProgressStatus (Unified 3-stage model)
-:StatusWantToRead a :ProgressStatus ; rdfs:label "want_to_read" .
-:StatusReading a :ProgressStatus ; rdfs:label "reading" .
-:StatusRead a :ProgressStatus ; rdfs:label "read" .
+:StatusWantToRead a :ProgressStatus ; rdfs:label "want_to_read" ; :applicableToCategory :MediaCategoryText .
+:StatusReading a :ProgressStatus ; rdfs:label "reading" ; :applicableToCategory :MediaCategoryText .
+:StatusRead a :ProgressStatus ; rdfs:label "read" ; :applicableToCategory :MediaCategoryText .
 
-:StatusWantToListen a :ProgressStatus ; rdfs:label "want_to_listen" .
-:StatusListening a :ProgressStatus ; rdfs:label "listening" .
-:StatusListened a :ProgressStatus ; rdfs:label "listened" .
+:StatusWantToListen a :ProgressStatus ; rdfs:label "want_to_listen" ; :applicableToCategory :MediaCategoryMusic .
+:StatusListening a :ProgressStatus ; rdfs:label "listening" ; :applicableToCategory :MediaCategoryMusic .
+:StatusListened a :ProgressStatus ; rdfs:label "listened" ; :applicableToCategory :MediaCategoryMusic .
 
-:StatusWantToWatch a :ProgressStatus ; rdfs:label "want_to_watch" .
-:StatusWatching a :ProgressStatus ; rdfs:label "watching" .
-:StatusWatched a :ProgressStatus ; rdfs:label "watched" .
+:StatusWantToWatch a :ProgressStatus ; rdfs:label "want_to_watch" ; :applicableToCategory :MediaCategoryMovie .
+:StatusWatching a :ProgressStatus ; rdfs:label "watching" ; :applicableToCategory :MediaCategoryMovie .
+:StatusWatched a :ProgressStatus ; rdfs:label "watched" ; :applicableToCategory :MediaCategoryMovie .
 
-:StatusWantToPlay a :ProgressStatus ; rdfs:label "want_to_play" .
-:StatusPlaying a :ProgressStatus ; rdfs:label "playing" .
-:StatusPlayed a :ProgressStatus ; rdfs:label "played" .
+:StatusWantToPlay a :ProgressStatus ; rdfs:label "want_to_play" ; :applicableToCategory :MediaCategoryBoardGame, :MediaCategoryPuzzle .
+:StatusPlaying a :ProgressStatus ; rdfs:label "playing" ; :applicableToCategory :MediaCategoryBoardGame, :MediaCategoryPuzzle .
+:StatusPlayed a :ProgressStatus ; rdfs:label "played" ; :applicableToCategory :MediaCategoryBoardGame, :MediaCategoryPuzzle .

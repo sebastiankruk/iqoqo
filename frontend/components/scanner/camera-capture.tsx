@@ -64,7 +64,7 @@ interface CameraCaptureProps {
   /** Called after a successful cover upload (mode 1). */
   onUploadComplete?: () => void;
   /** Called with extracted metadata after vision extraction (mode 2). */
-  onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat) => void;
+  onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -77,7 +77,7 @@ interface CameraCaptureProps {
   /** Confirmation message */
   confirmMessage?: string;
   /** Initial media format */
-  format?: MediaFormat;
+  format?: MediaFormat | string;
   /** Button variant */
   variant?: ButtonVariant;
   /** Optional CSS class name applied directly to the button */

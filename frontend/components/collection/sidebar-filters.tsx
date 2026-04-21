@@ -16,28 +16,49 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, Book, Music, Film, Puzzle as PuzzleIcon, LayoutGrid } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
+import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
 
 /** Props for SidebarFilters component */
 interface SidebarFiltersProps {
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
   statusCounts: Record<string, number>;
-  disableStatus?: boolean; // Fixed missing prop
+  disableStatus?: boolean;
 }
 
-const statusOptions: { value: string; label: string; dot: string }[] = [
+const collectionStatuses: { value: string; label: string; dot: string }[] = [
   { value: "wish_list", label: "On Wish List", dot: "bg-primary" },
   { value: "ordered", label: "Ordered", dot: "bg-orange-400" },
   { value: "available", label: "On Shelf", dot: "bg-chart-3" },
-  { value: "want_to_read", label: "Want to Read", dot: "bg-purple-500" },
-  { value: "reading", label: "Reading", dot: "bg-green-500" },
-  { value: "read", label: "Read", dot: "bg-blue-500" },
   { value: "lent", label: "Lent Out", dot: "bg-accent" },
   { value: "damaged", label: "Damaged", dot: "bg-yellow-600" },
   { value: "lost", label: "Lost", dot: "bg-destructive" },
 ];
+
+const progressLabels: Record<string, { label: string; dot: string }> = {
+  want_to_read: { label: "Want to Read", dot: "bg-purple-500" },
+  reading: { label: "Reading", dot: "bg-green-500" },
+  read: { label: "Read", dot: "bg-blue-500" },
+  want_to_listen: { label: "Want to Listen", dot: "bg-purple-500" },
+  listening: { label: "Listening", dot: "bg-green-500" },
+  listened: { label: "Listened", dot: "bg-blue-500" },
+  want_to_watch: { label: "Want to Watch", dot: "bg-purple-500" },
+  watching: { label: "Watching", dot: "bg-green-500" },
+  watched: { label: "Watched", dot: "bg-blue-500" },
+  want_to_play: { label: "Want to Play", dot: "bg-purple-500" },
+  playing: { label: "Playing", dot: "bg-green-500" },
+  played: { label: "Played", dot: "bg-blue-500" },
+};
+
+const categoryIcons: Record<string, React.ReactNode> = {
+  text: <Book className="h-3.5 w-3.5" />,
+  music: <Music className="h-3.5 w-3.5" />,
+  movie: <Film className="h-3.5 w-3.5" />,
+  board_game: <LayoutGrid className="h-3.5 w-3.5" />,
+  puzzle: <PuzzleIcon className="h-3.5 w-3.5" />,
+};
 
 /**
  * Checks if a filter is active.
@@ -97,24 +118,84 @@ function AccordionSection({
  * @param root0.disableStatus - Whether to disable the status filter
  * @returns {JSX.Element} The component*/
 export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, disableStatus }: SidebarFiltersProps) {
+  const activeCategory = activeFilters.find(f => f.type === "category")?.value;
+
+  const validProgressStatuses = activeCategory
+    ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []
+    : [];
+
+  const validFormats = activeCategory
+    ? MEDIA_HIERARCHY[activeCategory as keyof typeof MEDIA_HIERARCHY]?.formats || []
+    : [];
+
   return (
-    <aside className="w-full">
+    <aside className="w-full h-full overflow-y-auto pr-2 pb-20 custom-scrollbar">
       <div className="mb-4 flex items-center gap-2">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         <h2 className="font-serif text-sm font-bold text-foreground">Filters</h2>
       </div>
 
-      <AccordionSection title="Status">
+      <AccordionSection title="Media Category">
+        <div className="flex flex-col gap-1">
+          {Object.entries(MEDIA_HIERARCHY).map(([id, info]) => {
+            const active = isActive(activeFilters, "category", id);
+            return (
+              <label
+                key={id}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/10 text-foreground ring-1 ring-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => onToggleFilter({ type: "category", value: id })}
+                  className="hidden"
+                />
+                <span className={active ? "text-primary" : "text-muted-foreground"}>
+                  {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}
+                </span>
+                <span className="flex-1 font-medium">{info.label}</span>
+                {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+              </label>
+            );
+          })}
+        </div>
+      </AccordionSection>
+
+      {validFormats.length > 0 && (
+        <AccordionSection title="Physical Kind">
+          <div className="flex flex-col gap-1">
+            {validFormats.map(fmt => {
+              const active = isActive(activeFilters, "format", fmt.id);
+              return (
+                <label
+                  key={fmt.id}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-accent/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1">{fmt.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      <AccordionSection title="Collection Status">
         {disableStatus ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">Not applicable in Global Library view.</p>
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">Not applicable here.</p>
         ) : (
           <div className="flex flex-col gap-1">
-            {statusOptions.map(({ value, label, dot }) => {
+            {collectionStatuses.map(({ value, label, dot }) => {
               const active = isActive(activeFilters, "status", value);
               return (
                 <label
                   key={value}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/5 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
                 >
                   <input
                     type="checkbox"
@@ -131,6 +212,33 @@ export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, di
           </div>
         )}
       </AccordionSection>
+
+      {activeCategory && validProgressStatuses.length > 0 && (
+        <AccordionSection title="Progress">
+          <div className="flex flex-col gap-1">
+            {validProgressStatuses.map(status => {
+              const info = progressLabels[status] || { label: status, dot: "bg-muted" };
+              const active = isActive(activeFilters, "status", status);
+              return (
+                <label
+                  key={status}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "status", value: status })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className={`h-2 w-2 rounded-full ${info.dot}`} />
+                  <span className="flex-1">{info.label}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[status] ?? 0}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
     </aside>
   );
 }

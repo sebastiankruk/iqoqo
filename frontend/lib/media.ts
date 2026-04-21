@@ -29,48 +29,48 @@ export interface MediaMetadata {
  * Central registry of all supported media formats and their UI/API properties.
  * This is the SINGLE SOURCE OF TRUTH for media-related UI logic.
  */
-export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
+export const MEDIA_REGISTRY: Record<string, MediaMetadata> = {
   book: {
     label: "Book",
     apiCategory: "text",
     aspectRatio: 2 / 3,
     icon: Book,
   },
-  audio: {
-    label: "Audio (CD/Vinyl)",
-    apiCategory: "sound",
+  music: {
+    label: "Music (CD/Vinyl)",
+    apiCategory: "music",
     aspectRatio: 1 / 1,
     icon: Disc,
   },
   cd: {
     label: "CD",
-    apiCategory: "sound",
+    apiCategory: "music",
     aspectRatio: 1 / 1,
-    parent: "audio",
+    parent: "music",
     icon: Disc,
   },
   vinyl: {
     label: "Vinyl",
-    apiCategory: "sound",
+    apiCategory: "music",
     aspectRatio: 1 / 1,
-    parent: "audio",
+    parent: "music",
     icon: Disc,
   },
-  video: {
+  movie: {
     label: "Video (DVD/Blu-Ray)",
-    apiCategory: "moving image",
+    apiCategory: "movie",
     aspectRatio: 1 / 1,
     icon: Film,
   },
-  boardgame: {
+  board_game: {
     label: "Board Game",
-    apiCategory: "boardgame",
+    apiCategory: "board_game",
     aspectRatio: 1 / 1,
     icon: Dices,
   },
   puzzle: {
     label: "Jigsaw Puzzle",
-    apiCategory: "three-dimensional object",
+    apiCategory: "puzzle",
     aspectRatio: 1 / 1,
     icon: Puzzle,
   },

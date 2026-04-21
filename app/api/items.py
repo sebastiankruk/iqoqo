@@ -40,7 +40,9 @@ def get_items():
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
-    q = request.args.get("q", "").strip()
+    category_filter = request.args.get("category", None)
+    format_filter = request.args.get("format", None)
+    q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
 
     try:
@@ -95,16 +97,22 @@ def get_items():
     # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     query = query.filter(Item.owner_id == user_id)
+
+    if category_filter or format_filter or sort_by in ("title", "title-desc", "author"):
+        # We need to join these models if we have filters or specific sorting
+        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+        query = query.outerjoin(Work, Expression.work_id == Work.id)
+
+    if category_filter:
+        query = query.filter(Expression.content_type == category_filter)
+
+    if format_filter:
+        query = query.filter(Manifestation.meta["format"].astext.ilike(f"%{format_filter}%"))
+
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
-
-    if sort_by in ("title", "title-desc", "author"):
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-        )
 
     if sort_by == "title":
         query = query.order_by(Work.title.asc().nulls_last())

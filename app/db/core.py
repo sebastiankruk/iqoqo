@@ -98,27 +98,51 @@ class MediaCategory:
     """High-level media categories based on the FRBR content_type."""
 
     TEXT = "text"
-    SOUND = "sound"
-    VIDEO = "moving image"
-    GAME = "boardgame"
-    OBJECT = "three-dimensional object"
-    MUSIC = "notated_music"
+    MUSIC = "music"
+    MOVIE = "movie"
+    BOARD_GAME = "board_game"
+    PUZZLE = "puzzle"
 
-    ALL = (TEXT, SOUND, VIDEO, GAME, OBJECT, MUSIC)
+    ALL = (TEXT, MUSIC, MOVIE, BOARD_GAME, PUZZLE)
+
+
+CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
+    MediaCategory.TEXT: ("want_to_read", "reading", "read"),
+    MediaCategory.MUSIC: ("want_to_listen", "listening", "listened"),
+    MediaCategory.MOVIE: ("want_to_watch", "watching", "watched"),
+    MediaCategory.BOARD_GAME: ("want_to_play", "playing", "played"),
+    MediaCategory.PUZZLE: ("want_to_play", "playing", "played"),
+}
 
 
 class MediaFormat:
     """User-friendly media formats (display/scanning labels)."""
 
     BOOK = "book"
+    AUDIOBOOK_CD = "audiobook_cd"
     CD = "cd"
     VINYL = "vinyl"
-    AUDIO = "audio"
-    VIDEO = "video"
-    BOARDGAME = "boardgame"
+    SACD = "sacd"
+    DVD = "dvd"
+    BLURAY = "bluray"
+    BOARD_GAME = "board_game"
+    CARDS = "cards"
     PUZZLE = "puzzle"
 
-    ALL = (BOOK, CD, VINYL, AUDIO, VIDEO, BOARDGAME, PUZZLE)
+    ALL = (
+        BOOK,
+        AUDIOBOOK_CD,
+        CD,
+        VINYL,
+        SACD,
+        DVD,
+        BLURAY,
+        BOARD_GAME,
+        CARDS,
+        PUZZLE,
+        "music",
+        "movie",
+    )
 
 
 class Work(db.Model):  # type: ignore[name-defined]

@@ -130,11 +130,11 @@ def lookup_barcode_preview(query: str):
 
         content_type = None
         if format_hint in ("game", "boardgame"):
-            content_type = MediaCategory.GAME
+            content_type = MediaCategory.BOARD_GAME
         elif format_hint in ("audio", "cd", "vinyl", "sound"):
-            content_type = MediaCategory.SOUND
+            content_type = MediaCategory.MUSIC
         elif format_hint in ("video", "dvd", "bluray", "movie"):
-            content_type = MediaCategory.VIDEO
+            content_type = MediaCategory.MOVIE
         elif format_hint in ("book", "text"):
             content_type = MediaCategory.TEXT
 
@@ -378,16 +378,16 @@ def lookup_barcode_preview(query: str):
         from app.db.core import MediaFormat
 
         format_map = {
-            "video": MediaFormat.VIDEO,
-            "dvd": MediaFormat.VIDEO,
-            "bluray": MediaFormat.VIDEO,
-            "movie": MediaFormat.VIDEO,
-            "game": MediaFormat.BOARDGAME,
-            "boardgame": MediaFormat.BOARDGAME,
+            "video": "movie",
+            "dvd": MediaFormat.DVD,
+            "bluray": MediaFormat.BLURAY,
+            "movie": "movie",
+            "game": MediaFormat.BOARD_GAME,
+            "boardgame": MediaFormat.BOARD_GAME,
             "puzzle": MediaFormat.PUZZLE,
             "jigsaw": MediaFormat.PUZZLE,
-            "cd": MediaFormat.AUDIO,
-            "audio": MediaFormat.AUDIO,
+            "cd": MediaFormat.CD,
+            "audio": "music",
             "vinyl": MediaFormat.VINYL,
             "book": MediaFormat.BOOK,
             "text": MediaFormat.BOOK,

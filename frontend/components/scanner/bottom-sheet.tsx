@@ -36,7 +36,7 @@ interface BottomSheetProps {
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onShowManualForm?: () => void;
-  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame" | "puzzle";
+  format?: "book" | "music" | "movie" | "board_game" | "puzzle" | "audio" | "video" | "boardgame";
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
 }
@@ -70,10 +70,10 @@ export function BottomSheet({
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
   const formatToApiParam = (fmt?: string): string => {
-    if (fmt === "video") return "video";
-    if (fmt === "boardgame") return "boardgame";
+    if (fmt === "movie" || fmt === "video") return "movie";
+    if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
-    if (fmt === "audio") return "audio";
+    if (fmt === "music" || fmt === "audio") return "music";
     if (fmt === "book") return "book";
     return "";
   };
