@@ -18,8 +18,10 @@
 #
 
 import pytest
-from app.db.models import Expression, Item, Manifestation, Work, User, db
+
 from app.db.core import MediaCategory, MediaFormat
+from app.db.models import Expression, Item, Manifestation, User, Work, db
+
 
 @pytest.fixture
 def items_with_different_categories(app):
@@ -77,10 +79,12 @@ def items_with_different_categories(app):
         db.session.commit()
         return user.id
 
+
 def test_get_items_filtered_by_category(client, items_with_different_categories, app):
     """Test GET /api/items?category=..."""
     user_id = items_with_different_categories
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)
@@ -100,10 +104,12 @@ def test_get_items_filtered_by_category(client, items_with_different_categories,
     assert len(data) == 1
     assert data[0]["title"] == "Album One"
 
+
 def test_get_items_filtered_by_format(client, items_with_different_categories, app):
     """Test GET /api/items?format=..."""
     user_id = items_with_different_categories
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)
@@ -116,10 +122,12 @@ def test_get_items_filtered_by_format(client, items_with_different_categories, a
     assert len(data) == 1
     assert data[0]["title"] == "Game One"
 
+
 def test_get_items_search_with_filters(client, items_with_different_categories, app):
     """Test that search query correctly respects category/format filters."""
     user_id = items_with_different_categories
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)

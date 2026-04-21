@@ -99,7 +99,7 @@ describe("ScanPage", () => {
     // Fill out form
     fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Test Title" } });
     fireEvent.change(screen.getByLabelText(/Creator\(s\)/i), { target: { value: "Test Author" } });
-    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "audio" } });
+    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "music" } });
 
     // Submit form
     fireEvent.click(screen.getByText(/Save Manual Entry/i));
