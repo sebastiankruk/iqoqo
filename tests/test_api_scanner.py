@@ -373,12 +373,12 @@ def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_header
 def test_lookup_bgg_id_skips_upc(mock_bgg, mock_resolve, client, normal_user_headers):
     """Verify that short numeric IDs skip the UPC waterfall (prevention of Skil Drill bug)."""
     mock_bgg.return_value = {"title": "The Settlers of Canaan"}
-    
+
     # Use a short numeric query
     response = client.get("/api/lookup/3075?format=game", headers=normal_user_headers)
-    
+
     assert response.status_code == 200
     assert response.json["data"]["title"] == "The Settlers of Canaan"
-    
+
     mock_bgg.assert_called_with("3075")
     mock_resolve.assert_not_called()
