@@ -35,7 +35,7 @@ interface BottomSheetProps {
   onScannerStateChange?: (isActive: boolean) => void;
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
-  onShowManualForm?: () => void;
+  onShowManualForm?: (isbn?: string) => void;
   format?: "book" | "music" | "movie" | "board_game" | "puzzle" | "audio" | "video" | "boardgame";
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
@@ -89,6 +89,7 @@ export function BottomSheet({
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSearchedBarcode, setLastSearchedBarcode] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const barcodeEnabledRef = useRef<boolean>(true);
@@ -163,6 +164,7 @@ export function BottomSheet({
         }
       }
 
+      setLastSearchedBarcode(query);
       setIsSearching(true);
       setError(null);
       try {
@@ -310,7 +312,7 @@ export function BottomSheet({
             <p className="text-center text-xs text-destructive">{error}</p>
             <button
               type="button"
-              onClick={onShowManualForm}
+              onClick={() => onShowManualForm?.(lastSearchedBarcode)}
               className="w-full rounded-xl bg-secondary px-4 py-2 text-sm font-semibold shadow-sm hover:bg-secondary/80"
             >
               Enter Manually
@@ -391,7 +393,7 @@ export function BottomSheet({
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button
                 type="button"
-                onClick={onShowManualForm}
+                onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
               >
                 Manual Entry Form

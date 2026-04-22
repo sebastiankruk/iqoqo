@@ -34,25 +34,21 @@ depends_on = None
 
 
 def upgrade():
-    # Mappings: sound -> music, moving image -> movie, boardgame -> board_game, three-dimensional object -> puzzle
-    op.execute("UPDATE catalog.expressions SET content_type = 'music' WHERE content_type = 'sound'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'movie' WHERE content_type = 'moving image'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'board_game' WHERE content_type = 'boardgame'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'puzzle' WHERE content_type = 'three-dimensional object'")
-    # Fallback for SQLite (no schema)
-    op.execute("UPDATE expressions SET content_type = 'music' WHERE content_type = 'sound'")
-    op.execute("UPDATE expressions SET content_type = 'movie' WHERE content_type = 'moving image'")
-    op.execute("UPDATE expressions SET content_type = 'board_game' WHERE content_type = 'boardgame'")
-    op.execute("UPDATE expressions SET content_type = 'puzzle' WHERE content_type = 'three-dimensional object'")
+    """Mappings: sound -> music, moving image -> movie, boardgame -> board_game, three-dimensional object -> puzzle"""
+    conn = op.get_bind()
+    prefix = "catalog." if conn.dialect.name == "postgresql" else ""
+
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'music' WHERE content_type = 'sound'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'movie' WHERE content_type = 'moving image'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'board_game' WHERE content_type = 'boardgame'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'puzzle' WHERE content_type = 'three-dimensional object'")
 
 
 def downgrade():
-    op.execute("UPDATE catalog.expressions SET content_type = 'sound' WHERE content_type = 'music'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'moving image' WHERE content_type = 'movie'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'boardgame' WHERE content_type = 'board_game'")
-    op.execute("UPDATE catalog.expressions SET content_type = 'three-dimensional object' WHERE content_type = 'puzzle'")
-    # Fallback for SQLite
-    op.execute("UPDATE expressions SET content_type = 'sound' WHERE content_type = 'music'")
-    op.execute("UPDATE expressions SET content_type = 'moving image' WHERE content_type = 'movie'")
-    op.execute("UPDATE expressions SET content_type = 'boardgame' WHERE content_type = 'board_game'")
-    op.execute("UPDATE expressions SET content_type = 'three-dimensional object' WHERE content_type = 'puzzle'")
+    conn = op.get_bind()
+    prefix = "catalog." if conn.dialect.name == "postgresql" else ""
+
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'sound' WHERE content_type = 'music'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'moving image' WHERE content_type = 'movie'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'boardgame' WHERE content_type = 'board_game'")
+    op.execute(f"UPDATE {prefix}expressions SET content_type = 'three-dimensional object' WHERE content_type = 'puzzle'")

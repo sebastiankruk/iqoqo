@@ -27,6 +27,7 @@ interface MobileFilterDrawerProps {
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
   statusCounts: Record<string, number>;
+  formatCounts?: Record<string, number>;
 }
 
 /**
@@ -45,6 +46,7 @@ export function MobileFilterDrawer({
   activeFilters,
   onToggleFilter,
   statusCounts,
+  formatCounts,
 }: MobileFilterDrawerProps) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -89,7 +91,7 @@ export function MobileFilterDrawer({
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            <SidebarFilters activeFilters={activeFilters} onToggleFilter={onToggleFilter} statusCounts={statusCounts} />
+            <SidebarFilters activeFilters={activeFilters} onToggleFilter={onToggleFilter} statusCounts={statusCounts} formatCounts={formatCounts} />
           </div>
 
           <div className="border-t border-border p-4">

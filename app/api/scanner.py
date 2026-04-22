@@ -516,7 +516,13 @@ def scan_barcode():
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
         return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
-    new_item = Item(manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status="available")
+    from app.db.core import CATEGORY_PROGRESS_STATUSES
+    content_type = manifestation.expression.content_type if manifestation.expression else "text"
+    default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
+
+    new_item = Item(
+        manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status=default_progress, collection_status="available"
+    )
     db.session.add(new_item)
 
     # For name-based lookups (no barcode), store the hash_id in meta so future

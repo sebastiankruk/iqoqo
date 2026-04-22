@@ -38,8 +38,25 @@ export const queryKeys = {
    * @param formatFilter - Optional format filter.
    * @returns The query key for items.
    */
-  items: (page = 1, limit = 20, statuses?: string[], query?: string, sort?: string, category?: string, formatFilter?: string) =>
-    ["items", page, limit, statuses?.join(",") ?? "", query ?? "", sort ?? "", category ?? "", formatFilter ?? ""] as const,
+  items: (
+    page = 1,
+    limit = 20,
+    statuses?: string[],
+    query?: string,
+    sort?: string,
+    category?: string,
+    formatFilter?: string
+  ) =>
+    [
+      "items",
+      page,
+      limit,
+      statuses?.join(",") ?? "",
+      query ?? "",
+      sort ?? "",
+      category ?? "",
+      formatFilter ?? "",
+    ] as const,
   /**
    * Query key for a single item.
    *
@@ -54,7 +71,8 @@ export const queryKeys = {
    * @returns {readonly ["isbn", string]} The query key for ISBN lookup.
    */
   isbn: (isbn: string) => ["isbn", isbn] as const,
-  manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) => ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
+  manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
+    ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   config: ["config"] as const,
 };
@@ -102,7 +120,16 @@ export function useStats() {
  * @param formatFilter - Format filter
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
-export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, sort?: string, enabled = true, category?: string, formatFilter?: string) {
+export function useItems(
+  page = 1,
+  limit = 20,
+  statuses?: string[],
+  query?: string,
+  sort?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string
+) {
   return useQuery({
     queryKey: queryKeys.items(page, limit, statuses, query, sort, category, formatFilter),
     queryFn: async () => {
@@ -143,7 +170,14 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
  * @param formatFilter - Format filter
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<CatalogEntry[]>>} Query result
  */
-export function useManifestations(page = 1, limit = 20, query?: string, enabled = true, category?: string, formatFilter?: string) {
+export function useManifestations(
+  page = 1,
+  limit = 20,
+  query?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string
+) {
   return useQuery({
     queryKey: queryKeys.manifestations(page, limit, query, category, formatFilter),
     queryFn: async () => {

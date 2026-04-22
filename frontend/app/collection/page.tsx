@@ -105,7 +105,7 @@ function CollectionContent() {
     () => activeFilters.filter(f => f.type === "category").map(f => f.value),
     [activeFilters]
   );
-  
+
   const formatFilters = useMemo(
     () => activeFilters.filter(f => f.type === "format").map(f => f.value),
     [activeFilters]
@@ -170,17 +170,30 @@ function CollectionContent() {
     setActiveFilters([]);
   }, []);
 
+  const formatCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("format_")) {
+        counts[key.replace("format_", "")] = value as number;
+      }
+    }
+    return counts;
+  }, [statsData]);
+
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
-    return {
-      available: statsData.items_available,
-      lent: statsData.items_lent,
-      lost: statsData.items_lost,
-      wish_list: statsData.items_wish_list,
-      reading: statsData.items_reading,
-      read: statsData.items_read,
-      want_to_read: statsData.items_want_to_read ?? statsData.to_read,
-    };
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("items_")) {
+        counts[key.replace("items_", "")] = value as number;
+      }
+    }
+    // Also add to_read alias if want_to_read is missing
+    if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
+      counts.want_to_read = statsData.to_read;
+    }
+    return counts;
   }, [statsData]);
 
   const filteredItems = useMemo(() => {
@@ -312,6 +325,7 @@ function CollectionContent() {
                 activeFilters={activeFilters}
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
+                formatCounts={formatCounts}
                 disableStatus={viewMode === "manifestations"}
               />
             </div>
@@ -365,6 +379,7 @@ function CollectionContent() {
         activeFilters={activeFilters}
         onToggleFilter={toggleFilter}
         statusCounts={statusCounts}
+        formatCounts={formatCounts}
       />
     </div>
   );

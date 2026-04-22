@@ -42,7 +42,16 @@ describe("queryKeys.items", () => {
 
   it("joins multiple statuses with a comma", async () => {
     const { queryKeys } = await import("@/lib/api/hooks");
-    expect(queryKeys.items(1, 10, ["reading", "wish_list"])).toEqual(["items", 1, 10, "reading,wish_list", "", "", "", ""]);
+    expect(queryKeys.items(1, 10, ["reading", "wish_list"])).toEqual([
+      "items",
+      1,
+      10,
+      "reading,wish_list",
+      "",
+      "",
+      "",
+      "",
+    ]);
   });
 
   it("treats an empty statuses array the same as undefined", async () => {

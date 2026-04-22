@@ -44,6 +44,7 @@ export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
   const [candidates, setCandidates] = useState<{ isbn: string; items: IsbnMeta[] } | null>(null);
   const [showManual, setShowManual] = useState(false);
+  const [initialIdentifier, setInitialIdentifier] = useState("");
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
@@ -77,8 +78,14 @@ export default function ScanPage() {
     setTitle(data.Title || "");
     setAuthor(data.Authors?.join(", ") || "");
     if (file) setSnappedCover(file);
+    setInitialIdentifier("");
     setShowManual(true);
     toast.success("Cover metadata extracted! Please review.");
+  }, []);
+
+  const handleShowManualForm = useCallback((isbn?: string) => {
+    setInitialIdentifier(isbn || "");
+    setShowManual(true);
   }, []);
 
   const handleManualSubmit = async (data: ManualEntryData) => {
@@ -168,14 +175,20 @@ export default function ScanPage() {
           onScannerStateChange={setScannerActive}
           onTabChange={setScannerTab}
           onExtractComplete={handleExtractComplete}
-          onShowManualForm={() => setShowManual(true)}
+          onShowManualForm={handleShowManualForm}
           format={activeFormat}
           torchOn={torchOn}
           onTorchCapabilityFound={setHasTorch}
         />
       )}
       {result && (
-        <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />
+        <SuccessCard
+          isbn={result.isbn}
+          meta={result.meta}
+          onDismiss={handleDismiss}
+          snappedCover={snappedCover}
+          onShowManualForm={handleShowManualForm}
+        />
       )}
 
       {candidates && (
@@ -207,6 +220,7 @@ export default function ScanPage() {
             initialTitle={title}
             initialAuthors={author}
             initialFormat={activeFormat}
+            initialIdentifier={initialIdentifier}
           />
         </div>
       )}

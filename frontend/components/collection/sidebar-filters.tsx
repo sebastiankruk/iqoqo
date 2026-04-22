@@ -24,7 +24,8 @@ import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
 interface SidebarFiltersProps {
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
-  statusCounts: Record<string, number>;
+  statusCounts?: Record<string, number>;
+  formatCounts?: Record<string, number>;
   disableStatus?: boolean;
 }
 
@@ -117,7 +118,13 @@ function AccordionSection({
  * @param root0.statusCounts - The counts for each status
  * @param root0.disableStatus - Whether to disable the status filter
  * @returns {JSX.Element} The component*/
-export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, disableStatus }: SidebarFiltersProps) {
+export function SidebarFilters({
+  activeFilters,
+  onToggleFilter,
+  statusCounts = {},
+  formatCounts = {},
+  disableStatus = false,
+}: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
 
   const validProgressStatuses = activeCategory
@@ -174,12 +181,13 @@ export function SidebarFilters({ activeFilters, onToggleFilter, statusCounts, di
                 >
                   <input
                     type="radio"
-                    name="format"
+                    name="format_filter"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                    className="h-4 w-4 shrink-0 rounded-full border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <span className="flex-1">{fmt.label}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{formatCounts[fmt.id] ?? 0}</span>
                 </label>
               );
             })}
