@@ -517,6 +517,7 @@ def scan_barcode():
         return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
     from app.db.core import CATEGORY_PROGRESS_STATUSES
+
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
     default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
 

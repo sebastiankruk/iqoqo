@@ -116,6 +116,7 @@ function AccordionSection({
  * @param root0.activeFilters - The active filters
  * @param root0.onToggleFilter - Callback to toggle a filter
  * @param root0.statusCounts - The counts for each status
+ * @param root0.formatCounts - The counts for each format
  * @param root0.disableStatus - Whether to disable the status filter
  * @returns {JSX.Element} The component*/
 export function SidebarFilters({
