@@ -18,7 +18,7 @@
 import { X, ArrowDownUp } from "lucide-react";
 
 /** Filter type */
-export type FilterType = "status";
+export type FilterType = "status" | "category" | "format";
 
 /** Active filter */
 export interface ActiveFilter {
@@ -65,6 +65,8 @@ const statusLabel: Record<string, string> = {
  */
 function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "status") return `Status: ${statusLabel[filter.value] ?? filter.value}`;
+  if (filter.type === "category") return `Category: ${filter.value.replace("_", " ")}`;
+  if (filter.type === "format") return `Format: ${filter.value.replace("_", " ")}`;
   return filter.value;
 }
 
@@ -76,6 +78,8 @@ function chipLabel(filter: ActiveFilter): string {
  */
 function chipColor(filter: ActiveFilter): string {
   if (filter.type === "status") return "bg-accent/10 text-accent border-accent/20";
+  if (filter.type === "category") return "bg-primary/10 text-primary border-primary/20";
+  if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
   return "bg-secondary text-secondary-foreground border-border";
 }
 

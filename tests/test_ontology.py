@@ -40,7 +40,7 @@ from pathlib import Path
 
 import pytest
 
-from app.db.core import MediaFormat
+from app.db.core import MediaCategory, MediaFormat
 from app.db.models import ITEM_STATUSES
 
 # ---------------------------------------------------------------------------
@@ -179,3 +179,22 @@ def test_scan_formats_subset_of_media_formats() -> None:
 def test_media_format_python_values_non_empty(fmt: str) -> None:
     """Each value in MediaFormat.ALL must be a non-empty string."""
     assert isinstance(fmt, str) and fmt.strip(), f"MediaFormat.ALL contains an invalid entry: {fmt!r}"
+
+
+def test_media_category_all_in_sync() -> None:
+    """
+    Ensure MediaCategory.ALL (Python) and CATEGORY_STATUS_MAP keys (TypeScript) are identical.
+    """
+    ts_source = FRBR_TS.read_text(encoding="utf-8")
+
+    # Extract keys from export const CATEGORY_STATUS_MAP = { ... }
+    pattern = re.compile(r"export\s+const\s+CATEGORY_STATUS_MAP\s*=\s*\{([^\}]+)\}", re.DOTALL)
+    match = pattern.search(ts_source)
+
+    if not match:
+        pytest.fail("CATEGORY_STATUS_MAP is missing in frbr.ts")
+
+    ts_categories = frozenset(re.findall(r"([a-z_]+)\s*:", match.group(1)))
+    py_categories = frozenset(MediaCategory.ALL)
+
+    assert ts_categories == py_categories, f"Media categories out of sync. Python: {py_categories}, TS: {ts_categories}"

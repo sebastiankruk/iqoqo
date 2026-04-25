@@ -34,7 +34,18 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function isAudioMedia(format: string | undefined): boolean {
   if (!format) return false;
-  const audioFormats = new Set(["audio", "cd", "vinyl", "lp", "ep", "45", "audiobook", "cd-ep", "sacd"]);
+  const audioFormats = new Set([
+    "audio",
+    "cd",
+    "vinyl",
+    "lp",
+    "ep",
+    "45",
+    "audiobook",
+    "cd-ep",
+    "sacd",
+    "audiobook_cd",
+  ]);
   return audioFormats.has(format.toLowerCase());
 }
 /**

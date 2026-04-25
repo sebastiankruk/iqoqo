@@ -149,12 +149,71 @@ export type ProgressStatus =
 export type ItemStatus = ProgressStatus;
 
 /** Standard media formats used across the app */
-export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;
+export const MEDIA_FORMATS = [
+  "book",
+  "audiobook_cd",
+  "cd",
+  "vinyl",
+  "sacd",
+  "dvd",
+  "bluray",
+  "board_game",
+  "cards",
+  "puzzle",
+  "music",
+  "movie",
+] as const;
 export type MediaFormat = (typeof MEDIA_FORMATS)[number];
 
 /** High-level categories for scanning and manual entry */
-export const SCAN_FORMATS = ["book", "audio", "video", "boardgame", "puzzle"] as const;
+export const SCAN_FORMATS = ["book", "music", "movie", "board_game", "puzzle"] as const;
 export type ScanFormat = (typeof SCAN_FORMATS)[number];
+
+/** Media hierarchy mapping categories to their physical kinds */
+export const MEDIA_HIERARCHY = {
+  text: {
+    label: "Text",
+    formats: [
+      { id: "book", label: "Book" },
+      { id: "audiobook_cd", label: "Audiobook CD" },
+    ],
+  },
+  music: {
+    label: "Music",
+    formats: [
+      { id: "cd", label: "CD" },
+      { id: "vinyl", label: "Vinyl" },
+      { id: "sacd", label: "SACD" },
+    ],
+  },
+  movie: {
+    label: "Movie",
+    formats: [
+      { id: "dvd", label: "DVD" },
+      { id: "bluray", label: "Blu-Ray" },
+    ],
+  },
+  board_game: {
+    label: "Board Game",
+    formats: [
+      { id: "board_game", label: "Board Game" },
+      { id: "cards", label: "Cards" },
+    ],
+  },
+  puzzle: {
+    label: "Jigsaw Puzzle",
+    formats: [{ id: "puzzle", label: "Jigsaw Puzzle" }],
+  },
+} as const;
+
+/** Mapping media categories to their valid progress statuses */
+export const CATEGORY_STATUS_MAP = {
+  text: ["want_to_read", "reading", "read"],
+  music: ["want_to_listen", "listening", "listened"],
+  movie: ["want_to_watch", "watching", "watched"],
+  board_game: ["want_to_play", "playing", "played"],
+  puzzle: ["want_to_play", "playing", "played"],
+} as const;
 
 /** API Response envelope */
 export interface ApiResponse<T> {

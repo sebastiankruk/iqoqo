@@ -43,15 +43,17 @@ class IngestService:
 
         # Map format string → FRBR content type
         if raw_format in ("video", "dvd", "bluray", "movie", "moving image"):
-            content_type = MediaCategory.VIDEO
-        elif raw_format in ("game", "boardgame"):
-            content_type = MediaCategory.GAME
+            content_type = MediaCategory.MOVIE
+        elif raw_format in ("game", "boardgame", "board_game"):
+            content_type = MediaCategory.BOARD_GAME
         elif raw_format in ("book", "text"):
             content_type = MediaCategory.TEXT
         elif raw_format == "puzzle":
-            content_type = MediaCategory.OBJECT
+            content_type = MediaCategory.PUZZLE
+        elif raw_format in ("music", "sound", "audio", "cd", "vinyl", "sacd"):
+            content_type = MediaCategory.MUSIC
         else:
-            content_type = MediaCategory.SOUND
+            content_type = MediaCategory.MUSIC
 
         work_meta: dict = {"authors": [author_name] if author_name else []}
         work = Work(title=title, meta=work_meta)
@@ -104,7 +106,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.OBJECT)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.PUZZLE)
         db.session.add(expression)
         db.session.flush()
 
@@ -206,7 +208,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.SOUND)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MUSIC)
         db.session.add(expression)
         db.session.flush()
 
@@ -220,7 +222,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", MediaFormat.AUDIO),
+                "format": meta.get("format", "music"),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -271,7 +273,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.VIDEO)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MOVIE)
         db.session.add(expression)
         db.session.flush()
 
@@ -287,7 +289,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": stored_barcode,
-                "format": meta.get("format", MediaFormat.VIDEO),
+                "format": meta.get("format", "movie"),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -340,7 +342,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.GAME)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.BOARD_GAME)
         db.session.add(expression)
         db.session.flush()
 
@@ -355,7 +357,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": stored_barcode,
-                "format": meta.get("format", meta.get("Format", MediaFormat.BOARDGAME)),
+                "format": meta.get("format", meta.get("Format", MediaFormat.BOARD_GAME)),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],

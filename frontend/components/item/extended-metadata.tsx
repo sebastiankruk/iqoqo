@@ -16,6 +16,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,8 +53,10 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
 
   const format = meta["format"] as string | undefined;
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
-  const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isVideo = ["dvd", "bluray", "video", "movie", "moving image"].includes(format?.toLowerCase() || "");
+  const isBoardGame = ["boardgame", "board_game", "cards", "three-dimensional object"].includes(
+    format?.toLowerCase() || ""
+  );
   const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
 
   const trackList = meta["track_list"] as
@@ -277,11 +280,33 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                 if (value === null || value === undefined) {
                   displayValue = <span className="text-muted-foreground italic">null</span>;
                 } else if (Array.isArray(value)) {
+                  const isContributorField = [
+                    "authors",
+                    "Authors",
+                    "author",
+                    "artists",
+                    "Artist",
+                    "director",
+                    "Director",
+                    "cast",
+                    "Cast",
+                    "designers",
+                  ].includes(key);
                   displayValue = (
                     <div className="flex flex-wrap gap-1">
                       {value.map((item, idx) => (
-                        <span key={idx} className="bg-muted px-2 py-0.5 rounded text-xs">
-                          {String(item)}
+                        <span key={idx}>
+                          {isContributorField ? (
+                            <Link
+                              href={`/collection?q=${encodeURIComponent(String(item))}`}
+                              className="text-primary hover:underline hover:text-accent transition-colors font-medium"
+                            >
+                              {String(item)}
+                            </Link>
+                          ) : (
+                            <span className="bg-muted px-2 py-0.5 rounded text-xs">{String(item)}</span>
+                          )}
+                          {idx < value.length - 1 && isContributorField && <span className="mr-1">,</span>}
                         </span>
                       ))}
                     </div>

@@ -365,7 +365,7 @@ def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_header
     response = client.get("/api/lookup/12345?format=video", headers=normal_user_headers)
 
     assert response.status_code == 200
-    assert response.json["data"]["format"] == "video"
+    assert response.json["data"]["format"] == "movie"
 
 
 @patch("app.api.scanner.resolve_physical_media")

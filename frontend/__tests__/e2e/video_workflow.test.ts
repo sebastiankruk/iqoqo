@@ -47,7 +47,7 @@ test.describe("Video Media Ingestion Workflow", () => {
 
     // 1. Mock the lookup endpoint for DVD barcode (TMDB)
     const testBarcode = "883929153526";
-    await page.route(`**/api/lookup/${testBarcode}?format=video`, async route => {
+    await page.route(`**/api/lookup/${testBarcode}?format=movie`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

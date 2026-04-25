@@ -33,6 +33,7 @@ interface SuccessCardProps {
   onDismiss: () => void;
   onScanAnother?: () => void;
   snappedCover?: File | null;
+  onShowManualForm?: (isbn?: string) => void;
 }
 
 /**
@@ -45,9 +46,17 @@ interface SuccessCardProps {
  * @param props.onDismiss - Function to call when the card is dismissed
  * @param props.onScanAnother - Optional function for rapid sequential scanning
  * @param props.snappedCover - Optional file of a cover snapped from video
+ * @param props.onShowManualForm - Optional callback to show manual entry form
  * @returns {JSX.Element} The component
  */
-export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover }: SuccessCardProps) {
+export function SuccessCard({
+  isbn,
+  meta,
+  onDismiss,
+  onScanAnother,
+  snappedCover,
+  onShowManualForm,
+}: SuccessCardProps) {
   const normalizeFormat = (f: string): string => {
     const low = f.toLowerCase();
     if (["book", "text", "standard"].includes(low)) return "book";
@@ -333,6 +342,14 @@ export function SuccessCard({ isbn, meta, onDismiss, onScanAnother, snappedCover
                   aria-label="Scan Another"
                 >
                   Scan Another
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="w-full sm:w-auto h-12 rounded-xl text-muted-foreground hover:text-foreground"
+                  onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
+                >
+                  Wrong item? Enter Manually
                 </Button>
               </div>
             </div>

@@ -47,7 +47,7 @@ test.describe("Board Game Ingestion Workflow", () => {
 
     // 1. Mock the lookup endpoint for board game barcode (BGG)
     const testBarcode = "681706704";
-    await page.route(`**/api/lookup/${testBarcode}?format=boardgame`, async route => {
+    await page.route(`**/api/lookup/${testBarcode}?format=board_game`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -102,7 +102,7 @@ test.describe("Board Game Ingestion Workflow", () => {
             manifestation: {
               id: 200,
               title: "Catan",
-              format: "game",
+              format: "board_game",
             },
           },
         }),
@@ -171,7 +171,7 @@ test.describe("Board Game Ingestion Workflow", () => {
 
     // 1. Mock the lookup endpoint for board game barcode
     const testBarcode = "4005556199998";
-    await page.route(`**/api/lookup/${testBarcode}?format=boardgame`, async route => {
+    await page.route(`**/api/lookup/${testBarcode}?format=board_game`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

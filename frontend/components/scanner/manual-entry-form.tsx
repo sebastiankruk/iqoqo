@@ -20,7 +20,7 @@
  */
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -65,7 +65,7 @@ export function ManualEntryForm({
   initialTitle = "",
   initialAuthors = "",
 }: ManualEntryFormProps) {
-  const [formData, setFormData] = useState<ManualEntryData>({
+  const [formData, setFormData] = React.useState<ManualEntryData>({
     title: initialTitle,
     authors: initialAuthors,
     identifier: initialIdentifier,
@@ -73,7 +73,18 @@ export function ManualEntryForm({
     year: "",
     format: initialFormat,
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Sync state with props if they change (e.g. from a new scan or extraction)
+  React.useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      title: initialTitle,
+      authors: initialAuthors,
+      identifier: initialIdentifier,
+      format: initialFormat,
+    }));
+  }, [initialTitle, initialAuthors, initialIdentifier, initialFormat]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

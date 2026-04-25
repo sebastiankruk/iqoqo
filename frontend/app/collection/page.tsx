@@ -57,6 +57,14 @@ function CollectionContent() {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
 
+  // Keep search queries in sync if URL changes externally (e.g. from Navbar)
+  const [lastUrlQuery, setLastUrlQuery] = useState(initialQuery);
+  if (initialQuery !== lastUrlQuery) {
+    setLastUrlQuery(initialQuery);
+    setSearchQuery(initialQuery);
+    setAppliedQuery(initialQuery);
+  }
+
   const limit = 40;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
@@ -93,20 +101,34 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const categoryFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "category").map(f => f.value),
+    [activeFilters]
+  );
+
+  const formatFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "format").map(f => f.value),
+    [activeFilters]
+  );
+
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
     sortBy,
-    viewMode === "items" && isLoggedIn
+    viewMode === "items" && isLoggedIn,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
     appliedQuery,
-    viewMode === "manifestations"
+    viewMode === "manifestations",
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined
   );
 
   const { data: statsData } = useStats();
@@ -126,7 +148,15 @@ function CollectionContent() {
     setPage(1);
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
-      return exists ? prev.filter(f => !(f.type === filter.type && f.value === filter.value)) : [...prev, filter];
+      if (exists) {
+        return prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+      } else {
+        // Enforce single-select for category and format
+        if (filter.type === "category" || filter.type === "format") {
+          return [...prev.filter(f => f.type !== filter.type), filter];
+        }
+        return [...prev, filter];
+      }
     });
   }, []);
 
@@ -140,17 +170,30 @@ function CollectionContent() {
     setActiveFilters([]);
   }, []);
 
+  const formatCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("format_")) {
+        counts[key.replace("format_", "")] = value as number;
+      }
+    }
+    return counts;
+  }, [statsData]);
+
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
-    return {
-      available: statsData.items_available,
-      lent: statsData.items_lent,
-      lost: statsData.items_lost,
-      wish_list: statsData.items_wish_list,
-      reading: statsData.items_reading,
-      read: statsData.items_read,
-      want_to_read: statsData.items_want_to_read ?? statsData.to_read,
-    };
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("items_")) {
+        counts[key.replace("items_", "")] = value as number;
+      }
+    }
+    // Also add to_read alias if want_to_read is missing
+    if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
+      counts.want_to_read = statsData.to_read;
+    }
+    return counts;
   }, [statsData]);
 
   const filteredItems = useMemo(() => {
@@ -282,6 +325,7 @@ function CollectionContent() {
                 activeFilters={activeFilters}
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
+                formatCounts={formatCounts}
                 disableStatus={viewMode === "manifestations"}
               />
             </div>
@@ -335,6 +379,7 @@ function CollectionContent() {
         activeFilters={activeFilters}
         onToggleFilter={toggleFilter}
         statusCounts={statusCounts}
+        formatCounts={formatCounts}
       />
     </div>
   );

@@ -40,7 +40,9 @@ def get_items():
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
-    q = request.args.get("q", "").strip()
+    category_filter = request.args.get("category", None)
+    format_filter = request.args.get("format", None)
+    q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
 
     try:
@@ -58,7 +60,9 @@ def get_items():
         from app.core.search_service import SearchService
 
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
-        total, results = SearchService.search_items(q, user_id, limit, offset, statuses=statuses_list)
+        total, results = SearchService.search_items(
+            q, user_id, limit, offset, statuses=statuses_list, category=category_filter, format_filter=format_filter
+        )
 
         items_data = []
         for row in results:
@@ -74,6 +78,7 @@ def get_items():
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
+                    "content_type": row.get("content_type"),
                     "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
                     "updated_at": (
                         (row.get("updated_at") or row["added_at"]).isoformat()
@@ -95,16 +100,22 @@ def get_items():
     # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     query = query.filter(Item.owner_id == user_id)
+
+    if category_filter or format_filter or sort_by in ("title", "title-desc", "author"):
+        # We need to join these models if we have filters or specific sorting
+        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+        query = query.outerjoin(Work, Expression.work_id == Work.id)
+
+    if category_filter:
+        query = query.filter(Expression.content_type == category_filter)
+
+    if format_filter:
+        query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
-
-    if sort_by in ("title", "title-desc", "author"):
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-        )
 
     if sort_by == "title":
         query = query.order_by(Work.title.asc().nulls_last())
@@ -144,6 +155,7 @@ def get_items():
                 or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
+                "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                 "is_owner": str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,

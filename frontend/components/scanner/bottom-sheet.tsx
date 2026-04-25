@@ -35,8 +35,8 @@ interface BottomSheetProps {
   onScannerStateChange?: (isActive: boolean) => void;
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
-  onShowManualForm?: () => void;
-  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame" | "puzzle";
+  onShowManualForm?: (isbn?: string) => void;
+  format?: "book" | "music" | "movie" | "board_game" | "puzzle" | "audio" | "video" | "boardgame";
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
 }
@@ -70,10 +70,10 @@ export function BottomSheet({
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
   const formatToApiParam = (fmt?: string): string => {
-    if (fmt === "video") return "video";
-    if (fmt === "boardgame") return "boardgame";
+    if (fmt === "movie" || fmt === "video") return "movie";
+    if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
-    if (fmt === "audio") return "audio";
+    if (fmt === "music" || fmt === "audio") return "music";
     if (fmt === "book") return "book";
     return "";
   };
@@ -89,6 +89,7 @@ export function BottomSheet({
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSearchedBarcode, setLastSearchedBarcode] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const barcodeEnabledRef = useRef<boolean>(true);
@@ -163,6 +164,7 @@ export function BottomSheet({
         }
       }
 
+      setLastSearchedBarcode(query);
       setIsSearching(true);
       setError(null);
       try {
@@ -305,7 +307,18 @@ export function BottomSheet({
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-        {error && <p className="text-center text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex w-full flex-col gap-3">
+            <p className="text-center text-xs text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={() => onShowManualForm?.(lastSearchedBarcode)}
+              className="w-full rounded-xl bg-secondary px-4 py-2 text-sm font-semibold shadow-sm hover:bg-secondary/80"
+            >
+              Enter Manually
+            </button>
+          </div>
+        )}
 
         {activeTab === "barcode" && (
           <div className="flex w-full flex-col items-center gap-4">
@@ -350,7 +363,7 @@ export function BottomSheet({
               className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />
 
-            {error && <p className="text-center text-xs text-destructive">{error}</p>}
+            {/* Error is already handled at the top */}
           </div>
         )}
 
@@ -380,7 +393,7 @@ export function BottomSheet({
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button
                 type="button"
-                onClick={onShowManualForm}
+                onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
               >
                 Manual Entry Form
