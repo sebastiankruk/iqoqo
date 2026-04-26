@@ -60,6 +60,7 @@ describe("ManualEntryForm", () => {
         publisher: "Prentice Hall",
         year: "",
         format: "book",
+        coverFile: null,
       });
     });
   });
@@ -74,5 +75,17 @@ describe("ManualEntryForm", () => {
     fireEvent.click(cancelBtn);
 
     expect(mockCancel).toHaveBeenCalledOnce();
+  });
+
+  it("renders a cover file input for manual cover upload", () => {
+    const mockSubmit = vi.fn();
+    const mockCancel = vi.fn();
+
+    render(<ManualEntryForm onSubmit={mockSubmit} onCancel={mockCancel} />);
+
+    expect(screen.getByLabelText(/Manual Cover Upload/i)).toBeInTheDocument();
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+    expect(fileInput).toHaveAttribute("accept", "image/*");
   });
 });

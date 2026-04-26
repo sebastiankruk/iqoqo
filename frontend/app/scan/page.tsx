@@ -88,6 +88,14 @@ export default function ScanPage() {
     setShowManual(true);
   }, []);
 
+  const handleExtractionFailure = useCallback(
+    (ean: string) => {
+      handleShowManualForm(ean);
+      toast.info("Switching to manual entry...");
+    },
+    [handleShowManualForm]
+  );
+
   const handleManualSubmit = async (data: ManualEntryData) => {
     const authors = data.authors
       ? data.authors
@@ -115,17 +123,20 @@ export default function ScanPage() {
     addManualMutation.mutate(payload, {
       onSuccess: async response => {
         const item = response.data;
-        if (item && snappedCover && item.manifestation_id) {
+        const coverToUpload = data.coverFile || snappedCover;
+
+        if (item && coverToUpload && item.manifestation_id) {
           const coverFormData = new FormData();
-          coverFormData.append("cover", snappedCover);
+          coverFormData.append("cover", coverToUpload);
           try {
             await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
             toast.success(`"${payload.Title}" added with your custom cover!`);
           } catch (e) {
-            console.error("Failed to upload captured cover:", e);
-            toast.warning(`"${payload.Title}" added, but cover upload failed.`);
+            const errMsg = (e as Error)?.message || "Cover upload failed";
+            console.error("Failed to upload cover:", e);
+            toast.error(`"${payload.Title}" added, but cover upload failed: ${errMsg}`);
           }
         } else {
           toast.success(`"${payload.Title}" added to your library!`);
@@ -175,6 +186,7 @@ export default function ScanPage() {
           onScannerStateChange={setScannerActive}
           onTabChange={setScannerTab}
           onExtractComplete={handleExtractComplete}
+          onExtractionFailure={handleExtractionFailure}
           onShowManualForm={handleShowManualForm}
           format={activeFormat}
           torchOn={torchOn}

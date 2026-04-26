@@ -407,29 +407,66 @@ def add_item_manual():
     isbn = data.get("ISBN")
     pub_date_str = data.get("PublicationDate")
 
+    # Derive a sensible default progress status from the media format using canonical mapping.
+    from app.db.core import CATEGORY_PROGRESS_STATUSES, MediaCategory, MediaFormat
+
+    _FORMAT_TO_CATEGORY: dict[str, str] = {
+        MediaFormat.BOOK: MediaCategory.TEXT,
+        MediaFormat.AUDIOBOOK_CD: MediaCategory.MUSIC,
+        MediaFormat.CD: MediaCategory.MUSIC,
+        MediaFormat.VINYL: MediaCategory.MUSIC,
+        MediaFormat.SACD: MediaCategory.MUSIC,
+        MediaFormat.MUSIC: MediaCategory.MUSIC,
+        MediaFormat.DVD: MediaCategory.MOVIE,
+        MediaFormat.BLURAY: MediaCategory.MOVIE,
+        MediaFormat.MOVIE: MediaCategory.MOVIE,
+        MediaFormat.BOARD_GAME: MediaCategory.BOARD_GAME,
+        MediaFormat.PUZZLE: MediaCategory.PUZZLE,
+    }
+    _fmt_lower = (content_type or "").lower()
+    category = _FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+    default_status = CATEGORY_PROGRESS_STATUSES[category][0]
+
     try:
-        work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
-        db.session.add(work)
-        db.session.flush()
-
-        expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
-        db.session.add(expression)
-        db.session.flush()
-
-        manifestation = Manifestation(expression_id=expression.id, meta=data)
+        # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
+        existing_manifestation: Manifestation | None = None
+        normalised_isbn: str | None = None
         if isbn:
-            manifestation.isbn13 = str(isbn).replace("-", "").replace(" ", "").strip()
-        if pub_date_str:
-            from datetime import date
+            normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
+            existing_manifestation = Manifestation.query.filter_by(isbn13=normalised_isbn).first()
 
-            try:
-                manifestation.publication_date = date.fromisoformat(pub_date_str)
-            except (ValueError, TypeError):
-                pass
-        db.session.add(manifestation)
-        db.session.flush()
+        if existing_manifestation:
+            # Manifestation already exists — just create a new Item linked to it
+            manifestation = existing_manifestation
+        else:
+            work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
+            db.session.add(work)
+            db.session.flush()
 
-        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
+            expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+            db.session.add(expression)
+            db.session.flush()
+
+            manifestation = Manifestation(expression_id=expression.id, meta=data)
+            if normalised_isbn:
+                manifestation.isbn13 = normalised_isbn
+            if pub_date_str:
+                from datetime import date
+
+                try:
+                    manifestation.publication_date = date.fromisoformat(pub_date_str)
+                except (ValueError, TypeError):
+                    pass
+            db.session.add(manifestation)
+            db.session.flush()
+
+        item = Item(
+            manifestation_id=manifestation.id,
+            owner_id=user_id,
+            status=default_status,
+            collection_status="available",
+            meta={},
+        )
         db.session.add(item)
         db.session.commit()
 
