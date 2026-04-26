@@ -31,6 +31,11 @@ NPM = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npm
 NPX = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npx
 endif
 
+# Docker compose configuration for production/preview targets
+COMPOSE_FILE     ?= docker-compose.prod.yml
+COMPOSE_PROJECT  ?= iqoqo
+COMPOSE_ENV_FILE ?= .env
+
 help:
 	@echo "Available targets:"
 	@echo ""
@@ -221,8 +226,8 @@ db-export:
 	@echo "Export complete: data/backup.json"
 
 docker-backup:
-	@echo "Creating full backup in Docker..."
-	@docker compose exec -T web python scripts/backup.py
+	@echo "Creating full backup in Docker (Project: $(COMPOSE_PROJECT), Env: $(COMPOSE_ENV_FILE))..."
+	@docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web python scripts/backup.py
 	@echo "Backup complete! Check the ./exports folder on your host."
 
 db-stats:
