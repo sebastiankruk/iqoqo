@@ -66,7 +66,7 @@ interface CameraCaptureProps {
   /** Called with extracted metadata after vision extraction (mode 2). */
   onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
   /** Called when vision extraction or polling fails. */
-  onExtractionFailure?: (format: MediaFormat | string) => void;
+  onExtractionFailure?: () => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -221,13 +221,14 @@ export function CameraCapture({
           if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
           toast.error(envelope.error ?? "Vision extraction submission failed");
+          if (onExtractionFailure) onExtractionFailure();
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to process cover image";
       toast.error(message);
       console.error("Failed to process cover image", error);
-      if (onExtractionFailure) onExtractionFailure(format);
+      if (onExtractionFailure) onExtractionFailure();
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

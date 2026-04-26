@@ -407,24 +407,30 @@ def add_item_manual():
     isbn = data.get("ISBN")
     pub_date_str = data.get("PublicationDate")
 
-    # Derive a sensible default progress status from the media format so that
-    # a music album does not land in "want_to_read".
-    _audio_formats = {"music", "audio", "cd", "vinyl", "lp", "sound recording", "audiobook"}
-    _video_formats = {"video", "dvd", "bluray", "moving image", "movie", "series"}
-    _game_formats = {"boardgame", "board_game", "game", "puzzle", "three-dimensional object"}
+    # Derive a sensible default progress status from the media format using canonical mapping.
+    from app.db.core import CATEGORY_PROGRESS_STATUSES, MediaCategory, MediaFormat
+
+    _FORMAT_TO_CATEGORY: dict[str, str] = {
+        MediaFormat.BOOK: MediaCategory.TEXT,
+        MediaFormat.AUDIOBOOK_CD: MediaCategory.MUSIC,
+        MediaFormat.CD: MediaCategory.MUSIC,
+        MediaFormat.VINYL: MediaCategory.MUSIC,
+        MediaFormat.SACD: MediaCategory.MUSIC,
+        MediaFormat.MUSIC: MediaCategory.MUSIC,
+        MediaFormat.DVD: MediaCategory.MOVIE,
+        MediaFormat.BLURAY: MediaCategory.MOVIE,
+        MediaFormat.MOVIE: MediaCategory.MOVIE,
+        MediaFormat.BOARD_GAME: MediaCategory.BOARD_GAME,
+        MediaFormat.PUZZLE: MediaCategory.PUZZLE,
+    }
     _fmt_lower = (content_type or "").lower()
-    if _fmt_lower in _audio_formats:
-        default_status = "want_to_listen"
-    elif _fmt_lower in _video_formats:
-        default_status = "want_to_watch"
-    elif _fmt_lower in _game_formats:
-        default_status = "want_to_play"
-    else:
-        default_status = "want_to_read"
+    category = _FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+    default_status = CATEGORY_PROGRESS_STATUSES[category][0]
 
     try:
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
         existing_manifestation: Manifestation | None = None
+        normalised_isbn: str | None = None
         if isbn:
             normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
             existing_manifestation = Manifestation.query.filter_by(isbn13=normalised_isbn).first()
@@ -442,8 +448,8 @@ def add_item_manual():
             db.session.flush()
 
             manifestation = Manifestation(expression_id=expression.id, meta=data)
-            if isbn:
-                manifestation.isbn13 = normalised_isbn  # type: ignore[possibly-undefined]
+            if normalised_isbn:
+                manifestation.isbn13 = normalised_isbn
             if pub_date_str:
                 from datetime import date
 

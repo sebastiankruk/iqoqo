@@ -296,6 +296,7 @@ export function BottomSheet({
           {TABS.map(tab => (
             <button
               key={tab.id}
+              data-testid={`scanner-tab-${tab.id}`}
               onClick={() => handleTabChange(tab.id as TabId)}
               className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                 activeTab === tab.id
@@ -352,7 +353,7 @@ export function BottomSheet({
               label="Snap Cover"
               icon={<Camera className="mr-2 h-5 w-5" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
-              onExtractionFailure={onExtractionFailure}
+              onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
               format={format}
               className="flex w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80"
             />
@@ -363,7 +364,7 @@ export function BottomSheet({
               label="Upload from Gallery"
               icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
-              onExtractionFailure={onExtractionFailure}
+              onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
               format={format}
               className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />

@@ -217,23 +217,21 @@ export function ManualEntryForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="manual-cover-upload" className="text-sm font-medium text-foreground">
-            Manual Cover Upload
-          </label>
+          <span className="text-sm font-medium text-foreground">Manual Cover Upload</span>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="absolute inset-0 z-10 w-full cursor-pointer opacity-0"
-                id="manual-cover-upload"
-              />
-              <Button type="button" variant="outline" size="sm" className="pointer-events-none relative flex h-9 gap-2">
+            <Button asChild type="button" variant="outline" size="sm" className="relative flex h-9 gap-2">
+              <label htmlFor="manual-cover-upload" className="cursor-pointer">
                 <ImagePlus className="h-4 w-4 text-primary" />
                 {formData.coverFile ? "Change Image" : "Choose Cover"}
-              </Button>
-            </div>
+              </label>
+            </Button>
+            <input
+              id="manual-cover-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="sr-only"
+            />
             {formData.coverFile && (
               <span className="max-w-[150px] truncate text-[11px] text-muted-foreground">
                 {formData.coverFile.name}

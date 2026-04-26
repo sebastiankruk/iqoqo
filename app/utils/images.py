@@ -285,7 +285,10 @@ def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> s
             img.verify()
         file.seek(0)
     except Image.DecompressionBombError as exc:
-        raise ValueError("Image is too large to validate safely. Please resize it below 178 megapixels and try again.") from exc
+        limit = Image.MAX_IMAGE_PIXELS or 200_000_000
+        raise ValueError(
+            f"Image is too large to validate safely. Please resize it below {limit // 1_000_000} megapixels and try again."
+        ) from exc
     except (OSError, SyntaxError) as exc:
         raise ValueError("Invalid or corrupted image file") from exc
 

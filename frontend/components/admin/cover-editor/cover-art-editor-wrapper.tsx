@@ -24,6 +24,7 @@ import { uploadEntityCover, searchFrbrEntities, type FrbrSearchResult } from "@/
 import { useManifestation } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { toast } from "sonner";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Search, X, Loader2, AlertTriangle } from "lucide-react";
@@ -40,6 +41,7 @@ interface CoverArtEditorWrapperProps {
  * @returns {JSX.Element} The wrapper component for editing cover art.
  */
 export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEditorWrapperProps) {
+  const isDesktop = useMediaQuery("(min-width: 768px)");
   const [selectedEntityId, setSelectedEntityId] = useState<number | null>(preselectedManifestationId ?? null);
   const [entityType, setEntityType] = useState<"manifestation" | "item">("manifestation");
 
@@ -251,18 +253,19 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
 
   return (
     <div className="w-full">
-      {/* Mobile Fallback View */}
-      <div className="md:hidden flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-muted/50 min-h-[300px] gap-4">
-        <AlertTriangle className="w-12 h-12 text-orange-500" />
-        <h3 className="text-lg font-semibold">Screen Too Small</h3>
-        <p className="text-muted-foreground text-sm">
-          The advanced cover editor requires a larger screen for precise cropping and alignment. Please use an iPad or
-          Desktop browser to edit covers.
-        </p>
-      </div>
-
-      {/* Desktop/Tablet View */}
-      <div className="hidden md:block w-full">{!selectedEntityId ? searchView : editorView}</div>
+      {!isDesktop ? (
+        <div className="flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-muted/50 min-h-[300px] gap-4">
+          <AlertTriangle className="w-12 h-12 text-orange-500" />
+          <h3 className="text-lg font-semibold">Screen Too Small</h3>
+          <p className="text-muted-foreground text-sm">
+            The advanced cover editor requires a larger screen for precise cropping and alignment. Please use an iPad or
+            Desktop browser to edit covers.
+          </p>
+        </div>
+      ) : (
+        /* Desktop/Tablet View */
+        <div className="w-full">{!selectedEntityId ? searchView : editorView}</div>
+      )}
     </div>
   );
 }
