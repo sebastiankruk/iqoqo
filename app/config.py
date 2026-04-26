@@ -31,8 +31,17 @@ class Config:
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
+    @staticmethod
+    def _get_int_env(key: str, default: int) -> int:
+        """Safely parse an integer environment variable with a default fallback."""
+        try:
+            val = os.environ.get(key)
+            return int(val) if val else default
+        except ValueError:
+            return default
+
     # Protect against huge payload attacks
-    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16 MB max
+    MAX_CONTENT_LENGTH = _get_int_env("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)  # 16 MB max
 
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -43,8 +52,8 @@ class Config:
     _is_postgres = bool(SQLALCHEMY_DATABASE_URI and "postgres" in SQLALCHEMY_DATABASE_URI.lower())
     SQLALCHEMY_ENGINE_OPTIONS = (
         {
-            "pool_size": int(os.environ.get("SQLALCHEMY_POOL_SIZE", 5)),
-            "max_overflow": int(os.environ.get("SQLALCHEMY_MAX_OVERFLOW", 10)),
+            "pool_size": _get_int_env("SQLALCHEMY_POOL_SIZE", 5),
+            "max_overflow": _get_int_env("SQLALCHEMY_MAX_OVERFLOW", 10),
             "pool_recycle": 300,
             "pool_pre_ping": True,
         }
@@ -72,15 +81,6 @@ class Config:
         raise RuntimeError("ADMIN_PASSWORD environment variable is required and must not be empty.")
 
     ADMIN_PASSWORD = _admin_password
-
-    @staticmethod
-    def _get_int_env(key: str, default: int) -> int:
-        """Safely parse an integer environment variable with a default fallback."""
-        try:
-            val = os.environ.get(key)
-            return int(val) if val else default
-        except ValueError:
-            return default
 
     # LLM feature gate: set ALLOW_LLM=true to enable LLM cover generation for
     # users who also hold the llm_generate:* RBAC permission.
