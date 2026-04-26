@@ -323,31 +323,24 @@ class DataManager:
                 status_counts[c_status] += cnt
 
         if owner_id:
-            # Use .subquery() (not .scalar_subquery()) for multi-row IN contexts
-            # so the intent is clear and dialect edge-cases are avoided (Thread 5 fix).
-            base_manif_sq = select(Item.manifestation_id).where(Item.owner_id == owner_id).distinct().subquery()
+            # Single aggregate query for user-scoped FRBR entity counts using joins.
+            # This is more efficient than separate IN-subquery counts on large datasets.
+            from sqlalchemy import distinct
 
-            manifestations_count = (
-                db.session.query(Manifestation.id).filter(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id))).distinct().count()
-            )
+            frbr_counts = db.session.execute(
+                select(
+                    func.count(distinct(Work.id)),  # pylint: disable=not-callable
+                    func.count(distinct(Expression.id)),  # pylint: disable=not-callable
+                    func.count(distinct(Manifestation.id)),  # pylint: disable=not-callable
+                )
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(Item.owner_id == owner_id)
+            ).first()
 
-            base_expr_sq = (
-                select(Manifestation.expression_id)
-                .where(Manifestation.id.in_(select(base_manif_sq.c.manifestation_id)))
-                .distinct()
-                .subquery()
-            )
-
-            expressions_count = (
-                db.session.query(Expression.id).filter(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct().count()
-            )
-
-            works_count = (
-                db.session.query(Work.id)
-                .filter(Work.id.in_(select(Expression.work_id).where(Expression.id.in_(select(base_expr_sq.c.expression_id))).distinct()))
-                .distinct()
-                .count()
-            )
+            works_count, expressions_count, manifestations_count = frbr_counts if frbr_counts else (0, 0, 0)
         else:
             works_count = Work.query.count()
             expressions_count = Expression.query.count()

@@ -149,6 +149,20 @@ SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA catalog TO %I', :'ap
 SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA catalog TO %I', :'app_user') \gexec;
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+-- inventory schema access (Item tables)
+SELECT format('CREATE SCHEMA IF NOT EXISTS inventory') \gexec;
+SELECT format('GRANT ALL ON SCHEMA inventory TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA inventory TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA inventory TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+-- auth schema access (User, Role, etc.)
+SELECT format('CREATE SCHEMA IF NOT EXISTS auth') \gexec;
+SELECT format('GRANT ALL ON SCHEMA auth TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
 -- Transfer ownership of every existing table in both schemas to the application role
 -- so that Alembic can run DDL statements (ALTER TABLE, DROP TABLE, etc.).
 SELECT format($$
@@ -158,7 +172,7 @@ BEGIN
     FOR r IN
         SELECT schemaname, tablename
         FROM pg_tables
-        WHERE schemaname IN ('public', 'catalog')
+        WHERE schemaname IN ('public', 'catalog', 'inventory', 'auth')
     LOOP
         EXECUTE format('ALTER TABLE %I.%I OWNER TO %%I', r.schemaname, r.tablename, %L);
     END LOOP;

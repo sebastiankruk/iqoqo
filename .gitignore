@@ -41,6 +41,7 @@ node_modules/
 data/*.json
 !data/seed_example.json
 iqoqo_backup*.*
+exports/*
 
 # Virtual Env
 .venv*

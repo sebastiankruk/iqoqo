@@ -102,22 +102,26 @@ class TestRunScripts(unittest.TestCase):
     def test_alembic_version_detection_mock(self):
         # Mock docker to return version when psql is called through it
         docker_mock = self.bin_dir / "docker"
-        docker_mock.write_text("""#!/bin/bash
+        docker_mock.write_text(
+            """#!/bin/bash
 if [[ "$*" == *"psql"* ]]; then
     echo "mock-version-123"
 else
     exit 0
 fi
-""")
+"""
+        )
         # Mock python3 to return a specific version for the Alembic check
         python_mock = self.bin_dir / "python3"
-        python_mock.write_text("""#!/bin/bash
+        python_mock.write_text(
+            """#!/bin/bash
 if [[ "$*" == *"alembic.script"* ]]; then
     echo "mock-version-123"
 else
     echo "0.5.0"
 fi
-""")
+"""
+        )
 
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         result = self.run_script(args=["prod"], env_content=env_content)
@@ -127,22 +131,26 @@ fi
     def test_alembic_mismatch_warning(self):
         # Mock docker to return version when psql is called through it
         docker_mock = self.bin_dir / "docker"
-        docker_mock.write_text("""#!/bin/bash
+        docker_mock.write_text(
+            """#!/bin/bash
 if [[ "$*" == *"psql"* ]]; then
     echo "current-version"
 else
     exit 0
 fi
-""")
+"""
+        )
         # Mock python3 to return a different version than psql
         python_mock = self.bin_dir / "python3"
-        python_mock.write_text("""#!/bin/bash
+        python_mock.write_text(
+            """#!/bin/bash
 if [[ "$*" == *"alembic.script"* ]]; then
     echo "expected-version"
 else
     echo "0.5.0"
 fi
-""")
+"""
+        )
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         result = self.run_script(args=["prod"], env_content=env_content)
 
@@ -163,12 +171,14 @@ fi
     def test_clean_flag(self):
         # Test that --clean triggers docker compose down
         docker_mock = self.bin_dir / "docker"
-        docker_mock.write_text("""#!/bin/bash
+        docker_mock.write_text(
+            """#!/bin/bash
 if [[ "$*" == *"compose down"* ]]; then
     echo "DOCKER_DOWN_TRIGGERED"
 fi
 exit 0
-""")
+"""
+        )
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
         result = self.run_script(args=["prod", "--clean"], env_content=env_content)
 
