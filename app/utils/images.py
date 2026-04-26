@@ -24,8 +24,11 @@ from typing import Any
 import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# Safety threshold for decompression bombs (set to 100MP to allow large mobile photos)
-Image.MAX_IMAGE_PIXELS = 100000000
+# Safety threshold for decompression bombs.
+# Set to 200MP to accommodate even the largest modern smartphone cameras
+# (e.g. 200MP Samsung S23 Ultra). PIL default is 50MP.
+# Note: optimize_and_save_image always thumbnails down to 1024x1024 after this check.
+Image.MAX_IMAGE_PIXELS = 200_000_000
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +284,8 @@ def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> s
         with Image.open(file) as img:
             img.verify()
         file.seek(0)
+    except Image.DecompressionBombError as exc:
+        raise ValueError("Image is too large to validate safely. Please resize it below 178 megapixels and try again.") from exc
     except (OSError, SyntaxError) as exc:
         raise ValueError("Invalid or corrupted image file") from exc
 

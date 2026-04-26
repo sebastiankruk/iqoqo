@@ -134,8 +134,9 @@ export default function ScanPage() {
             });
             toast.success(`"${payload.Title}" added with your custom cover!`);
           } catch (e) {
+            const errMsg = (e as Error)?.message || "Cover upload failed";
             console.error("Failed to upload cover:", e);
-            toast.warning(`"${payload.Title}" added, but cover upload failed.`);
+            toast.error(`"${payload.Title}" added, but cover upload failed: ${errMsg}`);
           }
         } else {
           toast.success(`"${payload.Title}" added to your library!`);
