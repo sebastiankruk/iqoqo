@@ -329,7 +329,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         )}
 
         {canModifyItem && hasEditPermission && (
-          <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
+          <MultiImageUploader
+            manifestationId={item.manifestation_id}
+            currentItemFormat={format}
+            onUploadComplete={handleUploadComplete}
+          />
         )}
       </div>
 

@@ -15,7 +15,7 @@
 //
 
 import React from "react";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
@@ -68,5 +68,24 @@ describe("MultiImageUploader", () => {
 
     // Assert the parent callback was triggered
     expect(mockOnUploadComplete).toHaveBeenCalledOnce();
+  });
+
+  it("defaults label to 'front' when currentItemFormat is 'book'", async () => {
+    render(
+      <MultiImageUploader manifestationId={999} currentItemFormat="book" onUploadComplete={mockOnUploadComplete} />
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("front");
+  });
+
+  it("defaults label to 'disc' when currentItemFormat is 'cd'", async () => {
+    render(<MultiImageUploader manifestationId={999} currentItemFormat="cd" onUploadComplete={mockOnUploadComplete} />);
+    expect(screen.getByRole("combobox")).toHaveValue("disc");
+  });
+
+  it("defaults label to 'box' when currentItemFormat is 'boardgame'", async () => {
+    render(
+      <MultiImageUploader manifestationId={999} currentItemFormat="boardgame" onUploadComplete={mockOnUploadComplete} />
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("box");
   });
 });

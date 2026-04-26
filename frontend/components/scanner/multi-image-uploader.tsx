@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 interface MultiImageUploaderProps {
   manifestationId: number;
+  currentItemFormat?: string;
   onUploadComplete: () => void;
 }
 
@@ -32,11 +33,23 @@ interface MultiImageUploaderProps {
  *
  * @param root0 - The props object
  * @param root0.manifestationId - ID of the manifestation to attach images to
+ * @param root0.currentItemFormat - Format of the item to pre-select default label
  * @param root0.onUploadComplete - Callback when upload finishes
  * @returns {JSX.Element} The uploader UI
  */
-export function MultiImageUploader({ manifestationId, onUploadComplete }: MultiImageUploaderProps) {
-  const [label, setLabel] = useState<"front" | "back" | "disc" | "inlay" | "box" | "other">("disc");
+export function MultiImageUploader({ manifestationId, currentItemFormat, onUploadComplete }: MultiImageUploaderProps) {
+  const getDefaultLabel = (fmt?: string): "front" | "back" | "disc" | "inlay" | "box" | "other" => {
+    const low = fmt?.toLowerCase() || "";
+    if (["book", "text", "standard"].includes(low)) return "front";
+    if (["audio", "cd", "vinyl", "sound", "lp", "music"].includes(low)) return "disc";
+    if (["video", "dvd", "bluray", "movie", "moving image"].includes(low)) return "disc";
+    if (["boardgame", "board_game", "three-dimensional object", "game", "puzzle"].includes(low)) return "box";
+    return "disc";
+  };
+
+  const [label, setLabel] = useState<"front" | "back" | "disc" | "inlay" | "box" | "other">(
+    getDefaultLabel(currentItemFormat)
+  );
   const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
 

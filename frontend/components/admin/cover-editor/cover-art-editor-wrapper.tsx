@@ -26,7 +26,7 @@ import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, X, Loader2 } from "lucide-react";
+import { Search, X, Loader2, AlertTriangle } from "lucide-react";
 
 interface CoverArtEditorWrapperProps {
   preselectedManifestationId?: number | null;
@@ -141,59 +141,57 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
     }
   };
 
-  if (!selectedEntityId) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Cover Art Editor</CardTitle>
-          <CardDescription>Search for a manifestation to edit its cover art.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex gap-4">
-            <input
-              placeholder="Search by Title, ISBN, UPC, or EAN"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSearch()}
-              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <Button onClick={handleSearch} disabled={searching}>
-              {searching ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-              Search
-            </Button>
-          </div>
+  const searchView = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cover Art Editor</CardTitle>
+        <CardDescription>Search for a manifestation to edit its cover art.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex gap-4">
+          <input
+            placeholder="Search by Title, ISBN, UPC, or EAN"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+          <Button onClick={handleSearch} disabled={searching}>
+            {searching ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+            Search
+          </Button>
+        </div>
 
-          {searchError && <p className="text-destructive font-medium">{searchError}</p>}
+        {searchError && <p className="text-destructive font-medium">{searchError}</p>}
 
-          {searchResults.length > 0 && (
-            <div className="border rounded-lg divide-y">
-              {searchResults.map(result => (
-                <div
-                  key={result.id}
-                  className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
-                  onClick={() => handleSelectManifestation(result.id)}
-                >
-                  <div>
-                    <p className="font-medium">{result.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      ID: {result.id}
-                      {result.isbn13 && ` | ISBN: ${result.isbn13}`}
-                      {result.upc && ` | UPC: ${result.upc}`}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Select
-                  </Button>
+        {searchResults.length > 0 && (
+          <div className="border rounded-lg divide-y">
+            {searchResults.map(result => (
+              <div
+                key={result.id}
+                className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                onClick={() => handleSelectManifestation(result.id)}
+              >
+                <div>
+                  <p className="font-medium">{result.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    ID: {result.id}
+                    {result.isbn13 && ` | ISBN: ${result.isbn13}`}
+                    {result.upc && ` | UPC: ${result.upc}`}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+                <Button variant="outline" size="sm">
+                  Select
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 
-  return (
+  const editorView = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="space-y-1">
@@ -249,5 +247,22 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
         </div>
       </CardContent>
     </Card>
+  );
+
+  return (
+    <div className="w-full">
+      {/* Mobile Fallback View */}
+      <div className="md:hidden flex flex-col items-center justify-center p-8 text-center border rounded-lg bg-muted/50 min-h-[300px] gap-4">
+        <AlertTriangle className="w-12 h-12 text-orange-500" />
+        <h3 className="text-lg font-semibold">Screen Too Small</h3>
+        <p className="text-muted-foreground text-sm">
+          The advanced cover editor requires a larger screen for precise cropping and alignment. Please use an iPad or
+          Desktop browser to edit covers.
+        </p>
+      </div>
+
+      {/* Desktop/Tablet View */}
+      <div className="hidden md:block w-full">{!selectedEntityId ? searchView : editorView}</div>
+    </div>
   );
 }

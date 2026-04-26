@@ -21,7 +21,7 @@
 "use client";
 
 import React from "react";
-import { Save, X } from "lucide-react";
+import { Save, X, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
@@ -34,6 +34,7 @@ export interface ManualEntryData {
   publisher: string;
   year: string;
   format: ScanFormat;
+  coverFile?: File | null;
 }
 
 interface ManualEntryFormProps {
@@ -72,6 +73,7 @@ export function ManualEntryForm({
     publisher: "",
     year: "",
     format: initialFormat,
+    coverFile: null,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -93,6 +95,11 @@ export function ManualEntryForm({
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setFormData(prev => ({ ...prev, coverFile: file }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -206,6 +213,32 @@ export function ManualEntryForm({
               onChange={handleChange}
               className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
             />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="manual-cover-upload" className="text-sm font-medium text-foreground">
+            Manual Cover Upload
+          </label>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="absolute inset-0 z-10 w-full cursor-pointer opacity-0"
+                id="manual-cover-upload"
+              />
+              <Button type="button" variant="outline" size="sm" className="pointer-events-none relative flex h-9 gap-2">
+                <ImagePlus className="h-4 w-4 text-primary" />
+                {formData.coverFile ? "Change Image" : "Choose Cover"}
+              </Button>
+            </div>
+            {formData.coverFile && (
+              <span className="max-w-[150px] truncate text-[11px] text-muted-foreground">
+                {formData.coverFile.name}
+              </span>
+            )}
           </div>
         </div>
 

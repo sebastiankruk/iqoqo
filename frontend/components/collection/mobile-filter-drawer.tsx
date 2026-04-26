@@ -92,7 +92,12 @@ export function MobileFilterDrawer({
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            <SidebarFilters activeFilters={activeFilters} onToggleFilter={onToggleFilter} statusCounts={statusCounts} formatCounts={formatCounts} />
+            <SidebarFilters
+              activeFilters={activeFilters}
+              onToggleFilter={onToggleFilter}
+              statusCounts={statusCounts}
+              formatCounts={formatCounts}
+            />
           </div>
 
           <div className="border-t border-border p-4">

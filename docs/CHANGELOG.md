@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Manual Cover Upload**: `ManualEntryForm` now accepts a cover image file during manual entry fallback, which is uploaded to the backend after the item is saved.
 - **Ontology & Tracking**:
   - **Board Game Statuses**: Added `want_to_play` to the canonical status list to support game wishlisting.
   - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and Google Books/Open Library lookups, providing clear attribution badges in the UI.
@@ -17,8 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin UX**:
   - **RBAC Descriptions**: Added descriptive tooltips to the Role-Based Access Control sheet to clarify user permission boundaries.
 
+### Changed (UX)
+
+- **Graceful Lookup Failure**: When API/LLM/Vision extraction fails, the scanner now prominently routes the user to the `ManualEntryForm` with the scanned EAN pre-filled via `initialIdentifier`.
+- **Additional Scans Pre-selection**: `MultiImageUploader` now intelligently defaults the scan label based on the current item's media type (e.g., `"front"` for books, `"disc"` for CDs).
+- **Cover Editor Mobile Guard**: The heavy Canvas-based Cover Art Editor is now hidden on screens narrower than the `md` Tailwind breakpoint (768px). A clear message directs users to an iPad or desktop browser for cover editing.
+
 ### Fixed
 
+- **Firefox Camera Memory Leak**: Hardened `CameraCapture` `useEffect` cleanup to prevent dangling `enumerateDevices` promise callbacks from updating state after unmount.
 - **Profile Settings**: Resolved a critical bug where the "Display Name" field was read-only and didn't persist changes to the database.
 - **Aesthetic Consistency**: Standardized user metadata table colors to use semantic theme tokens instead of hardcoded classes.
 - **Image Resolution**: Fixed broken fallback cover image paths on production environments by routing all asset resolution through the centralized `getCoverUrl` utility.
