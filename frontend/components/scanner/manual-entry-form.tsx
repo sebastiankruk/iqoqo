@@ -217,7 +217,9 @@ export function ManualEntryForm({
         </div>
 
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-foreground">Manual Cover Upload</span>
+          <label htmlFor="manual-cover-upload" className="text-sm font-medium text-foreground">
+            Manual Cover Upload
+          </label>
           <div className="flex items-center gap-3">
             <Button asChild type="button" variant="outline" size="sm" className="relative flex h-9 gap-2">
               <label htmlFor="manual-cover-upload" className="cursor-pointer">
