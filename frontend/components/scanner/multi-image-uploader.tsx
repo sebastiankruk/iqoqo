@@ -21,6 +21,7 @@ import { CopyPlus, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { GLOBAL_IMAGE_TYPES, CATEGORY_IMAGE_TYPES, MEDIA_HIERARCHY, MediaCategory, ImageType } from "@/types/frbr";
 
 interface MultiImageUploaderProps {
   manifestationId: number;
@@ -30,26 +31,26 @@ interface MultiImageUploaderProps {
 
 /**
  * Component for uploading additional manifestation scans (disc, inlay, etc.).
- *
- * @param root0 - The props object
- * @param root0.manifestationId - ID of the manifestation to attach images to
- * @param root0.currentItemFormat - Format of the item to pre-select default label
- * @param root0.onUploadComplete - Callback when upload finishes
- * @returns {JSX.Element} The uploader UI
  */
 export function MultiImageUploader({ manifestationId, currentItemFormat, onUploadComplete }: MultiImageUploaderProps) {
-  const getDefaultLabel = (fmt?: string): "front" | "back" | "disc" | "inlay" | "box" | "other" => {
+  // Find category for current format to show context-aware labels
+  const itemCategory =
+    (Object.entries(MEDIA_HIERARCHY).find(([_, info]) =>
+      info.formats.some(f => f.id === currentItemFormat)
+    )?.[0] as MediaCategory) || "music";
+
+  const availableImageTypes = [...GLOBAL_IMAGE_TYPES, ...(CATEGORY_IMAGE_TYPES[itemCategory] || [])];
+
+  const getDefaultLabel = (fmt?: string): ImageType => {
     const low = fmt?.toLowerCase() || "";
     if (["book", "text", "standard"].includes(low)) return "front";
     if (["audio", "cd", "vinyl", "sound", "lp", "music"].includes(low)) return "disc";
     if (["video", "dvd", "bluray", "movie", "moving image"].includes(low)) return "disc";
-    if (["boardgame", "board_game", "three-dimensional object", "game", "puzzle"].includes(low)) return "box";
+    if (["boardgame", "board_game", "three-dimensional object", "game", "puzzle"].includes(low)) return "box_contents";
     return "disc";
   };
 
-  const [label, setLabel] = useState<"front" | "back" | "disc" | "inlay" | "box" | "other">(
-    getDefaultLabel(currentItemFormat)
-  );
+  const [label, setLabel] = useState<ImageType>(getDefaultLabel(currentItemFormat));
   const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
 
@@ -67,10 +68,8 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success(`${label} image uploaded successfully!`);
-      // Invalidate both manifestation detail and manifestations list queries to ensure UI refreshes everywhere
       await queryClient.invalidateQueries({ queryKey: ["manifestation", manifestationId] });
       await queryClient.invalidateQueries({ queryKey: ["manifestations"] });
-      // Reset input
       e.target.value = "";
       onUploadComplete();
     } catch (error) {
@@ -87,16 +86,15 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Additional Scans</span>
         <select
           value={label}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLabel(e.target.value as typeof label)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLabel(e.target.value as ImageType)}
           disabled={isUploading}
           className="text-xs bg-transparent border-none focus:ring-0 cursor-pointer font-semibold text-primary"
         >
-          <option value="disc">Disc / Vinyl</option>
-          <option value="inlay">Inlay / Booklet</option>
-          <option value="back">Back Cover</option>
-          <option value="box">Box</option>
-          <option value="front">Front Cover</option>
-          <option value="other">Other</option>
+          {availableImageTypes.map(t => (
+            <option key={t} value={t}>
+              {t.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+            </option>
+          ))}
         </select>
       </div>
 

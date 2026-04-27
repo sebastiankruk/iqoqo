@@ -408,23 +408,10 @@ def add_item_manual():
     pub_date_str = data.get("PublicationDate")
 
     # Derive a sensible default progress status from the media format using canonical mapping.
-    from app.db.core import CATEGORY_PROGRESS_STATUSES, MediaCategory, MediaFormat
+    from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_TO_CATEGORY, MediaCategory
 
-    _FORMAT_TO_CATEGORY: dict[str, str] = {
-        MediaFormat.BOOK: MediaCategory.TEXT,
-        MediaFormat.AUDIOBOOK_CD: MediaCategory.MUSIC,
-        MediaFormat.CD: MediaCategory.MUSIC,
-        MediaFormat.VINYL: MediaCategory.MUSIC,
-        MediaFormat.SACD: MediaCategory.MUSIC,
-        MediaFormat.MUSIC: MediaCategory.MUSIC,
-        MediaFormat.DVD: MediaCategory.MOVIE,
-        MediaFormat.BLURAY: MediaCategory.MOVIE,
-        MediaFormat.MOVIE: MediaCategory.MOVIE,
-        MediaFormat.BOARD_GAME: MediaCategory.BOARD_GAME,
-        MediaFormat.PUZZLE: MediaCategory.PUZZLE,
-    }
     _fmt_lower = (content_type or "").lower()
-    category = _FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+    category = FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
     default_status = CATEGORY_PROGRESS_STATUSES[category][0]
 
     try:

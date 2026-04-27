@@ -5,7 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-04-24
+## [0.5.0] - 2026-04-29
+
+### Added
+
+- **Media Taxonomy SSoT**: Implemented a Single Source of Truth for the iqoqo media taxonomy (categories, formats, and statuses) in `shared/taxonomy.yaml`.
+- **Code Generation Engine**: New `scripts/generate_taxonomy.py` automatically produces synchronized Python (`app/core/taxonomy.py`), TypeScript (`frontend/types/taxonomy.ts`), and RDF (`docs/ontology/taxonomy.ttl`) artifacts.
+- **Audiobook Category**: Promoted Audiobooks to a top-level media category (splitting from Text) with specialized progress tracking and image labels.
+- **Integrity Tests**: Added `tests/test_taxonomy_generation.py` to ensure committed generated files never drift from the YAML source.
+
+### Changed
+
+- **Format Rename**: Renamed the generic `puzzle` format to `jigsaw_puzzle` for clarity and future extension.
+- **Dynamic Image Labels**: The `MultiImageUploader` now dynamically adapts its labels based on the item category (e.g., "Disc" for music, "Dust Jacket" for books, "Box Contents" for games).
+- **Consolidated Taxonomy**: Refactored `app/db/core.py` and `frontend/types/frbr.ts` to re-export from the generated taxonomy, eliminating attribute drift across the stack.
+
+### Fixed
+
+- **Migration Chain Repair**: Fixed a broken Alembic migration chain where a revision referenced a non-existent ID (`fix_llm_telemetry_sequence`).
+- **Scanner Media Detection**: Hardened media type detection in the scanner API to correctly map generic hints (`audio`, `video`) to canonical formats.
+
+### Database Migrations
+
+- `migrate_taxonomy_v050_step7`: Moves Audiobook manifestations from `text` to `audiobook` category and renames `puzzle` format to `jigsaw_puzzle` in manifestation metadata.
 
 ### Added
 

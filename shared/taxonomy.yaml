@@ -1,0 +1,118 @@
+# shared/taxonomy.yaml
+# Single Source of Truth for iqoqo Media Taxonomy & Statuses
+# ---------------------------------------------------------
+# Run `make generate-taxonomy` after editing this file.
+
+global_image_types:
+  - front
+  - back
+  - spine
+  - other
+
+media_categories:
+  text:
+    label: "Text"
+    image_types: ["dust_jacket", "slipcase", "pages"]
+    formats:
+      - id: book
+        label: "Book"
+      - id: graphic_novel
+        label: "Graphic Novel / TPB"
+      - id: comic_book
+        label: "Comic Book (Single Issue)"
+      - id: magazine
+        label: "Magazine"
+      - id: ebook
+        label: "eBook"
+
+  audiobook:
+    label: "Audiobook"
+    image_types: ["disc", "cassette", "inlay", "slipcase"]
+    formats:
+      - id: audiobook_cd
+        label: "Audiobook CD"
+      - id: audiobook_cassette
+        label: "Audiobook Cassette"
+      - id: audiobook_digital
+        label: "Digital Audiobook"
+
+  music:
+    label: "Music"
+    image_types: ["disc", "inlay", "vinyl_label", "gatefold", "obi", "booklet"]
+    formats:
+      - id: cd
+        label: "CD"
+      - id: vinyl
+        label: "Vinyl"
+      - id: sacd
+        label: "SACD"
+      - id: cassette
+        label: "Cassette"
+      - id: minidisc
+        label: "MiniDisc"
+      - id: cd_dvd_combo
+        label: "CD + DVD Edition"
+
+  movie:
+    label: "Movie"
+    image_types: ["disc", "inlay", "slipcover", "booklet"]
+    formats:
+      - id: dvd
+        label: "DVD"
+      - id: bluray
+        label: "Blu-ray"
+      - id: 4k_uhd
+        label: "4K UHD"
+      - id: vcd
+        label: "Video CD (VCD)"
+      - id: vhs
+        label: "VHS"
+      - id: laserdisc
+        label: "LaserDisc"
+
+  board_game:
+    label: "Board Game"
+    image_types: ["box_contents", "board", "components", "rulebook"]
+    formats:
+      - id: board_game
+        label: "Board Game"
+      - id: cards
+        label: "Card Game"
+      - id: rpg_manual
+        label: "RPG Manual"
+      - id: miniatures
+        label: "Miniatures / Wargame"
+
+  puzzle:
+    label: "Puzzle"
+    image_types: ["pieces", "completed_puzzle", "poster"]
+    formats:
+      - id: jigsaw_puzzle
+        label: "Jigsaw Puzzle"
+      - id: mechanical_puzzle
+        label: "Mechanical / 3D Puzzle"
+
+collection_statuses:
+  - id: wish_list
+    label: "Want to Own"
+  - id: ordered
+    label: "Ordered"
+  - id: available
+    label: "On Shelf"
+  - id: lent
+    label: "Lent Out"
+  - id: damaged
+    label: "Damaged"
+  - id: lost
+    label: "Lost"
+
+progress_statuses:
+  text: ["want_to_read", "reading", "read", "dnf"]
+  audiobook: ["want_to_listen", "listening", "listened", "dnf"]
+  music: ["want_to_listen", "listened"]
+  movie: ["want_to_watch", "watched", "dnf"]
+  board_game: ["want_to_play", "playing", "played"]
+  puzzle: ["want_to_play", "playing", "played"]
+
+# Scanner top-bar formats (categories shown in scanner UI)
+scan_formats: ["book", "music", "movie", "board_game", "puzzle"]

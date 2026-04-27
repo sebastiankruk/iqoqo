@@ -29,6 +29,7 @@ from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
+from app.core.taxonomy import MediaCategory
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates, fetch_discogs_metadata
@@ -126,17 +127,18 @@ def lookup_barcode_preview(query: str):
 
     # Filter by format if hint is provided to avoid cross-media collisions
     if format_hint:
-        from app.db.core import MediaCategory
+        from app.core.taxonomy import FORMAT_TO_CATEGORY
 
-        content_type = None
-        if format_hint in ("game", "boardgame", "board_game"):
-            content_type = MediaCategory.BOARD_GAME
-        elif format_hint in ("audio", "cd", "vinyl", "sound", "music"):
-            content_type = MediaCategory.MUSIC
-        elif format_hint in ("video", "dvd", "bluray", "movie"):
-            content_type = MediaCategory.MOVIE
-        elif format_hint in ("book", "text"):
-            content_type = MediaCategory.TEXT
+        content_type = FORMAT_TO_CATEGORY.get(format_hint)
+
+        # Fallbacks for non-canonical hints
+        if not content_type:
+            if format_hint in ("game", "boardgame"):
+                content_type = MediaCategory.BOARD_GAME
+            elif format_hint in ("audio", "sound"):
+                content_type = MediaCategory.MUSIC
+            elif format_hint == "book":
+                content_type = MediaCategory.TEXT
 
         if content_type:
             query_obj = query_obj.filter(Expression.content_type == content_type)
@@ -375,26 +377,28 @@ def lookup_barcode_preview(query: str):
         )
 
     if "format" not in meta and format_hint:
-        from app.db.core import MediaCategory, MediaFormat
+        from app.core.taxonomy import FORMAT_TO_CATEGORY
+        from app.db.core import MediaFormat
 
-        format_map = {
-            "audio": MediaFormat.MUSIC,
-            "music": MediaFormat.MUSIC,
-            "cd": MediaFormat.CD,
-            "vinyl": MediaFormat.VINYL,
-            "sound": MediaFormat.MUSIC,
-            "video": MediaFormat.MOVIE,
-            "movie": MediaFormat.MOVIE,
-            "dvd": MediaFormat.DVD,
-            "bluray": MediaFormat.BLURAY,
+        # Use canonical mapping from taxonomy
+        meta["format"] = format_hint if format_hint in FORMAT_TO_CATEGORY else format_hint.upper()
+
+        # Map generic hints to default formats
+        hint_to_format = {
+            "audio": MediaFormat.CD,
+            "music": MediaFormat.CD,
+            "video": MediaFormat.DVD,
+            "movie": MediaFormat.DVD,
             "game": MediaFormat.BOARD_GAME,
             "boardgame": MediaFormat.BOARD_GAME,
-            "board_game": MediaFormat.BOARD_GAME,
-            "puzzle": MediaFormat.PUZZLE,
             "book": MediaFormat.BOOK,
             "text": MediaFormat.BOOK,
+            "puzzle": MediaFormat.JIGSAW_PUZZLE,
+            "jigsaw": MediaFormat.JIGSAW_PUZZLE,
+            "audiobook": MediaFormat.AUDIOBOOK_CD,
         }
-        meta["format"] = format_map.get(format_hint, format_hint.upper())
+        if format_hint in hint_to_format:
+            meta["format"] = hint_to_format[format_hint]
 
     # Add identifier to meta — use original human-readable query, not internal hash
     meta["identifier"] = query
