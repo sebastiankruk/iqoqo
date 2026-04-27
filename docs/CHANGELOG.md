@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Manual Cover Upload**: `ManualEntryForm` now accepts a cover image file during manual entry fallback, which is uploaded to the backend after the item is saved.
+- **Ontology & Tracking**:
+  - **Board Game Statuses**: Added `want_to_play` to the canonical status list to support game wishlisting.
+  - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and Google Books/Open Library lookups, providing clear attribution badges in the UI.
+- **Smart AI Capabilities**:
+  - **Media-Aware AI Art**: Expanded LLM image generation prompts to use media-specific prefixes (e.g., "Cinematic movie poster" for films, "Box art" for games), significantly improving the quality of AI-generated covers for non-book items.
+- **Admin UX**:
+  - **RBAC Descriptions**: Added descriptive tooltips to the Role-Based Access Control sheet to clarify user permission boundaries.
 - **Media Taxonomy SSoT**: Implemented a Single Source of Truth for the iqoqo media taxonomy (categories, formats, and statuses) in `shared/taxonomy.yaml`.
 - **Code Generation Engine**: New `scripts/generate_taxonomy.py` automatically produces synchronized Python (`app/core/taxonomy.py`), TypeScript (`frontend/types/taxonomy.ts`), and RDF (`docs/ontology/taxonomy.ttl`) artifacts.
 - **Audiobook Category**: Promoted Audiobooks to a top-level media category (splitting from Text) with specialized progress tracking and image labels.
@@ -22,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Firefox Camera Memory Leak**: Hardened `CameraCapture` `useEffect` cleanup to prevent dangling `enumerateDevices` promise callbacks from updating state after unmount.
+- **Profile Settings**: Resolved a critical bug where the "Display Name" field was read-only and didn't persist changes to the database.
+- **Aesthetic Consistency**: Standardized user metadata table colors to use semantic theme tokens instead of hardcoded classes.
+- **Image Resolution**: Fixed broken fallback cover image paths on production environments by routing all asset resolution through the centralized `getCoverUrl` utility.
+- **Component Stability**: Resolved JSX syntax errors in the Puzzle and Video metadata components.
 - **Migration Chain Repair**: Fixed a broken Alembic migration chain where a revision referenced a non-existent ID (`fix_llm_telemetry_sequence`).
 - **Scanner Media Detection**: Hardened media type detection in the scanner API to correctly map generic hints (`audio`, `video`) to canonical formats.
 
@@ -29,30 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `migrate_taxonomy_v050_step7`: Moves Audiobook manifestations from `text` to `audiobook` category and renames `puzzle` format to `jigsaw_puzzle` in manifestation metadata.
 
-### Added
-
-- **Manual Cover Upload**: `ManualEntryForm` now accepts a cover image file during manual entry fallback, which is uploaded to the backend after the item is saved.
-- **Ontology & Tracking**:
-  - **Board Game Statuses**: Added `want_to_play` to the canonical status list to support game wishlisting.
-  - **Metadata Provenance**: Integrated automated `data_source` tracking for Discogs, TMDB, BGG, and Google Books/Open Library lookups, providing clear attribution badges in the UI.
-- **Smart AI Capabilities**:
-  - **Media-Aware AI Art**: Expanded LLM image generation prompts to use media-specific prefixes (e.g., "Cinematic movie poster" for films, "Box art" for games), significantly improving the quality of AI-generated covers for non-book items.
-- **Admin UX**:
-  - **RBAC Descriptions**: Added descriptive tooltips to the Role-Based Access Control sheet to clarify user permission boundaries.
-
 ### Changed (UX)
 
 - **Graceful Lookup Failure**: When API/LLM/Vision extraction fails, the scanner now prominently routes the user to the `ManualEntryForm` with the scanned EAN pre-filled via `initialIdentifier`.
 - **Additional Scans Pre-selection**: `MultiImageUploader` now intelligently defaults the scan label based on the current item's media type (e.g., `"front"` for books, `"disc"` for CDs).
 - **Cover Editor Mobile Guard**: The heavy Canvas-based Cover Art Editor is now hidden on screens narrower than the `md` Tailwind breakpoint (768px). A clear message directs users to an iPad or desktop browser for cover editing.
-
-### Fixed
-
-- **Firefox Camera Memory Leak**: Hardened `CameraCapture` `useEffect` cleanup to prevent dangling `enumerateDevices` promise callbacks from updating state after unmount.
-- **Profile Settings**: Resolved a critical bug where the "Display Name" field was read-only and didn't persist changes to the database.
-- **Aesthetic Consistency**: Standardized user metadata table colors to use semantic theme tokens instead of hardcoded classes.
-- **Image Resolution**: Fixed broken fallback cover image paths on production environments by routing all asset resolution through the centralized `getCoverUrl` utility.
-- **Component Stability**: Resolved JSX syntax errors in the Puzzle and Video metadata components.
 
 ## [0.4.1] - 2026-04-20
 

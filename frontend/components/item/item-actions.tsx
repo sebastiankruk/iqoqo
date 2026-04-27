@@ -191,11 +191,11 @@ export function ItemActions({ item }: { item: Item }) {
 
         {isVideo && item.status !== "watched" && (
           <button
-            onClick={() => handleStatusUpdate(item.status === "watching" ? "watched" : "watching")}
+            onClick={() => handleStatusUpdate("watched")}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
           >
             <Video className="h-3.5 w-3.5" />
-            {item.status === "watching" ? "Mark as Watched" : "Now Watching"}
+            Mark as Watched
           </button>
         )}
 

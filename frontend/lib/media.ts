@@ -30,19 +30,66 @@ export interface MediaMetadata {
  * This is the SINGLE SOURCE OF TRUTH for media-related UI logic.
  */
 export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
+  // --- TEXT / BOOKS ---
   book: {
     label: "Book",
     apiCategory: "text",
     aspectRatio: 2 / 3,
     icon: Book,
   },
+  graphic_novel: {
+    label: "Graphic Novel",
+    apiCategory: "text",
+    aspectRatio: 2 / 3,
+    parent: "book",
+    icon: Book,
+  },
+  comic_book: {
+    label: "Comic Book",
+    apiCategory: "text",
+    aspectRatio: 2 / 3,
+    parent: "book",
+    icon: Book,
+  },
+  magazine: {
+    label: "Magazine",
+    apiCategory: "text",
+    aspectRatio: 2 / 3,
+    parent: "book",
+    icon: Book,
+  },
+  ebook: {
+    label: "eBook",
+    apiCategory: "text",
+    aspectRatio: 2 / 3,
+    parent: "book",
+    icon: Book,
+  },
+
+  // --- AUDIOBOOKS (Category: audiobook) ---
   audiobook_cd: {
     label: "Audiobook CD",
-    apiCategory: "text",
+    apiCategory: "audiobook",
+    aspectRatio: 1 / 1,
+    parent: "book", // Scanned under 'book' format in UI
+    icon: Disc,
+  },
+  audiobook_cassette: {
+    label: "Audiobook Cassette",
+    apiCategory: "audiobook",
     aspectRatio: 1 / 1,
     parent: "book",
     icon: Disc,
   },
+  audiobook_digital: {
+    label: "Digital Audiobook",
+    apiCategory: "audiobook",
+    aspectRatio: 1 / 1,
+    parent: "book",
+    icon: Disc,
+  },
+
+  // --- MUSIC ---
   music: {
     label: "Music (CD/Vinyl)",
     apiCategory: "music",
@@ -70,6 +117,29 @@ export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
     parent: "music",
     icon: Disc,
   },
+  cassette: {
+    label: "Cassette",
+    apiCategory: "music",
+    aspectRatio: 1 / 1,
+    parent: "music",
+    icon: Disc,
+  },
+  minidisc: {
+    label: "MiniDisc",
+    apiCategory: "music",
+    aspectRatio: 1 / 1,
+    parent: "music",
+    icon: Disc,
+  },
+  cd_dvd_combo: {
+    label: "CD + DVD",
+    apiCategory: "music",
+    aspectRatio: 1 / 1,
+    parent: "music",
+    icon: Disc,
+  },
+
+  // --- MOVIES ---
   movie: {
     label: "Video (DVD/Blu-Ray)",
     apiCategory: "movie",
@@ -79,7 +149,7 @@ export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
   dvd: {
     label: "DVD",
     apiCategory: "movie",
-    aspectRatio: 1.5, // 3:2 approximately for DVD cases or just 1:1 for discs
+    aspectRatio: 1.5,
     parent: "movie",
     icon: Film,
   },
@@ -90,6 +160,36 @@ export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
     parent: "movie",
     icon: Film,
   },
+  "4k_uhd": {
+    label: "4K Ultra HD",
+    apiCategory: "movie",
+    aspectRatio: 1.5,
+    parent: "movie",
+    icon: Film,
+  },
+  vcd: {
+    label: "VCD",
+    apiCategory: "movie",
+    aspectRatio: 1 / 1,
+    parent: "movie",
+    icon: Film,
+  },
+  vhs: {
+    label: "VHS",
+    apiCategory: "movie",
+    aspectRatio: 1.5,
+    parent: "movie",
+    icon: Film,
+  },
+  laserdisc: {
+    label: "LaserDisc",
+    apiCategory: "movie",
+    aspectRatio: 1 / 1,
+    parent: "movie",
+    icon: Film,
+  },
+
+  // --- BOARD GAMES ---
   board_game: {
     label: "Board Game",
     apiCategory: "board_game",
@@ -103,10 +203,40 @@ export const MEDIA_REGISTRY: Record<MediaFormat | ScanFormat, MediaMetadata> = {
     parent: "board_game",
     icon: Dices,
   },
+  rpg_manual: {
+    label: "RPG Manual",
+    apiCategory: "board_game",
+    aspectRatio: 2 / 3,
+    parent: "board_game",
+    icon: Book,
+  },
+  miniatures: {
+    label: "Miniatures",
+    apiCategory: "board_game",
+    aspectRatio: 1 / 1,
+    parent: "board_game",
+    icon: Dices,
+  },
+
+  // --- PUZZLES ---
   puzzle: {
+    label: "Puzzle",
+    apiCategory: "puzzle",
+    aspectRatio: 1 / 1,
+    icon: Puzzle,
+  },
+  jigsaw_puzzle: {
     label: "Jigsaw Puzzle",
     apiCategory: "puzzle",
     aspectRatio: 1 / 1,
+    parent: "puzzle",
+    icon: Puzzle,
+  },
+  mechanical_puzzle: {
+    label: "Mechanical Puzzle",
+    apiCategory: "puzzle",
+    aspectRatio: 1 / 1,
+    parent: "puzzle",
     icon: Puzzle,
   },
 };
