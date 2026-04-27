@@ -48,6 +48,7 @@ exports/*
 
 # AI
 .github/context
+.context
 
 # Process IDs
 .flask.pid
