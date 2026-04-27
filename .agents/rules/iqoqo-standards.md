@@ -9,7 +9,7 @@ Talk like caveman
 
 ## Decision Making & Feature Preservation
 
-- **Plan Over Comments:** The project plan files in `.github/context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
+- **Plan Over Comments:** The project plan files in `.context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
 
 ## General Architectural Principles
 

@@ -47,7 +47,6 @@ exports/*
 .venv*
 
 # AI
-.github/context
 .context
 
 # Process IDs

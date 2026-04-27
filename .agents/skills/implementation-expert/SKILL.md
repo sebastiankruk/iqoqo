@@ -12,7 +12,7 @@ This skill governs codebase changes. It handles provided code OR generates requi
 
 ## Core Rules
 
-1. **Source of Truth**: `.github/context/private-notes/` is law. Plan files there override all.
+1. **Source of Truth**: `.context/private-notes/` is law. Plan files there override all.
 2. **Mirror Patterns**: Match existing style, imports, and logic exactly. No "improvements" unless asked.
 3. **Type Safety**: No `# type: ignore` unless for SQLAlchemy dynamic attrs or broken external stubs. Fix the code.
 4. **Environment**: Use `.venv/bin/` for all Python tools (pytest, flask, alembic).
