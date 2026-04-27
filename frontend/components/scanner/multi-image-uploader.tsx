@@ -21,7 +21,16 @@ import { CopyPlus, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
-import { GLOBAL_IMAGE_TYPES, CATEGORY_IMAGE_TYPES, MEDIA_HIERARCHY, MediaCategory, ImageType } from "@/types/frbr";
+import {
+  GLOBAL_IMAGE_TYPES,
+  CATEGORY_IMAGE_TYPES,
+  MEDIA_HIERARCHY,
+  MEDIA_CATEGORIES,
+  FORMAT_ALIAS_TO_CATEGORY,
+  CATEGORY_DEFAULT_IMAGE_TYPE,
+  MediaCategory,
+  ImageType,
+} from "@/types/frbr";
 
 interface MultiImageUploaderProps {
   manifestationId: number;
@@ -31,23 +40,26 @@ interface MultiImageUploaderProps {
 
 /**
  * Component for uploading additional manifestation scans (disc, inlay, etc.).
+ * @param root0 - Component props.
+ * @param root0.manifestationId - ID of the manifestation to upload scans for.
+ * @param root0.currentItemFormat - Current item format string for label defaults.
+ * @param root0.onUploadComplete - Callback invoked after a successful upload.
+ * @returns The multi-image uploader UI.
  */
 export function MultiImageUploader({ manifestationId, currentItemFormat, onUploadComplete }: MultiImageUploaderProps) {
   // Find category for current format to show context-aware labels
   const itemCategory =
-    (Object.entries(MEDIA_HIERARCHY).find(([_, info]) =>
+    (Object.entries(MEDIA_HIERARCHY).find(([_cat, info]) =>
       info.formats.some(f => f.id === currentItemFormat)
-    )?.[0] as MediaCategory) || "music";
+    )?.[0] as MediaCategory) || MEDIA_CATEGORIES[0];
 
   const availableImageTypes = [...GLOBAL_IMAGE_TYPES, ...(CATEGORY_IMAGE_TYPES[itemCategory] || [])];
 
   const getDefaultLabel = (fmt?: string): ImageType => {
     const low = fmt?.toLowerCase() || "";
-    if (["book", "text", "standard"].includes(low)) return "front";
-    if (["audio", "cd", "vinyl", "sound", "lp", "music"].includes(low)) return "disc";
-    if (["video", "dvd", "bluray", "movie", "moving image"].includes(low)) return "disc";
-    if (["boardgame", "board_game", "three-dimensional object", "game", "puzzle"].includes(low)) return "box_contents";
-    return "disc";
+    // Resolve format/alias → category via the generated SSoT map
+    const category = FORMAT_ALIAS_TO_CATEGORY[low] || itemCategory;
+    return (CATEGORY_DEFAULT_IMAGE_TYPE[category] || GLOBAL_IMAGE_TYPES[0]) as ImageType;
   };
 
   const [label, setLabel] = useState<ImageType>(getDefaultLabel(currentItemFormat));

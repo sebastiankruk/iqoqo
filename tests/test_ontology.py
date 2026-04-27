@@ -101,7 +101,7 @@ def test_taxonomy_yaml_exists() -> None:
 
 def test_taxonomy_files_in_sync_with_yaml() -> None:
     """Verify that Python constants match the YAML source of truth."""
-    with open(TAXONOMY_YAML) as f:
+    with open(TAXONOMY_YAML, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     # Categories

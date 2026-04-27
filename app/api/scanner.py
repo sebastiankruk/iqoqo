@@ -29,7 +29,6 @@ from app.api.decorators import require_auth, require_permission
 from app.core.ingest import IngestService
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.core.taxonomy import MediaCategory
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates, fetch_discogs_metadata
@@ -127,18 +126,9 @@ def lookup_barcode_preview(query: str):
 
     # Filter by format if hint is provided to avoid cross-media collisions
     if format_hint:
-        from app.core.taxonomy import FORMAT_TO_CATEGORY
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-        content_type = FORMAT_TO_CATEGORY.get(format_hint)
-
-        # Fallbacks for non-canonical hints
-        if not content_type:
-            if format_hint in ("game", "boardgame"):
-                content_type = MediaCategory.BOARD_GAME
-            elif format_hint in ("audio", "sound"):
-                content_type = MediaCategory.MUSIC
-            elif format_hint == "book":
-                content_type = MediaCategory.TEXT
+        content_type = FORMAT_ALIAS_TO_CATEGORY.get(format_hint)
 
         if content_type:
             query_obj = query_obj.filter(Expression.content_type == content_type)

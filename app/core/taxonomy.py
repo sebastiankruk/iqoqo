@@ -139,6 +139,44 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "mechanical_puzzle": "puzzle",
 }
 
+FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
+    "book": "text",
+    "graphic_novel": "text",
+    "comic_book": "text",
+    "magazine": "text",
+    "ebook": "text",
+    "audiobook_cd": "audiobook",
+    "audiobook_cassette": "audiobook",
+    "audiobook_digital": "audiobook",
+    "cd": "music",
+    "vinyl": "music",
+    "sacd": "music",
+    "cassette": "music",
+    "minidisc": "music",
+    "cd_dvd_combo": "music",
+    "dvd": "movie",
+    "bluray": "movie",
+    "4k_uhd": "movie",
+    "vcd": "movie",
+    "vhs": "movie",
+    "laserdisc": "movie",
+    "board_game": "board_game",
+    "cards": "board_game",
+    "rpg_manual": "board_game",
+    "miniatures": "board_game",
+    "jigsaw_puzzle": "puzzle",
+    "mechanical_puzzle": "puzzle",
+    "standard": "text",
+    "audio": "music",
+    "sound": "music",
+    "lp": "music",
+    "video": "movie",
+    "moving image": "movie",
+    "game": "board_game",
+    "boardgame": "board_game",
+    "three-dimensional object": "board_game",
+}
+
 GLOBAL_IMAGE_TYPES: list[str] = ["front", "back", "spine", "other"]
 CATEGORY_IMAGE_TYPES: dict[str, list[str]] = {
     "text": ["dust_jacket", "slipcase", "pages"],
@@ -147,6 +185,15 @@ CATEGORY_IMAGE_TYPES: dict[str, list[str]] = {
     "movie": ["disc", "inlay", "slipcover", "booklet"],
     "board_game": ["box_contents", "board", "components", "rulebook"],
     "puzzle": ["pieces", "completed_puzzle", "poster"],
+}
+
+CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
+    "text": "front",
+    "audiobook": "front",
+    "music": "disc",
+    "movie": "disc",
+    "board_game": "box_contents",
+    "puzzle": "box_contents",
 }
 
 SCAN_FORMATS: tuple[str, ...] = ("book", "music", "movie", "board_game", "puzzle")

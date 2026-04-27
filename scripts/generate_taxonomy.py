@@ -58,12 +58,12 @@ def generate_python(data: dict) -> str:
     py_code.append("class MediaCategory:")
     for cat in data["media_categories"]:
         py_code.append(f'    {cat.upper()} = "{cat}"')
-    py_code.append(f'    ALL = ({", ".join(f"{repr(c)}" for c in data["media_categories"])})\n')
+    py_code.append(f'    ALL = ({", ".join(repr(c) for c in data["media_categories"])})\n')
 
     # Formats
     py_code.append("class MediaFormat:")
     all_formats = []
-    format_to_category = {}
+    format_to_category: dict[str, str] = {}
     for cat, info in data["media_categories"].items():
         for fmt in info["formats"]:
             fmt_id = fmt["id"]
@@ -82,7 +82,7 @@ def generate_python(data: dict) -> str:
     coll_statuses = [s["id"] for s in data["collection_statuses"]]
     py_code.append(f'COLLECTION_STATUSES: tuple[str, ...] = ({", ".join(repr(s) for s in coll_statuses)})\n')
 
-    prog_statuses = set()
+    prog_statuses: set[str] = set()
     for statuses in data["progress_statuses"].values():
         prog_statuses.update(statuses)
     py_code.append(f'PROGRESS_STATUSES: tuple[str, ...] = ({", ".join(repr(s) for s in sorted(prog_statuses))})\n')
@@ -95,10 +95,21 @@ def generate_python(data: dict) -> str:
 
     py_code.append(f"FORMAT_TO_CATEGORY: dict[str, str] = {json.dumps(format_to_category, indent=4)}\n")
 
+    # FORMAT_ALIAS_TO_CATEGORY — merges canonical formats + aliases into one
+    # lookup dict so consumers only need a single `dict.get()`.
+    alias_to_cat: dict[str, str] = dict(format_to_category)
+    for alias, target_cat in data.get("format_aliases", {}).items():
+        alias_to_cat[alias] = target_cat
+    py_code.append(f"FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {json.dumps(alias_to_cat, indent=4)}\n")
+
     # Image Types
     image_types_map = {cat: info.get("image_types", []) for cat, info in data["media_categories"].items()}
     py_code.append(f'GLOBAL_IMAGE_TYPES: list[str] = {json.dumps(data["global_image_types"])}')
     py_code.append(f"CATEGORY_IMAGE_TYPES: dict[str, list[str]] = {json.dumps(image_types_map, indent=4)}\n")
+
+    # Default image type per category
+    default_image = {cat: info.get("default_image_type", "front") for cat, info in data["media_categories"].items()}
+    py_code.append(f"CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {json.dumps(default_image, indent=4)}\n")
 
     # Scan Formats
     py_code.append(f'SCAN_FORMATS: tuple[str, ...] = {tuple(data["scan_formats"])}\n')
@@ -132,6 +143,19 @@ def generate_typescript(data: dict) -> str:
     cat_image_types = {cat: info.get("image_types", []) for cat, info in data["media_categories"].items()}
     ts_code.append(f"export const CATEGORY_IMAGE_TYPES = {json.dumps(cat_image_types, indent=2)} as const;\n")
 
+    # Default image type per category
+    default_image = {cat: info.get("default_image_type", "front") for cat, info in data["media_categories"].items()}
+    ts_code.append(f"export const CATEGORY_DEFAULT_IMAGE_TYPE: Record<MediaCategory, string> = {json.dumps(default_image, indent=2)};\n")
+
+    # FORMAT_ALIAS_TO_CATEGORY — canonical format IDs + non-canonical aliases
+    format_to_cat: dict[str, str] = {}
+    for cat, info in data["media_categories"].items():
+        for fmt in info["formats"]:
+            format_to_cat[fmt["id"]] = cat
+    for alias, target_cat in data.get("format_aliases", {}).items():
+        format_to_cat[alias] = target_cat
+    ts_code.append(f"export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {json.dumps(format_to_cat, indent=2)};\n")
+
     all_image_types = set(data["global_image_types"])
     for types in cat_image_types.values():
         all_image_types.update(types)
@@ -141,7 +165,7 @@ def generate_typescript(data: dict) -> str:
     coll_types = " | ".join(f'"{s}"' for s in sorted(coll_statuses))
     ts_code.append(f"export type CollectionStatus = {coll_types};\n")
 
-    prog_statuses_set = set()
+    prog_statuses_set: set[str] = set()
     for statuses in data["progress_statuses"].values():
         prog_statuses_set.update(statuses)
     prog_types = " | ".join(f'"{s}"' for s in sorted(prog_statuses_set))
@@ -158,6 +182,7 @@ def generate_turtle(data: dict) -> str:
         COPYRIGHT_HEADER.replace("#", "#"),
         "@prefix : <https://iqoqo.org/ontology#> .",
         "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .",
         "",
         "# AUTO-GENERATED from shared/taxonomy.yaml",
         "",
@@ -167,20 +192,35 @@ def generate_turtle(data: dict) -> str:
         cat_class = f"MediaCategory{cat.replace('_', ' ').title().replace(' ', '')}"
         ttl_code.append(f":{cat_class} a :MediaCategory ;")
         ttl_code.append(f'    rdfs:label "{cat}" ;')
+        default_img = info.get("default_image_type", "front")
+        ttl_code.append(f'    :defaultImageType "{default_img}" ;')
         ttl_code.append(f'    rdfs:comment "{info["label"]}" .')
 
         for fmt in info["formats"]:
             fmt_class = f"MediaFormat{fmt['id'].replace('_', ' ').title().replace(' ', '')}"
             ttl_code.append(f":{fmt_class} a :MediaFormat ;")
             ttl_code.append(f'    rdfs:label "{fmt["id"]}" ;')
+            ttl_code.append(f"    :belongsToCategory :{cat_class} ;")
             ttl_code.append(f'    rdfs:comment "{fmt["label"]}" .')
 
     ttl_code.append("")
 
+    # Format Aliases
+    if data.get("format_aliases"):
+        ttl_code.append("# Format Aliases (non-canonical names)")
+        for alias, target_cat in data["format_aliases"].items():
+            alias_id = alias.replace(" ", "_").replace("-", "_")
+            alias_class = f"FormatAlias{alias_id.replace('_', ' ').title().replace(' ', '')}"
+            target_class = f"MediaCategory{target_cat.replace('_', ' ').title().replace(' ', '')}"
+            ttl_code.append(f":{alias_class} a :FormatAlias ;")
+            ttl_code.append(f'    rdfs:label "{alias}" ;')
+            ttl_code.append(f"    :resolvesToCategory :{target_class} .")
+        ttl_code.append("")
+
     # Collection Statuses
     for status in data["collection_statuses"]:
         status_class = f"Status{status['id'].replace('_', ' ').title().replace(' ', '')}"
-        ttl_code.append(f":{status_class} a :CollectionStatus ; rdfs:label \"{status['id']}\" .")
+        ttl_code.append(f':{status_class} a :CollectionStatus ; rdfs:label "{status["id"]}" .')
 
     ttl_code.append("")
 
@@ -196,10 +236,19 @@ def generate_turtle(data: dict) -> str:
 
 
 if __name__ == "__main__":
-    with open(YAML_FILE) as f:
+    import subprocess
+
+    with open(YAML_FILE, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     PY_OUT.write_text(generate_python(data))
     TS_OUT.write_text(generate_typescript(data))
     TTL_OUT.write_text(generate_turtle(data))
+
+    # Auto-format the generated Python so `black --check` never drifts
+    subprocess.run(
+        [".venv/bin/black", "--quiet", str(PY_OUT)],
+        check=False,
+        cwd=str(ROOT_DIR),
+    )
     print("Taxonomy generated successfully.")

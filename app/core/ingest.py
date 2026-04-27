@@ -41,20 +41,10 @@ class IngestService:
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
         raw_format = (meta.get("format") or meta.get("Format") or "audio").lower()
 
-        from app.core.taxonomy import FORMAT_TO_CATEGORY
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-        # Map format string → FRBR content type
-        content_type = FORMAT_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
-
-        # Heuristics for non-canonical raw formats
-        if raw_format in ("video", "movie", "moving image"):
-            content_type = MediaCategory.MOVIE
-        elif raw_format in ("game", "boardgame"):
-            content_type = MediaCategory.BOARD_GAME
-        elif raw_format == "book":
-            content_type = MediaCategory.TEXT
-        elif raw_format in ("sound", "audio"):
-            content_type = MediaCategory.MUSIC
+        # Map format string → FRBR content type (canonical formats + aliases)
+        content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
 
         work_meta: dict = {"authors": [author_name] if author_name else []}
         work = Work(title=title, meta=work_meta)

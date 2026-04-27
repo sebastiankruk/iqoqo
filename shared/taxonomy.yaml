@@ -12,6 +12,7 @@ global_image_types:
 media_categories:
   text:
     label: "Text"
+    default_image_type: "front"
     image_types: ["dust_jacket", "slipcase", "pages"]
     formats:
       - id: book
@@ -27,6 +28,7 @@ media_categories:
 
   audiobook:
     label: "Audiobook"
+    default_image_type: "front"
     image_types: ["disc", "cassette", "inlay", "slipcase"]
     formats:
       - id: audiobook_cd
@@ -38,6 +40,7 @@ media_categories:
 
   music:
     label: "Music"
+    default_image_type: "disc"
     image_types: ["disc", "inlay", "vinyl_label", "gatefold", "obi", "booklet"]
     formats:
       - id: cd
@@ -55,6 +58,7 @@ media_categories:
 
   movie:
     label: "Movie"
+    default_image_type: "disc"
     image_types: ["disc", "inlay", "slipcover", "booklet"]
     formats:
       - id: dvd
@@ -72,6 +76,7 @@ media_categories:
 
   board_game:
     label: "Board Game"
+    default_image_type: "box_contents"
     image_types: ["box_contents", "board", "components", "rulebook"]
     formats:
       - id: board_game
@@ -85,12 +90,32 @@ media_categories:
 
   puzzle:
     label: "Puzzle"
+    default_image_type: "box_contents"
     image_types: ["pieces", "completed_puzzle", "poster"]
     formats:
       - id: jigsaw_puzzle
         label: "Jigsaw Puzzle"
       - id: mechanical_puzzle
         label: "Mechanical / 3D Puzzle"
+
+# Non-canonical strings that external APIs, legacy data, or user input may
+# send.  Each alias resolves to its canonical media category.  The generator
+# merges these into FORMAT_TO_CATEGORY / FORMAT_ALIAS_TO_CATEGORY so that
+# lookup code never needs its own hardcoded fallback table.
+format_aliases:
+  # text aliases
+  standard: text
+  # music aliases
+  audio: music
+  sound: music
+  lp: music
+  # movie aliases
+  video: movie
+  "moving image": movie
+  # board_game aliases
+  game: board_game
+  boardgame: board_game
+  "three-dimensional object": board_game
 
 collection_statuses:
   - id: wish_list
