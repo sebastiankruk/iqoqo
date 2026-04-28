@@ -360,7 +360,13 @@ def lookup_barcode_preview(query: str):
     if "title" not in meta:
         meta["title"] = meta.get("Title") or "Unknown Title"
     if "cover_url" not in meta:
-        meta["cover_url"] = meta.get("thumb") or meta.get("cover")
+        cover_val = meta.get("thumb") or meta.get("cover")
+        if isinstance(cover_val, dict):
+            meta["cover_url"] = cover_val.get("large") or cover_val.get("medium") or cover_val.get("small")
+        elif isinstance(cover_val, list) and len(cover_val) > 0:
+            meta["cover_url"] = cover_val[0]
+        else:
+            meta["cover_url"] = cover_val
     if "author" not in meta:
         meta["author"] = (
             meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]

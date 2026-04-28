@@ -79,7 +79,8 @@ export function SuccessCard({
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
   const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
   const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
-  const coverUrl = meta.cover_url || "/file.svg";
+  const rawCover = Array.isArray(meta.cover_url) ? meta.cover_url[0] : meta.cover_url;
+  const coverUrl = typeof rawCover === "string" && rawCover ? rawCover : "/file.svg";
 
   const format = selectedFormat;
   const isAudio = isAudioMedia(format);
