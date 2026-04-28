@@ -17,6 +17,7 @@
 #
 
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -34,18 +35,18 @@ def test_taxonomy_generation_freshness():
     ts_file = ROOT_DIR / "frontend" / "types" / "taxonomy.ts"
     ttl_file = ROOT_DIR / "docs" / "ontology" / "taxonomy.ttl"
 
-    old_py = py_file.read_text()
-    old_ts = ts_file.read_text()
-    old_ttl = ttl_file.read_text()
+    old_py = py_file.read_text(encoding="utf-8")
+    old_ts = ts_file.read_text(encoding="utf-8")
+    old_ttl = ttl_file.read_text(encoding="utf-8")
 
     # 2. Run generator
-    result = subprocess.run([".venv/bin/python", str(GENERATOR_SCRIPT)], capture_output=True, text=True, check=True, cwd=str(ROOT_DIR))
+    result = subprocess.run([sys.executable, str(GENERATOR_SCRIPT)], capture_output=True, text=True, check=True, cwd=str(ROOT_DIR))
     assert "Taxonomy generated successfully" in result.stdout
 
     # 3. Compare
-    new_py = py_file.read_text()
-    new_ts = ts_file.read_text()
-    new_ttl = ttl_file.read_text()
+    new_py = py_file.read_text(encoding="utf-8")
+    new_ts = ts_file.read_text(encoding="utf-8")
+    new_ttl = ttl_file.read_text(encoding="utf-8")
 
     assert old_py == new_py, "app/core/taxonomy.py is stale. Run 'make generate-taxonomy'."
     assert old_ts == new_ts, "frontend/types/taxonomy.ts is stale. Run 'make generate-taxonomy'."

@@ -20,6 +20,7 @@ Reads shared/taxonomy.yaml and generates Python, TypeScript, and Turtle outputs.
 """
 
 import json
+import sys
 from pathlib import Path
 
 import yaml
@@ -241,13 +242,13 @@ if __name__ == "__main__":
     with open(YAML_FILE, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    PY_OUT.write_text(generate_python(data))
-    TS_OUT.write_text(generate_typescript(data))
-    TTL_OUT.write_text(generate_turtle(data))
+    PY_OUT.write_text(generate_python(data), encoding="utf-8")
+    TS_OUT.write_text(generate_typescript(data), encoding="utf-8")
+    TTL_OUT.write_text(generate_turtle(data), encoding="utf-8")
 
     # Auto-format the generated Python so `black --check` never drifts
     subprocess.run(
-        [".venv/bin/black", "--quiet", str(PY_OUT)],
+        [sys.executable, "-m", "black", "--quiet", str(PY_OUT)],
         check=False,
         cwd=str(ROOT_DIR),
     )

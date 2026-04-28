@@ -49,20 +49,20 @@ interface MultiImageUploaderProps {
 export function MultiImageUploader({ manifestationId, currentItemFormat, onUploadComplete }: MultiImageUploaderProps) {
   // Find category for current format to show context-aware labels
   const itemCategory =
-    (Object.entries(MEDIA_HIERARCHY).find(([_cat, info]) =>
+    (Object.entries(MEDIA_HIERARCHY).find(([, info]) =>
       info.formats.some(f => f.id === currentItemFormat)
     )?.[0] as MediaCategory) || MEDIA_CATEGORIES[0];
 
-  const availableImageTypes = [...GLOBAL_IMAGE_TYPES, ...(CATEGORY_IMAGE_TYPES[itemCategory] || [])];
+  // Resolve format/alias → category via the generated SSoT map, fallback to hierarchy-based category
+  const resolvedCategory = FORMAT_ALIAS_TO_CATEGORY[currentItemFormat?.toLowerCase() || ""] || itemCategory;
 
-  const getDefaultLabel = (fmt?: string): ImageType => {
-    const low = fmt?.toLowerCase() || "";
-    // Resolve format/alias → category via the generated SSoT map
-    const category = FORMAT_ALIAS_TO_CATEGORY[low] || itemCategory;
-    return (CATEGORY_DEFAULT_IMAGE_TYPE[category] || GLOBAL_IMAGE_TYPES[0]) as ImageType;
+  const availableImageTypes = [...GLOBAL_IMAGE_TYPES, ...(CATEGORY_IMAGE_TYPES[resolvedCategory] || [])];
+
+  const getDefaultLabel = (): ImageType => {
+    return (CATEGORY_DEFAULT_IMAGE_TYPE[resolvedCategory] || GLOBAL_IMAGE_TYPES[0]) as ImageType;
   };
 
-  const [label, setLabel] = useState<ImageType>(getDefaultLabel(currentItemFormat));
+  const [label, setLabel] = useState<ImageType>(getDefaultLabel());
   const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
 

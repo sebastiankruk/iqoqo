@@ -408,10 +408,16 @@ def add_item_manual():
     pub_date_str = data.get("PublicationDate")
 
     # Derive a sensible default progress status from the media format using canonical mapping.
-    from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_TO_CATEGORY, MediaCategory
+    from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, MediaCategory
 
     _fmt_lower = (content_type or "").lower()
-    category = FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+    if _fmt_lower in MediaCategory.ALL:
+        category = _fmt_lower
+    else:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        category = FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+
     default_status = CATEGORY_PROGRESS_STATUSES[category][0]
 
     try:

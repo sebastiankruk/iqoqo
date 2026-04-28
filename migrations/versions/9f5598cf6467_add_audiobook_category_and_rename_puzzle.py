@@ -42,10 +42,12 @@ def upgrade():
             WHERE meta->>'format' = 'puzzle'
         """)
     else:
-        # SQLite or other: simpler but potentially slower or needs JSON functions if available
-        # Since the project rules mention Postgres explicitly (prefix = "catalog."), 
-        # we prioritize it. For others we can try a basic replace if supported.
-        pass
+        # SQLite: use json_set and json_extract
+        op.execute("""
+            UPDATE manifestations 
+            SET meta = json_set(meta, '$.format', 'jigsaw_puzzle') 
+            WHERE json_extract(meta, '$.format') = 'puzzle'
+        """)
 
 
 def downgrade():
@@ -62,4 +64,11 @@ def downgrade():
             UPDATE {prefix_catalog}manifestations 
             SET meta = jsonb_set(meta::jsonb, '{{format}}', '"puzzle"')::json 
             WHERE meta->>'format' = 'jigsaw_puzzle'
+        """)
+    else:
+        # SQLite: use json_set and json_extract
+        op.execute("""
+            UPDATE manifestations 
+            SET meta = json_set(meta, '$.format', 'puzzle') 
+            WHERE json_extract(meta, '$.format') = 'jigsaw_puzzle'
         """)
