@@ -1,3 +1,18 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+
 """add_audiobook_category_and_rename_puzzle
 
 Revision ID: 9f5598cf6467
@@ -10,8 +25,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '9f5598cf6467'
-down_revision = '88d8fcbeb3df'
+revision = "9f5598cf6467"
+down_revision = "88d8fcbeb3df"
 branch_labels = None
 depends_on = None
 
@@ -23,31 +38,37 @@ def upgrade():
 
     # 1. Update expressions content_type for audiobooks
     # manifestations with audiobook formats should point to expressions of type 'audiobook'
-    op.execute(f"""
-        UPDATE {prefix_catalog}expressions 
-        SET content_type = 'audiobook' 
+    op.execute(
+        f"""
+        UPDATE {prefix_catalog}expressions
+        SET content_type = 'audiobook'
         WHERE id IN (
-            SELECT expression_id 
-            FROM {prefix_catalog}manifestations 
+            SELECT expression_id
+            FROM {prefix_catalog}manifestations
             WHERE meta->>'format' IN ('audiobook_cd', 'audiobook_cassette', 'audiobook_digital')
         )
-    """)
+    """
+    )
 
     # 2. Rename 'puzzle' format to 'jigsaw_puzzle' in manifestation meta
     # We use jsonb_set for Postgres, with explicit casts if needed
     if conn.dialect.name == "postgresql":
-        op.execute(f"""
-            UPDATE {prefix_catalog}manifestations 
-            SET meta = jsonb_set(meta::jsonb, '{{format}}', '"jigsaw_puzzle"')::json 
+        op.execute(
+            f"""
+            UPDATE {prefix_catalog}manifestations
+            SET meta = jsonb_set(meta::jsonb, '{{format}}', '"jigsaw_puzzle"')::json
             WHERE meta->>'format' = 'puzzle'
-        """)
+        """
+        )
     else:
         # SQLite: use json_set and json_extract
-        op.execute("""
-            UPDATE manifestations 
-            SET meta = json_set(meta, '$.format', 'jigsaw_puzzle') 
+        op.execute(
+            """
+            UPDATE manifestations
+            SET meta = json_set(meta, '$.format', 'jigsaw_puzzle')
             WHERE json_extract(meta, '$.format') = 'puzzle'
-        """)
+        """
+        )
 
 
 def downgrade():
@@ -60,15 +81,19 @@ def downgrade():
 
     # 2. Revert 'jigsaw_puzzle' format to 'puzzle'
     if conn.dialect.name == "postgresql":
-        op.execute(f"""
-            UPDATE {prefix_catalog}manifestations 
-            SET meta = jsonb_set(meta::jsonb, '{{format}}', '"puzzle"')::json 
+        op.execute(
+            f"""
+            UPDATE {prefix_catalog}manifestations
+            SET meta = jsonb_set(meta::jsonb, '{{format}}', '"puzzle"')::json
             WHERE meta->>'format' = 'jigsaw_puzzle'
-        """)
+        """
+        )
     else:
         # SQLite: use json_set and json_extract
-        op.execute("""
-            UPDATE manifestations 
-            SET meta = json_set(meta, '$.format', 'puzzle') 
+        op.execute(
+            """
+            UPDATE manifestations
+            SET meta = json_set(meta, '$.format', 'puzzle')
             WHERE json_extract(meta, '$.format') = 'jigsaw_puzzle'
-        """)
+        """
+        )

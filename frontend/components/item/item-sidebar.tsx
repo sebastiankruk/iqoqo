@@ -15,6 +15,7 @@
 //
 "use client";
 
+import * as React from "react";
 import { ChangeEvent } from "react";
 import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +26,15 @@ import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   // Collection (Physical)
@@ -111,6 +121,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     router.refresh();
   };
 
+  const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);
+  const [borrowerName, setBorrowerName] = React.useState(item.lent_to_name || "");
+
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
     updateItem.mutate(
@@ -124,10 +137,41 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const handleCollectionStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["collection_status"];
+
+    if (newStatus === "lent") {
+      setIsLentDialogOpen(true);
+      return;
+    }
+
+    // If moving away from 'lent', we should clear the borrower info
+    const updatePayload: Partial<Item> = { collection_status: newStatus };
+    if (item.collection_status === "lent") {
+      updatePayload.lent_to_name = null;
+      updatePayload.lent_to_user_id = null;
+    }
+
+    updateItem.mutate(updatePayload, {
+      onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+      onError: e => toast.error((e as Error).message),
+    });
+  };
+
+  const handleLentSubmit = () => {
+    if (!borrowerName.trim()) {
+      toast.error("Please enter a borrower name");
+      return;
+    }
+
     updateItem.mutate(
-      { collection_status: newStatus },
       {
-        onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        collection_status: "lent",
+        lent_to_name: borrowerName.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Item marked as lent to ${borrowerName}`);
+          setIsLentDialogOpen(false);
+        },
         onError: e => toast.error((e as Error).message),
       }
     );
@@ -357,6 +401,42 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           )}
         </div>
       </div>
+
+      <Dialog open={isLentDialogOpen} onOpenChange={setIsLentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lent Out Item</DialogTitle>
+            <DialogDescription>
+              Who are you lending this item to? This helps you keep track of your physical collection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label
+              htmlFor="borrower-name"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Borrower Name
+            </label>
+            <input
+              id="borrower-name"
+              className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Enter name..."
+              value={borrowerName}
+              onChange={e => setBorrowerName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleLentSubmit()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLentSubmit} disabled={updateItem.isPending}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

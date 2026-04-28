@@ -18,6 +18,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Camera, Search, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
+import { ScanFormat } from "@/types/taxonomy";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
 const TABS = [
@@ -37,7 +38,7 @@ interface BottomSheetProps {
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onExtractionFailure?: (ean: string) => void;
   onShowManualForm?: (isbn?: string) => void;
-  format?: "book" | "music" | "movie" | "board_game" | "puzzle" | "audio" | "video" | "boardgame";
+  format?: ScanFormat;
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
 }

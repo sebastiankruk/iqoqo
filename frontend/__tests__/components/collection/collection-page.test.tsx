@@ -128,6 +128,7 @@ const FULL_STATS: DashboardStats = {
   items_reading: 10,
   items_read: 50,
   items_want_to_read: 23,
+  borrowed_items: 2,
 };
 
 /** Mock user profile */

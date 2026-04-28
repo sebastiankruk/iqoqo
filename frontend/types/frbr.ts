@@ -117,6 +117,9 @@ export interface Item {
   owner_count?: number;
   status: ProgressStatus;
   collection_status: CollectionStatus;
+  lent_to_user_id?: string | null;
+  lent_to_name?: string | null;
+  is_borrowed?: boolean;
   meta: Record<string, unknown>;
   added_at?: string;
   updated_at?: string;
@@ -154,6 +157,7 @@ export interface DashboardStats {
   items: number;
   total_items: number;
   lent_items: number;
+  borrowed_items: number;
   to_read: number;
   items_available: number;
   items_want_to_read: number;

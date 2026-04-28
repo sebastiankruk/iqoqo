@@ -310,6 +310,15 @@ class DataManager:
             .group_by(Expression.content_type)
         ).all()
 
+        borrowed_count = 0
+        if owner_id:
+            borrowed_count = (
+                db.session.execute(
+                    select(func.count(Item.id)).where(Item.lent_to_user_id == owner_id)  # pylint: disable=not-callable
+                ).scalar()
+                or 0
+            )
+
         status_counts: dict[str, int] = dict.fromkeys(ITEM_STATUSES, 0)
         total = 0
 
@@ -355,6 +364,7 @@ class DataManager:
             # UI-friendly aliases expected by the React dashboard
             "total_items": total,
             "lent_items": status_counts["lent"],
+            "borrowed_items": borrowed_count,
             "to_read": status_counts["wish_list"],
             # Per-status counts (items_available, items_lent, …)
             **{f"items_{s}": count for s, count in status_counts.items()},

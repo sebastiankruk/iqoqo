@@ -65,6 +65,9 @@ class SearchService:
         statuses: list[str] | None = None,
         category: str | None = None,
         format_filter: str | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
     ) -> tuple[int, list[dict]]:
         """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
         if not q:
@@ -72,12 +75,16 @@ class SearchService:
 
         if db.engine.dialect.name == "postgresql":
             try:
-                return SearchService._pg_item_fts(q, user_id, limit, offset, statuses, category, format_filter)
+                return SearchService._pg_item_fts(
+                    q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
+                )
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
                 logger.exception("PostgreSQL FTS failed for items, falling back to ILIKE", exc_info=exc)
                 db.session.rollback()
 
-        return SearchService._ilike_item_search(q, user_id, limit, offset, statuses, category, format_filter)
+        return SearchService._ilike_item_search(
+            q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
+        )
 
     @staticmethod
     def _pg_manifestation_fts(
@@ -147,6 +154,9 @@ class SearchService:
         statuses: list[str] | None = None,
         category: str | None = None,
         format_filter: str | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
     ) -> tuple[int, list[dict]]:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
@@ -154,7 +164,10 @@ class SearchService:
         tsquery_expr = "websearch_to_tsquery('simple', :q)"
 
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
-        extra_filters_sql = " AND i.owner_id = :user_id"
+        if borrowed_only:
+            extra_filters_sql = " AND i.lent_to_user_id = :user_id"
+        else:
+            extra_filters_sql = " AND (i.owner_id = :user_id OR i.lent_to_user_id = :user_id)"
 
         if statuses:
             params["statuses"] = tuple(statuses)
@@ -169,6 +182,11 @@ class SearchService:
             # exact match using JSONB ->> operator in raw SQL
             extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
 
+        if missing_cover:
+            extra_filters_sql += " AND (m.cover_url IS NULL OR m.cover_url = '')"
+        if missing_id:
+            extra_filters_sql += " AND (m.isbn13 IS NULL OR m.isbn13 = '')"
+
         count_sql = f"""
         SELECT count(i.id) FROM {_CATALOG}manifestations m
         JOIN {_CATALOG}expressions e ON e.id = m.expression_id
@@ -178,7 +196,8 @@ class SearchService:
         {extra_filters_sql}
         """
         rows_sql = f"""
-        SELECT i.id as item_id, i.owner_id, i.status, i.collection_status, m.id as manifestation_id,
+        SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
+               i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
@@ -212,6 +231,9 @@ class SearchService:
         statuses: list[str] | None = None,
         category: str | None = None,
         format_filter: str | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
     ) -> tuple[int, list[dict]]:
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
@@ -234,9 +256,19 @@ class SearchService:
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
             .join(Work, Expression.work_id == Work.id)
-            .filter(Item.owner_id == user_id)
-            .filter(Item.id.in_(matching_items_sub))
         )
+
+        if borrowed_only:
+            query = query.filter(Item.lent_to_user_id == user_id)
+        else:
+            query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+
+        if missing_cover:
+            query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+        if missing_id:
+            query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+
+        query = query.filter(Item.id.in_(matching_items_sub))
 
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
@@ -258,6 +290,8 @@ class SearchService:
                     "owner_id": item.owner_id,
                     "status": item.status,
                     "collection_status": item.collection_status,
+                    "lent_to_user_id": item.lent_to_user_id,
+                    "lent_to_name": item.lent_to_name,
                     "manifestation_id": manifestation.id,
                     "isbn13": manifestation.isbn13,
                     "title": work.title,

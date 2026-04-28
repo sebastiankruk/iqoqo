@@ -250,6 +250,14 @@ class Item(db.Model):  # type: ignore[name-defined]
     collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
 
+    lent_to_user_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    lent_to_name = db.Column(db.String(255), nullable=True)
+
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)

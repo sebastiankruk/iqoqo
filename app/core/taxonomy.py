@@ -196,4 +196,4 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
     "puzzle": "box_contents",
 }
 
-SCAN_FORMATS: tuple[str, ...] = ("book", "music", "movie", "board_game", "puzzle")
+SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle")

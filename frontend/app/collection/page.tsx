@@ -47,6 +47,7 @@ function CollectionContent() {
     : [];
   const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
   const initialQuery = searchParams?.get("q") ?? "";
+  const initialBorrowed = searchParams?.get("borrowed") === "true";
 
   const [page, setPage] = useState(initialPage);
   const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
@@ -56,6 +57,7 @@ function CollectionContent() {
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+  const [borrowedOnly, setBorrowedOnly] = useState(initialBorrowed);
 
   // Keep search queries in sync if URL changes externally (e.g. from Navbar)
   const [lastUrlQuery, setLastUrlQuery] = useState(initialQuery);
@@ -90,11 +92,12 @@ function CollectionContent() {
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
+    if (borrowedOnly) params.set("borrowed", "true");
 
     // Replace state blocks messy rapid history buildup while keeping deep link persistency active
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
+  }, [page, sortBy, activeFilters, appliedQuery, viewMode, borrowedOnly, pathname, router]);
 
   const statusFilters = useMemo(
     () => activeFilters.filter(f => f.type === "status").map(f => f.value),
@@ -119,7 +122,8 @@ function CollectionContent() {
     sortBy,
     viewMode === "items" && isLoggedIn,
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined
+    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    borrowedOnly
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
@@ -244,33 +248,50 @@ function CollectionContent() {
 
           <div className="flex flex-wrap items-center gap-4">
             {isLoggedIn && (
-              <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
-                <button
-                  onClick={() => {
-                    setViewMode("items");
-                    setPage(1);
-                  }}
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "items"
-                      ? "bg-primary text-primary-foreground shadow"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  <BookOpen className="h-4 w-4" /> My Items
-                </button>
-                <button
-                  onClick={() => {
-                    setViewMode("manifestations");
-                    setPage(1);
-                  }}
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "manifestations"
-                      ? "bg-primary text-primary-foreground shadow"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  <LibraryIcon className="h-4 w-4" /> Global Library
-                </button>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+                  <button
+                    onClick={() => {
+                      setViewMode("items");
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "items"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <BookOpen className="h-4 w-4" /> My Items
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewMode("manifestations");
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "manifestations"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <LibraryIcon className="h-4 w-4" /> Global Library
+                  </button>
+                </div>
+
+                {viewMode === "items" && (
+                  <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={borrowedOnly}
+                      onChange={() => {
+                        setBorrowedOnly(!borrowedOnly);
+                        setPage(1);
+                      }}
+                      className="h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-sm font-medium">Borrowed by me</span>
+                  </label>
+                )}
               </div>
             )}
 

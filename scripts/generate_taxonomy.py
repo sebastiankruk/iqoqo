@@ -133,7 +133,31 @@ def generate_typescript(data: dict) -> str:
     ts_code.append(f"export const MEDIA_CATEGORIES = {json.dumps(list(data['media_categories'].keys()))} as const;")
     ts_code.append("export type MediaCategory = (typeof MEDIA_CATEGORIES)[number];\n")
 
-    ts_code.append(f"export const MEDIA_HIERARCHY = {json.dumps(data['media_categories'], indent=2)} as const;\n")
+    # Only include needed fields for TS to keep it clean (and include UI hints)
+    hierarchy = {}
+    for cat, info in data["media_categories"].items():
+        cat_data = {
+            "label": info.get("label"),
+            "default_image_type": info.get("default_image_type"),
+            "image_types": info.get("image_types"),
+            "ui_icon": info.get("ui_icon"),
+            "ui_aspect_ratio": info.get("ui_aspect_ratio"),
+            "ui_parent": info.get("ui_parent"),
+            "formats": [],
+        }
+        for fmt in info["formats"]:
+            fmt_data = {
+                "id": fmt["id"],
+                "label": fmt["label"],
+            }
+            if "ui_aspect_ratio" in fmt:
+                fmt_data["ui_aspect_ratio"] = fmt["ui_aspect_ratio"]
+            if "ui_parent" in fmt:
+                fmt_data["ui_parent"] = fmt["ui_parent"]
+            cat_data["formats"].append(fmt_data)
+        hierarchy[cat] = cat_data
+
+    ts_code.append(f"export const MEDIA_HIERARCHY = {json.dumps(hierarchy, indent=2)} as const;\n")
     ts_code.append(f"export const CATEGORY_STATUS_MAP = {json.dumps(data['progress_statuses'], indent=2)} as const;\n")
 
     ts_code.append(f"export const SCAN_FORMATS = {json.dumps(data['scan_formats'])} as const;")

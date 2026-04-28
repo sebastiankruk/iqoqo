@@ -10,6 +10,7 @@
     "**/*.egg-info/**",
     "**/__pycache__/**",
     "**/.github/**",
+    "**/.context/**",
     "**/.git/**",
     ".agents/**",
   ],
