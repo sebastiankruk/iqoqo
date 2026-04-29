@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
 import * as adminApi from "@/lib/api/admin";
@@ -73,7 +73,9 @@ describe("FrbrEditor Component", () => {
 
     await waitFor(() => expect(screen.getByText("Work (F1)")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("Work (F1)"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Work (F1)"));
+    });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Dune")).toBeInTheDocument();
@@ -85,7 +87,9 @@ describe("FrbrEditor Component", () => {
 
     await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("Expression (F2)"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Expression (F2)"));
+    });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("text")).toBeInTheDocument();
@@ -98,7 +102,9 @@ describe("FrbrEditor Component", () => {
 
     await waitFor(() => expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText(/Items \(F5\)/));
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Items \(F5\)/));
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();

@@ -183,7 +183,7 @@ CATEGORY_IMAGE_TYPES: dict[str, list[str]] = {
     "audiobook": ["disc", "cassette", "inlay", "slipcase"],
     "music": ["disc", "inlay", "vinyl_label", "gatefold", "obi", "booklet"],
     "movie": ["disc", "inlay", "slipcover", "booklet"],
-    "board_game": ["box_contents", "board", "components", "rulebook"],
+    "board_game": ["box", "board", "components", "rulebook"],
     "puzzle": ["pieces", "completed_puzzle", "poster"],
 }
 
@@ -192,8 +192,8 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
     "audiobook": "front",
     "music": "disc",
     "movie": "disc",
-    "board_game": "box_contents",
-    "puzzle": "box_contents",
+    "board_game": "box",
+    "puzzle": "box",
 }
 
 SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle")

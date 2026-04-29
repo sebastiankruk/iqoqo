@@ -120,7 +120,7 @@
     rdfs:comment "LaserDisc" .
 :MediaCategoryBoardGame a :MediaCategory ;
     rdfs:label "board_game" ;
-    :defaultImageType "box_contents" ;
+    :defaultImageType "box" ;
     rdfs:comment "Board Game" .
 :MediaFormatBoardGame a :MediaFormat ;
     rdfs:label "board_game" ;
@@ -140,7 +140,7 @@
     rdfs:comment "Miniatures / Wargame" .
 :MediaCategoryPuzzle a :MediaCategory ;
     rdfs:label "puzzle" ;
-    :defaultImageType "box_contents" ;
+    :defaultImageType "box" ;
     rdfs:comment "Puzzle" .
 :MediaFormatJigsawPuzzle a :MediaFormat ;
     rdfs:label "jigsaw_puzzle" ;

@@ -104,8 +104,8 @@ media_categories:
 
   board_game:
     label: "Board Game"
-    default_image_type: "box_contents"
-    image_types: ["box_contents", "board", "components", "rulebook"]
+    default_image_type: "box"
+    image_types: ["box", "board", "components", "rulebook"]
     ui_icon: "Dices"
     ui_aspect_ratio: 1.0
     formats:
@@ -121,7 +121,7 @@ media_categories:
 
   puzzle:
     label: "Puzzle"
-    default_image_type: "box_contents"
+    default_image_type: "box"
     image_types: ["pieces", "completed_puzzle", "poster"]
     ui_icon: "Puzzle"
     ui_aspect_ratio: 1.0
