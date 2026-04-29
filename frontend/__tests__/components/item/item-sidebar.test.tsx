@@ -21,6 +21,7 @@ import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
+  useUserSearch: vi.fn(() => ({ data: [], isLoading: false })),
   useProfile: vi.fn(() => ({
     data: {
       permissions: ["update:item", "upload:cover", "write:metadata"],

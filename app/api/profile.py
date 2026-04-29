@@ -110,3 +110,42 @@ def delete_profile():
     db.session.commit()
 
     return jsonify({"message": "Account and all associated data permanently deleted."}), 200
+
+
+@profile_bp.route("/users/search", methods=["GET"], strict_slashes=False)
+@require_auth
+def search_users():
+    """Search for other users by email or display name. Used for lending items."""
+    query = request.args.get("q", "").strip()
+    if not query or len(query) < 2:
+        return jsonify({"success": True, "data": []})
+
+    limit = min(request.args.get("limit", 10, type=int), 20)
+
+    # Note: the user must be active. We allow finding any active user so items can be lent.
+    # Exclude the current user from search results.
+    current_user_id = getattr(g, "user_id", None)
+
+    users = (
+        User.query.filter(
+            db.and_(
+                User.is_active.is_(True),
+                User.id != current_user_id,
+                db.or_(User.email.ilike(f"%{query}%"), User.display_name.ilike(f"%{query}%")),
+            )
+        )
+        .limit(limit)
+        .all()
+    )
+
+    results = [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "display_name": u.display_name,
+            "avatar_url": u.avatar_url,
+        }
+        for u in users
+    ]
+
+    return jsonify({"success": True, "data": results})

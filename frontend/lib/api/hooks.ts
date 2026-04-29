@@ -257,6 +257,25 @@ export function useIsbnLookup(isbn: string, enabled = false) {
 }
 
 /**
+ * Custom hook to search users by name or email.
+ *
+ * @param query - The search query
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<UserProfile[]>} Query result
+ */
+export function useUserSearch(query: string, enabled = false) {
+  return useQuery({
+    queryKey: ["users", "search", query],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<UserProfile[]>>("/profile/users/search", { params: { q: query } });
+      return res.data?.data ?? [];
+    },
+    enabled: enabled && query.trim().length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+/**
  * Custom hook to add a new item.
  *
  * @returns {import('@tanstack/react-query').UseMutationResult<{ item_id: number; manifestation_id: number }, Error, { isbn?: string; manifestation_id?: number; metadata?: IsbnMeta }>} Mutation result
