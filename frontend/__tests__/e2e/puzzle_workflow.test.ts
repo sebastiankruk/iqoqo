@@ -49,7 +49,7 @@ test.describe("Jigsaw Puzzle Workflow", () => {
     await page.goto("/scan");
 
     // 2. Select Puzzle Mode using accessible button
-    await page.getByRole("button", { name: "Jigsaw Puzzle" }).click();
+    await page.getByRole("button", { name: "Puzzle", exact: true }).click();
 
     // 3. Mock Barcode API Response (Simulating a successful scan)
     await page.route("**/api/lookup/4005556199999*", async route => {
