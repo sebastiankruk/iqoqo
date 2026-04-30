@@ -242,6 +242,22 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         </span>
       </div>
 
+      {/* Lending info */}
+      {(item.collection_status === "lent" || item.owner_id === "Unavailable") && (
+        <div className="flex flex-col items-center gap-1">
+          {item.collection_status === "lent" && item.lent_to_name && (
+            <p className="text-center text-[10px] font-bold uppercase tracking-wider text-orange-600">
+              Lent to: <span className="text-foreground">{item.lent_to_name}</span>
+            </p>
+          )}
+          {item.owner_id === "Unavailable" && item.owner_name && (
+            <p className="text-center text-[10px] font-bold uppercase tracking-wider text-blue-600">
+              Borrowed from: <span className="text-foreground">{item.owner_name}</span>
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ISBN */}
       {item.isbn && <p className="text-center text-xs text-muted-foreground">ISBN: {item.isbn}</p>}
 

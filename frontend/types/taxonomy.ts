@@ -68,7 +68,7 @@ export const MEDIA_HIERARCHY = {
       "inlay",
       "slipcase"
     ],
-    "ui_icon": "Disc",
+    "ui_icon": "Headphones",
     "ui_aspect_ratio": 1.0,
     "ui_parent": "book",
     "formats": [

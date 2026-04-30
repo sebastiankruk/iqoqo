@@ -179,9 +179,13 @@ def lookup_barcode_preview(query: str):
 
     is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
 
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+    category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+
     # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
     # so the user can disambiguate between different releases/editions.
-    if not is_barcode and format_hint in ("audio", "cd", "vinyl", "sound", "music", None, ""):
+    if not is_barcode and (category_hint == "music" or format_hint in (None, "")):
         discogs_results = fetch_discogs_candidates(query)
         if len(discogs_results) > 1:
             # Return candidates for the frontend disambiguation sheet
@@ -203,7 +207,7 @@ def lookup_barcode_preview(query: str):
             provider = "discogs"
 
     # Route based on format hint first, fallback to heuristics
-    if format_hint in ("video", "dvd", "bluray", "movie"):
+    if category_hint == "movie":
         upc_meta = resolve_physical_media(barcode)
         if upc_meta and upc_meta.get("title"):
             title = clean_video_title(upc_meta["title"])
@@ -221,7 +225,7 @@ def lookup_barcode_preview(query: str):
             if meta:
                 meta["data_source"] = "tmdb"
             provider = "tmdb" if meta else None
-    elif format_hint in ("game", "boardgame", "board_game"):
+    elif category_hint == "board_game":
         # Heuristic: 1-7 digits are likely BGG IDs, not barcodes
         is_short_numeric = barcode.isdigit() and len(barcode) <= 7
 
@@ -253,12 +257,12 @@ def lookup_barcode_preview(query: str):
                 if meta:
                     meta["data_source"] = "bgg"
                     provider = "bgg"
-    elif format_hint in ("puzzle", "jigsaw"):
+    elif category_hint == "puzzle":
         meta = resolve_physical_media(barcode)
         if meta:
             meta["data_source"] = "upc"
         provider = "upc" if meta else None
-    elif format_hint in ("audio", "cd", "vinyl", "sound", "music"):
+    elif category_hint == "music":
         # Heuristic: 1-7 digits are likely Discogs Release IDs
         if barcode.isdigit() and len(barcode) <= 7:
             meta = fetch_discogs_by_id(barcode)
@@ -279,7 +283,7 @@ def lookup_barcode_preview(query: str):
             if meta:
                 meta["data_source"] = "musicbrainz"
             provider = "musicbrainz" if meta else None
-    elif is_book or format_hint in ("book", "text"):
+    elif is_book or category_hint in ("book", "text"):
         canonical = canonicalize_isbn(barcode)
         if canonical:
             meta = fetch_isbn_metadata(canonical)
@@ -460,25 +464,31 @@ def scan_barcode():
     if not manifestation and barcode:
         manifestation = _find_locally(barcode)
 
-    if not manifestation:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+
         try:
             # Support pure numeric Discogs Release IDs (heuristic: <= 8 digits and audio-ish)
             is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
-            if is_discogs_numeric and format_hint in ("audio", "cd", "vinyl", "sound", "music", None):
+            if is_discogs_numeric and (category_hint == "music" or format_hint is None):
                 meta = fetch_discogs_by_id(barcode)
                 if meta:
                     # Ingest using pre-fetched meta
                     manifestation = IngestService.ingest_from_meta(meta)
 
-            if not manifestation and format_hint in ("audio", "cd", "vinyl", "sound", "music"):
+            if not manifestation and category_hint == "music":
                 manifestation = IngestService.ingest_audio_from_barcode(barcode)
-            elif format_hint in ("video", "dvd", "bluray", "movie"):
+            elif category_hint == "movie":
                 manifestation = IngestService.ingest_video_from_barcode(barcode)
-            elif format_hint in ("game", "boardgame", "board_game"):
+            elif category_hint == "board_game":
                 manifestation = IngestService.ingest_game_from_barcode(barcode)
-            elif format_hint in ("puzzle", "jigsaw"):
+            elif category_hint == "puzzle":
                 manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
-            elif format_hint in ("book", "text"):
+            elif category_hint == "text":
+                manifestation = IngestService.ingest_from_isbn(barcode)
+            elif format_hint == "audiobook":
+                # Fallback for audiobook category itself if specific format not provided
                 manifestation = IngestService.ingest_from_isbn(barcode)
             else:
                 # Auto-fallback strategy

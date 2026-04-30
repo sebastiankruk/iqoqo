@@ -6,7 +6,7 @@
 // (at your option) any later version.
 //
 
-import { Book, Disc, Film, Dices, Puzzle, LucideIcon } from "lucide-react";
+import { Book, Disc, Film, Dices, Puzzle, Headphones, LucideIcon } from "lucide-react";
 import { MEDIA_HIERARCHY, MediaFormat, ScanFormat, MediaCategory, SCAN_FORMATS } from "@/types/taxonomy";
 
 /**
@@ -31,6 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
   Film,
   Dices,
   Puzzle,
+  Headphones,
 };
 
 /**
