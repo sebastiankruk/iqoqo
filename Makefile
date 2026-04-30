@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend generate-taxonomy
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -72,11 +72,16 @@ help:
 	@echo "Version updates:"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
+	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
 
 # Versioning targets
 sync-version:
 	@echo "Syncing version from pyproject.toml to package.json files..."
 	@.venv/bin/python scripts/sync_version.py
+
+generate-taxonomy:
+	@echo "Generating taxonomies from YAML..."
+	@.venv/bin/python scripts/generate_taxonomy.py
 
 bump-version:
 	@if [ -z "$(v)" ]; then \

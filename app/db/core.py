@@ -28,16 +28,17 @@ user ownership in the ``auth`` schema.
 from __future__ import annotations
 
 import os
-
-# ---------------------------------------------------------------------------
-# Schema selector
-# Use the "catalog" PostgreSQL schema in production.  SQLite (used in tests)
-# does not support named schemas, so we fall back to no schema.
-# ---------------------------------------------------------------------------
 from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import UUID
 
+from app.core.taxonomy import (  # noqa: F401
+    CATEGORY_PROGRESS_STATUSES,
+    COLLECTION_STATUSES,
+    PROGRESS_STATUSES,
+    MediaCategory,
+    MediaFormat,
+)
 from app.db.search_types import SearchVector
 
 from . import db
@@ -59,92 +60,9 @@ _AUTH: str | None = "auth" if _USE_PG else None
 #: FK prefix — ``"auth."`` in PostgreSQL, ``""`` in SQLite.
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 
-#: Canonical list of allowed Item statuses.  This is the single source of truth
-#: on the Python side; the TypeScript ``ItemStatus`` union in
-#: ``frontend/types/frbr.ts`` must stay in sync with these values.
-#:
-#: Statuses are grouped by media type for readability:
-#:   - generic:       available, lent, lost, wish_list, ordered, damaged
-#:   - text media:    reading, read, want_to_read (alias: wish_list)
-#:   - audio media:   listening, listened, want_to_listen
-COLLECTION_STATUSES: tuple[str, ...] = (
-    "wish_list",
-    "ordered",
-    "available",
-    "lent",
-    "damaged",
-    "lost",
-)
 
-PROGRESS_STATUSES: tuple[str, ...] = (
-    "reading",
-    "read",
-    "want_to_read",
-    "want_to_listen",
-    "listening",
-    "listened",
-    "watching",
-    "watched",
-    "want_to_watch",
-    "want_to_play",
-    "playing",
-    "played",
-)
-
+#: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
-
-
-class MediaCategory:
-    """High-level media categories based on the FRBR content_type."""
-
-    TEXT = "text"
-    MUSIC = "music"
-    MOVIE = "movie"
-    BOARD_GAME = "board_game"
-    PUZZLE = "puzzle"
-
-    ALL = (TEXT, MUSIC, MOVIE, BOARD_GAME, PUZZLE)
-
-
-CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
-    MediaCategory.TEXT: ("want_to_read", "reading", "read"),
-    MediaCategory.MUSIC: ("want_to_listen", "listening", "listened"),
-    MediaCategory.MOVIE: ("want_to_watch", "watching", "watched"),
-    MediaCategory.BOARD_GAME: ("want_to_play", "playing", "played"),
-    MediaCategory.PUZZLE: ("want_to_play", "playing", "played"),
-}
-
-
-class MediaFormat:
-    """User-friendly media formats (display/scanning labels)."""
-
-    BOOK = "book"
-    AUDIOBOOK_CD = "audiobook_cd"
-    CD = "cd"
-    VINYL = "vinyl"
-    SACD = "sacd"
-    DVD = "dvd"
-    BLURAY = "bluray"
-    BOARD_GAME = "board_game"
-    CARDS = "cards"
-    PUZZLE = "puzzle"
-    MUSIC = "music"
-    MOVIE = "movie"
-
-    ALL = (
-        BOOK,
-        AUDIOBOOK_CD,
-        CD,
-        VINYL,
-        SACD,
-        DVD,
-        BLURAY,
-        BOARD_GAME,
-        CARDS,
-        PUZZLE,
-        MUSIC,
-        MOVIE,
-    )
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -331,6 +249,14 @@ class Item(db.Model):  # type: ignore[name-defined]
     status = db.Column(db.String(50), default="want_to_read")  # see PROGRESS_STATUSES for valid values
     collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
+
+    lent_to_user_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    lent_to_name = db.Column(db.String(255), nullable=True)
 
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))

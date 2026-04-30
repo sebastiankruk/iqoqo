@@ -39,45 +39,42 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
-from app.db.core import MediaCategory, MediaFormat
-from app.db.models import ITEM_STATUSES
+from app.core.taxonomy import (
+    CATEGORY_PROGRESS_STATUSES,
+    COLLECTION_STATUSES,
+    FORMAT_TO_CATEGORY,
+    PROGRESS_STATUSES,
+    SCAN_FORMATS,
+    MediaCategory,
+    MediaFormat,
+)
+from app.db.core import ITEM_STATUSES
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-#: Absolute path to the TypeScript FRBR types file.
-FRBR_TS = Path(__file__).resolve().parents[1] / "frontend" / "types" / "frbr.ts"
+ROOT_DIR = Path(__file__).resolve().parents[1]
+TAXONOMY_YAML = ROOT_DIR / "shared" / "taxonomy.yaml"
+TAXONOMY_TS = ROOT_DIR / "frontend" / "types" / "taxonomy.ts"
 
 
 def _parse_ts_const_array(ts_source: str, const_name: str) -> frozenset[str]:
-    """
-    Extract the string literals from a TypeScript ``as const`` array.
-
-    Parses a declaration of the form::
-
-        export const MY_LIST = ["a", "b", "c"] as const;
-
-    and returns ``frozenset({"a", "b", "c"})``.
-
-    Args:
-        ts_source: Full source text of the TypeScript file.
-        const_name: Name of the const to extract.
-
-    Returns:
-        A frozenset of string literals found in the array.
-
-    Raises:
-        ValueError: If the declaration cannot be found.
-    """
+    """Extract string literals from a TypeScript 'as const' array."""
     pattern = re.compile(
         rf"export\s+const\s+{re.escape(const_name)}\s*=\s*\[([^\]]+)\]",
         re.DOTALL,
     )
     match = pattern.search(ts_source)
     if not match:
-        raise ValueError(f"Could not locate '{const_name}' const array in frbr.ts")
+        # Try finding it without 'export const' if it's just a variable
+        pattern = re.compile(rf"{re.escape(const_name)}\s*=\s*\[([^\]]+)\]", re.DOTALL)
+        match = pattern.search(ts_source)
+
+    if not match:
+        raise ValueError(f"Could not locate '{const_name}' array in taxonomy.ts")
     return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
 
@@ -89,112 +86,88 @@ def _parse_union_type_from_ts(ts_source: str, type_name: str) -> frozenset[str]:
     )
     match = pattern.search(ts_source)
     if not match:
-        raise ValueError(f"Could not locate '{type_name}' type alias in frbr.ts")
+        raise ValueError(f"Could not locate '{type_name}' type alias in taxonomy.ts")
     return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# SSoT Contract Tests
 # ---------------------------------------------------------------------------
 
 
-def test_frbr_ts_exists() -> None:
-    """Verify that the TypeScript types file is present on disk."""
-    assert FRBR_TS.exists(), f"Expected TypeScript types file at {FRBR_TS}. Has the frontend directory been moved?"
+def test_taxonomy_yaml_exists() -> None:
+    assert TAXONOMY_YAML.exists()
 
 
-def test_item_status_ontology_in_sync() -> None:
-    """Ensure that ITEM_STATUSES (Python) and the union of statuses (TypeScript) are identical."""
-    ts_source = FRBR_TS.read_text(encoding="utf-8")
+def test_taxonomy_files_in_sync_with_yaml() -> None:
+    """Verify that Python constants match the YAML source of truth."""
+    with open(TAXONOMY_YAML, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
 
-    # ProgressStatus and CollectionStatus should equal ITEM_STATUSES
-    ts_progress = _parse_union_type_from_ts(ts_source, "ProgressStatus")
-    ts_collection = _parse_union_type_from_ts(ts_source, "CollectionStatus")
-    ts_statuses = ts_progress | ts_collection
+    # Categories
+    assert frozenset(MediaCategory.ALL) == frozenset(data["media_categories"].keys())
 
-    py_statuses = frozenset(ITEM_STATUSES)
+    # Formats
+    yaml_formats: set[str] = {fmt["id"] for info in data["media_categories"].values() for fmt in info["formats"]}
+    assert frozenset(MediaFormat.ALL) == frozenset(yaml_formats)
 
-    only_in_python = py_statuses - ts_statuses
-    only_in_ts = ts_statuses - py_statuses
+    # Collection Statuses
+    yaml_coll = frozenset(s["id"] for s in data["collection_statuses"])
+    assert frozenset(COLLECTION_STATUSES) == yaml_coll
 
-    messages: list[str] = []
-    if only_in_python:
-        messages.append(f"Statuses in ITEM_STATUSES (Python) but missing from TS: {sorted(only_in_python)}")
-    if only_in_ts:
-        messages.append(f"Statuses in TS but missing from ITEM_STATUSES (Python): {sorted(only_in_ts)}")
+    # Progress Statuses
+    yaml_prog = set()
+    for statuses in data["progress_statuses"].values():
+        yaml_prog.update(statuses)
+    assert frozenset(PROGRESS_STATUSES) == frozenset(yaml_prog)
 
-    assert not messages, "\n".join(messages)
+    # Category Progress Map
+    for cat, statuses in data["progress_statuses"].items():
+        assert frozenset(CATEGORY_PROGRESS_STATUSES[cat]) == frozenset(statuses)
+
+    # Scan Formats
+    assert frozenset(SCAN_FORMATS) == frozenset(data["scan_formats"])
+
+
+def test_python_and_ts_in_sync() -> None:
+    """Ensure Python and TypeScript generated files are identical."""
+    ts_source = TAXONOMY_TS.read_text(encoding="utf-8")
+
+    # Formats
+    ts_formats = _parse_ts_const_array(ts_source, "MEDIA_FORMATS")
+    assert ts_formats == frozenset(MediaFormat.ALL)
+
+    # Categories
+    ts_categories = _parse_ts_const_array(ts_source, "MEDIA_CATEGORIES")
+    assert ts_categories == frozenset(MediaCategory.ALL)
+
+    # Statuses
+    ts_coll = _parse_union_type_from_ts(ts_source, "CollectionStatus")
+    assert ts_coll == frozenset(COLLECTION_STATUSES)
+
+    ts_prog = _parse_union_type_from_ts(ts_source, "ProgressStatus")
+    assert ts_prog == frozenset(PROGRESS_STATUSES)
+
+
+def test_format_to_category_completeness() -> None:
+    """Every format must map back to exactly one valid category."""
+    for fmt in MediaFormat.ALL:
+        assert fmt in FORMAT_TO_CATEGORY, f"Format '{fmt}' missing from FORMAT_TO_CATEGORY mapping"
+        assert FORMAT_TO_CATEGORY[fmt] in MediaCategory.ALL, f"Format '{fmt}' maps to invalid category '{FORMAT_TO_CATEGORY[fmt]}'"
+
+
+def test_scan_formats_validity() -> None:
+    """SCAN_FORMATS must be a subset of MediaCategory.ALL (or formats)."""
+    # In our YAML, scan_formats currently references categories or special aliases.
+    # We should ensure they are at least known strings.
+    for fmt in SCAN_FORMATS:
+        # In current design, scan_formats are mostly categories
+        is_category = fmt in MediaCategory.ALL
+        is_format = fmt in MediaFormat.ALL
+        assert is_category or is_format, f"Scan format '{fmt}' is neither a known category nor a format"
 
 
 @pytest.mark.parametrize("status", ITEM_STATUSES)
 def test_item_status_python_values_non_empty(status: str) -> None:
     """Each status in ITEM_STATUSES must be a non-empty string."""
     assert isinstance(status, str) and status.strip(), f"ITEM_STATUSES contains an invalid entry: {status!r}"
-
-
-# ---------------------------------------------------------------------------
-# MediaFormat contract tests
-# ---------------------------------------------------------------------------
-
-
-def test_media_format_all_in_sync() -> None:
-    """
-    Ensure MediaFormat.ALL (Python) and MEDIA_FORMATS (TypeScript) are identical.
-
-    This will fail if a format is added, removed, or renamed on one side
-    without a corresponding change on the other.
-    """
-    ts_source = FRBR_TS.read_text(encoding="utf-8")
-    ts_formats = _parse_ts_const_array(ts_source, "MEDIA_FORMATS")
-    py_formats = frozenset(MediaFormat.ALL)
-
-    only_in_python = py_formats - ts_formats
-    only_in_ts = ts_formats - py_formats
-
-    messages: list[str] = []
-    if only_in_python:
-        messages.append(f"Formats in MediaFormat.ALL (Python) but missing from MEDIA_FORMATS (TypeScript): {sorted(only_in_python)}")
-    if only_in_ts:
-        messages.append(f"Formats in MEDIA_FORMATS (TypeScript) but missing from MediaFormat.ALL (Python): {sorted(only_in_ts)}")
-
-    assert not messages, "\n".join(messages)
-
-
-def test_scan_formats_subset_of_media_formats() -> None:
-    """
-    Ensure SCAN_FORMATS (TypeScript) is a proper subset of MEDIA_FORMATS (TypeScript).
-
-    ScanFormat represents only the top-level groupings shown in the scanner UI,
-    not every leaf format (e.g. 'cd' and 'vinyl' are sub-formats of 'audio').
-    """
-    ts_source = FRBR_TS.read_text(encoding="utf-8")
-    scan_formats = _parse_ts_const_array(ts_source, "SCAN_FORMATS")
-    all_formats = _parse_ts_const_array(ts_source, "MEDIA_FORMATS")
-
-    extras = scan_formats - all_formats
-    assert not extras, f"SCAN_FORMATS contains values not present in MEDIA_FORMATS: {sorted(extras)}"
-
-
-@pytest.mark.parametrize("fmt", MediaFormat.ALL)
-def test_media_format_python_values_non_empty(fmt: str) -> None:
-    """Each value in MediaFormat.ALL must be a non-empty string."""
-    assert isinstance(fmt, str) and fmt.strip(), f"MediaFormat.ALL contains an invalid entry: {fmt!r}"
-
-
-def test_media_category_all_in_sync() -> None:
-    """
-    Ensure MediaCategory.ALL (Python) and CATEGORY_STATUS_MAP keys (TypeScript) are identical.
-    """
-    ts_source = FRBR_TS.read_text(encoding="utf-8")
-
-    # Extract keys from export const CATEGORY_STATUS_MAP = { ... }
-    pattern = re.compile(r"export\s+const\s+CATEGORY_STATUS_MAP\s*=\s*\{([^\}]+)\}", re.DOTALL)
-    match = pattern.search(ts_source)
-
-    if not match:
-        pytest.fail("CATEGORY_STATUS_MAP is missing in frbr.ts")
-
-    ts_categories = frozenset(re.findall(r"([a-z_]+)\s*:", match.group(1)))
-    py_categories = frozenset(MediaCategory.ALL)
-
-    assert ts_categories == py_categories, f"Media categories out of sync. Python: {py_categories}, TS: {ts_categories}"

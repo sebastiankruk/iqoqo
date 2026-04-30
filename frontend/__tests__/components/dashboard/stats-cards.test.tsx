@@ -54,13 +54,14 @@ describe("StatsCards", () => {
     vi.clearAllMocks();
   });
 
-  it("renders four stat card labels", () => {
+  it("renders five stat card labels", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
     render(<StatsCards />);
     expect(screen.getByText("Items")).toBeInTheDocument();
     expect(screen.getByText("Lent Out")).toBeInTheDocument();
     expect(screen.getByText("On Wish List")).toBeInTheDocument();
     expect(screen.getByText("Reading")).toBeInTheDocument();
+    expect(screen.getByText("Borrowed")).toBeInTheDocument();
   });
 
   it("displays numeric values when data is loaded", () => {
@@ -86,7 +87,7 @@ describe("StatsCards", () => {
     render(<StatsCards />);
     const dashes = screen.getAllByText("—");
     // One dash per stat card
-    expect(dashes).toHaveLength(4);
+    expect(dashes).toHaveLength(5);
   });
 
   it("is wrapped in a landmark section for accessibility", () => {
@@ -109,7 +110,7 @@ describe("StatsCards", () => {
     render(<StatsCards />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
 
     expect(links[0]).toHaveAttribute("href", "/collection");
     expect(links[1]).toHaveAttribute("href", "/collection?statuses=reading");

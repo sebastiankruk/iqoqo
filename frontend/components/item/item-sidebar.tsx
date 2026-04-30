@@ -15,16 +15,26 @@
 //
 "use client";
 
+import * as React from "react";
 import { ChangeEvent } from "react";
 import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { useUpdateItem, useProfile } from "@/lib/api/hooks";
+import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   // Collection (Physical)
@@ -111,6 +121,14 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     router.refresh();
   };
 
+  const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);
+  const [borrowerName, setBorrowerName] = React.useState(item.lent_to_name || "");
+  const [borrowerId, setBorrowerId] = React.useState<string | undefined>(item.lent_to_user_id || undefined);
+
+  // Hook for user search, enabled when borrowerName is typed and doesn't exactly match the selected ID
+  const [searchFocused, setSearchFocused] = React.useState(false);
+  const { data: searchResults, isLoading: isSearching } = useUserSearch(borrowerName, searchFocused);
+
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
     updateItem.mutate(
@@ -124,10 +142,42 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const handleCollectionStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["collection_status"];
+
+    if (newStatus === "lent") {
+      setIsLentDialogOpen(true);
+      return;
+    }
+
+    // If moving away from 'lent', we should clear the borrower info
+    const updatePayload: Partial<Item> = { collection_status: newStatus };
+    if (item.collection_status === "lent") {
+      updatePayload.lent_to_name = null;
+      updatePayload.lent_to_user_id = null;
+    }
+
+    updateItem.mutate(updatePayload, {
+      onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+      onError: e => toast.error((e as Error).message),
+    });
+  };
+
+  const handleLentSubmit = () => {
+    if (!borrowerName.trim()) {
+      toast.error("Please enter a borrower name");
+      return;
+    }
+
     updateItem.mutate(
-      { collection_status: newStatus },
       {
-        onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        collection_status: "lent",
+        lent_to_name: borrowerName.trim(),
+        lent_to_user_id: borrowerId || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Item marked as lent to ${borrowerName}`);
+          setIsLentDialogOpen(false);
+        },
         onError: e => toast.error((e as Error).message),
       }
     );
@@ -357,6 +407,81 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           )}
         </div>
       </div>
+
+      <Dialog open={isLentDialogOpen} onOpenChange={setIsLentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lent Out Item</DialogTitle>
+            <DialogDescription>
+              Who are you lending this item to? This helps you keep track of your physical collection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label
+              htmlFor="borrower-name"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Borrower Name
+            </label>
+            <div className="relative">
+              <input
+                id="borrower-name"
+                className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Search user or enter name..."
+                value={borrowerName}
+                onChange={e => {
+                  setBorrowerName(e.target.value);
+                  setBorrowerId(undefined); // Reset ID if user types something new
+                }}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                onKeyDown={e => e.key === "Enter" && handleLentSubmit()}
+                autoFocus
+                autoComplete="off"
+              />
+              {searchFocused && borrowerName.trim().length >= 2 && (
+                <div className="absolute z-50 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md outline-none">
+                  <ul className="max-h-48 overflow-y-auto py-1">
+                    {isSearching ? (
+                      <li className="px-3 py-2 text-sm text-muted-foreground">Searching...</li>
+                    ) : searchResults && searchResults.length > 0 ? (
+                      searchResults.map(user => (
+                        <li
+                          key={user.id}
+                          className="px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between"
+                          onMouseDown={e => {
+                            e.preventDefault(); // Prevent blur
+                            setBorrowerName(user.display_name || user.email);
+                            setBorrowerId(user.id);
+                            setSearchFocused(false);
+                          }}
+                        >
+                          <span className="font-medium">{user.display_name || user.email}</span>
+                          <span className="text-xs text-muted-foreground ml-2 truncate max-w-[120px]">
+                            {user.email}
+                          </span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-3 py-2 text-sm text-muted-foreground">
+                        No users found. Will save as plain name.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLentSubmit} disabled={updateItem.isPending}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

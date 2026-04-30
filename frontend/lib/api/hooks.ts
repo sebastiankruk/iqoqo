@@ -118,6 +118,7 @@ export function useStats() {
  * @param enabled - Whether the query is enabled
  * @param category - Category filter
  * @param formatFilter - Format filter
+ * @param borrowed - Filter by borrowed status
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
 export function useItems(
@@ -128,12 +129,13 @@ export function useItems(
   sort?: string,
   enabled = true,
   category?: string,
-  formatFilter?: string
+  formatFilter?: string,
+  borrowed?: boolean
 ) {
   return useQuery({
-    queryKey: queryKeys.items(page, limit, statuses, query, sort, category, formatFilter),
+    queryKey: [...queryKeys.items(page, limit, statuses, query, sort, category, formatFilter), borrowed],
     queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit };
+      const params: Record<string, string | number | boolean> = { page, limit };
       if (statuses && statuses.length > 0) {
         params.statuses = statuses.join(",");
       }
@@ -148,6 +150,9 @@ export function useItems(
       }
       if (formatFilter) {
         params.format = formatFilter;
+      }
+      if (borrowed) {
+        params.borrowed = true;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
@@ -248,6 +253,25 @@ export function useIsbnLookup(isbn: string, enabled = false) {
     enabled: enabled && isbn.length >= 10,
     retry: false,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * Custom hook to search users by name or email.
+ *
+ * @param query - The search query
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<UserProfile[]>} Query result
+ */
+export function useUserSearch(query: string, enabled = false) {
+  return useQuery({
+    queryKey: ["users", "search", query],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<UserProfile[]>>("/profile/users/search", { params: { q: query } });
+      return res.data?.data ?? [];
+    },
+    enabled: enabled && query.trim().length >= 2,
+    staleTime: 60_000,
   });
 }
 

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-04-24
+## [0.5.0] - 2026-04-29
 
 ### Added
 
@@ -17,12 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Media-Aware AI Art**: Expanded LLM image generation prompts to use media-specific prefixes (e.g., "Cinematic movie poster" for films, "Box art" for games), significantly improving the quality of AI-generated covers for non-book items.
 - **Admin UX**:
   - **RBAC Descriptions**: Added descriptive tooltips to the Role-Based Access Control sheet to clarify user permission boundaries.
+- **Media Taxonomy SSoT**: Implemented a Single Source of Truth for the iqoqo media taxonomy (categories, formats, and statuses) in `shared/taxonomy.yaml`.
+- **Code Generation Engine**: New `scripts/generate_taxonomy.py` automatically produces synchronized Python (`app/core/taxonomy.py`), TypeScript (`frontend/types/taxonomy.ts`), and RDF (`docs/ontology/taxonomy.ttl`) artifacts.
+- **Audiobook Category**: Promoted Audiobooks to a top-level media category (splitting from Text) with specialized progress tracking and image labels.
+- **Integrity Tests**: Added `tests/test_taxonomy_generation.py` to ensure committed generated files never drift from the YAML source.
 
-### Changed (UX)
+### Changed
 
-- **Graceful Lookup Failure**: When API/LLM/Vision extraction fails, the scanner now prominently routes the user to the `ManualEntryForm` with the scanned EAN pre-filled via `initialIdentifier`.
-- **Additional Scans Pre-selection**: `MultiImageUploader` now intelligently defaults the scan label based on the current item's media type (e.g., `"front"` for books, `"disc"` for CDs).
-- **Cover Editor Mobile Guard**: The heavy Canvas-based Cover Art Editor is now hidden on screens narrower than the `md` Tailwind breakpoint (768px). A clear message directs users to an iPad or desktop browser for cover editing.
+- **Format Rename**: Renamed the generic `puzzle` format to `jigsaw_puzzle` for clarity and future extension.
+- **Dynamic Image Labels**: The `MultiImageUploader` now dynamically adapts its labels based on the item category (e.g., "Disc" for music, "Dust Jacket" for books, "Box Contents" for games).
+- **Consolidated Taxonomy**: Refactored `app/db/core.py` and `frontend/types/frbr.ts` to re-export from the generated taxonomy, eliminating attribute drift across the stack.
 
 ### Fixed
 
@@ -31,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Aesthetic Consistency**: Standardized user metadata table colors to use semantic theme tokens instead of hardcoded classes.
 - **Image Resolution**: Fixed broken fallback cover image paths on production environments by routing all asset resolution through the centralized `getCoverUrl` utility.
 - **Component Stability**: Resolved JSX syntax errors in the Puzzle and Video metadata components.
+- **Migration Chain Repair**: Fixed a broken Alembic migration chain where a revision referenced a non-existent ID (`fix_llm_telemetry_sequence`).
+- **Scanner Media Detection**: Hardened media type detection in the scanner API to correctly map generic hints (`audio`, `video`) to canonical formats.
+
+### Database Migrations
+
+- `9f5598cf6467_add_audiobook_category_and_rename_puzzle`: Moves Audiobook manifestations from `text` to `audiobook` category and renames `puzzle` format to `jigsaw_puzzle` in manifestation metadata.
+
+### Changed (UX)
+
+- **Graceful Lookup Failure**: When API/LLM/Vision extraction fails, the scanner now prominently routes the user to the `ManualEntryForm` with the scanned EAN pre-filled via `initialIdentifier`.
+- **Additional Scans Pre-selection**: `MultiImageUploader` now intelligently defaults the scan label based on the current item's media type (e.g., `"front"` for books, `"disc"` for CDs).
+- **Cover Editor Mobile Guard**: The heavy Canvas-based Cover Art Editor is now hidden on screens narrower than the `md` Tailwind breakpoint (768px). A clear message directs users to an iPad or desktop browser for cover editing.
 
 ## [0.4.1] - 2026-04-20
 

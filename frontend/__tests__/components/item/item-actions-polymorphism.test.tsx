@@ -70,11 +70,11 @@ describe("ItemActions Polymorphism", () => {
     expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
   });
 
-  it("renders Now Watching for a Video item", () => {
+  it("renders Mark as Watched for a Video item", () => {
     const videoItem = { ...baseItem, meta: { format: "DVD" } } as unknown as Item;
     render(<ItemActions item={videoItem} />);
 
-    expect(screen.getByText(/Now Watching/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mark as Watched/i)).toBeInTheDocument();
     expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
   });
 

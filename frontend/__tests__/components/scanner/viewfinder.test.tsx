@@ -71,7 +71,7 @@ describe("Viewfinder", () => {
   it("adjusts height for book format (vertical)", () => {
     const { getByTestId } = render(<Viewfinder format="book" />);
     const box = getByTestId("viewfinder-box");
-    expect(box.getAttribute("style")).toContain("height: 360px");
+    expect(box.getAttribute("style")).toMatch(/height: (359|360)(\.\d+)?px/);
   });
 
   it("adjusts height for audio format (square)", () => {

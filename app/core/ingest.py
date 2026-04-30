@@ -41,19 +41,10 @@ class IngestService:
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
         raw_format = (meta.get("format") or meta.get("Format") or "audio").lower()
 
-        # Map format string → FRBR content type
-        if raw_format in ("video", "dvd", "bluray", "movie", "moving image"):
-            content_type = MediaCategory.MOVIE
-        elif raw_format in ("game", "boardgame", "board_game"):
-            content_type = MediaCategory.BOARD_GAME
-        elif raw_format in ("book", "text"):
-            content_type = MediaCategory.TEXT
-        elif raw_format == "puzzle":
-            content_type = MediaCategory.PUZZLE
-        elif raw_format in ("music", "sound", "audio", "cd", "vinyl", "sacd"):
-            content_type = MediaCategory.MUSIC
-        else:
-            content_type = MediaCategory.MUSIC
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        # Map format string → FRBR content type (canonical formats + aliases)
+        content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
 
         work_meta: dict = {"authors": [author_name] if author_name else []}
         work = Work(title=title, meta=work_meta)
@@ -119,7 +110,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": MediaFormat.PUZZLE,
+                "format": MediaFormat.JIGSAW_PUZZLE,
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],

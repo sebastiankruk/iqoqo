@@ -126,17 +126,9 @@ def lookup_barcode_preview(query: str):
 
     # Filter by format if hint is provided to avoid cross-media collisions
     if format_hint:
-        from app.db.core import MediaCategory
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-        content_type = None
-        if format_hint in ("game", "boardgame", "board_game"):
-            content_type = MediaCategory.BOARD_GAME
-        elif format_hint in ("audio", "cd", "vinyl", "sound", "music"):
-            content_type = MediaCategory.MUSIC
-        elif format_hint in ("video", "dvd", "bluray", "movie"):
-            content_type = MediaCategory.MOVIE
-        elif format_hint in ("book", "text"):
-            content_type = MediaCategory.TEXT
+        content_type = FORMAT_ALIAS_TO_CATEGORY.get(format_hint)
 
         if content_type:
             query_obj = query_obj.filter(Expression.content_type == content_type)
@@ -368,33 +360,41 @@ def lookup_barcode_preview(query: str):
     if "title" not in meta:
         meta["title"] = meta.get("Title") or "Unknown Title"
     if "cover_url" not in meta:
-        meta["cover_url"] = meta.get("thumb") or meta.get("cover")
+        cover_val = meta.get("thumb") or meta.get("cover")
+        if isinstance(cover_val, dict):
+            meta["cover_url"] = cover_val.get("large") or cover_val.get("medium") or cover_val.get("small")
+        elif isinstance(cover_val, list) and len(cover_val) > 0:
+            meta["cover_url"] = cover_val[0]
+        else:
+            meta["cover_url"] = cover_val
     if "author" not in meta:
         meta["author"] = (
             meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
         )
 
     if "format" not in meta and format_hint:
-        from app.db.core import MediaCategory, MediaFormat
+        from app.core.taxonomy import FORMAT_TO_CATEGORY
+        from app.db.core import MediaFormat
 
-        format_map = {
-            "audio": MediaFormat.MUSIC,
-            "music": MediaFormat.MUSIC,
-            "cd": MediaFormat.CD,
-            "vinyl": MediaFormat.VINYL,
-            "sound": MediaFormat.MUSIC,
-            "video": MediaFormat.MOVIE,
-            "movie": MediaFormat.MOVIE,
-            "dvd": MediaFormat.DVD,
-            "bluray": MediaFormat.BLURAY,
+        # Use canonical mapping from taxonomy
+        meta["format"] = format_hint if format_hint in FORMAT_TO_CATEGORY else format_hint.upper()
+
+        # Map generic hints to default formats
+        hint_to_format = {
+            "audio": MediaFormat.CD,
+            "music": MediaFormat.CD,
+            "video": MediaFormat.DVD,
+            "movie": MediaFormat.DVD,
             "game": MediaFormat.BOARD_GAME,
             "boardgame": MediaFormat.BOARD_GAME,
-            "board_game": MediaFormat.BOARD_GAME,
-            "puzzle": MediaFormat.PUZZLE,
             "book": MediaFormat.BOOK,
             "text": MediaFormat.BOOK,
+            "puzzle": MediaFormat.JIGSAW_PUZZLE,
+            "jigsaw": MediaFormat.JIGSAW_PUZZLE,
+            "audiobook": MediaFormat.AUDIOBOOK_CD,
         }
-        meta["format"] = format_map.get(format_hint, format_hint.upper())
+        if format_hint in hint_to_format:
+            meta["format"] = hint_to_format[format_hint]
 
     # Add identifier to meta — use original human-readable query, not internal hash
     meta["identifier"] = query

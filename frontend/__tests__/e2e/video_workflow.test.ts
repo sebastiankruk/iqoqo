@@ -113,7 +113,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText("Tap to start camera")).toBeVisible();
 
     // 6. Select the Video format from the top pill menu
-    await page.getByRole("button", { name: "Video" }).click();
+    await page.getByRole("button", { name: "Movie" }).click();
 
     // 7. Switch to the Manual Search tab
     await page.getByRole("button", { name: "Manual Search" }).click();

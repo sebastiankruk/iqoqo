@@ -21,6 +21,7 @@ import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
+  useUserSearch: vi.fn(() => ({ data: [], isLoading: false })),
   useProfile: vi.fn(() => ({
     data: {
       permissions: ["update:item", "upload:cover", "write:metadata"],
@@ -74,10 +75,10 @@ describe("ItemSidebar Component", () => {
 
     render(<ItemSidebar item={mockItem} />);
     const select = screen.getByLabelText("Collection status");
-    fireEvent.change(select, { target: { value: "lent" } });
+    fireEvent.change(select, { target: { value: "damaged" } });
 
     expect(mutateMock).toHaveBeenCalledTimes(1);
-    expect(mutateMock).toHaveBeenCalledWith({ collection_status: "lent" }, expect.any(Object));
+    expect(mutateMock).toHaveBeenCalledWith({ collection_status: "damaged" }, expect.any(Object));
   });
 
   it("calls update mutation when progress status select is changed", () => {

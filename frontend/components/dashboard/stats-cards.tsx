@@ -68,11 +68,21 @@ export function StatsCards() {
       description: "Currently with friends",
       href: "/collection?statuses=lent",
     },
+    {
+      label: "Borrowed",
+      value: stats?.borrowed_items ?? 0,
+      icon: BookMarked,
+      borderColor: "border-l-teal-500",
+      iconBg: "bg-teal-500/10",
+      iconColor: "text-teal-600",
+      description: "Borrowed from others",
+      href: "/collection?borrowed=true",
+    },
   ];
 
   return (
     <section aria-label="Collection statistics">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map(stat => (
           <Link
             key={stat.label}

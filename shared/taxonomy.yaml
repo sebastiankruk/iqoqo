@@ -1,0 +1,176 @@
+# shared/taxonomy.yaml
+# Single Source of Truth for iqoqo Media Taxonomy & Statuses
+# ---------------------------------------------------------
+# Run `make generate-taxonomy` after editing this file.
+
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+
+global_image_types:
+  - front
+  - back
+  - spine
+  - other
+
+media_categories:
+  text:
+    label: "Text"
+    default_image_type: "front"
+    image_types: ["dust_jacket", "slipcase", "pages"]
+    ui_icon: "Book"
+    ui_aspect_ratio: 0.66666667
+    ui_parent: "book"
+    formats:
+      - id: book
+        label: "Book"
+      - id: graphic_novel
+        label: "Graphic Novel / TPB"
+      - id: comic_book
+        label: "Comic Book (Single Issue)"
+      - id: magazine
+        label: "Magazine"
+      - id: ebook
+        label: "eBook"
+
+  audiobook:
+    label: "Audiobook"
+    default_image_type: "front"
+    image_types: ["disc", "cassette", "inlay", "slipcase"]
+    ui_icon: "Disc"
+    ui_aspect_ratio: 1.0
+    ui_parent: "book"
+    formats:
+      - id: audiobook_cd
+        label: "Audiobook CD"
+      - id: audiobook_cassette
+        label: "Audiobook Cassette"
+        ui_aspect_ratio: 1.0
+      - id: audiobook_digital
+        label: "Digital Audiobook"
+
+  music:
+    label: "Music"
+    default_image_type: "disc"
+    image_types: ["disc", "inlay", "vinyl_label", "gatefold", "obi", "booklet"]
+    ui_icon: "Disc"
+    ui_aspect_ratio: 1.0
+    formats:
+      - id: cd
+        label: "CD"
+      - id: vinyl
+        label: "Vinyl"
+      - id: sacd
+        label: "SACD"
+      - id: cassette
+        label: "Cassette"
+      - id: minidisc
+        label: "MiniDisc"
+      - id: cd_dvd_combo
+        label: "CD + DVD Edition"
+
+  movie:
+    label: "Movie"
+    default_image_type: "disc"
+    image_types: ["disc", "inlay", "slipcover", "booklet"]
+    ui_icon: "Film"
+    ui_aspect_ratio: 1.5
+    formats:
+      - id: dvd
+        label: "DVD"
+      - id: bluray
+        label: "Blu-ray"
+      - id: 4k_uhd
+        label: "4K UHD"
+      - id: vcd
+        label: "Video CD (VCD)"
+        ui_aspect_ratio: 1.0
+      - id: vhs
+        label: "VHS"
+      - id: laserdisc
+        label: "LaserDisc"
+        ui_aspect_ratio: 1.0
+
+  board_game:
+    label: "Board Game"
+    default_image_type: "box"
+    image_types: ["box", "board", "components", "rulebook"]
+    ui_icon: "Dices"
+    ui_aspect_ratio: 1.0
+    formats:
+      - id: board_game
+        label: "Board Game"
+      - id: cards
+        label: "Card Game"
+      - id: rpg_manual
+        label: "RPG Manual"
+        ui_aspect_ratio: 0.66666667
+      - id: miniatures
+        label: "Miniatures / Wargame"
+
+  puzzle:
+    label: "Puzzle"
+    default_image_type: "box"
+    image_types: ["pieces", "completed_puzzle", "poster"]
+    ui_icon: "Puzzle"
+    ui_aspect_ratio: 1.0
+    formats:
+      - id: jigsaw_puzzle
+        label: "Jigsaw Puzzle"
+      - id: mechanical_puzzle
+        label: "Mechanical / 3D Puzzle"
+
+# Non-canonical strings that external APIs, legacy data, or user input may
+# send.  Each alias resolves to its canonical media category.  The generator
+# merges these into FORMAT_TO_CATEGORY / FORMAT_ALIAS_TO_CATEGORY so that
+# lookup code never needs its own hardcoded fallback table.
+format_aliases:
+  # text aliases
+  standard: text
+  # music aliases
+  audio: music
+  sound: music
+  lp: music
+  # movie aliases
+  video: movie
+  "moving image": movie
+  # board_game aliases
+  game: board_game
+  boardgame: board_game
+  "three-dimensional object": board_game
+
+collection_statuses:
+  - id: wish_list
+    label: "Want to Own"
+  - id: ordered
+    label: "Ordered"
+  - id: available
+    label: "On Shelf"
+  - id: lent
+    label: "Lent Out"
+  - id: damaged
+    label: "Damaged"
+  - id: lost
+    label: "Lost"
+
+progress_statuses:
+  text: ["want_to_read", "reading", "read", "dnf"]
+  audiobook: ["want_to_listen", "listening", "listened", "dnf"]
+  music: ["want_to_listen", "listened"]
+  movie: ["want_to_watch", "watched", "dnf"]
+  board_game: ["want_to_play", "playing", "played"]
+  puzzle: ["want_to_play", "playing", "played"]
+
+# Scanner top-bar formats (categories shown in scanner UI)
+scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle"]

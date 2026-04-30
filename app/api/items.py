@@ -44,6 +44,9 @@ def get_items():
     format_filter = request.args.get("format", None)
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
+    borrowed_only = request.args.get("borrowed", "false").lower() == "true"
+    missing_cover = request.args.get("missing_cover", "false").lower() == "true"
+    missing_id = request.args.get("missing_id", "false").lower() == "true"
 
     try:
         page = int(page_param)
@@ -61,7 +64,16 @@ def get_items():
 
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
         total, results = SearchService.search_items(
-            q, user_id, limit, offset, statuses=statuses_list, category=category_filter, format_filter=format_filter
+            q,
+            user_id,
+            limit,
+            offset,
+            statuses=statuses_list,
+            category=category_filter,
+            format_filter=format_filter,
+            borrowed_only=borrowed_only,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
         )
 
         items_data = []
@@ -72,6 +84,8 @@ def get_items():
                     "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
                     "status": row["status"],
                     "collection_status": row["collection_status"],
+                    "lent_to_user_id": row.get("lent_to_user_id"),
+                    "lent_to_name": row.get("lent_to_name"),
                     "manifestation_id": row["manifestation_id"],
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
@@ -79,6 +93,8 @@ def get_items():
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
                     "content_type": row.get("content_type"),
+                    "is_owner": str(row["owner_id"]) == str(g.user_id) if hasattr(g, "user_id") else False,
+                    "is_borrowed": str(row["owner_id"]) != str(g.user_id) if hasattr(g, "user_id") else False,
                     "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
                     "updated_at": (
                         (row.get("updated_at") or row["added_at"]).isoformat()
@@ -99,7 +115,11 @@ def get_items():
 
     # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-    query = query.filter(Item.owner_id == user_id)
+
+    if borrowed_only:
+        query = query.filter(Item.lent_to_user_id == user_id)
+    else:
+        query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
     if category_filter or format_filter or sort_by in ("title", "title-desc", "author"):
         # We need to join these models if we have filters or specific sorting
@@ -112,6 +132,11 @@ def get_items():
 
     if format_filter:
         query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+
+    if missing_cover:
+        query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+    if missing_id:
+        query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
@@ -142,12 +167,15 @@ def get_items():
             work_title = work.title or ""
             authors = work.meta.get("authors", []) if work.meta else []
 
+        is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
         items_data.append(
             {
                 "id": item.id,
                 "owner_id": item.owner_id,
                 "status": item.status,
                 "collection_status": item.collection_status,
+                "lent_to_user_id": item.lent_to_user_id,
+                "lent_to_name": item.lent_to_name,
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
@@ -156,7 +184,8 @@ def get_items():
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
                 "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
-                "is_owner": str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False,
+                "is_owner": is_owner,
+                "is_borrowed": not is_owner,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }
@@ -205,6 +234,10 @@ def get_item_detail(item_id: int):
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
+
+    if is_owner or is_admin or (user_id and str(item.lent_to_user_id) == str(user_id)):
+        item_data["lent_to_user_id"] = item.lent_to_user_id
+        item_data["lent_to_name"] = item.lent_to_name
 
     if is_owner or is_admin or has_read_owners:
         owner = db.session.get(User, item.owner_id)
@@ -274,6 +307,11 @@ def update_item(item_id: int):
         item.collection_status = data["collection_status"]
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
         db.session.add(log)
+
+    if "lent_to_user_id" in data:
+        item.lent_to_user_id = data["lent_to_user_id"]
+    if "lent_to_name" in data:
+        item.lent_to_name = data["lent_to_name"]
 
     if data.get("meta"):
         item.meta = data["meta"]
@@ -408,23 +446,16 @@ def add_item_manual():
     pub_date_str = data.get("PublicationDate")
 
     # Derive a sensible default progress status from the media format using canonical mapping.
-    from app.db.core import CATEGORY_PROGRESS_STATUSES, MediaCategory, MediaFormat
+    from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, MediaCategory
 
-    _FORMAT_TO_CATEGORY: dict[str, str] = {
-        MediaFormat.BOOK: MediaCategory.TEXT,
-        MediaFormat.AUDIOBOOK_CD: MediaCategory.MUSIC,
-        MediaFormat.CD: MediaCategory.MUSIC,
-        MediaFormat.VINYL: MediaCategory.MUSIC,
-        MediaFormat.SACD: MediaCategory.MUSIC,
-        MediaFormat.MUSIC: MediaCategory.MUSIC,
-        MediaFormat.DVD: MediaCategory.MOVIE,
-        MediaFormat.BLURAY: MediaCategory.MOVIE,
-        MediaFormat.MOVIE: MediaCategory.MOVIE,
-        MediaFormat.BOARD_GAME: MediaCategory.BOARD_GAME,
-        MediaFormat.PUZZLE: MediaCategory.PUZZLE,
-    }
     _fmt_lower = (content_type or "").lower()
-    category = _FORMAT_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+    if _fmt_lower in MediaCategory.ALL:
+        category = _fmt_lower
+    else:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        category = FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+
     default_status = CATEGORY_PROGRESS_STATUSES[category][0]
 
     try:
