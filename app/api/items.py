@@ -140,7 +140,18 @@ def get_items():
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+        if "lent" in statuses_list and not borrowed_only:
+            # If 'lent' is selected specifically, they want items THEY lent out.
+            # So we exclude items they borrowed (which also have collection_status='lent').
+            query = query.filter(
+                db.or_(
+                    Item.status.in_([s for s in statuses_list if s != "lent"]),
+                    db.and_(Item.collection_status == "lent", Item.owner_id == user_id),
+                    Item.collection_status.in_([s for s in statuses_list if s != "lent"]),
+                )
+            )
+        else:
+            query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if sort_by == "title":
         query = query.order_by(Work.title.asc().nulls_last())
@@ -210,6 +221,7 @@ def get_item_detail(item_id: int):
 
     user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_borrowed = user_id and str(item.lent_to_user_id) == str(user_id)
     is_admin = False
     has_read_owners = False
 
@@ -225,8 +237,9 @@ def get_item_detail(item_id: int):
 
     item_data = {
         "id": item.id,
-        "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
+        "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed) else "Unavailable",
         "is_owner": is_owner,
+        "is_borrowed": is_borrowed,
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
@@ -235,11 +248,11 @@ def get_item_detail(item_id: int):
         "meta": item.meta,
     }
 
-    if is_owner or is_admin or (user_id and str(item.lent_to_user_id) == str(user_id)):
+    if is_owner or is_admin or is_borrowed:
         item_data["lent_to_user_id"] = item.lent_to_user_id
         item_data["lent_to_name"] = item.lent_to_name
 
-    if is_owner or is_admin or has_read_owners:
+    if is_owner or is_admin or has_read_owners or is_borrowed:
         owner = db.session.get(User, item.owner_id)
         if owner:
             item_data["owner_name"] = owner.display_name or owner.email

@@ -89,7 +89,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
   const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const isOwner = item.owner_id !== "Unavailable";
+  const isOwner = !!item.is_owner;
   const canModifyItem = isOwner || hasUpdateItemPermission;
 
   // Media type detection
@@ -243,14 +243,14 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       </div>
 
       {/* Lending info */}
-      {(item.collection_status === "lent" || item.owner_id === "Unavailable") && (
+      {(item.collection_status === "lent" || item.is_borrowed) && (
         <div className="flex flex-col items-center gap-1">
           {item.collection_status === "lent" && item.lent_to_name && (
             <p className="text-center text-[10px] font-bold uppercase tracking-wider text-orange-600">
               Lent to: <span className="text-foreground">{item.lent_to_name}</span>
             </p>
           )}
-          {item.owner_id === "Unavailable" && item.owner_name && (
+          {item.is_borrowed && item.owner_name && (
             <p className="text-center text-[10px] font-bold uppercase tracking-wider text-blue-600">
               Borrowed from: <span className="text-foreground">{item.owner_name}</span>
             </p>

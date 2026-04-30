@@ -42,6 +42,8 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
+    missing_cover = request.args.get("missing_cover") == "true"
+    missing_id = request.args.get("missing_id") == "true"
 
     try:
         page = int(page_param)
@@ -57,7 +59,9 @@ def get_manifestations() -> tuple[Response, int]:
     if q:
         from app.core.search_service import SearchService
 
-        total, result_ids = SearchService.search_manifestations(q, limit, offset, category=category_filter, format_filter=format_filter)
+        total, result_ids = SearchService.search_manifestations(
+            q, limit, offset, category=category_filter, format_filter=format_filter, missing_cover=missing_cover, missing_id=missing_id
+        )
 
         if result_ids:
             manifestations_unordered = (
@@ -76,6 +80,10 @@ def get_manifestations() -> tuple[Response, int]:
             query = query.filter(Expression.content_type == category_filter)
         if format_filter:
             query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if missing_cover:
+            query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+        if missing_id:
+            query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()

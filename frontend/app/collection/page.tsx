@@ -304,7 +304,7 @@ function CollectionContent() {
                   </button>
                 </div>
 
-                {isLoggedIn && profile?.permissions?.includes(PermissionName.UPDATE_ITEM) && (
+                {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
                       <input

@@ -76,7 +76,7 @@ export function StatsCards() {
       iconBg: "bg-teal-500/10",
       iconColor: "text-teal-600",
       description: "Borrowed from others",
-      href: "/collection?borrowed=true",
+      href: "/collection?statuses=borrowed",
     },
   ];
 

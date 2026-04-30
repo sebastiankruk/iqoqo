@@ -133,10 +133,17 @@ export function ManualEntryForm({
             onChange={handleChange}
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            {SCAN_FORMATS.map(f => (
-              <option key={f} value={f}>
-                {MEDIA_REGISTRY[f].label}
-              </option>
+            {SCAN_FORMATS.map(groupId => (
+              <optgroup key={groupId} label={MEDIA_REGISTRY[groupId].label}>
+                <option value={groupId}>{MEDIA_REGISTRY[groupId].label} (Generic)</option>
+                {Object.entries(MEDIA_REGISTRY)
+                  .filter(([id, meta]) => meta.parent === groupId && id !== groupId)
+                  .map(([id, meta]) => (
+                    <option key={id} value={id}>
+                      {meta.label}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </div>
