@@ -250,11 +250,20 @@ def generate_turtle(data: dict) -> str:
     ttl_code.append("")
 
     # Progress Statuses
+    status_to_cats = {}
     for cat, statuses in data["progress_statuses"].items():
-        cat_class = f"MediaCategory{cat.replace('_', ' ').title().replace(' ', '')}"
         for status in statuses:
-            status_class = f"Status{status.replace('_', ' ').title().replace(' ', '')}"
-            ttl_code.append(f':{status_class} a :ProgressStatus ; rdfs:label "{status}" ; :applicableToCategory :{cat_class} .')
+            status_to_cats.setdefault(status, []).append(cat)
+
+    for status, cats in sorted(status_to_cats.items()):
+        status_class = f"Status{status.replace('_', ' ').title().replace(' ', '')}"
+        ttl_code.append(f":{status_class} a :ProgressStatus ;")
+        ttl_code.append(f'    rdfs:label "{status}" ;')
+        for i, cat in enumerate(sorted(cats)):
+            cat_class = f"MediaCategory{cat.replace('_', ' ').title().replace(' ', '')}"
+            term = " ;" if i < len(cats) - 1 else " ."
+            ttl_code.append(f"    :applicableToCategory :{cat_class}{term}")
+        ttl_code.append("")
 
     ttl_code.append("")
     return "\n".join(ttl_code)

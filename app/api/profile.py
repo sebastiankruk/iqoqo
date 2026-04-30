@@ -120,7 +120,10 @@ def search_users():
     if not query or len(query) < 2:
         return jsonify({"success": True, "data": []})
 
-    limit = min(request.args.get("limit", 10, type=int), 20)
+    limit_param = request.args.get("limit", 10, type=int)
+    if limit_param < 1:
+        return jsonify({"success": False, "data": None, "error": "Invalid limit parameter"}), 400
+    limit = min(limit_param, 20)
 
     # Note: the user must be active. We allow finding any active user so items can be lent.
     # Exclude the current user from search results.

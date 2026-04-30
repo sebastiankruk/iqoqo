@@ -231,11 +231,13 @@ def get_item_detail(item_id: int):
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
-        "lent_to_user_id": item.lent_to_user_id,
-        "lent_to_name": item.lent_to_name,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
+
+    if is_owner or is_admin or (user_id and str(item.lent_to_user_id) == str(user_id)):
+        item_data["lent_to_user_id"] = item.lent_to_user_id
+        item_data["lent_to_name"] = item.lent_to_name
 
     if is_owner or is_admin or has_read_owners:
         owner = db.session.get(User, item.owner_id)

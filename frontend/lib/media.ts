@@ -84,7 +84,7 @@ function buildMediaRegistry(): Record<MediaFormat | ScanFormat, MediaMetadata> {
         apiCategory: category,
         icon,
         aspectRatio: fmtAspectRatio,
-        parent: fmtParent as ScanFormat,
+        parent: fmtParent !== fmt.id ? (fmtParent as ScanFormat) : undefined,
       };
     });
   });

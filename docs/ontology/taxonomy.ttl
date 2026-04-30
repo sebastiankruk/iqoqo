@@ -187,22 +187,58 @@
 :StatusDamaged a :CollectionStatus ; rdfs:label "damaged" .
 :StatusLost a :CollectionStatus ; rdfs:label "lost" .
 
-:StatusWantToRead a :ProgressStatus ; rdfs:label "want_to_read" ; :applicableToCategory :MediaCategoryText .
-:StatusReading a :ProgressStatus ; rdfs:label "reading" ; :applicableToCategory :MediaCategoryText .
-:StatusRead a :ProgressStatus ; rdfs:label "read" ; :applicableToCategory :MediaCategoryText .
-:StatusDnf a :ProgressStatus ; rdfs:label "dnf" ; :applicableToCategory :MediaCategoryText .
-:StatusWantToListen a :ProgressStatus ; rdfs:label "want_to_listen" ; :applicableToCategory :MediaCategoryAudiobook .
-:StatusListening a :ProgressStatus ; rdfs:label "listening" ; :applicableToCategory :MediaCategoryAudiobook .
-:StatusListened a :ProgressStatus ; rdfs:label "listened" ; :applicableToCategory :MediaCategoryAudiobook .
-:StatusDnf a :ProgressStatus ; rdfs:label "dnf" ; :applicableToCategory :MediaCategoryAudiobook .
-:StatusWantToListen a :ProgressStatus ; rdfs:label "want_to_listen" ; :applicableToCategory :MediaCategoryMusic .
-:StatusListened a :ProgressStatus ; rdfs:label "listened" ; :applicableToCategory :MediaCategoryMusic .
-:StatusWantToWatch a :ProgressStatus ; rdfs:label "want_to_watch" ; :applicableToCategory :MediaCategoryMovie .
-:StatusWatched a :ProgressStatus ; rdfs:label "watched" ; :applicableToCategory :MediaCategoryMovie .
-:StatusDnf a :ProgressStatus ; rdfs:label "dnf" ; :applicableToCategory :MediaCategoryMovie .
-:StatusWantToPlay a :ProgressStatus ; rdfs:label "want_to_play" ; :applicableToCategory :MediaCategoryBoardGame .
-:StatusPlaying a :ProgressStatus ; rdfs:label "playing" ; :applicableToCategory :MediaCategoryBoardGame .
-:StatusPlayed a :ProgressStatus ; rdfs:label "played" ; :applicableToCategory :MediaCategoryBoardGame .
-:StatusWantToPlay a :ProgressStatus ; rdfs:label "want_to_play" ; :applicableToCategory :MediaCategoryPuzzle .
-:StatusPlaying a :ProgressStatus ; rdfs:label "playing" ; :applicableToCategory :MediaCategoryPuzzle .
-:StatusPlayed a :ProgressStatus ; rdfs:label "played" ; :applicableToCategory :MediaCategoryPuzzle .
+:StatusDnf a :ProgressStatus ;
+    rdfs:label "dnf" ;
+    :applicableToCategory :MediaCategoryAudiobook ;
+    :applicableToCategory :MediaCategoryMovie ;
+    :applicableToCategory :MediaCategoryText .
+
+:StatusListened a :ProgressStatus ;
+    rdfs:label "listened" ;
+    :applicableToCategory :MediaCategoryAudiobook ;
+    :applicableToCategory :MediaCategoryMusic .
+
+:StatusListening a :ProgressStatus ;
+    rdfs:label "listening" ;
+    :applicableToCategory :MediaCategoryAudiobook .
+
+:StatusPlayed a :ProgressStatus ;
+    rdfs:label "played" ;
+    :applicableToCategory :MediaCategoryBoardGame ;
+    :applicableToCategory :MediaCategoryPuzzle .
+
+:StatusPlaying a :ProgressStatus ;
+    rdfs:label "playing" ;
+    :applicableToCategory :MediaCategoryBoardGame ;
+    :applicableToCategory :MediaCategoryPuzzle .
+
+:StatusRead a :ProgressStatus ;
+    rdfs:label "read" ;
+    :applicableToCategory :MediaCategoryText .
+
+:StatusReading a :ProgressStatus ;
+    rdfs:label "reading" ;
+    :applicableToCategory :MediaCategoryText .
+
+:StatusWantToListen a :ProgressStatus ;
+    rdfs:label "want_to_listen" ;
+    :applicableToCategory :MediaCategoryAudiobook ;
+    :applicableToCategory :MediaCategoryMusic .
+
+:StatusWantToPlay a :ProgressStatus ;
+    rdfs:label "want_to_play" ;
+    :applicableToCategory :MediaCategoryBoardGame ;
+    :applicableToCategory :MediaCategoryPuzzle .
+
+:StatusWantToRead a :ProgressStatus ;
+    rdfs:label "want_to_read" ;
+    :applicableToCategory :MediaCategoryText .
+
+:StatusWantToWatch a :ProgressStatus ;
+    rdfs:label "want_to_watch" ;
+    :applicableToCategory :MediaCategoryMovie .
+
+:StatusWatched a :ProgressStatus ;
+    rdfs:label "watched" ;
+    :applicableToCategory :MediaCategoryMovie .
+

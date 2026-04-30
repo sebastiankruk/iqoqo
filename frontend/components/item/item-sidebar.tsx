@@ -463,7 +463,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                         </li>
                       ))
                     ) : (
-                      <li className="px-3 py-2 text-sm text-muted-foreground">No users found. Will save as plain name.</li>
+                      <li className="px-3 py-2 text-sm text-muted-foreground">
+                        No users found. Will save as plain name.
+                      </li>
                     )}
                   </ul>
                 </div>

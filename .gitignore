@@ -70,3 +70,5 @@ playwright-report/
 
 # External services
 .allegro_token.json
+
+frontend/test_output.txt
