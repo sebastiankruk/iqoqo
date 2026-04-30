@@ -85,6 +85,52 @@ test.describe("Lending Workflow", () => {
       })
     );
 
+    // 1.5 Mock the unified POST /scan endpoint
+    await page.route("**/api/scan", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            item_id: 1,
+            manifestation_id: 100,
+            barcode: testBarcode,
+            title: "Lending Test Book",
+            message: "Successfully added to your collection",
+          },
+        }),
+      });
+    });
+
+    // 1.6 Mock the target Item page to prevent timeout on redirect
+    await page.route("**/api/items/1**", async route => {
+      if (route.request().method() === "PUT") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: { id: 1 } }),
+        });
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: 1,
+            owner_id: "test-user-id",
+            status: "read",
+            collection_status: "available",
+            title: "Lending Test Book",
+            meta: { format: "book" },
+            manifestation_meta: { format: "book" },
+          },
+        }),
+      });
+    });
+
     // 2. Navigate to Scanner page
     await page.goto("/scan");
 
