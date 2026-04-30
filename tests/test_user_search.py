@@ -1,3 +1,19 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+
 import pytest
 
 from app.db.models import User, db
@@ -50,10 +66,7 @@ def test_user_search_by_email_and_name(client, normal_user_headers, app):
 def test_user_search_limit(client, normal_user_headers, app):
     """Verify search respects the limit parameter."""
     with app.app_context():
-        users = [
-            User(email=f"limit{i}@test.local", display_name=f"Limit Tester {i}", is_active=True)
-            for i in range(15)
-        ]
+        users = [User(email=f"limit{i}@test.local", display_name=f"Limit Tester {i}", is_active=True) for i in range(15)]
         db.session.add_all(users)
         db.session.commit()
 
