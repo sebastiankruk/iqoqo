@@ -116,9 +116,17 @@ class SearchService:
             params["format_filter"] = format_filter
             extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
         if missing_cover:
-            extra_filters_sql += " AND (m.cover_url IS NULL OR m.cover_url = '')"
+            extra_filters_sql += (
+                " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
+            )
         if missing_id:
-            extra_filters_sql += " AND (m.isbn13 IS NULL OR m.isbn13 = '')"
+            extra_filters_sql += (
+                " AND (m.isbn13 IS NULL OR m.isbn13 = '')"
+                " AND (m.upc IS NULL OR m.upc = '')"
+                " AND (m.ean IS NULL OR m.ean = '')"
+                " AND (m.meta ->> 'barcode' IS NULL OR m.meta ->> 'barcode' = '')"
+                " AND (m.meta ->> 'catalog_number' IS NULL OR m.meta ->> 'catalog_number' = '')"
+            )
 
         count_sql = f"""
         SELECT count(*) FROM {_CATALOG}manifestations m
@@ -163,9 +171,31 @@ class SearchService:
         if format_filter:
             base_query = base_query.filter(Manifestation.meta["format"].as_string() == format_filter)
         if missing_cover:
-            base_query = base_query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+            base_query = base_query.filter(
+                db.and_(
+                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                    db.or_(
+                        Manifestation.meta["cover_url"].as_string().is_(None),
+                        Manifestation.meta["cover_url"].as_string() == "",
+                    ),
+                )
+            )
         if missing_id:
-            base_query = base_query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+            base_query = base_query.filter(
+                db.and_(
+                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                    db.or_(
+                        Manifestation.meta["barcode"].as_string().is_(None),
+                        Manifestation.meta["barcode"].as_string() == "",
+                    ),
+                    db.or_(
+                        Manifestation.meta["catalog_number"].as_string().is_(None),
+                        Manifestation.meta["catalog_number"].as_string() == "",
+                    ),
+                )
+            )
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -209,9 +239,17 @@ class SearchService:
             extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
 
         if missing_cover:
-            extra_filters_sql += " AND (m.cover_url IS NULL OR m.cover_url = '')"
+            extra_filters_sql += (
+                " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
+            )
         if missing_id:
-            extra_filters_sql += " AND (m.isbn13 IS NULL OR m.isbn13 = '')"
+            extra_filters_sql += (
+                " AND (m.isbn13 IS NULL OR m.isbn13 = '')"
+                " AND (m.upc IS NULL OR m.upc = '')"
+                " AND (m.ean IS NULL OR m.ean = '')"
+                " AND (m.meta ->> 'barcode' IS NULL OR m.meta ->> 'barcode' = '')"
+                " AND (m.meta ->> 'catalog_number' IS NULL OR m.meta ->> 'catalog_number' = '')"
+            )
 
         count_sql = f"""
         SELECT count(i.id) FROM {_CATALOG}manifestations m
@@ -290,9 +328,31 @@ class SearchService:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
         if missing_cover:
-            query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                    db.or_(
+                        Manifestation.meta["cover_url"].as_string().is_(None),
+                        Manifestation.meta["cover_url"].as_string() == "",
+                    ),
+                )
+            )
         if missing_id:
-            query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                    db.or_(
+                        Manifestation.meta["barcode"].as_string().is_(None),
+                        Manifestation.meta["barcode"].as_string() == "",
+                    ),
+                    db.or_(
+                        Manifestation.meta["catalog_number"].as_string().is_(None),
+                        Manifestation.meta["catalog_number"].as_string() == "",
+                    ),
+                )
+            )
 
         query = query.filter(Item.id.in_(matching_items_sub))
 

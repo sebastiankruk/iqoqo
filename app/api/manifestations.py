@@ -81,9 +81,31 @@ def get_manifestations() -> tuple[Response, int]:
         if format_filter:
             query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
         if missing_cover:
-            query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                    db.or_(
+                        Manifestation.meta["cover_url"].as_string().is_(None),
+                        Manifestation.meta["cover_url"].as_string() == "",
+                    ),
+                )
+            )
         if missing_id:
-            query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                    db.or_(
+                        Manifestation.meta["barcode"].as_string().is_(None),
+                        Manifestation.meta["barcode"].as_string() == "",
+                    ),
+                    db.or_(
+                        Manifestation.meta["catalog_number"].as_string().is_(None),
+                        Manifestation.meta["catalog_number"].as_string() == "",
+                    ),
+                )
+            )
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()

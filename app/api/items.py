@@ -121,7 +121,7 @@ def get_items():
     else:
         query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-    if category_filter or format_filter or sort_by in ("title", "title-desc", "author"):
+    if category_filter or format_filter or missing_cover or missing_id or sort_by in ("title", "title-desc", "author"):
         # We need to join these models if we have filters or specific sorting
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
         query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
@@ -134,9 +134,31 @@ def get_items():
         query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
 
     if missing_cover:
-        query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                db.or_(
+                    Manifestation.meta["cover_url"].as_string().is_(None),
+                    Manifestation.meta["cover_url"].as_string() == "",
+                ),
+            )
+        )
     if missing_id:
-        query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                db.or_(
+                    Manifestation.meta["barcode"].as_string().is_(None),
+                    Manifestation.meta["barcode"].as_string() == "",
+                ),
+                db.or_(
+                    Manifestation.meta["catalog_number"].as_string().is_(None),
+                    Manifestation.meta["catalog_number"].as_string() == "",
+                ),
+            )
+        )
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
