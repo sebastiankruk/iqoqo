@@ -119,6 +119,8 @@ export function useStats() {
  * @param category - Category filter
  * @param formatFilter - Format filter
  * @param borrowed - Filter by borrowed status
+ * @param missingCover - Filter items missing a cover
+ * @param missingId - Filter items missing an external identifier
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
 export function useItems(
@@ -130,10 +132,17 @@ export function useItems(
   enabled = true,
   category?: string,
   formatFilter?: string,
-  borrowed?: boolean
+  borrowed?: boolean,
+  missingCover?: boolean,
+  missingId?: boolean
 ) {
   return useQuery({
-    queryKey: [...queryKeys.items(page, limit, statuses, query, sort, category, formatFilter), borrowed],
+    queryKey: [
+      ...queryKeys.items(page, limit, statuses, query, sort, category, formatFilter),
+      borrowed,
+      missingCover,
+      missingId,
+    ],
     queryFn: async () => {
       const params: Record<string, string | number | boolean> = { page, limit };
       if (statuses && statuses.length > 0) {
@@ -154,6 +163,12 @@ export function useItems(
       if (borrowed) {
         params.borrowed = true;
       }
+      if (missingCover) {
+        params.missing_cover = true;
+      }
+      if (missingId) {
+        params.missing_id = true;
+      }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
@@ -173,6 +188,8 @@ export function useItems(
  * @param enabled - Whether the query is enabled
  * @param category - Category filter
  * @param formatFilter - Format filter
+ * @param missingCover - Filter manifestations missing a cover
+ * @param missingId - Filter manifestations missing an external identifier
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<CatalogEntry[]>>} Query result
  */
 export function useManifestations(
@@ -181,10 +198,12 @@ export function useManifestations(
   query?: string,
   enabled = true,
   category?: string,
-  formatFilter?: string
+  formatFilter?: string,
+  missingCover?: boolean,
+  missingId?: boolean
 ) {
   return useQuery({
-    queryKey: queryKeys.manifestations(page, limit, query, category, formatFilter),
+    queryKey: [...queryKeys.manifestations(page, limit, query, category, formatFilter), missingCover, missingId],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (query && query.length > 0) {
@@ -195,6 +214,12 @@ export function useManifestations(
       }
       if (formatFilter) {
         params.format = formatFilter;
+      }
+      if (missingCover) {
+        (params as Record<string, string | number | boolean>).missing_cover = true;
+      }
+      if (missingId) {
+        (params as Record<string, string | number | boolean>).missing_id = true;
       }
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;

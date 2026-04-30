@@ -26,6 +26,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
+import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 
 /**
@@ -47,7 +48,8 @@ function CollectionContent() {
     : [];
   const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
   const initialQuery = searchParams?.get("q") ?? "";
-  const initialBorrowed = searchParams?.get("borrowed") === "true";
+  const initialMissingCover = searchParams?.get("missing_cover") === "true";
+  const initialMissingId = searchParams?.get("missing_id") === "true";
 
   const [page, setPage] = useState(initialPage);
   const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
@@ -57,7 +59,8 @@ function CollectionContent() {
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
-  const [borrowedOnly, setBorrowedOnly] = useState(initialBorrowed);
+  const [missingCoverOnly, setMissingCoverOnly] = useState(initialMissingCover);
+  const [missingIdOnly, setMissingIdOnly] = useState(initialMissingId);
 
   // Keep search queries in sync if URL changes externally (e.g. from Navbar)
   const [lastUrlQuery, setLastUrlQuery] = useState(initialQuery);
@@ -82,25 +85,14 @@ function CollectionContent() {
     }
   }
 
-  // Automatically sync all states robustly back to the URL as they change
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (page > 1) params.set("page", page.toString());
-    if (sortBy !== "updated") params.set("sort", sortBy);
-
+  const statusFilters = useMemo(() => {
     const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
-    if (statuses.length > 0) params.set("statuses", statuses.join(","));
-    if (appliedQuery) params.set("q", appliedQuery);
-    if (viewMode !== "items") params.set("view", viewMode);
-    if (borrowedOnly) params.set("borrowed", "true");
+    // Separate 'borrowed' virtual status from DB statuses
+    return statuses.filter(s => s !== "borrowed");
+  }, [activeFilters]);
 
-    // Replace state blocks messy rapid history buildup while keeping deep link persistency active
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [page, sortBy, activeFilters, appliedQuery, viewMode, borrowedOnly, pathname, router]);
-
-  const statusFilters = useMemo(
-    () => activeFilters.filter(f => f.type === "status").map(f => f.value),
+  const isBorrowedFilterActive = useMemo(
+    () => activeFilters.some(f => f.type === "status" && f.value === "borrowed"),
     [activeFilters]
   );
 
@@ -114,6 +106,36 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  // Automatically sync all states robustly back to the URL as they change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", page.toString());
+    if (sortBy !== "updated") params.set("sort", sortBy);
+
+    const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
+    if (statuses.length > 0) params.set("statuses", statuses.join(","));
+    if (appliedQuery) params.set("q", appliedQuery);
+    if (viewMode !== "items") params.set("view", viewMode);
+    if (isBorrowedFilterActive) params.set("borrowed", "true");
+    if (missingCoverOnly) params.set("missing_cover", "true");
+    if (missingIdOnly) params.set("missing_id", "true");
+
+    // Replace state blocks messy rapid history buildup while keeping deep link persistency active
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [
+    page,
+    sortBy,
+    activeFilters,
+    appliedQuery,
+    viewMode,
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly,
+    pathname,
+    router,
+  ]);
+
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
     limit,
@@ -123,7 +145,9 @@ function CollectionContent() {
     viewMode === "items" && isLoggedIn,
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
     formatFilters.length > 0 ? formatFilters[0] : undefined,
-    borrowedOnly
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
@@ -132,7 +156,9 @@ function CollectionContent() {
     appliedQuery,
     viewMode === "manifestations",
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined
+    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    missingCoverOnly,
+    missingIdOnly
   );
 
   const { data: statsData } = useStats();
@@ -278,19 +304,33 @@ function CollectionContent() {
                   </button>
                 </div>
 
-                {viewMode === "items" && (
-                  <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={borrowedOnly}
-                      onChange={() => {
-                        setBorrowedOnly(!borrowedOnly);
-                        setPage(1);
-                      }}
-                      className="h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <span className="text-sm font-medium">Borrowed by me</span>
-                  </label>
+                {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={missingCoverOnly}
+                        onChange={() => {
+                          setMissingCoverOnly(!missingCoverOnly);
+                          setPage(1);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">No Cover</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={missingIdOnly}
+                        onChange={() => {
+                          setMissingIdOnly(!missingIdOnly);
+                          setPage(1);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">No ID</span>
+                    </label>
+                  </div>
                 )}
               </div>
             )}

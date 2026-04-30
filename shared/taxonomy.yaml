@@ -48,7 +48,7 @@ media_categories:
     label: "Audiobook"
     default_image_type: "front"
     image_types: ["disc", "cassette", "inlay", "slipcase"]
-    ui_icon: "Disc"
+    ui_icon: "Headphones"
     ui_aspect_ratio: 1.0
     ui_parent: "book"
     formats:

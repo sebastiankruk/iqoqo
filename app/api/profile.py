@@ -121,7 +121,7 @@ def search_users():
         return jsonify({"success": True, "data": []})
 
     limit_param = request.args.get("limit", 10, type=int)
-    if limit_param < 1:
+    if limit_param is None or limit_param < 1:
         return jsonify({"success": False, "data": None, "error": "Invalid limit parameter"}), 400
     limit = min(limit_param, 20)
 

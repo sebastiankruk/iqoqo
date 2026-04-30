@@ -121,7 +121,7 @@ def get_items():
     else:
         query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-    if category_filter or format_filter or sort_by in ("title", "title-desc", "author"):
+    if category_filter or format_filter or missing_cover or missing_id or sort_by in ("title", "title-desc", "author"):
         # We need to join these models if we have filters or specific sorting
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
         query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
@@ -134,13 +134,46 @@ def get_items():
         query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
 
     if missing_cover:
-        query = query.filter(db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""))
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                db.or_(
+                    Manifestation.meta["cover_url"].as_string().is_(None),
+                    Manifestation.meta["cover_url"].as_string() == "",
+                ),
+            )
+        )
     if missing_id:
-        query = query.filter(db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""))
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                db.or_(
+                    Manifestation.meta["barcode"].as_string().is_(None),
+                    Manifestation.meta["barcode"].as_string() == "",
+                ),
+                db.or_(
+                    Manifestation.meta["catalog_number"].as_string().is_(None),
+                    Manifestation.meta["catalog_number"].as_string() == "",
+                ),
+            )
+        )
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+        if "lent" in statuses_list and not borrowed_only:
+            # If 'lent' is selected specifically, they want items THEY lent out.
+            # So we exclude items they borrowed (which also have collection_status='lent').
+            query = query.filter(
+                db.or_(
+                    Item.status.in_([s for s in statuses_list if s != "lent"]),
+                    db.and_(Item.collection_status == "lent", Item.owner_id == user_id),
+                    Item.collection_status.in_([s for s in statuses_list if s != "lent"]),
+                )
+            )
+        else:
+            query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if sort_by == "title":
         query = query.order_by(Work.title.asc().nulls_last())
@@ -210,6 +243,7 @@ def get_item_detail(item_id: int):
 
     user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_borrowed = user_id and str(item.lent_to_user_id) == str(user_id)
     is_admin = False
     has_read_owners = False
 
@@ -225,8 +259,9 @@ def get_item_detail(item_id: int):
 
     item_data = {
         "id": item.id,
-        "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
+        "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed) else "Unavailable",
         "is_owner": is_owner,
+        "is_borrowed": is_borrowed,
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
@@ -235,11 +270,11 @@ def get_item_detail(item_id: int):
         "meta": item.meta,
     }
 
-    if is_owner or is_admin or (user_id and str(item.lent_to_user_id) == str(user_id)):
+    if is_owner or is_admin or is_borrowed:
         item_data["lent_to_user_id"] = item.lent_to_user_id
         item_data["lent_to_name"] = item.lent_to_name
 
-    if is_owner or is_admin or has_read_owners:
+    if is_owner or is_admin or has_read_owners or is_borrowed:
         owner = db.session.get(User, item.owner_id)
         if owner:
             item_data["owner_name"] = owner.display_name or owner.email

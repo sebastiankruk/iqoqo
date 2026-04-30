@@ -33,6 +33,7 @@ const collectionStatuses: { value: string; label: string; dot: string }[] = [
   { value: "wish_list", label: "On Wish List", dot: "bg-primary" },
   { value: "ordered", label: "Ordered", dot: "bg-orange-400" },
   { value: "available", label: "On Shelf", dot: "bg-chart-3" },
+  { value: "borrowed", label: "Borrowed by me", dot: "bg-cyan-500" },
   { value: "lent", label: "Lent Out", dot: "bg-accent" },
   { value: "damaged", label: "Damaged", dot: "bg-yellow-600" },
   { value: "lost", label: "Lost", dot: "bg-destructive" },

@@ -25,7 +25,7 @@ describe("ManualEntryForm", () => {
 
     expect(screen.getByText("Manual Item Entry")).toBeInTheDocument();
     expect(screen.getByDisplayValue("9780131103627")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Book")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Book (Generic)")).toBeInTheDocument();
   });
 
   it("handles form submission with correct data", async () => {

@@ -46,6 +46,7 @@ const mockItem = {
   cover_url: "/cover.jpg",
   cover_status: "ready",
   isbn: "9780544003415",
+  is_owner: true,
 } as unknown as Item;
 
 describe("ItemSidebar Component", () => {
@@ -110,6 +111,7 @@ describe("ItemSidebar Component", () => {
     const anonymizedItem = {
       ...mockItem,
       owner_id: "Unavailable",
+      is_owner: false,
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} />);
@@ -132,6 +134,7 @@ describe("ItemSidebar Component", () => {
     const anonymizedItem = {
       ...mockItem,
       owner_id: "Unavailable",
+      is_owner: false,
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} onEdit={vi.fn()} />);
