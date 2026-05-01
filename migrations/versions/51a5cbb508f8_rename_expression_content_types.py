@@ -1,7 +1,7 @@
 """rename_expression_content_types
 
 Revision ID: 51a5cbb508f8
-Revises: fix_llm_telemetry_sequence
+Revises: 9ed9e764c2b0
 Create Date: 2026-04-21 21:30:59.009915
 
 """

@@ -106,11 +106,12 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
 
     from app.config import Config
 
-    url = f"https://api.discogs.com/database/search?barcode={barcode}&type=release"
+    url = "https://api.discogs.com/database/search"
+    params = {"barcode": barcode, "type": "release"}
     headers = {"User-Agent": f"iqoqo/{Config.VERSION} ( info@iqoqo.cc )", "Authorization": auth_header}
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
@@ -149,11 +150,14 @@ def fetch_discogs_candidates(query: str, max_results: int = 5) -> list[dict]:
         logger.warning("No Discogs credentials found. Skipping Discogs candidate search.")
         return []
 
-    url = f"https://api.discogs.com/database/search?q={query}&type=release"
-    headers = {"User-Agent": "iqoqo/0.5.0 ( dev@kruk.me )", "Authorization": auth_header}
+    from app.config import Config
+
+    url = "https://api.discogs.com/database/search"
+    params = {"q": query, "type": "release"}
+    headers = {"User-Agent": f"iqoqo/{Config.VERSION} ( info@iqoqo.cc )", "Authorization": auth_header}
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         results = data.get("results") or []
@@ -183,8 +187,10 @@ def fetch_discogs_by_id(discogs_id: str) -> dict | None:
     else:
         return None
 
+    from app.config import Config
+
     url = f"https://api.discogs.com/releases/{discogs_id}"
-    headers = {"User-Agent": "iqoqo/0.5.0 ( dev@kruk.me )", "Authorization": auth_header}
+    headers = {"User-Agent": f"iqoqo/{Config.VERSION} ( info@iqoqo.cc )", "Authorization": auth_header}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)

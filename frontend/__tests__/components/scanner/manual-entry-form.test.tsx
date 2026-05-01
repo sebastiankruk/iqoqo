@@ -5,7 +5,7 @@
 // by the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi, describe, it, expect } from "vitest";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 

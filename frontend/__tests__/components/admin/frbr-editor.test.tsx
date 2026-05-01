@@ -44,6 +44,7 @@ describe("FrbrEditor Component", () => {
   });
 
   it("renders loading state initially", () => {
+    vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
     render(<FrbrEditor manifestationId={3} />);
     expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
   });

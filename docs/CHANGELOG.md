@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-04-29
+## [0.5.0] - 2026-05-01
 
 ### Added
 
@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Component Stability**: Resolved JSX syntax errors in the Puzzle and Video metadata components.
 - **Migration Chain Repair**: Fixed a broken Alembic migration chain where a revision referenced a non-existent ID (`fix_llm_telemetry_sequence`).
 - **Scanner Media Detection**: Hardened media type detection in the scanner API to correctly map generic hints (`audio`, `video`) to canonical formats.
+- **Security**: Patched PII Leakage/User Enumeration by enforcing exact matches on email wildcard searches.
 
 ### Database Migrations
 

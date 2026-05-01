@@ -132,3 +132,31 @@ vi.mock("@tanstack/react-query", async importOriginal => {
     }),
   };
 });
+
+/* ── Global axios mock ────────────────────────────────────────────────────── */
+vi.mock("axios", async importOriginal => {
+  const actual = await importOriginal<typeof import("axios")>();
+  const mockAxiosInstance = {
+    get: vi.fn().mockResolvedValue({ data: { success: true, data: [] } }),
+    post: vi.fn().mockResolvedValue({ data: { success: true, data: {} } }),
+    put: vi.fn().mockResolvedValue({ data: { success: true, data: {} } }),
+    delete: vi.fn().mockResolvedValue({ data: { success: true, data: {} } }),
+    interceptors: {
+      request: { use: vi.fn(), eject: vi.fn() },
+      response: { use: vi.fn(), eject: vi.fn() },
+    },
+    defaults: {
+      baseURL: "/api",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  };
+
+  return {
+    default: {
+      ...actual.default,
+      create: vi.fn().mockReturnValue(mockAxiosInstance),
+    },
+  };
+});

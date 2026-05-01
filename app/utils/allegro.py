@@ -90,12 +90,14 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
         # Step 1: Try Product Catalog as User (Preferred for clean metadata)
         # Use mode=GTIN only if barcode looks like a real EAN/UPC
         is_numeric_barcode = barcode.isdigit() and len(barcode) in (8, 10, 12, 13, 14)
-        mode_param = "&mode=GTIN" if is_numeric_barcode else ""
+        catalog_params = {"phrase": barcode}
+        if is_numeric_barcode:
+            catalog_params["mode"] = "GTIN"
 
         if os.path.isfile(_TOKEN_FILE):
             try:
-                catalog_url = f"https://api.allegro.pl/sale/products?phrase={barcode}{mode_param}"
-                cat_resp = requests.get(catalog_url, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+                catalog_url = "https://api.allegro.pl/sale/products"
+                cat_resp = requests.get(catalog_url, headers=headers, params=catalog_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
                 if cat_resp.status_code == 200:
                     cat_data = cat_resp.json()
                     products = cat_data.get("products", [])
@@ -129,8 +131,9 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
         # ONLY if catalog found nothing and we are NOT getting 403s
         # Note: listing API is often 403 for Client Credentials; we only try if we have a real token
         if os.path.isfile(_TOKEN_FILE):
-            listing_url = f"https://api.allegro.pl/offers/listing?phrase={barcode}"
-            response = requests.get(listing_url, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+            listing_url = "https://api.allegro.pl/offers/listing"
+            listing_params = {"phrase": barcode}
+            response = requests.get(listing_url, headers=headers, params=listing_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
             if response.status_code == 200:
                 data = response.json()
                 items = data.get("items", {})

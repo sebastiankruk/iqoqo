@@ -63,15 +63,17 @@ def upgrade():
 
     # Canonical mapping for valid statuses per category
     CATEGORY_PROGRESS = {
-        'text': {'want_to_read', 'reading', 'read'},
-        'music': {'want_to_listen', 'listening', 'listened'},
-        'movie': {'want_to_watch', 'watching', 'watched'},
+        'text': {'want_to_read', 'reading', 'read', 'dnf'},
+        'audiobook': {'want_to_listen', 'listening', 'listened', 'dnf'},
+        'music': {'want_to_listen', 'listened'},
+        'movie': {'want_to_watch', 'watched', 'dnf'},
         'board_game': {'want_to_play', 'playing', 'played'},
         'puzzle': {'want_to_play', 'playing', 'played'},
     }
     
     CATEGORY_DEFAULTS = {
         'text': 'want_to_read',
+        'audiobook': 'want_to_listen',
         'music': 'want_to_listen',
         'movie': 'want_to_watch',
         'board_game': 'want_to_play',

@@ -30,7 +30,7 @@ These statuses track the user's interaction progress with the content, categoriz
 
 | Status         | Description                                         |
 |:---------------|:----------------------------------------------------|
-| `want_to_read` | Alias for `wish_list`, specifically for text media. |
+| `want_to_read` | Intended for future reading.                        |
 | `reading`      | Content is currently being consumed.                |
 | `read`         | Content has been completed.                         |
 

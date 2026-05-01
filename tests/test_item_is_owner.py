@@ -42,7 +42,7 @@ def test_data(app):
         db.session.add(manif)
         db.session.flush()
 
-        item1 = Item(manifestation_id=manif.id, owner_id=user1.id, status="available")
+        item1 = Item(manifestation_id=manif.id, owner_id=user1.id, status="want_to_read", collection_status="available")
         db.session.add(item1)
         db.session.commit()
 
