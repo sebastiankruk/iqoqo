@@ -18,7 +18,7 @@
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, Loader2 } from "lucide-react";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";

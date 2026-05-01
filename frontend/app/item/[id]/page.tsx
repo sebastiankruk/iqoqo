@@ -18,7 +18,7 @@
 import { use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { HeroBanner } from "@/components/item/hero-banner";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";

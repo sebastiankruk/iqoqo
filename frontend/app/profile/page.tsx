@@ -20,7 +20,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
 import { useAppConfig } from "@/lib/api/hooks";
