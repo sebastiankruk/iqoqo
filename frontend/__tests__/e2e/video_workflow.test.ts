@@ -47,7 +47,7 @@ test.describe("Video Media Ingestion Workflow", () => {
 
     // 1. Mock the lookup endpoint for DVD barcode (TMDB)
     const testBarcode = "883929153526";
-    await page.route(`**/api/lookup/${testBarcode}?format=video`, async route => {
+    await page.route(`**/api/lookup/${testBarcode}?format=movie`, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -113,13 +113,13 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText("Tap to start camera")).toBeVisible();
 
     // 6. Select the Video format from the top pill menu
-    await page.getByRole("button", { name: "Video" }).click();
+    await page.getByRole("button", { name: "Movie" }).click();
 
     // 7. Switch to the Manual Search tab
     await page.getByRole("button", { name: "Manual Search" }).click();
 
     // 8. Enter barcode for a DVD
-    const barcodeInput = page.getByPlaceholder("Enter barcode or title...");
+    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 
@@ -129,7 +129,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Inception" added to your library!/i)).toBeVisible();

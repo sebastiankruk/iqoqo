@@ -152,7 +152,7 @@ test.describe("Audio Media Workflow", () => {
     const uploaderSection = page.getByText("Additional Scans");
     await expect(uploaderSection).toBeVisible({ timeout: 10000 });
 
-    const labelSelect = page.locator("select").filter({ hasText: "Disc / Vinyl" });
+    const labelSelect = page.locator("select").filter({ hasText: "Disc" });
     await expect(labelSelect).toBeVisible();
 
     await expect(page.getByText(/Upload [a-z]+ image/i)).toBeVisible();
@@ -160,7 +160,7 @@ test.describe("Audio Media Workflow", () => {
     // 9. Verify NO redundant format toggle (Book/CD/Vinyl) on the item page
     // It should be hidden because manifestation_id is passed to CameraCapture
     await expect(page.getByRole("button", { name: "BOOK" })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "CD" })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Music" })).not.toBeVisible();
   });
 
   test("should lookup and add an audio CD via generic scanner endpoint using UPC", async ({ page }) => {
@@ -226,13 +226,13 @@ test.describe("Audio Media Workflow", () => {
     await page.goto("/scan");
 
     // 4. Select the Audio format first
-    await page.getByRole("button", { name: "CD" }).click();
+    await page.getByRole("button", { name: "Music" }).click();
 
     // 5. Use the Manual Search tab
     await page.getByText("Manual Search").click();
 
     // 5. Submit 12-digit UPC (validates updated frontend regex rules)
-    await page.fill('input[placeholder="Enter barcode or title..."]', testBarcode);
+    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', testBarcode);
     await page.locator('button[type="submit"]').click();
 
     // 6. Verify the Success Card renders parsed audio metadata
@@ -242,11 +242,11 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByText("AUDIO", { exact: true })).toBeVisible(); // JS transformation check
 
     // 7. Verify the Audio format is active (selected) in the scanner header
-    // The CD button should be highlighted as the active format
-    await expect(page.getByRole("button", { name: "CD" })).toHaveClass(/bg-primary/);
+    // The Music button should be highlighted as the active format
+    await expect(page.getByRole("button", { name: "Music" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
-    await page.getByRole("button", { name: "Add to Collection" }).click();
+    await page.getByRole("button", { name: "Add to My Collection" }).click();
 
     // 8. Expect routing to newly ingested item details page
     await expect(page).toHaveURL(/.*\/item\/2/);

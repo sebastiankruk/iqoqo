@@ -17,6 +17,7 @@
 
 import { Puzzle, Factory, Ruler, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 
 interface ExtendedMetadataPuzzleProps {
   meta: Record<string, unknown>;
@@ -35,9 +36,19 @@ export function ExtendedMetadataPuzzle({ meta }: ExtendedMetadataPuzzleProps) {
   const manufacturer = meta["manufacturer"] as string | undefined;
   const artist = meta["artist"] as string | undefined;
   const puzzleType = meta["puzzle_type"] as string | undefined;
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
+      {coverUrl && (
+        <div className="flex justify-center mb-4">
+          <div className="w-full max-w-[300px] aspect-video rounded-xl overflow-hidden shadow-md border bg-secondary/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={coverUrl} alt="Puzzle Box" className="h-full w-full object-cover" />
+          </div>
+        </div>
+      )}
       <h3 className="font-bold text-lg text-foreground font-serif">Puzzle Details</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {pieceCount && (

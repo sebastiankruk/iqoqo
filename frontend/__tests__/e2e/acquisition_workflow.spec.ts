@@ -108,7 +108,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await page.getByRole("button", { name: "Manual Search" }).click();
 
       // 2. Fill the lookup field
-      await page.getByPlaceholder("Enter barcode or title...").fill("9780134685991");
+      await page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…").fill("9780134685991");
 
       // 3. Click search icon button
       await page.locator("button:has(svg.lucide-search)").click();
@@ -117,7 +117,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await expect(page.getByText("Test Book")).toBeVisible();
 
       // 4. Add to Collection
-      await page.getByRole("button", { name: "Add to Collection" }).click();
+      await page.getByRole("button", { name: "Add to My Collection" }).click();
 
       // Verify Success Route
       await expect(page).toHaveURL(/.*\/item\/123/);

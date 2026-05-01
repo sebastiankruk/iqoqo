@@ -1,6 +1,6 @@
 {
   "name": "iqoqo",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {

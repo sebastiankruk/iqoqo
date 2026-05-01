@@ -19,6 +19,13 @@ import { useState, useEffect } from "react";
 import { AdminUser, updateUser, getRoles } from "@/lib/api/admin";
 import { Loader2, X, ShieldAlert } from "lucide-react";
 
+/** Descriptions for system roles */
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  admin: "Full system access including user management, settings, and all custodian privileges.",
+  custodian: "Can manage catalog metadata, cover art, and FRBR entities. Cannot manage users or system settings.",
+  user: "Standard user. Can view the catalog, manage their own collection, and scan items.",
+};
+
 interface RbacSheetProps {
   /** The user to edit */
   user: AdminUser;
@@ -163,6 +170,11 @@ export function RbacSheet({ user, onClose, onUpdate, canEdit = false }: RbacShee
                       <span className="font-medium text-sm capitalize group-hover:text-primary transition-colors">
                         {role.name}
                       </span>
+                      {ROLE_DESCRIPTIONS[role.name.toLowerCase()] && (
+                        <span className="text-xs text-muted-foreground leading-snug mt-0.5">
+                          {ROLE_DESCRIPTIONS[role.name.toLowerCase()]}
+                        </span>
+                      )}
                     </div>
                   </label>
                 ))}

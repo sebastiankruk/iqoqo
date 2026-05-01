@@ -18,7 +18,7 @@
 import { X, ArrowDownUp } from "lucide-react";
 
 /** Filter type */
-export type FilterType = "status";
+export type FilterType = "status" | "category" | "format";
 
 /** Active filter */
 export interface ActiveFilter {
@@ -37,13 +37,24 @@ interface FilterBarProps {
 }
 
 const statusLabel: Record<string, string> = {
-  available: "On Shelf",
-  unread: "Unread",
-  reading: "Reading",
-  lent: "Lent Out",
-  lost: "Lost",
   wish_list: "On Wish List",
+  ordered: "Ordered",
+  available: "On Shelf",
+  lent: "Lent Out",
+  damaged: "Damaged",
+  lost: "Lost",
+  want_to_read: "Want to Read",
+  reading: "Reading",
   read: "Read",
+  want_to_listen: "Want to Listen",
+  listening: "Listening",
+  listened: "Listened",
+  want_to_watch: "Want to Watch",
+  watching: "Watching",
+  watched: "Watched",
+  want_to_play: "Want to Play",
+  playing: "Playing",
+  played: "Played",
 };
 
 /**
@@ -54,6 +65,8 @@ const statusLabel: Record<string, string> = {
  */
 function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "status") return `Status: ${statusLabel[filter.value] ?? filter.value}`;
+  if (filter.type === "category") return `Category: ${filter.value.replace("_", " ")}`;
+  if (filter.type === "format") return `Format: ${filter.value.replace("_", " ")}`;
   return filter.value;
 }
 
@@ -65,6 +78,8 @@ function chipLabel(filter: ActiveFilter): string {
  */
 function chipColor(filter: ActiveFilter): string {
   if (filter.type === "status") return "bg-accent/10 text-accent border-accent/20";
+  if (filter.type === "category") return "bg-primary/10 text-primary border-primary/20";
+  if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
   return "bg-secondary text-secondary-foreground border-border";
 }
 
@@ -89,7 +104,7 @@ export function FilterBar({
 }: FilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <p className="mr-1 text-sm text-muted-foreground">
+      <p className="mr-1 text-sm text-muted-foreground" data-testid="result-count">
         <span className="font-semibold text-foreground">{resultCount}</span> items
       </p>
 

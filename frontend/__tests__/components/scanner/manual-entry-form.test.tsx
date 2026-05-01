@@ -5,7 +5,7 @@
 // by the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi, describe, it, expect } from "vitest";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 
@@ -25,7 +25,7 @@ describe("ManualEntryForm", () => {
 
     expect(screen.getByText("Manual Item Entry")).toBeInTheDocument();
     expect(screen.getByDisplayValue("9780131103627")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Book")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Book (Generic)")).toBeInTheDocument();
   });
 
   it("handles form submission with correct data", async () => {
@@ -60,6 +60,7 @@ describe("ManualEntryForm", () => {
         publisher: "Prentice Hall",
         year: "",
         format: "book",
+        coverFile: null,
       });
     });
   });
@@ -74,5 +75,17 @@ describe("ManualEntryForm", () => {
     fireEvent.click(cancelBtn);
 
     expect(mockCancel).toHaveBeenCalledOnce();
+  });
+
+  it("renders a cover file input for manual cover upload", () => {
+    const mockSubmit = vi.fn();
+    const mockCancel = vi.fn();
+
+    render(<ManualEntryForm onSubmit={mockSubmit} onCancel={mockCancel} />);
+
+    expect(screen.getByLabelText(/Manual Cover Upload/i)).toBeInTheDocument();
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+    expect(fileInput).toHaveAttribute("accept", "image/*");
   });
 });

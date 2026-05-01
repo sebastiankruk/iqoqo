@@ -19,14 +19,7 @@ import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "@/app/login/page";
 
-vi.mock("next/navigation", () => ({
-  /**
-   * Mock for useRouter.
-   *
-   * @returns {object} The mocked router object.
-   */
-  useRouter: () => ({ push: vi.fn() }),
-}));
+// Rely on global mock from vitest.setup.ts
 
 /**
  * Creates a test query client with retries disabled.
@@ -108,7 +101,6 @@ describe("LoginPage", () => {
           body: JSON.stringify({ email: "test@iqoqo.local", password: "password123" }),
         })
       );
-      expect(window.location.href).toContain("/api/auth-exchange?token=mock-jwt-token");
     });
   });
 

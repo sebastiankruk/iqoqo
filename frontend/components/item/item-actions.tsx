@@ -167,12 +167,12 @@ export function ItemActions({ item }: { item: Item }) {
 
   return (
     <div className="mt-8 flex flex-col gap-6 rounded-2xl border bg-card/50 p-6 shadow-sm border-border/40">
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4 w-full">
         {/* Polymorphic quick actions */}
         {isBook && item.status !== "read" && (
           <button
             onClick={() => handleStatusUpdate(item.status === "reading" ? "read" : "reading")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
           >
             <BookOpen className="h-3.5 w-3.5" />
             {item.status === "reading" ? "Mark as Read" : "Log Reading Progress"}
@@ -182,7 +182,7 @@ export function ItemActions({ item }: { item: Item }) {
         {isAudio && item.status !== "listened" && (
           <button
             onClick={() => handleStatusUpdate(item.status === "listening" ? "listened" : "listening")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
           >
             <Music className="h-3.5 w-3.5" />
             {item.status === "listening" ? "Mark as Listened" : "Now Listening"}
@@ -191,18 +191,18 @@ export function ItemActions({ item }: { item: Item }) {
 
         {isVideo && item.status !== "watched" && (
           <button
-            onClick={() => handleStatusUpdate(item.status === "watching" ? "watched" : "watching")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+            onClick={() => handleStatusUpdate("watched")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
           >
             <Video className="h-3.5 w-3.5" />
-            {item.status === "watching" ? "Mark as Watched" : "Now Watching"}
+            Mark as Watched
           </button>
         )}
 
         {isGame && (
           <button
             onClick={() => handleStatusUpdate("played")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
           >
             <Gamepad2 className="h-3.5 w-3.5" />
             Log Play

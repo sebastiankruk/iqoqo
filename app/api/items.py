@@ -40,8 +40,13 @@ def get_items():
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
-    q = request.args.get("q", "").strip()
+    category_filter = request.args.get("category", None)
+    format_filter = request.args.get("format", None)
+    q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
+    borrowed_only = request.args.get("borrowed", "false").lower() == "true"
+    missing_cover = request.args.get("missing_cover", "false").lower() == "true"
+    missing_id = request.args.get("missing_id", "false").lower() == "true"
 
     try:
         page = int(page_param)
@@ -58,7 +63,18 @@ def get_items():
         from app.core.search_service import SearchService
 
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
-        total, results = SearchService.search_items(q, user_id, limit, offset, statuses=statuses_list)
+        total, results = SearchService.search_items(
+            q,
+            user_id,
+            limit,
+            offset,
+            statuses=statuses_list,
+            category=category_filter,
+            format_filter=format_filter,
+            borrowed_only=borrowed_only,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+        )
 
         items_data = []
         for row in results:
@@ -68,12 +84,17 @@ def get_items():
                     "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
                     "status": row["status"],
                     "collection_status": row["collection_status"],
+                    "lent_to_user_id": row.get("lent_to_user_id"),
+                    "lent_to_name": row.get("lent_to_name"),
                     "manifestation_id": row["manifestation_id"],
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
+                    "content_type": row.get("content_type"),
+                    "is_owner": str(row["owner_id"]) == str(g.user_id) if hasattr(g, "user_id") else False,
+                    "is_borrowed": str(row["owner_id"]) != str(g.user_id) if hasattr(g, "user_id") else False,
                     "added_at": row["added_at"].isoformat() if hasattr(row["added_at"], "isoformat") else row["added_at"],
                     "updated_at": (
                         (row.get("updated_at") or row["added_at"]).isoformat()
@@ -94,17 +115,65 @@ def get_items():
 
     # Standard sorting and querying
     query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-    query = query.filter(Item.owner_id == user_id)
+
+    if borrowed_only:
+        query = query.filter(Item.lent_to_user_id == user_id)
+    else:
+        query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+
+    if category_filter or format_filter or missing_cover or missing_id or sort_by in ("title", "title-desc", "author"):
+        # We need to join these models if we have filters or specific sorting
+        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+        query = query.outerjoin(Work, Expression.work_id == Work.id)
+
+    if category_filter:
+        query = query.filter(Expression.content_type == category_filter)
+
+    if format_filter:
+        query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+
+    if missing_cover:
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                db.or_(
+                    Manifestation.meta["cover_url"].as_string().is_(None),
+                    Manifestation.meta["cover_url"].as_string() == "",
+                ),
+            )
+        )
+    if missing_id:
+        query = query.filter(
+            db.and_(
+                db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                db.or_(
+                    Manifestation.meta["barcode"].as_string().is_(None),
+                    Manifestation.meta["barcode"].as_string() == "",
+                ),
+                db.or_(
+                    Manifestation.meta["catalog_number"].as_string().is_(None),
+                    Manifestation.meta["catalog_number"].as_string() == "",
+                ),
+            )
+        )
+
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
-
-    if sort_by in ("title", "title-desc", "author"):
-        query = (
-            query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            .outerjoin(Work, Expression.work_id == Work.id)
-        )
+        if "lent" in statuses_list and not borrowed_only:
+            # If 'lent' is selected specifically, they want items THEY lent out.
+            # So we exclude items they borrowed (which also have collection_status='lent').
+            query = query.filter(
+                db.or_(
+                    Item.status.in_([s for s in statuses_list if s != "lent"]),
+                    db.and_(Item.collection_status == "lent", Item.owner_id == user_id),
+                    Item.collection_status.in_([s for s in statuses_list if s != "lent"]),
+                )
+            )
+        else:
+            query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if sort_by == "title":
         query = query.order_by(Work.title.asc().nulls_last())
@@ -131,12 +200,15 @@ def get_items():
             work_title = work.title or ""
             authors = work.meta.get("authors", []) if work.meta else []
 
+        is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
         items_data.append(
             {
                 "id": item.id,
                 "owner_id": item.owner_id,
                 "status": item.status,
                 "collection_status": item.collection_status,
+                "lent_to_user_id": item.lent_to_user_id,
+                "lent_to_name": item.lent_to_name,
                 "manifestation_id": item.manifestation_id,
                 "isbn": manifestation.isbn13 if manifestation else None,
                 "title": work_title,
@@ -144,6 +216,9 @@ def get_items():
                 or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
                 "authors": authors,
+                "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
+                "is_owner": is_owner,
+                "is_borrowed": not is_owner,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }
@@ -168,6 +243,7 @@ def get_item_detail(item_id: int):
 
     user_id = getattr(g, "user_id", None)
     is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    is_borrowed = user_id and str(item.lent_to_user_id) == str(user_id)
     is_admin = False
     has_read_owners = False
 
@@ -183,7 +259,9 @@ def get_item_detail(item_id: int):
 
     item_data = {
         "id": item.id,
-        "owner_id": str(item.owner_id) if (is_owner or is_admin) else "Unavailable",
+        "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed) else "Unavailable",
+        "is_owner": is_owner,
+        "is_borrowed": is_borrowed,
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
@@ -192,7 +270,11 @@ def get_item_detail(item_id: int):
         "meta": item.meta,
     }
 
-    if is_owner or is_admin or has_read_owners:
+    if is_owner or is_admin or is_borrowed:
+        item_data["lent_to_user_id"] = item.lent_to_user_id
+        item_data["lent_to_name"] = item.lent_to_name
+
+    if is_owner or is_admin or has_read_owners or is_borrowed:
         owner = db.session.get(User, item.owner_id)
         if owner:
             item_data["owner_name"] = owner.display_name or owner.email
@@ -260,6 +342,11 @@ def update_item(item_id: int):
         item.collection_status = data["collection_status"]
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
         db.session.add(log)
+
+    if "lent_to_user_id" in data:
+        item.lent_to_user_id = data["lent_to_user_id"]
+    if "lent_to_name" in data:
+        item.lent_to_name = data["lent_to_name"]
 
     if data.get("meta"):
         item.meta = data["meta"]
@@ -343,7 +430,7 @@ def add_item(isbn: str):
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
     db.session.add(item)
     try:
         db.session.commit()
@@ -366,7 +453,7 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
     db.session.add(item)
     db.session.commit()
 
@@ -393,29 +480,59 @@ def add_item_manual():
     isbn = data.get("ISBN")
     pub_date_str = data.get("PublicationDate")
 
+    # Derive a sensible default progress status from the media format using canonical mapping.
+    from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, MediaCategory
+
+    _fmt_lower = (content_type or "").lower()
+    if _fmt_lower in MediaCategory.ALL:
+        category = _fmt_lower
+    else:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        category = FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+
+    default_status = CATEGORY_PROGRESS_STATUSES[category][0]
+
     try:
-        work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
-        db.session.add(work)
-        db.session.flush()
-
-        expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
-        db.session.add(expression)
-        db.session.flush()
-
-        manifestation = Manifestation(expression_id=expression.id, meta=data)
+        # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
+        existing_manifestation: Manifestation | None = None
+        normalised_isbn: str | None = None
         if isbn:
-            manifestation.isbn13 = str(isbn).replace("-", "").replace(" ", "").strip()
-        if pub_date_str:
-            from datetime import date
+            normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
+            existing_manifestation = Manifestation.query.filter_by(isbn13=normalised_isbn).first()
 
-            try:
-                manifestation.publication_date = date.fromisoformat(pub_date_str)
-            except (ValueError, TypeError):
-                pass
-        db.session.add(manifestation)
-        db.session.flush()
+        if existing_manifestation:
+            # Manifestation already exists — just create a new Item linked to it
+            manifestation = existing_manifestation
+        else:
+            work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
+            db.session.add(work)
+            db.session.flush()
 
-        item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="unread", collection_status="available", meta={})
+            expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+            db.session.add(expression)
+            db.session.flush()
+
+            manifestation = Manifestation(expression_id=expression.id, meta=data)
+            if normalised_isbn:
+                manifestation.isbn13 = normalised_isbn
+            if pub_date_str:
+                from datetime import date
+
+                try:
+                    manifestation.publication_date = date.fromisoformat(pub_date_str)
+                except (ValueError, TypeError):
+                    pass
+            db.session.add(manifestation)
+            db.session.flush()
+
+        item = Item(
+            manifestation_id=manifestation.id,
+            owner_id=user_id,
+            status=default_status,
+            collection_status="available",
+            meta={},
+        )
         db.session.add(item)
         db.session.commit()
 

@@ -75,7 +75,9 @@ describe("UserManagement Component", () => {
     await waitFor(() => expect(screen.getByText("test1@test.com")).toBeInTheDocument());
 
     // Click the table row
-    fireEvent.click(screen.getByText("test1@test.com"));
+    await waitFor(() => {
+      fireEvent.click(screen.getByText("test1@test.com"));
+    });
 
     // Assert the Sheet slide-over mounts
     expect(screen.getByText("User Access Control")).toBeInTheDocument();

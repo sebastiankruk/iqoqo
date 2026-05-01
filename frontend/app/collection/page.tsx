@@ -26,6 +26,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
+import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 
 /**
@@ -47,6 +48,8 @@ function CollectionContent() {
     : [];
   const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
   const initialQuery = searchParams?.get("q") ?? "";
+  const initialMissingCover = searchParams?.get("missing_cover") === "true";
+  const initialMissingId = searchParams?.get("missing_id") === "true";
 
   const [page, setPage] = useState(initialPage);
   const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
@@ -56,6 +59,16 @@ function CollectionContent() {
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+  const [missingCoverOnly, setMissingCoverOnly] = useState(initialMissingCover);
+  const [missingIdOnly, setMissingIdOnly] = useState(initialMissingId);
+
+  // Keep search queries in sync if URL changes externally (e.g. from Navbar)
+  const [lastUrlQuery, setLastUrlQuery] = useState(initialQuery);
+  if (initialQuery !== lastUrlQuery) {
+    setLastUrlQuery(initialQuery);
+    setSearchQuery(initialQuery);
+    setAppliedQuery(initialQuery);
+  }
 
   const limit = 40;
 
@@ -72,6 +85,27 @@ function CollectionContent() {
     }
   }
 
+  const statusFilters = useMemo(() => {
+    const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
+    // Separate 'borrowed' virtual status from DB statuses
+    return statuses.filter(s => s !== "borrowed");
+  }, [activeFilters]);
+
+  const isBorrowedFilterActive = useMemo(
+    () => activeFilters.some(f => f.type === "status" && f.value === "borrowed"),
+    [activeFilters]
+  );
+
+  const categoryFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "category").map(f => f.value),
+    [activeFilters]
+  );
+
+  const formatFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "format").map(f => f.value),
+    [activeFilters]
+  );
+
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
     const params = new URLSearchParams();
@@ -82,16 +116,25 @@ function CollectionContent() {
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
+    if (isBorrowedFilterActive) params.set("borrowed", "true");
+    if (missingCoverOnly) params.set("missing_cover", "true");
+    if (missingIdOnly) params.set("missing_id", "true");
 
     // Replace state blocks messy rapid history buildup while keeping deep link persistency active
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [page, sortBy, activeFilters, appliedQuery, viewMode, pathname, router]);
-
-  const statusFilters = useMemo(
-    () => activeFilters.filter(f => f.type === "status").map(f => f.value),
-    [activeFilters]
-  );
+  }, [
+    page,
+    sortBy,
+    activeFilters,
+    appliedQuery,
+    viewMode,
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly,
+    pathname,
+    router,
+  ]);
 
   const { data: itemsData, isLoading: itemsLoading } = useItems(
     page,
@@ -99,14 +142,23 @@ function CollectionContent() {
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
     sortBy,
-    viewMode === "items" && isLoggedIn
+    viewMode === "items" && isLoggedIn,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly
   );
 
   const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
     page,
     limit,
     appliedQuery,
-    viewMode === "manifestations"
+    viewMode === "manifestations",
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    missingCoverOnly,
+    missingIdOnly
   );
 
   const { data: statsData } = useStats();
@@ -126,7 +178,15 @@ function CollectionContent() {
     setPage(1);
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
-      return exists ? prev.filter(f => !(f.type === filter.type && f.value === filter.value)) : [...prev, filter];
+      if (exists) {
+        return prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+      } else {
+        // Enforce single-select for category and format
+        if (filter.type === "category" || filter.type === "format") {
+          return [...prev.filter(f => f.type !== filter.type), filter];
+        }
+        return [...prev, filter];
+      }
     });
   }, []);
 
@@ -140,17 +200,30 @@ function CollectionContent() {
     setActiveFilters([]);
   }, []);
 
+  const formatCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("format_")) {
+        counts[key.replace("format_", "")] = value as number;
+      }
+    }
+    return counts;
+  }, [statsData]);
+
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
-    return {
-      available: statsData.items_available,
-      lent: statsData.items_lent,
-      lost: statsData.items_lost,
-      wish_list: statsData.items_wish_list,
-      reading: statsData.items_reading,
-      read: statsData.items_read,
-      unread: statsData.items_unread ?? statsData.to_read,
-    };
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("items_")) {
+        counts[key.replace("items_", "")] = value as number;
+      }
+    }
+    // Also add to_read alias if want_to_read is missing
+    if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
+      counts.want_to_read = statsData.to_read;
+    }
+    return counts;
   }, [statsData]);
 
   const filteredItems = useMemo(() => {
@@ -201,33 +274,64 @@ function CollectionContent() {
 
           <div className="flex flex-wrap items-center gap-4">
             {isLoggedIn && (
-              <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
-                <button
-                  onClick={() => {
-                    setViewMode("items");
-                    setPage(1);
-                  }}
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "items"
-                      ? "bg-primary text-primary-foreground shadow"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  <BookOpen className="h-4 w-4" /> My Items
-                </button>
-                <button
-                  onClick={() => {
-                    setViewMode("manifestations");
-                    setPage(1);
-                  }}
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    viewMode === "manifestations"
-                      ? "bg-primary text-primary-foreground shadow"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  <LibraryIcon className="h-4 w-4" /> Global Library
-                </button>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+                  <button
+                    onClick={() => {
+                      setViewMode("items");
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "items"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <BookOpen className="h-4 w-4" /> My Items
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewMode("manifestations");
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "manifestations"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <LibraryIcon className="h-4 w-4" /> Global Library
+                  </button>
+                </div>
+
+                {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={missingCoverOnly}
+                        onChange={() => {
+                          setMissingCoverOnly(!missingCoverOnly);
+                          setPage(1);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">No Cover</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={missingIdOnly}
+                        onChange={() => {
+                          setMissingIdOnly(!missingIdOnly);
+                          setPage(1);
+                        }}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">No ID</span>
+                    </label>
+                  </div>
+                )}
               </div>
             )}
 
@@ -282,6 +386,7 @@ function CollectionContent() {
                 activeFilters={activeFilters}
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
+                formatCounts={formatCounts}
                 disableStatus={viewMode === "manifestations"}
               />
             </div>
@@ -335,6 +440,7 @@ function CollectionContent() {
         activeFilters={activeFilters}
         onToggleFilter={toggleFilter}
         statusCounts={statusCounts}
+        formatCounts={formatCounts}
       />
     </div>
   );

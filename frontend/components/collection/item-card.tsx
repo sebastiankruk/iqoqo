@@ -93,7 +93,8 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
   const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
 
-  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).owner_id !== "Unavailable";
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
+  const isBorrowed = !isCatalog && (item as Item).is_borrowed;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
@@ -183,6 +184,11 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
                     {dotTitle}
                   </span>
                 )}
+                {isBorrowed && (
+                  <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent whitespace-nowrap">
+                    Borrowed
+                  </span>
+                )}
                 {isCatalog && userOwns && (
                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
                     In Collection
@@ -233,6 +239,12 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
                 In Collection
+              </div>
+            )}
+            {isBorrowed && (
+              <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-accent">
+                <span className="inline-block h-3 w-3 rounded-full bg-accent/20" />
+                Borrowed
               </div>
             )}
           </div>

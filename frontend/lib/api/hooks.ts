@@ -34,10 +34,29 @@ export const queryKeys = {
    * @param statuses - Optional array of item statuses to filter by.
    * @param query - Optional search query string.
    * @param sort - Optional sort order (updated, added, title, title-desc, author).
-   * @returns {readonly ["items", number, number, string, string, string]} The query key for items.
+   * @param category - Optional category filter.
+   * @param formatFilter - Optional format filter.
+   * @returns The query key for items.
    */
-  items: (page = 1, limit = 20, statuses?: string[], query?: string, sort?: string) =>
-    ["items", page, limit, statuses?.join(",") ?? "", query ?? "", sort ?? ""] as const,
+  items: (
+    page = 1,
+    limit = 20,
+    statuses?: string[],
+    query?: string,
+    sort?: string,
+    category?: string,
+    formatFilter?: string
+  ) =>
+    [
+      "items",
+      page,
+      limit,
+      statuses?.join(",") ?? "",
+      query ?? "",
+      sort ?? "",
+      category ?? "",
+      formatFilter ?? "",
+    ] as const,
   /**
    * Query key for a single item.
    *
@@ -52,7 +71,8 @@ export const queryKeys = {
    * @returns {readonly ["isbn", string]} The query key for ISBN lookup.
    */
   isbn: (isbn: string) => ["isbn", isbn] as const,
-  manifestations: (page = 1, limit = 20, query?: string) => ["manifestations", page, limit, query ?? ""] as const,
+  manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
+    ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   config: ["config"] as const,
 };
@@ -96,13 +116,35 @@ export function useStats() {
  * @param query - Search query
  * @param sort - Sort order (updated, added, title, title-desc, author)
  * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param borrowed - Filter by borrowed status
+ * @param missingCover - Filter items missing a cover
+ * @param missingId - Filter items missing an external identifier
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
-export function useItems(page = 1, limit = 20, statuses?: string[], query?: string, sort?: string, enabled = true) {
+export function useItems(
+  page = 1,
+  limit = 20,
+  statuses?: string[],
+  query?: string,
+  sort?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  borrowed?: boolean,
+  missingCover?: boolean,
+  missingId?: boolean
+) {
   return useQuery({
-    queryKey: queryKeys.items(page, limit, statuses, query, sort),
+    queryKey: [
+      ...queryKeys.items(page, limit, statuses, query, sort, category, formatFilter),
+      borrowed,
+      missingCover,
+      missingId,
+    ],
     queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit };
+      const params: Record<string, string | number | boolean> = { page, limit };
       if (statuses && statuses.length > 0) {
         params.statuses = statuses.join(",");
       }
@@ -111,6 +153,21 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
       }
       if (sort) {
         params.sort = sort;
+      }
+      if (category) {
+        params.category = category;
+      }
+      if (formatFilter) {
+        params.format = formatFilter;
+      }
+      if (borrowed) {
+        params.borrowed = true;
+      }
+      if (missingCover) {
+        params.missing_cover = true;
+      }
+      if (missingId) {
+        params.missing_id = true;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
@@ -129,15 +186,40 @@ export function useItems(page = 1, limit = 20, statuses?: string[], query?: stri
  * @param limit - Items per page
  * @param query - Search query
  * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param missingCover - Filter manifestations missing a cover
+ * @param missingId - Filter manifestations missing an external identifier
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<CatalogEntry[]>>} Query result
  */
-export function useManifestations(page = 1, limit = 20, query?: string, enabled = true) {
+export function useManifestations(
+  page = 1,
+  limit = 20,
+  query?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  missingCover?: boolean,
+  missingId?: boolean
+) {
   return useQuery({
-    queryKey: queryKeys.manifestations(page, limit, query),
+    queryKey: [...queryKeys.manifestations(page, limit, query, category, formatFilter), missingCover, missingId],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (query && query.length > 0) {
         params.q = query;
+      }
+      if (category) {
+        params.category = category;
+      }
+      if (formatFilter) {
+        params.format = formatFilter;
+      }
+      if (missingCover) {
+        (params as Record<string, string | number | boolean>).missing_cover = true;
+      }
+      if (missingId) {
+        (params as Record<string, string | number | boolean>).missing_id = true;
       }
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
@@ -196,6 +278,25 @@ export function useIsbnLookup(isbn: string, enabled = false) {
     enabled: enabled && isbn.length >= 10,
     retry: false,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * Custom hook to search users by name or email.
+ *
+ * @param query - The search query
+ * @param enabled - Whether the query is enabled
+ * @returns {import('@tanstack/react-query').UseQueryResult<UserProfile[]>} Query result
+ */
+export function useUserSearch(query: string, enabled = false) {
+  return useQuery({
+    queryKey: ["users", "search", query],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<UserProfile[]>>("/profile/users/search", { params: { q: query } });
+      return res.data?.data ?? [];
+    },
+    enabled: enabled && query.trim().length >= 2,
+    staleTime: 60_000,
   });
 }
 

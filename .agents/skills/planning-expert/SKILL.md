@@ -22,7 +22,7 @@ This skill converts high-level product improvement descriptions into implementat
 
 The skill accepts product improvement descriptions from:
 
-- `.github/context/private-notes/plan/` folder
+- `.context/private-notes/plan/` folder
 - Direct prompts describing features with UI/UX objectives
 
 ## Core Directives

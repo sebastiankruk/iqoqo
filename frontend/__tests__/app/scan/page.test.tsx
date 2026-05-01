@@ -99,7 +99,7 @@ describe("ScanPage", () => {
     // Fill out form
     fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Test Title" } });
     fireEvent.change(screen.getByLabelText(/Creator\(s\)/i), { target: { value: "Test Author" } });
-    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "audio" } });
+    fireEvent.change(screen.getByLabelText(/Format/i), { target: { value: "music" } });
 
     // Submit form
     fireEvent.click(screen.getByText(/Save Manual Entry/i));
@@ -107,7 +107,7 @@ describe("ScanPage", () => {
     // Assert mutate was called
     expect(mutateMock).toHaveBeenCalledTimes(1);
     expect(mutateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "sound" }),
+      expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "music" }),
       expect.any(Object)
     );
   });

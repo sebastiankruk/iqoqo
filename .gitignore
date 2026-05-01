@@ -47,7 +47,7 @@ exports/*
 .venv*
 
 # AI
-.github/context
+.context
 
 # Process IDs
 .flask.pid
@@ -61,9 +61,14 @@ covers.tar.gz
 app/static/uploads/raw_covers/*
 app/static/uploads/covers/*
 
+# Backup
+backups/*
+
 # Testing
 test-results/
 playwright-report/
 
 # External services
 .allegro_token.json
+
+frontend/test_output.txt

@@ -40,10 +40,13 @@ export interface Expression {
   meta?: Record<string, unknown>;
 }
 
+import type { MediaFormat, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
+export * from "./taxonomy";
+
 /** Additional image attached to a manifestation (e.g., disc, inlay). */
 export interface AdditionalImage {
   url: string;
-  label: "front" | "back" | "disc" | "inlay" | "box" | "other" | string;
+  label: ImageType | string;
   added_at: string;
 }
 
@@ -61,7 +64,7 @@ export interface Manifestation {
   owner_count?: number;
   meta: {
     additional_images?: AdditionalImage[];
-    format?: "LP" | "45" | "EP" | "CD" | "CD-EP" | "Audiobook" | "Blu-ray" | "DVD" | "VHS" | "Board Game" | string;
+    format?: MediaFormat | string;
     catalog_number?: string;
     pressing_number?: string;
     matrix_number?: string;
@@ -109,10 +112,14 @@ export interface Item {
   id: number;
   manifestation_id: number;
   owner_id: string;
+  is_owner?: boolean;
   owner_name?: string | null;
   owner_count?: number;
   status: ProgressStatus;
   collection_status: CollectionStatus;
+  lent_to_user_id?: string | null;
+  lent_to_name?: string | null;
+  is_borrowed?: boolean;
   meta: Record<string, unknown>;
   added_at?: string;
   updated_at?: string;
@@ -126,34 +133,8 @@ export interface Item {
   work?: Pick<Work, "id" | "title" | "authors" | "meta">;
 }
 
-/** Physical/Collection status type */
-export type CollectionStatus = "available" | "lent" | "lost" | "wish_list" | "ordered" | "damaged";
-
-/** Media-specific progress status type */
-export type ProgressStatus =
-  | "unread"
-  | "reading"
-  | "read"
-  | "want_to_read"
-  | "listening"
-  | "listened"
-  | "want_to_listen"
-  | "watching"
-  | "watched"
-  | "want_to_watch"
-  | "playing"
-  | "played";
-
 /** Backward compatible alias for ProgressStatus */
 export type ItemStatus = ProgressStatus;
-
-/** Standard media formats used across the app */
-export const MEDIA_FORMATS = ["book", "cd", "vinyl", "audio", "video", "boardgame", "puzzle"] as const;
-export type MediaFormat = (typeof MEDIA_FORMATS)[number];
-
-/** High-level categories for scanning and manual entry */
-export const SCAN_FORMATS = ["book", "audio", "video", "boardgame", "puzzle"] as const;
-export type ScanFormat = (typeof SCAN_FORMATS)[number];
 
 /** API Response envelope */
 export interface ApiResponse<T> {
@@ -176,9 +157,10 @@ export interface DashboardStats {
   items: number;
   total_items: number;
   lent_items: number;
+  borrowed_items: number;
   to_read: number;
   items_available: number;
-  items_unread: number;
+  items_want_to_read: number;
   items_lent: number;
   items_lost: number;
   items_wish_list: number;
@@ -201,6 +183,7 @@ export interface IsbnMeta {
   format?: string;
   barcode?: string;
   isbn?: string;
+  identifier?: string;
   cover_url?: string;
   directors?: string[];
   Director?: string[];
@@ -218,6 +201,12 @@ export interface IsbnMeta {
   runtime?: number;
   Runtime?: number;
   meta?: Record<string, unknown>;
+  already_in_collection?: boolean;
+  item_id?: number | null;
+  manifestation_id?: number | null;
+  discogs_id?: string;
+  already_in_db?: boolean;
+  candidates?: IsbnMeta[];
 }
 
 /** User profile */

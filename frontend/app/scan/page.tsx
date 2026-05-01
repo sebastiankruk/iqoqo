@@ -25,6 +25,7 @@ import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
+import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { useAddManualItem } from "@/lib/api/hooks";
@@ -41,7 +42,9 @@ import { mapFormatToApi } from "@/lib/media";
  */
 export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
+  const [candidates, setCandidates] = useState<{ isbn: string; items: IsbnMeta[] } | null>(null);
   const [showManual, setShowManual] = useState(false);
+  const [initialIdentifier, setInitialIdentifier] = useState("");
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
@@ -56,20 +59,42 @@ export default function ScanPage() {
   const router = useRouter();
 
   const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
-    setResult({ isbn, meta });
+    // Prefer the backend-normalized identifier/barcode if available
+    const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
+
+    if (meta.candidates && meta.candidates.length > 1) {
+      setCandidates({ isbn: canonicalId, items: meta.candidates });
+    } else {
+      setResult({ isbn: canonicalId, meta });
+    }
   }, []);
 
   const handleDismiss = useCallback(() => {
     setResult(null);
+    setCandidates(null);
   }, []);
 
   const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }, file?: File) => {
     setTitle(data.Title || "");
     setAuthor(data.Authors?.join(", ") || "");
     if (file) setSnappedCover(file);
+    setInitialIdentifier("");
     setShowManual(true);
     toast.success("Cover metadata extracted! Please review.");
   }, []);
+
+  const handleShowManualForm = useCallback((isbn?: string) => {
+    setInitialIdentifier(isbn || "");
+    setShowManual(true);
+  }, []);
+
+  const handleExtractionFailure = useCallback(
+    (ean: string) => {
+      handleShowManualForm(ean);
+      toast.info("Switching to manual entry...");
+    },
+    [handleShowManualForm]
+  );
 
   const handleManualSubmit = async (data: ManualEntryData) => {
     const authors = data.authors
@@ -98,17 +123,20 @@ export default function ScanPage() {
     addManualMutation.mutate(payload, {
       onSuccess: async response => {
         const item = response.data;
-        if (item && snappedCover && item.manifestation_id) {
+        const coverToUpload = data.coverFile || snappedCover;
+
+        if (item && coverToUpload && item.manifestation_id) {
           const coverFormData = new FormData();
-          coverFormData.append("cover", snappedCover);
+          coverFormData.append("cover", coverToUpload);
           try {
             await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
             toast.success(`"${payload.Title}" added with your custom cover!`);
           } catch (e) {
-            console.error("Failed to upload captured cover:", e);
-            toast.warning(`"${payload.Title}" added, but cover upload failed.`);
+            const errMsg = (e as Error)?.message || "Cover upload failed";
+            console.error("Failed to upload cover:", e);
+            toast.error(`"${payload.Title}" added, but cover upload failed: ${errMsg}`);
           }
         } else {
           toast.success(`"${payload.Title}" added to your library!`);
@@ -158,14 +186,42 @@ export default function ScanPage() {
           onScannerStateChange={setScannerActive}
           onTabChange={setScannerTab}
           onExtractComplete={handleExtractComplete}
-          onShowManualForm={() => setShowManual(true)}
+          onExtractionFailure={handleExtractionFailure}
+          onShowManualForm={handleShowManualForm}
           format={activeFormat}
           torchOn={torchOn}
           onTorchCapabilityFound={setHasTorch}
         />
       )}
       {result && (
-        <SuccessCard isbn={result.isbn} meta={result.meta} onDismiss={handleDismiss} snappedCover={snappedCover} />
+        <SuccessCard
+          isbn={result.isbn}
+          meta={result.meta}
+          onDismiss={handleDismiss}
+          snappedCover={snappedCover}
+          onShowManualForm={handleShowManualForm}
+        />
+      )}
+
+      {candidates && (
+        <DisambiguationSheet
+          candidates={candidates.items}
+          onSelect={choice => {
+            setCandidates(null);
+            // Derive a stable identifier from the selected candidate
+            const selectedIdentifier =
+              (typeof choice === "object" &&
+                choice !== null &&
+                "identifier" in choice &&
+                (choice.identifier as string)) ||
+              (typeof choice === "object" && choice !== null && "barcode" in choice && (choice.barcode as string)) ||
+              (typeof choice === "object" && choice !== null && "isbn" in choice && (choice.isbn as string)) ||
+              candidates.isbn;
+
+            setResult({ isbn: selectedIdentifier, meta: choice });
+          }}
+          onDismiss={handleDismiss}
+        />
       )}
 
       {showManual && (
@@ -176,6 +232,7 @@ export default function ScanPage() {
             initialTitle={title}
             initialAuthors={author}
             initialFormat={activeFormat}
+            initialIdentifier={initialIdentifier}
           />
         </div>
       )}

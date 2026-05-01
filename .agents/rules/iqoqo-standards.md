@@ -1,15 +1,15 @@
 ---
 trigger: always_on
----
-
----
 description: "Global coding standards and architectural rules for the iqoqo project."
 ---
+
+Talk like caveman
+
 # iqoqo Global Project Rules
 
 ## Decision Making & Feature Preservation
 
-- **Plan Over Comments:** The project plan files in `.github/context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
+- **Plan Over Comments:** The project plan files in `.context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
 
 ## General Architectural Principles
 
@@ -23,12 +23,15 @@ description: "Global coding standards and architectural rules for the iqoqo proj
 
 - **Typing:** Use strict Python type hints (`typing` module) for all function signatures and return types.
 - **ORM:** Use SQLAlchemy 2.0 style syntax (e.g., `select()`, `session.execute()`). Avoid legacy `Query` usage.
-- **Linting:** Code must pass `pylint` and `flake8` without warnings. Use `# noqa` only when absolutely necessary and add a comment explaining why.
+- **Formatting:** ALWAYS run `make format-python` after changing Python code.
+- **Linting:** Code must pass `pylint`, `ruff`, and `mypy` without warnings (`make lint`). Use `# noqa` only when absolutely necessary and add a comment explaining why.
 - **Pylint & SQLAlchemy:** `pylint` falsely flags SQLAlchemy's `func.count` as not callable (`E1102`). Whenever you write `func.count()`, immediately append `# pylint: disable=not-callable` to the line to prevent CI failures.
 - **API Responses:** All API responses must be JSON. Use consistent error formatting: `{"error": "description", "code": 400}`.
 - **Aggregates:** Prefer `GROUP BY` aggregate queries over dictionary comprehensions that execute N+1 `COUNT` queries.
 
 ## Frontend (Next.js / TypeScript)
+
+- **Formatting:** ALWAYS run `make format-js` after changing JS/TS code.
 
 - **Framework:** Use Next.js 16+ App Router (`app/` directory). Do not use the legacy `pages/` router.
 - **Components:** Write functional components using React hooks. Do not use class components.

@@ -81,7 +81,7 @@ def update_consent():
 # Add PUT and DELETE to profile_bp in app/api/profile.py
 
 
-@profile_bp.route("/", methods=["PUT"])
+@profile_bp.route("/", methods=["PUT"], strict_slashes=False)
 @require_auth
 def update_profile():
     data = request.get_json()
@@ -96,7 +96,7 @@ def update_profile():
     return jsonify({"message": "Profile updated successfully", "display_name": user.display_name})
 
 
-@profile_bp.route("/", methods=["DELETE"])
+@profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
 @require_auth
 def delete_profile():
     """Right to be forgotten: Deletes user, their items, and consents."""
@@ -110,3 +110,55 @@ def delete_profile():
     db.session.commit()
 
     return jsonify({"message": "Account and all associated data permanently deleted."}), 200
+
+
+def _mask_email(email: str) -> str:
+    """Masks an email to prevent PII scraping (e.g., a***z@example.com)."""
+    if not email or "@" not in email:
+        return email
+    local, domain = email.split("@", 1)
+    if len(local) > 2:
+        local = f"{local[0]}***{local[-1]}"
+    else:
+        local = f"{local[0]}***"
+    return f"{local}@{domain}"
+
+
+@profile_bp.route("/users/search", methods=["GET"], strict_slashes=False)
+@require_auth
+def search_users():
+    """Search for other users by exact email or partial display name."""
+    query = request.args.get("q", "").strip()
+    if not query or len(query) < 2:
+        return jsonify({"success": True, "data": []})
+
+    limit_param = request.args.get("limit", 10, type=int)
+    if limit_param is None or limit_param < 1:
+        return jsonify({"success": False, "data": None, "error": "Invalid limit parameter"}), 400
+    limit = min(limit_param, 20)
+
+    current_user_id = getattr(g, "user_id", None)
+
+    users = (
+        User.query.filter(
+            db.and_(
+                User.is_active.is_(True),
+                User.id != current_user_id,
+                db.or_(User.email == query.lower(), User.display_name.ilike(f"%{query}%")),
+            )
+        )
+        .limit(limit)
+        .all()
+    )
+
+    results = [
+        {
+            "id": str(u.id),
+            "email": u.email if u.email == query.lower() else _mask_email(u.email),
+            "display_name": u.display_name,
+            "avatar_url": u.avatar_url,
+        }
+        for u in users
+    ]
+
+    return jsonify({"success": True, "data": results})

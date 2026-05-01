@@ -96,6 +96,7 @@ class DataManager:
                     "manifestation_id": item.manifestation_id,
                     "owner_id": str(item.owner_id) if item.owner_id else None,
                     "status": item.status,
+                    "collection_status": item.collection_status,
                     "condition": item.condition,
                     "added_at": item.added_at.isoformat() if item.added_at else None,
                     "meta": item.meta,
@@ -227,7 +228,8 @@ class DataManager:
             item = Item(
                 manifestation_id=new_manif_id,
                 owner_id=owner_id,
-                status=item_data.get("status", "available"),
+                status=item_data.get("status", "want_to_read"),
+                collection_status=item_data.get("collection_status", "available"),
                 condition=item_data.get("condition"),
                 added_at=added_at,
                 meta=item_data.get("meta", {}),
@@ -288,17 +290,46 @@ class DataManager:
         """
         from sqlalchemy import func, select
 
-        # Single GROUP BY query replaces one COUNT per status (was 7+ round-trips).
+        # Group by Item.status (progress) and Item.collection_status
         owner_filter = [Item.owner_id == owner_id] if owner_id else []
-        rows = db.session.execute(
+        status_rows = db.session.execute(
             select(Item.status, func.count(Item.id).label("cnt")).where(*owner_filter).group_by(Item.status)  # pylint: disable=not-callable
         ).all()
+        collection_status_rows = db.session.execute(
+            select(Item.collection_status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+            .where(*owner_filter)
+            .group_by(Item.collection_status)
+        ).all()
+
+        format_rows = db.session.execute(
+            select(Expression.content_type, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+            .select_from(Item)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .where(*owner_filter)
+            .group_by(Expression.content_type)
+        ).all()
+
+        borrowed_count = 0
+        if owner_id:
+            borrowed_count = (
+                db.session.execute(
+                    select(func.count(Item.id)).where(Item.lent_to_user_id == owner_id)  # pylint: disable=not-callable
+                ).scalar()
+                or 0
+            )
+
         status_counts: dict[str, int] = dict.fromkeys(ITEM_STATUSES, 0)
         total = 0
-        for status, cnt in rows:
+
+        for status, cnt in status_rows:
             if status in status_counts:
-                status_counts[status] = cnt
+                status_counts[status] += cnt
             total += cnt
+
+        for c_status, cnt in collection_status_rows:
+            if c_status in status_counts:
+                status_counts[c_status] += cnt
 
         if owner_id:
             # Single aggregate query for user-scoped FRBR entity counts using joins.
@@ -333,7 +364,10 @@ class DataManager:
             # UI-friendly aliases expected by the React dashboard
             "total_items": total,
             "lent_items": status_counts["lent"],
+            "borrowed_items": borrowed_count,
             "to_read": status_counts["wish_list"],
             # Per-status counts (items_available, items_lent, …)
             **{f"items_{s}": count for s, count in status_counts.items()},
+            # Per-format counts
+            **{f"format_{f}": count for f, count in format_rows},
         }

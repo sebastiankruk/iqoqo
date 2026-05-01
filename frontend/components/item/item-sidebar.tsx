@@ -15,16 +15,26 @@
 //
 "use client";
 
+import * as React from "react";
 import { ChangeEvent } from "react";
 import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { useUpdateItem, useProfile } from "@/lib/api/hooks";
+import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   // Collection (Physical)
@@ -44,7 +54,8 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   want_to_listen: { label: "Want to Listen", class: "bg-sky-50 text-sky-700 ring-sky-200" },
   watching: { label: "Watching...", class: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
   watched: { label: "Watched", class: "bg-violet-50 text-violet-700 ring-violet-200" },
-  want_to_watch: { label: "Want to Watch", class: "bg-purple-50 text-purple-700 ring-purple-200" },
+  want_to_watch: { label: "Want to Watch", class: "bg-indigo-50/50 text-indigo-600 ring-indigo-200" },
+  want_to_play: { label: "Want to Play", class: "bg-rose-50/50 text-rose-600 ring-rose-200" },
   played: { label: "Played", class: "bg-rose-50 text-rose-700 ring-rose-200" },
   playing: { label: "Playing...", class: "bg-pink-50 text-pink-700 ring-pink-200" },
 };
@@ -68,8 +79,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const coverUrl =
     getCoverUrl(item.cover_url || undefined, timestamp) ??
-    (item.manifestation_meta?.["cover_url"] as string | undefined) ??
-    (item.meta?.["cover_url"] as string | undefined);
+    getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ??
+    getCoverUrl(item.meta?.["cover_url"] as string | undefined, timestamp);
 
   const updateItem = useUpdateItem(item.id);
   const { data: profile } = useProfile();
@@ -78,7 +89,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
   const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const isOwner = item.owner_id !== "Unavailable";
+  const isOwner = !!item.is_owner;
   const canModifyItem = isOwner || hasUpdateItemPermission;
 
   // Media type detection
@@ -110,6 +121,14 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     router.refresh();
   };
 
+  const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);
+  const [borrowerName, setBorrowerName] = React.useState(item.lent_to_name || "");
+  const [borrowerId, setBorrowerId] = React.useState<string | undefined>(item.lent_to_user_id || undefined);
+
+  // Hook for user search, enabled when borrowerName is typed and doesn't exactly match the selected ID
+  const [searchFocused, setSearchFocused] = React.useState(false);
+  const { data: searchResults, isLoading: isSearching } = useUserSearch(borrowerName, searchFocused);
+
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
     updateItem.mutate(
@@ -123,10 +142,42 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const handleCollectionStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["collection_status"];
+
+    if (newStatus === "lent") {
+      setIsLentDialogOpen(true);
+      return;
+    }
+
+    // If moving away from 'lent', we should clear the borrower info
+    const updatePayload: Partial<Item> = { collection_status: newStatus };
+    if (item.collection_status === "lent") {
+      updatePayload.lent_to_name = null;
+      updatePayload.lent_to_user_id = null;
+    }
+
+    updateItem.mutate(updatePayload, {
+      onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+      onError: e => toast.error((e as Error).message),
+    });
+  };
+
+  const handleLentSubmit = () => {
+    if (!borrowerName.trim()) {
+      toast.error("Please enter a borrower name");
+      return;
+    }
+
     updateItem.mutate(
-      { collection_status: newStatus },
       {
-        onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+        collection_status: "lent",
+        lent_to_name: borrowerName.trim(),
+        lent_to_user_id: borrowerId || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Item marked as lent to ${borrowerName}`);
+          setIsLentDialogOpen(false);
+        },
         onError: e => toast.error((e as Error).message),
       }
     );
@@ -190,6 +241,22 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           {progressStatusInfo.label?.toUpperCase() || "UNKNOWN"}
         </span>
       </div>
+
+      {/* Lending info */}
+      {(item.collection_status === "lent" || item.is_borrowed) && (
+        <div className="flex flex-col items-center gap-1">
+          {item.collection_status === "lent" && item.lent_to_name && (
+            <p className="text-center text-[10px] font-bold uppercase tracking-wider text-orange-600">
+              Lent to: <span className="text-foreground">{item.lent_to_name}</span>
+            </p>
+          )}
+          {item.is_borrowed && item.owner_name && (
+            <p className="text-center text-[10px] font-bold uppercase tracking-wider text-blue-600">
+              Borrowed from: <span className="text-foreground">{item.owner_name}</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ISBN */}
       {item.isbn && <p className="text-center text-xs text-muted-foreground">ISBN: {item.isbn}</p>}
@@ -269,9 +336,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 )}
                 {isGame && (
                   <optgroup label="Gaming Progress">
-                    {["playing", "played"].map(key => (
-                      <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
-                        {STATUS_LABELS[key]?.label || key}
+                    {["want_to_play", "playing", "played"].map(s => (
+                      <option key={s} value={s} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[s]?.label || s}
                       </option>
                     ))}
                   </optgroup>
@@ -328,7 +395,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         )}
 
         {canModifyItem && hasEditPermission && (
-          <MultiImageUploader manifestationId={item.manifestation_id} onUploadComplete={handleUploadComplete} />
+          <MultiImageUploader
+            manifestationId={item.manifestation_id}
+            currentItemFormat={format}
+            onUploadComplete={handleUploadComplete}
+          />
         )}
       </div>
 
@@ -352,6 +423,81 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           )}
         </div>
       </div>
+
+      <Dialog open={isLentDialogOpen} onOpenChange={setIsLentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lent Out Item</DialogTitle>
+            <DialogDescription>
+              Who are you lending this item to? This helps you keep track of your physical collection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label
+              htmlFor="borrower-name"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Borrower Name
+            </label>
+            <div className="relative">
+              <input
+                id="borrower-name"
+                className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Search user or enter name..."
+                value={borrowerName}
+                onChange={e => {
+                  setBorrowerName(e.target.value);
+                  setBorrowerId(undefined); // Reset ID if user types something new
+                }}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                onKeyDown={e => e.key === "Enter" && handleLentSubmit()}
+                autoFocus
+                autoComplete="off"
+              />
+              {searchFocused && borrowerName.trim().length >= 2 && (
+                <div className="absolute z-50 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md outline-none">
+                  <ul className="max-h-48 overflow-y-auto py-1">
+                    {isSearching ? (
+                      <li className="px-3 py-2 text-sm text-muted-foreground">Searching...</li>
+                    ) : searchResults && searchResults.length > 0 ? (
+                      searchResults.map(user => (
+                        <li
+                          key={user.id}
+                          className="px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between"
+                          onMouseDown={e => {
+                            e.preventDefault(); // Prevent blur
+                            setBorrowerName(user.display_name || user.email);
+                            setBorrowerId(user.id);
+                            setSearchFocused(false);
+                          }}
+                        >
+                          <span className="font-medium">{user.display_name || user.email}</span>
+                          <span className="text-xs text-muted-foreground ml-2 truncate max-w-[120px]">
+                            {user.email}
+                          </span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-3 py-2 text-sm text-muted-foreground">
+                        No users found. Will save as plain name.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLentSubmit} disabled={updateItem.isPending}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -15,6 +15,7 @@
 //
 import { Badge } from "@/components/ui/badge";
 import { BggAttribution } from "@/components/ui/bgg-attribution";
+import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 
 interface ExtendedMetadataBoardGameProps {
   meta: Record<string, unknown>;
@@ -28,16 +29,26 @@ interface ExtendedMetadataBoardGameProps {
  * @returns {JSX.Element | null} The component or null if no relevant metadata
  */
 export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGameProps) {
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
   const minPlayers = (meta.min_players || meta.MinPlayers) as number | undefined;
   const maxPlayers = (meta.max_players || meta.MaxPlayers) as number | undefined;
   const playingTime = (meta.playing_time || meta.playtime || meta.max_playtime || meta.PlayTime) as number | undefined;
   const mechanics = (meta.mechanics || meta.Mechanics) as string[] | undefined;
   const source = meta.Source as string | undefined;
 
-  if (!minPlayers && !maxPlayers && !playingTime && !mechanics?.length && source !== "BGG") return null;
+  if (!minPlayers && !maxPlayers && !playingTime && !mechanics?.length && source !== "BGG" && !coverUrl) return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
+      {coverUrl && (
+        <div className="flex justify-center mb-4">
+          <div className="w-full max-w-[300px] aspect-square rounded-xl overflow-hidden shadow-md border bg-secondary/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={coverUrl} alt="Board Game Box" className="h-full w-full object-cover" />
+          </div>
+        </div>
+      )}
       <h3 className="font-bold text-lg text-foreground font-serif">Game Details</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
         {(minPlayers || maxPlayers) && (

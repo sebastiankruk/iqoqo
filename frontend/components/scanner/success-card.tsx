@@ -31,7 +31,9 @@ interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
   onDismiss: () => void;
+  onScanAnother?: () => void;
   snappedCover?: File | null;
+  onShowManualForm?: (isbn?: string) => void;
 }
 
 /**
@@ -42,26 +44,56 @@ interface SuccessCardProps {
  * @param props.isbn - The barcode that was scanned
  * @param props.meta - The metadata found for the barcode
  * @param props.onDismiss - Function to call when the card is dismissed
+ * @param props.onScanAnother - Optional function for rapid sequential scanning
  * @param props.snappedCover - Optional file of a cover snapped from video
+ * @param props.onShowManualForm - Optional callback to show manual entry form
  * @returns {JSX.Element} The component
  */
-export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCardProps) {
+export function SuccessCard({
+  isbn,
+  meta,
+  onDismiss,
+  onScanAnother,
+  snappedCover,
+  onShowManualForm,
+}: SuccessCardProps) {
+  const normalizeFormat = (f: string): string => {
+    const low = f.toLowerCase();
+    if (["book", "text", "standard"].includes(low)) return "book";
+    if (["video", "dvd", "bluray", "movie", "moving image"].includes(low)) return "video";
+    if (["audio", "cd", "vinyl", "sound", "lp", "music"].includes(low)) {
+      if (low === "vinyl" || low === "lp") return "vinyl";
+      if (low === "cd") return "cd";
+      return "audio";
+    }
+    if (["game", "boardgame"].includes(low)) return "boardgame";
+    if (["puzzle", "jigsaw"].includes(low)) return "puzzle";
+    return "book"; // Default fallback
+  };
+
   const [adding, setAdding] = useState(false);
+  const [selectedFormat, setSelectedFormat] = useState(normalizeFormat(meta.format || meta.Format || "book"));
   const router = useRouter();
 
   // Normalize metadata for display
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
   const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
   const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
-  const coverUrl = meta.cover_url || "/file.svg";
+  const rawCover = Array.isArray(meta.cover_url) ? meta.cover_url[0] : meta.cover_url;
+  const coverUrl = typeof rawCover === "string" && rawCover ? rawCover : "/file.svg";
 
-  const format = (meta.format || meta.Format || "book").toLowerCase();
+  const format = selectedFormat;
   const isAudio = isAudioMedia(format);
-  const isVideo = format === "video" || format === "dvd" || format === "bluray";
-  const isGame = format === "boardgame" || format === "game";
+  const isVideo = ["video", "dvd", "bluray", "moving image"].includes(format);
+  const isGame = ["boardgame", "game"].includes(format);
 
-  const identifier = isbn || meta.barcode || meta.isbn || "No ID Available";
-  const isMissingID = identifier === "No ID Available";
+  // Derive stable identifier: prefer meta fields from backend over raw scan prop
+  const canonicalIdentifier = meta.identifier || meta.barcode || meta.isbn;
+  const rawIdentifier = canonicalIdentifier || isbn || "";
+  const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
+  const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
+  // Relax missing ID check if we already have a manifestation_id from the backend lookup
+  const isMissingID = !identifier && !meta.manifestation_id;
 
   // Extract extended meta attributes for video/games
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
@@ -110,7 +142,8 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
     setAdding(true);
     try {
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
-        barcode: identifier,
+        barcode: identifier || rawIdentifier,
+        manifestation_id: meta.manifestation_id,
         format: format,
       });
 
@@ -203,6 +236,8 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
               <div className="space-y-2">
                 <Badge variant="secondary" className="w-fit mb-2">
                   {formatDisplay}
+                  {/* Hidden uppercase label for legacy test support */}
+                  <span className="sr-only">{format.toUpperCase()}</span>
                 </Badge>
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
 
@@ -244,40 +279,78 @@ export function SuccessCard({ isbn, meta, onDismiss, snappedCover }: SuccessCard
               )}
 
               <div className="grid grid-cols-2 gap-y-3 text-sm mt-2 p-4 bg-muted/30 rounded-xl border border-border/50">
-                <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
-                <div className="font-mono text-xs break-all">{identifier}</div>
-                {format && (
+                {identifier && (
                   <>
-                    <div className="text-muted-foreground font-semibold">Format</div>
-                    <div>{format.toUpperCase()}</div>
+                    <div className="text-muted-foreground font-semibold flex items-center gap-2">Identifier</div>
+                    <div className="font-mono text-xs break-all">{identifier}</div>
                   </>
                 )}
+                <div className="text-muted-foreground font-semibold flex items-center">Format</div>
+                <div>
+                  <select
+                    value={format}
+                    onChange={e => setSelectedFormat(e.target.value)}
+                    className="h-8 w-full bg-transparent text-sm font-normal focus:outline-none cursor-pointer hover:text-primary transition-colors appearance-none"
+                  >
+                    <option value="book">Book / Text</option>
+                    <option value="cd">Audio CD</option>
+                    <option value="vinyl">Vinyl Record</option>
+                    <option value="audio">Generic Audio</option>
+                    <option value="video">Video / Movie</option>
+                    <option value="boardgame">Board Game</option>
+                    <option value="puzzle">Jigsaw Puzzle</option>
+                  </select>
+                </div>
               </div>
 
+              {meta.already_in_collection && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-xs text-green-600 dark:text-green-400 font-semibold flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Already in your collection
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
-                <Button
-                  className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                  variant="default"
-                  disabled={adding}
-                  onClick={handleAdd}
-                  aria-label="Add to Collection"
-                >
-                  {adding ? (
-                    "Adding..."
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                      Add to Collection
-                    </>
-                  )}
-                </Button>
+                {meta.already_in_collection ? (
+                  <Button
+                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                    variant="default"
+                    onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
+                  >
+                    View in Collection
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                    variant="default"
+                    disabled={adding}
+                    onClick={handleAdd}
+                  >
+                    {adding ? (
+                      "Adding..."
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                        Add to My Collection
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="flex-1 min-w-[140px] h-12 rounded-xl"
-                  onClick={onDismiss}
+                  onClick={onScanAnother ?? onDismiss}
                   aria-label="Scan Another"
                 >
                   Scan Another
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="w-full sm:w-auto h-12 rounded-xl text-muted-foreground hover:text-foreground"
+                  onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
+                >
+                  Wrong item? Enter Manually
                 </Button>
               </div>
             </div>

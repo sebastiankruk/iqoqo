@@ -15,7 +15,7 @@
 //
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
 
 interface CoverCanvasProps {
@@ -74,6 +74,14 @@ export function CoverCanvas({
       setCrop(centerAspectCrop(width, height, aspect));
     }
   };
+
+  // Re-calculate crop when aspect ratio changes to ensure dashed lines update immediately
+  useEffect(() => {
+    if (imgRef.current && aspect) {
+      const { width, height } = imgRef.current;
+      setCrop(centerAspectCrop(width, height, aspect));
+    }
+  }, [aspect, imgRef, setCrop]);
 
   return (
     <div className="relative shadow-lg border bg-background rounded-md overflow-hidden">

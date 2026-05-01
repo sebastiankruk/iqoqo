@@ -52,4 +52,11 @@ describe("CameraCapture", () => {
       expect(screen.queryByText("Snap Cover")).not.toBeInTheDocument();
     });
   });
+
+  it("aborts enumeration on unmount", async () => {
+    const abortSpy = vi.spyOn(AbortController.prototype, "abort");
+    const { unmount } = render(<CameraCapture label="Snap Cover" />);
+    unmount();
+    expect(abortSpy).toHaveBeenCalled();
+  });
 });

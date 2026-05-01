@@ -20,8 +20,8 @@
  */
 "use client";
 
-import React, { useState } from "react";
-import { Save, X } from "lucide-react";
+import React from "react";
+import { Save, X, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
@@ -34,6 +34,7 @@ export interface ManualEntryData {
   publisher: string;
   year: string;
   format: ScanFormat;
+  coverFile?: File | null;
 }
 
 interface ManualEntryFormProps {
@@ -65,15 +66,27 @@ export function ManualEntryForm({
   initialTitle = "",
   initialAuthors = "",
 }: ManualEntryFormProps) {
-  const [formData, setFormData] = useState<ManualEntryData>({
+  const [formData, setFormData] = React.useState<ManualEntryData>({
     title: initialTitle,
     authors: initialAuthors,
     identifier: initialIdentifier,
     publisher: "",
     year: "",
     format: initialFormat,
+    coverFile: null,
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Sync state with props if they change (e.g. from a new scan or extraction)
+  React.useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      title: initialTitle,
+      authors: initialAuthors,
+      identifier: initialIdentifier,
+      format: initialFormat,
+    }));
+  }, [initialTitle, initialAuthors, initialIdentifier, initialFormat]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -82,6 +95,11 @@ export function ManualEntryForm({
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setFormData(prev => ({ ...prev, coverFile: file }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,10 +133,17 @@ export function ManualEntryForm({
             onChange={handleChange}
             className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            {SCAN_FORMATS.map(f => (
-              <option key={f} value={f}>
-                {MEDIA_REGISTRY[f].label}
-              </option>
+            {SCAN_FORMATS.map(groupId => (
+              <optgroup key={groupId} label={MEDIA_REGISTRY[groupId].label}>
+                <option value={groupId}>{MEDIA_REGISTRY[groupId].label} (Generic)</option>
+                {Object.entries(MEDIA_REGISTRY)
+                  .filter(([id, meta]) => meta.parent === groupId && id !== groupId)
+                  .map(([id, meta]) => (
+                    <option key={id} value={id}>
+                      {meta.label}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -195,6 +220,32 @@ export function ManualEntryForm({
               onChange={handleChange}
               className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
             />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="manual-cover-upload" className="text-sm font-medium text-foreground">
+            Manual Cover Upload
+          </label>
+          <div className="flex items-center gap-3">
+            <Button asChild type="button" variant="outline" size="sm" className="relative flex h-9 gap-2">
+              <label htmlFor="manual-cover-upload" className="cursor-pointer">
+                <ImagePlus className="h-4 w-4 text-primary" />
+                {formData.coverFile ? "Change Image" : "Choose Cover"}
+              </label>
+            </Button>
+            <input
+              id="manual-cover-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="sr-only"
+            />
+            {formData.coverFile && (
+              <span className="max-w-[150px] truncate text-[11px] text-muted-foreground">
+                {formData.coverFile.name}
+              </span>
+            )}
           </div>
         </div>
 

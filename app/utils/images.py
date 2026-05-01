@@ -19,9 +19,16 @@ import io
 import logging
 import os
 import textwrap
+from typing import Any
 
 import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+# Safety threshold for decompression bombs.
+# Set to 200MP to accommodate even the largest modern smartphone cameras
+# (e.g. 200MP Samsung S23 Ultra). PIL default is 50MP.
+# Note: optimize_and_save_image always thumbnails down to 1024x1024 after this check.
+Image.MAX_IMAGE_PIXELS = 200_000_000
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +126,7 @@ def add_text_overlay(
             max_text_width = int(width * 0.90)  # Keep 5% margin on sides
 
             # Define bounding boxes (y_start, y_end) as ratios of height
-            # Title: 40%-25% of bottom -> 0.60 to 0.75
+
             title_box = (height * 0.60, height * 0.75)
             # Author: 20%-10% of bottom -> 0.80 to 0.90
             author_box = (height * 0.80, height * 0.90)
@@ -249,3 +256,40 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
 
     # Return public URL
     return f"/static/{subfolder}/{target_filename}"
+
+
+def validate_upload_file(file: Any, max_size_bytes: int = 10 * 1024 * 1024) -> str:
+    """Validate an uploaded image file: extension, size, and PIL integrity check.
+
+    Returns:
+        The file extension (lowercase, e.g. 'jpg') if valid.
+
+    Raises:
+        ValueError: With a user-facing message if validation fails.
+    """
+    if not file or not file.filename:
+        raise ValueError("No file provided")
+
+    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
+    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
+        raise ValueError(f"Invalid file type. Allowed: {', '.join(sorted(allowed_extensions))}")
+
+    file.seek(0, os.SEEK_END)
+    actual_size = file.tell()
+    file.seek(0)
+    if actual_size > max_size_bytes:
+        raise ValueError(f"File too large. Max size: {max_size_bytes // (1024 * 1024)}MB")
+
+    try:
+        with Image.open(file) as img:
+            img.verify()
+        file.seek(0)
+    except Image.DecompressionBombError as exc:
+        limit = Image.MAX_IMAGE_PIXELS or 200_000_000
+        raise ValueError(
+            f"Image is too large to validate safely. Please resize it below {limit // 1_000_000} megapixels and try again."
+        ) from exc
+    except (OSError, SyntaxError) as exc:
+        raise ValueError("Invalid or corrupted image file") from exc
+
+    return str(file.filename.rsplit(".", 1)[-1].lower())

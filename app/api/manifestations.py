@@ -20,7 +20,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from flask import Response, g, jsonify, request
-from PIL import Image
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -31,7 +30,7 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
-from app.utils.images import save_upload_image
+from app.utils.images import save_upload_image, validate_upload_file
 
 
 @api_bp.route("/manifestations", methods=["GET"])
@@ -41,6 +40,10 @@ def get_manifestations() -> tuple[Response, int]:
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
+    category_filter = request.args.get("category")
+    format_filter = request.args.get("format")
+    missing_cover = request.args.get("missing_cover") == "true"
+    missing_id = request.args.get("missing_id") == "true"
 
     try:
         page = int(page_param)
@@ -56,7 +59,9 @@ def get_manifestations() -> tuple[Response, int]:
     if q:
         from app.core.search_service import SearchService
 
-        total, result_ids = SearchService.search_manifestations(q, limit, offset)
+        total, result_ids = SearchService.search_manifestations(
+            q, limit, offset, category=category_filter, format_filter=format_filter, missing_cover=missing_cover, missing_id=missing_id
+        )
 
         if result_ids:
             manifestations_unordered = (
@@ -69,9 +74,40 @@ def get_manifestations() -> tuple[Response, int]:
         else:
             manifestations = []
     else:
-        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).order_by(
-            Manifestation.id.desc()
-        )
+        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression)
+
+        if category_filter:
+            query = query.filter(Expression.content_type == category_filter)
+        if format_filter:
+            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if missing_cover:
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
+                    db.or_(
+                        Manifestation.meta["cover_url"].as_string().is_(None),
+                        Manifestation.meta["cover_url"].as_string() == "",
+                    ),
+                )
+            )
+        if missing_id:
+            query = query.filter(
+                db.and_(
+                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
+                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
+                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
+                    db.or_(
+                        Manifestation.meta["barcode"].as_string().is_(None),
+                        Manifestation.meta["barcode"].as_string() == "",
+                    ),
+                    db.or_(
+                        Manifestation.meta["catalog_number"].as_string().is_(None),
+                        Manifestation.meta["catalog_number"].as_string() == "",
+                    ),
+                )
+            )
+
+        query = query.order_by(Manifestation.id.desc())
         total = query.count()
         manifestations = query.offset(offset).limit(limit).all()
 
@@ -340,24 +376,12 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     if not file.filename:
         return jsonify({"error": "No selected file"}), 400
 
-    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
-    if "." not in file.filename or file.filename.rsplit(".", 1)[1].lower() not in allowed_extensions:
-        return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
-
-    max_size = 10 * 1024 * 1024
-    file.seek(0, os.SEEK_END)
-    actual_size = file.tell()
-    file.seek(0)
-
-    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
-        return jsonify({"error": "File too large. Max size: 10MB"}), 413
-
     try:
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
-    except (OSError, SyntaxError):
-        return jsonify({"error": "Invalid or corrupted image file"}), 400
+        validate_upload_file(file)
+    except ValueError as e:
+        error_message = str(e)
+        status_code = 413 if "too large" in error_message.lower() else 400
+        return jsonify({"error": error_message}), status_code
 
     manifestation = db.get_or_404(Manifestation, manifestation_id)
     identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
@@ -427,30 +451,19 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     if not file.filename:
         return jsonify({"success": False, "error": "No selected file"}), 400
 
-    # Validation
-    allowed_extensions = {"png", "jpg", "jpeg", "webp"}
-    if "." not in file.filename or file.filename.rsplit(".", 1)[-1].lower() not in allowed_extensions:
-        return jsonify({"success": False, "error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
-
-    max_size = 10 * 1024 * 1024
-    file.seek(0, os.SEEK_END)
-    actual_size = file.tell()
-    file.seek(0)
-
-    if (request.content_length and request.content_length > max_size) or actual_size > max_size:
-        return jsonify({"success": False, "error": "File too large. Max size: 10MB"}), 413
-
-    image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
-
     try:
-        # PIL Content check
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
+        # Use common validation helper
+        validate_upload_file(file)
+
+        image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
 
         # Save and optimize
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+    except ValueError as e:
+        error_message = str(e)
+        status_code = 413 if "too large" in error_message.lower() else 400
+        return jsonify({"success": False, "error": error_message}), status_code
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
@@ -593,6 +606,11 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
     try:
+        # Manually nullify scan telemetry to avoid ForeignKeyViolation on delete
+        from app.db.models import ScanTelemetry
+
+        ScanTelemetry.query.filter_by(manifestation_id=manifestation_id).update({"manifestation_id": None})
+
         db.session.delete(manif)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200

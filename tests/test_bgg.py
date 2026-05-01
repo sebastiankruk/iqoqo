@@ -17,8 +17,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
-from app.utils.bgg import fetch_bgg_metadata
+from app.utils.bgg import clean_bgg_query, fetch_bgg_metadata
 
 
 @patch("app.utils.bgg.requests.get")
@@ -93,3 +94,40 @@ def test_fetch_bgg_metadata_with_designers(mock_get):
     assert "Trading" in result["Mechanics"]
     assert "Hexagon Grid" in result["Mechanics"]
     assert "Klaus Teuber" in result.get("Designers", [])
+
+
+def test_clean_bgg_query():
+    """Test parenthetical content removal from BGG queries."""
+    assert clean_bgg_query("Brass: Birmingham (2018)") == "Brass: Birmingham"
+    assert clean_bgg_query("Catan [Fifth Edition]") == "Catan"
+    assert clean_bgg_query("Pandemic (Big Box) (2015)") == "Pandemic"
+    assert clean_bgg_query("No Parenthesis") == "No Parenthesis"
+    assert clean_bgg_query("") == ""
+
+
+@patch("app.utils.bgg.os.getenv")
+@patch("app.utils.bgg.logger")
+def test_fetch_bgg_metadata_no_token_warning(mock_logger, mock_getenv):
+    """Test that a warning is logged when BGG_API_TOKEN is missing."""
+    mock_getenv.return_value = None
+    # We don't care about the return value, just the side effect of logging
+    with patch("app.utils.bgg.requests.get") as mock_get:
+        mock_get.return_value.status_code = 401
+        mock_get.return_value.raise_for_status.side_effect = requests.RequestException("Unauthorized")
+        fetch_bgg_metadata("Catan")
+
+    mock_logger.warning.assert_any_call(
+        "BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized."
+    )
+
+
+@patch("app.utils.bgg.requests.get")
+def test_fetch_bgg_metadata_xml_parse_error(mock_get):
+    """Test graceful handling of malformed XML from BGG."""
+    mock_resp = MagicMock()
+    mock_resp.content = b"not xml"
+    mock_resp.raise_for_status.return_value = None
+    mock_get.return_value = mock_resp
+
+    result = fetch_bgg_metadata("Catan")
+    assert result is None

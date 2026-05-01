@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats build-frontend generate-taxonomy
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -51,6 +51,7 @@ help:
 	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
 	@echo "  lint-css       - Run CSS linter (stylelint)"
 	@echo "  lint-markdown  - Run Markdown linter"
+	@echo "  lint-license   - Check copyright headers"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
@@ -71,11 +72,16 @@ help:
 	@echo "Version updates:"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
+	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
 
 # Versioning targets
 sync-version:
 	@echo "Syncing version from pyproject.toml to package.json files..."
 	@.venv/bin/python scripts/sync_version.py
+
+generate-taxonomy:
+	@echo "Generating taxonomies from YAML..."
+	@.venv/bin/python scripts/generate_taxonomy.py
 
 bump-version:
 	@if [ -z "$(v)" ]; then \
@@ -94,37 +100,45 @@ init:
 
 start:
 	@echo "Starting development environment..."
-	@./run_dev.sh
+	@./run.sh dev
 
 stop:
 	@echo "Stopping Flask server..."
-	@if [ -f .flask.pid ]; then \
-		FLASK_PID=$$(cat .flask.pid); \
+	@if [ -f .pids/flask.pid ]; then \
+		FLASK_PID=$$(cat .pids/flask.pid); \
 		if kill -0 $$FLASK_PID 2>/dev/null; then \
 			kill $$FLASK_PID; \
 			echo "Sent SIGTERM to Flask (PID $$FLASK_PID)."; \
 		else \
 			echo "Flask PID $$FLASK_PID is not running."; \
 		fi; \
-		rm -f .flask.pid; \
-	else \
-		echo "No Flask PID file found (.flask.pid); skipping Flask stop."; \
+		rm -f .pids/flask.pid; \
+	fi
+	@echo "Stopping Celery worker..."
+	@if [ -f .pids/celery.pid ]; then \
+		CELERY_PID=$$(cat .pids/celery.pid); \
+		if kill -0 $$CELERY_PID 2>/dev/null; then \
+			kill $$CELERY_PID; \
+			echo "Sent SIGTERM to Celery (PID $$CELERY_PID)."; \
+		else \
+			echo "Celery PID $$CELERY_PID is not running."; \
+		fi; \
+		rm -f .pids/celery.pid; \
 	fi
 	@echo "Stopping Next.js frontend..."
-	@if [ -f .frontend.pid ]; then \
-		FRONTEND_PID=$$(cat .frontend.pid); \
-		if kill -0 $$FRONTEND_PID 2>/dev/null; then \
-			kill $$FRONTEND_PID; \
-			echo "Sent SIGTERM to Next.js (PID $$FRONTEND_PID)."; \
+	@if [ -f .pids/next.pid ]; then \
+		NEXT_PID=$$(cat .pids/next.pid); \
+		if kill -0 $$NEXT_PID 2>/dev/null; then \
+			kill $$NEXT_PID; \
+			echo "Sent SIGTERM to Next.js (PID $$NEXT_PID)."; \
 		else \
-			echo "Frontend PID $$FRONTEND_PID is not running."; \
+			echo "Frontend PID $$NEXT_PID is not running."; \
 		fi; \
-		rm -f .frontend.pid; \
-	else \
-		echo "No frontend PID file found (.frontend.pid); skipping frontend stop."; \
+		rm -f .pids/next.pid; \
 	fi
 	@echo "Stopping database containers..."
 	@docker compose stop
+	@rm -rf .pids
 	@echo "Development environment stopped."
 
 # Linting targets
@@ -242,9 +256,11 @@ db-stats:
 			print(f\"  Items: {stats['items']}\"); \
 			print(f\"  Total: {sum(stats.values())}\")"
 
-sync-perms:
-	@echo "Syncing permissions from shared/permissions.yaml"
-	.venv/bin/python scripts/sync_permissions.py
+sync-permissions:
+	@echo "Synchronizing permissions (Code & Database)..."
+	@PYTHONPATH=. .venv/bin/python scripts/sync_permissions.py
+	@PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+	@echo "Permissions synchronized successfully."
 
 verify-perms:
 	@echo "Verifying permissions are synchronized"

@@ -64,7 +64,9 @@ interface CameraCaptureProps {
   /** Called after a successful cover upload (mode 1). */
   onUploadComplete?: () => void;
   /** Called with extracted metadata after vision extraction (mode 2). */
-  onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat) => void;
+  onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
+  /** Called when vision extraction or polling fails. */
+  onExtractionFailure?: () => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -77,7 +79,7 @@ interface CameraCaptureProps {
   /** Confirmation message */
   confirmMessage?: string;
   /** Initial media format */
-  format?: MediaFormat;
+  format?: MediaFormat | string;
   /** Button variant */
   variant?: ButtonVariant;
   /** Optional CSS class name applied directly to the button */
@@ -94,6 +96,7 @@ interface CameraCaptureProps {
  * @param props.manifestation_id - If set, uploads the image as a cover for this manifestation.
  * @param props.onUploadComplete - Called after a successful cover upload (mode 1).
  * @param props.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
+ * @param props.onExtractionFailure - Called when extraction or polling fails.
  * @param props.className - Optional CSS class name applied to the wrapper div.
  * @param props.capture - Whether to force the camera or omit for gallery.
  * @param props.label - Label for the button.
@@ -110,6 +113,7 @@ export function CameraCapture({
   manifestation_id,
   onUploadComplete,
   onExtractComplete,
+  onExtractionFailure,
   className,
   capture = "environment",
   label = "Snap Cover",
@@ -129,22 +133,25 @@ export function CameraCapture({
 
   // Check if a physical camera is available
   useEffect(() => {
-    let mounted = true;
+    const controller = new AbortController();
+
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
       navigator.mediaDevices
         .enumerateDevices()
         .then(devices => {
+          if (controller.signal.aborted) return;
           const videoInputs = devices.filter(d => d.kind === "videoinput");
-          if (mounted) setHasCamera(videoInputs.length > 0);
+          setHasCamera(videoInputs.length > 0);
         })
         .catch(() => {
-          if (mounted) setHasCamera(false);
+          if (controller.signal.aborted) return;
+          setHasCamera(false);
         });
     } else {
       setHasCamera(false);
     }
     return () => {
-      mounted = false;
+      controller.abort();
     };
   }, []);
 
@@ -214,12 +221,14 @@ export function CameraCapture({
           if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
           toast.error(envelope.error ?? "Vision extraction submission failed");
+          if (onExtractionFailure) onExtractionFailure();
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to process cover image";
       toast.error(message);
       console.error("Failed to process cover image", error);
+      if (onExtractionFailure) onExtractionFailure();
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

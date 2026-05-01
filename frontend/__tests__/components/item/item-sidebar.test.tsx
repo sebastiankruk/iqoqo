@@ -21,6 +21,7 @@ import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(),
+  useUserSearch: vi.fn(() => ({ data: [], isLoading: false })),
   useProfile: vi.fn(() => ({
     data: {
       permissions: ["update:item", "upload:cover", "write:metadata"],
@@ -45,6 +46,7 @@ const mockItem = {
   cover_url: "/cover.jpg",
   cover_status: "ready",
   isbn: "9780544003415",
+  is_owner: true,
 } as unknown as Item;
 
 describe("ItemSidebar Component", () => {
@@ -74,10 +76,10 @@ describe("ItemSidebar Component", () => {
 
     render(<ItemSidebar item={mockItem} />);
     const select = screen.getByLabelText("Collection status");
-    fireEvent.change(select, { target: { value: "lent" } });
+    fireEvent.change(select, { target: { value: "damaged" } });
 
     expect(mutateMock).toHaveBeenCalledTimes(1);
-    expect(mutateMock).toHaveBeenCalledWith({ collection_status: "lent" }, expect.any(Object));
+    expect(mutateMock).toHaveBeenCalledWith({ collection_status: "damaged" }, expect.any(Object));
   });
 
   it("calls update mutation when progress status select is changed", () => {
@@ -109,6 +111,7 @@ describe("ItemSidebar Component", () => {
     const anonymizedItem = {
       ...mockItem,
       owner_id: "Unavailable",
+      is_owner: false,
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} />);
@@ -131,6 +134,7 @@ describe("ItemSidebar Component", () => {
     const anonymizedItem = {
       ...mockItem,
       owner_id: "Unavailable",
+      is_owner: false,
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} onEdit={vi.fn()} />);

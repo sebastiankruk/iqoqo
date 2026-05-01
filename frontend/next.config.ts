@@ -58,6 +58,12 @@ const nextConfig: NextConfig = {
         // (same-origin) so the session cookie is forwarded without CORS issues.
         destination: `${backendBase}/api/:path`,
       },
+      {
+        // Intercept static asset requests (stored as /static/... in DB)
+        // and proxy them to the backend API static serving endpoint.
+        source: "/static/:path*",
+        destination: `${backendBase}/api/static/:path*`,
+      },
     ];
   },
   // Allow cover images from a restricted set of HTTPS origins (metadata comes
@@ -68,6 +74,9 @@ const nextConfig: NextConfig = {
     localPatterns: [
       {
         pathname: "/api/static/**",
+      },
+      {
+        pathname: "/static/**",
       },
       {
         pathname: "/*.png",

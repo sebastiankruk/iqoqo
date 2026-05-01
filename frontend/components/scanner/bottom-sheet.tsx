@@ -18,6 +18,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Camera, Search, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
+import { ScanFormat } from "@/types/taxonomy";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
 const TABS = [
@@ -35,8 +36,9 @@ interface BottomSheetProps {
   onScannerStateChange?: (isActive: boolean) => void;
   onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
-  onShowManualForm?: () => void;
-  format?: "book" | "cd" | "vinyl" | "audio" | "video" | "boardgame" | "puzzle";
+  onExtractionFailure?: (ean: string) => void;
+  onShowManualForm?: (isbn?: string) => void;
+  format?: ScanFormat;
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
 }
@@ -50,6 +52,7 @@ interface BottomSheetProps {
  * @param root0.onScannerStateChange - Optional callback when scanner active state changes
  * @param root0.onTabChange - Optional callback when the bottom sheet tab changes
  * @param root0.onExtractComplete - Optional callback when cover metadata is extracted
+ * @param root0.onExtractionFailure - Optional callback when extraction fails
  * @param root0.onShowManualForm - Optional callback to show manual entry form
  * @param root0.format - The current media format (book, cd, vinyl)
  * @param root0.torchOn - Whether the flashlight should be on
@@ -62,6 +65,7 @@ export function BottomSheet({
   onScannerStateChange,
   onTabChange,
   onExtractComplete,
+  onExtractionFailure,
   onShowManualForm,
   format = "book",
   torchOn = false,
@@ -70,10 +74,10 @@ export function BottomSheet({
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
   const formatToApiParam = (fmt?: string): string => {
-    if (fmt === "video") return "video";
-    if (fmt === "boardgame") return "boardgame";
+    if (fmt === "movie" || fmt === "video") return "movie";
+    if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
-    if (fmt === "audio") return "audio";
+    if (fmt === "music" || fmt === "audio") return "music";
     if (fmt === "book") return "book";
     return "";
   };
@@ -89,6 +93,7 @@ export function BottomSheet({
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSearchedBarcode, setLastSearchedBarcode] = useState<string>("");
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const barcodeEnabledRef = useRef<boolean>(true);
@@ -163,6 +168,7 @@ export function BottomSheet({
         }
       }
 
+      setLastSearchedBarcode(query);
       setIsSearching(true);
       setError(null);
       try {
@@ -278,7 +284,7 @@ export function BottomSheet({
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    lookupBarcode(manualIsbn, true);
+    lookupBarcode(manualIsbn.trim(), true);
   };
 
   return (
@@ -291,6 +297,7 @@ export function BottomSheet({
           {TABS.map(tab => (
             <button
               key={tab.id}
+              data-testid={`scanner-tab-${tab.id}`}
               onClick={() => handleTabChange(tab.id as TabId)}
               className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                 activeTab === tab.id
@@ -305,7 +312,18 @@ export function BottomSheet({
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-        {error && <p className="text-center text-xs text-destructive">{error}</p>}
+        {error && (
+          <div className="flex w-full flex-col gap-3">
+            <p className="text-center text-xs text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={() => onShowManualForm?.(lastSearchedBarcode)}
+              className="w-full rounded-xl bg-secondary px-4 py-2 text-sm font-semibold shadow-sm hover:bg-secondary/80"
+            >
+              Enter Manually
+            </button>
+          </div>
+        )}
 
         {activeTab === "barcode" && (
           <div className="flex w-full flex-col items-center gap-4">
@@ -336,6 +354,7 @@ export function BottomSheet({
               label="Snap Cover"
               icon={<Camera className="mr-2 h-5 w-5" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
+              onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
               format={format}
               className="flex w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80"
             />
@@ -346,11 +365,12 @@ export function BottomSheet({
               label="Upload from Gallery"
               icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
+              onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
               format={format}
               className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
             />
 
-            {error && <p className="text-center text-xs text-destructive">{error}</p>}
+            {/* Error is already handled at the top */}
           </div>
         )}
 
@@ -362,7 +382,7 @@ export function BottomSheet({
                   type="text"
                   value={manualIsbn}
                   onChange={e => setManualIsbn(e.target.value)}
-                  placeholder="Enter barcode or title..."
+                  placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"
                   className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
                 />
                 <button
@@ -373,14 +393,14 @@ export function BottomSheet({
                   <Search className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                {isSearching ? "Looking up…" : "Try ISBN or UPC"}
-              </p>
             </form>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {isSearching ? "Looking up…" : "Enter barcode, Discogs Release ID, or Artist – Title"}
+            </p>
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button
                 type="button"
-                onClick={onShowManualForm}
+                onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
               >
                 Manual Entry Form

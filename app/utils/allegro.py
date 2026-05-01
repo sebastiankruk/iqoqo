@@ -88,10 +88,16 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
 
     try:
         # Step 1: Try Product Catalog as User (Preferred for clean metadata)
+        # Use mode=GTIN only if barcode looks like a real EAN/UPC
+        is_numeric_barcode = barcode.isdigit() and len(barcode) in (8, 10, 12, 13, 14)
+        catalog_params = {"phrase": barcode}
+        if is_numeric_barcode:
+            catalog_params["mode"] = "GTIN"
+
         if os.path.isfile(_TOKEN_FILE):
             try:
-                catalog_url = f"https://api.allegro.pl/sale/products?phrase={barcode}&mode=GTIN"
-                cat_resp = requests.get(catalog_url, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+                catalog_url = "https://api.allegro.pl/sale/products"
+                cat_resp = requests.get(catalog_url, headers=headers, params=catalog_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
                 if cat_resp.status_code == 200:
                     cat_data = cat_resp.json()
                     products = cat_data.get("products", [])
@@ -122,30 +128,27 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
                 pass  # Fall back to Listing if Catalog fails
 
         # Step 2: Use Listing API (Public Marketplace Search)
-        # This endpoint is accessible via Client Credentials and matches allegro.pl search
-        listing_url = f"https://api.allegro.pl/offers/listing?phrase={barcode}"
-        response = requests.get(listing_url, headers=headers, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
-        response.raise_for_status()
-        data = response.json()
-
-        items = data.get("items", {})
-        # Combine promoted and regular offers
-        offers = items.get("promoted", []) + items.get("regular", [])
-
-        if not offers:
-            # If nothing by barcode, we could try a broad search, but phrase=barcode is usually best for EANs
-            return None
-
-        # Take the best matching offer (usually the first one)
-        offer = offers[0]
-
-        return {
-            "title": offer.get("name", "Unknown Media"),
-            "barcode": barcode,
-            "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
-            "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
-            "source": "Allegro Listing",
-        }
+        # ONLY if catalog found nothing and we are NOT getting 403s
+        # Note: listing API is often 403 for Client Credentials; we only try if we have a real token
+        if os.path.isfile(_TOKEN_FILE):
+            listing_url = "https://api.allegro.pl/offers/listing"
+            listing_params = {"phrase": barcode}
+            response = requests.get(listing_url, headers=headers, params=listing_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("items", {})
+                offers = items.get("promoted", []) + items.get("regular", [])
+                if offers:
+                    offer = offers[0]
+                    return {
+                        "title": offer.get("name", "Unknown Media"),
+                        "barcode": barcode,
+                        "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
+                        "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
+                        "source": "Allegro Listing",
+                    }
+            elif response.status_code == 403:
+                logger.debug("Allegro Listing API returned 403; skipping fallback.")
     except requests.exceptions.Timeout:
         logger.warning("Allegro lookup timed out for barcode %s", barcode)
     except requests.exceptions.HTTPError as e:

@@ -17,8 +17,8 @@
 
 import Link from "next/link";
 import { Search, ScanLine, Library, Loader2, Settings, User, LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,8 +40,13 @@ import { useProfile } from "@/lib/api/hooks";
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || searchParams?.get("search") || "");
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setSearchQuery(searchParams?.get("q") || searchParams?.get("search") || "");
+  }, [searchParams]);
 
   /**
    * Handles the user logout process.
@@ -67,11 +72,16 @@ export function Navbar() {
    */
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    const params = new URLSearchParams(searchParams?.toString() || "");
     if (searchQuery.trim()) {
-      router.push(`/collection?q=${encodeURIComponent(searchQuery.trim())}`);
+      params.set("q", searchQuery.trim());
+      params.delete("search");
     } else {
-      router.push("/collection");
+      params.delete("q");
+      params.delete("search");
     }
+    params.set("page", "1");
+    router.push(`/collection?${params.toString()}`);
   };
 
   return (

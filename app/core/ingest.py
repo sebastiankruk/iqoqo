@@ -29,6 +29,57 @@ from app.utils.upc import resolve_physical_media
 
 class IngestService:
     @staticmethod
+    def ingest_from_meta(meta: dict) -> Manifestation:
+        """Save a manifestation from pre-fetched metadata without calling any external API.
+
+        Used by the 'Save to Catalog Only' flow so we can persist the data the
+        lookup endpoint already retrieved, avoiding redundant / slow network calls.
+        The caller must include at minimum a ``title`` and ``format`` key.
+        """
+        title = meta.get("title") or meta.get("Title") or "Unknown Title"
+        author_name = meta.get("author") or meta.get("artist") or (meta.get("authors") or meta.get("Authors") or [None])[0]
+        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+        raw_format = (meta.get("format") or meta.get("Format") or "audio").lower()
+
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        # Map format string → FRBR content type (canonical formats + aliases)
+        content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
+
+        work_meta: dict = {"authors": [author_name] if author_name else []}
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "person")
+            if contributor:
+                add_work_contribution(work.id, contributor.id, "author")
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=content_type)
+        db.session.add(expression)
+        db.session.flush()
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "title": title,
+                "author": author_name,
+                "authors": [author_name] if author_name else [],
+                "cover_url": cover_url,
+                "format": raw_format,
+            }
+        )
+
+        manifestation = Manifestation(expression=expression, meta=man_meta)
+        db.session.add(manifestation)
+        db.session.commit()
+
+        identifier = meta.get("identifier") or meta.get("barcode") or meta.get("isbn") or title
+        start_cover_processing(manifestation_id=manifestation.id, identifier=identifier, title=title, author=author_name or "")
+        return manifestation
+
+    @staticmethod
     def ingest_puzzle_from_barcode(barcode: str) -> Manifestation:
         # Puzzles are purely manifestation-based (no cinematic 'work' resolution)
         # but we still benefit from the Tier 1a/1b/2 waterfall.
@@ -46,7 +97,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.OBJECT)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.PUZZLE)
         db.session.add(expression)
         db.session.flush()
 
@@ -59,7 +110,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": MediaFormat.PUZZLE,
+                "format": MediaFormat.JIGSAW_PUZZLE,
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -148,7 +199,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.SOUND)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MUSIC)
         db.session.add(expression)
         db.session.flush()
 
@@ -162,7 +213,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": barcode,
-                "format": meta.get("format", MediaFormat.AUDIO),
+                "format": meta.get("format", "music"),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -213,7 +264,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.VIDEO)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MOVIE)
         db.session.add(expression)
         db.session.flush()
 
@@ -229,7 +280,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": stored_barcode,
-                "format": meta.get("format", MediaFormat.VIDEO),
+                "format": meta.get("format", "movie"),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
@@ -282,7 +333,7 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.GAME)
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.BOARD_GAME)
         db.session.add(expression)
         db.session.flush()
 
@@ -297,7 +348,7 @@ class IngestService:
         man_meta.update(
             {
                 "barcode": stored_barcode,
-                "format": meta.get("format", meta.get("Format", MediaFormat.BOARDGAME)),
+                "format": meta.get("format", meta.get("Format", MediaFormat.BOARD_GAME)),
                 "title": title,
                 "author": author_name,
                 "authors": [author_name] if author_name else [],
