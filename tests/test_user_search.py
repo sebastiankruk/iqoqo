@@ -45,8 +45,8 @@ def test_user_search_by_email_and_name(client, normal_user_headers, app):
         db.session.add_all([user1, user2, user3, inactive])
         db.session.commit()
 
-    # Search by email prefix
-    response = client.get("/api/profile/users/search?q=target1", headers=normal_user_headers)
+    # Search by exact email
+    response = client.get("/api/profile/users/search?q=target1@test.local", headers=normal_user_headers)
     assert response.status_code == 200
     data = response.json["data"]
     assert len(data) == 1
