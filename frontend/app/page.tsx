@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { CurrentContext } from "@/components/dashboard/current-context";

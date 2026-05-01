@@ -30,7 +30,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";

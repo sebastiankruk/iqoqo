@@ -18,7 +18,7 @@
 import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
 import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";

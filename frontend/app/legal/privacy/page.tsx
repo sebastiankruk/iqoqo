@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { Footer } from "@/components/dashboard/footer";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
