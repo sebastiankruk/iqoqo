@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
+# pylint: disable=broad-exception-caught, inconsistent-return-statements
 
 import os
 from datetime import date
@@ -283,123 +283,94 @@ def _mask_api_key(value: str) -> str:
     return "***"
 
 
+def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
+    """Helper for GET /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    if category == "federation" and not can_federation:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "affiliate" and not can_affiliate:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category in {"external_apis", "apikeys"} and not can_external:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "internal" and not can_internal:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
+    from flask import current_app
+    flask_config = current_app.config if current_app else {}
+    result = {}
+
+    if can_external:
+        for key in API_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or "")), "source": source}
+
+    if can_federation:
+        for key in FEDERATION_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    if can_affiliate:
+        for key in AFFILIATE_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    if can_internal:
+        for key in INTERNAL_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    return {"success": True, "data": result}
+
+
+def _put_settings(user: User, data: dict) -> dict:
+    """Helper for PUT /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    saved = {}
+    for key, value in data.items():
+        if (key in API_KEYS and not can_external) or (key in FEDERATION_KEYS and not can_federation) or \
+           (key in AFFILIATE_KEYS and not can_affiliate) or (key in INTERNAL_KEYS and not can_internal):
+            continue
+
+        if isinstance(value, str) and value.startswith("***"):
+            continue
+
+        setting = InstanceSettings.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            db.session.add(InstanceSettings(key=key, value=value))
+        saved[key] = value
+
+    db.session.commit()
+    return {"success": True, "data": saved}
+
+
 @admin_bp.route("/settings", methods=["GET", "PUT"])
 @admin_required
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 def manage_settings():
     """Manage global instance settings with category-based RBAC."""
     user = _get_current_user()
-
-    category = request.args.get("category", "all")
+    if not user:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
 
     if request.method == "GET":
-        can_external = _has_permission(user, "config:external_apis")
-        can_federation = _has_permission(user, "config:federation")
-        can_affiliate = _has_permission(user, "config:affiliate")
-        can_internal = _has_permission(user, "config:internal")
+        res = _get_settings(user, request.args.get("category", "all"))
+        return jsonify(res) if isinstance(res, dict) else res
 
-        # Get all DB settings
-        db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
-
-        # Get Flask config keys
-        try:
-            from flask import current_app
-
-            flask_config = current_app.config if current_app else {}
-        except Exception:
-            flask_config = {}
-
-        result = {}
-
-        # Process API keys (external)
-        if can_external:
-            for key in API_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    # Mask all API keys (DB and env); URLs shown unmasked
-                    is_url = key in ("LOCAL_SD_URL",)
-                    if is_url:
-                        result[key] = {"value": str(value), "source": source}
-                    else:
-                        result[key] = {"value": _mask_api_key(str(value)), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Federation keys
-        if can_federation:
-            for key in FEDERATION_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Affiliate keys
-        if can_affiliate:
-            for key in AFFILIATE_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Internal keys
-        if can_internal:
-            for key in INTERNAL_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        if category == "federation" and not can_federation:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_FEDERATION} required"}), 403
-        if category == "affiliate" and not can_affiliate:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_AFFILIATE} required"}), 403
-        if category in {"external_apis", "apikeys"} and not can_external:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_EXTERNAL_APIS} required"}), 403
-        if category == "internal" and not can_internal:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_INTERNAL} required"}), 403
-
-        return jsonify({"success": True, "data": result})
-
-    if request.method == "PUT":
-        can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
-        can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
-        can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
-        can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
-
-        data = request.json or {}
-        saved = {}
-
-        for key, value in data.items():
-            if key in API_KEYS and not can_external:
-                continue
-            if key in FEDERATION_KEYS and not can_federation:
-                continue
-            if key in AFFILIATE_KEYS and not can_affiliate:
-                continue
-            if key in INTERNAL_KEYS and not can_internal:
-                continue
-
-            if isinstance(value, str) and value.startswith("***"):
-                continue
-
-            setting = InstanceSettings.query.filter_by(key=key).first()
-            if setting:
-                setting.value = value
-            else:
-                setting = InstanceSettings(key=key, value=value)
-                db.session.add(setting)
-
-            saved[key] = value
-
-        db.session.commit()
-        return jsonify({"success": True, "data": saved})
+    return jsonify(_put_settings(user, request.json or {}))
 
 
 # --- FRBR ENTITY MANAGEMENT ROUTES ---

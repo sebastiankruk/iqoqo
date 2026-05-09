@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, X, Plus, Disc, BookOpen, Film, Gamepad2 } from "lucide-react";
+import { Check, X, Plus, Disc, BookOpen, Film, Gamepad2, BookmarkPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { IsbnMeta, ApiResponse } from "@/types/frbr";
@@ -38,16 +38,7 @@ interface SuccessCardProps {
 
 /**
  * SuccessCard component shown after a successful scan.
- * Displays item metadata and provides an option to add it to the library.
- *
- * @param props - Component props
- * @param props.isbn - The barcode that was scanned
- * @param props.meta - The metadata found for the barcode
- * @param props.onDismiss - Function to call when the card is dismissed
- * @param props.onScanAnother - Optional function for rapid sequential scanning
- * @param props.snappedCover - Optional file of a cover snapped from video
- * @param props.onShowManualForm - Optional callback to show manual entry form
- * @returns {JSX.Element} The component
+ * Displays item metadata and provides options to add it to Library or Wishlist.
  */
 export function SuccessCard({
   isbn,
@@ -68,14 +59,13 @@ export function SuccessCard({
     }
     if (["game", "boardgame"].includes(low)) return "boardgame";
     if (["puzzle", "jigsaw"].includes(low)) return "puzzle";
-    return "book"; // Default fallback
+    return "book";
   };
 
   const [adding, setAdding] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState(normalizeFormat(meta.format || meta.Format || "book"));
   const router = useRouter();
 
-  // Normalize metadata for display
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
   const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
   const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
@@ -87,15 +77,12 @@ export function SuccessCard({
   const isVideo = ["video", "dvd", "bluray", "moving image"].includes(format);
   const isGame = ["boardgame", "game"].includes(format);
 
-  // Derive stable identifier: prefer meta fields from backend over raw scan prop
   const canonicalIdentifier = meta.identifier || meta.barcode || meta.isbn;
   const rawIdentifier = canonicalIdentifier || isbn || "";
   const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
   const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
-  // Relax missing ID check if we already have a manifestation_id from the backend lookup
   const isMissingID = !identifier && !meta.manifestation_id;
 
-  // Extract extended meta attributes for video/games
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
   const directors: string[] = Array.isArray(meta.directors)
     ? meta.directors
@@ -114,7 +101,7 @@ export function SuccessCard({
       : Array.isArray(extendedMeta.mechanics)
         ? extendedMeta.mechanics
         : [];
-  // Player count for board games
+  
   const minPlayers =
     meta.min_players ??
     (extendedMeta.min_players as number | undefined) ??
@@ -125,7 +112,7 @@ export function SuccessCard({
     (extendedMeta.maxPlayers as number | undefined);
   const playerCountDisplay =
     minPlayers && maxPlayers ? `${minPlayers}-${maxPlayers} players` : minPlayers ? `${minPlayers}+ players` : null;
-  // Runtime for video
+  
   const runtime =
     meta.runtime ?? (extendedMeta.runtime as number | undefined) ?? (extendedMeta.Runtime as number | undefined);
 
@@ -134,7 +121,7 @@ export function SuccessCard({
   if (isAudio) formatDisplay = "Audio Media";
   if (isGame) formatDisplay = "Board Game";
 
-  const handleAdd = async () => {
+  const handleAdd = async (collectionStatus: "available" | "wishlist") => {
     if (isMissingID) {
       toast.error("Standard barcode required to add to collection.");
       return;
@@ -145,6 +132,7 @@ export function SuccessCard({
         barcode: identifier || rawIdentifier,
         manifestation_id: meta.manifestation_id,
         format: format,
+        collection_status: collectionStatus,
       });
 
       const responseData = res.data;
@@ -167,7 +155,7 @@ export function SuccessCard({
           toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        toast.success(`"${title}" added to your library!`);
+        toast.success(`"${title}" added to your ${collectionStatus === "wishlist" ? "Wishlist" : "Library"}!`);
       }
 
       if (data.item_id) {
@@ -199,7 +187,6 @@ export function SuccessCard({
 
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
-            {/* Dynamic Cover Art Aspect Ratio */}
             <div
               className={`relative w-full md:w-1/3 shrink-0 rounded-xl overflow-hidden shadow-xl bg-muted ${isAudio ? "aspect-square" : isVideo ? "aspect-[2/3]" : "aspect-[2/3]"}`}
             >
@@ -236,14 +223,12 @@ export function SuccessCard({
               <div className="space-y-2">
                 <Badge variant="secondary" className="w-fit mb-2">
                   {formatDisplay}
-                  {/* Hidden uppercase label for legacy test support */}
                   <span className="sr-only">{format.toUpperCase()}</span>
                 </Badge>
                 <h3 className="text-2xl font-bold leading-tight font-serif text-foreground">{title}</h3>
 
                 {authors.length > 0 && <p className="text-lg text-muted-foreground">{authorDisplay}</p>}
 
-                {/* Extended Metadata Display */}
                 {playerCountDisplay && (
                   <p className="text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">Players:</span> {playerCountDisplay}
@@ -320,38 +305,58 @@ export function SuccessCard({
                     View in Collection
                   </Button>
                 ) : (
-                  <Button
-                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                    variant="default"
-                    disabled={adding}
-                    onClick={handleAdd}
-                  >
-                    {adding ? (
-                      "Adding..."
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                        Add to My Collection
-                      </>
-                    )}
-                  </Button>
+                  <>
+                    <Button
+                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                      variant="default"
+                      disabled={adding}
+                      onClick={() => handleAdd("available")}
+                    >
+                      {adding ? (
+                        "Adding..."
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                          Add to Library
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
+                      variant="outline"
+                      disabled={adding}
+                      onClick={() => handleAdd("wishlist")}
+                    >
+                      {adding ? (
+                        "Adding..."
+                      ) : (
+                        <>
+                          <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
+                          Add to Wishlist
+                        </>
+                      )}
+                    </Button>
+                  </>
                 )}
-                <Button
-                  variant="outline"
-                  className="flex-1 min-w-[140px] h-12 rounded-xl"
-                  onClick={onScanAnother ?? onDismiss}
-                  aria-label="Scan Another"
-                >
-                  Scan Another
-                </Button>
+                
+                <div className="w-full flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-12 rounded-xl"
+                    onClick={onScanAnother ?? onDismiss}
+                    aria-label="Scan Another"
+                  >
+                    Scan Another
+                  </Button>
 
-                <Button
-                  variant="ghost"
-                  className="w-full sm:w-auto h-12 rounded-xl text-muted-foreground hover:text-foreground"
-                  onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
-                >
-                  Wrong item? Enter Manually
-                </Button>
+                  <Button
+                    variant="ghost"
+                    className="flex-1 h-12 rounded-xl text-muted-foreground hover:text-foreground"
+                    onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
+                  >
+                    Enter Manually
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

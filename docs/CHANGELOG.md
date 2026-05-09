@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-10
+
+### Added
+
+- **Scanner Strategy Pattern**: Extracted complex barcode lookup logic into a dedicated strategy layer (`app/strategies/lookup.py`).
+  - Concrete strategies for **Books** (ISBN), **Audio** (Discogs/MusicBrainz), **Video** (TMDB), **Board Games** (BGG), and **Puzzles**.
+  - `LookupStrategyFactory` for intelligent routing based on frontend hints.
+- **Dual Intent Scanning**: The scanner success card now offers "Add to Library" vs. "Add to Wishlist" intents, allowing users to track desired items without immediate ownership.
+- **Lint Safeguards**: Added a permanent automated test (`tests/test_lint_safeguards.py`) that strictly forbids the use of `# pylint: disable=too-many-return-statements` across the `app/` codebase.
+
+### Changed
+
+- **Refactored API**: Completely refactored `app/api/scanner.py` to eliminate cyclomatic complexity and satisfy strict linting rules.
+- **Global Code Hygiene**: Removed all instances of `too-many-return-statements` silencers from `admin.py`, `manifestations.py`, `decorators.py`, and `config_service.py` by refactoring logic into smaller, testable helpers.
+
+### Fixed
+
+- **Mock Integrity**: Updated and hardened the scanner test suite (`tests/test_api_scanner.py`) to reflect the new strategy architecture and prevent `MagicMock` serialization leaks in JSON responses.
+
 ## [0.5.0] - 2026-05-01
 
 ### Added

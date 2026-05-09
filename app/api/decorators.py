@@ -108,33 +108,35 @@ def require_permission(perm_name: PermissionName):
     return decorator
 
 
+def _get_user_id_from_token(token: str) -> tuple[uuid.UUID | None, str | None]:
+    """Helper to validate token and return user_id or error message."""
+    try:
+        payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+        if _is_token_revoked(payload.get("jti")):
+            return None, "Token revoked"
+        return uuid.UUID(payload["sub"]), None
+    except jwt.ExpiredSignatureError:
+        return None, "Token expired"
+    except jwt.InvalidTokenError:
+        return None, "Invalid token"
+    except ValueError:
+        return None, "Invalid user ID format"
+
+
 def admin_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):  # pylint: disable=too-many-return-statements
-        token = None
-        if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]
-        elif "iqoqo_session" in request.cookies:
-            token = request.cookies.get("iqoqo_session")
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get("Authorization", "").split(" ")[1] if "Authorization" in request.headers else request.cookies.get("iqoqo_session")
 
         if not token:
             return jsonify({"success": False, "error": "Authentication required"}), 401
-        try:
-            payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
 
-            # Check blocklist
-            if _is_token_revoked(payload.get("jti")):
-                return jsonify({"success": False, "error": "Token revoked"}), 401
+        uid, err = _get_user_id_from_token(token)
+        if err:
+            return jsonify({"success": False, "error": err}), 401
 
-            g.user_id = uuid.UUID(payload["sub"])
-        except jwt.ExpiredSignatureError:
-            return jsonify({"success": False, "error": "Token expired"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"success": False, "error": "Invalid token"}), 401
-        except ValueError:
-            return jsonify({"success": False, "error": "Invalid user ID format"}), 401
-
-        user = db.session.get(User, g.user_id)
+        g.user_id = uid
+        user = db.session.get(User, uid)
         is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
         if not is_admin:
             return jsonify({"success": False, "error": "Admin privileges required"}), 403

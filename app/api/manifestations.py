@@ -438,32 +438,23 @@ def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
-    # pylint: disable=too-many-return-statements
     """Upload an additional image (inlay, disc, back) for a manifestation."""
     manifestation = db.session.get(Manifestation, manifestation_id)
     if not manifestation:
         return jsonify({"success": False, "error": "Manifestation not found"}), 404
 
-    if "image" not in request.files:
-        return jsonify({"success": False, "error": "No image provided"}), 400
-
-    file = request.files["image"]
-    if not file.filename:
+    file = request.files.get("image")
+    if not file or not file.filename:
         return jsonify({"success": False, "error": "No selected file"}), 400
 
     try:
-        # Use common validation helper
         validate_upload_file(file)
-
-        image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
-
-        # Save and optimize
+        image_label = request.form.get("label", "other")
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
     except ValueError as e:
-        error_message = str(e)
-        status_code = 413 if "too large" in error_message.lower() else 400
-        return jsonify({"success": False, "error": error_message}), status_code
+        msg = str(e)
+        return jsonify({"success": False, "error": msg}), (413 if "too large" in msg.lower() else 400)
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 

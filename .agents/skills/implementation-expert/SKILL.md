@@ -12,16 +12,19 @@ This skill governs codebase changes. It handles provided code OR generates requi
 
 ## Core Rules
 
-1. **Source of Truth**: `.context/private-notes/` is law. Plan files there override all.
+1. **Source of Truth**: `.context/private-notes/` is law. Plan files there override all. Do not update those files unless explicitly told so.
 2. **Mirror Patterns**: Match existing style, imports, and logic exactly. No "improvements" unless asked.
 3. **Type Safety**: No `# type: ignore` unless for SQLAlchemy dynamic attrs or broken external stubs. Fix the code.
 4. **Environment**: Use `.venv/bin/` for all Python tools (pytest, flask, alembic).
 5. **Copyright**: Every new file (.py, .ts, .tsx) MUST have the standard iqoqo AGPL header.
 6. **FRBR Hierarchy**: Respect Work -> Expression -> Manifestation -> Item ontology.
+7. **Context**: Discover via wikilinks in frontmatter
+8. **Tests**: All new code or code changes needs to be covered with tests: backend, frontend, or e2e - depending on their nature.
+9. **Refactors**: Prefer small refactors over large ones. If a large refactor is needed, it should be documented in a separate plan file and approved before implementation.
 
 ## Implementation Workflow
 
-### Phase 1: Planning (If no code provided)
+### Phase 1: Planning (If no code provided, provided code is incomplete or misaligned)
 - **Explore**: Search `app/api/`, `app/core/`, `app/db/`, and `frontend/components/` for similar patterns.
 - **Draft**: Create incremental snippets (patches) matching explored patterns.
 - **Markers**: Use `Add to {path} after {context}:` to define insertion points.
@@ -31,6 +34,13 @@ This skill governs codebase changes. It handles provided code OR generates requi
 - **QA**: Run `make lint` and `make test`. If fail, fix code until green.
 - **Cleanup**: Auto-fix lints with `ruff check --fix` or `black` without changing logic.
 - **Git**: Conclude with `git add` and `git commit` using Conventional Commits.
+
+### Phase 3: Human verification
+- **Plan**: Provide plan for manual verification of changes introduced in this batch
+- **Context**: Use development notes and roadmap documents (in `.context/private-notes/`) to highlight what needs to be verified
+- **Update**: When human confirms all tests pass - you can tick corresponding checkboxes in development plan and roadmap documents to mark them as completed. If something is missing - ask human for clarification before continuing.
+- **CHANGELOG**: Update CHANGELOG.md to reflect introduced changes; use current version number.
+
 
 ## Copyright Header
 ```python
