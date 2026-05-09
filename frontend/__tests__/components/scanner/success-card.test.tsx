@@ -133,6 +133,27 @@ describe("SuccessCard", () => {
     });
   });
 
+  it("calls apiClient.post to /scan and shows success toast when 'Add to Wishlist' succeeds", async () => {
+    mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 101, manifestation_id: 102 } } });
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+
+    // Explicitly clear mock to avoid interference from earlier renders
+    mockApiPost.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /add to.*wishlist/i }));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith("/scan", {
+        barcode: "9780441013593",
+        format: "book",
+        manifestation_id: undefined,
+        collection_status: "wishlist",
+      });
+      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
+      expect(mockPush).toHaveBeenCalledWith("/item/101");
+    });
+  });
+
   it("displays the barcode under the title", () => {
     // Provide meta without its own ISBN to test fallback to the 'isbn' prop
     const metaWithoutIsbn = { ...SAMPLE_META, isbn: undefined, barcode: undefined, identifier: undefined };

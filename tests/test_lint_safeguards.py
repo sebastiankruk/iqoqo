@@ -24,27 +24,32 @@ def test_no_too_many_return_statements_disables():
     Ensure that 'too-many-return-statements' is not disabled in the app/ directory.
     This enforces clean refactoring into Strategy patterns.
     """
-    search_pattern = "pylint: disable=too-many-return-statements"
-    search_dir = "app/"
-
-    # Use grep to find the pattern
-    try:
-        result = subprocess.run(["grep", "-r", search_pattern, search_dir], capture_output=True, text=True, check=False)
-
-        # If grep finds something, it returns 0
-        if result.returncode == 0:
-            found_lines = result.stdout.strip().split("\n")
-            error_msg = f"Forbidden pylint suppression found in {len(found_lines)} locations:\n"
-            error_msg += "\n".join(found_lines)
-            pytest_fail(error_msg)
-
-    except FileNotFoundError:
-        # Fallback if grep is not available (unlikely on Mac/Linux)
-        pass
-
-
-def pytest_fail(message):
-    """Helper to fail the test with a message."""
     import pytest
 
-    pytest.fail(message)
+    forbidden_pattern = "pylint: disable=too-many-return-statements"
+    search_dir = "app"
+
+    if not os.path.exists(search_dir):
+        pytest.fail(f"Search directory '{search_dir}' does not exist.")
+
+    violations = []
+
+    for root, _, files in os.walk(search_dir):
+        for file in files:
+            if not file.endswith(".py"):
+                continue
+
+            file_path = os.path.join(root, file)
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for line_num, line in enumerate(f, 1):
+                        if forbidden_pattern in line:
+                            violations.append(f"{file_path}:{line_num}: {line.strip()}")
+            except (IOError, UnicodeDecodeError) as e:
+                # Optionally handle or fail on unreadable files
+                violations.append(f"ERROR: Could not read {file_path}: {e}")
+
+    if violations:
+        error_msg = f"Forbidden pylint suppression found in {len(violations)} locations:\n"
+        error_msg += "\n".join(violations)
+        pytest.fail(error_msg)
