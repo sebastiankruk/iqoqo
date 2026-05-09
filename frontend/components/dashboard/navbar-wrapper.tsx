@@ -18,10 +18,20 @@
 import { Suspense } from "react";
 import { Navbar } from "./navbar";
 
+/**
+ * Skeleton placeholder for the Navbar during suspense loading.
+ *
+ * @returns {JSX.Element} The rendered skeleton.
+ */
 function NavbarSkeleton() {
   return <div className="sticky top-0 z-50 h-16 bg-primary" />;
 }
 
+/**
+ * Navbar component wrapped in Suspense for client-side hydration.
+ *
+ * @returns {JSX.Element} The rendered navbar with suspense.
+ */
 export function NavbarWithSuspense() {
   return (
     <Suspense fallback={<NavbarSkeleton />}>

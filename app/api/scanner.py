@@ -31,7 +31,7 @@ from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.strategies.lookup import LookupStrategyFactory
-from app.utils.discogs import fetch_discogs_candidates, fetch_discogs_by_id
+from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -103,14 +103,16 @@ def _find_locally(code: str) -> Manifestation | None:
 
 def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | None) -> Manifestation:
     """Waterfall helper to ingest based on format hint. Drastically reduces cyclomatic complexity."""
-    if category_hint == "music":
-        return IngestService.ingest_audio_from_barcode(barcode)
-    if category_hint == "movie":
-        return IngestService.ingest_video_from_barcode(barcode)
-    if category_hint == "board_game":
-        return IngestService.ingest_game_from_barcode(barcode)
-    if category_hint == "puzzle":
-        return IngestService.ingest_puzzle_from_barcode(barcode)
+    ingest_map = {
+        "music": IngestService.ingest_audio_from_barcode,
+        "movie": IngestService.ingest_video_from_barcode,
+        "board_game": IngestService.ingest_game_from_barcode,
+        "puzzle": IngestService.ingest_puzzle_from_barcode,
+    }
+
+    if category_hint in ingest_map:
+        return ingest_map[category_hint](barcode)
+
     if category_hint == "text" or format_hint == "audiobook":
         return IngestService.ingest_from_isbn(barcode)
 
@@ -128,13 +130,13 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
         IngestService.ingest_video_from_barcode,
         IngestService.ingest_game_from_barcode,
         IngestService.ingest_puzzle_from_barcode,
-        IngestService.ingest_from_isbn
+        IngestService.ingest_from_isbn,
     ]:
         try:
             return ingest_func(barcode)
         except ValueError:
             continue
-            
+
     raise ValueError("Exhausted all ingestion methods")
 
 
@@ -158,6 +160,7 @@ def lookup_barcode_preview(query: str):
     query_obj = Manifestation.query.join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
 
     from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
     category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
     # Filter by format if hint is provided to avoid cross-media collisions
@@ -316,59 +319,60 @@ def scan_barcode():
     barcode = data.get("barcode")
     manifestation_id = data.get("manifestation_id")
     format_hint = data.get("format")
-    collection_status = data.get("collection_status", "available")  # Defaults to available, accepts wishlist
+    collection_status = data.get("collection_status", "available")
 
     if not barcode and not manifestation_id:
         return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
 
     is_new_manifestation = False
     manifestation = None
-
-    # Priority 1: Direct Manifestation ID
     if manifestation_id:
         manifestation = db.session.get(Manifestation, manifestation_id)
 
-    # Priority 2: Check DB by barcode
     if not manifestation and barcode:
         manifestation = _find_locally(barcode)
+        if not manifestation:
+            try:
+                from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
-        category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+                category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
-        try:
-            # Support pure numeric Discogs Release IDs
-            is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
-            if is_discogs_numeric and (category_hint == "music" or format_hint is None):
-                meta = fetch_discogs_by_id(barcode)
-                if meta:
-                    manifestation = IngestService.ingest_from_meta(meta)
+                # Support pure numeric Discogs Release IDs
+                is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
+                if is_discogs_numeric and (category_hint == "music" or format_hint is None):
+                    meta = fetch_discogs_by_id(barcode)
+                    if meta:
+                        manifestation = IngestService.ingest_from_meta(meta)
 
-            if not manifestation:
-                manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
-            is_new_manifestation = True
-            
-        except ValueError as e:
-            return jsonify({"success": False, "data": None, "error": f"Invalid barcode or not found: {str(e)}"}), 400
-        except ConnectionError as e:
-            return jsonify({"success": False, "data": None, "error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:  # pylint: disable=broad-except
-            _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
-            return jsonify({"success": False, "data": None, "error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
+                if not manifestation:
+                    manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
+                is_new_manifestation = True
+
+            except (ValueError, ConnectionError, Exception) as e:  # pylint: disable=broad-exception-caught
+                _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
+                err_msg = str(e)
+                code = 404
+                if isinstance(e, ConnectionError):
+                    code = 503
+                elif isinstance(e, ValueError):
+                    code = 400
+                return jsonify({"success": False, "data": None, "error": f"Resolution failed: {err_msg}"}), code
 
     if not manifestation:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
         return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
 
     from app.db.core import CATEGORY_PROGRESS_STATUSES
+
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
     default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
 
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
-        manifestation_id=manifestation.id, 
-        owner_id=getattr(g, "user_id", None), 
-        status=default_progress, 
-        collection_status=collection_status
+        manifestation_id=manifestation.id,
+        owner_id=getattr(g, "user_id", None),
+        status=default_progress,
+        collection_status=collection_status,
     )
     db.session.add(new_item)
 
@@ -425,45 +429,30 @@ def scan_barcode():
 @require_permission(PermissionName.LLM_GENERATE_METADATA)
 def extract_from_cover():
     """Submit a cover image for asynchronous metadata extraction."""
-    if "cover" not in request.files:
-        return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
-
-    file = request.files["cover"]
-    if not file.filename:
-        return jsonify({"success": False, "data": None, "error": "No selected file"}), 400
+    file = request.files.get("cover")
+    error_msg = "No file provided" if file is None else ("No selected file" if not file.filename else None)
+    if error_msg:
+        return jsonify({"success": False, "data": None, "error": error_msg}), 400
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in _ALLOWED_EXTENSIONS:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": f"Invalid file type. Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
-                }
-            ),
-            400,
-        )
+        return jsonify({"success": False, "data": None, "error": f"Invalid file type: {ext}"}), 400
 
     if request.content_length and request.content_length > _MAX_COVER_SIZE:
-        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
+        return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
     if image_bytes is None:
-        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
+        return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img.verify()
+        Image.open(io.BytesIO(image_bytes)).verify()
     except (OSError, SyntaxError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    user_id = getattr(g, "user_id", None)
-
-    # Dispatch to background task queue
-    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)
+    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=getattr(g, "user_id", None))
 
     return jsonify({"success": True, "data": {"task_id": task_id}, "error": None}), 202
 

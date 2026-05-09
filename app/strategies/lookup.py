@@ -18,7 +18,6 @@ Lookup strategies for barcode and external identifier metadata retrieval.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional
 
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_metadata
@@ -30,9 +29,9 @@ from app.utils.upc import resolve_physical_media
 
 class LookupStrategy(ABC):
     """Base interface for media metadata lookup strategies."""
-    
+
     @abstractmethod
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         """
         Look up metadata for a given barcode or query.
         Returns a tuple of (metadata_dict, provider_name).
@@ -41,10 +40,10 @@ class LookupStrategy(ABC):
 
 
 class VideoLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         upc_meta = resolve_physical_media(barcode)
-        
+
         if upc_meta and upc_meta.get("title"):
             title = clean_video_title(upc_meta["title"])
             meta = fetch_video_metadata(title)
@@ -56,18 +55,18 @@ class VideoLookupStrategy(LookupStrategy):
                 meta = upc_meta
                 meta["data_source"] = "upc"
                 provider = "upc"
-                
+
         if not meta:
             meta = fetch_video_metadata(barcode)
             if meta:
                 meta["data_source"] = "tmdb"
                 provider = "tmdb"
-                
+
         return meta, provider
 
 
 class BoardGameLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         is_short_numeric = barcode.isdigit() and len(barcode) <= 7
 
@@ -95,12 +94,12 @@ class BoardGameLookupStrategy(LookupStrategy):
                 if meta:
                     meta["data_source"] = "bgg"
                     provider = "bgg"
-                    
+
         return meta, provider
 
 
 class PuzzleLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta = resolve_physical_media(barcode)
         if meta:
             meta["data_source"] = "upc"
@@ -109,7 +108,7 @@ class PuzzleLookupStrategy(LookupStrategy):
 
 
 class AudioLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         if barcode.isdigit() and len(barcode) <= 7:
             meta = fetch_discogs_by_id(barcode)
@@ -128,12 +127,12 @@ class AudioLookupStrategy(LookupStrategy):
             if meta:
                 meta["data_source"] = "musicbrainz"
                 provider = "musicbrainz"
-                
+
         return meta, provider
 
 
 class BookLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         canonical = canonicalize_isbn(barcode)
         if canonical:
@@ -147,20 +146,20 @@ class BookLookupStrategy(LookupStrategy):
             if meta:
                 meta["data_source"] = "discogs"
                 provider = "discogs"
-                
+
         if not meta:
             meta = fetch_audio_metadata(barcode)
             if meta:
                 meta["data_source"] = "musicbrainz"
                 provider = "musicbrainz"
-                
+
         return meta, provider
 
 
 class DefaultFallbackStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: Optional[str] = None) -> Tuple[Optional[dict], Optional[str]]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
-        
+
         # Prioritize ISBN for ISBN-like barcodes (original scanner behavior)
         is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
         if is_isbn_like:
@@ -177,14 +176,14 @@ class DefaultFallbackStrategy(LookupStrategy):
         if meta:
             meta["data_source"] = "discogs"
             provider = "discogs"
-            
+
         if not meta:
             meta = fetch_audio_metadata(barcode)
             if meta:
                 meta["data_source"] = "musicbrainz"
                 provider = "musicbrainz"
 
-        if not meta and not is_isbn_like: # Don't double check if already tried above
+        if not meta and not is_isbn_like:  # Don't double check if already tried above
             canonical = canonicalize_isbn(barcode)
             if canonical:
                 meta = fetch_isbn_metadata(canonical)
@@ -210,7 +209,7 @@ class DefaultFallbackStrategy(LookupStrategy):
                     else:
                         meta = upc_meta
                         provider = "upc"
-                        
+
             if not meta:
                 meta = fetch_video_metadata(barcode)
                 if meta:
@@ -221,15 +220,15 @@ class DefaultFallbackStrategy(LookupStrategy):
                     if meta:
                         meta["data_source"] = "bgg"
                         provider = "bgg"
-                        
+
         return meta, provider
 
 
 class LookupStrategyFactory:
     """Factory to retrieve the appropriate lookup strategy based on format hint."""
-    
+
     @staticmethod
-    def get_strategy(category_hint: Optional[str]) -> LookupStrategy:
+    def get_strategy(category_hint: str | None) -> LookupStrategy:
         strategies = {
             "movie": VideoLookupStrategy(),
             "board_game": BoardGameLookupStrategy(),
@@ -238,4 +237,6 @@ class LookupStrategyFactory:
             "book": BookLookupStrategy(),
             "text": BookLookupStrategy(),
         }
+        if category_hint is None:
+            return DefaultFallbackStrategy()
         return strategies.get(category_hint, DefaultFallbackStrategy())

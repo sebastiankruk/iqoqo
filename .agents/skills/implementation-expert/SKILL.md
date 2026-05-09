@@ -35,7 +35,12 @@ This skill governs codebase changes. It handles provided code OR generates requi
 - **Cleanup**: Auto-fix lints with `ruff check --fix` or `black` without changing logic.
 - **Git**: Conclude with `git add` and `git commit` using Conventional Commits.
 
-### Phase 3: Human verification
+
+### Phase 3: Linting and Testing
+- **Linting**: `make lint` should not produce errors
+- **Test** `make test` should pass.
+
+### Phase 4: Human verification
 - **Plan**: Provide plan for manual verification of changes introduced in this batch
 - **Context**: Use development notes and roadmap documents (in `.context/private-notes/`) to highlight what needs to be verified
 - **Update**: When human confirms all tests pass - you can tick corresponding checkboxes in development plan and roadmap documents to mark them as completed. If something is missing - ask human for clarification before continuing.

@@ -58,7 +58,7 @@ def test_want_to_play_status_acceptance(client, normal_user_headers, app):
 
 def test_data_source_injection_discogs(client, normal_user_headers, app):
     """Verify that Discogs lookups inject 'data_source': 'discogs' into meta."""
-    with patch("app.api.scanner.fetch_discogs_by_id") as mock_fetch:
+    with patch("app.strategies.lookup.fetch_discogs_by_id") as mock_fetch:
         mock_fetch.return_value = {"title": "Test Discogs Release", "artist": "Test Artist", "thumb": "http://example.com/cover.jpg"}
 
         # Call lookup with audio hint
@@ -72,8 +72,10 @@ def test_data_source_injection_discogs(client, normal_user_headers, app):
 
 def test_data_source_injection_barcode_tmdb(client, normal_user_headers, app):
     """Verify that barcode lookups for video inject 'data_source': 'tmdb'."""
-    with patch("app.api.scanner.resolve_physical_media") as mock_upc, patch("app.api.scanner.fetch_video_metadata") as mock_tmdb:
-
+    with (
+        patch("app.strategies.lookup.resolve_physical_media") as mock_upc,
+        patch("app.strategies.lookup.fetch_video_metadata") as mock_tmdb,
+    ):
         mock_upc.return_value = {"title": "The Movie", "format": "DVD"}
         mock_tmdb.return_value = {"title": "The Movie (2024)", "year": "2024"}
 
@@ -88,8 +90,7 @@ def test_data_source_injection_barcode_tmdb(client, normal_user_headers, app):
 
 def test_data_source_injection_barcode_bgg(client, normal_user_headers, app):
     """Verify that barcode lookups for games inject 'data_source': 'bgg'."""
-    with patch("app.api.scanner.resolve_physical_media") as mock_upc, patch("app.api.scanner.fetch_bgg_metadata") as mock_bgg:
-
+    with patch("app.strategies.lookup.resolve_physical_media") as mock_upc, patch("app.strategies.lookup.fetch_bgg_metadata") as mock_bgg:
         mock_upc.return_value = {"title": "The Game", "format": "Board Game"}
         mock_bgg.return_value = {"title": "The Game (2nd Edition)", "min_players": 2}
 
@@ -108,8 +109,7 @@ def test_data_source_injection_barcode_isbn(client, normal_user_headers, app):
     The backend fetch_isbn_metadata sets meta['Source'] to 'Google Books' or
     'Open Library'. The scanner converts this to a snake_case data_source value.
     """
-    with patch("app.api.scanner.fetch_isbn_metadata") as mock_isbn, patch("app.api.scanner.canonicalize_isbn") as mock_canon:
-
+    with patch("app.strategies.lookup.fetch_isbn_metadata") as mock_isbn, patch("app.strategies.lookup.canonicalize_isbn") as mock_canon:
         mock_canon.return_value = "9781234567890"
         # Include the Source field that fetch_isbn_metadata always sets
         mock_isbn.return_value = {"title": "The Book", "authors": ["Me"], "Source": "Google Books"}

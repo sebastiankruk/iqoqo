@@ -39,6 +39,15 @@ interface SuccessCardProps {
 /**
  * SuccessCard component shown after a successful scan.
  * Displays item metadata and provides options to add it to Library or Wishlist.
+ *
+ * @param {SuccessCardProps} props - The component props.
+ * @param {string} props.isbn - The barcode/identifier.
+ * @param {IsbnMeta} props.meta - The metadata for the scanned item.
+ * @param {Function} props.onDismiss - Callback to dismiss the card.
+ * @param {Function} [props.onScanAnother] - Callback to start a new scan.
+ * @param {File | null} [props.snappedCover] - The captured cover image.
+ * @param {Function} [props.onShowManualForm] - Callback to show the manual entry form.
+ * @returns {JSX.Element} The rendered success card.
  */
 export function SuccessCard({
   isbn,
@@ -101,7 +110,7 @@ export function SuccessCard({
       : Array.isArray(extendedMeta.mechanics)
         ? extendedMeta.mechanics
         : [];
-  
+
   const minPlayers =
     meta.min_players ??
     (extendedMeta.min_players as number | undefined) ??
@@ -112,7 +121,7 @@ export function SuccessCard({
     (extendedMeta.maxPlayers as number | undefined);
   const playerCountDisplay =
     minPlayers && maxPlayers ? `${minPlayers}-${maxPlayers} players` : minPlayers ? `${minPlayers}+ players` : null;
-  
+
   const runtime =
     meta.runtime ?? (extendedMeta.runtime as number | undefined) ?? (extendedMeta.Runtime as number | undefined);
 
@@ -338,7 +347,7 @@ export function SuccessCard({
                     </Button>
                   </>
                 )}
-                
+
                 <div className="w-full flex gap-3">
                   <Button
                     variant="outline"
