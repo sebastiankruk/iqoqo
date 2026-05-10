@@ -103,15 +103,13 @@ def _find_locally(code: str) -> Manifestation | None:
 
 def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | None) -> Manifestation:
     """Waterfall helper to ingest based on format hint. Drastically reduces cyclomatic complexity."""
-    ingest_map = {
-        "music": IngestService.ingest_audio_from_barcode,
-        "movie": IngestService.ingest_video_from_barcode,
-        "board_game": IngestService.ingest_game_from_barcode,
-        "puzzle": IngestService.ingest_puzzle_from_barcode,
-    }
+    from app.core.taxonomy import CATEGORY_INGEST_METHOD
+
+    ingest_map = {cat: getattr(IngestService, method) for cat, method in CATEGORY_INGEST_METHOD.items()}
 
     if category_hint in ingest_map:
-        return ingest_map[category_hint](barcode)
+        result: Manifestation = ingest_map[category_hint](barcode)
+        return result
 
     if category_hint == "text" or format_hint == "audiobook":
         return IngestService.ingest_from_isbn(barcode)
@@ -224,7 +222,8 @@ def lookup_barcode_preview(query: str):
             _record_scan_telemetry(query, format_hint, "discogs", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
 
-    # Leverage the Strategy Pattern
+    # Leverage the Strategy Pattern for format-specific metadata lookups
+    # (e.g., ISBN for books, UPC for music/movies, BGG for games)
     strategy = LookupStrategyFactory.get_strategy(category_hint)
     meta, provider = strategy.lookup(barcode, query)
 
@@ -232,7 +231,7 @@ def lookup_barcode_preview(query: str):
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
-    # Ensure frontend gets normalized keys for preview
+    # Ensure frontend gets normalized keys for preview regardless of source API schema
     if "title" not in meta:
         meta["title"] = meta.get("Title") or "Unknown Title"
     if "cover_url" not in meta:
@@ -320,6 +319,24 @@ def scan_barcode():
     manifestation_id = data.get("manifestation_id")
     format_hint = data.get("format")
     collection_status = data.get("collection_status", "available")
+
+    from app.core.taxonomy import COLLECTION_STATUSES
+
+    # Normalize legacy 'wishlist' to canonical 'wish_list'
+    STATUS_ALIASES = {"wishlist": "wish_list"}
+    collection_status = STATUS_ALIASES.get(collection_status, collection_status)
+
+    if collection_status not in COLLECTION_STATUSES:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}",
+                }
+            ),
+            400,
+        )
 
     if not barcode and not manifestation_id:
         return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
@@ -430,18 +447,15 @@ def scan_barcode():
 def extract_from_cover():
     """Submit a cover image for asynchronous metadata extraction."""
     file = request.files.get("cover")
-    error_msg = "No file provided" if file is None else ("No selected file" if not file.filename else None)
-    if error_msg:
-        return jsonify({"success": False, "data": None, "error": error_msg}), 400
+    if not file or not file.filename:
+        return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in _ALLOWED_EXTENSIONS:
         return jsonify({"success": False, "data": None, "error": f"Invalid file type: {ext}"}), 400
 
-    if request.content_length and request.content_length > _MAX_COVER_SIZE:
-        return jsonify({"success": False, "data": None, "error": "File too large"}), 413
-
-    image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
+    too_large = request.content_length and request.content_length > _MAX_COVER_SIZE
+    image_bytes = None if too_large else _read_bounded(file, _MAX_COVER_SIZE)
     if image_bytes is None:
         return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 

@@ -130,7 +130,7 @@ export function SuccessCard({
   if (isAudio) formatDisplay = "Audio Media";
   if (isGame) formatDisplay = "Board Game";
 
-  const handleAdd = async (collectionStatus: "available" | "wishlist") => {
+  const handleAdd = async (collectionStatus: "available" | "wish_list") => {
     if (isMissingID) {
       toast.error("Standard barcode required to add to collection.");
       return;
@@ -164,7 +164,7 @@ export function SuccessCard({
           toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        toast.success(`"${title}" added to your ${collectionStatus === "wishlist" ? "Wishlist" : "Library"}!`);
+        toast.success(`"${title}" added to your ${collectionStatus === "wish_list" ? "Wishlist" : "Library"}!`);
       }
 
       if (data.item_id) {
@@ -334,7 +334,7 @@ export function SuccessCard({
                       className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
                       variant="outline"
                       disabled={adding}
-                      onClick={() => handleAdd("wishlist")}
+                      onClick={() => handleAdd("wish_list")}
                     >
                       {adding ? (
                         "Adding..."
@@ -345,25 +345,25 @@ export function SuccessCard({
                         </>
                       )}
                     </Button>
+
+                    <Button
+                      variant="outline"
+                      className="flex-1 min-w-[140px] h-12 rounded-xl"
+                      onClick={onScanAnother ?? onDismiss}
+                      aria-label="Scan Another"
+                    >
+                      Scan Another
+                    </Button>
                   </>
                 )}
 
-                <div className="w-full flex gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-12 rounded-xl"
-                    onClick={onScanAnother ?? onDismiss}
-                    aria-label="Scan Another"
-                  >
-                    Scan Another
-                  </Button>
-
+                <div className="w-full flex justify-center">
                   <Button
                     variant="ghost"
-                    className="flex-1 h-12 rounded-xl text-muted-foreground hover:text-foreground"
+                    className="w-full sm:w-auto h-12 rounded-xl text-muted-foreground hover:text-foreground"
                     onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
                   >
-                    Enter Manually
+                    Wrong item? Enter Manually
                   </Button>
                 </div>
               </div>

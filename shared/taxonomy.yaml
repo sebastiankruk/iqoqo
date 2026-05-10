@@ -174,3 +174,31 @@ progress_statuses:
 
 # Scanner top-bar formats (categories shown in scanner UI)
 scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle"]
+
+# Mapping of media categories to their respective lookup strategy classes
+lookup_strategies:
+  movie:
+    class: VideoLookupStrategy
+    waterfall_order: 1
+  music:
+    class: AudioLookupStrategy
+    waterfall_order: 2
+  book:
+    class: BookLookupStrategy
+    waterfall_order: 3
+  board_game:
+    class: BoardGameLookupStrategy
+    waterfall_order: 4
+  puzzle:
+    class: PuzzleLookupStrategy
+    waterfall_order: 5
+  text:
+    class: BookLookupStrategy
+    waterfall_order: 3
+
+# Mapping of media categories to IngestService methods for hint-based ingestion
+ingest_methods:
+  music: ingest_audio_from_barcode
+  movie: ingest_video_from_barcode
+  board_game: ingest_game_from_barcode
+  puzzle: ingest_puzzle_from_barcode

@@ -128,7 +128,7 @@ def get_roles():
 
     if request.method == "POST":
         if not _has_permission(user, PermissionName.WRITE_ROLES):
-            return jsonify({"success": False, "error": "Permission denied"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
         data = request.json or {}
         name = data.get("name", "").strip()
@@ -149,7 +149,7 @@ def get_roles():
         return jsonify({"success": True, "data": {"id": role.id, "name": role.name, "is_protected": False}})
 
     if not _has_permission(user, PermissionName.READ_ROLES):
-        return jsonify({"success": False, "error": "Permission denied"}), 403
+        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
     roles = Role.query.all()
     protected_roles = {"admin", "user", "contributor"}

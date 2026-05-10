@@ -197,3 +197,21 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
 }
 
 SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle")
+
+LOOKUP_STRATEGY_MAP: dict[str, str] = {
+    "movie": "VideoLookupStrategy",
+    "music": "AudioLookupStrategy",
+    "book": "BookLookupStrategy",
+    "board_game": "BoardGameLookupStrategy",
+    "puzzle": "PuzzleLookupStrategy",
+    "text": "BookLookupStrategy",
+}
+
+LOOKUP_WATERFALL_ORDER: list[str] = ["movie", "music", "book", "board_game", "puzzle"]
+
+CATEGORY_INGEST_METHOD: dict[str, str] = {
+    "music": "ingest_audio_from_barcode",
+    "movie": "ingest_video_from_barcode",
+    "board_game": "ingest_game_from_barcode",
+    "puzzle": "ingest_puzzle_from_barcode",
+}

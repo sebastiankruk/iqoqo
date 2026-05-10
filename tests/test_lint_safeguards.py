@@ -41,11 +41,11 @@ def test_no_too_many_return_statements_disables():
 
             file_path = os.path.join(root, file)
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     for line_num, line in enumerate(f, 1):
                         if forbidden_pattern in line:
                             violations.append(f"{file_path}:{line_num}: {line.strip()}")
-            except (IOError, UnicodeDecodeError) as e:
+            except (OSError, UnicodeDecodeError) as e:
                 # Optionally handle or fail on unreadable files
                 violations.append(f"ERROR: Could not read {file_path}: {e}")
 

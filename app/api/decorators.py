@@ -126,11 +126,15 @@ def _get_user_id_from_token(token: str) -> tuple[uuid.UUID | None, str | None]:
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        token = (
-            request.headers.get("Authorization", "").split(" ")[1]
-            if "Authorization" in request.headers
-            else request.cookies.get("iqoqo_session")
-        )
+        token = None
+        if "Authorization" in request.headers:
+            auth_header = request.headers.get("Authorization", "")
+            parts = auth_header.split(" ", 1)
+            if len(parts) == 2 and parts[0] == "Bearer":
+                token = parts[1]
+
+        if not token:
+            token = request.cookies.get("iqoqo_session")
 
         if not token:
             return jsonify({"success": False, "error": "Authentication required"}), 401

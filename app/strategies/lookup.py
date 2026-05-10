@@ -17,6 +17,7 @@
 Lookup strategies for barcode and external identifier metadata retrieval.
 """
 
+import sys
 from abc import ABC, abstractmethod
 
 from app.utils.bgg import fetch_bgg_metadata
@@ -53,8 +54,8 @@ class VideoLookupStrategy(LookupStrategy):
                 meta.update({k: v for k, v in upc_meta.items() if k not in meta})
             else:
                 meta = upc_meta
-                meta["data_source"] = "upc"
                 provider = "upc"
+                meta["data_source"] = "upc"
 
         if not meta:
             meta = fetch_video_metadata(barcode)
@@ -209,6 +210,7 @@ class DefaultFallbackStrategy(LookupStrategy):
                     else:
                         meta = upc_meta
                         provider = "upc"
+                        meta["data_source"] = "upc"
 
             if not meta:
                 meta = fetch_video_metadata(barcode)
@@ -229,14 +231,20 @@ class LookupStrategyFactory:
 
     @staticmethod
     def get_strategy(category_hint: str | None) -> LookupStrategy:
-        strategies = {
-            "movie": VideoLookupStrategy(),
-            "board_game": BoardGameLookupStrategy(),
-            "puzzle": PuzzleLookupStrategy(),
-            "music": AudioLookupStrategy(),
-            "book": BookLookupStrategy(),
-            "text": BookLookupStrategy(),
-        }
-        if category_hint is None:
+        """Dynamically resolve strategy based on ontology-driven LOOKUP_STRATEGY_MAP."""
+        from app.core.taxonomy import LOOKUP_STRATEGY_MAP
+
+        if not category_hint:
             return DefaultFallbackStrategy()
-        return strategies.get(category_hint, DefaultFallbackStrategy())
+
+        strategy_class_name: str | None = LOOKUP_STRATEGY_MAP.get(category_hint)
+        if not strategy_class_name:
+            return DefaultFallbackStrategy()
+
+        strategy_class = getattr(sys.modules[__name__], strategy_class_name, None)
+        if strategy_class and issubclass(strategy_class, LookupStrategy):
+            import typing
+
+            return typing.cast(LookupStrategy, strategy_class())
+
+        return DefaultFallbackStrategy()
