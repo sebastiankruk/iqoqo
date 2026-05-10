@@ -85,9 +85,9 @@ class TestCoverCleanupOnFailure:
 
         has_cleanup = "os.remove" in source or "delete" in source or "cleanup" in source or "finally" in source
 
-        assert has_cleanup, (
-            "upload_cover should have file cleanup logic in exception handler. " "Check for os.remove or similar cleanup in except block."
-        )
+        assert (
+            has_cleanup
+        ), "upload_cover should have file cleanup logic in exception handler. Check for os.remove or similar cleanup in except block."
 
     def test_rollback_handles_missing_file(self, app):
         """Rollback should handle case where file was never created."""

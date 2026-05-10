@@ -146,7 +146,7 @@ test.describe("Lending Workflow", () => {
     await expect(page.getByText("Lending Test Book")).toBeVisible({ timeout: 5000 });
 
     // 6. Click Add to Collection
-    await page.getByRole("button", { name: "Add to My Collection" }).click();
+    await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 7. Verify dynamic success message toast
     await expect(page.getByText(/"Lending Test Book" added to your library!/i)).toBeVisible();

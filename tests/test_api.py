@@ -351,7 +351,7 @@ def test_vision_extract_empty_filename(client, vision_user_headers):
     assert response.status_code == 400
     data = response.json
     assert data["success"] is False
-    assert "No selected file" in data["error"]
+    assert "No file provided" in data["error"]
 
 
 @pytest.mark.parametrize("bad_ext", ["exe", "txt", "gif", "pdf"])

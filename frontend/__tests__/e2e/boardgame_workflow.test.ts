@@ -132,7 +132,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("Dice Rolling")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to My Collection" }).click();
+    await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Catan" added to your library!/i)).toBeVisible();
@@ -228,7 +228,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("2-5 players")).toBeVisible();
 
     // 8. Add to collection
-    await page.getByRole("button", { name: "Add to My Collection" }).click();
+    await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 9. Verify success
     await expect(page.getByText(/"Carcassonne" added to your library!/i)).toBeVisible();

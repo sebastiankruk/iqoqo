@@ -108,14 +108,16 @@ describe("SuccessCard", () => {
     // Explicitly clear mock to avoid interference from earlier renders in this file
     mockApiPost.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: /add to.*collection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
 
     await waitFor(() => {
       expect(mockApiPost).toHaveBeenCalledWith("/scan", {
         barcode: "9780441013593",
         format: "book",
+        manifestation_id: undefined,
+        collection_status: "available",
       });
-      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your library!');
+      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Library!');
       expect(mockPush).toHaveBeenCalledWith("/item/99");
     });
   });
@@ -124,10 +126,31 @@ describe("SuccessCard", () => {
     mockApiPost.mockRejectedValueOnce(new Error("Network error"));
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /add to.*collection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Network error");
+    });
+  });
+
+  it("calls apiClient.post to /scan and shows success toast when 'Add to Wishlist' succeeds", async () => {
+    mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 101, manifestation_id: 102 } } });
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+
+    // Explicitly clear mock to avoid interference from earlier renders
+    mockApiPost.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /add to.*wishlist/i }));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith("/scan", {
+        barcode: "9780441013593",
+        format: "book",
+        manifestation_id: undefined,
+        collection_status: "wish_list",
+      });
+      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
+      expect(mockPush).toHaveBeenCalledWith("/item/101");
     });
   });
 

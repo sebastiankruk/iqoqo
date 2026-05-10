@@ -13,12 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
+# pylint: disable=broad-exception-caught, inconsistent-return-statements
 
 import os
 from datetime import date
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 
 from app.api.decorators import admin_required
 from app.core import frbr_service
@@ -128,16 +128,21 @@ def get_roles():
 
     if request.method == "POST":
         if not _has_permission(user, PermissionName.WRITE_ROLES):
-            return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
         data = request.json or {}
         name = data.get("name", "").strip()
+        err = None
         if not name:
-            return jsonify({"success": False, "error": "Role name is required"}), 400
-        if len(name) > 50:
-            return jsonify({"success": False, "error": "Role name too long (max 50 chars)"}), 400
-        if Role.query.filter_by(name=name).first():
-            return jsonify({"success": False, "error": "Role already exists"}), 400
+            err = "Role name is required"
+        elif len(name) > 50:
+            err = "Role name too long"
+        elif Role.query.filter_by(name=name).first():
+            err = "Role already exists"
+
+        if err:
+            return jsonify({"success": False, "error": err}), 400
+
         role = Role(name=name)
         db.session.add(role)
         db.session.commit()
@@ -283,123 +288,107 @@ def _mask_api_key(value: str) -> str:
     return "***"
 
 
+def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
+    """Helper for GET /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    if category == "federation" and not can_federation:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "affiliate" and not can_affiliate:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category in {"external_apis", "apikeys"} and not can_external:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "internal" and not can_internal:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
+    from flask import current_app
+
+    flask_config = current_app.config if current_app else {}
+    result = {}
+
+    if can_external:
+        for key in API_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {
+                "value": (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or "")),
+                "source": source,
+            }
+
+    if can_federation:
+        for key in FEDERATION_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    if can_affiliate:
+        for key in AFFILIATE_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    if can_internal:
+        for key in INTERNAL_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": str(value or ""), "source": source}
+
+    return {"success": True, "data": result}
+
+
+def _put_settings(user: User, data: dict) -> dict:
+    """Helper for PUT /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    key_permissions = {
+        **dict.fromkeys(API_KEYS, can_external),
+        **dict.fromkeys(FEDERATION_KEYS, can_federation),
+        **dict.fromkeys(AFFILIATE_KEYS, can_affiliate),
+        **dict.fromkeys(INTERNAL_KEYS, can_internal),
+    }
+
+    saved = {}
+    for key, value in data.items():
+        if not key_permissions.get(key, True):
+            continue
+
+        if isinstance(value, str) and value.startswith("***"):
+            continue
+
+        setting = InstanceSettings.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            new_setting = InstanceSettings()
+            new_setting.key = key
+            new_setting.value = value
+            db.session.add(new_setting)
+        saved[key] = value
+
+    db.session.commit()
+    return {"success": True, "data": saved}
+
+
 @admin_bp.route("/settings", methods=["GET", "PUT"])
 @admin_required
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 def manage_settings():
     """Manage global instance settings with category-based RBAC."""
     user = _get_current_user()
-
-    category = request.args.get("category", "all")
+    if not user:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
 
     if request.method == "GET":
-        can_external = _has_permission(user, "config:external_apis")
-        can_federation = _has_permission(user, "config:federation")
-        can_affiliate = _has_permission(user, "config:affiliate")
-        can_internal = _has_permission(user, "config:internal")
+        res = _get_settings(user, request.args.get("category", "all"))
+        return jsonify(res) if isinstance(res, dict) else res
 
-        # Get all DB settings
-        db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
-
-        # Get Flask config keys
-        try:
-            from flask import current_app
-
-            flask_config = current_app.config if current_app else {}
-        except Exception:
-            flask_config = {}
-
-        result = {}
-
-        # Process API keys (external)
-        if can_external:
-            for key in API_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    # Mask all API keys (DB and env); URLs shown unmasked
-                    is_url = key in ("LOCAL_SD_URL",)
-                    if is_url:
-                        result[key] = {"value": str(value), "source": source}
-                    else:
-                        result[key] = {"value": _mask_api_key(str(value)), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Federation keys
-        if can_federation:
-            for key in FEDERATION_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Affiliate keys
-        if can_affiliate:
-            for key in AFFILIATE_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Internal keys
-        if can_internal:
-            for key in INTERNAL_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        if category == "federation" and not can_federation:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_FEDERATION} required"}), 403
-        if category == "affiliate" and not can_affiliate:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_AFFILIATE} required"}), 403
-        if category in {"external_apis", "apikeys"} and not can_external:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_EXTERNAL_APIS} required"}), 403
-        if category == "internal" and not can_internal:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_INTERNAL} required"}), 403
-
-        return jsonify({"success": True, "data": result})
-
-    if request.method == "PUT":
-        can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
-        can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
-        can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
-        can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
-
-        data = request.json or {}
-        saved = {}
-
-        for key, value in data.items():
-            if key in API_KEYS and not can_external:
-                continue
-            if key in FEDERATION_KEYS and not can_federation:
-                continue
-            if key in AFFILIATE_KEYS and not can_affiliate:
-                continue
-            if key in INTERNAL_KEYS and not can_internal:
-                continue
-
-            if isinstance(value, str) and value.startswith("***"):
-                continue
-
-            setting = InstanceSettings.query.filter_by(key=key).first()
-            if setting:
-                setting.value = value
-            else:
-                setting = InstanceSettings(key=key, value=value)
-                db.session.add(setting)
-
-            saved[key] = value
-
-        db.session.commit()
-        return jsonify({"success": True, "data": saved})
+    return jsonify(_put_settings(user, request.json or {}))
 
 
 # --- FRBR ENTITY MANAGEMENT ROUTES ---
@@ -649,23 +638,14 @@ def upload_cover():
     user = _get_current_user()
 
     if not _has_permission(user, PermissionName.EDIT_COVER) and not _has_permission(user, PermissionName.UPLOAD_COVER):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.UPLOAD_COVER} required"}), 403
+        return jsonify({"success": False, "error": "Permission denied"}), 403
 
-    if "file" not in request.files:
-        return jsonify({"success": False, "error": "No file provided"}), 400
-
-    file = request.files["file"]
+    file = request.files.get("file")
     entity_type = request.form.get("entity_type")
     entity_id = request.form.get("entity_id")
 
-    if not file or file.filename == "":
-        return jsonify({"success": False, "error": "Empty file"}), 400
-
-    if entity_type not in ["manifestation", "item"]:
-        return jsonify({"success": False, "error": "Invalid entity type. Must be manifestation or item."}), 400
-
-    if not entity_id or not str(entity_id).isdigit():
-        return jsonify({"success": False, "error": "Invalid or missing entity_id"}), 400
+    if not file or not file.filename or entity_type not in ["manifestation", "item"] or not str(entity_id).isdigit():
+        return jsonify({"success": False, "error": "Invalid request parameters"}), 400
 
     ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
     filename = f"{entity_type}_{entity_id}_cover.{ext}"
@@ -682,23 +662,15 @@ def upload_cover():
         from app.utils.covers import COVERS_DIR
 
         saved_filepath = os.path.join(COVERS_DIR, filename)
-
-        if entity_type == "manifestation":
-            entity = db.session.get(Manifestation, int(entity_id))
-        else:
-            entity = db.session.get(Item, int(entity_id))
+        entity = db.session.get(Manifestation, int(entity_id)) if entity_type == "manifestation" else db.session.get(Item, int(entity_id))
 
         if not entity:
-            return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found"}), 404
+            return jsonify({"success": False, "error": "Entity not found"}), 404
 
         if hasattr(entity, "cover_url"):
             entity.cover_url = public_url
 
-        if not entity.meta:
-            entity.meta = {}
-
-        # Create a new dictionary to ensure SQLAlchemy detects the JSONB mutation
-        new_meta = dict(entity.meta)
+        new_meta = dict(entity.meta or {})
         new_meta["cover_url"] = public_url
         entity.meta = new_meta
 
@@ -706,10 +678,9 @@ def upload_cover():
         return jsonify({"success": True, "data": {"cover_url": public_url}})
     except Exception as e:
         db.session.rollback()
-        # Clean up orphaned file if DB commit failed
         if saved_filepath:
             try:
                 os.remove(saved_filepath)
             except OSError:
-                pass  # Best-effort cleanup
+                pass
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500

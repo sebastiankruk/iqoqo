@@ -201,7 +201,7 @@ class TestPermissionScenarios:
 
                 # Should have edit:cover or upload:cover
                 has_cover_access = len(cover_perms) > 0
-                assert has_cover_access, "Contributor role should have cover permissions " "for the cover editor to be useful"
+                assert has_cover_access, "Contributor role should have cover permissions for the cover editor to be useful"
 
     def test_user_role_limited_cover_access(self, app):
         """Regular user role should have limited cover access."""

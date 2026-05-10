@@ -246,7 +246,7 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByRole("button", { name: "Music" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
-    await page.getByRole("button", { name: "Add to My Collection" }).click();
+    await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 8. Expect routing to newly ingested item details page
     await expect(page).toHaveURL(/.*\/item\/2/);

@@ -115,6 +115,21 @@ def generate_python(data: dict) -> str:
     # Scan Formats
     py_code.append(f'SCAN_FORMATS: tuple[str, ...] = {tuple(data["scan_formats"])}\n')
 
+    # Lookup Strategies
+    lookup_map = {cat: info["class"] for cat, info in data.get("lookup_strategies", {}).items()}
+    py_code.append(f"LOOKUP_STRATEGY_MAP: dict[str, str] = {json.dumps(lookup_map, indent=4)}\n")
+
+    # Waterfall Order
+    waterfall = sorted(
+        [(cat, info["waterfall_order"]) for cat, info in data.get("lookup_strategies", {}).items() if cat != "text"],
+        key=lambda x: x[1],
+    )
+    waterfall_list = [cat for cat, _ in waterfall]
+    py_code.append(f"LOOKUP_WATERFALL_ORDER: list[str] = {json.dumps(waterfall_list)}\n")
+
+    # Ingest Methods
+    py_code.append(f'CATEGORY_INGEST_METHOD: dict[str, str] = {json.dumps(data.get("ingest_methods", {}), indent=4)}\n')
+
     return "\n".join(py_code)
 
 
@@ -266,6 +281,17 @@ def generate_turtle(data: dict) -> str:
         ttl_code.append("")
 
     ttl_code.append("")
+
+    # Lookup Strategies
+    for cat, info in data.get("lookup_strategies", {}).items():
+        cat_suffix = cat.replace("_", " ").title().replace(" ", "")
+        ttl_code.append(f":LookupStrategy{cat_suffix} a :LookupStrategy ;")
+        ttl_code.append(f'    rdfs:label "{cat}" ;')
+        ttl_code.append(f'    :strategyClass "{info["class"]}" ;')
+        ttl_code.append(f'    :waterfallOrder {info["waterfall_order"]} ;')
+        ttl_code.append(f"    :forCategory :MediaCategory{cat_suffix} .")
+    ttl_code.append("")
+
     return "\n".join(ttl_code)
 
 
