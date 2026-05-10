@@ -147,7 +147,7 @@ describe("SuccessCard", () => {
         barcode: "9780441013593",
         format: "book",
         manifestation_id: undefined,
-        collection_status: "wishlist",
+        collection_status: "wish_list",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
       expect(mockPush).toHaveBeenCalledWith("/item/101");
