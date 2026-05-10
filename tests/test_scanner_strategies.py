@@ -19,12 +19,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.strategies.lookup import (
+from app.strategies import (
     AudioLookupStrategy,
     BoardGameLookupStrategy,
     BookLookupStrategy,
     DefaultFallbackStrategy,
     LookupStrategyFactory,
+    PuzzleLookupStrategy,
     VideoLookupStrategy,
 )
 
@@ -39,8 +40,8 @@ def test_strategy_factory_resolves_correctly():
     assert isinstance(LookupStrategyFactory.get_strategy(None), DefaultFallbackStrategy)
 
 
-@patch("app.strategies.lookup.resolve_physical_media")
-@patch("app.strategies.lookup.fetch_video_metadata")
+@patch("app.strategies.video.resolve_physical_media")
+@patch("app.strategies.video.fetch_video_metadata")
 def test_video_strategy_lookup(mock_fetch, mock_resolve):
     strategy = VideoLookupStrategy()
     mock_resolve.return_value = {"title": "The Matrix"}
@@ -53,8 +54,8 @@ def test_video_strategy_lookup(mock_fetch, mock_resolve):
     assert meta["data_source"] == "tmdb"
 
 
-@patch("app.strategies.lookup.canonicalize_isbn")
-@patch("app.strategies.lookup.fetch_isbn_metadata")
+@patch("app.strategies.book.canonicalize_isbn")
+@patch("app.strategies.book.fetch_isbn_metadata")
 def test_book_strategy_lookup(mock_fetch, mock_canonical):
     strategy = BookLookupStrategy()
     mock_canonical.return_value = "9781234567890"

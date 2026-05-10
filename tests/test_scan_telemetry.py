@@ -25,7 +25,7 @@ def test_lookup_barcode_preview_records_telemetry(client, admin_headers):
     barcode = "9783161484100"  # Valid ISBN-13
 
     # Mocking external metadata fetch to avoid network calls
-    with patch("app.strategies.lookup.fetch_isbn_metadata") as mock_fetch:
+    with patch("app.strategies.book.fetch_isbn_metadata") as mock_fetch:
         mock_fetch.return_value = {"Title": "Test Book", "Authors": ["Test Author"], "format": "BOOK"}
 
         response = client.get(f"/api/lookup/{barcode}?format=book", headers=admin_headers)
@@ -42,8 +42,8 @@ def test_lookup_barcode_preview_records_failure_telemetry(client, admin_headers)
     """Test that failed barcode lookup records failure telemetry in DB."""
     barcode = "9780000000002"  # Correct check digit but unknown
 
-    with patch("app.strategies.lookup.fetch_isbn_metadata") as mock_fetch:
-        with patch("app.strategies.lookup.fetch_discogs_metadata") as mock_discogs:
+    with patch("app.strategies.book.fetch_isbn_metadata") as mock_fetch:
+        with patch("app.strategies.book.fetch_discogs_metadata") as mock_discogs:
             mock_fetch.return_value = None
             mock_discogs.return_value = None
 

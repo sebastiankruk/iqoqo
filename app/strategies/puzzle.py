@@ -13,23 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from app.strategies.base import LookupStrategy
+from app.utils.upc import resolve_physical_media
 
-from .audio import AudioLookupStrategy
-from .base import LookupStrategy
-from .boardgame import BoardGameLookupStrategy
-from .book import BookLookupStrategy
-from .default import DefaultFallbackStrategy
-from .factory import LookupStrategyFactory
-from .puzzle import PuzzleLookupStrategy
-from .video import VideoLookupStrategy
 
-__all__ = [
-    "LookupStrategy",
-    "VideoLookupStrategy",
-    "BoardGameLookupStrategy",
-    "PuzzleLookupStrategy",
-    "AudioLookupStrategy",
-    "BookLookupStrategy",
-    "DefaultFallbackStrategy",
-    "LookupStrategyFactory",
-]
+class PuzzleLookupStrategy(LookupStrategy):
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
+        meta = resolve_physical_media(barcode)
+        if meta:
+            meta["data_source"] = "upc"
+            return meta, "upc"
+        return None, None

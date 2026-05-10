@@ -30,7 +30,7 @@ from app.core.ingest import IngestService
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
-from app.strategies.lookup import LookupStrategyFactory
+from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
 

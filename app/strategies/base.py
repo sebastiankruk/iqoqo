@@ -13,23 +13,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from abc import ABC, abstractmethod
 
-from .audio import AudioLookupStrategy
-from .base import LookupStrategy
-from .boardgame import BoardGameLookupStrategy
-from .book import BookLookupStrategy
-from .default import DefaultFallbackStrategy
-from .factory import LookupStrategyFactory
-from .puzzle import PuzzleLookupStrategy
-from .video import VideoLookupStrategy
 
-__all__ = [
-    "LookupStrategy",
-    "VideoLookupStrategy",
-    "BoardGameLookupStrategy",
-    "PuzzleLookupStrategy",
-    "AudioLookupStrategy",
-    "BookLookupStrategy",
-    "DefaultFallbackStrategy",
-    "LookupStrategyFactory",
-]
+class LookupStrategy(ABC):
+    """Base interface for media metadata lookup strategies."""
+
+    @abstractmethod
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
+        """
+        Look up metadata for a given barcode or query.
+        Returns a tuple of (metadata_dict, provider_name).
+        """
+        pass
