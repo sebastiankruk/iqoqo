@@ -129,7 +129,8 @@ def test_lookup_rate_limit(client, app_with_limiter, normal_user_headers):
     # Hit it 10 times (limit is 10 per minute)
     for _ in range(10):
         response = client.get("/api/lookup/123", headers=normal_user_headers)
-        assert response.status_code == 200
+        # We accept 200 or 404 (not found) as long as it is not 429 (rate limited)
+        assert response.status_code in (200, 404)
 
     # 11th should fail
     response = client.get("/api/lookup/123", headers=normal_user_headers)
