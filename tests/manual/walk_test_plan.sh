@@ -1,4 +1,19 @@
 #!/bin/bash
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 # 0.6.0-2-manual_test_automation.sh
 # Automated walkthrough of the Phase 2 Manual Test Plan: API Security & Payload Validation
 # 🦖 Me make script for you!
@@ -225,9 +240,57 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/item/$TEST_IS
 
 if [ "$STATUS" == "200" ]; then
     pass "Test 5.1: Added item with ISBN $TEST_ISBN and new Title."
-    # Verify in DB (via API)
 else
     fail "Test 5.1: Expected 200, got $STATUS."
+fi
+
+# Test 5.2: Update manifestation metadata (Security)
+echo "  Checking manifestation update security..."
+# No Auth
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/isbn/$TEST_ISBN" \
+  -H "Content-Type: application/json" \
+  -d "{\"Title\": \"Hacker Title\"}")
+if [ "$STATUS" == "401" ]; then
+    pass "Test 5.2.1: Anonymous update manifestation returned 401."
+else
+    fail "Test 5.2.1: Expected 401, got $STATUS."
+fi
+
+# Normal User (No write_metadata permission by default)
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/isbn/$TEST_ISBN" \
+  -H "Authorization: Bearer $NORMAL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"Title\": \"Sneaky Title\"}")
+if [ "$STATUS" == "403" ]; then
+    pass "Test 5.2.2: Normal user update manifestation returned 403."
+else
+    fail "Test 5.2.2: Expected 403, got $STATUS."
+fi
+
+# Test 5.3: Manifestation Update Validation (Pydantic)
+echo "  Checking manifestation update validation..."
+# Invalid payload (Authors must be list of strings)
+RESPONSE=$(curl -s -X POST "$BASE_URL/isbn/$TEST_ISBN" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"Authors\": \"Just a string, not a list\"}")
+ERROR=$(echo $RESPONSE | jq -r .error)
+
+if [[ "$ERROR" == "Invalid payload" ]]; then
+    pass "Test 5.3.1: Invalid Authors format caught by Pydantic (400)."
+else
+    fail "Test 5.3.1: Expected 400 'Invalid payload', got '$ERROR'."
+fi
+
+# Valid Admin Update
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/isbn/$TEST_ISBN" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"Title\": \"George Orwell - 1984 (Hardened)\", \"Authors\": [\"George Orwell\"]}")
+if [ "$STATUS" == "200" ]; then
+    pass "Test 5.3.2: Admin update manifestation with valid Pydantic payload returned 200."
+else
+    fail "Test 5.3.2: Expected 200, got $STATUS."
 fi
 
 echo "--------------------------------------------------"
