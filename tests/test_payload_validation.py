@@ -137,7 +137,7 @@ def test_lookup_rate_limit(client, app_with_limiter, normal_user_headers):
     assert response.status_code == 429
 
 
-def test_update_manifestation_security(client, normal_user_headers, app):
+def test_update_manifestation_security(client, normal_user_headers, admin_headers, app):
     # Setup: Create a manifestation
     isbn = "9780141036144"
     with app.app_context():
@@ -160,20 +160,11 @@ def test_update_manifestation_security(client, normal_user_headers, app):
     assert response.status_code == 403
 
     # Admin user (with permission) should succeed
-    with app.app_context():
-        admin_role = Role.query.filter_by(name="admin").first()
-        admin_user = User(email="admin@example.com")
-        admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
-        admin_token = generate_internal_jwt(admin_user)
-
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
     response = client.post(f"/api/isbn/{isbn}", json={"Title": "Hardened Title"}, headers=admin_headers)
     assert response.status_code == 200
 
 
-def test_update_manifestation_validation(client, app):
+def test_update_manifestation_validation(client, admin_headers, app):
     isbn = "9780141036145"
     with app.app_context():
         work = Work(title="Validate Me")
@@ -184,14 +175,8 @@ def test_update_manifestation_validation(client, app):
         db.session.flush()
         m = Manifestation(expression_id=expr.id, isbn13=isbn)
         db.session.add(m)
-        admin_role = Role.query.filter_by(name="admin").first()
-        admin_user = User(email="admin_val@example.com")
-        admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
         db.session.commit()
-        admin_token = generate_internal_jwt(admin_user)
 
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
     # Invalid Authors (string instead of list)
     response = client.post(f"/api/isbn/{isbn}", json={"Authors": "Not a list"}, headers=admin_headers)
     assert response.status_code == 400
