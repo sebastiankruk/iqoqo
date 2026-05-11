@@ -26,13 +26,16 @@ from sqlalchemy import or_
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
+from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
+from pydantic import ValidationError
 
 # Maximum allowed upload size for cover images (10 MB)
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -140,6 +143,7 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
+@limiter.limit("10 per minute")
 def lookup_barcode_preview(query: str):
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
     format_hint = request.args.get("format")
@@ -309,16 +313,18 @@ def lookup_barcode_preview(query: str):
 
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
+@limiter.limit("20 per minute")
 def scan_barcode():
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return invalid_json_payload_response()
+    try:
+        payload = ScanBarcodeSchema(**(request.get_json(silent=True) or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 
-    barcode = data.get("barcode")
-    manifestation_id = data.get("manifestation_id")
-    format_hint = data.get("format")
-    collection_status = data.get("collection_status", "available")
+    barcode = payload.barcode
+    manifestation_id = payload.manifestation_id
+    format_hint = payload.format
+    collection_status = payload.collection_status
 
     from app.core.taxonomy import COLLECTION_STATUSES
 

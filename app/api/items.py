@@ -20,9 +20,12 @@ from flask import current_app, g, jsonify, request
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
+from pydantic import ValidationError
+
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
+from app.api.schemas import ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
 
@@ -325,31 +328,30 @@ def update_item(item_id: int):
     if not (is_owner or is_admin or has_update_permission):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return invalid_json_payload_response()
+    try:
+        payload = ItemUpdateSchema(**(request.get_json(silent=True) or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 
-    if data.get("status") and data["status"] != item.status:
+    if payload.status and payload.status != item.status:
         old_status = item.status
-        item.status = data["status"]
+        item.status = payload.status
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_status, new_status=item.status)
         db.session.add(log)
 
-    if data.get("collection_status") and data["collection_status"] != item.collection_status:
-        # We also log collection status changes in the same log for now,
-        # but we could add a flag if needed.
+    if payload.collection_status and payload.collection_status != item.collection_status:
         old_c_status = item.collection_status
-        item.collection_status = data["collection_status"]
+        item.collection_status = payload.collection_status
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
         db.session.add(log)
 
-    if "lent_to_user_id" in data:
-        item.lent_to_user_id = data["lent_to_user_id"]
-    if "lent_to_name" in data:
-        item.lent_to_name = data["lent_to_name"]
+    if payload.lent_to_user_id is not None:
+        item.lent_to_user_id = payload.lent_to_user_id
+    if payload.lent_to_name is not None:
+        item.lent_to_name = payload.lent_to_name
 
-    if data.get("meta"):
-        item.meta = data["meta"]
+    if payload.meta is not None:
+        item.meta = payload.meta
 
     try:
         db.session.commit()
@@ -417,20 +419,30 @@ def add_item(isbn: str):
                 return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
-    metadata = request.get_json(silent=True)
-    if metadata:
-        manifestation.update_meta(**metadata)
+    try:
+        payload = ItemCreateSchema(**(request.get_json(silent=True) or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+
+    if payload.meta:
+        manifestation.update_meta(**payload.meta)
         if manifestation.expression and manifestation.expression.work:
-            if "Title" in metadata:
-                manifestation.expression.work.title = metadata["Title"]
-            if "Authors" in metadata:
+            if "Title" in payload.meta:
+                manifestation.expression.work.title = payload.meta["Title"]
+            if "Authors" in payload.meta:
                 if not manifestation.expression.work.meta:
                     manifestation.expression.work.meta = {}
                 work_meta = dict(manifestation.expression.work.meta)
-                work_meta["authors"] = metadata["Authors"]
+                work_meta["authors"] = payload.meta["Authors"]
                 manifestation.expression.work.meta = work_meta
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
+    item = Item(
+        manifestation_id=manifestation.id,
+        owner_id=user_id,
+        status=payload.status or "want_to_read",
+        collection_status=payload.collection_status,
+        meta={},
+    )
     db.session.add(item)
     try:
         db.session.commit()
@@ -453,7 +465,18 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    item = Item(manifestation_id=manifestation.id, owner_id=user_id, status="want_to_read", collection_status="available", meta={})
+    try:
+        payload = ItemCreateSchema(**(request.get_json(silent=True) or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+
+    item = Item(
+        manifestation_id=manifestation.id,
+        owner_id=user_id,
+        status=payload.status or "want_to_read",
+        collection_status=payload.collection_status,
+        meta={},
+    )
     db.session.add(item)
     db.session.commit()
 
@@ -468,17 +491,18 @@ def add_item_manual():
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return invalid_json_payload_response()
+    try:
+        payload = ItemManualCreateSchema(**(request.get_json(silent=True) or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 
-    title = data.get("Title", "Unknown Title")
-    authors = data.get("Authors", [])
+    title = payload.Title
+    authors = payload.Authors
     if isinstance(authors, str):
         authors = [authors]
-    content_type = data.get("Format", "text")
-    isbn = data.get("ISBN")
-    pub_date_str = data.get("PublicationDate")
+    content_type = payload.Format
+    isbn = payload.ISBN
+    pub_date_str = payload.PublicationDate
 
     # Derive a sensible default progress status from the media format using canonical mapping.
     from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, MediaCategory
@@ -505,7 +529,7 @@ def add_item_manual():
             # Manifestation already exists — just create a new Item linked to it
             manifestation = existing_manifestation
         else:
-            work = Work(title=title, meta={"authors": authors, "description": data.get("Description")})
+            work = Work(title=title, meta={"authors": authors, "description": payload.Description})
             db.session.add(work)
             db.session.flush()
 
@@ -513,7 +537,8 @@ def add_item_manual():
             db.session.add(expression)
             db.session.flush()
 
-            manifestation = Manifestation(expression_id=expression.id, meta=data)
+            # Store all extra fields in meta
+            manifestation = Manifestation(expression_id=expression.id, meta=payload.model_dump())
             if normalised_isbn:
                 manifestation.isbn13 = normalised_isbn
             if pub_date_str:
@@ -529,8 +554,8 @@ def add_item_manual():
         item = Item(
             manifestation_id=manifestation.id,
             owner_id=user_id,
-            status=default_status,
-            collection_status="available",
+            status=payload.status or default_status,
+            collection_status=payload.collection_status,
             meta={},
         )
         db.session.add(item)
