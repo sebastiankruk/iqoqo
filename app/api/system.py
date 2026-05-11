@@ -125,6 +125,7 @@ def get_global_stats():
 
 
 @api_bp.route("/admin/stats", methods=["GET"])
+@require_auth
 @admin_required
 def get_stats():
     stats = DataManager.get_stats()
@@ -132,6 +133,7 @@ def get_stats():
 
 
 @api_bp.route("/admin/export", methods=["GET"])
+@require_auth
 @admin_required
 def export_data():
     try:
@@ -145,6 +147,7 @@ def export_data():
 
 
 @api_bp.route("/admin/import", methods=["POST"])
+@require_auth
 @admin_required
 def import_data():
     try:
@@ -167,6 +170,7 @@ def import_data():
 
 
 @api_bp.route("/admin/clear", methods=["DELETE"])
+@require_auth
 @admin_required
 def clear_data():
     data = request.get_json(silent=True)

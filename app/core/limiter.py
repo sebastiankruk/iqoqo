@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 """Rate limiter configuration."""
+
 from flask import g
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address

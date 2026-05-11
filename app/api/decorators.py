@@ -102,15 +102,13 @@ def require_permission(perm_name: PermissionName):
                 return jsonify({"error": "Authentication required"}), 401
 
             user = db.session.get(User, user_id)
-            if not user or not user.has_permission(perm):
-                return jsonify({"error": "Forbidden", "missing_permission": perm}), 403
+            if not user or not user.has_permission(perm_name):
+                return jsonify({"error": "Forbidden", "missing_permission": perm_name}), 403
             return f(*args, **kwargs)
 
         return decorated
 
     return decorator
-
-
 
 
 def admin_required(f):

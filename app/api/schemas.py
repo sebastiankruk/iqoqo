@@ -14,53 +14,54 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 """Pydantic schemas for API payload validation."""
-from typing import Any, Dict, List, Optional
+
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class ItemCreateSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = Field(default=None, description="The progress status of the item")
-    collection_status: Optional[str] = Field(default="available", description="The physical status of the item")
-    meta: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    status: str | None = Field(default=None, description="The progress status of the item")
+    collection_status: str | None = Field(default="available", description="The physical status of the item")
+    meta: dict[str, Any] | None = Field(default_factory=dict)
 
 
 class ItemUpdateSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
-    status: Optional[str] = None
-    collection_status: Optional[str] = None
-    lent_to_user_id: Optional[str] = None
-    lent_to_name: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    status: str | None = None
+    collection_status: str | None = None
+    lent_to_user_id: str | None = None
+    lent_to_name: str | None = None
+    meta: dict[str, Any] | None = None
 
 
 class ItemManualCreateSchema(BaseModel):
     model_config = ConfigDict(extra="allow")  # Store all extra fields in meta
 
     Title: str = Field(..., min_length=1)
-    Authors: Optional[List[str] | str] = Field(default_factory=list)
-    Format: Optional[str] = "text"
-    ISBN: Optional[Optional[str]] = None
-    PublicationDate: Optional[Optional[str]] = None
-    Description: Optional[Optional[str]] = None
-    status: Optional[str] = None
-    collection_status: Optional[str] = "available"
+    Authors: list[str] | str | None = Field(default_factory=list)
+    Format: str | None = "text"
+    ISBN: str | None = None
+    PublicationDate: str | None = None
+    Description: str | None = None
+    status: str | None = None
+    collection_status: str | None = "available"
 
 
 class ManifestationUpdateSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    Title: Optional[str] = None
-    Authors: Optional[List[str]] = None
+    Title: str | None = None
+    Authors: list[str] | None = None
 
 
 class ScanBarcodeSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    barcode: Optional[str] = None
-    manifestation_id: Optional[int] = None
-    format: Optional[str] = None
-    collection_status: Optional[str] = "available"
+    barcode: str | None = None
+    manifestation_id: int | None = None
+    format: str | None = None
+    collection_status: str | None = "available"

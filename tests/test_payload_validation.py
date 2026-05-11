@@ -14,10 +14,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 """Tests for API security and payload validation."""
-import pytest
-from app.db.models import Item, Manifestation, db, User, Role, Work, Expression
-from app.api.auth import generate_internal_jwt
+
 import uuid
+
+import pytest
+
+from app.api.auth import generate_internal_jwt
+from app.db.models import Expression, Item, Manifestation, Role, User, Work, db
+
 
 @pytest.fixture
 def user_with_item(app):
@@ -25,48 +29,48 @@ def user_with_item(app):
         user = User(email="test@example.com", display_name="Test User")
         db.session.add(user)
         db.session.flush()
-        
+
         work = Work(title="Test Work")
         db.session.add(work)
         db.session.flush()
-        
+
         expr = Expression(work_id=work.id, content_type="text")
         db.session.add(expr)
         db.session.flush()
-        
+
         m = Manifestation(expression_id=expr.id, isbn13="1234567890123")
         db.session.add(m)
         db.session.flush()
-        
+
         item = Item(owner_id=user.id, manifestation_id=m.id, status="available", collection_status="available")
         db.session.add(item)
         db.session.commit()
-        
+
         token = generate_internal_jwt(user)
         return user.id, item.id, {"Authorization": f"Bearer {token}"}
 
+
 def test_update_item_bola_prevention(client, user_with_item):
-    user_id, item_id, headers = user_with_item
-    
+    _, item_id, headers = user_with_item
+
     # Try to inject owner_id
-    payload = {
-        "status": "reading",
-        "owner_id": str(uuid.uuid4())
-    }
+    payload = {"status": "reading", "owner_id": str(uuid.uuid4())}
     response = client.put(f"/api/items/{item_id}", json=payload, headers=headers)
     assert response.status_code == 400
     assert "Invalid payload" in response.json["error"]
 
+
 def test_update_item_valid(client, user_with_item):
-    user_id, item_id, headers = user_with_item
-    
+    _, item_id, headers = user_with_item
+
     payload = {"status": "reading"}
     response = client.put(f"/api/items/{item_id}", json=payload, headers=headers)
     assert response.status_code == 200
-    
+
     with client.application.app_context():
         updated_item = db.session.get(Item, item_id)
         assert updated_item.status == "reading"
+
 
 def test_add_item_manual_extra_fields(client, normal_user_headers):
     payload = {
@@ -74,36 +78,37 @@ def test_add_item_manual_extra_fields(client, normal_user_headers):
         "Authors": ["Author A"],
         "Format": "text",
         "Year": "2024",  # Extra field
-        "CustomField": "CustomValue"  # Extra field
+        "CustomField": "CustomValue",  # Extra field
     }
     response = client.get("/api/items/manual", json=payload, headers=normal_user_headers)
     # Actually add_item_manual is POST
     response = client.post("/api/items/manual", json=payload, headers=normal_user_headers)
     assert response.status_code == 200
-    
+
     m_id = response.json["data"]["manifestation_id"]
     with client.application.app_context():
         m = db.session.get(Manifestation, m_id)
         assert m.meta["Year"] == "2024"
         assert m.meta["CustomField"] == "CustomValue"
 
+
 def test_scan_barcode_invalid_payload(client, normal_user_headers):
-    payload = {
-        "barcode": "123456",
-        "unknown": "value"
-    }
+    payload = {"barcode": "123456", "unknown": "value"}
     response = client.post("/api/scan", json=payload, headers=normal_user_headers)
     assert response.status_code == 400
     assert "Invalid payload" in response.json["error"]
 
+
 @pytest.fixture
 def app_with_limiter(app):
     from app.core.limiter import limiter
+
     app.config["RATELIMIT_ENABLED"] = True
     app.config["RATELIMIT_STORAGE_URI"] = "memory://"
     # Re-init to pick up config
     limiter.init_app(app)
     return app
+
 
 def test_admin_required_refactored(client, app):
     # Create normal user
@@ -112,19 +117,20 @@ def test_admin_required_refactored(client, app):
         db.session.add(user)
         db.session.commit()
         token = generate_internal_jwt(user)
-    
+
     headers = {"Authorization": f"Bearer {token}"}
     # Correct path is /api/v1/admin/users
     response = client.get("/api/v1/admin/users", headers=headers)
     assert response.status_code == 403
     assert "Admin privileges required" in response.json["error"]
 
+
 def test_lookup_rate_limit(client, app_with_limiter, normal_user_headers):
     # Hit it 10 times (limit is 10 per minute)
     for _ in range(10):
         response = client.get("/api/lookup/123", headers=normal_user_headers)
         assert response.status_code == 200
-    
+
     # 11th should fail
     response = client.get("/api/lookup/123", headers=normal_user_headers)
     assert response.status_code == 429

@@ -17,10 +17,9 @@
 #
 
 from flask import current_app, g, jsonify, request
+from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-
-from pydantic import ValidationError
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
@@ -312,24 +311,23 @@ def get_item_detail(item_id: int):
 @require_auth
 def update_item(item_id: int):
     item = db.session.get(Item, item_id)
-    if not item:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
     user_id = getattr(g, "user_id", None)
-    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
-    is_admin = False
+    user = db.session.get(User, user_id) if user_id else None
 
-    user = db.session.get(User, user_id)
-    if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
-        is_admin = True
-
+    is_owner = (str(item.owner_id) == str(user_id)) if item and user_id else False
+    is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
     has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
 
-    if not (is_owner or is_admin or has_update_permission):
-        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+    if not item or not (is_owner or is_admin or has_update_permission):
+        error, code = ("Item not found", 404) if not item else ("Forbidden", 403)
+        return jsonify({"success": False, "data": None, "error": error}), code
+
+    data = request.get_json(silent=True)
+    if not data:
+        return invalid_json_payload_response()
 
     try:
-        payload = ItemUpdateSchema(**(request.get_json(silent=True) or {}))
+        payload = ItemUpdateSchema(**data)
     except ValidationError as e:
         return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 
@@ -350,8 +348,22 @@ def update_item(item_id: int):
     if payload.lent_to_name is not None:
         item.lent_to_name = payload.lent_to_name
 
-    if payload.meta is not None:
-        item.meta = payload.meta
+    # Optional metadata update from extra fields or meta field
+    metadata = payload.model_extra or {}
+
+    # BOLA protection: block sensitive fields in extra
+    forbidden = {"owner_id", "id", "created_at"}
+    if any(k in metadata for k in forbidden):
+        return jsonify({"success": False, "error": "Invalid payload: forbidden fields"}), 400
+
+    if isinstance(payload.meta, dict):
+        metadata.update(payload.meta)
+
+    if metadata:
+        if item.manifestation:
+            item.manifestation.update_meta(**metadata)
+        # Also update item.meta if needed, but usually extra fields are for manifestation
+        item.meta = {**item.meta, **metadata} if item.meta else metadata
 
     try:
         db.session.commit()
@@ -424,16 +436,20 @@ def add_item(isbn: str):
     except ValidationError as e:
         return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 
-    if payload.meta:
-        manifestation.update_meta(**payload.meta)
+    metadata = payload.model_extra or {}
+    if isinstance(payload.meta, dict):
+        metadata.update(payload.meta)
+
+    if metadata:
+        manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
-            if "Title" in payload.meta:
-                manifestation.expression.work.title = payload.meta["Title"]
-            if "Authors" in payload.meta:
+            if "Title" in metadata:
+                manifestation.expression.work.title = metadata["Title"]
+            if "Authors" in metadata:
                 if not manifestation.expression.work.meta:
                     manifestation.expression.work.meta = {}
                 work_meta = dict(manifestation.expression.work.meta)
-                work_meta["authors"] = payload.meta["Authors"]
+                work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
     item = Item(
@@ -491,8 +507,18 @@ def add_item_manual():
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if data is None and request.data:
+            return invalid_json_payload_response()
+    else:
+        data = None
+
+    if not data:
+        return invalid_json_payload_response()
+
     try:
-        payload = ItemManualCreateSchema(**(request.get_json(silent=True) or {}))
+        payload = ItemManualCreateSchema(**data)
     except ValidationError as e:
         return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
 

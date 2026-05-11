@@ -22,9 +22,10 @@ import re
 
 from flask import current_app, g, jsonify, request
 from PIL import Image
+from pydantic import ValidationError
 from sqlalchemy import or_
 
-from app.api.core import api_bp, invalid_json_payload_response
+from app.api.core import api_bp
 from app.api.decorators import require_auth, require_permission
 from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
@@ -35,7 +36,6 @@ from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
-from pydantic import ValidationError
 
 # Maximum allowed upload size for cover images (10 MB)
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
