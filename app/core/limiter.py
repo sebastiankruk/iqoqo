@@ -22,7 +22,10 @@ from flask_limiter.util import get_remote_address
 
 def get_user_id_or_ip():
     """Use authenticated user ID for rate limiting, fallback to IP."""
-    return str(getattr(g, "user_id", get_remote_address()))
+    user_id = getattr(g, "user_id", None)
+    if user_id is not None:
+        return str(user_id)
+    return get_remote_address()
 
 
 limiter = Limiter(

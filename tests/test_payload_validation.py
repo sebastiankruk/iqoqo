@@ -80,7 +80,7 @@ def test_add_item_manual_extra_fields(client, normal_user_headers):
         "Year": "2024",  # Extra field
         "CustomField": "CustomValue",  # Extra field
     }
-    response = client.get("/api/items/manual", json=payload, headers=normal_user_headers)
+    # Add manual item via POST
     # Actually add_item_manual is POST
     response = client.post("/api/items/manual", json=payload, headers=normal_user_headers)
     assert response.status_code == 200

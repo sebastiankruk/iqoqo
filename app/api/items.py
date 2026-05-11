@@ -323,7 +323,7 @@ def update_item(item_id: int):
         return jsonify({"success": False, "data": None, "error": error}), code
 
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict):
         return invalid_json_payload_response()
 
     try:
@@ -350,14 +350,13 @@ def update_item(item_id: int):
 
     # Optional metadata update from extra fields or meta field
     metadata = payload.model_extra or {}
+    if isinstance(payload.meta, dict):
+        metadata.update(payload.meta)
 
-    # BOLA protection: block sensitive fields in extra
+    # BOLA protection: block sensitive fields
     forbidden = {"owner_id", "id", "created_at"}
     if any(k in metadata for k in forbidden):
         return jsonify({"success": False, "error": "Invalid payload: forbidden fields"}), 400
-
-    if isinstance(payload.meta, dict):
-        metadata.update(payload.meta)
 
     if metadata:
         if item.manifestation:
@@ -431,10 +430,17 @@ def add_item(isbn: str):
                 return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        if payload_json is None and not request.data:
+            payload_json = {}
+        else:
+            return invalid_json_payload_response()
+
     try:
-        payload = ItemCreateSchema(**(request.get_json(silent=True) or {}))
-    except ValidationError as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+        payload = ItemCreateSchema(**payload_json)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
 
     metadata = payload.model_extra or {}
     if isinstance(payload.meta, dict):
@@ -481,10 +487,17 @@ def add_item_by_manifestation(manifestation_id: int):
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        if payload_json is None and not request.data:
+            payload_json = {}
+        else:
+            return invalid_json_payload_response()
+
     try:
-        payload = ItemCreateSchema(**(request.get_json(silent=True) or {}))
-    except ValidationError as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+        payload = ItemCreateSchema(**payload_json)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
 
     item = Item(
         manifestation_id=manifestation.id,
@@ -507,20 +520,14 @@ def add_item_manual():
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    if request.is_json:
-        data = request.get_json(silent=True)
-        if data is None and request.data:
-            return invalid_json_payload_response()
-    else:
-        data = None
-
-    if not data:
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
         return invalid_json_payload_response()
 
     try:
         payload = ItemManualCreateSchema(**data)
-    except ValidationError as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
 
     title = payload.Title
     authors = payload.Authors

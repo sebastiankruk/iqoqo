@@ -25,7 +25,7 @@ from PIL import Image
 from pydantic import ValidationError
 from sqlalchemy import or_
 
-from app.api.core import api_bp
+from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
 from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
@@ -316,10 +316,28 @@ def lookup_barcode_preview(query: str):
 @limiter.limit("20 per minute")
 def scan_barcode():
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
-    try:
-        payload = ScanBarcodeSchema(**(request.get_json(silent=True) or {}))
-    except ValidationError as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+    payload_json = request.get_json(silent=True)
+    error_response = None
+    payload = None
+    if not isinstance(payload_json, dict):
+        error_response = invalid_json_payload_response()
+    else:
+        try:
+            payload = ScanBarcodeSchema(**payload_json)
+        except (ValidationError, TypeError) as e:
+            error_response = (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Invalid payload",
+                        "details": str(e) if isinstance(e, TypeError) else e.errors(),
+                    }
+                ),
+                400,
+            )
+
+    if error_response:
+        return error_response
 
     barcode = payload.barcode
     manifestation_id = payload.manifestation_id
