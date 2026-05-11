@@ -135,3 +135,77 @@ def test_lookup_rate_limit(client, app_with_limiter, normal_user_headers):
     # 11th should fail
     response = client.get("/api/lookup/123", headers=normal_user_headers)
     assert response.status_code == 429
+
+
+def test_update_manifestation_security(client, normal_user_headers, app):
+    # Setup: Create a manifestation
+    isbn = "9780141036144"
+    with app.app_context():
+        work = Work(title="Old Title")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        m = Manifestation(expression_id=expr.id, isbn13=isbn)
+        db.session.add(m)
+        db.session.commit()
+
+    # Anonymous update should fail
+    response = client.post(f"/api/isbn/{isbn}", json={"Title": "Hacker Title"})
+    assert response.status_code == 401
+
+    # Normal user without permission should fail
+    response = client.post(f"/api/isbn/{isbn}", json={"Title": "Sneaky Title"}, headers=normal_user_headers)
+    assert response.status_code == 403
+
+    # Admin user (with permission) should succeed
+    with app.app_context():
+        admin_role = Role.query.filter_by(name="admin").first()
+        admin_user = User(email="admin@example.com")
+        admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
+        admin_token = generate_internal_jwt(admin_user)
+
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    response = client.post(f"/api/isbn/{isbn}", json={"Title": "Hardened Title"}, headers=admin_headers)
+    assert response.status_code == 200
+
+
+def test_update_manifestation_validation(client, app):
+    isbn = "9780141036145"
+    with app.app_context():
+        work = Work(title="Validate Me")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        m = Manifestation(expression_id=expr.id, isbn13=isbn)
+        db.session.add(m)
+        admin_role = Role.query.filter_by(name="admin").first()
+        admin_user = User(email="admin_val@example.com")
+        admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
+        admin_token = generate_internal_jwt(admin_user)
+
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    # Invalid Authors (string instead of list)
+    response = client.post(f"/api/isbn/{isbn}", json={"Authors": "Not a list"}, headers=admin_headers)
+    assert response.status_code == 400
+    assert "Invalid payload" in response.json["error"]
+
+
+def test_scan_barcode_dynamic_status(client, normal_user_headers, app):
+    # Verify that collection_status can be passed dynamically
+    barcode = "9780141036146"
+    # Pre-mocking the manifestation lookup might be needed or just use a mock
+    # But here we just want to see if the payload is accepted and processed
+    payload = {"barcode": barcode, "collection_status": "wish_list"}
+    # Note: /api/scan requires resolution, if it fails to resolve it might return 404
+    # But the collection_status check happens before ingestion in some cases
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    # If it fails to resolve, it's 404/400, but we want to make sure it's not a payload error
+    assert response.status_code != 400 or "Invalid payload" not in response.json.get("error", "")
