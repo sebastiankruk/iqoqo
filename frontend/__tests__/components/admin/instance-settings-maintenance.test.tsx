@@ -26,7 +26,7 @@ describe("InstanceSettings - Maintenance Mode", () => {
   });
 
   it("renders Maintenance Mode toggle in internal category", async () => {
-    (adminApi.getInstanceSettings as any).mockResolvedValue({
+    vi.mocked(adminApi.getInstanceSettings).mockResolvedValue({
       MAINTENANCE_MODE: { value: "false", source: "db" },
       IQOQO_KNOWN_JUNK_PHASHES: { value: "", source: "missing" }
     });
