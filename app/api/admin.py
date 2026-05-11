@@ -108,7 +108,7 @@ def update_user(user_id):
     if not _has_permission(user, PermissionName.WRITE_USERS):
         return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
 
-    user_obj = User.query.get_or_404(user_id)
+    user_obj = db.get_or_404(User, user_id)
     data = request.json or {}
 
     if "is_active" in data:
@@ -183,7 +183,7 @@ def delete_role(role_id):
     if not _has_permission(user, PermissionName.WRITE_ROLES):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
-    role = Role.query.get_or_404(role_id)
+    role = db.get_or_404(Role, role_id)
     protected_roles = {"admin", "user", "contributor"}
     if role.name.lower() in protected_roles:
         return jsonify({"success": False, "error": "Cannot delete protected role"}), 400
@@ -224,7 +224,7 @@ def manage_role_permissions(role_id):
         if not _has_permission(user, PermissionName.WRITE_ROLES):
             return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
-    role = Role.query.get_or_404(role_id)
+    role = db.get_or_404(Role, role_id)
 
     if request.method == "GET":
         role_permission_ids = {p.id for p in role.permissions}
@@ -245,7 +245,9 @@ def manage_role_permissions(role_id):
 
     data = request.json or {}
     permission_ids = data.get("permission_ids", [])
-    permissions = Permission.query.filter(Permission.id.in_(permission_ids)).all() if permission_ids else []
+    permissions = (
+        db.session.execute(db.select(Permission).filter(Permission.id.in_(permission_ids))).scalars().all() if permission_ids else []
+    )
     role.permissions = permissions
     db.session.commit()
 
@@ -630,17 +632,19 @@ def search_frbr_entities():
         )
 
         # Get manifestations matching either criteria
-        work_ids_subquery = db.session.query(Work.id).filter(work_filter).subquery()
-        mans = (
-            Manifestation.query.filter(
+        work_stmt = db.select(Work.id).filter(work_filter)
+        expr_stmt = db.select(Expression.id).filter(Expression.work_id.in_(work_stmt))
+        stmt = (
+            db.select(Manifestation)
+            .filter(
                 db.or_(
                     identifier_filter,
-                    Manifestation.expression_id.in_(db.session.query(Expression.id).filter(Expression.work_id.in_(work_ids_subquery))),
+                    Manifestation.expression_id.in_(expr_stmt),
                 )
             )
             .limit(limit)
-            .all()
         )
+        mans = db.session.execute(stmt).scalars().all()
         results = []
         for m in mans:
             expr = db.session.get(Expression, m.expression_id) if m.expression_id else None
