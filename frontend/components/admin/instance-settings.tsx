@@ -71,6 +71,11 @@ const SETTING_GROUPS = {
       type: "text" as const,
       placeholder: "Comma-separated pHash values",
     },
+    {
+      key: "MAINTENANCE_MODE",
+      label: "Maintenance Mode",
+      type: "boolean" as const,
+    },
   ],
 };
 

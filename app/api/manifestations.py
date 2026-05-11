@@ -472,6 +472,9 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     try:
         validate_upload_file(file)
         image_label = request.form.get("label", "other")
+        # QA/Tech-Debt Fix: Accept dynamic source from caller (scanner vs manual upload),
+        # avoiding hardcoded "user_upload" that prevented scanner auto-fallback from being recorded.
+        image_source = request.form.get("source", "user_upload")
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
     except ValueError as e:
@@ -480,8 +483,8 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
-    # Save to ImageScan table
-    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source="user_upload")
+    # Save to ImageScan table with dynamic source
+    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source=image_source)
     db.session.add(scan)
 
     # Keep compatibility with old JSONB field for now

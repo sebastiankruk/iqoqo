@@ -35,6 +35,7 @@ EXTRA_ARGS=()
 TUNNEL=false
 CLEAN=false
 BACKUP=false
+PREBUILT=false
 
 # Robust argument parsing
 while [ $# -gt 0 ]; do
@@ -51,6 +52,9 @@ while [ $# -gt 0 ]; do
             ;;
         --backup)
             BACKUP=true
+            ;;
+        --prebuilt)
+            PREBUILT=true
             ;;
         *)
             # Non-flag positional arg (if first) is treated as mode
@@ -445,8 +449,20 @@ except Exception:
         docker compose exec -T db pg_dump -U "${POSTGRES_USER:-iqoqo}" "${POSTGRES_DB:-iqoqo}" > "$BACKUP_FILE" || echo "⚠️  Backup failed!"
     fi
 
+    COMPOSE_CMD="docker compose -f docker-compose.yml"
+
+    if [ "$PREBUILT" = true ]; then
+        echo "📦 Using pre-built images from ghcr.io..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.prebuilt.yml"
+        $COMPOSE_CMD pull
+        BUILD_FLAG=""
+    else
+        echo "🔨 Building images locally from source..."
+        BUILD_FLAG="--build"
+    fi
+
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
-    docker compose up -d --build --remove-orphans
+    $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans
 
     echo "✅ Success! Deployment ready."
     [ "$MODE" != "prod" ] && echo "🌐 URL: http://localhost:${NGINX_PORT:-8000}"
