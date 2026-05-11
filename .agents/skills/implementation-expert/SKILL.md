@@ -21,6 +21,8 @@ This skill governs codebase changes. It handles provided code OR generates requi
 7. **Context**: Discover via wikilinks in frontmatter
 8. **Tests**: All new code or code changes needs to be covered with tests: backend, frontend, or e2e - depending on their nature.
 9. **Refactors**: Prefer small refactors over large ones. If a large refactor is needed, it should be documented in a separate plan file and approved before implementation.
+10. **Don't Mute Returns**: Do not suppress return-value warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`. Handle or propagate return values properly.
+11. **Preserve Docs**: When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip or replace them.
 
 ## Implementation Workflow
 
