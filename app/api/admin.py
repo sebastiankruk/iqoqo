@@ -20,7 +20,7 @@ from datetime import date
 
 from flask import Blueprint, Response, g, jsonify, request
 
-from app.api.decorators import admin_required
+from app.api.decorators import admin_required, require_auth
 from app.core import frbr_service
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
@@ -60,6 +60,7 @@ def _format_user(u: User) -> dict:
 
 
 @admin_bp.route("/users", methods=["GET"])
+@require_auth
 @admin_required
 def get_users():
     """Get all users with optional filtering and pagination."""
@@ -98,6 +99,7 @@ def get_users():
 
 
 @admin_bp.route("/users/<uuid:user_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_user(user_id):
     """Update user's active status and RBAC roles."""
@@ -121,6 +123,7 @@ def update_user(user_id):
 
 
 @admin_bp.route("/roles", methods=["GET", "POST"])
+@require_auth
 @admin_required
 def get_roles():
     """Get all available roles for RBAC assignment, or create a new role."""
@@ -171,6 +174,7 @@ def get_roles():
 
 
 @admin_bp.route("/roles/<int:role_id>", methods=["DELETE"])
+@require_auth
 @admin_required
 def delete_role(role_id):
     """Delete a role (only non-protected roles can be deleted)."""
@@ -189,6 +193,7 @@ def delete_role(role_id):
 
 
 @admin_bp.route("/permissions", methods=["GET"])
+@require_auth
 @admin_required
 def get_permissions():
     """Get all available permissions that can be assigned to roles."""
@@ -207,6 +212,7 @@ def get_permissions():
 
 
 @admin_bp.route("/roles/<int:role_id>/permissions", methods=["GET", "PUT"])
+@require_auth
 @admin_required
 def manage_role_permissions(role_id):
     """Get or update permissions for a specific role."""
@@ -377,6 +383,7 @@ def _put_settings(user: User, data: dict) -> dict:
 
 
 @admin_bp.route("/settings", methods=["GET", "PUT"])
+@require_auth
 @admin_required
 def manage_settings():
     """Manage global instance settings with category-based RBAC."""
@@ -395,6 +402,7 @@ def manage_settings():
 
 
 @admin_bp.route("/frbr/tree/manifestation/<int:manif_id>", methods=["GET"])
+@require_auth
 @admin_required
 def get_frbr_tree(manif_id):
     """Fetches the full FRBR lineage upward from a Manifestation."""
@@ -460,6 +468,7 @@ def get_frbr_tree(manif_id):
 
 
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_work(work_id):
     """Update a Work entity."""
@@ -477,6 +486,7 @@ def update_work(work_id):
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_expression(expr_id):
     """Update an Expression entity."""
@@ -500,6 +510,7 @@ def update_expression(expr_id):
 
 
 @admin_bp.route("/frbr/manifestation/<int:manif_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_manifestation(manif_id):
     """Update a Manifestation entity."""
@@ -532,6 +543,7 @@ def update_manifestation(manif_id):
 
 
 @admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_item(item_id):
     """Update an Item entity."""
@@ -555,6 +567,7 @@ def update_item(item_id):
 
 
 @admin_bp.route("/frbr/search", methods=["GET"])
+@require_auth
 @admin_required
 def search_frbr_entities():
     """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
@@ -632,6 +645,7 @@ def search_frbr_entities():
 
 
 @admin_bp.route("/media/upload-cover", methods=["POST"])
+@require_auth
 @admin_required
 def upload_cover():
     """Accepts a client-side processed image blob, saves it, and binds it to an entity."""

@@ -310,14 +310,36 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation(isbn: str) -> tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    metadata = request.get_json(silent=True)
-    if not isinstance(metadata, dict):
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
         return invalid_json_payload_response()
+
+    from pydantic import ValidationError
+
+    from app.api.schemas import ManifestationUpdateSchema
+
+    try:
+        payload = ManifestationUpdateSchema(**payload_json)
+    except (ValidationError, TypeError) as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Invalid payload",
+                    "details": str(e) if isinstance(e, TypeError) else e.errors(),
+                }
+            ),
+            400,
+        )
+
+    metadata = payload.model_dump(exclude_unset=True)
 
     if metadata:
         manifestation.update_meta(**metadata)

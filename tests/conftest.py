@@ -42,6 +42,7 @@ def app():
         config_override={
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "RATELIMIT_ENABLED": False,
         }
     )
 
