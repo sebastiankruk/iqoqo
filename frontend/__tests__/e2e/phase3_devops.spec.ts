@@ -16,22 +16,73 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Phase 3 DevOps & UI Features", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    // Mock Profile to bypass login redirects
+    await page.route("**/api/profile**", route =>
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            id: "admin-id",
+            email: "admin@iqoqo.local",
+            display_name: "Admin User",
+            roles: ["admin"],
+            permissions: ["config:internal", "write:metadata"],
+          },
+        },
+      })
+    );
+
+    // Mock Config
+    await page.route("**/api/config**", route =>
+      route.fulfill({
+        status: 200,
+        json: { success: true, data: { federation_enabled: false, version: "0.6.0" } },
+      })
+    );
+    
+    // Mock Settings
+    await page.route("**/v1/admin/settings*", route =>
+        route.fulfill({
+            status: 200,
+            json: {
+                success: true,
+                data: {
+                    "MAINTENANCE_MODE": { "value": "false", "source": "db" },
+                    "IQOQO_KNOWN_JUNK_PHASHES": { "value": "", "source": "db" }
+                }
+            }
+        })
+    );
+  });
+
   test("Landing page has functional GitHub link", async ({ page }) => {
+    // Un-mock profile or mock as 401 to see the landing page Hero
+    await page.route("**/api/profile**", route =>
+        route.fulfill({
+            status: 401,
+            json: { success: false, error: "Unauthorized" }
+        })
+    );
+    
     await page.goto("/");
-    const githubLink = page.locator('a:has-text("GitHub")');
+    const githubLink = page.getByRole("link", { name: /GitHub/i });
     await expect(githubLink).toBeVisible();
     await expect(githubLink).toHaveAttribute("href", "https://github.com/sebastiankruk/iqoqo");
     await expect(githubLink).toHaveAttribute("target", "_blank");
   });
 
   test("Admin internal settings show Maintenance Mode toggle", async ({ page }) => {
-    // Note: This requires admin login which is typically handled in global setup or via a helper
-    // For this E2E test we assume the session is available or we bypass auth for the check
-    // In a real run, we'd use: await loginAsAdmin(page);
-    await page.goto("/admin/settings?tab=internal");
+    // Note: This requires admin login which is mocked in beforeEach
+    await page.goto("/admin/settings?tab=instance");
     
     // Check if the Maintenance Mode card exists
-    await expect(page.locator("text=Maintenance Mode")).toBeVisible();
+    await expect(page.getByText("Maintenance Mode")).toBeVisible();
     await expect(page.locator("select")).toBeVisible();
   });
 });

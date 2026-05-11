@@ -316,32 +316,35 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
     flask_config = current_app.config if current_app else {}
     result = {}
 
+    def normalize_val(v):
+        s_v = str(v or "").lower()
+        return s_v if s_v in ("true", "false") else str(v or "")
+
     if can_external:
         for key in API_KEYS:
             source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-            result[key] = {
-                "value": (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or "")),
-                "source": source,
-            }
+            # Mask API keys but keep other external settings unmasked
+            display_value = (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or "")) if key in API_KEYS and key != "LOCAL_SD_URL" else str(value or "")
+            result[key] = {"value": display_value, "source": source}
 
     if can_federation:
         for key in FEDERATION_KEYS:
             source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-            result[key] = {"value": str(value or ""), "source": source}
+            result[key] = {"value": normalize_val(value), "source": source}
 
     if can_affiliate:
         for key in AFFILIATE_KEYS:
             source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-            result[key] = {"value": str(value or ""), "source": source}
+            result[key] = {"value": normalize_val(value), "source": source}
 
     if can_internal:
         for key in INTERNAL_KEYS:
             source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-            result[key] = {"value": str(value or ""), "source": source}
+            result[key] = {"value": normalize_val(value), "source": source}
 
     return {"success": True, "data": result}
 

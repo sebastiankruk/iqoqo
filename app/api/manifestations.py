@@ -475,6 +475,8 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
         # QA/Tech-Debt Fix: Accept dynamic source from caller (scanner vs manual upload),
         # avoiding hardcoded "user_upload" that prevented scanner auto-fallback from being recorded.
         image_source = request.form.get("source", "user_upload")
+        if len(image_source) > 100:
+            return jsonify({"success": False, "error": "Source identifier too long (max 100)"}), 400
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
     except ValueError as e:

@@ -28,12 +28,14 @@ mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump PostgreSQL
 echo "📦 Dumping PostgreSQL database..."
-docker exec -t "${COMPOSE_PROJECT}-db-1" \
+docker compose -f docker-compose.yml exec -T db \
     pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" \
     > "${BACKUP_DIR}/db_dump_${TIMESTAMP}.sql"
 
 # 2. Archive uploaded assets (non-fatal if missing)
-for asset_dir in covers data/uploads; do
+# Standard iQoQo asset paths relative to app root/volumes
+ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers")
+for asset_dir in "${ASSET_PATHS[@]}"; do
     if [ -d "${asset_dir}" ]; then
         echo "📁 Archiving ${asset_dir}..."
         tar -czf "${BACKUP_DIR}/$(basename "${asset_dir}")_${TIMESTAMP}.tar.gz" "${asset_dir}"

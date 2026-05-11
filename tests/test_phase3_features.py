@@ -25,39 +25,6 @@ from app.db.models import Expression, ImageScan, InstanceSettings, Manifestation
 
 
 @pytest.fixture
-def admin_headers(app):
-    """Generate admin headers for API requests."""
-    with app.app_context():
-        # Ensure admin role exists
-        admin_role = Role.query.filter_by(name="admin").first()
-        if not admin_role:
-            admin_role = Role(name="admin")
-            db.session.add(admin_role)
-            db.session.flush()
-
-        # Assign all permissions to admin role
-        from app.core.permissions import PermissionName
-
-        for perm_name in PermissionName:
-            perm = Permission.query.filter_by(name=perm_name.value).first()
-            if not perm:
-                perm = Permission(name=perm_name.value)
-                db.session.add(perm)
-                db.session.flush()
-            if perm not in admin_role.permissions:
-                admin_role.permissions.append(perm)
-
-        # Create admin user
-        admin_user = User(email="admin@iqoqo.test", is_active=True)
-        admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
-
-        token = generate_internal_jwt(admin_user)
-        return {"Authorization": f"Bearer {token}"}
-
-
-@pytest.fixture
 def sample_manifestation(app):
     """Create a sample manifestation for testing."""
     with app.app_context():

@@ -267,7 +267,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               <div className="flex items-center gap-3">
                 <select
                   className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={value === "true" ? "true" : "false"}
+                  value={String(value).toLowerCase() === "true" ? "true" : "false"}
                   onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
                 >
                   <option value="true">Enabled</option>
