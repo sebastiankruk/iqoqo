@@ -70,6 +70,13 @@ describe("MultiImageUploader", () => {
     expect(mockOnUploadComplete).toHaveBeenCalledOnce();
   });
 
+  it("renders both Browse and Snap buttons", async () => {
+    render(<MultiImageUploader manifestationId={999} onUploadComplete={mockOnUploadComplete} />);
+
+    expect(screen.getByText("Browse")).toBeInTheDocument();
+    expect(screen.getByText("Snap")).toBeInTheDocument();
+  });
+
   it("defaults label to 'front' when currentItemFormat is 'book'", async () => {
     render(
       <MultiImageUploader manifestationId={999} currentItemFormat="book" onUploadComplete={mockOnUploadComplete} />
