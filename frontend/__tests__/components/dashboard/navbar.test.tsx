@@ -29,6 +29,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useAppConfig: vi.fn(() => ({ data: { maintenance_mode: false }, isLoading: false })),
 }));
 
 describe("Navbar", () => {
