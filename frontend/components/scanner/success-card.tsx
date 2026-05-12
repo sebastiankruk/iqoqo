@@ -154,6 +154,7 @@ export function SuccessCard({
       if (snappedCover && data.manifestation_id) {
         const coverFormData = new FormData();
         coverFormData.append("cover", snappedCover);
+        coverFormData.append("source", "scanner_camera");
         try {
           await apiClient.post(`/manifestations/${data.manifestation_id}/cover`, coverFormData, {
             headers: { "Content-Type": "multipart/form-data" },

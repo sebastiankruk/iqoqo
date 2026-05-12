@@ -94,6 +94,8 @@ interface CameraCaptureProps {
   buttonClassName?: string;
   /** If true, forces the simplified button layout and applies to button */
   inline?: boolean;
+  /** Source identifier for the scan (e.g. scanner_camera, user_upload) */
+  source?: string;
 }
 
 /**
@@ -118,6 +120,7 @@ interface CameraCaptureProps {
  * @param props.variant - Button variant.
  * @param props.buttonClassName - Optional CSS class name applied directly to the button.
  * @param props.inline - If true, forces the simplified button layout and applies to button.
+ * @param props.source - Source identifier for the scan (e.g. scanner_camera, user_upload).
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
@@ -138,6 +141,7 @@ export function CameraCapture({
   variant,
   buttonClassName,
   inline,
+  source,
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -213,12 +217,15 @@ export function CameraCapture({
     setUploading(true);
     const formData = new FormData();
 
+    // Default source logic: if explicitly provided use it, otherwise detect from capture prop
+    const effectiveSource = source || (capture === "environment" ? "scanner_camera" : "user_upload");
+
     try {
       if (mode === "gallery" && manifestation_id) {
         // Mode 3: Upload an additional scan to the gallery
         formData.append("image", file);
         formData.append("label", galleryLabel || "other");
-        formData.append("source", "scanner_camera");
+        formData.append("source", effectiveSource);
 
         await apiClient.post(`/manifestations/${manifestation_id}/images`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -228,6 +235,8 @@ export function CameraCapture({
         // Mode 1: Upload a user-contributed cover for a known manifestation
         formData.append("cover", file);
         formData.append("format", format);
+        formData.append("source", effectiveSource);
+
         await apiClient.post(`/manifestations/${manifestation_id}/cover`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -236,6 +245,8 @@ export function CameraCapture({
         // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
         formData.append("cover", file);
         formData.append("format", format);
+        formData.append("source", effectiveSource);
+
         const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });

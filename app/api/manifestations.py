@@ -423,6 +423,18 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
+
+    # Record as a scan event if source is provided (e.g., scanner_camera)
+    image_source = request.form.get("source", "user_upload")
+    scan = ImageScan(
+        manifestation_id=manifestation.id,
+        file_path=f"/static/uploads/raw_covers/{filename}",  # Record raw for now, processing will update cover_url
+        scan_type="front",
+        source=image_source,
+    )
+    db.session.add(scan)
+    db.session.commit()
+
     task_id = start_cover_processing(
         manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
     )

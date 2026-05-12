@@ -146,10 +146,11 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
           galleryLabel={label}
           onGalleryUploadComplete={handleCameraComplete}
           label="Snap"
-          icon={<Camera className="h-3 w-3" />}
+          icon={<Camera className="h-3.5 w-3.5" />}
           inline
-          variant="outline"
-          buttonClassName="h-8 text-[11px] font-semibold border-dashed px-3"
+          variant="secondary"
+          source="scanner_camera"
+          buttonClassName="h-8 text-[11px] font-bold px-4 shadow-sm hover:bg-secondary/80"
         />
       </div>
     </div>
