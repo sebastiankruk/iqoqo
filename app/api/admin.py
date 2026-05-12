@@ -25,7 +25,7 @@ from app.core import frbr_service
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
 from app.db.core import Expression, Item, Manifestation, Work
-from app.db.models import InstanceSettings, Permission, Role, User, db
+from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
@@ -406,6 +406,28 @@ def manage_settings():
         return jsonify(res) if isinstance(res, dict) else res
 
     return jsonify(_put_settings(user, request.json or {}))
+
+
+@admin_bp.route("/settings/reveal", methods=["GET"])
+@require_auth
+@admin_required
+def reveal_setting():
+    """Reveal a specific masked setting value."""
+    user = _get_current_user()
+    if not user:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    key = request.args.get("key")
+    if not key or key not in API_KEYS:
+        return jsonify({"success": False, "error": "Invalid or missing key"}), 400
+
+    if not _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    db_setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
+    value = db_setting.value if db_setting else (os.environ.get(key) or "")
+
+    return jsonify({"success": True, "data": {"value": value}})
 
 
 # --- FRBR ENTITY MANAGEMENT ROUTES ---

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 from . import db
 
@@ -90,7 +91,7 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
 
     @classmethod
-    def get_value(cls, key: str, default: any = None) -> any:
+    def get_value(cls, key: str, default: Any = None) -> Any:
         """Get a setting value by key with a fallback default."""
         from . import db
 
