@@ -36,6 +36,7 @@ TUNNEL=false
 CLEAN=false
 BACKUP=false
 PREBUILT=false
+STOP=false
 CUSTOM_VERSION=""
 
 # Robust argument parsing
@@ -60,6 +61,9 @@ while [ $# -gt 0 ]; do
         --version)
             shift
             CUSTOM_VERSION="$1"
+            ;;
+        --stop)
+            STOP=true
             ;;
         *)
             # Non-flag positional arg (if first) is treated as mode
@@ -147,6 +151,26 @@ else
 fi
 
 # 3. Execution Dispatch
+PID_DIR=".pids"
+
+if [ "$STOP" = true ]; then
+    echo "🛑 Stopping iqoqo in '$MODE' mode..."
+    if [ "$MODE" == "dev" ]; then
+        # Kill local processes if they exist
+        [ -f "$PID_DIR/flask.pid" ] && kill $(cat "$PID_DIR/flask.pid") 2>/dev/null || true
+        [ -f "$PID_DIR/celery.pid" ] && kill $(cat "$PID_DIR/celery.pid") 2>/dev/null || true
+        [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
+        rm -rf "$PID_DIR"
+        docker compose down db redis
+    else
+        export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
+        [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
+        docker compose down --remove-orphans
+    fi
+    echo "✅ Stopped."
+    exit 0
+fi
+
 if [ "$MODE" == "dev" ]; then
     # --- LOCAL DEV MODE ---
 
