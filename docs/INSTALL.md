@@ -11,6 +11,10 @@ For the fastest setup, use Docker Compose:
 git clone https://github.com/sebastiankruk/iqoqo.git
 cd iqoqo
 
+# (Optional) Login to GitHub Container Registry for pre-built images
+# If pull fails, the script will offer to login via GitHub CLI (gh)
+gh auth token | docker login ghcr.io -u your-username --password-stdin
+
 # 2. Create and configure environment file
 cp .env.example .env
 # Edit .env: Set DATABASE_URL, configure ports, set strong passwords, and CORS values if needed

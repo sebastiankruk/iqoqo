@@ -36,6 +36,7 @@ TUNNEL=false
 CLEAN=false
 BACKUP=false
 PREBUILT=false
+CUSTOM_VERSION=""
 
 # Robust argument parsing
 while [ $# -gt 0 ]; do
@@ -55,6 +56,10 @@ while [ $# -gt 0 ]; do
             ;;
         --prebuilt)
             PREBUILT=true
+            ;;
+        --version)
+            shift
+            CUSTOM_VERSION="$1"
             ;;
         *)
             # Non-flag positional arg (if first) is treated as mode
@@ -121,10 +126,14 @@ VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 
     || grep -m 1 "version =" pyproject.toml | cut -d '"' -f 2 \
     || echo "0.0.0")
 
-if [ "$MODE" == "dev" ]; then
-    export APP_VERSION="${VERSION}.dev"
+if [ -n "$CUSTOM_VERSION" ]; then
+    export APP_VERSION="$CUSTOM_VERSION"
 else
-    export APP_VERSION="${VERSION}"
+    if [ "$MODE" == "dev" ]; then
+        export APP_VERSION="${VERSION}.dev"
+    else
+        export APP_VERSION="${VERSION}"
+    fi
 fi
 
 # Activate/Bootstrap Virtual Environment
@@ -454,7 +463,33 @@ except Exception:
     if [ "$PREBUILT" = true ]; then
         echo "📦 Using pre-built images from ghcr.io..."
         COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.prebuilt.yml"
-        $COMPOSE_CMD pull
+        if ! $COMPOSE_CMD pull; then
+            echo "❌ Error: Failed to pull pre-built images."
+            if command -v gh &>/dev/null; then
+                if [ -t 0 ]; then
+                    read -p "🤔 Do you want to attempt automatic login via GitHub CLI (gh)? [y/N] " -n 1 -r
+                    echo
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        echo "🔑 Attempting GHCR login..."
+                        if gh auth token | docker login ghcr.io -u "${GITHUB_USER:-sebastiankruk}" --password-stdin; then
+                             echo "✅ Login successful! Retrying pull..."
+                             $COMPOSE_CMD pull || { echo "❌ Still failed to pull. Please check permissions."; exit 1; }
+                        else
+                             echo "❌ Automatic login failed. Please run 'docker login ghcr.io' manually."
+                             exit 1
+                        fi
+                    else
+                        exit 1
+                    fi
+                else
+                    echo "💡 Hint: Try 'gh auth token | docker login ghcr.io -u YOUR_USER --password-stdin' or run without --prebuilt."
+                    exit 1
+                fi
+            else
+                echo "❌ Please log in to ghcr.io manually (docker login ghcr.io) or run without --prebuilt."
+                exit 1
+            fi
+        fi
         BUILD_FLAG=""
     else
         echo "🔨 Building images locally from source..."
@@ -462,7 +497,10 @@ except Exception:
     fi
 
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
-    $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans
+    if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then
+        echo "❌ Error: Failed to start full stack for $COMPOSE_PROJECT_NAME."
+        exit 1
+    fi
 
     echo "✅ Success! Deployment ready."
     [ "$MODE" != "prod" ] && echo "🌐 URL: http://localhost:${NGINX_PORT:-8000}"

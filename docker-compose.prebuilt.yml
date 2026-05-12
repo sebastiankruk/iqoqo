@@ -18,13 +18,13 @@
 # Note: Requires Docker Compose v2.24+
 services:
   web:
-    image: ghcr.io/${GITHUB_REPOSITORY:-sebastiankruk/iqoqo}/backend:${APP_VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY:-sebastiankruk/iqoqo}/backend:${APP_VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-sebastiankruk/iqoqo}/frontend:${APP_VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-frontend:${APP_VERSION:-latest}
     build: !reset null

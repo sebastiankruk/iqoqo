@@ -44,7 +44,7 @@ jobs:
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/backend
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/iqoqo-backend
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -54,7 +54,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/frontend
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/iqoqo-frontend
           tags: |
             type=ref,event=branch
             type=ref,event=tag
