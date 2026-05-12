@@ -59,5 +59,7 @@ class ManifestationContribution(db.Model):  # type: ignore[name-defined]
     sequence = db.Column(db.Integer, default=0)
 
     # Note: Contributor relationship can be added here or dynamically accessed via backrefs
-    contributor = db.relationship("Contributor", backref=db.backref("manifestation_contributions", lazy="dynamic"))
-    manifestation = db.relationship("Manifestation", backref=db.backref("contributions", lazy="dynamic"))
+    contributor = db.relationship(
+        "Contributor", backref=db.backref("manifestation_contributions", lazy="dynamic", cascade="all, delete-orphan")
+    )
+    manifestation = db.relationship("Manifestation", backref=db.backref("contributions", lazy="dynamic", cascade="all, delete-orphan"))
