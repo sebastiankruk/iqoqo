@@ -107,7 +107,7 @@ class Work(db.Model):  # type: ignore[name-defined]
     )
 
     # Relationships
-    expressions = db.relationship("Expression", backref="work", lazy=True)
+    expressions = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("WorkContribution", backref="work", lazy="selectin", cascade="all, delete-orphan")
     parts = db.relationship(
         "WorkPart",
@@ -136,13 +136,13 @@ class Expression(db.Model):  # type: ignore[name-defined]
     __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
 
     id = db.Column(db.Integer, primary_key=True)
-    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id"), nullable=False)
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False)
     content_type = db.Column(db.String(50))  # e.g., 'text', 'sound', 'notated_music', 'video'
     language = db.Column(db.String(10))  # BCP-47 language tag, e.g., 'en', 'pl'
     meta = db.Column(db.JSON, default=dict)
 
     # Relationships
-    manifestations = db.relationship("Manifestation", backref="expression", lazy=True)
+    manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("ExpressionContribution", backref="expression", lazy="selectin", cascade="all, delete-orphan")
 
 
@@ -157,7 +157,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     __tablename__ = "manifestations"
 
     id = db.Column(db.Integer, primary_key=True)
-    expression_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}expressions.id"), nullable=False)
+    expression_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="CASCADE"), nullable=False)
 
     # Identifiers — at least one is expected for cover/lookup purposes
     isbn13 = db.Column(db.String(13), index=True, unique=True)
@@ -228,7 +228,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         self.meta = meta
 
     # Relationships
-    items = db.relationship("Item", backref="manifestation", lazy=True)
+    items = db.relationship("Item", backref="manifestation", lazy=True, cascade="all, delete-orphan")
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -243,7 +243,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
 
     id = db.Column(db.Integer, primary_key=True)
-    manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id"), nullable=False)
+    manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=False)
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status = db.Column(db.String(50), default="want_to_read")  # see PROGRESS_STATUSES for valid values

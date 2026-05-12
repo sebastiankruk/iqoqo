@@ -100,7 +100,7 @@ test.describe("Jigsaw Puzzle Workflow", () => {
     await expect(page.locator("text=Starry Night 1000pc")).toBeVisible();
 
     // 7. Confirm addition
-    await page.click('button:has-text("Add to My Collection")');
+    await page.click('button:has-text("Add to Library")');
     await expect(page).toHaveURL(/\/item\/.*/);
   });
 });

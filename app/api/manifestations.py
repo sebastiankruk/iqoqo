@@ -310,14 +310,36 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation(isbn: str) -> tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    metadata = request.get_json(silent=True)
-    if not isinstance(metadata, dict):
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
         return invalid_json_payload_response()
+
+    from pydantic import ValidationError
+
+    from app.api.schemas import ManifestationUpdateSchema
+
+    try:
+        payload = ManifestationUpdateSchema(**payload_json)
+    except (ValidationError, TypeError) as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Invalid payload",
+                    "details": str(e) if isinstance(e, TypeError) else e.errors(),
+                }
+            ),
+            400,
+        )
+
+    metadata = payload.model_dump(exclude_unset=True)
 
     if metadata:
         manifestation.update_meta(**metadata)
@@ -401,6 +423,18 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     user_id_str = str(user_id) if user_id else "anonymous"
     user_obj = db.session.get(User, user_id) if user_id else None
     llm_permissions = User.list_llm_permissions(user_obj)
+
+    # Record as a scan event if source is provided (e.g., scanner_camera)
+    image_source = request.form.get("source", "user_upload")
+    scan = ImageScan(
+        manifestation_id=manifestation.id,
+        file_path=f"/static/uploads/raw_covers/{filename}",  # Record raw for now, processing will update cover_url
+        scan_type="front",
+        source=image_source,
+    )
+    db.session.add(scan)
+    db.session.commit()
+
     task_id = start_cover_processing(
         manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
     )
@@ -438,37 +472,33 @@ def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
-    # pylint: disable=too-many-return-statements
     """Upload an additional image (inlay, disc, back) for a manifestation."""
     manifestation = db.session.get(Manifestation, manifestation_id)
     if not manifestation:
         return jsonify({"success": False, "error": "Manifestation not found"}), 404
 
-    if "image" not in request.files:
-        return jsonify({"success": False, "error": "No image provided"}), 400
-
-    file = request.files["image"]
-    if not file.filename:
+    file = request.files.get("image")
+    if not file or not file.filename:
         return jsonify({"success": False, "error": "No selected file"}), 400
 
     try:
-        # Use common validation helper
         validate_upload_file(file)
-
-        image_label = request.form.get("label", "other")  # 'disc', 'inlay', 'back', 'box'
-
-        # Save and optimize
+        image_label = request.form.get("label", "other")
+        # QA/Tech-Debt Fix: Accept dynamic source from caller (scanner vs manual upload),
+        # avoiding hardcoded "user_upload" that prevented scanner auto-fallback from being recorded.
+        image_source = request.form.get("source", "user_upload")
+        if len(image_source) > 100:
+            return jsonify({"success": False, "error": "Source identifier too long (max 100)"}), 400
         filename = secure_filename(f"manifestation_{manifestation_id}_{image_label}_{file.filename}")
         image_url = save_upload_image(file, subfolder="gallery", filename=filename)
     except ValueError as e:
-        error_message = str(e)
-        status_code = 413 if "too large" in error_message.lower() else 400
-        return jsonify({"success": False, "error": error_message}), status_code
+        msg = str(e)
+        return jsonify({"success": False, "error": msg}), (413 if "too large" in msg.lower() else 400)
     except (OSError, SyntaxError):
         return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
 
-    # Save to ImageScan table
-    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source="user_upload")
+    # Save to ImageScan table with dynamic source
+    scan = ImageScan(manifestation_id=manifestation_id, file_path=image_url, scan_type=image_label, source=image_source)
     db.session.add(scan)
 
     # Keep compatibility with old JSONB field for now

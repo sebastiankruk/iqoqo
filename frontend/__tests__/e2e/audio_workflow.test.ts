@@ -155,7 +155,8 @@ test.describe("Audio Media Workflow", () => {
     const labelSelect = page.locator("select").filter({ hasText: "Disc" });
     await expect(labelSelect).toBeVisible();
 
-    await expect(page.getByText(/Upload [a-z]+ image/i)).toBeVisible();
+    await expect(page.getByText("Browse")).toBeVisible();
+    await expect(page.getByText("Snap")).toBeVisible();
 
     // 9. Verify NO redundant format toggle (Book/CD/Vinyl) on the item page
     // It should be hidden because manifestation_id is passed to CameraCapture
@@ -246,7 +247,7 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByRole("button", { name: "Music" })).toHaveClass(/bg-primary/);
 
     // 8. Submit the generic "Add to Collection" action
-    await page.getByRole("button", { name: "Add to My Collection" }).click();
+    await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 8. Expect routing to newly ingested item details page
     await expect(page).toHaveURL(/.*\/item\/2/);

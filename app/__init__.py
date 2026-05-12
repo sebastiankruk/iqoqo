@@ -131,6 +131,16 @@ def create_app(config_class=Config, config_override=None):
 
     init_celery(app)
 
+    # Initialize Limiter
+    from app.core.limiter import limiter
+
+    redis_url = app.config.get("REDIS_URL")
+    if redis_url:
+        limiter.storage_uri = redis_url
+    # If Redis is mandatory, we could check here, but the plan says it must be configured in .env.
+    # Flask-Limiter will use storage_uri.
+    limiter.init_app(app)
+
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)

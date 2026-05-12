@@ -22,20 +22,19 @@ import re
 
 from flask import current_app, g, jsonify, request
 from PIL import Image
+from pydantic import ValidationError
 from sqlalchemy import or_
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
+from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
-from app.utils.bgg import fetch_bgg_metadata
-from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates, fetch_discogs_metadata
-from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
-from app.utils.musicbrainz import fetch_audio_metadata
-from app.utils.tmdb import clean_video_title, fetch_video_metadata
-from app.utils.upc import resolve_physical_media
+from app.strategies import LookupStrategyFactory
+from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
 
 # Maximum allowed upload size for cover images (10 MB)
@@ -105,8 +104,46 @@ def _find_locally(code: str) -> Manifestation | None:
     return result if isinstance(result, Manifestation) else None
 
 
+def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | None) -> Manifestation:
+    """Waterfall helper to ingest based on format hint. Drastically reduces cyclomatic complexity."""
+    from app.core.taxonomy import CATEGORY_INGEST_METHOD
+
+    ingest_map = {cat: getattr(IngestService, method) for cat, method in CATEGORY_INGEST_METHOD.items()}
+
+    if category_hint in ingest_map:
+        result: Manifestation = ingest_map[category_hint](barcode)
+        return result
+
+    if category_hint == "text" or format_hint == "audiobook":
+        return IngestService.ingest_from_isbn(barcode)
+
+    # Auto-fallback strategy
+    is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
+    if is_isbn_like:
+        try:
+            return IngestService.ingest_from_isbn(barcode)
+        except ValueError:
+            return IngestService.ingest_audio_from_barcode(barcode)
+
+    # Waterfall trial for unknown pure barcode formats
+    for ingest_func in [
+        IngestService.ingest_audio_from_barcode,
+        IngestService.ingest_video_from_barcode,
+        IngestService.ingest_game_from_barcode,
+        IngestService.ingest_puzzle_from_barcode,
+        IngestService.ingest_from_isbn,
+    ]:
+        try:
+            return ingest_func(barcode)
+        except ValueError:
+            continue
+
+    raise ValueError("Exhausted all ingestion methods")
+
+
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
+@limiter.limit("10 per minute")
 def lookup_barcode_preview(query: str):
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
     format_hint = request.args.get("format")
@@ -124,14 +161,13 @@ def lookup_barcode_preview(query: str):
     # Check DB first
     query_obj = Manifestation.query.join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
 
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+    category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+
     # Filter by format if hint is provided to avoid cross-media collisions
-    if format_hint:
-        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
-
-        content_type = FORMAT_ALIAS_TO_CATEGORY.get(format_hint)
-
-        if content_type:
-            query_obj = query_obj.filter(Expression.content_type == content_type)
+    if category_hint:
+        query_obj = query_obj.filter(Expression.content_type == category_hint)
 
     all_manifestations = query_obj.all()
     manifestation = all_manifestations[0] if all_manifestations else None
@@ -173,24 +209,12 @@ def lookup_barcode_preview(query: str):
         _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
         return jsonify({"success": True, "data": data, "error": None}), 200
 
-    meta = None
-    provider = None
-    barcode = query if not is_barcode else canonical_id  # Use raw text for external search if not barcode
-
-    is_book = barcode.startswith("978") or barcode.startswith("979") or len(barcode) == 10
-
-    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
-
-    category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+    barcode = query if not is_barcode else canonical_id
 
     # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
-    # so the user can disambiguate between different releases/editions.
     if not is_barcode and (category_hint == "music" or format_hint in (None, "")):
         discogs_results = fetch_discogs_candidates(query)
         if len(discogs_results) > 1:
-            # Return candidates for the frontend disambiguation sheet
-            # Build response from a copy — top must NOT be mutated because it
-            # already lives inside discogs_results, which becomes candidates.
             response_data = copy.deepcopy(discogs_results[0])
             response_data["candidates"] = discogs_results
             response_data["identifier"] = query
@@ -201,166 +225,17 @@ def lookup_barcode_preview(query: str):
                 candidate["data_source"] = "discogs"
             _record_scan_telemetry(query, format_hint, "discogs", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
-        if len(discogs_results) == 1:
-            meta = dict(discogs_results[0])
-            meta["data_source"] = "discogs"
-            provider = "discogs"
 
-    # Route based on format hint first, fallback to heuristics
-    if category_hint == "movie":
-        upc_meta = resolve_physical_media(barcode)
-        if upc_meta and upc_meta.get("title"):
-            title = clean_video_title(upc_meta["title"])
-            meta = fetch_video_metadata(title)
-            if meta:
-                meta["data_source"] = "tmdb"
-            provider = "tmdb" if meta else "upc"
-            if meta:
-                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-            else:
-                meta = upc_meta
-                meta["data_source"] = "upc"
-        if not meta:
-            meta = fetch_video_metadata(barcode)
-            if meta:
-                meta["data_source"] = "tmdb"
-            provider = "tmdb" if meta else None
-    elif category_hint == "board_game":
-        # Heuristic: 1-7 digits are likely BGG IDs, not barcodes
-        is_short_numeric = barcode.isdigit() and len(barcode) <= 7
-
-        if is_short_numeric:
-            meta = fetch_bgg_metadata(barcode)
-            if meta:
-                meta["data_source"] = "bgg"
-                provider = "bgg"
-        else:
-            # Full waterfall for barcodes
-            upc_meta = resolve_physical_media(barcode)
-            if upc_meta and upc_meta.get("title"):
-                # Try BGG by title first
-                meta = fetch_bgg_metadata(upc_meta["title"])
-                if meta:
-                    meta["data_source"] = "bgg"
-                    provider = "bgg"
-                    # Merge UPC data (like high-res covers from Allegro) if it doesn't overwrite BGG
-                    if isinstance(meta, dict):
-                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-                else:
-                    meta = upc_meta
-                    meta["data_source"] = "upc"
-                    provider = "upc"
-
-            if not meta:
-                # Last resort: try BGG with raw identifier
-                meta = fetch_bgg_metadata(barcode)
-                if meta:
-                    meta["data_source"] = "bgg"
-                    provider = "bgg"
-    elif category_hint == "puzzle":
-        meta = resolve_physical_media(barcode)
-        if meta:
-            meta["data_source"] = "upc"
-        provider = "upc" if meta else None
-    elif category_hint == "music":
-        # Heuristic: 1-7 digits are likely Discogs Release IDs
-        if barcode.isdigit() and len(barcode) <= 7:
-            meta = fetch_discogs_by_id(barcode)
-            if meta:
-                meta["data_source"] = "discogs"
-                provider = "discogs"
-
-        if not meta:
-            meta = fetch_discogs_metadata(barcode)
-            if meta:
-                meta["data_source"] = "discogs"
-                provider = "discogs"
-
-        if not meta:
-            provider = "discogs" if meta else None
-        if not meta:
-            meta = fetch_audio_metadata(barcode)
-            if meta:
-                meta["data_source"] = "musicbrainz"
-            provider = "musicbrainz" if meta else None
-    elif is_book or category_hint in ("book", "text"):
-        canonical = canonicalize_isbn(barcode)
-        if canonical:
-            meta = fetch_isbn_metadata(canonical)
-            if meta:
-                # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
-                meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
-            provider = "isbn" if meta else None
-
-        # Fallback to audio if book fails
-        if not meta:
-            meta = fetch_discogs_metadata(barcode)
-            if meta:
-                meta["data_source"] = "discogs"
-            provider = "discogs" if meta else None
-            if not meta:
-                meta = fetch_audio_metadata(barcode)
-                if meta:
-                    meta["data_source"] = "musicbrainz"
-                provider = "musicbrainz" if meta else None
-    else:
-        # No format hint: auto-fallback strategy for non-ISBN barcodes
-        # Try audio sources first (UPC/EAN codes commonly map to audio)
-        meta = fetch_discogs_metadata(barcode)
-        if meta:
-            meta["data_source"] = "discogs"
-        provider = "discogs" if meta else None
-        if not meta:
-            meta = fetch_audio_metadata(barcode)
-            if meta:
-                meta["data_source"] = "musicbrainz"
-            provider = "musicbrainz" if meta else None
-
-        # Fallback to book if audio fails
-        if not meta:
-            canonical = canonicalize_isbn(barcode)
-            if canonical:
-                meta = fetch_isbn_metadata(canonical)
-                if meta:
-                    # fetch_isbn_metadata sets meta["Source"] to "Google Books" or "Open Library"
-                    meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
-                provider = "isbn" if meta else None
-
-        # Final fallback to video/game if all else fails
-        if not meta:
-            upc_meta = resolve_physical_media(barcode)
-            if upc_meta and upc_meta.get("title"):
-                title = clean_video_title(upc_meta["title"])
-                meta = fetch_video_metadata(title)
-                if meta:
-                    meta["data_source"] = "tmdb"
-                    provider = "tmdb"
-                    meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-                else:
-                    meta = fetch_bgg_metadata(upc_meta["title"])
-                    if meta:
-                        meta["data_source"] = "bgg"
-                        provider = "bgg"
-                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-                    else:
-                        meta = upc_meta
-                        provider = "upc"
-            if not meta:
-                meta = fetch_video_metadata(barcode)
-                if meta:
-                    meta["data_source"] = "tmdb"
-                    provider = "tmdb"
-                else:
-                    meta = fetch_bgg_metadata(barcode)
-                    if meta:
-                        meta["data_source"] = "bgg"
-                    provider = "bgg" if meta else None
+    # Leverage the Strategy Pattern for format-specific metadata lookups
+    # (e.g., ISBN for books, UPC for music/movies, BGG for games)
+    strategy = LookupStrategyFactory.get_strategy(category_hint)
+    meta, provider = strategy.lookup(barcode, query)
 
     if not meta:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
-    # Ensure frontend gets normalized keys for preview
+    # Ensure frontend gets normalized keys for preview regardless of source API schema
     if "title" not in meta:
         meta["title"] = meta.get("Title") or "Unknown Title"
     if "cover_url" not in meta:
@@ -400,12 +275,11 @@ def lookup_barcode_preview(query: str):
         if format_hint in hint_to_format:
             meta["format"] = hint_to_format[format_hint]
 
-    # Add identifier to meta — use original human-readable query, not internal hash
+    # Add identifier to meta
     meta["identifier"] = query
     meta["already_in_collection"] = False
 
     # Auto-save to catalog so the user never has to click an extra button.
-    # This is a best-effort fire-and-return; we never block the preview on failure.
     manifestation_id: int | None = None
     try:
         meta_to_store = {k: v for k, v in meta.items() if k not in ("already_in_collection", "item_id", "candidates", "already_in_db")}
@@ -439,88 +313,91 @@ def lookup_barcode_preview(query: str):
 
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
+@limiter.limit("20 per minute")
 def scan_barcode():
-    # pylint: disable=too-many-return-statements
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return invalid_json_payload_response()
+    payload_json = request.get_json(silent=True)
+    error_response = None
+    payload = None
+    if not isinstance(payload_json, dict):
+        error_response = invalid_json_payload_response()
+    else:
+        try:
+            payload = ScanBarcodeSchema(**payload_json)
+        except (ValidationError, TypeError) as e:
+            error_response = (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Invalid payload",
+                        "details": str(e) if isinstance(e, TypeError) else e.errors(),
+                    }
+                ),
+                400,
+            )
 
-    barcode = data.get("barcode")
-    manifestation_id = data.get("manifestation_id")
-    format_hint = data.get("format")
+    if error_response:
+        return error_response
+
+    barcode = payload.barcode
+    manifestation_id = payload.manifestation_id
+    format_hint = payload.format
+    collection_status = payload.collection_status
+
+    from app.core.taxonomy import COLLECTION_STATUSES
+
+    # Normalize legacy 'wishlist' to canonical 'wish_list'
+    STATUS_ALIASES = {"wishlist": "wish_list"}
+    collection_status = STATUS_ALIASES.get(collection_status, collection_status)
+
+    if collection_status not in COLLECTION_STATUSES:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}",
+                }
+            ),
+            400,
+        )
 
     if not barcode and not manifestation_id:
         return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
 
     is_new_manifestation = False
     manifestation = None
-
-    # Priority 1: Direct Manifestation ID (Safe and stable for name-lookups)
     if manifestation_id:
         manifestation = db.session.get(Manifestation, manifestation_id)
 
-    # Priority 2: Check DB by barcode
     if not manifestation and barcode:
         manifestation = _find_locally(barcode)
+        if not manifestation:
+            try:
+                from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+                category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
-        category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+                # Support pure numeric Discogs Release IDs
+                is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
+                if is_discogs_numeric and (category_hint == "music" or format_hint is None):
+                    meta = fetch_discogs_by_id(barcode)
+                    if meta:
+                        manifestation = IngestService.ingest_from_meta(meta)
 
-        try:
-            # Support pure numeric Discogs Release IDs (heuristic: <= 8 digits and audio-ish)
-            is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
-            if is_discogs_numeric and (category_hint == "music" or format_hint is None):
-                meta = fetch_discogs_by_id(barcode)
-                if meta:
-                    # Ingest using pre-fetched meta
-                    manifestation = IngestService.ingest_from_meta(meta)
+                if not manifestation:
+                    manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
+                is_new_manifestation = True
 
-            if not manifestation and category_hint == "music":
-                manifestation = IngestService.ingest_audio_from_barcode(barcode)
-            elif category_hint == "movie":
-                manifestation = IngestService.ingest_video_from_barcode(barcode)
-            elif category_hint == "board_game":
-                manifestation = IngestService.ingest_game_from_barcode(barcode)
-            elif category_hint == "puzzle":
-                manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
-            elif category_hint == "text":
-                manifestation = IngestService.ingest_from_isbn(barcode)
-            elif format_hint == "audiobook":
-                # Fallback for audiobook category itself if specific format not provided
-                manifestation = IngestService.ingest_from_isbn(barcode)
-            else:
-                # Auto-fallback strategy
-                is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
-                if is_isbn_like:
-                    try:
-                        manifestation = IngestService.ingest_from_isbn(barcode)
-                    except ValueError:
-                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
-                else:
-                    try:
-                        manifestation = IngestService.ingest_audio_from_barcode(barcode)
-                    except ValueError:
-                        try:
-                            manifestation = IngestService.ingest_video_from_barcode(barcode)
-                        except ValueError:
-                            try:
-                                manifestation = IngestService.ingest_game_from_barcode(barcode)
-                            except ValueError:
-                                try:
-                                    manifestation = IngestService.ingest_puzzle_from_barcode(barcode)
-                                except ValueError:
-                                    manifestation = IngestService.ingest_from_isbn(barcode)
-
-            is_new_manifestation = True
-        except ValueError as e:
-            return jsonify({"success": False, "data": None, "error": f"Invalid barcode or not found: {str(e)}"}), 400
-        except ConnectionError as e:
-            return jsonify({"success": False, "data": None, "error": f"Network error while fetching metadata: {str(e)}"}), 503
-        except Exception as e:  # pylint: disable=broad-except
-            _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
-            return jsonify({"success": False, "data": None, "error": f"Failed to find or ingest metadata for barcode: {str(e)}"}), 404
+            except (ValueError, ConnectionError, Exception) as e:  # pylint: disable=broad-exception-caught
+                _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
+                err_msg = str(e)
+                code = 404
+                if isinstance(e, ConnectionError):
+                    code = 503
+                elif isinstance(e, ValueError):
+                    code = 400
+                return jsonify({"success": False, "data": None, "error": f"Resolution failed: {err_msg}"}), code
 
     if not manifestation:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
@@ -531,13 +408,16 @@ def scan_barcode():
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
     default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
 
+    # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
-        manifestation_id=manifestation.id, owner_id=getattr(g, "user_id", None), status=default_progress, collection_status="available"
+        manifestation_id=manifestation.id,
+        owner_id=getattr(g, "user_id", None),
+        status=default_progress,
+        collection_status=collection_status,
     )
     db.session.add(new_item)
 
-    # For name-based lookups (no barcode), store the hash_id in meta so future
-    # local lookups can find this manifestation without hitting external APIs again.
+    # For name-based lookups (no barcode), store the hash_id in meta
     if barcode:
         is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
         if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
@@ -589,51 +469,28 @@ def scan_barcode():
 @require_auth
 @require_permission(PermissionName.LLM_GENERATE_METADATA)
 def extract_from_cover():
-    # pylint: disable=too-many-return-statements
-    """Submit a cover image for asynchronous metadata extraction.
-
-    Returns:
-        202 - ``{"success": true, "data": {"task_id": str}, "error": null}``
-    """
-    if "cover" not in request.files:
+    """Submit a cover image for asynchronous metadata extraction."""
+    file = request.files.get("cover")
+    if not file or not file.filename:
         return jsonify({"success": False, "data": None, "error": "No file provided"}), 400
-
-    file = request.files["cover"]
-    if not file.filename:
-        return jsonify({"success": False, "data": None, "error": "No selected file"}), 400
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in _ALLOWED_EXTENSIONS:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": f"Invalid file type. Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
-                }
-            ),
-            400,
-        )
+        return jsonify({"success": False, "data": None, "error": f"Invalid file type: {ext}"}), 400
 
-    if request.content_length and request.content_length > _MAX_COVER_SIZE:
-        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
-
-    image_bytes = _read_bounded(file, _MAX_COVER_SIZE)
+    too_large = request.content_length and request.content_length > _MAX_COVER_SIZE
+    image_bytes = None if too_large else _read_bounded(file, _MAX_COVER_SIZE)
     if image_bytes is None:
-        return jsonify({"success": False, "data": None, "error": "File too large. Max size: 10 MB"}), 413
+        return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img.verify()
+        Image.open(io.BytesIO(image_bytes)).verify()
     except (OSError, SyntaxError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    user_id = getattr(g, "user_id", None)
-
-    # Dispatch to background task queue
-    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=user_id)
+    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=getattr(g, "user_id", None))
 
     return jsonify({"success": True, "data": {"task_id": task_id}, "error": None}), 202
 

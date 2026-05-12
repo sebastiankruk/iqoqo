@@ -16,7 +16,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getInstanceSettings, updateInstanceSettings } from "@/lib/api/admin";
+import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, EyeOff, Save } from "lucide-react";
 
@@ -70,6 +70,11 @@ const SETTING_GROUPS = {
       label: "Known Junk Image Hashes",
       type: "text" as const,
       placeholder: "Comma-separated pHash values",
+    },
+    {
+      key: "MAINTENANCE_MODE",
+      label: "Maintenance Mode",
+      type: "boolean" as const,
     },
   ],
 };
@@ -127,6 +132,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [saving, setSaving] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
   const settingsList = SETTING_GROUPS[category] || [];
@@ -172,16 +178,27 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     }
   };
 
-  const toggleReveal = (key: string) => {
-    setRevealedKeys(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) {
+  const toggleReveal = async (key: string) => {
+    if (revealedKeys.has(key)) {
+      setRevealedKeys(prev => {
+        const next = new Set(prev);
         next.delete(key);
-      } else {
+        return next;
+      });
+      return;
+    }
+
+    try {
+      const data = await revealSettingValue(key);
+      setRevealedValues(prev => ({ ...prev, [key]: data.value }));
+      setRevealedKeys(prev => {
+        const next = new Set(prev);
         next.add(key);
-      }
-      return next;
-    });
+        return next;
+      });
+    } catch (e) {
+      console.error("Failed to reveal setting", e);
+    }
   };
 
   const getSettingValue = (key: string): { value: string; source: string } => {
@@ -227,8 +244,14 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                     type="text"
                     autoComplete="off"
                     className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
-                    value={isRevealed ? value.replace(/^\*+/, "") : value}
-                    onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                    value={isRevealed ? revealedValues[s.key] || value : value}
+                    onChange={e => {
+                      const newVal = e.target.value;
+                      if (isRevealed) {
+                        setRevealedValues({ ...revealedValues, [s.key]: newVal });
+                      }
+                      setSettings({ ...settings, [s.key]: newVal });
+                    }}
                     placeholder={s.placeholder}
                   />
                   {(isMasked || source !== "missing") && (
@@ -262,7 +285,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               <div className="flex items-center gap-3">
                 <select
                   className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={value === "true" ? "true" : "false"}
+                  value={String(value).toLowerCase() === "true" ? "true" : "false"}
                   onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
                 >
                   <option value="true">Enabled</option>

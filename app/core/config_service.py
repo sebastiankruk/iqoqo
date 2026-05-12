@@ -42,7 +42,6 @@ class ConfigService:
         Returns:
             The configuration value from highest priority source
         """
-        # pylint: disable=too-many-return-statements
         try:
             from flask import current_app
 

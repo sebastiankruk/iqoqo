@@ -13,19 +13,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
+# pylint: disable=broad-exception-caught, inconsistent-return-statements
 
 import os
 from datetime import date
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 
-from app.api.decorators import admin_required
+from app.api.decorators import admin_required, require_auth
 from app.core import frbr_service
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
 from app.db.core import Expression, Item, Manifestation, Work
-from app.db.models import InstanceSettings, Permission, Role, User, db
+from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
@@ -60,6 +60,7 @@ def _format_user(u: User) -> dict:
 
 
 @admin_bp.route("/users", methods=["GET"])
+@require_auth
 @admin_required
 def get_users():
     """Get all users with optional filtering and pagination."""
@@ -74,19 +75,19 @@ def get_users():
     # QA FIX: Clamp limit to prevent DB/Memory DoS attacks
     limit = min(request.args.get("limit", 50, type=int), 100)
 
-    query = User.query
+    stmt = db.select(User)
 
     if search:
-        query = query.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
+        stmt = stmt.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
 
     if status == "active":
-        query = query.filter(User.is_active.is_(True))
+        stmt = stmt.filter(User.is_active.is_(True))
     elif status == "inactive":
-        query = query.filter(User.is_active.is_(False))
+        stmt = stmt.filter(User.is_active.is_(False))
 
-    query = query.order_by(User.created_at.desc())
+    stmt = stmt.order_by(User.created_at.desc())
 
-    paginated = query.paginate(page=page, per_page=limit, error_out=False)
+    paginated = db.paginate(stmt, page=page, per_page=limit, error_out=False)
 
     return jsonify(
         {
@@ -98,6 +99,7 @@ def get_users():
 
 
 @admin_bp.route("/users/<uuid:user_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_user(user_id):
     """Update user's active status and RBAC roles."""
@@ -106,21 +108,22 @@ def update_user(user_id):
     if not _has_permission(user, PermissionName.WRITE_USERS):
         return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
 
-    user_obj = User.query.get_or_404(user_id)
+    user_obj = db.get_or_404(User, user_id)
     data = request.json or {}
 
     if "is_active" in data:
         user_obj.is_active = bool(data["is_active"])
 
     if "roles" in data and isinstance(data["roles"], list):
-        new_roles = Role.query.filter(Role.name.in_(data["roles"])).all()
-        user_obj.roles = new_roles
+        new_roles = db.session.execute(db.select(Role).filter(Role.name.in_(data["roles"]))).scalars().all()
+        user_obj.roles = list(new_roles)
 
     db.session.commit()
     return jsonify({"success": True, "data": _format_user(user_obj)})
 
 
 @admin_bp.route("/roles", methods=["GET", "POST"])
+@require_auth
 @admin_required
 def get_roles():
     """Get all available roles for RBAC assignment, or create a new role."""
@@ -128,16 +131,21 @@ def get_roles():
 
     if request.method == "POST":
         if not _has_permission(user, PermissionName.WRITE_ROLES):
-            return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
+            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
         data = request.json or {}
         name = data.get("name", "").strip()
+        err = None
         if not name:
-            return jsonify({"success": False, "error": "Role name is required"}), 400
-        if len(name) > 50:
-            return jsonify({"success": False, "error": "Role name too long (max 50 chars)"}), 400
-        if Role.query.filter_by(name=name).first():
-            return jsonify({"success": False, "error": "Role already exists"}), 400
+            err = "Role name is required"
+        elif len(name) > 50:
+            err = "Role name too long"
+        elif db.session.execute(db.select(Role).filter_by(name=name)).scalar_one_or_none():
+            err = "Role already exists"
+
+        if err:
+            return jsonify({"success": False, "error": err}), 400
+
         role = Role(name=name)
         db.session.add(role)
         db.session.commit()
@@ -146,7 +154,7 @@ def get_roles():
     if not _has_permission(user, PermissionName.READ_ROLES):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
-    roles = Role.query.all()
+    roles = db.session.execute(db.select(Role)).scalars().all()
     protected_roles = {"admin", "user", "contributor"}
     return jsonify(
         {
@@ -156,7 +164,8 @@ def get_roles():
                     "id": r.id,
                     "name": r.name,
                     "is_protected": r.name.lower() in protected_roles,
-                    "member_count": r.users.count(),
+                    "member_count": db.session.execute(db.select(db.func.count()).select_from(user_roles).filter_by(role_id=r.id)).scalar()
+                    or 0,  # pylint: disable=not-callable
                     "permission_count": len(r.permissions),
                 }
                 for r in roles
@@ -166,6 +175,7 @@ def get_roles():
 
 
 @admin_bp.route("/roles/<int:role_id>", methods=["DELETE"])
+@require_auth
 @admin_required
 def delete_role(role_id):
     """Delete a role (only non-protected roles can be deleted)."""
@@ -174,7 +184,7 @@ def delete_role(role_id):
     if not _has_permission(user, PermissionName.WRITE_ROLES):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
-    role = Role.query.get_or_404(role_id)
+    role = db.get_or_404(Role, role_id)
     protected_roles = {"admin", "user", "contributor"}
     if role.name.lower() in protected_roles:
         return jsonify({"success": False, "error": "Cannot delete protected role"}), 400
@@ -184,6 +194,7 @@ def delete_role(role_id):
 
 
 @admin_bp.route("/permissions", methods=["GET"])
+@require_auth
 @admin_required
 def get_permissions():
     """Get all available permissions that can be assigned to roles."""
@@ -192,7 +203,7 @@ def get_permissions():
     if not _has_permission(user, PermissionName.READ_ROLES):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
-    permissions = Permission.query.all()
+    permissions = db.session.execute(db.select(Permission)).scalars().all()
     return jsonify(
         {
             "success": True,
@@ -202,6 +213,7 @@ def get_permissions():
 
 
 @admin_bp.route("/roles/<int:role_id>/permissions", methods=["GET", "PUT"])
+@require_auth
 @admin_required
 def manage_role_permissions(role_id):
     """Get or update permissions for a specific role."""
@@ -213,7 +225,7 @@ def manage_role_permissions(role_id):
         if not _has_permission(user, PermissionName.WRITE_ROLES):
             return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_ROLES} required"}), 403
 
-    role = Role.query.get_or_404(role_id)
+    role = db.get_or_404(Role, role_id)
 
     if request.method == "GET":
         role_permission_ids = {p.id for p in role.permissions}
@@ -234,7 +246,9 @@ def manage_role_permissions(role_id):
 
     data = request.json or {}
     permission_ids = data.get("permission_ids", [])
-    permissions = Permission.query.filter(Permission.id.in_(permission_ids)).all() if permission_ids else []
+    permissions = (
+        db.session.execute(db.select(Permission).filter(Permission.id.in_(permission_ids))).scalars().all() if permission_ids else []
+    )
     role.permissions = permissions
     db.session.commit()
 
@@ -271,7 +285,7 @@ FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
 
 AFFILIATE_KEYS = {"AFFILIATE_AMAZON", "AFFILIATE_ALLEGRO", "AFFILIATE_EMPIK"}
 
-INTERNAL_KEYS = {"instance_name", "IQOQO_KNOWN_JUNK_PHASHES"}
+INTERNAL_KEYS = {"instance_name", "IQOQO_KNOWN_JUNK_PHASHES", "MAINTENANCE_MODE"}
 
 
 def _mask_api_key(value: str) -> str:
@@ -283,129 +297,144 @@ def _mask_api_key(value: str) -> str:
     return "***"
 
 
+def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
+    """Helper for GET /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    if category == "federation" and not can_federation:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "affiliate" and not can_affiliate:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category in {"external_apis", "apikeys"} and not can_external:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+    if category == "internal" and not can_internal:
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    db_settings = {s.key: s.value for s in db.session.execute(db.select(InstanceSettings)).scalars().all()}
+    from flask import current_app
+
+    flask_config = current_app.config if current_app else {}
+    result = {}
+
+    def normalize_val(v):
+        s_v = str(v or "").lower()
+        return s_v if s_v in ("true", "false") else str(v or "")
+
+    if can_external:
+        for key in API_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            # Mask API keys but keep other external settings unmasked
+            display_value = (
+                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or ""))
+                if key in API_KEYS and key != "LOCAL_SD_URL"
+                else str(value or "")
+            )
+            result[key] = {"value": display_value, "source": source}
+
+    if can_federation:
+        for key in FEDERATION_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": normalize_val(value), "source": source}
+
+    if can_affiliate:
+        for key in AFFILIATE_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": normalize_val(value), "source": source}
+
+    if can_internal:
+        for key in INTERNAL_KEYS:
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
+            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            result[key] = {"value": normalize_val(value), "source": source}
+
+    return {"success": True, "data": result}
+
+
+def _put_settings(user: User, data: dict) -> dict:
+    """Helper for PUT /settings."""
+    can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
+    can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
+    can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
+    can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
+
+    key_permissions = {
+        **dict.fromkeys(API_KEYS, can_external),
+        **dict.fromkeys(FEDERATION_KEYS, can_federation),
+        **dict.fromkeys(AFFILIATE_KEYS, can_affiliate),
+        **dict.fromkeys(INTERNAL_KEYS, can_internal),
+    }
+
+    saved = {}
+    for key, value in data.items():
+        if not key_permissions.get(key, True):
+            continue
+
+        if isinstance(value, str) and value.startswith("***"):
+            continue
+
+        setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
+        if setting:
+            setting.value = value
+        else:
+            new_setting = InstanceSettings()
+            new_setting.key = key
+            new_setting.value = value
+            db.session.add(new_setting)
+        saved[key] = value
+
+    db.session.commit()
+    return {"success": True, "data": saved}
+
+
 @admin_bp.route("/settings", methods=["GET", "PUT"])
+@require_auth
 @admin_required
-# pylint: disable=too-many-return-statements, broad-exception-caught, inconsistent-return-statements
 def manage_settings():
     """Manage global instance settings with category-based RBAC."""
     user = _get_current_user()
-
-    category = request.args.get("category", "all")
+    if not user:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
 
     if request.method == "GET":
-        can_external = _has_permission(user, "config:external_apis")
-        can_federation = _has_permission(user, "config:federation")
-        can_affiliate = _has_permission(user, "config:affiliate")
-        can_internal = _has_permission(user, "config:internal")
+        res = _get_settings(user, request.args.get("category", "all"))
+        return jsonify(res) if isinstance(res, dict) else res
 
-        # Get all DB settings
-        db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
+    return jsonify(_put_settings(user, request.json or {}))
 
-        # Get Flask config keys
-        try:
-            from flask import current_app
 
-            flask_config = current_app.config if current_app else {}
-        except Exception:
-            flask_config = {}
+@admin_bp.route("/settings/reveal", methods=["GET"])
+@require_auth
+@admin_required
+def reveal_setting():
+    """Reveal a specific masked setting value."""
+    user = _get_current_user()
+    if not user:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
 
-        result = {}
+    key = request.args.get("key")
+    if not key or key not in API_KEYS:
+        return jsonify({"success": False, "error": "Invalid or missing key"}), 400
 
-        # Process API keys (external)
-        if can_external:
-            for key in API_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    # Mask all API keys (DB and env); URLs shown unmasked
-                    is_url = key in ("LOCAL_SD_URL",)
-                    if is_url:
-                        result[key] = {"value": str(value), "source": source}
-                    else:
-                        result[key] = {"value": _mask_api_key(str(value)), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
+    if not _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
 
-        # Process Federation keys
-        if can_federation:
-            for key in FEDERATION_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
+    db_setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
+    value = db_setting.value if db_setting else (os.environ.get(key) or "")
 
-        # Process Affiliate keys
-        if can_affiliate:
-            for key in AFFILIATE_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        # Process Internal keys
-        if can_internal:
-            for key in INTERNAL_KEYS:
-                source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-                value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
-                if value:
-                    result[key] = {"value": str(value), "source": source}
-                else:
-                    result[key] = {"value": "", "source": source}
-
-        if category == "federation" and not can_federation:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_FEDERATION} required"}), 403
-        if category == "affiliate" and not can_affiliate:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_AFFILIATE} required"}), 403
-        if category in {"external_apis", "apikeys"} and not can_external:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_EXTERNAL_APIS} required"}), 403
-        if category == "internal" and not can_internal:
-            return jsonify({"success": False, "error": f"Permission denied: {PermissionName.CONFIG_INTERNAL} required"}), 403
-
-        return jsonify({"success": True, "data": result})
-
-    if request.method == "PUT":
-        can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
-        can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
-        can_affiliate = _has_permission(user, PermissionName.CONFIG_AFFILIATE)
-        can_internal = _has_permission(user, PermissionName.CONFIG_INTERNAL)
-
-        data = request.json or {}
-        saved = {}
-
-        for key, value in data.items():
-            if key in API_KEYS and not can_external:
-                continue
-            if key in FEDERATION_KEYS and not can_federation:
-                continue
-            if key in AFFILIATE_KEYS and not can_affiliate:
-                continue
-            if key in INTERNAL_KEYS and not can_internal:
-                continue
-
-            if isinstance(value, str) and value.startswith("***"):
-                continue
-
-            setting = InstanceSettings.query.filter_by(key=key).first()
-            if setting:
-                setting.value = value
-            else:
-                setting = InstanceSettings(key=key, value=value)
-                db.session.add(setting)
-
-            saved[key] = value
-
-        db.session.commit()
-        return jsonify({"success": True, "data": saved})
+    return jsonify({"success": True, "data": {"value": value}})
 
 
 # --- FRBR ENTITY MANAGEMENT ROUTES ---
 
 
 @admin_bp.route("/frbr/tree/manifestation/<int:manif_id>", methods=["GET"])
+@require_auth
 @admin_required
 def get_frbr_tree(manif_id):
     """Fetches the full FRBR lineage upward from a Manifestation."""
@@ -421,7 +450,7 @@ def get_frbr_tree(manif_id):
     expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
     work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
 
-    items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
+    items = db.session.execute(db.select(Item).filter_by(manifestation_id=manif.id).order_by(Item.id)).scalars().all()
 
     items_data = []
     for i in items:
@@ -471,6 +500,7 @@ def get_frbr_tree(manif_id):
 
 
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_work(work_id):
     """Update a Work entity."""
@@ -488,6 +518,7 @@ def update_work(work_id):
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_expression(expr_id):
     """Update an Expression entity."""
@@ -511,6 +542,7 @@ def update_expression(expr_id):
 
 
 @admin_bp.route("/frbr/manifestation/<int:manif_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_manifestation(manif_id):
     """Update a Manifestation entity."""
@@ -543,6 +575,7 @@ def update_manifestation(manif_id):
 
 
 @admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
+@require_auth
 @admin_required
 def update_item(item_id):
     """Update an Item entity."""
@@ -566,6 +599,7 @@ def update_item(item_id):
 
 
 @admin_bp.route("/frbr/search", methods=["GET"])
+@require_auth
 @admin_required
 def search_frbr_entities():
     """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
@@ -584,15 +618,18 @@ def search_frbr_entities():
     results = []
 
     if entity_type == "work":
-        works = Work.query.filter(Work.title.ilike(f"%{query}%")).limit(limit).all()
+        works = db.session.execute(db.select(Work).filter(Work.title.ilike(f"%{query}%")).limit(limit)).scalars().all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
         expressions = (
-            db.session.query(Expression)
-            .join(Work, Expression.work_id == Work.id)
-            .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
-            .limit(limit)
+            db.session.execute(
+                db.select(Expression)
+                .join(Work, Expression.work_id == Work.id)
+                .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+                .limit(limit)
+            )
+            .scalars()
             .all()
         )
 
@@ -621,17 +658,19 @@ def search_frbr_entities():
         )
 
         # Get manifestations matching either criteria
-        work_ids_subquery = db.session.query(Work.id).filter(work_filter).subquery()
-        mans = (
-            Manifestation.query.filter(
+        work_stmt = db.select(Work.id).filter(work_filter)
+        expr_stmt = db.select(Expression.id).filter(Expression.work_id.in_(work_stmt))
+        stmt = (
+            db.select(Manifestation)
+            .filter(
                 db.or_(
                     identifier_filter,
-                    Manifestation.expression_id.in_(db.session.query(Expression.id).filter(Expression.work_id.in_(work_ids_subquery))),
+                    Manifestation.expression_id.in_(expr_stmt),
                 )
             )
             .limit(limit)
-            .all()
         )
+        mans = db.session.execute(stmt).scalars().all()
         results = []
         for m in mans:
             expr = db.session.get(Expression, m.expression_id) if m.expression_id else None
@@ -643,29 +682,21 @@ def search_frbr_entities():
 
 
 @admin_bp.route("/media/upload-cover", methods=["POST"])
+@require_auth
 @admin_required
 def upload_cover():
     """Accepts a client-side processed image blob, saves it, and binds it to an entity."""
     user = _get_current_user()
 
     if not _has_permission(user, PermissionName.EDIT_COVER) and not _has_permission(user, PermissionName.UPLOAD_COVER):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.UPLOAD_COVER} required"}), 403
+        return jsonify({"success": False, "error": "Permission denied"}), 403
 
-    if "file" not in request.files:
-        return jsonify({"success": False, "error": "No file provided"}), 400
-
-    file = request.files["file"]
+    file = request.files.get("file")
     entity_type = request.form.get("entity_type")
     entity_id = request.form.get("entity_id")
 
-    if not file or file.filename == "":
-        return jsonify({"success": False, "error": "Empty file"}), 400
-
-    if entity_type not in ["manifestation", "item"]:
-        return jsonify({"success": False, "error": "Invalid entity type. Must be manifestation or item."}), 400
-
-    if not entity_id or not str(entity_id).isdigit():
-        return jsonify({"success": False, "error": "Invalid or missing entity_id"}), 400
+    if not file or not file.filename or entity_type not in ["manifestation", "item"] or not str(entity_id).isdigit():
+        return jsonify({"success": False, "error": "Invalid request parameters"}), 400
 
     ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
     filename = f"{entity_type}_{entity_id}_cover.{ext}"
@@ -682,23 +713,15 @@ def upload_cover():
         from app.utils.covers import COVERS_DIR
 
         saved_filepath = os.path.join(COVERS_DIR, filename)
-
-        if entity_type == "manifestation":
-            entity = db.session.get(Manifestation, int(entity_id))
-        else:
-            entity = db.session.get(Item, int(entity_id))
+        entity = db.session.get(Manifestation, int(entity_id)) if entity_type == "manifestation" else db.session.get(Item, int(entity_id))
 
         if not entity:
-            return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found"}), 404
+            return jsonify({"success": False, "error": "Entity not found"}), 404
 
         if hasattr(entity, "cover_url"):
             entity.cover_url = public_url
 
-        if not entity.meta:
-            entity.meta = {}
-
-        # Create a new dictionary to ensure SQLAlchemy detects the JSONB mutation
-        new_meta = dict(entity.meta)
+        new_meta = dict(entity.meta or {})
         new_meta["cover_url"] = public_url
         entity.meta = new_meta
 
@@ -706,10 +729,9 @@ def upload_cover():
         return jsonify({"success": True, "data": {"cover_url": public_url}})
     except Exception as e:
         db.session.rollback()
-        # Clean up orphaned file if DB commit failed
         if saved_filepath:
             try:
                 os.remove(saved_filepath)
             except OSError:
-                pass  # Best-effort cleanup
+                pass
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500

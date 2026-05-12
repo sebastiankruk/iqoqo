@@ -59,6 +59,8 @@ class ContainerAggregation(db.Model):  # type: ignore[name-defined]
     quantity = db.Column(db.Integer, default=1)
 
     # Relationships
-    container_work = db.relationship("Work", foreign_keys=[container_work_id], backref=db.backref("aggregates", lazy="dynamic"))
+    container_work = db.relationship(
+        "Work", foreign_keys=[container_work_id], backref=db.backref("aggregates", lazy="dynamic", cascade="all, delete-orphan")
+    )
     aggregated_work = db.relationship("Work", foreign_keys=[aggregated_work_id])
     aggregated_item = db.relationship("Item", foreign_keys=[aggregated_item_id])
