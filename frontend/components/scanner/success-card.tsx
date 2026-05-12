@@ -154,6 +154,7 @@ export function SuccessCard({
       if (snappedCover && data.manifestation_id) {
         const coverFormData = new FormData();
         coverFormData.append("cover", snappedCover);
+        coverFormData.append("source", "scanner_camera");
         try {
           await apiClient.post(`/manifestations/${data.manifestation_id}/cover`, coverFormData, {
             headers: { "Content-Type": "multipart/form-data" },
@@ -304,55 +305,55 @@ export function SuccessCard({
                 </div>
               )}
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
-                  {meta.already_in_collection ? (
+              <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
+                {meta.already_in_collection ? (
+                  <Button
+                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                    variant="default"
+                    onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
+                  >
+                    View in Collection
+                  </Button>
+                ) : (
+                  <>
                     <Button
                       className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
                       variant="default"
-                      onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
+                      disabled={adding}
+                      onClick={() => handleAdd("available")}
                     >
-                      View in Collection
+                      {adding ? (
+                        "Adding..."
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                          Add to Library
+                        </>
+                      )}
                     </Button>
-                  ) : (
-                    <>
-                      <Button
-                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                        variant="default"
-                        disabled={adding}
-                        onClick={() => handleAdd("available")}
-                      >
-                        {adding ? (
-                          "Adding..."
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                            Add to Library
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
-                        variant="outline"
-                        disabled={adding}
-                        onClick={() => handleAdd("wish_list")}
-                      >
-                        {adding ? (
-                          "Adding..."
-                        ) : (
-                          <>
-                            <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
-                            Add to Wishlist
-                          </>
-                        )}
-                      </Button>
+                    <Button
+                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
+                      variant="outline"
+                      disabled={adding}
+                      onClick={() => handleAdd("wish_list")}
+                    >
+                      {adding ? (
+                        "Adding..."
+                      ) : (
+                        <>
+                          <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
+                          Add to Wishlist
+                        </>
+                      )}
+                    </Button>
 
-                  <Button
-                    variant="outline"
-                    className="flex-1 min-w-[140px] h-12 rounded-xl"
-                    onClick={onScanAnother ?? onDismiss}
-                    aria-label="Scan Another"
-                  >
-                    Scan Another
+                    <Button
+                      variant="outline"
+                      className="flex-1 min-w-[140px] h-12 rounded-xl"
+                      onClick={onScanAnother ?? onDismiss}
+                      aria-label="Scan Another"
+                    >
+                      Scan Another
                     </Button>
                   </>
                 )}
@@ -366,7 +367,7 @@ export function SuccessCard({
                     Wrong item? Enter Manually
                   </Button>
                 </div>
-                </div>
+              </div>
             </div>
           </div>
         </CardContent>

@@ -125,7 +125,8 @@ def test_admin_required_refactored(client, app):
     assert "Admin privileges required" in response.json["error"]
 
 
-def test_lookup_rate_limit(client, app_with_limiter, normal_user_headers):
+def test_lookup_rate_limit(app_with_limiter, normal_user_headers):
+    client = app_with_limiter.test_client()
     # Hit it 10 times (limit is 10 per minute)
     for _ in range(10):
         response = client.get("/api/lookup/123", headers=normal_user_headers)

@@ -17,9 +17,10 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { CopyPlus, Loader2 } from "lucide-react";
+import { CopyPlus, Loader2, Camera } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { CameraCapture } from "./camera-capture";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   GLOBAL_IMAGE_TYPES,
@@ -74,6 +75,7 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
     const formData = new FormData();
     formData.append("image", file);
     formData.append("label", label);
+    formData.append("source", "user_upload");
 
     try {
       await apiClient.post(`/manifestations/${manifestationId}/images`, formData, {
@@ -90,6 +92,13 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleCameraComplete = async () => {
+    toast.success(`${label} image captured and uploaded!`);
+    await queryClient.invalidateQueries({ queryKey: ["manifestation", manifestationId] });
+    await queryClient.invalidateQueries({ queryKey: ["manifestations"] });
+    onUploadComplete();
   };
 
   return (
@@ -110,24 +119,39 @@ export function MultiImageUploader({ manifestationId, currentItemFormat, onUploa
         </select>
       </div>
 
-      <div className="relative">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleUpload}
-          disabled={isUploading}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-          id="gallery-upload"
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleUpload}
+            disabled={isUploading}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            id="gallery-upload"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isUploading}
+            className="w-full h-8 text-[11px] font-semibold flex items-center justify-center gap-2 border-dashed"
+          >
+            {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CopyPlus className="h-3 w-3" />}
+            {isUploading ? "Uploading..." : `Browse`}
+          </Button>
+        </div>
+
+        <CameraCapture
+          manifestation_id={manifestationId}
+          mode="gallery"
+          galleryLabel={label}
+          onGalleryUploadComplete={handleCameraComplete}
+          label="Snap"
+          icon={<Camera className="h-3.5 w-3.5" />}
+          inline
+          variant="secondary"
+          source="scanner_camera"
+          buttonClassName="h-8 text-[11px] font-bold px-4 shadow-sm hover:bg-secondary/80"
         />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isUploading}
-          className="w-full h-8 text-[11px] font-semibold flex items-center justify-center gap-2 border-dashed"
-        >
-          {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CopyPlus className="h-3 w-3" />}
-          {isUploading ? "Uploading..." : `Upload ${label} image`}
-        </Button>
       </div>
     </div>
   );

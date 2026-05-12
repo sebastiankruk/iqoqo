@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2, Settings, User, LogOut } from "lucide-react";
+import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useProfile } from "@/lib/api/hooks";
+import { useProfile, useAppConfig } from "@/lib/api/hooks";
 
 /**
  * Sticky top navigation bar – "Modern Athenaeum" style.
@@ -39,10 +39,13 @@ import { useProfile } from "@/lib/api/hooks";
  */
 export function Navbar() {
   const { data: profile, isLoading } = useProfile();
+  const { data: config } = useAppConfig();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || searchParams?.get("search") || "");
   const queryClient = useQueryClient();
+
+  const isMaintenanceMode = config?.maintenance_mode === true;
 
   useEffect(() => {
     setSearchQuery(searchParams?.get("q") || searchParams?.get("search") || "");
@@ -86,6 +89,12 @@ export function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 bg-primary text-primary-foreground dark:bg-[#040608] dark:text-foreground dark:border-b">
+      {isMaintenanceMode && (
+        <div className="bg-amber-500 py-2 px-4 text-center text-xs font-bold uppercase tracking-wider text-black flex items-center justify-center gap-2 border-b border-amber-600/20">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Maintenance Mode Active – Some features may be limited
+        </div>
+      )}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
         {/* Brand */}
         <Link href="/" className="flex shrink-0 items-center gap-2.5">

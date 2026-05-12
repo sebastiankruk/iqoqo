@@ -128,6 +128,8 @@ export default function ScanPage() {
         if (item && coverToUpload && item.manifestation_id) {
           const coverFormData = new FormData();
           coverFormData.append("cover", coverToUpload);
+          const isSnapped = coverToUpload === snappedCover;
+          coverFormData.append("source", isSnapped ? "scanner_camera" : "user_upload");
           try {
             await apiClient.post(`/manifestations/${item.manifestation_id}/cover`, coverFormData, {
               headers: { "Content-Type": "multipart/form-data" },

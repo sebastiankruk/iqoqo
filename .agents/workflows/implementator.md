@@ -24,6 +24,7 @@ User provides an implementation plan (with code or diffs) and requests implement
 - Invoke the **`implementation-export`** skill (or direct file manipulation tools).
 - Apply the provided `implementation_plan` exactly as specified using the appropriate file replacement tools.
 - **Strict Constraint**: Apply changes without "extra creativity". Do not refactor, clean up, or hallucinate improvements outside of the provided plan.
+- **Preserve Integrity**: Do not mute return-value warnings with silencing comments (`# type: ignore`, `# noqa`, `# pylint: disable`). Preserve all existing docstrings and function descriptions.
 
 ### 2. Initial Quality Assurance
 

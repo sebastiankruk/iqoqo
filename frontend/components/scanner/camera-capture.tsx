@@ -23,6 +23,8 @@
  * 2. **Vision extraction** – posts the image to `/vision/extract` and calls
  * `onExtractComplete` with the extracted `{ Title, Authors }` payload when
  * the server returns `success: true`.
+ * 3. **Gallery upload** – posts the image to `/manifestations/:id/images` and
+ * calls `onGalleryUploadComplete` on success.
  *
  * @module components/scanner/camera-capture
  */
@@ -61,8 +63,14 @@ interface ExtractedMetadata {
 interface CameraCaptureProps {
   /** If set, the component uploads the image as a cover for this manifestation. */
   manifestation_id?: number;
+  /** If true, the component uploads the image to the gallery (/images) instead of cover. */
+  mode?: "cover" | "gallery" | "vision";
+  /** The label for the gallery scan (front, back, disc, etc.). Used only in gallery mode. */
+  galleryLabel?: string;
   /** Called after a successful cover upload (mode 1). */
   onUploadComplete?: () => void;
+  /** Called after a successful gallery upload (mode 3). */
+  onGalleryUploadComplete?: () => void;
   /** Called with extracted metadata after vision extraction (mode 2). */
   onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
   /** Called when vision extraction or polling fails. */
@@ -86,6 +94,8 @@ interface CameraCaptureProps {
   buttonClassName?: string;
   /** If true, forces the simplified button layout and applies to button */
   inline?: boolean;
+  /** Source identifier for the scan (e.g. scanner_camera, user_upload) */
+  source?: string;
 }
 
 /**
@@ -94,7 +104,10 @@ interface CameraCaptureProps {
  *
  * @param props - Component props.
  * @param props.manifestation_id - If set, uploads the image as a cover for this manifestation.
+ * @param props.mode - The upload mode: "cover", "gallery", or "vision".
+ * @param props.galleryLabel - The label for the gallery scan (only for gallery mode).
  * @param props.onUploadComplete - Called after a successful cover upload (mode 1).
+ * @param props.onGalleryUploadComplete - Called after a successful gallery upload (mode 3).
  * @param props.onExtractComplete - Called with extracted metadata after vision extraction (mode 2).
  * @param props.onExtractionFailure - Called when extraction or polling fails.
  * @param props.className - Optional CSS class name applied to the wrapper div.
@@ -107,11 +120,15 @@ interface CameraCaptureProps {
  * @param props.variant - Button variant.
  * @param props.buttonClassName - Optional CSS class name applied directly to the button.
  * @param props.inline - If true, forces the simplified button layout and applies to button.
+ * @param props.source - Source identifier for the scan (e.g. scanner_camera, user_upload).
  * @returns The rendered camera capture button element.
  */
 export function CameraCapture({
   manifestation_id,
+  mode = "cover",
+  galleryLabel,
   onUploadComplete,
+  onGalleryUploadComplete,
   onExtractComplete,
   onExtractionFailure,
   className,
@@ -124,6 +141,7 @@ export function CameraCapture({
   variant,
   buttonClassName,
   inline,
+  source,
 }: CameraCaptureProps) {
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -198,18 +216,37 @@ export function CameraCapture({
   const processFile = async (file: File) => {
     setUploading(true);
     const formData = new FormData();
-    formData.append("cover", file);
-    formData.append("format", format);
+
+    // Default source logic: if explicitly provided use it, otherwise detect from capture prop
+    const effectiveSource = source || (capture === "environment" ? "scanner_camera" : "user_upload");
 
     try {
-      if (manifestation_id) {
+      if (mode === "gallery" && manifestation_id) {
+        // Mode 3: Upload an additional scan to the gallery
+        formData.append("image", file);
+        formData.append("label", galleryLabel || "other");
+        formData.append("source", effectiveSource);
+
+        await apiClient.post(`/manifestations/${manifestation_id}/images`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (onGalleryUploadComplete) onGalleryUploadComplete();
+      } else if (manifestation_id) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
+        formData.append("cover", file);
+        formData.append("format", format);
+        formData.append("source", effectiveSource);
+
         await apiClient.post(`/manifestations/${manifestation_id}/cover`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         if (onUploadComplete) onUploadComplete();
       } else {
         // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
+        formData.append("cover", file);
+        formData.append("format", format);
+        formData.append("source", effectiveSource);
+
         const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });

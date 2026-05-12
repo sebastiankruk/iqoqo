@@ -102,7 +102,7 @@ test.describe("Wishlist and Progress Workflow", () => {
 
   test("should allow user to update progress and collection status via item sidebar", async ({ page }) => {
     const itemId = 999;
-    
+
     // 1 & 2. Mock GET and PUT item
     const capturedUpdates: Record<string, unknown>[] = [];
     let currentItemState = {
@@ -113,7 +113,7 @@ test.describe("Wishlist and Progress Workflow", () => {
       is_owner: true,
       manifestation_id: 1000,
       meta: { format: "book" },
-      manifestation: { id: 1000, title: "Test Book" }
+      manifestation: { id: 1000, title: "Test Book" },
     };
     await page.route(`**/api/items/${itemId}**`, async route => {
       if (route.request().method() === "PUT") {
@@ -137,7 +137,6 @@ test.describe("Wishlist and Progress Workflow", () => {
       }
     });
 
-
     // 3. Navigate to item page
     page.on("console", msg => console.log("PAGE LOG:", msg.text()));
     page.on("pageerror", err => console.log("PAGE ERROR:", err.message));
@@ -146,7 +145,7 @@ test.describe("Wishlist and Progress Workflow", () => {
     });
     await page.goto(`/item/${itemId}`);
     await page.waitForLoadState("networkidle");
-    const bodyText = await page.innerText('body');
+    const bodyText = await page.innerText("body");
     console.log("BODY TEXT:", bodyText.slice(0, 200));
 
     // 4. Update Progress Status to "Want to Read"
@@ -164,7 +163,7 @@ test.describe("Wishlist and Progress Workflow", () => {
     // 6. Verify captured payloads
     expect(capturedUpdates).toContainEqual(expect.objectContaining({ status: "want_to_read" }));
     expect(capturedUpdates).toContainEqual(expect.objectContaining({ collection_status: "wish_list" }));
-    
+
     // Allow a small window for re-render after toasts
     await page.waitForTimeout(1000);
 
