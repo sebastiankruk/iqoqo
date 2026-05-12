@@ -45,31 +45,31 @@ test.describe("Phase 3 DevOps & UI Features", () => {
         json: { success: true, data: { federation_enabled: false, version: "0.6.0" } },
       })
     );
-    
+
     // Mock Settings
     await page.route("**/v1/admin/settings*", route =>
-        route.fulfill({
-            status: 200,
-            json: {
-                success: true,
-                data: {
-                    "MAINTENANCE_MODE": { "value": "false", "source": "db" },
-                    "IQOQO_KNOWN_JUNK_PHASHES": { "value": "", "source": "db" }
-                }
-            }
-        })
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            MAINTENANCE_MODE: { value: "false", source: "db" },
+            IQOQO_KNOWN_JUNK_PHASHES: { value: "", source: "db" },
+          },
+        },
+      })
     );
   });
 
   test("Landing page has functional GitHub link", async ({ page }) => {
     // Un-mock profile or mock as 401 to see the landing page Hero
     await page.route("**/api/profile**", route =>
-        route.fulfill({
-            status: 401,
-            json: { success: false, error: "Unauthorized" }
-        })
+      route.fulfill({
+        status: 401,
+        json: { success: false, error: "Unauthorized" },
+      })
     );
-    
+
     await page.goto("/");
     const githubLink = page.getByRole("link", { name: /GitHub/i });
     await expect(githubLink).toBeVisible();
@@ -80,7 +80,7 @@ test.describe("Phase 3 DevOps & UI Features", () => {
   test("Admin internal settings show Maintenance Mode toggle", async ({ page }) => {
     // Note: This requires admin login which is mocked in beforeEach
     await page.goto("/admin/settings?tab=instance");
-    
+
     // Check if the Maintenance Mode card exists
     await expect(page.getByText("Maintenance Mode")).toBeVisible();
     await expect(page.locator("select")).toBeVisible();

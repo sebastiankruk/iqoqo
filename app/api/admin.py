@@ -75,19 +75,19 @@ def get_users():
     # QA FIX: Clamp limit to prevent DB/Memory DoS attacks
     limit = min(request.args.get("limit", 50, type=int), 100)
 
-    query = User.query
+    stmt = db.select(User)
 
     if search:
-        query = query.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
+        stmt = stmt.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
 
     if status == "active":
-        query = query.filter(User.is_active.is_(True))
+        stmt = stmt.filter(User.is_active.is_(True))
     elif status == "inactive":
-        query = query.filter(User.is_active.is_(False))
+        stmt = stmt.filter(User.is_active.is_(False))
 
-    query = query.order_by(User.created_at.desc())
+    stmt = stmt.order_by(User.created_at.desc())
 
-    paginated = query.paginate(page=page, per_page=limit, error_out=False)
+    paginated = db.paginate(stmt, page=page, per_page=limit, error_out=False)
 
     return jsonify(
         {
@@ -115,8 +115,8 @@ def update_user(user_id):
         user_obj.is_active = bool(data["is_active"])
 
     if "roles" in data and isinstance(data["roles"], list):
-        new_roles = Role.query.filter(Role.name.in_(data["roles"])).all()
-        user_obj.roles = new_roles
+        new_roles = db.session.execute(db.select(Role).filter(Role.name.in_(data["roles"]))).scalars().all()
+        user_obj.roles = list(new_roles)
 
     db.session.commit()
     return jsonify({"success": True, "data": _format_user(user_obj)})
@@ -140,7 +140,7 @@ def get_roles():
             err = "Role name is required"
         elif len(name) > 50:
             err = "Role name too long"
-        elif Role.query.filter_by(name=name).first():
+        elif db.session.execute(db.select(Role).filter_by(name=name)).scalar_one_or_none():
             err = "Role already exists"
 
         if err:
@@ -154,7 +154,7 @@ def get_roles():
     if not _has_permission(user, PermissionName.READ_ROLES):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
-    roles = Role.query.all()
+    roles = db.session.execute(db.select(Role)).scalars().all()
     protected_roles = {"admin", "user", "contributor"}
     return jsonify(
         {
@@ -164,7 +164,8 @@ def get_roles():
                     "id": r.id,
                     "name": r.name,
                     "is_protected": r.name.lower() in protected_roles,
-                    "member_count": r.users.count(),
+                    "member_count": db.session.execute(db.select(db.func.count()).select_from(user_roles).filter_by(role_id=r.id)).scalar()
+                    or 0,  # pylint: disable=not-callable
                     "permission_count": len(r.permissions),
                 }
                 for r in roles
@@ -202,7 +203,7 @@ def get_permissions():
     if not _has_permission(user, PermissionName.READ_ROLES):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
-    permissions = Permission.query.all()
+    permissions = db.session.execute(db.select(Permission)).scalars().all()
     return jsonify(
         {
             "success": True,
@@ -312,7 +313,7 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
     if category == "internal" and not can_internal:
         return jsonify({"success": False, "error": "Permission denied"}), 403
 
-    db_settings = {s.key: s.value for s in InstanceSettings.query.all()}
+    db_settings = {s.key: s.value for s in db.session.execute(db.select(InstanceSettings)).scalars().all()}
     from flask import current_app
 
     flask_config = current_app.config if current_app else {}
@@ -377,7 +378,7 @@ def _put_settings(user: User, data: dict) -> dict:
         if isinstance(value, str) and value.startswith("***"):
             continue
 
-        setting = InstanceSettings.query.filter_by(key=key).first()
+        setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
         if setting:
             setting.value = value
         else:
@@ -427,7 +428,7 @@ def get_frbr_tree(manif_id):
     expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
     work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
 
-    items = Item.query.filter_by(manifestation_id=manif.id).order_by(Item.id).all()
+    items = db.session.execute(db.select(Item).filter_by(manifestation_id=manif.id).order_by(Item.id)).scalars().all()
 
     items_data = []
     for i in items:
@@ -595,15 +596,18 @@ def search_frbr_entities():
     results = []
 
     if entity_type == "work":
-        works = Work.query.filter(Work.title.ilike(f"%{query}%")).limit(limit).all()
+        works = db.session.execute(db.select(Work).filter(Work.title.ilike(f"%{query}%")).limit(limit)).scalars().all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
         expressions = (
-            db.session.query(Expression)
-            .join(Work, Expression.work_id == Work.id)
-            .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
-            .limit(limit)
+            db.session.execute(
+                db.select(Expression)
+                .join(Work, Expression.work_id == Work.id)
+                .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+                .limit(limit)
+            )
+            .scalars()
             .all()
         )
 

@@ -88,3 +88,12 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+
+    @classmethod
+    def get_value(cls, key: str, default: any = None) -> any:
+        """Get a setting value by key with a fallback default."""
+        from . import db
+
+        stmt = db.select(cls).filter_by(key=key)
+        setting = db.session.execute(stmt).scalar_one_or_none()
+        return setting.value if setting else default
