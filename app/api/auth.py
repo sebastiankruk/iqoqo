@@ -71,7 +71,7 @@ def google_callback():
     user_info = oauth.google.parse_id_token(token, nonce=None)
     email = user_info.get("email")
 
-    user = User.query.filter_by(email=email).first()
+    user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
     picture = user_info.get("picture")
 
     if not user:
@@ -82,7 +82,7 @@ def google_callback():
             google_id=user_info.get("sub"),
             avatar_url=picture,
         )
-        default_role = Role.query.filter_by(name="user").first()
+        default_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
         if default_role:
             user.roles.append(default_role)
         db.session.add(user)
@@ -109,7 +109,7 @@ def local_login():
     if not email or not password:
         return jsonify({"error": "Required"}), 400
 
-    user = User.query.filter_by(email=email).first()
+    user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
     if not user or not user.check_password(password):
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.is_active:
@@ -131,7 +131,7 @@ def local_register():
         return jsonify({"error": "Email and password are required"}), 400
 
     # Check if user already exists
-    if User.query.filter_by(email=email).first():
+    if db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none():
         return jsonify({"error": "Email already registered"}), 409
 
     # Create new user
@@ -139,7 +139,7 @@ def local_register():
     new_user.set_password(password)
 
     # Assign default 'user' role
-    default_role = Role.query.filter_by(name="user").first()
+    default_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
     if default_role:
         new_user.roles.append(default_role)
 
