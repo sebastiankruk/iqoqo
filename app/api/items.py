@@ -639,3 +639,33 @@ def get_item_logs(item_id: int):
             "error": None,
         }
     )
+
+
+@api_bp.route("/items/<int:item_id>/visibility", methods=["PATCH"])
+@require_auth
+def toggle_item_visibility(item_id: int):
+    """
+    Toggles the is_hidden flag for a specific item.
+    Hidden items do not appear on the user's public profile or shared collections.
+    """
+    item = db.session.get(Item, item_id)
+    user_id = getattr(g, "user_id", None)
+
+    if not item or str(item.owner_id) != str(user_id):
+        # Return 404 even if forbidden to prevent data leakage (BOLA protection)
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    data = request.get_json() or {}
+    if "is_hidden" not in data:
+        return jsonify({"error": "Missing 'is_hidden' boolean field.", "code": 400}), 400
+
+    item.is_hidden = bool(data["is_hidden"])
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Item visibility updated to {'hidden' if item.is_hidden else 'public'}.",
+            "is_hidden": item.is_hidden,
+        }
+    )

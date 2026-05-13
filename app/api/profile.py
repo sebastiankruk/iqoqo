@@ -16,6 +16,7 @@
 from datetime import UTC, datetime
 
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy import select
 
 from app.db.models import ConsentRecord, User, db
 
@@ -160,5 +161,35 @@ def search_users():
         }
         for u in users
     ]
-
     return jsonify({"success": True, "data": results})
+
+@profile_bp.route("/settings", methods=["PATCH"])
+@require_auth
+def update_profile_settings():
+    """Updates the current user's public profile settings."""
+    data = request.get_json() or {}
+    user = db.session.get(User, getattr(g, "user_id", None))
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if "public_username" in data:
+        new_username = data["public_username"].strip().lower()
+        if new_username:
+            # Check if username is taken by someone else
+            stmt = select(User).where(User.public_username == new_username, User.id != user.id)
+            existing = db.session.execute(stmt).scalar_one_or_none()
+            if existing:
+                return jsonify({"error": "Public username is already taken."}), 409
+            user.public_username = new_username
+
+    if "bio" in data:
+        user.bio = data["bio"].strip()
+
+    if "visibility" in data:
+        # User feedback: reuse visibility to value == public
+        val = data["visibility"]
+        if val in ["public", "private"]:
+            user.visibility = val
+
+    db.session.commit()
+    return jsonify({"success": True, "message": "Profile updated successfully.", "data": user.to_dict()})

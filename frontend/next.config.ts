@@ -16,6 +16,9 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { createRequire } from "module";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 // Read version from package.json so NEXT_PUBLIC_APP_VERSION is always in sync
 // with the canonical semver set by `make bump-version` / `scripts/sync_version.py`.
@@ -126,4 +129,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

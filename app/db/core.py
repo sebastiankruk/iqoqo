@@ -258,6 +258,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
     lent_to_name = db.Column(db.String(255), nullable=True)
 
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
