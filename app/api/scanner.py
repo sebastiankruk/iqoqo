@@ -20,7 +20,7 @@ import hashlib
 import io
 import re
 
-from flask import current_app, g, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from PIL import Image
 from pydantic import ValidationError
 from sqlalchemy import or_
@@ -58,7 +58,7 @@ def _read_bounded(file_storage, max_bytes: int) -> bytes | None:
 
 
 def _record_scan_telemetry(
-    barcode: str,
+    barcode: str | None,
     format_hint: str | None,
     provider: str,
     status: str,
@@ -144,7 +144,7 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
 @limiter.limit("10 per minute")
-def lookup_barcode_preview(query: str):
+def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
     format_hint = request.args.get("format")
 
@@ -313,8 +313,9 @@ def lookup_barcode_preview(query: str):
 
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
+@require_permission(PermissionName.WRITE_ITEM)
 @limiter.limit("20 per minute")
-def scan_barcode():
+def scan_barcode() -> Response | tuple[Response, int]:
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     payload_json = request.get_json(silent=True)
     error_response = None
@@ -336,19 +337,20 @@ def scan_barcode():
                 400,
             )
 
-    if error_response:
-        return error_response
+    if error_response or payload is None:
+        return error_response or (jsonify({"error": "Invalid payload"}), 400)
 
-    barcode = payload.barcode
-    manifestation_id = payload.manifestation_id
-    format_hint = payload.format
-    collection_status = payload.collection_status
+    barcode: str | None = payload.barcode
+    manifestation_id: int | None = payload.manifestation_id
+    format_hint: str | None = payload.format
+    collection_status: str | None = payload.collection_status
 
     from app.core.taxonomy import COLLECTION_STATUSES
 
     # Normalize legacy 'wishlist' to canonical 'wish_list'
     STATUS_ALIASES = {"wishlist": "wish_list"}
-    collection_status = STATUS_ALIASES.get(collection_status, collection_status)
+    if collection_status in STATUS_ALIASES:  # pylint: disable=consider-using-get
+        collection_status = STATUS_ALIASES[collection_status]
 
     if collection_status not in COLLECTION_STATUSES:
         return (
@@ -379,13 +381,16 @@ def scan_barcode():
                 category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
                 # Support pure numeric Discogs Release IDs
-                is_discogs_numeric = barcode.isdigit() and len(barcode) <= 8
-                if is_discogs_numeric and (category_hint == "music" or format_hint is None):
+                is_discogs_numeric = False
+                if barcode and barcode.isdigit() and len(barcode) <= 8:
+                    is_discogs_numeric = True
+
+                if is_discogs_numeric and barcode and (category_hint == "music" or format_hint is None):
                     meta = fetch_discogs_by_id(barcode)
                     if meta:
                         manifestation = IngestService.ingest_from_meta(meta)
 
-                if not manifestation:
+                if not manifestation and barcode:
                     manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
                 is_new_manifestation = True
 

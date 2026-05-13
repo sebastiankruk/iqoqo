@@ -22,23 +22,28 @@ from app.utils.musicbrainz import fetch_audio_metadata
 class BookLookupStrategy(LookupStrategy):
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
-        canonical = canonicalize_isbn(barcode)
-        if canonical:
-            meta = fetch_isbn_metadata(canonical)
-            if meta:
-                meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
-                provider = "isbn"
+        try:
+            canonical = canonicalize_isbn(barcode)
+            if canonical:
+                meta = fetch_isbn_metadata(canonical)
+                if meta:
+                    meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
+                    provider = "isbn"
 
-        if not meta:
-            meta = fetch_discogs_metadata(barcode)
-            if meta:
-                meta["data_source"] = "discogs"
-                provider = "discogs"
+            if not meta:
+                meta = fetch_discogs_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "discogs"
+                    provider = "discogs"
 
-        if not meta:
-            meta = fetch_audio_metadata(barcode)
-            if meta:
-                meta["data_source"] = "musicbrainz"
-                provider = "musicbrainz"
+            if not meta:
+                meta = fetch_audio_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "musicbrainz"
+                    provider = "musicbrainz"
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            import logging
+
+            logging.getLogger(__name__).error(f"Strategy lookup failed: {exc}")
 
         return meta, provider

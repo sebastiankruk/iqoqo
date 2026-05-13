@@ -245,10 +245,17 @@ def add_text_overlay(
 
 def save_upload_image(file, subfolder: str = "gallery", filename: str | None = None) -> str:
     """Saves an uploaded image file, optimizes it, and returns the public URL."""
+    from werkzeug.utils import secure_filename
+
     from app.utils.covers import COVERS_DIR, GALLERY_DIR
 
     base_dir = COVERS_DIR if subfolder == "covers" else GALLERY_DIR
-    target_filename = filename or file.filename
+    raw_filename = filename or file.filename
+    target_filename = secure_filename(raw_filename)
+
+    if not target_filename:
+        raise ValueError("Invalid filename")
+
     filepath = os.path.join(base_dir, target_filename)
 
     # Save and optimize.

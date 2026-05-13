@@ -50,6 +50,8 @@ permissions:
     description: "Modify status, condition, or local metadata of items."
   - name: "upload:cover"
     description: "Contribute or manually upload cover images."
+  - name: "write:item"
+    description: "Allow adding new items to the personal collection (manual entry or scanner)."
   - name: "write:metadata"
     description: "Edit central metadata for manifestations and items."
   - name: "write:roles"

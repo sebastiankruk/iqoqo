@@ -138,7 +138,7 @@ export function SuccessCard({
     setAdding(true);
     try {
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
-        barcode: identifier || rawIdentifier,
+        barcode: rawIdentifier,
         manifestation_id: meta.manifestation_id,
         format: format,
         collection_status: collectionStatus,

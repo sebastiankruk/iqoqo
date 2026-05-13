@@ -28,6 +28,7 @@ import { SuccessCard } from "@/components/scanner/success-card";
 import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
+import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
 import { useAddManualItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -159,85 +160,87 @@ export default function ScanPage() {
   }, []);
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        autoPlay
-        suppressHydrationWarning
-        className="absolute inset-0 z-0 h-full w-full object-cover"
-      />
-
-      <TopBar
-        currentFormat={activeFormat}
-        setFormat={f => setActiveFormat(f as ScanFormat)}
-        hasFlash={hasTorch}
-        isFlashOn={torchOn}
-        onToggleFlash={handleToggleTorch}
-      />
-
-      {!result && !showManual && scannerTab === "barcode" && (
-        <Viewfinder isScanning={scannerActive} format={activeFormat} />
-      )}
-
-      {!result && !showManual && (
-        <BottomSheet
-          videoRef={videoRef}
-          onFound={handleFound}
-          onScannerStateChange={setScannerActive}
-          onTabChange={setScannerTab}
-          onExtractComplete={handleExtractComplete}
-          onExtractionFailure={handleExtractionFailure}
-          onShowManualForm={handleShowManualForm}
-          format={activeFormat}
-          torchOn={torchOn}
-          onTorchCapabilityFound={setHasTorch}
+    <ScannerErrorBoundary>
+      <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          suppressHydrationWarning
+          className="absolute inset-0 z-0 h-full w-full object-cover"
         />
-      )}
-      {result && (
-        <SuccessCard
-          isbn={result.isbn}
-          meta={result.meta}
-          onDismiss={handleDismiss}
-          snappedCover={snappedCover}
-          onShowManualForm={handleShowManualForm}
+
+        <TopBar
+          currentFormat={activeFormat}
+          setFormat={f => setActiveFormat(f as ScanFormat)}
+          hasFlash={hasTorch}
+          isFlashOn={torchOn}
+          onToggleFlash={handleToggleTorch}
         />
-      )}
 
-      {candidates && (
-        <DisambiguationSheet
-          candidates={candidates.items}
-          onSelect={choice => {
-            setCandidates(null);
-            // Derive a stable identifier from the selected candidate
-            const selectedIdentifier =
-              (typeof choice === "object" &&
-                choice !== null &&
-                "identifier" in choice &&
-                (choice.identifier as string)) ||
-              (typeof choice === "object" && choice !== null && "barcode" in choice && (choice.barcode as string)) ||
-              (typeof choice === "object" && choice !== null && "isbn" in choice && (choice.isbn as string)) ||
-              candidates.isbn;
+        {!result && !showManual && scannerTab === "barcode" && (
+          <Viewfinder isScanning={scannerActive} format={activeFormat} />
+        )}
 
-            setResult({ isbn: selectedIdentifier, meta: choice });
-          }}
-          onDismiss={handleDismiss}
-        />
-      )}
-
-      {showManual && (
-        <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
-          <ManualEntryForm
-            onSubmit={handleManualSubmit}
-            onCancel={() => setShowManual(false)}
-            initialTitle={title}
-            initialAuthors={author}
-            initialFormat={activeFormat}
-            initialIdentifier={initialIdentifier}
+        {!result && !showManual && (
+          <BottomSheet
+            videoRef={videoRef}
+            onFound={handleFound}
+            onScannerStateChange={setScannerActive}
+            onTabChange={setScannerTab}
+            onExtractComplete={handleExtractComplete}
+            onExtractionFailure={handleExtractionFailure}
+            onShowManualForm={handleShowManualForm}
+            format={activeFormat}
+            torchOn={torchOn}
+            onTorchCapabilityFound={setHasTorch}
           />
-        </div>
-      )}
-    </div>
+        )}
+        {result && (
+          <SuccessCard
+            isbn={result.isbn}
+            meta={result.meta}
+            onDismiss={handleDismiss}
+            snappedCover={snappedCover}
+            onShowManualForm={handleShowManualForm}
+          />
+        )}
+
+        {candidates && (
+          <DisambiguationSheet
+            candidates={candidates.items}
+            onSelect={choice => {
+              setCandidates(null);
+              // Derive a stable identifier from the selected candidate
+              const selectedIdentifier =
+                (typeof choice === "object" &&
+                  choice !== null &&
+                  "identifier" in choice &&
+                  (choice.identifier as string)) ||
+                (typeof choice === "object" && choice !== null && "barcode" in choice && (choice.barcode as string)) ||
+                (typeof choice === "object" && choice !== null && "isbn" in choice && (choice.isbn as string)) ||
+                candidates.isbn;
+
+              setResult({ isbn: selectedIdentifier, meta: choice });
+            }}
+            onDismiss={handleDismiss}
+          />
+        )}
+
+        {showManual && (
+          <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
+            <ManualEntryForm
+              onSubmit={handleManualSubmit}
+              onCancel={() => setShowManual(false)}
+              initialTitle={title}
+              initialAuthors={author}
+              initialFormat={activeFormat}
+              initialIdentifier={initialIdentifier}
+            />
+          </div>
+        )}
+      </div>
+    </ScannerErrorBoundary>
   );
 }

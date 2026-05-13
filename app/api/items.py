@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-from flask import current_app, g, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -329,7 +329,7 @@ def update_item(item_id: int):
     try:
         payload = ItemUpdateSchema(**data)
     except ValidationError as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": e.errors()}), 400
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
     if payload.status and payload.status != item.status:
         old_status = item.status
@@ -401,7 +401,7 @@ def delete_item(item_id: int):
 
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
-def get_items_by_isbn(isbn: str):
+def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
@@ -415,7 +415,8 @@ def get_items_by_isbn(isbn: str):
 
 @api_bp.route("/item/<isbn>", methods=["POST"])
 @require_auth
-def add_item(isbn: str):
+@require_permission(PermissionName.WRITE_ITEM)
+def add_item(isbn: str) -> Response | tuple[Response, int]:
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -440,7 +441,7 @@ def add_item(isbn: str):
     try:
         payload = ItemCreateSchema(**payload_json)
     except (ValidationError, TypeError) as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
     metadata = payload.model_extra or {}
     if isinstance(payload.meta, dict):
@@ -477,7 +478,8 @@ def add_item(isbn: str):
 
 @api_bp.route("/manifestations/<int:manifestation_id>/add", methods=["POST"])
 @require_auth
-def add_item_by_manifestation(manifestation_id: int):
+@require_permission(PermissionName.WRITE_ITEM)
+def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Response, int]:
     """Add a new item to the user collection by manifestation ID (no ISBN required)."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -497,7 +499,7 @@ def add_item_by_manifestation(manifestation_id: int):
     try:
         payload = ItemCreateSchema(**payload_json)
     except (ValidationError, TypeError) as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
     item = Item(
         manifestation_id=manifestation.id,
@@ -514,7 +516,8 @@ def add_item_by_manifestation(manifestation_id: int):
 
 @api_bp.route("/items/manual", methods=["POST"])
 @require_auth
-def add_item_manual():
+@require_permission(PermissionName.WRITE_ITEM)
+def add_item_manual() -> Response | tuple[Response, int]:
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -527,7 +530,7 @@ def add_item_manual():
     try:
         payload = ItemManualCreateSchema(**data)
     except (ValidationError, TypeError) as e:
-        return jsonify({"success": False, "error": "Invalid payload", "details": str(e) if isinstance(e, TypeError) else e.errors()}), 400
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
     title = payload.Title
     authors = payload.Authors

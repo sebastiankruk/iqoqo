@@ -16,6 +16,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.14-slim
 
+# Create a non-root user
+RUN useradd -m -s /bin/bash appuser
+
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
@@ -33,6 +36,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application's code into the container
 COPY . .
 
+# Fix ownership
+RUN chown -R appuser:appuser /usr/src/app
+
 # Inject version
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
@@ -41,7 +47,10 @@ ENV APP_VERSION=$APP_VERSION
 EXPOSE 5000
 
 # Define environment variable
-ENV FLASK_APP run.py
+ENV FLASK_APP=run.py
+
+# Switch to non-root user
+USER appuser
 
 # Run the command to start the server
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]

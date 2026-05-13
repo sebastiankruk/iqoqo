@@ -213,9 +213,8 @@ def test_update_manifestation_invalid_or_missing_json_payload(client, sample_boo
 
     assert response.status_code == 400
     assert response.json == {
-        "success": False,
-        "data": None,
         "error": "Invalid or missing JSON payload",
+        "code": 400,
     }
 
 

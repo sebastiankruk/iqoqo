@@ -26,8 +26,18 @@ load_dotenv()
 
 class Config:
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    # Default secret key must be at least 32 bytes for HMAC-SHA256 (JWT requirement)
-    SECRET_KEY = os.environ.get("SECRET_KEY", "iqoqo-default-secret-key-32-chars-at-least")
+    # Default secret key logic: random in dev, mandatory in production to prevent JWT forgery
+    _default_secret = None
+    if os.environ.get("FLASK_ENV") != "production":
+        import secrets
+
+        _default_secret = secrets.token_hex(32)
+
+    SECRET_KEY = os.environ.get("SECRET_KEY", _default_secret)
+
+    if not SECRET_KEY and os.environ.get("FLASK_ENV") == "production":
+        raise RuntimeError("SECRET_KEY environment variable is missing. This is required in production! Please set it in your .env file.")
+
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 

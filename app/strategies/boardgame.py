@@ -21,31 +21,36 @@ from app.utils.upc import resolve_physical_media
 class BoardGameLookupStrategy(LookupStrategy):
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
-        is_short_numeric = barcode.isdigit() and len(barcode) <= 7
+        try:
+            is_short_numeric = barcode.isdigit() and len(barcode) <= 7
 
-        if is_short_numeric:
-            meta = fetch_bgg_metadata(barcode)
-            if meta:
-                meta["data_source"] = "bgg"
-                provider = "bgg"
-        else:
-            upc_meta = resolve_physical_media(barcode)
-            if upc_meta and upc_meta.get("title"):
-                meta = fetch_bgg_metadata(upc_meta["title"])
-                if meta:
-                    meta["data_source"] = "bgg"
-                    provider = "bgg"
-                    if isinstance(meta, dict):
-                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
-                else:
-                    meta = upc_meta
-                    meta["data_source"] = "upc"
-                    provider = "upc"
-
-            if not meta:
+            if is_short_numeric:
                 meta = fetch_bgg_metadata(barcode)
                 if meta:
                     meta["data_source"] = "bgg"
                     provider = "bgg"
+            else:
+                upc_meta = resolve_physical_media(barcode)
+                if upc_meta and upc_meta.get("title"):
+                    meta = fetch_bgg_metadata(upc_meta["title"])
+                    if meta:
+                        meta["data_source"] = "bgg"
+                        provider = "bgg"
+                        if isinstance(meta, dict):
+                            meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                    else:
+                        meta = upc_meta
+                        meta["data_source"] = "upc"
+                        provider = "upc"
+
+                if not meta:
+                    meta = fetch_bgg_metadata(barcode)
+                    if meta:
+                        meta["data_source"] = "bgg"
+                        provider = "bgg"
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            import logging
+
+            logging.getLogger(__name__).error(f"BoardGame Strategy lookup failed: {exc}")
 
         return meta, provider

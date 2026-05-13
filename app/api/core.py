@@ -20,4 +20,4 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 def invalid_json_payload_response() -> tuple[Response, int]:
     """Return a standardized 400 response for absent/invalid JSON payloads."""
-    return jsonify({"success": False, "data": None, "error": "Invalid or missing JSON payload"}), 400
+    return jsonify({"error": "Invalid or missing JSON payload", "code": 400}), 400

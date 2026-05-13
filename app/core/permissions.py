@@ -41,6 +41,7 @@ class PermissionName(StrEnum):
     REGENERATE_COVER = "regenerate:cover"
     UPDATE_ITEM = "update:item"
     UPLOAD_COVER = "upload:cover"
+    WRITE_ITEM = "write:item"
     WRITE_METADATA = "write:metadata"
     WRITE_ROLES = "write:roles"
     WRITE_USERS = "write:users"

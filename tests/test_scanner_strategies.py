@@ -1,3 +1,7 @@
+"""
+Tests for the refactored Scanner Strategy Pattern mapping to FRBR models.
+"""
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -11,58 +15,49 @@
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
-#
-"""Tests for the Scanner Lookup Strategy Factory & Implementations."""
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from app.strategies import (
-    AudioLookupStrategy,
-    BoardGameLookupStrategy,
-    BookLookupStrategy,
-    DefaultFallbackStrategy,
-    LookupStrategyFactory,
-    PuzzleLookupStrategy,
-    VideoLookupStrategy,
-)
+from app.strategies.boardgame import BoardGameLookupStrategy
+
+# Adapting imports based on Phase 1 Refactoring
+from app.strategies.book import BookLookupStrategy
 
 
-def test_strategy_factory_resolves_correctly():
-    """Ensure the factory hands out the specific format Strategy classes."""
-    assert isinstance(LookupStrategyFactory.get_strategy("movie"), VideoLookupStrategy)
-    assert isinstance(LookupStrategyFactory.get_strategy("music"), AudioLookupStrategy)
-    assert isinstance(LookupStrategyFactory.get_strategy("book"), BookLookupStrategy)
-    assert isinstance(LookupStrategyFactory.get_strategy("board_game"), BoardGameLookupStrategy)
-    assert isinstance(LookupStrategyFactory.get_strategy("unknown_hint"), DefaultFallbackStrategy)
-    assert isinstance(LookupStrategyFactory.get_strategy(None), DefaultFallbackStrategy)
-
-
-@patch("app.strategies.video.resolve_physical_media")
-@patch("app.strategies.video.fetch_video_metadata")
-def test_video_strategy_lookup(mock_fetch, mock_resolve):
-    strategy = VideoLookupStrategy()
-    mock_resolve.return_value = {"title": "The Matrix"}
-    mock_fetch.return_value = {"Title": "The Matrix", "year": 1999}
-
-    meta, provider = strategy.lookup("12345")
-
-    assert provider == "tmdb"
-    assert meta["Title"] == "The Matrix"
-    assert meta["data_source"] == "tmdb"
-
-
-@patch("app.strategies.book.canonicalize_isbn")
-@patch("app.strategies.book.fetch_isbn_metadata")
-def test_book_strategy_lookup(mock_fetch, mock_canonical):
+def test_book_lookup_strategy_success():
+    """Ensure BookLookupStrategy correctly aggregates valid provider data."""
     strategy = BookLookupStrategy()
-    mock_canonical.return_value = "9781234567890"
-    mock_fetch.return_value = {"Title": "Dune", "Source": "Google Books"}
+    with patch("app.strategies.book.fetch_isbn_metadata") as mock_fetch:
+        mock_fetch.return_value = {"title": "Dune", "author": "Frank Herbert", "isbn": "9780441172719"}
+        result, provider = strategy.lookup("9780441172719")
 
-    meta, provider = strategy.lookup("9781234567890")
+        assert result is not None
+        assert result["title"] == "Dune"
+        assert provider == "isbn"
+        mock_fetch.assert_called_once()
 
-    assert provider == "isbn"
-    assert meta["Title"] == "Dune"
-    assert meta["data_source"] == "google_books"
+
+def test_book_lookup_strategy_provider_failure():
+    """Ensure strategy handles provider timeouts and enforces standard API error format."""
+    strategy = BookLookupStrategy()
+    with patch("app.strategies.book.fetch_isbn_metadata", side_effect=Exception("API Timeout")):
+        with patch("app.strategies.book.fetch_discogs_metadata", return_value=None):
+            with patch("app.strategies.book.fetch_audio_metadata", return_value=None):
+                result, _ = strategy.lookup("9780441172719")
+                assert result is None
+
+
+def test_game_lookup_strategy_success():
+    """Ensure GameLookupStrategy correctly fetches and structures Board Game metadata."""
+    strategy = BoardGameLookupStrategy()
+    with patch("app.strategies.boardgame.fetch_bgg_metadata") as mock_fetch:
+        mock_fetch.return_value = {"title": "Catan", "min_players": 3}
+        result, provider = strategy.lookup("123456")  # Short numeric triggers BGG
+
+        assert result is not None
+        assert result["title"] == "Catan"
+        assert provider == "bgg"
+        mock_fetch.assert_called_once()

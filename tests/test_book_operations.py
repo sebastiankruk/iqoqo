@@ -376,8 +376,10 @@ class TestAddingBooks:
 
         response = client.post("/api/items/manual", **request_kwargs)
         assert response.status_code == 400
-        assert response.json["success"] is False
-        assert response.json["error"] == "Invalid or missing JSON payload"
+        assert response.json == {
+            "error": "Invalid or missing JSON payload",
+            "code": 400,
+        }
 
 
 # =============================================================================
