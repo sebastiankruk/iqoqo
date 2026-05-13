@@ -51,7 +51,7 @@ class SharedCollection(db.Model):  # type: ignore[name-defined]
     filters = db.Column(JSONB if _USE_PG else db.JSON, server_default="{}", nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
-    user = db.relationship("User", backref=db.backref("shared_collections", lazy="dynamic"))
+    user = db.relationship("User", backref=db.backref("shared_collections", lazy="dynamic", cascade="all, delete-orphan"))
 
     def to_dict(self) -> dict:
         """Serialize the shared collection."""
