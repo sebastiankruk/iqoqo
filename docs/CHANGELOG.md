@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-20
+
+### Added
+
+- **Library Sharing & Public Discovery (Phase 1)**:
+  - **Public Profiles**: Users can opt-in to public profiles via `u/[public_username]`.
+  - **Shared Collections**: Secure token-based sharing for filtered views (e.g., Wishlist, Reading list).
+  - **Granular Privacy**: New `is_hidden` toggle for items to exclude specific copies from public views.
+  - **"Smart Check" Inventory Tool**: Visitor-facing tool to check if a manifestation/work exists in a user's library.
+  - **i18n Foundation**: Integrated `next-intl` for multi-language support (EN, PL).
+  - **Social Metadata**: Added `public_username` and `bio` to user profiles.
+  - **Web Share Integration**: New `ShareButton` with native Web Share API support and clipboard fallback.
+- **Backend Architecture**:
+  - `SharedCollection` model with automated secure token generation.
+  - Cascade deletes for social data when a user account is removed.
+  - BOLA protection for all visibility and sharing endpoints.
+- **Quality Assurance**:
+  - Extended backend test suite for pagination, visibility gates, and social models.
+  - Vitest unit tests for core UI components (`ShareButton`, `EmptyState`).
+  - Playwright E2E coverage for public profile discovery and privacy management.
+
+### Fixed
+
+- **Serialization Reliability**: Resolved `AttributeError` in public API when serializing complex FRBR relationships for unauthenticated views.
+- **Database Constraints**: Fixed `NOT NULL` constraint violations in SQLite during user deletion by correctly implementing relationship cascades.
+
 ## [0.6.0] - 2026-05-10
 
 ### Added

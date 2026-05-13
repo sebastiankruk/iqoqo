@@ -16,9 +16,12 @@
 """Tests for profile and item visibility API."""
 
 import json
+
 import pytest
-from app.db.models import User, Item, Manifestation, Expression, Work, db
+
 from app.api.auth import generate_internal_jwt
+from app.db.models import Expression, Item, Manifestation, User, Work, db
+
 
 @pytest.fixture
 def test_user(app):
@@ -54,7 +57,7 @@ def test_update_username_conflict(client, app, test_user, auth_headers):
         other = User(email="other@iqoqo.local", public_username="taken")
         db.session.add(other)
         db.session.commit()
-    
+
     response = client.patch("/api/profile/settings", json={"public_username": "taken"}, headers=auth_headers)
     assert response.status_code == 409
 
@@ -98,14 +101,14 @@ def test_toggle_item_visibility_unauthorized(client, app, test_user):
         db.session.flush()
         item = Item(owner_id=test_user, manifestation_id=mani.id)
         db.session.add(item)
-        
+
         # Create another user
         other = User(email="spy@iqoqo.local")
         db.session.add(other)
         db.session.commit()
         item_id = item.id
         other_token = generate_internal_jwt(other)
-    
+
     headers = {"Authorization": f"Bearer {other_token}"}
     response = client.patch(f"/api/items/{item_id}/visibility", json={"is_hidden": True}, headers=headers)
     assert response.status_code == 404 # BOLA protection

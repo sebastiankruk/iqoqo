@@ -16,8 +16,11 @@
 """Extended tests for the public API endpoints."""
 
 import json
+
 import pytest
-from app.db.models import User, Item, Manifestation, Expression, Work, SharedCollection, db
+
+from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+
 
 @pytest.fixture
 def test_user(app):
@@ -43,7 +46,7 @@ def test_pagination(client, app, test_user):
         mani = Manifestation(expression_id=expr.id)
         db.session.add(mani)
         db.session.flush()
-        
+
         for i in range(15):
             item = Item(owner_id=user.id, manifestation_id=mani.id, status="read")
             db.session.add(item)
@@ -73,12 +76,12 @@ def test_shared_collection_with_status_filter(client, app, test_user):
         mani = Manifestation(expression_id=expr.id)
         db.session.add(mani)
         db.session.flush()
-        
+
         # 2 read, 1 wishlist
         db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
         db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
         db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="wish_list"))
-        
+
         collection = SharedCollection(
             user_id=user.id,
             name="My Read Books",
