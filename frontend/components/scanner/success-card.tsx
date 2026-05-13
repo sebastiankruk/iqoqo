@@ -90,7 +90,8 @@ export function SuccessCard({
   const rawIdentifier = canonicalIdentifier || isbn || "";
   const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
   const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
-  const isMissingID = !identifier && !meta.manifestation_id;
+  const machineIdentifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? String(meta.discogs_id) : "";
+  const isMissingID = !machineIdentifier && !meta.manifestation_id;
 
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
   const directors: string[] = Array.isArray(meta.directors)
@@ -138,7 +139,7 @@ export function SuccessCard({
     setAdding(true);
     try {
       const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
-        barcode: rawIdentifier,
+        barcode: machineIdentifier,
         manifestation_id: meta.manifestation_id,
         format: format,
         collection_status: collectionStatus,

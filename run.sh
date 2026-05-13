@@ -161,7 +161,7 @@ if [ "$STOP" = true ]; then
         [ -f "$PID_DIR/celery.pid" ] && kill $(cat "$PID_DIR/celery.pid") 2>/dev/null || true
         [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
         rm -rf "$PID_DIR"
-        docker compose down db redis
+        docker compose down
     else
         export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
         [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
