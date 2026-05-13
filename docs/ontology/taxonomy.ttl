@@ -242,3 +242,34 @@
     rdfs:label "watched" ;
     :applicableToCategory :MediaCategoryMovie .
 
+
+:LookupStrategyMovie a :LookupStrategy ;
+    rdfs:label "movie" ;
+    :strategyClass "VideoLookupStrategy" ;
+    :waterfallOrder 1 ;
+    :forCategory :MediaCategoryMovie .
+:LookupStrategyMusic a :LookupStrategy ;
+    rdfs:label "music" ;
+    :strategyClass "AudioLookupStrategy" ;
+    :waterfallOrder 2 ;
+    :forCategory :MediaCategoryMusic .
+:LookupStrategyBook a :LookupStrategy ;
+    rdfs:label "book" ;
+    :strategyClass "BookLookupStrategy" ;
+    :waterfallOrder 3 ;
+    :forCategory :MediaCategoryBook .
+:LookupStrategyBoardGame a :LookupStrategy ;
+    rdfs:label "board_game" ;
+    :strategyClass "BoardGameLookupStrategy" ;
+    :waterfallOrder 4 ;
+    :forCategory :MediaCategoryBoardGame .
+:LookupStrategyPuzzle a :LookupStrategy ;
+    rdfs:label "puzzle" ;
+    :strategyClass "PuzzleLookupStrategy" ;
+    :waterfallOrder 5 ;
+    :forCategory :MediaCategoryPuzzle .
+:LookupStrategyText a :LookupStrategy ;
+    rdfs:label "text" ;
+    :strategyClass "BookLookupStrategy" ;
+    :waterfallOrder 3 ;
+    :forCategory :MediaCategoryText .

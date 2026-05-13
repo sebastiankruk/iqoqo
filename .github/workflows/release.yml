@@ -68,7 +68,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/iqoqo-backend:latest
-            ghcr.io/${{ github.repository_owner }}/iqoqo-backend:v${{ env.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/iqoqo-backend:${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -80,7 +80,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:latest
-            ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:v${{ env.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

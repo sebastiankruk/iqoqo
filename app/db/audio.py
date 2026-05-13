@@ -120,8 +120,10 @@ class Contributor(db.Model):  # type: ignore[name-defined]
     meta = db.Column(db.JSON, default=dict)
 
     # Relationships
-    work_contributions = db.relationship("WorkContribution", backref="contributor", lazy="dynamic")
-    expression_contributions = db.relationship("ExpressionContribution", backref="contributor", lazy="dynamic")
+    work_contributions = db.relationship("WorkContribution", backref="contributor", lazy="dynamic", cascade="all, delete-orphan")
+    expression_contributions = db.relationship(
+        "ExpressionContribution", backref="contributor", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class WorkContribution(db.Model):  # type: ignore[name-defined]

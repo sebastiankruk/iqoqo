@@ -187,11 +187,11 @@ def test_extract_from_cover_pil_verify_failure(mock_image_open, client, vision_u
 # =====================================================================
 
 
-@patch("app.api.scanner.fetch_isbn_metadata")
-@patch("app.api.scanner.fetch_discogs_metadata")
+@patch("app.strategies.default.fetch_isbn_metadata")
+@patch("app.strategies.default.fetch_discogs_metadata")
 def test_lookup_barcode_book_isbn(mock_discogs, mock_isbn, client, normal_user_headers):
     """Test looking up a standard 13-digit ISBN correctly bypasses audio fetchers."""
-    # Ensure it normalizes key as well
+    mock_discogs.return_value = None
     mock_isbn.return_value = {"Title": "Neuromancer", "Format": "book"}
 
     # 978 prefix guarantees book routing
@@ -204,8 +204,8 @@ def test_lookup_barcode_book_isbn(mock_discogs, mock_isbn, client, normal_user_h
     mock_discogs.assert_not_called()
 
 
-@patch("app.api.scanner.fetch_isbn_metadata")
-@patch("app.api.scanner.fetch_discogs_metadata")
+@patch("app.strategies.default.fetch_isbn_metadata")
+@patch("app.strategies.default.fetch_discogs_metadata")
 def test_lookup_barcode_audio_upc(mock_discogs, mock_isbn, client, normal_user_headers):
     """Test looking up a standard 12-digit UPC uses audio fetchers first and normalizes payload keys."""
     # Simulating raw API keys that typically break frontend rendering
@@ -264,8 +264,8 @@ def test_scan_barcode_creates_book_item(mock_ingest_book, client, normal_user_he
     mock_ingest_book.assert_called_once_with("9780441013593")
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_video_metadata")
+@patch("app.strategies.video.resolve_physical_media")
+@patch("app.strategies.video.fetch_video_metadata")
 def test_lookup_barcode_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
     """Test looking up video format."""
     mock_upc.return_value = None
@@ -277,8 +277,8 @@ def test_lookup_barcode_video_tmdb(mock_tmdb, mock_upc, client, normal_user_head
     mock_tmdb.assert_called_once()
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_video_metadata")
+@patch("app.strategies.video.resolve_physical_media")
+@patch("app.strategies.video.fetch_video_metadata")
 def test_lookup_title_video_tmdb(mock_tmdb, mock_upc, client, normal_user_headers):
     """Test looking up video format by title directly."""
     mock_tmdb.return_value = {"Title": "The Lord of the Rings", "Format": "video"}
@@ -292,8 +292,8 @@ def test_lookup_title_video_tmdb(mock_tmdb, mock_upc, client, normal_user_header
     mock_tmdb.assert_called_with("The Lord of the Rings")
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_bgg_metadata")
+@patch("app.strategies.boardgame.resolve_physical_media")
+@patch("app.strategies.boardgame.fetch_bgg_metadata")
 def test_lookup_barcode_boardgame_bgg(mock_bgg, mock_resolve, client, normal_user_headers):
     """Test looking up game format."""
     mock_resolve.return_value = {"title": "Catan", "barcode": "5432154321"}
@@ -340,10 +340,11 @@ def test_scan_barcode_creates_game_item(mock_ingest_game, client, normal_user_he
     mock_ingest_game.assert_called_once_with("9876543210")
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_video_metadata")
+@patch("app.strategies.video.resolve_physical_media")
+@patch("app.strategies.video.fetch_video_metadata")
 def test_lookup_video_fallback_to_upc_meta(mock_tmdb, mock_upc, client, normal_user_headers):
     """Test that if TMDB fails, we still return the Allegro/UPC metadata."""
+    mock_tmdb.return_value = None
     upc_payload = {"title": "Allegro Item", "cover_url": "http://img.jpg", "source": "Allegro Listing"}
     mock_upc.return_value = upc_payload
     mock_tmdb.return_value = None  # TMDB finds nothing
@@ -355,10 +356,11 @@ def test_lookup_video_fallback_to_upc_meta(mock_tmdb, mock_upc, client, normal_u
     assert response.json["data"]["source"] == "Allegro Listing"
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_video_metadata")
+@patch("app.strategies.video.resolve_physical_media")
+@patch("app.strategies.video.fetch_video_metadata")
 def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_headers):
     """Test that format key is injected for frontend normalization."""
+    mock_tmdb.return_value = None
     mock_upc.return_value = {"title": "No Format Item"}
     mock_tmdb.return_value = None
 
@@ -368,8 +370,8 @@ def test_lookup_format_injection(mock_tmdb, mock_upc, client, normal_user_header
     assert response.json["data"]["format"] == "dvd"
 
 
-@patch("app.api.scanner.resolve_physical_media")
-@patch("app.api.scanner.fetch_bgg_metadata")
+@patch("app.strategies.boardgame.resolve_physical_media")
+@patch("app.strategies.boardgame.fetch_bgg_metadata")
 def test_lookup_bgg_id_skips_upc(mock_bgg, mock_resolve, client, normal_user_headers):
     """Verify that short numeric IDs skip the UPC waterfall (prevention of Skil Drill bug)."""
     mock_bgg.return_value = {"title": "The Settlers of Canaan"}

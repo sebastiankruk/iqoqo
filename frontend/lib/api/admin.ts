@@ -213,6 +213,20 @@ export async function updateInstanceSettings(
   return res.data.data;
 }
 
+/**
+ * Reveal a masked setting value.
+ *
+ * @param key - The setting key to reveal
+ * @returns The unmasked value
+ */
+export async function revealSettingValue(key: string): Promise<{ value: string }> {
+  const res = await apiClient.get<ApiResponse<{ value: string }>>(`/v1/admin/settings/reveal?key=${key}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to reveal setting");
+  }
+  return res.data.data;
+}
+
 // --- FRBR ENTITY TYPES ---
 
 export interface FrbrWork {

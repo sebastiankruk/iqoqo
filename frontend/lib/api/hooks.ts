@@ -80,12 +80,12 @@ export const queryKeys = {
 /**
  * Custom hook to fetch the application configuration.
  *
- * @returns {import('@tanstack/react-query').UseQueryResult<{ federation_enabled: boolean; version: string }>} Query result containing the app config
+ * @returns {import('@tanstack/react-query').UseQueryResult<{ federation_enabled: boolean; version: string; maintenance_mode: boolean }>} Query result containing the app config
  */
 export function useAppConfig() {
   return useQuery({
     queryKey: queryKeys.config,
-    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string }>("/config"),
+    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string; maintenance_mode: boolean }>("/config"),
     staleTime: 60 * 60 * 1000,
   });
 }

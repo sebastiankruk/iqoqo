@@ -81,10 +81,21 @@ def health_check():
 @api_bp.route("/config", methods=["GET"])
 def get_config():
     """Return public application configuration for the frontend (non-sensitive)."""
+    from app.db.models import InstanceSettings
+
+    def is_true(v):
+        if isinstance(v, bool):
+            return v
+        return str(v or "").lower() == "true"
+
     return jsonify(
         {
             "success": True,
-            "data": {"federation_enabled": Config.FEDERATION_ENABLED, "version": Config.VERSION},
+            "data": {
+                "federation_enabled": Config.FEDERATION_ENABLED,
+                "version": Config.VERSION,
+                "maintenance_mode": is_true(InstanceSettings.get_value("MAINTENANCE_MODE", False)),
+            },
             "error": None,
         }
     )
@@ -125,6 +136,7 @@ def get_global_stats():
 
 
 @api_bp.route("/admin/stats", methods=["GET"])
+@require_auth
 @admin_required
 def get_stats():
     stats = DataManager.get_stats()
@@ -132,6 +144,7 @@ def get_stats():
 
 
 @api_bp.route("/admin/export", methods=["GET"])
+@require_auth
 @admin_required
 def export_data():
     try:
@@ -145,6 +158,7 @@ def export_data():
 
 
 @api_bp.route("/admin/import", methods=["POST"])
+@require_auth
 @admin_required
 def import_data():
     try:
@@ -167,6 +181,7 @@ def import_data():
 
 
 @api_bp.route("/admin/clear", methods=["DELETE"])
+@require_auth
 @admin_required
 def clear_data():
     data = request.get_json(silent=True)

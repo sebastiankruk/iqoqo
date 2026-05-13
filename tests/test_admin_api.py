@@ -233,9 +233,8 @@ def test_admin_clear_invalid_or_missing_json_payload(client, admin_headers, payl
 
     assert response.status_code == 400
     assert response.json == {
-        "success": False,
-        "data": None,
         "error": "Invalid or missing JSON payload",
+        "code": 400,
     }
 
 

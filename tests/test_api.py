@@ -93,6 +93,7 @@ def admin_headers(app):
             Permission(name="refetch:metadata"),
             Permission(name="delete:item"),
             Permission(name="upload:cover"),
+            Permission(name="write:metadata"),
         ]
         db.session.add_all(perms)
 
@@ -175,10 +176,10 @@ def test_lookup_isbn_from_open_library(mock_fetch, client):
         assert manifestation.expression.work.title == "1984"
 
 
-def test_update_manifestation(client, sample_book):
+def test_update_manifestation(client, sample_book, admin_headers):
     """Test updating manifestation metadata."""
     new_data = {"Title": "Updated Title", "Authors": ["New Author"]}
-    response = client.post("/api/isbn/9780345391803", json=new_data, content_type="application/json")
+    response = client.post("/api/isbn/9780345391803", json=new_data, headers=admin_headers, content_type="application/json")
     assert response.status_code == 200
     assert response.json["status"] == "ok"
 
@@ -189,9 +190,9 @@ def test_update_manifestation(client, sample_book):
         assert manifestation.expression.work.title == "Updated Title"
 
 
-def test_update_manifestation_not_found(client):
+def test_update_manifestation_not_found(client, admin_headers):
     """Test updating non-existent manifestation returns 404."""
-    response = client.post("/api/isbn/9999999999999", json={"Title": "Test"}, content_type="application/json")
+    response = client.post("/api/isbn/9999999999999", json={"Title": "Test"}, headers=admin_headers, content_type="application/json")
     assert response.status_code == 404
 
 
@@ -202,9 +203,9 @@ def test_update_manifestation_not_found(client):
         (None, "application/json"),  # missing JSON body
     ],
 )
-def test_update_manifestation_invalid_or_missing_json_payload(client, sample_book, payload, content_type):
+def test_update_manifestation_invalid_or_missing_json_payload(client, sample_book, payload, content_type, admin_headers):
     """Test update_manifestation returns standardized 400 for invalid or missing JSON payload."""
-    request_kwargs = {"content_type": content_type}
+    request_kwargs = {"content_type": content_type, "headers": admin_headers}
     if payload is not None:
         request_kwargs["data"] = payload
 
@@ -212,9 +213,8 @@ def test_update_manifestation_invalid_or_missing_json_payload(client, sample_boo
 
     assert response.status_code == 400
     assert response.json == {
-        "success": False,
-        "data": None,
         "error": "Invalid or missing JSON payload",
+        "code": 400,
     }
 
 
@@ -351,7 +351,7 @@ def test_vision_extract_empty_filename(client, vision_user_headers):
     assert response.status_code == 400
     data = response.json
     assert data["success"] is False
-    assert "No selected file" in data["error"]
+    assert "No file provided" in data["error"]
 
 
 @pytest.mark.parametrize("bad_ext", ["exe", "txt", "gif", "pdf"])

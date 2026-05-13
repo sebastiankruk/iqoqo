@@ -23,6 +23,7 @@ import type { UserProfile } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
+  useAppConfig: vi.fn(() => ({ data: { maintenance_mode: false }, isLoading: false })),
 }));
 
 vi.mock("next/navigation", () => ({

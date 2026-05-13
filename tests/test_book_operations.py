@@ -376,8 +376,10 @@ class TestAddingBooks:
 
         response = client.post("/api/items/manual", **request_kwargs)
         assert response.status_code == 400
-        assert response.json["success"] is False
-        assert response.json["error"] == "Invalid or missing JSON payload"
+        assert response.json == {
+            "error": "Invalid or missing JSON payload",
+            "code": 400,
+        }
 
 
 # =============================================================================
@@ -388,10 +390,10 @@ class TestAddingBooks:
 class TestUpdatingBooks:
     """Test suite for updating book metadata."""
 
-    def test_update_manifestation_title(self, client, sample_work_complete):
+    def test_update_manifestation_title(self, client, sample_work_complete, admin_headers):
         """Test updating only the title of a manifestation."""
         new_data = {"Title": "The Lord of the Rings: Updated Edition"}
-        response = client.post("/api/isbn/9780544003415", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
         assert response.json["status"] == "ok"
 
@@ -401,10 +403,10 @@ class TestUpdatingBooks:
             assert manifestation.meta["Title"] == "The Lord of the Rings: Updated Edition"
             assert manifestation.expression.work.title == "The Lord of the Rings: Updated Edition"
 
-    def test_update_manifestation_authors(self, client, sample_work_complete):
+    def test_update_manifestation_authors(self, client, sample_work_complete, admin_headers):
         """Test updating only the authors of a manifestation."""
         new_data = {"Authors": ["J.R.R. Tolkien", "Christopher Tolkien"]}
-        response = client.post("/api/isbn/9780544003415", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -412,7 +414,7 @@ class TestUpdatingBooks:
             assert manifestation.meta["Authors"] == ["J.R.R. Tolkien", "Christopher Tolkien"]
             assert manifestation.expression.work.meta["authors"] == ["J.R.R. Tolkien", "Christopher Tolkien"]
 
-    def test_update_manifestation_complete_metadata(self, client, sample_work_complete):
+    def test_update_manifestation_complete_metadata(self, client, sample_work_complete, admin_headers):
         """Test updating complete metadata of a manifestation."""
         new_data = {
             "Title": "Completely New Title",
@@ -420,7 +422,7 @@ class TestUpdatingBooks:
             "Publisher": "New Publisher",
             "Year": "2025",
         }
-        response = client.post("/api/isbn/9780544003415", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -430,28 +432,28 @@ class TestUpdatingBooks:
             assert manifestation.meta["Publisher"] == "New Publisher"
             assert manifestation.meta["Year"] == "2025"
 
-    def test_update_nonexistent_manifestation(self, client):
+    def test_update_nonexistent_manifestation(self, client, admin_headers):
         """Test updating a non-existent manifestation returns 404."""
         new_data = {"Title": "This Should Fail"}
-        response = client.post("/api/isbn/9999999999999", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9999999999999", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 404
         assert "error" in response.json
 
-    def test_update_without_metadata(self, client, sample_work_complete):
+    def test_update_without_metadata(self, client, sample_work_complete, admin_headers):
         """Test updating without providing metadata returns 400."""
         # When no JSON data is provided
-        response = client.post("/api/isbn/9780544003415", json={}, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json={}, headers=admin_headers, content_type="application/json")
         assert response.status_code == 400
         # Empty dict should also trigger error
         if response.json:
             assert "error" in response.json
 
-    def test_update_with_empty_metadata(self, client, sample_work_complete):
+    def test_update_with_empty_metadata(self, client, sample_work_complete, admin_headers):
         """Test updating with empty metadata returns 400."""
-        response = client.post("/api/isbn/9780544003415", json={}, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json={}, headers=admin_headers, content_type="application/json")
         assert response.status_code == 400
 
-    def test_update_preserves_existing_metadata(self, client, app):
+    def test_update_preserves_existing_metadata(self, client, app, admin_headers):
         """Test that updating preserves other metadata fields."""
         with app.app_context():
             work = Work(title="Original Title", meta={"authors": ["Original Author"]})
@@ -472,7 +474,7 @@ class TestUpdatingBooks:
 
         # Update only the title
         new_data = {"Title": "Updated Title"}
-        response = client.post("/api/isbn/9781111111111", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9781111111111", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
 
         # Verify Publisher is still there
@@ -482,10 +484,10 @@ class TestUpdatingBooks:
             assert manifestation.meta["Publisher"] == "Original Publisher"
             assert manifestation.meta["Authors"] == ["Original Author"]
 
-    def test_update_work_metadata_syncs_with_manifestation(self, client, sample_work_complete):
+    def test_update_work_metadata_syncs_with_manifestation(self, client, sample_work_complete, admin_headers):
         """Test that updating work metadata is reflected in manifestation."""
         new_data = {"Title": "Synced Title", "Authors": ["Synced Author"]}
-        response = client.post("/api/isbn/9780544003415", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9780544003415", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -498,7 +500,7 @@ class TestUpdatingBooks:
             assert manifestation.meta["Authors"] == ["Synced Author"]
             assert work.meta["authors"] == ["Synced Author"]
 
-    def test_update_creates_meta_if_not_exists(self, client, app):
+    def test_update_creates_meta_if_not_exists(self, client, app, admin_headers):
         """Test updating a manifestation that has no meta creates it."""
         with app.app_context():
             work = Work(title="No Meta", meta={"authors": []})
@@ -515,7 +517,7 @@ class TestUpdatingBooks:
             db.session.commit()
 
         new_data = {"Title": "Now Has Meta"}
-        response = client.post("/api/isbn/9782222222222", json=new_data, content_type="application/json")
+        response = client.post("/api/isbn/9782222222222", json=new_data, headers=admin_headers, content_type="application/json")
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -600,7 +602,7 @@ class TestBookOperationsIntegration:
     """Integration tests for complete workflows."""
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
-    def test_complete_workflow_scan_add_update(self, mock_fetch, client, normal_user_headers):
+    def test_complete_workflow_scan_add_update(self, mock_fetch, client, normal_user_headers, admin_headers):
         """Test complete workflow: scan new book, add item, then update metadata."""
         mock_fetch.return_value = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
 
@@ -616,7 +618,7 @@ class TestBookOperationsIntegration:
 
         # Step 3: Update metadata
         update_data = {"Title": "The Hobbit: Annotated Edition", "Authors": ["J.R.R. Tolkien"]}
-        update_response = client.post("/api/isbn/9780547928227", json=update_data, content_type="application/json")
+        update_response = client.post("/api/isbn/9780547928227", json=update_data, headers=admin_headers, content_type="application/json")
         assert update_response.status_code == 200
 
         # Step 4: Verify everything is consistent

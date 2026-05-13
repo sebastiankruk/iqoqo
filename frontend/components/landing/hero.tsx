@@ -18,6 +18,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Github } from "lucide-react";
 
 /**
  * Hero section component.
@@ -44,12 +45,23 @@ export function Hero() {
           iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games.
           Built on the open Semantic Web, designed for a distributed future.
         </p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex gap-4 justify-center flex-wrap">
           <Button asChild variant="outline" size="sm">
             <Link href="/register">Start Your Catalog</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/collection">Browse Instance</Link>
+          </Button>
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            className="bg-black text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
+          >
+            <Link href="https://github.com/sebastiankruk/iqoqo" target="_blank" rel="noopener noreferrer">
+              <Github className="w-4 h-4 mr-2" />
+              GitHub
+            </Link>
           </Button>
         </div>
       </div>

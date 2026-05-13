@@ -390,6 +390,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
                 : undefined
             }
+            source="scanner_camera"
             className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
           />
         )}

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-10
+
+### Added
+
+- **Scanner Strategy Pattern**: Extracted complex barcode lookup logic into a dedicated strategy layer (`app/strategies/lookup.py`).
+  - Concrete strategies for **Books** (ISBN), **Audio** (Discogs/MusicBrainz), **Video** (TMDB), **Board Games** (BGG), and **Puzzles**.
+  - `LookupStrategyFactory` for intelligent routing based on frontend hints.
+- **Dual Intent Scanning**: The scanner success card now offers "Add to Library" vs. "Add to Wishlist" intents, allowing users to track desired items without immediate ownership.
+- **Lint Safeguards**: Added a permanent automated test (`tests/test_lint_safeguards.py`) that strictly forbids the use of `# pylint: disable=too-many-return-statements` across the `app/` codebase.
+- **DevOps & Deployment**:
+  - GitHub Actions workflow (`deploy.yml`) to build and push Docker images to `ghcr.io` on push to `main` and semver tags.
+  - `docker-compose.prebuilt.yml` override to run pre-built images from `ghcr.io` (requires Docker Compose v2.24+).
+  - `--prebuilt` flag to `run.sh` to skip local build and pull from registry.
+- **Cloud Backups**:
+  - `scripts/cloud_backup.sh` — rclone-based backup of PostgreSQL + asset volumes.
+  - `.agents/skills/cloud-backup-setup/SKILL.md` — agentic skill to guide rclone setup.
+  - `docs/BACKUPS.md` — documentation for cloud backup configuration.
+- **Instance Maintenance**:
+  - `MAINTENANCE_MODE` instance setting toggle in Admin → Internal Settings.
+- **UI & Discovery**:
+  - GitHub repository link button in landing page Hero component.
+
+### Changed
+
+- **Refactored API**: Completely refactored `app/api/scanner.py` to eliminate cyclomatic complexity and satisfy strict linting rules.
+- **Global Code Hygiene**: Removed all instances of `too-many-return-statements` silencers from `admin.py`, `manifestations.py`, `decorators.py`, and `config_service.py` by refactoring logic into smaller, testable helpers.
+- **Standardized Image Uploads**: `upload_manifestation_image()` now accepts a dynamic `source` form field (default: `user_upload`), enabling scanner integrations and automated fallbacks to tag their contributions correctly.
+
+### Fixed
+
+- **Mock Integrity**: Updated and hardened the scanner test suite (`tests/test_api_scanner.py`) to reflect the new strategy architecture and prevent `MagicMock` serialization leaks in JSON responses.
+
 ## [0.5.0] - 2026-05-01
 
 ### Added

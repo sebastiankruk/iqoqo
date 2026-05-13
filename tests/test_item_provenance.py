@@ -92,7 +92,7 @@ def test_image_scan_provenance(client, admin_headers, app):
     img.save(img_io, "JPEG")
     img_io.seek(0)
 
-    data = {"image": (img_io, "test.jpg"), "label": "disc"}
+    data = {"image": (img_io, "test.jpg"), "label": "disc", "source": "scanner_camera"}
 
     resp = client.post(f"/api/manifestations/{manif_id}/images", data=data, content_type="multipart/form-data", headers=admin_headers)
     assert resp.status_code == 201
@@ -102,13 +102,16 @@ def test_image_scan_provenance(client, admin_headers, app):
         scan = ImageScan.query.filter_by(manifestation_id=manif_id).first()
         assert scan is not None
         assert scan.scan_type == "disc"
+        assert scan.source == "scanner_camera"
         assert "gallery" in scan.file_path
 
     # Get images via API
     resp = client.get(f"/api/manifestations/{manif_id}/images", headers=admin_headers)
     assert resp.status_code == 200
-    assert len(resp.get_json()["data"]) == 1
-    assert resp.get_json()["data"][0]["label"] == "disc"
+    res_data = resp.get_json()["data"]
+    assert len(res_data) == 1
+    assert res_data[0]["label"] == "disc"
+    assert res_data[0]["source"] == "scanner_camera"
 
 
 def test_cover_provenance_headers(client, app):

@@ -567,9 +567,8 @@ def test_update_item_invalid_or_missing_json_payload(client, sample_work, payloa
 
     assert response.status_code == 400
     assert response.json == {
-        "success": False,
-        "data": None,
         "error": "Invalid or missing JSON payload",
+        "code": 400,
     }
 
 

@@ -78,9 +78,9 @@ class TestCoverCorsPrevention:
         # Should NOT be an external CDN URL that would cause CORS issues
         external_domains = ["s3.amazonaws.com", "cdn.", "cloudfront.net", "imgix."]
         for domain in external_domains:
-            assert domain not in cover_url, (
-                f"External URL {cover_url} will cause tainted canvas issues. " "Use same-origin URL or add CORS headers."
-            )
+            assert (
+                domain not in cover_url
+            ), f"External URL {cover_url} will cause tainted canvas issues. Use same-origin URL or add CORS headers."
 
     def test_cover_url_accessible_for_canvas_operations(self, client, admin_headers):
         """Cover URLs should be accessible for canvas manipulation.
