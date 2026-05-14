@@ -85,15 +85,9 @@ def get_public_items(username: str):
                         "status": item.status,
                         "collection_status": item.collection_status,
                         "title": item.manifestation.title,
-                        "authors": item.manifestation.meta.get("authors", [])
-                        if item.manifestation.meta
-                        else [],
+                        "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
                         "cover_url": item.manifestation.cover_url
-                        or (
-                            item.manifestation.meta.get("cover_url")
-                            if item.manifestation.meta
-                            else None
-                        ),
+                        or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
                         "added_at": item.added_at.isoformat() if item.added_at else None,
                     }
                     for item in items
@@ -143,15 +137,9 @@ def get_shared_collection(token: str):
                         "status": item.status,
                         "collection_status": item.collection_status,
                         "title": item.manifestation.title,
-                        "authors": item.manifestation.meta.get("authors", [])
-                        if item.manifestation.meta
-                        else [],
+                        "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
                         "cover_url": item.manifestation.cover_url
-                        or (
-                            item.manifestation.meta.get("cover_url")
-                            if item.manifestation.meta
-                            else None
-                        ),
+                        or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
                     }
                     for item in items
                 ],

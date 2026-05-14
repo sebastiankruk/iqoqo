@@ -34,6 +34,7 @@ def test_shared_collection_token_generation(app):
         assert sc.share_token is not None
         assert len(sc.share_token) == 36
 
+
 def test_public_username_uniqueness(app):
     with app.app_context():
         u1 = User(email="u1@iqoqo.local", public_username="same")
@@ -44,6 +45,7 @@ def test_public_username_uniqueness(app):
         db.session.add(u2)
         with pytest.raises(IntegrityError):
             db.session.commit()
+
 
 def test_cascade_delete_user(app):
     with app.app_context():

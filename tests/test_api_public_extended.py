@@ -25,14 +25,11 @@ from app.db.models import Expression, Item, Manifestation, SharedCollection, Use
 @pytest.fixture
 def test_user(app):
     with app.app_context():
-        user = User(
-            email="extended@iqoqo.local",
-            public_username="extuser",
-            visibility="public"
-        )
+        user = User(email="extended@iqoqo.local", public_username="extuser", visibility="public")
         db.session.add(user)
         db.session.commit()
         return user.public_username
+
 
 def test_pagination(client, app, test_user):
     with app.app_context():
@@ -64,6 +61,7 @@ def test_pagination(client, app, test_user):
     data = json.loads(response.data)
     assert len(data["data"]["items"]) == 5
 
+
 def test_shared_collection_with_status_filter(client, app, test_user):
     with app.app_context():
         user = User.query.filter_by(public_username=test_user).first()
@@ -82,11 +80,7 @@ def test_shared_collection_with_status_filter(client, app, test_user):
         db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
         db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="wish_list"))
 
-        collection = SharedCollection(
-            user_id=user.id,
-            name="My Read Books",
-            filters={"status": "read"}
-        )
+        collection = SharedCollection(user_id=user.id, name="My Read Books", filters={"status": "read"})
         db.session.add(collection)
         db.session.commit()
         token = collection.share_token
@@ -96,6 +90,7 @@ def test_shared_collection_with_status_filter(client, app, test_user):
     assert len(data["data"]["items"]) == 2
     for item in data["data"]["items"]:
         assert item["status"] == "read"
+
 
 def test_check_inventory_missing_query(client, test_user):
     response = client.post(f"/api/public/u/{test_user}/check", json={})

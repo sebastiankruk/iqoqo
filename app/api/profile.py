@@ -163,6 +163,7 @@ def search_users():
     ]
     return jsonify({"success": True, "data": results})
 
+
 @profile_bp.route("/settings", methods=["PATCH"])
 @require_auth
 def update_profile_settings():

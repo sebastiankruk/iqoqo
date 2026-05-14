@@ -31,6 +31,7 @@ def test_user(app):
         db.session.commit()
         return user.id
 
+
 @pytest.fixture
 def auth_headers(app, test_user):
     with app.app_context():
@@ -38,12 +39,9 @@ def auth_headers(app, test_user):
         token = generate_internal_jwt(user)
     return {"Authorization": f"Bearer {token}"}
 
+
 def test_update_profile_settings(client, test_user, auth_headers):
-    payload = {
-        "public_username": "newuser",
-        "bio": "I am a cave man",
-        "visibility": "public"
-    }
+    payload = {"public_username": "newuser", "bio": "I am a cave man", "visibility": "public"}
     response = client.patch("/api/profile/settings", json=payload, headers=auth_headers)
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -51,6 +49,7 @@ def test_update_profile_settings(client, test_user, auth_headers):
     assert data["data"]["public_username"] == "newuser"
     assert data["data"]["bio"] == "I am a cave man"
     assert data["data"]["visibility"] == "public"
+
 
 def test_update_username_conflict(client, app, test_user, auth_headers):
     with app.app_context():
@@ -60,6 +59,7 @@ def test_update_username_conflict(client, app, test_user, auth_headers):
 
     response = client.patch("/api/profile/settings", json={"public_username": "taken"}, headers=auth_headers)
     assert response.status_code == 409
+
 
 def test_toggle_item_visibility(client, app, test_user, auth_headers):
     with app.app_context():
@@ -87,6 +87,7 @@ def test_toggle_item_visibility(client, app, test_user, auth_headers):
     assert response.status_code == 200
     assert json.loads(response.data)["is_hidden"] is False
 
+
 def test_toggle_item_visibility_unauthorized(client, app, test_user):
     with app.app_context():
         # Create item for test_user
@@ -111,4 +112,4 @@ def test_toggle_item_visibility_unauthorized(client, app, test_user):
 
     headers = {"Authorization": f"Bearer {other_token}"}
     response = client.patch(f"/api/items/{item_id}/visibility", json={"is_hidden": True}, headers=headers)
-    assert response.status_code == 404 # BOLA protection
+    assert response.status_code == 404  # BOLA protection

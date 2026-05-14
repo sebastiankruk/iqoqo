@@ -26,15 +26,12 @@ from app.db.models import Expression, Item, Manifestation, User, Work, db
 def public_user(app):
     with app.app_context():
         user = User(
-            email="public@iqoqo.local",
-            display_name="Public User",
-            public_username="publicuser",
-            visibility="public",
-            bio="Cave man bio"
+            email="public@iqoqo.local", display_name="Public User", public_username="publicuser", visibility="public", bio="Cave man bio"
         )
         db.session.add(user)
         db.session.commit()
         return user.public_username
+
 
 @pytest.fixture
 def sample_data(app, public_user):
@@ -64,16 +61,19 @@ def sample_data(app, public_user):
         db.session.commit()
         return True
 
+
 def test_get_public_profile(client, public_user, sample_data):
     response = client.get(f"/api/public/u/{public_user}")
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["data"]["username"] == "publicuser"
-    assert data["data"]["public_item_count"] == 1 # item2 is hidden
+    assert data["data"]["public_item_count"] == 1  # item2 is hidden
+
 
 def test_get_public_profile_not_found(client):
     response = client.get("/api/public/u/nonexistent")
     assert response.status_code == 404
+
 
 def test_get_public_items(client, public_user, sample_data):
     response = client.get(f"/api/public/u/{public_user}/items")
@@ -82,25 +82,22 @@ def test_get_public_items(client, public_user, sample_data):
     assert len(data["data"]["items"]) == 1
     assert data["data"]["items"][0]["status"] == "read"
 
+
 def test_check_inventory_found(client, public_user, sample_data):
-    response = client.post(
-        f"/api/public/u/{public_user}/check",
-        json={"query": "9780000000001"}
-    )
+    response = client.post(f"/api/public/u/{public_user}/check", json={"query": "9780000000001"})
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["has_item"] is True
     assert data["data"]["type"] == "item"
     assert data["data"]["title"] == "The Cave Bible"
 
+
 def test_check_inventory_by_title(client, public_user, sample_data):
-    response = client.post(
-        f"/api/public/u/{public_user}/check",
-        json={"query": "Cave Bible"}
-    )
+    response = client.post(f"/api/public/u/{public_user}/check", json={"query": "Cave Bible"})
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["has_item"] is True
+
 
 def test_check_inventory_manifestation_only(client, public_user, sample_data, app):
     with app.app_context():
@@ -110,10 +107,7 @@ def test_check_inventory_manifestation_only(client, public_user, sample_data, ap
         db.session.add(mani2)
         db.session.commit()
 
-    response = client.post(
-        f"/api/public/u/{public_user}/check",
-        json={"query": "9780000000002"}
-    )
+    response = client.post(f"/api/public/u/{public_user}/check", json={"query": "9780000000002"})
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["has_item"] is False
