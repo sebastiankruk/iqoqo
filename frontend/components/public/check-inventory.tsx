@@ -103,54 +103,57 @@ export function CheckInventory({ username }: CheckInventoryProps) {
         <Card className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 text-left">
           <CardContent className="p-4">
             {result.data && result.data.length > 0 ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap justify-center gap-4">
                 {result.data.map(item => (
                   <Link
                     href={`/manifestation/${item.type === "item" ? item.manifestation_id : item.id}`}
                     key={`${item.type}-${item.id}`}
-                    className="block group"
+                    className="block group w-[130px]"
                   >
-                    <div className="flex items-start gap-4 p-2 rounded-md hover:bg-muted/30 transition-colors">
-                      <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className="flex flex-col items-center gap-2 p-2 rounded-md hover:bg-muted/30 transition-colors">
+                      <div className="relative shrink-0">
                         {item.cover_url ? (
                           <div
-                            className={`relative h-20 w-14 overflow-hidden rounded shadow-sm ${
+                            className={`relative h-28 w-20 overflow-hidden rounded shadow-sm ${
                               item.type === "manifestation" ? "opacity-60 grayscale" : ""
                             }`}
                           >
                             <Image src={item.cover_url} alt={item.title} fill className="object-cover" />
                           </div>
                         ) : (
-                          <div className="h-20 w-14 bg-muted rounded shadow-sm flex items-center justify-center">
+                          <div className="h-28 w-20 bg-muted rounded shadow-sm flex items-center justify-center">
                             {item.type === "item" ? (
-                              <CheckCircle2 className="h-6 w-6 text-muted-foreground/30" />
+                              <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
                             ) : (
-                              <Info className="h-6 w-6 text-muted-foreground/30" />
+                              <Info className="h-8 w-8 text-muted-foreground/30" />
                             )}
                           </div>
                         )}
-                        {item.type === "item" ? (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>{t("foundItem")}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                            <Info className="h-3.5 w-3.5" />
-                            <span>{t("foundManifestation")}</span>
-                          </div>
-                        )}
+
+                        {/* Floating status badge for extreme compression */}
+                        <div className="absolute -bottom-1 -right-1">
+                          {item.type === "item" ? (
+                            <div className="bg-green-600 dark:bg-green-500 rounded-full p-1 shadow-md border-2 border-background">
+                              <CheckCircle2 className="h-3 w-3 text-white" />
+                            </div>
+                          ) : (
+                            <div className="bg-amber-600 dark:bg-amber-500 rounded-full p-1 shadow-md border-2 border-background">
+                              <Info className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0 py-1">
-                        <p className="text-sm font-semibold leading-tight group-hover:underline line-clamp-2">
+
+                      <div className="w-full text-center space-y-1">
+                        <p className="text-[11px] font-bold leading-tight group-hover:underline line-clamp-2">
                           {item.title}
                         </p>
                         {item.type === "item" ? (
-                          <p className="text-xs text-muted-foreground mt-1 capitalize">
-                            Status: {item.status?.replace(/_/g, " ")}
+                          <p className="text-[9px] text-muted-foreground capitalize truncate">
+                            {item.status?.replace(/_/g, " ")}
                           </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{item.publisher}</p>
+                          <p className="text-[9px] text-muted-foreground truncate">{item.publisher}</p>
                         )}
                       </div>
                     </div>
