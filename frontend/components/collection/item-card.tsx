@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
@@ -140,7 +140,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
     return (
       <Link
         href={targetHref}
-        className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
+        className={`group overflow-hidden rounded-xl bg-card shadow-sm transition-all hover:shadow-md ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""}`}
       >
         <div className="flex h-full p-5 gap-4 items-center">
           <div
@@ -194,6 +194,12 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
                     In Collection
                   </span>
                 )}
+                {!isCatalog && (item as Item).is_hidden && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2.5 py-0.5 text-[10px] font-bold text-zinc-100 ring-1 ring-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-300">
+                    <EyeOff className="h-2.5 w-2.5" />
+                    HIDDEN
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -203,7 +209,10 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   }
 
   return (
-    <Link href={targetHref} className="group block">
+    <Link
+      href={targetHref}
+      className={`group block transition-all ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""}`}
+    >
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {(isProcessing || coverStatus === "pending") && (
@@ -245,6 +254,12 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-accent">
                 <span className="inline-block h-3 w-3 rounded-full bg-accent/20" />
                 Borrowed
+              </div>
+            )}
+            {!isCatalog && (item as Item).is_hidden && (
+              <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-zinc-500">
+                <EyeOff className="h-2.5 w-2.5" />
+                HIDDEN
               </div>
             )}
           </div>

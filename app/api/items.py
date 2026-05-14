@@ -249,6 +249,10 @@ def get_item_detail(item_id: int):
     is_admin = False
     has_read_owners = False
 
+    if item.is_hidden and not (is_owner or is_borrowed):
+        # We check admin/read_owners later, but first pass: if hidden, you must have a reason to see it
+        pass
+
     if user_id:
         user = db.session.get(User, user_id)
         if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
@@ -256,8 +260,14 @@ def get_item_detail(item_id: int):
         if user:
             has_read_owners = user.has_permission(PermissionName.READ_OWNERS)
 
+    if item.is_hidden and not (is_owner or is_admin or is_borrowed or has_read_owners):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+
     manifestation = item.manifestation
-    owner_count = db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id).scalar() or 0
+    owner_count = (
+        db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)).scalar()
+        or 0
+    )
 
     item_data = {
         "id": item.id,
@@ -268,6 +278,7 @@ def get_item_detail(item_id: int):
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
+        "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
@@ -347,6 +358,8 @@ def update_item(item_id: int):
         item.lent_to_user_id = payload.lent_to_user_id
     if payload.lent_to_name is not None:
         item.lent_to_name = payload.lent_to_name
+    if "is_hidden" in data:
+        item.is_hidden = bool(data["is_hidden"])
 
     # Optional metadata update from extra fields or meta field
     metadata = payload.model_extra or {}
@@ -406,7 +419,7 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    items = Item.query.filter_by(manifestation_id=manifestation.id).all()
+    items = Item.query.filter_by(manifestation_id=manifestation.id).filter(Item.is_hidden.is_(False)).all()
     if not items:
         return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
