@@ -177,9 +177,16 @@ export function Navbar() {
                 </div>
                 <DropdownMenuSeparator className="dark:bg-white/10" />
                 <DropdownMenuGroup>
+                  {profile.public_username && (
+                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                      <Link href={`/u/${profile.public_username}`}>
+                        <User className="mr-2 h-4 w-4" /> Public Profile
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                     <Link href="/admin/settings">
-                      <User className="mr-2 h-4 w-4" /> Profile Settings
+                      <Settings className="mr-2 h-4 w-4" /> Profile Settings
                     </Link>
                   </DropdownMenuItem>
                   {profile.roles?.includes("admin") && (

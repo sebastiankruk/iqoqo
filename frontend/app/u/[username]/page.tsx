@@ -26,6 +26,7 @@ import { CheckInventory } from "@/components/public/check-inventory";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Footer } from "@/components/dashboard/footer";
+import { Navbar } from "@/components/dashboard/navbar";
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -106,6 +107,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
       <main className="flex-1">
         {/* Header / Hero Section */}
         <div className="bg-muted/30 border-b">

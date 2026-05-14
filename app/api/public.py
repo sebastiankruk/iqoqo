@@ -28,7 +28,7 @@ public_bp = Blueprint("public", __name__, url_prefix="/public")
 @public_bp.route("/u/<string:username>", methods=["GET"])
 def get_public_profile(username: str):
     """Retrieve a user's public profile stats and basic info."""
-    stmt = select(User).where(User.public_username == username, User.visibility == "public")
+    stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(stmt).scalar_one_or_none()
 
     if not user:
@@ -54,7 +54,7 @@ def get_public_profile(username: str):
 @public_bp.route("/u/<string:username>/items", methods=["GET"])
 def get_public_items(username: str):
     """Retrieve public items for a user."""
-    user_stmt = select(User).where(User.public_username == username, User.visibility == "public")
+    user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -154,7 +154,7 @@ def check_inventory(username: str):
     Smart check if a user has a specific item.
     Returns Item if owned, otherwise Manifestation if exists in catalog.
     """
-    user_stmt = select(User).where(User.public_username == username, User.visibility == "public")
+    user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -178,10 +178,15 @@ def check_inventory(username: str):
                 Work.title.ilike(f"%{query_term}%"),
                 Manifestation.isbn13 == query_term,
                 Manifestation.upc == query_term,
+                db.cast(Manifestation.meta, db.String).ilike(f"%{query_term}%"),
             ),
         )
+        .order_by(
+            (Work.title.ilike(query_term)).desc(),
+            (Work.title.ilike(f"{query_term}%")).desc()
+        )
     )
-    item = db.session.execute(item_stmt).scalar_one_or_none()
+    item = db.session.execute(item_stmt).scalars().first()
 
     if item:
         return jsonify(
@@ -209,10 +214,15 @@ def check_inventory(username: str):
                 Work.title.ilike(f"%{query_term}%"),
                 Manifestation.isbn13 == query_term,
                 Manifestation.upc == query_term,
+                db.cast(Manifestation.meta, db.String).ilike(f"%{query_term}%"),
             )
         )
+        .order_by(
+            (Work.title.ilike(query_term)).desc(),
+            (Work.title.ilike(f"{query_term}%")).desc()
+        )
     )
-    manifestation = db.session.execute(manifestation_stmt).scalar_one_or_none()
+    manifestation = db.session.execute(manifestation_stmt).scalars().first()
 
     if manifestation:
         return jsonify(
