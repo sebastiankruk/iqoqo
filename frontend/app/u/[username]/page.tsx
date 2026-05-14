@@ -111,11 +111,11 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         <div className="bg-muted/30 border-b">
           <div className="mx-auto max-w-5xl px-6 py-12 md:py-20">
             <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-              <Avatar 
-                src={user.avatar_url} 
-                alt={user.display_name || user.username} 
+              <Avatar
+                src={user.avatar_url}
+                alt={user.display_name || user.username}
                 fallback={(user.display_name?.[0] || user.username[0])?.toUpperCase()}
-                className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl" 
+                className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl"
               />
 
               <div className="flex-1 text-center md:text-left space-y-3">

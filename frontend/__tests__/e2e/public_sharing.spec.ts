@@ -20,20 +20,20 @@ test.describe("Public Sharing", () => {
   test("visitor can view public profile", async ({ page }) => {
     // This assumes a user 'testuser' exists and is public
     await page.goto("/u/testuser");
-    await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByText(/Shared by/i)).toBeVisible();
+    await expect(page.locator("h1")).toContainText("Test User");
+    await expect(page.getByText(/Public Items/i)).toBeVisible();
   });
 
   test("visitor sees empty state for empty collection", async ({ page }) => {
     await page.goto("/u/emptyuser");
-    await expect(page.getByText(/Empty Collection/i)).toBeVisible();
+    await expect(page.getByText(/Nothing here yet/i)).toBeVisible();
   });
 
   test("check inventory tool works", async ({ page }) => {
     await page.goto("/u/testuser");
-    const input = page.getByPlaceholder(/Search for a title/i);
-    await input.fill("The Cave Bible");
-    await input.press("Enter");
-    await expect(page.getByText(/In this collection/i)).toBeVisible();
+    const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
+    await input.fill("Public Treasure");
+    await page.getByRole("button", { name: "Check if I have it" }).first().click();
+    await expect(page.getByText(/I have this!/i)).toBeVisible();
   });
 });

@@ -21,26 +21,13 @@ import { Box } from "lucide-react";
 
 describe("EmptyState", () => {
   it("renders title and description", () => {
-    render(
-      <EmptyState 
-        title="Empty Cave" 
-        description="No rocks found here." 
-        icon={Box} 
-      />
-    );
+    render(<EmptyState title="Empty Cave" description="No rocks found here." icon={Box} />);
     expect(screen.getByText("Empty Cave")).toBeInTheDocument();
     expect(screen.getByText("No rocks found here.")).toBeInTheDocument();
   });
 
   it("renders children/CTA", () => {
-    render(
-      <EmptyState 
-        title="T" 
-        description="D" 
-        icon={Box} 
-        action={<button>Hunt Rocks</button>} 
-      />
-    );
+    render(<EmptyState title="T" description="D" icon={Box} action={<button>Hunt Rocks</button>} />);
     expect(screen.getByRole("button", { name: /Hunt Rocks/i })).toBeInTheDocument();
   });
 });

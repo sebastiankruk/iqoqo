@@ -208,7 +208,7 @@ test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
-test-e2e:
+test-e2e: db-init db-seed-e2e
 	@echo "Running end-to-end tests (Playwright)..."
 	cd frontend && $(NPX) playwright test
 
@@ -231,6 +231,10 @@ db-init:
 db-seed:
 	@echo "Loading seed data..."
 	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
+
+db-seed-e2e:
+	@echo "Loading E2E specific seed data..."
+	PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py
 
 db-export:
 	@echo "Exporting database to data/backup.json..."

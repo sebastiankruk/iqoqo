@@ -21,7 +21,7 @@ import { toast } from "sonner";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key === "share" ? "Share" : key,
+  useTranslations: () => (key: string) => (key === "share" ? "Share" : key),
 }));
 
 describe("ShareButton", () => {

@@ -27,6 +27,6 @@ test.describe("Privacy Management", () => {
     // This requires specific setup where 'testuser' has 1 public and 1 hidden item
     await page.goto("/u/testuser");
     await expect(page.getByText("Hidden Treasure")).not.toBeVisible();
-    await expect(page.getByText("Public Treasure")).toBeVisible();
+    await expect(page.getByText("Public Treasure").first()).toBeVisible();
   });
 });
