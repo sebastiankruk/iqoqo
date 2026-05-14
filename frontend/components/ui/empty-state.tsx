@@ -34,6 +34,13 @@ interface EmptyStateProps {
 
 /**
  * Reusable empty state component with a dashed border card.
+ * @param root0 - The component props.
+ * @param root0.title - Title of the empty state.
+ * @param root0.description - Optional description text.
+ * @param root0.icon - Optional Lucide icon to display.
+ * @param root0.action - Optional action button or node.
+ * @param root0.className - Optional additional class names for the container.
+ * @returns The rendered empty state component.
  */
 export function EmptyState({ title, description, icon: Icon, action, className }: EmptyStateProps) {
   return (

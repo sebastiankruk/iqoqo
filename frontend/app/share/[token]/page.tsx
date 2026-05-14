@@ -29,6 +29,11 @@ interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
 }
 
+/**
+ * Fetches a shared collection by its secure token.
+ * @param token - The unique share token.
+ * @returns The shared collection data or null if not found.
+ */
 async function getSharedCollection(token: string) {
   const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
     next: { revalidate: 60 },
@@ -37,6 +42,12 @@ async function getSharedCollection(token: string) {
   return res.json();
 }
 
+/**
+ * Generates SEO metadata for the shared collection page.
+ * @param props - Component props.
+ * @param props.params - The route parameters.
+ * @returns Metadata object for Next.js.
+ */
 export async function generateMetadata({ params }: SharedCollectionPageProps): Promise<Metadata> {
   const { token } = await params;
   const collectionRes = await getSharedCollection(token);
@@ -53,6 +64,12 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
   };
 }
 
+/**
+ * Public page for viewing a shared collection via a secure token.
+ * @param props - Component props.
+ * @param props.params - The route parameters.
+ * @returns The rendered page.
+ */
 export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
   const { token } = await params;
   const t = await getTranslations("Public");

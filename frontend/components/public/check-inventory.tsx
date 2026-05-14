@@ -29,13 +29,26 @@ interface CheckInventoryProps {
   username: string;
 }
 
+interface CheckResult {
+  has_item: boolean;
+  data?: {
+    title: string;
+    cover_url?: string;
+    status?: string;
+    publisher?: string;
+  };
+}
+
 /**
  * A search component for visitors to check if a specific item exists in a public collection.
+ * @param root0 - The component props.
+ * @param root0.username - The public username of the profile being checked.
+ * @returns The rendered search component.
  */
 export function CheckInventory({ username }: CheckInventoryProps) {
   const t = useTranslations("Public");
   const [query, setQuery] = React.useState("");
-  const [result, setResult] = React.useState<any>(null);
+  const [result, setResult] = React.useState<CheckResult | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   const handleCheck = async (e: React.FormEvent) => {
@@ -83,7 +96,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
       {result && (
         <Card className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
           <CardContent className="p-4">
-            {result.has_item ? (
+            {result.has_item && result.data ? (
               <div className="flex items-start gap-4">
                 <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
                   <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -99,7 +112,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                     <div>
                       <p className="text-sm font-medium leading-tight">{result.data.title}</p>
                       <p className="text-xs text-muted-foreground mt-1 capitalize">
-                        Status: {result.data.status.replace(/_/g, " ")}
+                        Status: {result.data.status?.replace(/_/g, " ")}
                       </p>
                     </div>
                   </div>

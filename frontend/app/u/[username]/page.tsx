@@ -15,23 +15,27 @@
 //
 
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { Library, User as UserIcon } from "lucide-react";
+import { Library } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { ShareButton } from "@/components/ui/share-button";
 import { CheckInventory } from "@/components/public/check-inventory";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { Footer } from "@/components/dashboard/footer";
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
 }
 
+/**
+ * Fetches user profile data for the public page.
+ * @param username - The public username to fetch.
+ * @returns The user profile data or null if not found.
+ */
 async function getProfile(username: string) {
   const res = await fetch(resolveApiUrl(`/public/u/${username}`, true), {
     next: { revalidate: 60 }, // Cache for 60 seconds
@@ -40,6 +44,11 @@ async function getProfile(username: string) {
   return res.json();
 }
 
+/**
+ * Fetches the public items for a given user.
+ * @param username - The public username to fetch items for.
+ * @returns The items list.
+ */
 async function getItems(username: string) {
   const res = await fetch(resolveApiUrl(`/public/u/${username}/items`, true), {
     next: { revalidate: 60 },
@@ -48,6 +57,12 @@ async function getItems(username: string) {
   return res.json();
 }
 
+/**
+ * Generates SEO metadata for the public profile page.
+ * @param props - Component props.
+ * @param props.params - The route parameters.
+ * @returns Metadata object for Next.js.
+ */
 export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
   const { username } = await params;
   const profileRes = await getProfile(username);
@@ -70,6 +85,12 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
   };
 }
 
+/**
+ * Public profile page for a user.
+ * @param props - Component props.
+ * @param props.params - The route parameters.
+ * @returns The rendered page.
+ */
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
   const { username } = await params;
   const t = await getTranslations("Public");
@@ -90,12 +111,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         <div className="bg-muted/30 border-b">
           <div className="mx-auto max-w-5xl px-6 py-12 md:py-20">
             <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-              <Avatar className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl">
-                <AvatarImage src={user.avatar_url} alt={user.display_name} />
-                <AvatarFallback>
-                  <UserIcon className="h-12 w-12 text-muted-foreground" />
-                </AvatarFallback>
-              </Avatar>
+              <Avatar 
+                src={user.avatar_url} 
+                alt={user.display_name || user.username} 
+                fallback={(user.display_name?.[0] || user.username[0])?.toUpperCase()}
+                className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl" 
+              />
 
               <div className="flex-1 text-center md:text-left space-y-3">
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">

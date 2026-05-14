@@ -34,6 +34,11 @@ interface ShareButtonProps {
 /**
  * Share button that uses the Web Share API when available,
  * falling back to clipboard copy.
+ * @param root0 - The component props.
+ * @param root0.url - The URL to share. Defaults to current window location if omitted.
+ * @param root0.title - Optional title for the share dialog.
+ * @param root0.text - Optional text for the share dialog.
+ * @returns The rendered share button.
  */
 export function ShareButton({ url, title, text }: ShareButtonProps) {
   const t = useTranslations("Common");
