@@ -19,8 +19,7 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, or_, select
-
-from app.db.models import Item, Manifestation, SharedCollection, User, Work, db
+from app.db.models import Item, Manifestation, SharedCollection, User, Work, Expression, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 
@@ -116,10 +115,39 @@ def get_shared_collection(token: str):
     query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False))
 
     filters = collection.filters
+
     if "status" in filters:
-        query = query.where(Item.status == filters["status"])
-    if "collection_status" in filters:
-        query = query.where(Item.collection_status == filters["collection_status"])
+        # The frontend sends 'status' which could map to either Item.status or Item.collection_status
+        status_val = filters["status"]
+        query = query.where(or_(Item.status == status_val, Item.collection_status == status_val))
+
+    if "tags" in filters:
+        # tags array maps to Expression.content_type
+        # We need to join Expression if it's not already joined
+        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+        tags_list = filters["tags"]
+        if tags_list:
+            query = query.where(Expression.content_type.in_(tags_list))
+
+    if "query" in filters:
+        search_query = filters["query"]
+        if search_query:
+            # Join Work and Manifestation if not joined
+            if "tags" not in filters:
+                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            query = query.outerjoin(Work, Expression.work_id == Work.id)
+            
+            query = query.where(
+                or_(
+                    Work.title.ilike(f"%{search_query}%"),
+                    Manifestation.isbn13 == search_query,
+                    Manifestation.upc == search_query,
+                    db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
+                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%")
+                )
+            )
 
     items = db.session.execute(query).scalars().all()
 

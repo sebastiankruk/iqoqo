@@ -24,7 +24,8 @@ from app.db.models import SharedCollection, db
 sharing_bp = Blueprint("sharing", __name__, url_prefix="/sharing")
 
 
-@sharing_bp.route("/", methods=["GET"])
+@sharing_bp.route("", methods=["GET"], strict_slashes=False)
+@sharing_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
 def list_shared_collections():
     """List shared collections for the current user."""
@@ -34,7 +35,8 @@ def list_shared_collections():
     return jsonify({"success": True, "data": [c.to_dict() for c in collections]})
 
 
-@sharing_bp.route("/", methods=["POST"])
+@sharing_bp.route("", methods=["POST"], strict_slashes=False)
+@sharing_bp.route("/", methods=["POST"], strict_slashes=False)
 @require_auth
 def create_shared_collection():
     """Create a new shared collection."""
