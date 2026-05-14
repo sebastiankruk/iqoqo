@@ -186,21 +186,24 @@ def check_inventory(username: str):
             (Work.title.ilike(f"{query_term}%")).desc()
         )
     )
-    item = db.session.execute(item_stmt).scalars().first()
+    items = db.session.execute(item_stmt.limit(5)).scalars().all()
 
-    if item:
+    if items:
         return jsonify(
             {
                 "success": True,
-                "has_item": True,
-                "data": {
-                    "type": "item",
-                    "id": item.id,
-                    "title": item.manifestation.title,
-                    "status": item.status,
-                    "collection_status": item.collection_status,
-                    "cover_url": item.manifestation.cover_url,
-                },
+                "data": [
+                    {
+                        "type": "item",
+                        "id": item.id,
+                        "manifestation_id": item.manifestation_id,
+                        "title": item.manifestation.title,
+                        "status": item.status,
+                        "collection_status": item.collection_status,
+                        "cover_url": item.manifestation.cover_url,
+                    }
+                    for item in items
+                ],
             }
         )
 
@@ -222,21 +225,23 @@ def check_inventory(username: str):
             (Work.title.ilike(f"{query_term}%")).desc()
         )
     )
-    manifestation = db.session.execute(manifestation_stmt).scalars().first()
+    manifestations = db.session.execute(manifestation_stmt.limit(5)).scalars().all()
 
-    if manifestation:
+    if manifestations:
         return jsonify(
             {
                 "success": True,
-                "has_item": False,
-                "data": {
-                    "type": "manifestation",
-                    "id": manifestation.id,
-                    "title": manifestation.title,
-                    "publisher": manifestation.publisher,
-                    "cover_url": manifestation.cover_url,
-                },
+                "data": [
+                    {
+                        "type": "manifestation",
+                        "id": m.id,
+                        "title": m.title,
+                        "publisher": m.publisher,
+                        "cover_url": m.cover_url,
+                    }
+                    for m in manifestations
+                ],
             }
         )
 
-    return jsonify({"success": True, "has_item": False, "data": None})
+    return jsonify({"success": True, "data": []})

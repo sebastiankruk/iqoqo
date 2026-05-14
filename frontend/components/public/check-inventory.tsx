@@ -23,20 +23,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useTranslations } from "next-intl";
 import { resolveApiUrl } from "@/lib/utils";
 import Image from "next/image";
+import Link from "next/link";
 
 interface CheckInventoryProps {
   /** The public username of the profile being checked */
   username: string;
 }
 
+interface CheckResultData {
+  type: "item" | "manifestation";
+  id: number;
+  manifestation_id?: number;
+  title: string;
+  cover_url?: string;
+  status?: string;
+  publisher?: string;
+}
+
 interface CheckResult {
-  has_item: boolean;
-  data?: {
-    title: string;
-    cover_url?: string;
-    status?: string;
-    publisher?: string;
-  };
+  success: boolean;
+  data: CheckResultData[];
 }
 
 /**
@@ -94,54 +100,62 @@ export function CheckInventory({ username }: CheckInventoryProps) {
       </form>
 
       {result && (
-        <Card className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+        <Card className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 text-left">
           <CardContent className="p-4">
-            {result.has_item && result.data ? (
-              <div className="flex items-start gap-4">
-                <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
-                  <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <p className="font-bold text-green-700 dark:text-green-400">{t("foundItem")}</p>
-                  <div className="flex gap-3 mt-2">
-                    {result.data.cover_url && (
-                      <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded shadow-sm">
-                        <Image src={result.data.cover_url} alt={result.data.title} fill className="object-cover" />
+            {result.data && result.data.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {result.data.map(item => (
+                  <Link
+                    href={`/manifestation/${item.type === "item" ? item.manifestation_id : item.id}`}
+                    key={`${item.type}-${item.id}`}
+                    className="block group"
+                  >
+                    <div className="flex items-start gap-4 p-2 rounded-md hover:bg-muted/30 transition-colors">
+                      <div className="flex flex-col items-center gap-1.5 shrink-0">
+                        {item.cover_url ? (
+                          <div
+                            className={`relative h-20 w-14 overflow-hidden rounded shadow-sm ${
+                              item.type === "manifestation" ? "opacity-60 grayscale" : ""
+                            }`}
+                          >
+                            <Image src={item.cover_url} alt={item.title} fill className="object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-20 w-14 bg-muted rounded shadow-sm flex items-center justify-center">
+                            {item.type === "item" ? (
+                              <CheckCircle2 className="h-6 w-6 text-muted-foreground/30" />
+                            ) : (
+                              <Info className="h-6 w-6 text-muted-foreground/30" />
+                            )}
+                          </div>
+                        )}
+                        {item.type === "item" ? (
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>{t("foundItem")}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            <Info className="h-3.5 w-3.5" />
+                            <span>{t("foundManifestation")}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-medium leading-tight">{result.data.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1 capitalize">
-                        Status: {result.data.status?.replace(/_/g, " ")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : result.data ? (
-              <div className="flex items-start gap-4">
-                <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full">
-                  <Info className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <p className="font-bold text-amber-700 dark:text-amber-400">{t("foundManifestation")}</p>
-                  <div className="flex gap-3 mt-2">
-                    {result.data.cover_url && (
-                      <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded shadow-sm opacity-60">
-                        <Image
-                          src={result.data.cover_url}
-                          alt={result.data.title}
-                          fill
-                          className="object-cover grayscale"
-                        />
+                      <div className="flex-1 min-w-0 py-1">
+                        <p className="text-sm font-semibold leading-tight group-hover:underline line-clamp-2">
+                          {item.title}
+                        </p>
+                        {item.type === "item" ? (
+                          <p className="text-xs text-muted-foreground mt-1 capitalize">
+                            Status: {item.status?.replace(/_/g, " ")}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">{item.publisher}</p>
+                        )}
                       </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-medium leading-tight">{result.data.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{result.data.publisher}</p>
                     </div>
-                  </div>
-                </div>
+                  </Link>
+                ))}
               </div>
             ) : (
               <div className="flex items-center gap-4">
