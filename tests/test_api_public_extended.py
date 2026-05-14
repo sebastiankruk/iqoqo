@@ -47,7 +47,7 @@ def test_pagination(client, app, test_user):
         db.session.add(mani)
         db.session.flush()
 
-        for i in range(15):
+        for _ in range(15):
             item = Item(owner_id=user.id, manifestation_id=mani.id, status="read")
             db.session.add(item)
         db.session.commit()
