@@ -141,8 +141,8 @@ function SettingsContent(): React.JSX.Element {
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Profile updated successfully");
       setUsernameError(null);
-    } catch (err: any) {
-      const errorMsg = err.message || "Failed to update profile";
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
       toast.error(errorMsg);
       if (errorMsg.toLowerCase().includes("username")) {
         setUsernameError(errorMsg);

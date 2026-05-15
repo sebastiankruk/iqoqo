@@ -145,6 +145,9 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                       </div>
 
                       <div className="w-full text-center space-y-1">
+                        <p className="text-[10px] font-semibold text-primary uppercase tracking-tighter">
+                          {item.type === "item" ? t("foundItem") : t("foundManifestation")}
+                        </p>
                         <p className="text-[11px] font-bold leading-tight group-hover:underline line-clamp-2">
                           {item.title}
                         </p>

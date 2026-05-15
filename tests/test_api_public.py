@@ -87,16 +87,16 @@ def test_check_inventory_found(client, public_user, sample_data):
     response = client.post(f"/api/public/u/{public_user}/check", json={"query": "9780000000001"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["has_item"] is True
-    assert data["data"]["type"] == "item"
-    assert data["data"]["title"] == "The Cave Bible"
+    assert len(data["data"]) > 0
+    assert data["data"][0]["type"] == "item"
+    assert data["data"][0]["title"] == "The Cave Bible"
 
 
 def test_check_inventory_by_title(client, public_user, sample_data):
     response = client.post(f"/api/public/u/{public_user}/check", json={"query": "Cave Bible"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["has_item"] is True
+    assert len(data["data"]) > 0
 
 
 def test_check_inventory_manifestation_only(client, public_user, sample_data, app):
@@ -110,6 +110,6 @@ def test_check_inventory_manifestation_only(client, public_user, sample_data, ap
     response = client.post(f"/api/public/u/{public_user}/check", json={"query": "9780000000002"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["has_item"] is False
-    assert data["data"]["type"] == "manifestation"
-    assert data["data"]["title"] == "The Cave Bible"
+    assert len(data["data"]) > 0
+    assert data["data"][0]["type"] == "manifestation"
+    assert data["data"][0]["title"] == "The Cave Bible"

@@ -19,7 +19,8 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, or_, select
-from app.db.models import Item, Manifestation, SharedCollection, User, Work, Expression, db
+
+from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 
@@ -138,14 +139,14 @@ def get_shared_collection(token: str):
                 query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
                 query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
             query = query.outerjoin(Work, Expression.work_id == Work.id)
-            
+
             query = query.where(
                 or_(
                     Work.title.ilike(f"%{search_query}%"),
                     Manifestation.isbn13 == search_query,
                     Manifestation.upc == search_query,
                     db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
-                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%")
+                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%"),
                 )
             )
 
@@ -209,10 +210,7 @@ def check_inventory(username: str):
                 db.cast(Manifestation.meta, db.String).ilike(f"%{query_term}%"),
             ),
         )
-        .order_by(
-            (Work.title.ilike(query_term)).desc(),
-            (Work.title.ilike(f"{query_term}%")).desc()
-        )
+        .order_by(Work.title.asc())
     )
     items = db.session.execute(item_stmt.limit(5)).scalars().all()
 
@@ -248,10 +246,7 @@ def check_inventory(username: str):
                 db.cast(Manifestation.meta, db.String).ilike(f"%{query_term}%"),
             )
         )
-        .order_by(
-            (Work.title.ilike(query_term)).desc(),
-            (Work.title.ilike(f"{query_term}%")).desc()
-        )
+        .order_by(Work.title.asc())
     )
     manifestations = db.session.execute(manifestation_stmt.limit(5)).scalars().all()
 

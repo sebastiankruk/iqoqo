@@ -64,7 +64,7 @@ def test_update_profile(client):
 
     response = client.put("/api/profile/", headers={"Authorization": f"Bearer {token}"}, json={"display_name": "New Name"})
     assert response.status_code == 200
-    assert json.loads(response.data)["display_name"] == "New Name"
+    assert json.loads(response.data)["data"]["display_name"] == "New Name"
 
 
 def test_delete_account_right_to_be_forgotten(client):

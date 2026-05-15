@@ -1,7 +1,22 @@
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
 "use client";
 
 import * as React from "react";
-import { Share2, Loader2, Copy, Check } from "lucide-react";
+import { Share2, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,15 +29,22 @@ import {
 } from "@/components/ui/dialog";
 
 import { toast } from "sonner";
-import { resolveApiUrl } from "@/lib/utils";
 import { ShareButton } from "@/components/ui/share-button";
 import { apiClient } from "@/lib/api/client";
+import { type ActiveFilter } from "./filter-bar";
 
 interface ShareCollectionDialogProps {
   activeFilters: ActiveFilter[];
   appliedQuery: string;
 }
 
+/**
+ * Dialog component for sharing a filtered collection view.
+ * @param props - Component props.
+ * @param props.activeFilters - Currently active filters to be shared.
+ * @param props.appliedQuery - Current search query to be shared.
+ * @returns React component.
+ */
 export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareCollectionDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -61,7 +83,7 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
 
     try {
       // Build filters payload
-      const filtersPayload: Record<string, any> = {};
+      const filtersPayload: Record<string, string | string[]> = {};
       const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
       const categories = activeFilters.filter(f => f.type === "category").map(f => f.value);
 

@@ -48,6 +48,7 @@ export function Avatar({ src, alt, size = 40, className, fallback }: AvatarProps
       aria-label={!src ? alt || initials || "avatar" : undefined}
     >
       {src ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
         <img src={src} alt={alt || "avatar"} width={size} height={size} className="object-cover w-full h-full" />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground select-none font-medium">

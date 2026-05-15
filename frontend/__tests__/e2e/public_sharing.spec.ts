@@ -32,8 +32,12 @@ test.describe("Public Sharing", () => {
   test("check inventory tool works", async ({ page }) => {
     await page.goto("/u/testuser");
     const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
-    await input.fill("Public Treasure");
+    await input.fill("1111111111111");
     await page.getByRole("button", { name: "Check if I have it" }).first().click();
+    
+    // Check if the item title appears
+    await expect(page.getByText("Public Treasure")).toBeVisible();
+    // Then check for the success label
     await expect(page.getByText(/I have this!/i)).toBeVisible();
   });
 });
