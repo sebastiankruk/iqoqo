@@ -33,11 +33,21 @@ test.describe("Public Sharing", () => {
     await page.goto("/u/testuser");
     const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
     await input.fill("1111111111111");
+
+    // Wait for the search API response
+    const responsePromise = page.waitForResponse(
+      r => r.url().includes("/public/u/testuser/check") && r.status() === 200
+    );
     await page.getByRole("button", { name: "Check if I have it" }).first().click();
-    
-    // Check if the item title appears
-    await expect(page.getByText("Public Treasure")).toBeVisible();
-    // Then check for the success label
-    await expect(page.getByText(/I have this!/i)).toBeVisible();
+    await responsePromise;
+
+    // Wait for the search result card to appear (be specific to avoid matching toasts)
+    const resultCard = page.locator("div[data-slot='card'].animate-in");
+    await expect(resultCard).toBeVisible();
+
+    // Check if the item title appears WITHIN the result card
+    await expect(resultCard.getByText("Public Treasure").first()).toBeVisible();
+    // Then check for the success label container WITHIN the result card
+    await expect(resultCard.locator("p.text-primary.uppercase").first()).toBeVisible();
   });
 });

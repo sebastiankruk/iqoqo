@@ -261,7 +261,7 @@ def get_item_detail(item_id: int):
             has_read_owners = user.has_permission(PermissionName.READ_OWNERS)
 
     if item.is_hidden and not (is_owner or is_admin or is_borrowed or has_read_owners):
-        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     manifestation = item.manifestation
     owner_count = (
@@ -358,8 +358,8 @@ def update_item(item_id: int):
         item.lent_to_user_id = payload.lent_to_user_id
     if payload.lent_to_name is not None:
         item.lent_to_name = payload.lent_to_name
-    if "is_hidden" in data:
-        item.is_hidden = bool(data["is_hidden"])
+    if payload.is_hidden is not None:
+        item.is_hidden = payload.is_hidden
 
     # Optional metadata update from extra fields or meta field
     metadata = payload.model_extra or {}
@@ -672,7 +672,11 @@ def toggle_item_visibility(item_id: int):
     if "is_hidden" not in data:
         return jsonify({"error": "Missing 'is_hidden' boolean field.", "code": 400}), 400
 
-    item.is_hidden = bool(data["is_hidden"])
+    new_val = data["is_hidden"]
+    if not isinstance(new_val, bool):
+        return jsonify({"error": "Field 'is_hidden' must be a boolean.", "code": 400}), 400
+
+    item.is_hidden = new_val
     db.session.commit()
 
     return jsonify(

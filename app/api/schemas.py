@@ -25,6 +25,7 @@ class ItemCreateSchema(BaseModel):
 
     status: str | None = Field(default=None, description="The progress status of the item")
     collection_status: str | None = Field(default="available", description="The physical status of the item")
+    is_hidden: bool | None = Field(default=False, description="Whether the item is hidden from public profiles")
     meta: dict[str, Any] | None = Field(default_factory=dict)
 
 
@@ -35,6 +36,7 @@ class ItemUpdateSchema(BaseModel):
     collection_status: str | None = None
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
+    is_hidden: bool | None = None
     meta: dict[str, Any] | None = None
 
 

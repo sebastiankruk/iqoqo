@@ -7,7 +7,10 @@
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
-    "share": "Share"
+    "share": "Share",
+    "copied": "Copied!",
+    "copySuccess": "Link copied to clipboard!",
+    "copyError": "Could not copy link"
   },
   "Public": {
     "profileTitle": "{name}'s Collection",

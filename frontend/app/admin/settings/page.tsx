@@ -334,7 +334,9 @@ function SettingsContent(): React.JSX.Element {
                       Setting a public username allows you to share your collection at <code>/u/[username]</code>.
                     </p>
                     <div className="mt-4 flex items-center gap-2 max-w-md">
-                      <span className="text-sm text-muted-foreground">iqoqo.app/u/</span>
+                      <span className="text-sm text-muted-foreground">
+                        {typeof window !== "undefined" ? window.location.host : "iqoqo.app"}/u/
+                      </span>
                       <input
                         className={cn(
                           "flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",

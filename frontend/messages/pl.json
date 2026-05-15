@@ -7,7 +7,10 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "delete": "Usuń",
-    "share": "Udostępnij"
+    "share": "Udostępnij",
+    "copied": "Skopiowano!",
+    "copySuccess": "Link skopiowany do schowka!",
+    "copyError": "Nie udało się skopiować linku"
   },
   "Public": {
     "profileTitle": "Kolekcja użytkownika {name}",

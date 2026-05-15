@@ -19,6 +19,7 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
@@ -64,6 +65,7 @@ def get_public_items(username: str):
 
     stmt = (
         select(Item)
+        .options(selectinload(Item.manifestation))
         .where(Item.owner_id == user.id, Item.is_hidden.is_(False))
         .order_by(Item.updated_at.desc())
         .limit(per_page)
@@ -150,7 +152,7 @@ def get_shared_collection(token: str):
                 )
             )
 
-    items = db.session.execute(query).scalars().all()
+    items = db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all()
 
     return jsonify(
         {
@@ -212,7 +214,7 @@ def check_inventory(username: str):
         )
         .order_by(Work.title.asc())
     )
-    items = db.session.execute(item_stmt.limit(5)).scalars().all()
+    items = db.session.execute(item_stmt.options(selectinload(Item.manifestation)).limit(5)).scalars().all()
 
     if items:
         return jsonify(

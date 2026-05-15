@@ -18,7 +18,8 @@ import { cookies } from "next/headers";
 
 export default getRequestConfig(async () => {
   const cookieStore = await cookies();
-  const locale = cookieStore.get("NEXT_LOCALE")?.value || "en";
+  const localeFromCookie = cookieStore.get("NEXT_LOCALE")?.value || "en";
+  const locale = ["en", "pl"].includes(localeFromCookie) ? localeFromCookie : "en";
 
   return {
     locale,

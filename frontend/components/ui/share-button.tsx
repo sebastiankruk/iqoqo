@@ -68,10 +68,10 @@ export function ShareButton({ url, title, text }: ShareButtonProps) {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      toast.success("Link copied to clipboard!");
+      toast.success(t("copySuccess"));
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast.error("Could not copy link");
+      toast.error(t("copyError"));
       console.error("Clipboard failed", err);
     }
   };
@@ -79,7 +79,7 @@ export function ShareButton({ url, title, text }: ShareButtonProps) {
   return (
     <Button onClick={handleShare} variant="outline" size="sm" className="flex items-center gap-2 transition-all">
       {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
-      <span>{copied ? "Copied!" : t("share")}</span>
+      <span>{copied ? t("copied") : t("share")}</span>
     </Button>
   );
 }
