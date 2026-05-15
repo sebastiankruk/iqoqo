@@ -41,8 +41,8 @@ test.describe("Public Sharing", () => {
     await page.getByRole("button", { name: "Check if I have it" }).first().click();
     await responsePromise;
 
-    // Wait for the search result card to appear (be specific to avoid matching toasts)
-    const resultCard = page.locator("div[data-slot='card'].animate-in");
+    // Wait for the search result card to appear
+    const resultCard = page.locator("#inventory-result-card");
     await expect(resultCard).toBeVisible();
 
     // Check if the item title appears WITHIN the result card
