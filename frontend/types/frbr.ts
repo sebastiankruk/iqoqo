@@ -120,6 +120,7 @@ export interface Item {
   lent_to_user_id?: string | null;
   lent_to_name?: string | null;
   is_borrowed?: boolean;
+  is_hidden?: boolean;
   meta: Record<string, unknown>;
   added_at?: string;
   updated_at?: string;
@@ -214,6 +215,8 @@ export interface UserProfile {
   id: string;
   email: string;
   display_name?: string;
+  public_username?: string;
+  bio?: string;
   avatar_url?: string;
   visibility?: string;
   consents?: Record<string, boolean>;

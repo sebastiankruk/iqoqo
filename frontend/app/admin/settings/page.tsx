@@ -107,30 +107,46 @@ function SettingsContent(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [internalTab, setInternalTab] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>("");
+  const [publicUsername, setPublicUsername] = useState<string>("");
+  const [bio, setBio] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
+  const [visibility, setVisibility] = useState<string>("private");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const activeTab = internalTab || searchParams.get("tab") || "profile";
 
   // Initialize local state when profile loads
   useEffect(() => {
-    if (profile?.display_name) {
-      setDisplayName(profile.display_name);
-    } else if (profile?.email) {
-      setDisplayName("");
+    if (profile) {
+      setDisplayName(profile.display_name || "");
+      setPublicUsername(profile.public_username || "");
+      setBio(profile.bio || "");
+      setAvatarUrl(profile.avatar_url || "");
+      setVisibility(profile.visibility || "private");
     }
-  }, [profile?.display_name, profile?.email, activeTab]);
+  }, [profile, activeTab]);
 
-  const handleSaveDisplayName = async () => {
-    const trimmedName = displayName.trim();
-    if (!trimmedName) return;
+  const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      await apiClient.put("/profile/", { display_name: trimmedName });
+      await apiClient.put("/profile/", {
+        display_name: displayName.trim(),
+        public_username: publicUsername.trim() || null,
+        bio: bio.trim(),
+        avatar_url: avatarUrl.trim(),
+        visibility: visibility,
+      });
       // Invalidate so the navbar and other consumers refresh immediately
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      toast.success("Display name updated successfully");
+      toast.success("Profile updated successfully");
+      setUsernameError(null);
     } catch (err) {
-      toast.error("Failed to update profile");
+      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
+      toast.error(errorMsg);
+      if (errorMsg.toLowerCase().includes("username")) {
+        setUsernameError(errorMsg);
+      }
       console.error(err);
     } finally {
       setIsSaving(false);
@@ -284,26 +300,129 @@ function SettingsContent(): React.JSX.Element {
                 </p>
               </div>
               <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6">
-                  <h3 className="text-lg font-medium">Display Name</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    This is your public display name on this instance.
-                  </p>
-                  <input
-                    className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    value={displayName}
-                    onChange={e => setDisplayName(e.target.value)}
-                    placeholder="Enter your display name"
-                  />
+                <div className="p-6 flex flex-col gap-8">
+                  {/* Display Name */}
+                  <div>
+                    <h3 className="text-lg font-medium">Display Name</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      This is your public display name on this instance.
+                    </p>
+                    <input
+                      className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      placeholder="Enter your display name"
+                    />
+                  </div>
+
+                  {/* Avatar URL */}
+                  <div>
+                    <h3 className="text-lg font-medium">Avatar URL</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Link to an image for your profile picture.</p>
+                    <input
+                      className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={avatarUrl}
+                      onChange={e => setAvatarUrl(e.target.value)}
+                      placeholder="https://example.com/avatar.jpg"
+                    />
+                  </div>
+
+                  {/* Public Username */}
+                  <div>
+                    <h3 className="text-lg font-medium">Public Username</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Setting a public username allows you to share your collection at <code>/u/[username]</code>.
+                    </p>
+                    <div className="mt-4 flex items-center gap-2 max-w-md">
+                      <span className="text-sm text-muted-foreground">
+                        {typeof window !== "undefined" ? window.location.host : "iqoqo.app"}/u/
+                      </span>
+                      <input
+                        className={cn(
+                          "flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                          usernameError && "border-red-500 focus-visible:ring-red-500"
+                        )}
+                        value={publicUsername}
+                        onChange={e => {
+                          setPublicUsername(e.target.value);
+                          if (usernameError) setUsernameError(null);
+                        }}
+                        placeholder="testuser1"
+                      />
+                    </div>
+                    {usernameError && <p className="mt-2 text-xs font-medium text-red-500">{usernameError}</p>}
+                  </div>
+
+                  {/* Bio */}
+                  <div>
+                    <h3 className="text-lg font-medium">Bio</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      A short description about you or your collection.
+                    </p>
+                    <textarea
+                      className="mt-4 flex min-h-[100px] w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      placeholder="Tell the world about your library..."
+                    />
+                  </div>
+
+                  {/* Visibility */}
+                  <div>
+                    <h3 className="text-lg font-medium">Profile Visibility</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Control who can see your profile and collection.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="visibility"
+                          value="private"
+                          checked={visibility === "private"}
+                          onChange={e => setVisibility(e.target.value)}
+                          className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                        />
+                        <div>
+                          <p className="text-sm font-medium group-hover:text-foreground transition-colors">Private</p>
+                          <p className="text-xs text-muted-foreground">Only you can see your collection.</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="visibility"
+                          value="public"
+                          checked={visibility === "public"}
+                          onChange={e => setVisibility(e.target.value)}
+                          className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                        />
+                        <div>
+                          <p className="text-sm font-medium group-hover:text-foreground transition-colors">Public</p>
+                          <p className="text-xs text-muted-foreground">
+                            Anyone with the link can view your collection.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
                   <button
                     className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium disabled:opacity-50 flex items-center gap-2"
-                    onClick={handleSaveDisplayName}
-                    disabled={isSaving || !displayName.trim() || displayName === profile.display_name}
+                    onClick={handleSaveProfile}
+                    disabled={
+                      isSaving ||
+                      (displayName === (profile.display_name || "") &&
+                        publicUsername === (profile.public_username || "") &&
+                        bio === (profile.bio || "") &&
+                        avatarUrl === (profile.avatar_url || "") &&
+                        visibility === (profile.visibility || "private"))
+                    }
                   >
                     {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isSaving ? "Saving..." : "Save"}
+                    {isSaving ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </div>

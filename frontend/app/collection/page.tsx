@@ -24,6 +24,7 @@ import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
+import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
 import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
@@ -365,6 +366,10 @@ function CollectionContent() {
                 </span>
               )}
             </button>
+
+            {isLoggedIn && (activeFilters.length > 0 || appliedQuery) && (
+              <ShareCollectionDialog activeFilters={activeFilters} appliedQuery={appliedQuery} />
+            )}
           </div>
         </div>
 

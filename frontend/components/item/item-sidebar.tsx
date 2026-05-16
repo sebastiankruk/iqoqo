@@ -17,7 +17,7 @@
 
 import * as React from "react";
 import { ChangeEvent } from "react";
-import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2 } from "lucide-react";
+import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
@@ -183,6 +183,17 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     );
   };
 
+  const handleToggleVisibility = () => {
+    const newHidden = !item.is_hidden;
+    updateItem.mutate(
+      { is_hidden: newHidden },
+      {
+        onSuccess: () => toast.success(`Item is now ${newHidden ? "hidden" : "public"}`),
+        onError: e => toast.error((e as Error).message),
+      }
+    );
+  };
+
   /**
    * Handles generating and opening the QR code for the item.
    * TODO: Implementation for QR code printing is not ready yet.
@@ -240,6 +251,15 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           <span className="h-1 w-1 rounded-full bg-current opacity-70" />
           {progressStatusInfo.label?.toUpperCase() || "UNKNOWN"}
         </span>
+        {item.is_hidden && (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold ring-1 transition-all bg-zinc-900 text-zinc-100 ring-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-300"
+            title="Item is hidden from your public profile"
+          >
+            <EyeOff className="h-3 w-3" />
+            HIDDEN
+          </span>
+        )}
       </div>
 
       {/* Lending info */}
@@ -364,6 +384,26 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           >
             <Pencil className="h-4 w-4" />
             Edit Metadata
+          </button>
+        )}
+
+        {canModifyItem && (
+          <button
+            onClick={handleToggleVisibility}
+            disabled={updateItem.isPending}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            {item.is_hidden ? (
+              <>
+                <Eye className="h-4 w-4" />
+                Make Public
+              </>
+            ) : (
+              <>
+                <EyeOff className="h-4 w-4" />
+                Hide from Public
+              </>
+            )}
           </button>
         )}
         {/* Print QR Code - Hidden until implementation is ready */}

@@ -112,6 +112,8 @@ class User(db.Model):  # type: ignore[name-defined]
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(100))
+    public_username = db.Column(db.String(50), unique=True, nullable=True, index=True)
+    bio = db.Column(db.Text, nullable=True)
     avatar_url = db.Column(db.String(500), nullable=True)
     google_id = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
@@ -149,6 +151,8 @@ class User(db.Model):  # type: ignore[name-defined]
             "id": str(self.id) if self.id else None,
             "email": self.email,
             "display_name": self.display_name,
+            "public_username": self.public_username,
+            "bio": self.bio,
             "avatar_url": self.avatar_url,
             "visibility": self.visibility,
             "created_at": self.created_at.isoformat() if self.created_at else None,

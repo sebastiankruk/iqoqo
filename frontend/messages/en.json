@@ -1,0 +1,25 @@
+{
+  "Common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "noItems": "No items found",
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "share": "Share",
+    "copied": "Copied!",
+    "copySuccess": "Link copied to clipboard!",
+    "copyError": "Could not copy link"
+  },
+  "Public": {
+    "profileTitle": "{name}'s Collection",
+    "checkInventory": "Check if I have it",
+    "checkPlaceholder": "Search by Title, ISBN, or UPC...",
+    "foundItem": "I have this!",
+    "foundManifestation": "This is in the catalog, but not in my collection.",
+    "notFound": "I don't have this item yet.",
+    "sharedCollection": "Shared Collection",
+    "hiddenItemNote": "Note: Some items may be hidden for privacy."
+  }
+}

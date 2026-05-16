@@ -249,6 +249,10 @@ def get_item_detail(item_id: int):
     is_admin = False
     has_read_owners = False
 
+    if item.is_hidden and not (is_owner or is_borrowed):
+        # We check admin/read_owners later, but first pass: if hidden, you must have a reason to see it
+        pass
+
     if user_id:
         user = db.session.get(User, user_id)
         if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
@@ -256,8 +260,14 @@ def get_item_detail(item_id: int):
         if user:
             has_read_owners = user.has_permission(PermissionName.READ_OWNERS)
 
+    if item.is_hidden and not (is_owner or is_admin or is_borrowed or has_read_owners):
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
     manifestation = item.manifestation
-    owner_count = db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id).scalar() or 0
+    owner_count = (
+        db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)).scalar()
+        or 0
+    )
 
     item_data = {
         "id": item.id,
@@ -268,6 +278,7 @@ def get_item_detail(item_id: int):
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
+        "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
         "meta": item.meta,
     }
@@ -347,6 +358,8 @@ def update_item(item_id: int):
         item.lent_to_user_id = payload.lent_to_user_id
     if payload.lent_to_name is not None:
         item.lent_to_name = payload.lent_to_name
+    if payload.is_hidden is not None:
+        item.is_hidden = payload.is_hidden
 
     # Optional metadata update from extra fields or meta field
     metadata = payload.model_extra or {}
@@ -406,7 +419,7 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    items = Item.query.filter_by(manifestation_id=manifestation.id).all()
+    items = Item.query.filter_by(manifestation_id=manifestation.id).filter(Item.is_hidden.is_(False)).all()
     if not items:
         return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
@@ -637,5 +650,39 @@ def get_item_logs(item_id: int):
                 for entry in logs
             ],
             "error": None,
+        }
+    )
+
+
+@api_bp.route("/items/<int:item_id>/visibility", methods=["PATCH"])
+@require_auth
+def toggle_item_visibility(item_id: int):
+    """
+    Toggles the is_hidden flag for a specific item.
+    Hidden items do not appear on the user's public profile or shared collections.
+    """
+    item = db.session.get(Item, item_id)
+    user_id = getattr(g, "user_id", None)
+
+    if not item or str(item.owner_id) != str(user_id):
+        # Return 404 even if forbidden to prevent data leakage (BOLA protection)
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    data = request.get_json() or {}
+    if "is_hidden" not in data:
+        return jsonify({"error": "Missing 'is_hidden' boolean field.", "code": 400}), 400
+
+    new_val = data["is_hidden"]
+    if not isinstance(new_val, bool):
+        return jsonify({"error": "Field 'is_hidden' must be a boolean.", "code": 400}), 400
+
+    item.is_hidden = new_val
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Item visibility updated to {'hidden' if item.is_hidden else 'public'}.",
+            "is_hidden": item.is_hidden,
         }
     )

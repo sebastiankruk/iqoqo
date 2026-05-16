@@ -20,6 +20,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { getMessages, getLocale } from "next-intl/server";
+import { NextIntlClientProvider } from "next-intl";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -54,24 +56,29 @@ export const viewport: Viewport = {
  * @param root0.children - The child components
  * @returns {JSX.Element} The root layout
  */
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
     <html
-      lang="en"
+      lang={locale}
       className={cn(merriweather.variable, inter.variable, "font-sans", geist.variable)}
       suppressHydrationWarning
     >
       <head />
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <Providers>
-            {children}
-            <CookieConsent />
-          </Providers>
+          <NextIntlClientProvider locale={locale} messages={messages}>
+            <Providers>
+              {children}
+              <CookieConsent />
+            </Providers>
+          </NextIntlClientProvider>
         </ThemeProvider>
       </body>
     </html>

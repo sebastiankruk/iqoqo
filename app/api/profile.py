@@ -16,6 +16,7 @@
 from datetime import UTC, datetime
 
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy import select
 
 from app.db.models import ConsentRecord, User, db
 
@@ -36,20 +37,19 @@ def get_profile():
     # Extract unique permissions from all roles the user holds and return them
     permissions = sorted({perm.name for role in user.roles for perm in role.permissions})
 
+    data = user.to_dict()
+    data.update(
+        {
+            "roles": [r.name for r in user.roles],
+            "permissions": permissions,
+            "consents": consents,
+        }
+    )
+
     return jsonify(
         {
             "success": True,
-            "data": {
-                "id": str(user.id),
-                "email": user.email,
-                "display_name": user.display_name,
-                "avatar_url": user.avatar_url,
-                "visibility": user.visibility,
-                "roles": [r.name for r in user.roles],
-                "permissions": permissions,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "consents": consents,
-            },
+            "data": data,
         }
     )
 
@@ -92,8 +92,31 @@ def update_profile():
     if "display_name" in data:
         user.display_name = data["display_name"]
 
+    if "public_username" in data:
+        new_username = data["public_username"].strip().lower()
+        if new_username:
+            # Check if username is taken by someone else
+            stmt = select(User).where(User.public_username == new_username, User.id != user.id)
+            existing = db.session.execute(stmt).scalar_one_or_none()
+            if existing:
+                return jsonify({"error": "Public username is already taken."}), 409
+            user.public_username = new_username
+        else:
+            user.public_username = None
+
+    if "bio" in data:
+        user.bio = data["bio"].strip()
+
+    if "visibility" in data:
+        val = data["visibility"]
+        if val in ["public", "private"]:
+            user.visibility = val
+
+    if "avatar_url" in data:
+        user.avatar_url = data["avatar_url"].strip()
+
     db.session.commit()
-    return jsonify({"message": "Profile updated successfully", "display_name": user.display_name})
+    return jsonify({"message": "Profile updated successfully", "data": user.to_dict()})
 
 
 @profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
@@ -160,5 +183,36 @@ def search_users():
         }
         for u in users
     ]
-
     return jsonify({"success": True, "data": results})
+
+
+@profile_bp.route("/settings", methods=["PATCH"])
+@require_auth
+def update_profile_settings():
+    """Updates the current user's public profile settings."""
+    data = request.get_json() or {}
+    user = db.session.get(User, getattr(g, "user_id", None))
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if "public_username" in data:
+        new_username = data["public_username"].strip().lower()
+        if new_username:
+            # Check if username is taken by someone else
+            stmt = select(User).where(User.public_username == new_username, User.id != user.id)
+            existing = db.session.execute(stmt).scalar_one_or_none()
+            if existing:
+                return jsonify({"error": "Public username is already taken."}), 409
+            user.public_username = new_username
+
+    if "bio" in data:
+        user.bio = data["bio"].strip()
+
+    if "visibility" in data:
+        # User feedback: reuse visibility to value == public
+        val = data["visibility"]
+        if val in ["public", "private"]:
+            user.visibility = val
+
+    db.session.commit()
+    return jsonify({"success": True, "message": "Profile updated successfully.", "data": user.to_dict()})
