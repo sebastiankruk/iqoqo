@@ -195,8 +195,8 @@ jobs:
 
       - name: Start Flask Backend
         run: |
-          make db-init
-          make db-seed-e2e
+          python scripts/init_db.py --seed-file data/seed_example.json
+          PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
           FLASK_APP=app python -m flask run --port 5000 &
           sleep 5
         env:
