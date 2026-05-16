@@ -20,15 +20,18 @@
  * next/link is mocked globally via vitest.setup.ts.
  */
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
+
 /**
  * Make a mock Item.
- *
- * @param overrides - Item overrides
- * @returns {Item} Mock Item
  */
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -46,9 +49,6 @@ function makeItem(overrides: Partial<Item> = {}): Item {
 
 /**
  * Make a mock CatalogEntry.
- *
- * @param overrides - CatalogEntry overrides
- * @returns {CatalogEntry} Mock CatalogEntry
  */
 function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
@@ -86,6 +86,19 @@ describe("ItemCard", () => {
   it("links to the item detail page", () => {
     render(<ItemCard item={makeItem({ id: 42 })} />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/item/42");
+  });
+
+  it("shows a quantity badge when _quantity > 1", () => {
+    const item = makeItem();
+    (item as any)._quantity = 3;
+    render(<ItemCard item={item} />);
+    expect(screen.getByText("x3")).toBeInTheDocument();
+  });
+
+  it("does not show a quantity badge when _quantity is 1 or undefined", () => {
+    const item = makeItem();
+    render(<ItemCard item={item} />);
+    expect(screen.queryByText(/^x\d+$/)).not.toBeInTheDocument();
   });
 
   it("renders a cover placeholder when coverUrl is absent", () => {

@@ -24,7 +24,7 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
-from app.api.schemas import ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
 
@@ -525,6 +525,65 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     db.session.commit()
 
     return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+
+
+@api_bp.route("/items/bulk", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+def add_items_bulk() -> Response | tuple[Response, int]:
+    """Bulk add multiple manifestations to user's collection."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = ItemBulkCreateSchema(**payload_json)
+    except ValidationError as e:
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    manifestations = Manifestation.query.filter(Manifestation.id.in_(payload.manifestation_ids)).all()
+    if not manifestations:
+        return jsonify({"success": False, "data": None, "error": "No valid manifestations found"}), 404
+
+    created_items = []
+    for man in manifestations:
+        status = payload.status
+        if not status:
+            content_type = man.expression.content_type if man.expression else "text"
+            from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_ALIAS_TO_CATEGORY, MediaCategory
+            _fmt_lower = (content_type or "").lower()
+            category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+            status = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))[0]
+
+        item = Item(
+            manifestation_id=man.id,
+            owner_id=user_id,
+            status=status,
+            collection_status=payload.collection_status,
+            is_hidden=payload.is_hidden or False,
+            meta={},
+        )
+        db.session.add(item)
+        created_items.append(item)
+
+    try:
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "data": {
+                "item_ids": [i.id for i in created_items],
+                "manifestation_ids": [m.id for m in manifestations]
+            },
+            "error": None
+        })
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to bulk add items for user %s: %s", user_id, e)
+        return jsonify({"success": False, "data": None, "error": "Failed to create items"}), 500
 
 
 @api_bp.route("/items/manual", methods=["POST"])

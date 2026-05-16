@@ -21,6 +21,9 @@ Ensures we strictly return {"error": "...", "code": 400} on malformed requests.
 import json
 
 import pytest
+from pydantic import ValidationError
+
+from app.api.schemas import ItemBulkCreateSchema, ItemManualCreateSchema, ScanBarcodeSchema
 
 
 def test_add_item_missing_required_fields(client, normal_user_headers):
@@ -62,3 +65,41 @@ def test_add_item_malformed_json(client, normal_user_headers):
     data = response.get_json()
     assert data["code"] == 400
     assert "invalid or missing json payload" in data["error"].lower()
+
+
+def test_item_bulk_create_schema_validation():
+    """Test explicit Pydantic rules for bulk item creation schema."""
+    valid_data = {"manifestation_ids": [1, 2, 3], "status": "want_to_read"}
+    schema = ItemBulkCreateSchema(**valid_data)
+    assert schema.manifestation_ids == [1, 2, 3]
+
+    with pytest.raises(ValidationError) as exc:
+        ItemBulkCreateSchema(manifestation_ids=[])
+    assert "List should have at least 1 item" in str(exc.value)
+
+    with pytest.raises(ValidationError):
+        ItemBulkCreateSchema(status="read")
+
+    with pytest.raises(ValidationError) as exc:
+        ItemBulkCreateSchema(manifestation_ids=[1], malicious_field="drop_tables")
+    assert "Extra inputs are not permitted" in str(exc.value)
+
+
+def test_item_manual_create_schema_allows_extra():
+    """Test that manual schema deliberately allows extra fields to be bundled into meta."""
+    valid_data = {
+        "Title": "A Good Book",
+        "CustomMeta": "Stored gracefully"
+    }
+    schema = ItemManualCreateSchema(**valid_data)
+    assert schema.Title == "A Good Book"
+
+    assert getattr(schema, "model_extra", None) is not None
+    assert schema.model_extra["CustomMeta"] == "Stored gracefully"
+
+
+def test_scan_barcode_schema_forbids_extra():
+    """Test strict configuration on barcode scanner schema."""
+    with pytest.raises(ValidationError) as exc:
+        ScanBarcodeSchema(barcode="123456789", format="book", injected_role="admin")
+    assert "Extra inputs are not permitted" in str(exc.value)

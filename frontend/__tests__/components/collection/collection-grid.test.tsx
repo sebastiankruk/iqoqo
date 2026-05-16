@@ -15,28 +15,26 @@
 //
 /**
  * Tests for the CollectionGrid component.
- *
- * CollectionGrid is a pure component: it accepts an array of Item objects and
- * renders either an empty state or a grid of ItemCards.
- * next/link is mocked globally via vitest.setup.ts.
  */
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect, vi } from "vitest";
 import type { Item } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 
-/**
- * Factory for creating mock Items.
- *
- * @param id - Item ID
- * @param title - Item title
- * @param author - Item author
- * @returns {Item} Mock Item
- */
-function makeItem(id: number, title: string, author: string): Item {
+class MockIntersectionObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+
+beforeAll(() => {
+  window.IntersectionObserver = MockIntersectionObserver as any;
+});
+
+function makeItem(id: number, title: string, author: string, manifestation_id: number = id): Item {
   return {
     id,
-    manifestation_id: id,
+    manifestation_id,
     owner_id: "user1",
     status: "want_to_read",
     collection_status: "available",
@@ -69,6 +67,29 @@ describe("CollectionGrid", () => {
     expect(screen.getAllByText("Project Hail Mary").length).toBeGreaterThan(0);
   });
 
+  it("groups identical manifestations into a single card", () => {
+    const items = [
+      makeItem(1, "Dune (Copy 1)", "Frank Herbert", 100),
+      makeItem(2, "Dune (Copy 2)", "Frank Herbert", 100),
+      makeItem(3, "Dune Messiah", "Frank Herbert", 101),
+    ];
+    render(<CollectionGrid items={items} />);
+
+    expect(screen.getAllByText("Dune (Copy 1)").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Dune (Copy 2)")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Dune Messiah").length).toBeGreaterThan(0);
+  });
+
+  it("does not group items when isManifestationView is true", () => {
+    const items = [
+      makeItem(1, "Dune (Edition A)", "Frank Herbert", 100),
+      makeItem(2, "Dune (Edition B)", "Frank Herbert", 100),
+    ];
+    render(<CollectionGrid items={items} isManifestationView={true} />);
+    expect(screen.getAllByText("Dune (Edition A)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Dune (Edition B)").length).toBeGreaterThan(0);
+  });
+
   it("does not show the empty-state when items are present", () => {
     const items = [makeItem(1, "Dune", "Frank Herbert")];
     render(<CollectionGrid items={items} />);
@@ -78,6 +99,41 @@ describe("CollectionGrid", () => {
   it("creates links with correct item hrefs", () => {
     const items = [makeItem(7, "Neuromancer", "William Gibson")];
     render(<CollectionGrid items={items} />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/item/7");
+    const links = screen.getAllByRole("link");
+    expect(links[0]).toHaveAttribute("href", "/item/7");
+  });
+
+  describe("Lazy Loading / Infinite Scroll", () => {
+    it("renders a loading spinner at the bottom when isLoadingMore is true", () => {
+      const items = [makeItem(1, "LazyTitle1", "Frank Herbert")];
+      const { container } = render(<CollectionGrid items={items} hasMore={true} isLoadingMore={true} />);
+
+      expect(screen.getAllByText("LazyTitle1").length).toBeGreaterThan(0);
+      expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+    });
+
+    it("does not show the 'No items found' empty state if it is currently loading the first page", () => {
+      const { container } = render(<CollectionGrid items={[]} isLoadingMore={true} hasMore={true} />);
+
+      expect(screen.queryByText("No items found")).not.toBeInTheDocument();
+      expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+    });
+
+    it("renders the scroll trigger area when hasMore is true and not loading", () => {
+      const items = [makeItem(1, "LazyTitle3", "Frank Herbert")];
+      const { container } = render(<CollectionGrid items={items} hasMore={true} isLoadingMore={false} />);
+
+      expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
+      const triggerDiv = container.querySelector(".h-6");
+      expect(triggerDiv).toBeInTheDocument();
+    });
+
+    it("does not render the scroll trigger when hasMore is false", () => {
+      const items = [makeItem(1, "LazyTitle4", "Frank Herbert")];
+      const { container } = render(<CollectionGrid items={items} hasMore={false} isLoadingMore={false} />);
+
+      const outerDiv = container.firstChild as HTMLElement;
+      expect(outerDiv.children.length).toBe(1);
+    });
   });
 });

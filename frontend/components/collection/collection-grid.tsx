@@ -15,26 +15,67 @@
 //
 "use client";
 
-import { Library } from "lucide-react";
+import { useMemo, useEffect, useRef } from "react";
+import { Library, Loader2 } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "./item-card";
 
-/**
- * Responsive grid of item cards. Shows empty state when no items match.
- *
- * @param root0 - The props object
- * @param root0.items - The items to display
- * @param root0.isManifestationView - Whether to show the manifestation view
- * @returns {JSX.Element} The component
- */
+interface CollectionGridProps {
+  items: (Item | CatalogEntry)[];
+  isManifestationView?: boolean;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+}
+
 export function CollectionGrid({
   items,
   isManifestationView = false,
-}: {
-  items: (Item | CatalogEntry)[];
-  isManifestationView?: boolean;
-}) {
-  if (items.length === 0) {
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+}: CollectionGridProps) {
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
+  const displayItems = useMemo(() => {
+    if (isManifestationView) return items;
+
+    const map = new Map<number, any>();
+    for (const item of items) {
+      const mId = (item as Item).manifestation_id;
+      if (mId === undefined) {
+        map.set(item.id, { ...item, _quantity: 1 });
+        continue;
+      }
+
+      if (!map.has(mId)) {
+        map.set(mId, { ...item, _quantity: 1 });
+      } else {
+        const existing = map.get(mId);
+        existing._quantity += 1;
+      }
+    }
+    return Array.from(map.values()) as (Item | CatalogEntry)[];
+  }, [items, isManifestationView]);
+
+  if (displayItems.length === 0 && !isLoadingMore) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -49,10 +90,22 @@ export function CollectionGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {items.map(item => (
-        <ItemCard key={item.id} item={item as Item} isManifestationView={isManifestationView} />
-      ))}
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {displayItems.map(item => (
+          <ItemCard key={item.id} item={item as Item} isManifestationView={isManifestationView} />
+        ))}
+      </div>
+
+      {hasMore && (
+        <div ref={loadMoreRef} className="flex justify-center py-6">
+          {isLoadingMore ? (
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          ) : (
+            <div className="h-6" />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,15 @@ class ItemCreateSchema(BaseModel):
     meta: dict[str, Any] | None = Field(default_factory=dict)
 
 
+class ItemBulkCreateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifestation_ids: list[int] = Field(..., min_length=1, description="List of manifestation IDs to add")
+    status: str | None = Field(default=None, description="The progress status of the items")
+    collection_status: str | None = Field(default="available", description="The physical status of the items")
+    is_hidden: bool | None = Field(default=False, description="Whether the items are hidden from public profiles")
+
+
 class ItemUpdateSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 

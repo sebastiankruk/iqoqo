@@ -152,7 +152,20 @@ def test_get_items_search_with_filters(client, items_with_different_categories, 
 def items_for_quality_filters(app):
     """Seed items with different quality states (missing cover/ID)."""
     with app.app_context():
+        from app.core.permissions import PermissionName
+        from app.db.models import Permission, Role
+
+        write_perm = Permission.query.filter_by(name=PermissionName.WRITE_ITEM).first()
+        if not write_perm:
+            write_perm = Permission(name=PermissionName.WRITE_ITEM)
+            db.session.add(write_perm)
+        user_role = Role(name="quality_tester")
+        user_role.permissions.append(write_perm)
+        db.session.add(user_role)
+        db.session.flush()
+
         user = User(email="quality_test@iqoqo.local", display_name="Quality Tester")
+        user.roles.append(user_role)
         db.session.add(user)
         db.session.flush()
 
@@ -263,3 +276,73 @@ def test_get_items_filtered_by_missing_id(client, items_for_quality_filters, app
     # "UPC Item" has UPC.
     assert len(data) == 1
     assert data[0]["title"] == "No ID Item"
+
+
+def test_bulk_add_items_success(client, items_for_quality_filters, app):
+    """Test POST /api/items/bulk creates multiple items from valid manifestation IDs."""
+    user_id = items_for_quality_filters
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+        manifestations = db.session.query(Manifestation).limit(2).all()
+        man_ids = [m.id for m in manifestations]
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "manifestation_ids": man_ids,
+        "status": "want_to_read",
+        "collection_status": "wishlist"
+    }
+
+    response = client.post("/api/items/bulk", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert len(data["data"]["item_ids"]) == 2
+    assert sorted(data["data"]["manifestation_ids"]) == sorted(man_ids)
+
+    with app.app_context():
+        created_items = db.session.query(Item).filter(Item.id.in_(data["data"]["item_ids"])).all()
+        assert len(created_items) == 2
+        assert all(i.status == "want_to_read" for i in created_items)
+        assert all(i.collection_status == "wishlist" for i in created_items)
+
+
+def test_bulk_add_items_invalid_payload(client, items_for_quality_filters, app):
+    """Test POST /api/items/bulk rejects empty array as dictated by strict Pydantic rules."""
+    user_id = items_for_quality_filters
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post("/api/items/bulk", json={"status": "read"}, headers=headers)
+    assert response.status_code == 400
+
+    payload = {"manifestation_ids": []}
+    response = client.post("/api/items/bulk", json=payload, headers=headers)
+    assert response.status_code == 400
+
+
+def test_bulk_add_items_not_found(client, items_for_quality_filters, app):
+    """Test POST /api/items/bulk handles non-existent manifestation IDs gracefully."""
+    user_id = items_for_quality_filters
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {"manifestation_ids": [999998, 999999]}
+
+    response = client.post("/api/items/bulk", json=payload, headers=headers)
+    assert response.status_code == 404
+    assert response.json["success"] is False
+    assert "No valid manifestations found" in response.json["error"]
