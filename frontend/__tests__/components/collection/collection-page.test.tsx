@@ -17,18 +17,18 @@
  * Tests for the CollectionPage component.
  *
  * Focuses on the three behavioral fixes made in the pagination/filtering
- * overhaul:
+ * overhaul from the infinite-scroll / virtualized scrolling migration:
  *
  * 1. statusCounts shown in the sidebar come from useStats() (global totals)
- * and are therefore accurate across all pages, not just the visible 40.
+ *    and are therefore accurate across all pages, not just the visible 40.
  * 2. resultCount displayed in the FilterBar is meta.total from the API
- * response, not the length of the local items array.
- * 3. When a status filter is toggled, the page number resets to 1 and the
- * selected status is forwarded to useItems() as a server-side filter.
+ *    response, not the length of the local items array.
+ * 3. Filter changes are forwarded to useInfiniteItems as server-side params.
  *
- * useItems and useStats are mocked; sub-components that don't contribute to
- * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
- * stubbed to keep the test surface small and fast.
+ * useInfiniteItems, useInfiniteManifestations and useStats are mocked;
+ * sub-components that don't contribute to the tested behavior (Navbar,
+ * CollectionGrid, MobileFilterDrawer) are stubbed to keep the test surface
+ * small and fast.
  */
 // Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 //
@@ -48,29 +48,38 @@
 /**
  * Tests for the CollectionPage component.
  *
- * Focuses on the three behavioral fixes made in the pagination/filtering
- * overhaul:
+ * Focuses on the three behavioral fixes:
  *
- * 1. statusCounts shown in the sidebar come from useStats() (global totals)
- * and are therefore accurate across all pages, not just the visible 40.
- * 2. resultCount displayed in the FilterBar is meta.total from the API
- * response, not the length of the local items array.
- * 3. When a status filter is toggled, the page number resets to 1 and the
- * selected status is forwarded to useItems() as a server-side filter.
- *
- * useItems and useStats are mocked; sub-components that don't contribute to
- * the tested behavior (Navbar, CollectionGrid, MobileFilterDrawer) are
- * stubbed to keep the test surface small and fast.
+ * 1. statusCounts from useStats() (global totals).
+ * 2. resultCount from meta.total.
+ * 3. Filter changes forwarded as server-side params.
  */
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+/**
+ * Build a standard infinite query mock return value.
+ *
+ * @param overrides - Properties to override in the default mock shape
+ * @returns A mock infinite query result object
+ */
+function infiniteQueryResult(overrides: Record<string, unknown> = {}) {
+  return {
+    data: { pages: [] },
+    isLoading: false,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    ...overrides,
+  };
+}
+
 // ── Mock hooks ─────────────────────────────────────────────────────────────
 vi.mock("@/lib/api/hooks", () => ({
-  useItems: vi.fn(),
+  useInfiniteItems: vi.fn(),
   useStats: vi.fn(),
   useProfile: vi.fn(),
-  useManifestations: vi.fn(),
+  useInfiniteManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
   useWorksShelf: vi.fn(),
   useExpressionsShelf: vi.fn(),
@@ -103,13 +112,13 @@ vi.mock("@/components/collection/mobile-filter-drawer", () => ({
 }));
 
 // ── Imports (after mocks are defined) ─────────────────────────────────────
-import { useItems, useStats, useManifestations, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
+import { useInfiniteItems, useStats, useInfiniteManifestations, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
 
-const mockUseItems = vi.mocked(useItems);
+const mockUseItems = vi.mocked(useInfiniteItems);
 const mockUseStats = vi.mocked(useStats);
-const mockUseManifestations = vi.mocked(useManifestations);
+const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseProfile = vi.mocked(useProfile);
 const mockUseWorksShelf = vi.mocked(useWorksShelf);
 const mockUseExpressionsShelf = vi.mocked(useExpressionsShelf);
@@ -188,18 +197,14 @@ describe("CollectionPage – statusCounts from useStats()", () => {
     vi.clearAllMocks();
     // Simulate a logged-in user so the page renders normally
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({}, 2),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({}, 2)] },
+    }));
     mockUseStats.mockReturnValue({
       data: FULL_STATS,
       isLoading: false,
     } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    } as ReturnType<typeof useManifestations>);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
     mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
@@ -239,34 +244,30 @@ describe("CollectionPage – resultCount from meta.total", () => {
       data: FULL_STATS,
       isLoading: false,
     } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    } as ReturnType<typeof useManifestations>);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
     mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("shows meta.total as the result count, not the local items length", () => {
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({ total: 237 }, 2),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({ total: 237 }, 2)] },
+    }));
     render(<CollectionPage />);
     expect(screen.getByText("237")).toBeInTheDocument();
   });
 
   it("shows 0 items while loading", () => {
-    mockUseItems.mockReturnValue({
+    mockUseItems.mockReturnValue(infiniteQueryResult({
       data: undefined,
       isLoading: true,
-    } as ReturnType<typeof useItems>);
+    }));
     render(<CollectionPage />);
     expect(screen.getByTestId("result-count")).toHaveTextContent("0 items");
   });
 });
 
-describe("CollectionPage – filter toggles reset page to 1", () => {
+describe("CollectionPage – filter toggles forward params to useInfiniteItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
@@ -274,95 +275,64 @@ describe("CollectionPage – filter toggles reset page to 1", () => {
       data: FULL_STATS,
       isLoading: false,
     } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    } as ReturnType<typeof useManifestations>);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
     mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
-  it("resets to page 1 when a status filter is toggled from page 2", () => {
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({ page: 1, pages: 6, total: 237 }, 40),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
+  it("passes the toggled status as a server-side filter (statuses @ index 1)", () => {
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({ total: 150, pages: 4 }, 40)] },
+    }));
 
     render(<CollectionPage />);
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
-
-    const afterNextCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(afterNextCall[0]).toBe(2);
-
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
 
-    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(lastCall[0]).toBe(1);
+    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    // useInfiniteItems params: (limit, statuses, query, sortBy, enabled, ...)
+    expect(lastCall[1]).toEqual(["available"]);
   });
 
-  it("passes the toggled status to useItems as a server-side filter", () => {
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({ total: 150, pages: 4 }, 40),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
+  it("removes the status filter when toggled off", () => {
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({}, 40)] },
+    }));
 
     render(<CollectionPage />);
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
+    fireEvent.click(checkbox);
 
-    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(lastCall[2]).toEqual(["available"]);
+    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    expect(lastCall[1]).toBeUndefined();
   });
 
-  it("removes the status filter from useItems when toggled off", () => {
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({}, 40),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
-
-    render(<CollectionPage />);
-    const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
-    fireEvent.click(checkbox);
-    fireEvent.click(checkbox);
-
-    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(lastCall[2]).toBeUndefined();
-  });
-
-  it("resets page to 1 when the active filter chip is removed", () => {
-    mockUseItems.mockReturnValue({
-      data: makeItemsResponse({ page: 1, pages: 6, total: 237 }, 40),
-      isLoading: false,
-    } as ReturnType<typeof useItems>);
+  it("re-fetches (new queryKey) when a filter chip is removed", () => {
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({ page: 1, pages: 6, total: 237 }, 40)] },
+    }));
 
     render(<CollectionPage />);
 
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
-
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    const afterNextCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(afterNextCall[0]).toBe(2);
 
     const chip = screen.getByText(/status: on shelf/i).closest("button");
     expect(chip).not.toBeNull();
     fireEvent.click(chip!);
 
-    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useItems>;
-    expect(lastCall[0]).toBe(1);
-    expect(lastCall[2]).toBeUndefined();
+    const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    expect(lastCall[1]).toBeUndefined();
   });
 });
 
 describe("CollectionPage – Authentication & View Modes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseItems.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useItems>);
+    mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useManifestations
-    >);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
     mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
@@ -376,8 +346,9 @@ describe("CollectionPage – Authentication & View Modes", () => {
 
     const calls = mockUseManifestations.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    // Index [3] is the `enabled` parameter (page, limit, query, enabled)
-    expect(calls[calls.length - 1][3]).toBe(true);
+    // useInfiniteManifestations params: (limit, query, enabled, ...)
+    // enabled is at index 2
+    expect(calls[calls.length - 1][2]).toBe(true);
   });
 
   it("hides My Items toggle and defaults to Global Library when logged out", () => {
@@ -390,8 +361,9 @@ describe("CollectionPage – Authentication & View Modes", () => {
     // It should automatically trigger the manifestations fetch
     const calls = mockUseManifestations.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    // Index [3] is the `enabled` parameter (page, limit, query, enabled)
-    expect(calls[calls.length - 1][3]).toBe(true);
+    // useInfiniteManifestations params: (limit, query, enabled, ...)
+    // enabled is at index 2
+    expect(calls[calls.length - 1][2]).toBe(true);
   });
 });
 
@@ -400,8 +372,10 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     vi.clearAllMocks();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseItems.mockReturnValue({ data: makeItemsResponse({}, 2), isLoading: false } as ReturnType<typeof useItems>);
-    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useManifestations>);
+    mockUseItems.mockReturnValue(infiniteQueryResult({
+      data: { pages: [makeItemsResponse({}, 2)] },
+    }));
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
   });
 
   it("renders the Works shelf when the Works view mode is selected", () => {
@@ -435,11 +409,9 @@ describe("CollectionPage – Sorting Behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
-    mockUseItems.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useItems>);
+    mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useManifestations
-    >);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
     mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
@@ -448,9 +420,9 @@ describe("CollectionPage – Sorting Behavior", () => {
     render(<CollectionPage />);
     const calls = mockUseItems.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    // useItems parameters: (page, limit, statuses, query, sortBy, enabled)
-    // sortBy is parameter index 4
-    const lastCall = calls.at(-1) as Parameters<typeof useItems>;
-    expect(lastCall[4]).toBe("updated");
+    // useInfiniteItems parameters: (limit, statuses, query, sortBy, enabled, ...)
+    // sortBy is parameter index 3
+    const lastCall = calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    expect(lastCall[3]).toBe("updated");
   });
 });

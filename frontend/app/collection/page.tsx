@@ -25,8 +25,8 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
-import { useItems, useManifestations, useStats, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
-import type { Item, CatalogEntry, WorkShelfEntry, ExpressionShelfEntry } from "@/types/frbr";
+import { useInfiniteItems, useInfiniteManifestations, useStats, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 
@@ -41,7 +41,6 @@ function CollectionContent() {
   const pathname = usePathname();
 
   // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
-  const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
   const initialSort = searchParams?.get("sort") || "updated";
   const initialStatuses = searchParams?.get("statuses") || "";
   const initialFilters: ActiveFilter[] = initialStatuses
@@ -52,7 +51,6 @@ function CollectionContent() {
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";
 
-  const [page, setPage] = useState(initialPage);
   const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions">(initialViewMode);
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
   const [sortBy, setSortBy] = useState(initialSort);
@@ -82,7 +80,6 @@ function CollectionContent() {
     setPrevIsLoggedIn(isLoggedIn);
     if (!isLoggedIn && (viewMode === "items" || viewMode === "works" || viewMode === "expressions")) {
       setViewMode("manifestations");
-      setPage(1);
     }
   }
 
@@ -110,7 +107,6 @@ function CollectionContent() {
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
     const params = new URLSearchParams();
-    if (page > 1) params.set("page", page.toString());
     if (sortBy !== "updated") params.set("sort", sortBy);
 
     const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
@@ -125,7 +121,6 @@ function CollectionContent() {
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [
-    page,
     sortBy,
     activeFilters,
     appliedQuery,
@@ -137,8 +132,13 @@ function CollectionContent() {
     router,
   ]);
 
-  const { data: itemsData, isLoading: itemsLoading } = useItems(
-    page,
+  const {
+    data: itemsData,
+    isLoading: itemsLoading,
+    fetchNextPage: fetchNextItems,
+    hasNextPage: hasMoreItems,
+    isFetchingNextPage: isFetchingMoreItems,
+  } = useInfiniteItems(
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
@@ -151,8 +151,13 @@ function CollectionContent() {
     missingIdOnly
   );
 
-  const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
-    page,
+  const {
+    data: manifestationsData,
+    isLoading: manifestationsLoading,
+    fetchNextPage: fetchNextManifestations,
+    hasNextPage: hasMoreManifestations,
+    isFetchingNextPage: isFetchingMoreManifestations,
+  } = useInfiniteManifestations(
     limit,
     appliedQuery,
     viewMode === "manifestations",
@@ -167,21 +172,24 @@ function CollectionContent() {
 
   const { data: statsData } = useStats();
 
-  const currentData = viewMode === "items" ? itemsData : viewMode === "manifestations" ? manifestationsData : undefined;
   const isLoading = viewMode === "items" ? itemsLoading : viewMode === "manifestations" ? manifestationsLoading : viewMode === "works" ? worksLoading : exprsLoading;
 
   const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
-    if (viewMode === "items" || viewMode === "manifestations") {
-      return (currentData?.data as Array<Item | CatalogEntry>) ?? [];
+    if (viewMode === "items") {
+      return itemsData?.pages.flatMap(page => page.data || []) ?? [];
+    }
+    if (viewMode === "manifestations") {
+      return manifestationsData?.pages.flatMap(page => page.data || []) ?? [];
     }
     return [];
-  }, [currentData?.data, viewMode]);
+  }, [itemsData, manifestationsData, viewMode]);
 
-  const total = viewMode === "works" ? worksData?.total ?? 0 : viewMode === "expressions" ? exprsData?.total ?? 0 : currentData?.meta?.total ?? 0;
-  const pages = currentData?.meta?.pages ?? 1;
+  const total = viewMode === "works" ? worksData?.total ?? 0 :
+                viewMode === "expressions" ? exprsData?.total ?? 0 :
+                viewMode === "items" ? itemsData?.pages?.[0]?.meta?.total ?? 0 :
+                viewMode === "manifestations" ? manifestationsData?.pages?.[0]?.meta?.total ?? 0 : 0;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
-    setPage(1);
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
       if (exists) {
@@ -197,12 +205,10 @@ function CollectionContent() {
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
-    setPage(1);
     setActiveFilters(prev => prev.filter(f => !(f.type === filter.type && f.value === filter.value)));
   }, []);
 
   const clearAll = useCallback(() => {
-    setPage(1);
     setActiveFilters([]);
   }, []);
 
@@ -285,7 +291,6 @@ function CollectionContent() {
                   <button
                     onClick={() => {
                       setViewMode("items");
-                      setPage(1);
                     }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "items"
@@ -298,7 +303,6 @@ function CollectionContent() {
                   <button
                     onClick={() => {
                       setViewMode("manifestations");
-                      setPage(1);
                     }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "manifestations"
@@ -309,7 +313,7 @@ function CollectionContent() {
                     <LibraryIcon className="h-4 w-4" /> Global Library
                   </button>
                   <button
-                    onClick={() => { setViewMode("works"); setPage(1); }}
+                    onClick={() => { setViewMode("works"); }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "works" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
@@ -317,7 +321,7 @@ function CollectionContent() {
                     <Layers className="h-4 w-4" /> Works
                   </button>
                   <button
-                    onClick={() => { setViewMode("expressions"); setPage(1); }}
+                    onClick={() => { setViewMode("expressions"); }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "expressions" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
@@ -334,7 +338,6 @@ function CollectionContent() {
                         checked={missingCoverOnly}
                         onChange={() => {
                           setMissingCoverOnly(!missingCoverOnly);
-                          setPage(1);
                         }}
                         className="h-4 w-4 rounded border-border accent-primary"
                       />
@@ -346,7 +349,6 @@ function CollectionContent() {
                         checked={missingIdOnly}
                         onChange={() => {
                           setMissingIdOnly(!missingIdOnly);
-                          setPage(1);
                         }}
                         className="h-4 w-4 rounded border-border accent-primary"
                       />
@@ -360,7 +362,6 @@ function CollectionContent() {
             <form
               onSubmit={e => {
                 e.preventDefault();
-                setPage(1);
                 setAppliedQuery(searchQuery);
               }}
               className="relative w-full sm:w-64 md:w-80"
@@ -465,29 +466,16 @@ function CollectionContent() {
                 ))}
               </div>
             ) : (
-              <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
-            )}
-
-            {(viewMode === "items" || viewMode === "manifestations") && pages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {pages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(pages, p + 1))}
-                  disabled={page === pages}
-                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
+              <CollectionGrid 
+                items={filteredItems} 
+                isManifestationView={viewMode === "manifestations"} 
+                hasMore={viewMode === "items" ? hasMoreItems : viewMode === "manifestations" ? hasMoreManifestations : false}
+                isLoadingMore={viewMode === "items" ? isFetchingMoreItems : viewMode === "manifestations" ? isFetchingMoreManifestations : false}
+                onLoadMore={() => {
+                  if (viewMode === "items" && hasMoreItems) fetchNextItems();
+                  if (viewMode === "manifestations" && hasMoreManifestations) fetchNextManifestations();
+                }}
+              />
             )}
           </div>
         </div>

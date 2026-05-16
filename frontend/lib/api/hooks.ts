@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
 import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile, WorkShelfEntry, ExpressionShelfEntry, WorkPartEntry } from "@/types/frbr";
 
@@ -180,6 +180,66 @@ export function useItems(
   });
 }
 
+/**
+ * Custom hook to fetch an infinite scrolling list of items.
+ *
+ * @param limit - Items per page
+ * @param statuses - Filter by statuses
+ * @param query - Search query
+ * @param sort - Sort order (updated, added, title, title-desc, author)
+ * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param borrowed - Filter by borrowed status
+ * @param missingCover - Filter items missing a cover
+ * @param missingId - Filter items missing an external identifier
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<Item[]>>} Infinite query result
+ */
+export function useInfiniteItems(
+  limit = 20,
+  statuses?: string[],
+  query?: string,
+  sort?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  borrowed?: boolean,
+  missingCover?: boolean,
+  missingId?: boolean
+) {
+  return useInfiniteQuery({
+    queryKey: [
+      ...queryKeys.items(1, limit, statuses, query, sort, category, formatFilter),
+      "infinite",
+      borrowed,
+      missingCover,
+      missingId,
+    ],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: Record<string, string | number | boolean> = { page: pageParam, limit };
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (query && query.length > 0) params.q = query;
+      if (sort) params.sort = sort;
+      if (category) params.category = category;
+      if (formatFilter) params.format = formatFilter;
+      if (borrowed) params.borrowed = true;
+      if (missingCover) params.missing_cover = true;
+      if (missingId) params.missing_id = true;
+      const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
+      return res.data;
+    },
+    getNextPageParam: (lastPage) => {
+      if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
+        return lastPage.meta.page + 1;
+      }
+      return undefined;
+    },
+    staleTime: 10_000,
+    enabled,
+  });
+}
+
 /* ── Manifestations list (global catalog) ─────────────────────────────────── */
 
 /**
@@ -226,6 +286,51 @@ export function useManifestations(
       }
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
+    },
+    staleTime: 10_000,
+    enabled,
+  });
+}
+
+/**
+ * Custom hook to fetch an infinite scrolling list of manifestations.
+ *
+ * @param limit - Items per page
+ * @param query - Search query
+ * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param missingCover - Filter manifestations missing a cover
+ * @param missingId - Filter manifestations missing an external identifier
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
+ */
+export function useInfiniteManifestations(
+  limit = 20,
+  query?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  missingCover?: boolean,
+  missingId?: boolean
+) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.manifestations(1, limit, query, category, formatFilter), "infinite", missingCover, missingId],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: Record<string, string | number | boolean> = { page: pageParam, limit };
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      if (formatFilter) params.format = formatFilter;
+      if (missingCover) params.missing_cover = true;
+      if (missingId) params.missing_id = true;
+      const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
+      return res.data;
+    },
+    getNextPageParam: (lastPage) => {
+      if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
+        return lastPage.meta.page + 1;
+      }
+      return undefined;
     },
     staleTime: 10_000,
     enabled,
