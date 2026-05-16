@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Infinite Scroll / Virtualized Loading**:
+  - Replaced manual Previous/Next pagination in the Collection view with lazy loading via `IntersectionObserver`.
+  - Two new React Query hooks: `useInfiniteItems` and `useInfiniteManifestations` using `useInfiniteQuery` with page-based `getNextPageParam`.
+  - Vitest unit tests for infinite query hooks (`infinite-hooks.test.tsx`).
+  - Playwright E2E test for scroll-triggered data fetching (`infinite_scroll.spec.ts`).
+
 - **Library Sharing & Public Discovery (Phase 1)**:
   - **Public Profiles**: Users can opt-in to public profiles via `u/[public_username]`.
   - **Shared Collections**: Secure token-based sharing for filtered views (e.g., Wishlist, Reading list).
