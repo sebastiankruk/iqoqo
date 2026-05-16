@@ -193,6 +193,15 @@ jobs:
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install --with-deps chromium
 
+      - name: Start Flask Backend
+        run: |
+          make db-init
+          make db-seed-e2e
+          FLASK_APP=app python -m flask run --port 5000 &
+          sleep 5
+        env:
+          SECRET_KEY: test-secret-key
+
       - name: Run Playwright E2E tests
         run: cd frontend && npx playwright test
         env:
