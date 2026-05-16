@@ -87,10 +87,7 @@ def test_item_bulk_create_schema_validation():
 
 def test_item_manual_create_schema_allows_extra():
     """Test that manual schema deliberately allows extra fields to be bundled into meta."""
-    valid_data = {
-        "Title": "A Good Book",
-        "CustomMeta": "Stored gracefully"
-    }
+    valid_data = {"Title": "A Good Book", "CustomMeta": "Stored gracefully"}
     schema = ItemManualCreateSchema(**valid_data)
     assert schema.Title == "A Good Book"
 

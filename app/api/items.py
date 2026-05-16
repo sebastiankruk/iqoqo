@@ -555,6 +555,7 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         if not status:
             content_type = man.expression.content_type if man.expression else "text"
             from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_ALIAS_TO_CATEGORY, MediaCategory
+
             _fmt_lower = (content_type or "").lower()
             category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
             status = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))[0]
@@ -572,14 +573,13 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 
     try:
         db.session.commit()
-        return jsonify({
-            "success": True,
-            "data": {
-                "item_ids": [i.id for i in created_items],
-                "manifestation_ids": [m.id for m in manifestations]
-            },
-            "error": None
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {"item_ids": [i.id for i in created_items], "manifestation_ids": [m.id for m in manifestations]},
+                "error": None,
+            }
+        )
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         current_app.logger.exception("Failed to bulk add items for user %s: %s", user_id, e)

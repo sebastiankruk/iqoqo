@@ -33,19 +33,22 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     user_id = getattr(g, "user_id", None)
 
     def get_jsonb_array_elements(field_name: str):
-        return db.session.query(
-            func.jsonb_array_elements_text(
-                func.coalesce(Item.meta.op("->")(field_name), text("'[]'::jsonb"))
-            ).label("element")
-        ).filter(Item.owner_id == user_id).distinct().all()
+        return (
+            db.session.query(
+                func.jsonb_array_elements_text(func.coalesce(Item.meta.op("->")(field_name), text("'[]'::jsonb"))).label("element")
+            )
+            .filter(Item.owner_id == user_id)
+            .distinct()
+            .all()
+        )
 
     def get_jsonb_string_elements(field_name: str):
-        return db.session.query(
-            Item.meta.op("->>")(field_name).label("element")
-        ).filter(
-            Item.owner_id == user_id,
-            Item.meta.op("->>")(field_name) is not None
-        ).distinct().all()
+        return (
+            db.session.query(Item.meta.op("->>")(field_name).label("element"))
+            .filter(Item.owner_id == user_id, Item.meta.op("->>")(field_name) is not None)
+            .distinct()
+            .all()
+        )
 
     try:
         tags = [row.element for row in get_jsonb_array_elements("tags")]
@@ -53,14 +56,16 @@ def get_taxonomies() -> Response | tuple[Response, int]:
         collections = [row.element for row in get_jsonb_array_elements("collections")]
         publishers = [row.element for row in get_jsonb_string_elements("publisher")]
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "tags": sorted(tags),
-                "genres": sorted(genres),
-                "collections": sorted(collections),
-                "publishers": sorted(publishers),
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "tags": sorted(tags),
+                    "genres": sorted(genres),
+                    "collections": sorted(collections),
+                    "publishers": sorted(publishers),
+                },
             }
-        })
+        )
     except Exception:
         return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500

@@ -290,11 +290,7 @@ def test_bulk_add_items_success(client, items_for_quality_filters, app):
         man_ids = [m.id for m in manifestations]
 
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {
-        "manifestation_ids": man_ids,
-        "status": "want_to_read",
-        "collection_status": "wishlist"
-    }
+    payload = {"manifestation_ids": man_ids, "status": "want_to_read", "collection_status": "wishlist"}
 
     response = client.post("/api/items/bulk", json=payload, headers=headers)
 

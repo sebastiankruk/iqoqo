@@ -30,6 +30,7 @@ def _is_sqlite(app):
 def _requires_postgresql():
     """Skip test if running on SQLite (JSONB functions not supported)."""
     import os
+
     return os.environ.get("DATABASE_URL", "").startswith("sqlite")
 
 
@@ -60,21 +61,13 @@ def complex_shelf_data(app):
             manifestation_id=m1a.id,
             owner_id=user.id,
             status="read",
-            meta={
-                "tags": ["fantasy", "epic"],
-                "genres": ["High Fantasy"],
-                "publisher": "Allen & Unwin"
-            }
+            meta={"tags": ["fantasy", "epic"], "genres": ["High Fantasy"], "publisher": "Allen & Unwin"},
         )
         i2 = Item(
             manifestation_id=m1b.id,
             owner_id=user.id,
             status="want_to_read",
-            meta={
-                "tags": ["favorite", "fantasy"],
-                "collections": ["My Precious"],
-                "publisher": "HarperCollins"
-            }
+            meta={"tags": ["favorite", "fantasy"], "collections": ["My Precious"], "publisher": "HarperCollins"},
         )
         db.session.add_all([i1, i2])
 
@@ -161,6 +154,7 @@ def test_get_taxonomies_empty_state(client, app):
         user_id = user.id
 
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)
@@ -203,6 +197,7 @@ def test_get_taxonomies_null_meta_handling(client, app):
         user_id = user.id
 
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)
@@ -274,6 +269,7 @@ def test_get_works_shelf_orphaned_items(client, app):
         user_id = user.id
 
     from app.api.auth import generate_internal_jwt
+
     with app.app_context():
         user = db.session.get(User, user_id)
         token = generate_internal_jwt(user)
@@ -308,12 +304,7 @@ def series_data(app):
 
         db.session.commit()
 
-        return {
-            "user_id": user.id,
-            "container_id": container.id,
-            "part1_id": part1.id,
-            "part2_id": part2.id
-        }
+        return {"user_id": user.id, "container_id": container.id, "part1_id": part1.id, "part2_id": part2.id}
 
 
 def test_get_expressions_shelf_aggregation(client, complex_shelf_data, app):

@@ -33,11 +33,12 @@ def get_user_works() -> Response:
     """
     user_id = getattr(g, "user_id", None)
 
-    items = db.session.query(Item).options(
-        selectinload(Item.manifestation)
-        .selectinload(Manifestation.expression)
-        .selectinload(Expression.work)
-    ).filter(Item.owner_id == user_id).all()
+    items = (
+        db.session.query(Item)
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .filter(Item.owner_id == user_id)
+        .all()
+    )
 
     works_map = {}
     for item in items:
@@ -54,24 +55,25 @@ def get_user_works() -> Response:
                 "total_items": 0,
             }
 
-        man_dict = next(
-            (m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id),
-            None
-        )
+        man_dict = next((m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
         if not man_dict:
-            works_map[work.id]["owned_manifestations"].append({
-                "manifestation_id": item.manifestation.id,
-                "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                "cover_url": item.manifestation.cover_url,
-            })
+            works_map[work.id]["owned_manifestations"].append(
+                {
+                    "manifestation_id": item.manifestation.id,
+                    "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
+                    "cover_url": item.manifestation.cover_url,
+                }
+            )
 
         works_map[work.id]["total_items"] += 1
 
-    return jsonify({
-        "success": True,
-        "data": list(works_map.values()),
-        "total": len(works_map),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "data": list(works_map.values()),
+            "total": len(works_map),
+        }
+    )
 
 
 @api_bp.route("/expressions/shelf", methods=["GET"])
@@ -83,11 +85,12 @@ def get_user_expressions() -> Response:
     """
     user_id = getattr(g, "user_id", None)
 
-    items = db.session.query(Item).options(
-        selectinload(Item.manifestation)
-        .selectinload(Manifestation.expression)
-        .selectinload(Expression.work)
-    ).filter(Item.owner_id == user_id).all()
+    items = (
+        db.session.query(Item)
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .filter(Item.owner_id == user_id)
+        .all()
+    )
 
     expr_map = {}
     for item in items:
@@ -107,24 +110,25 @@ def get_user_expressions() -> Response:
                 "total_items": 0,
             }
 
-        man_dict = next(
-            (m for m in expr_map[expr.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id),
-            None
-        )
+        man_dict = next((m for m in expr_map[expr.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
         if not man_dict:
-            expr_map[expr.id]["owned_manifestations"].append({
-                "manifestation_id": item.manifestation.id,
-                "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                "cover_url": item.manifestation.cover_url,
-            })
+            expr_map[expr.id]["owned_manifestations"].append(
+                {
+                    "manifestation_id": item.manifestation.id,
+                    "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
+                    "cover_url": item.manifestation.cover_url,
+                }
+            )
 
         expr_map[expr.id]["total_items"] += 1
 
-    return jsonify({
-        "success": True,
-        "data": list(expr_map.values()),
-        "total": len(expr_map),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "data": list(expr_map.values()),
+            "total": len(expr_map),
+        }
+    )
 
 
 @api_bp.route("/works/<int:work_id>/parts", methods=["GET"])
@@ -137,16 +141,15 @@ def get_work_parts(work_id: int) -> Response | tuple[Response, int]:
     parts = []
     for wp in work.parts:  # type: ignore[attr-defined]
         part_work = wp.part
-        parts.append({
-            "part_work_id": part_work.id,
-            "title": part_work.title,
-            "sequence": wp.sequence,
-        })
+        parts.append(
+            {
+                "part_work_id": part_work.id,
+                "title": part_work.title,
+                "sequence": wp.sequence,
+            }
+        )
 
-    return jsonify({
-        "success": True,
-        "data": sorted(parts, key=lambda x: x["sequence"])
-    })
+    return jsonify({"success": True, "data": sorted(parts, key=lambda x: x["sequence"])})
 
 
 @api_bp.route("/works/<int:work_id>/parts", methods=["POST"])
