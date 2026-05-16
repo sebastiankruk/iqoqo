@@ -43,7 +43,12 @@ export function Navbar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || searchParams?.get("search") || "");
+  const [mounted, setMounted] = useState(false);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isMaintenanceMode = config?.maintenance_mode === true;
 
@@ -149,7 +154,7 @@ export function Navbar() {
           <ModeToggle />
 
           {/* Auth State Rendering */}
-          {isLoading ? (
+          {!mounted || isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : profile ? (
             <DropdownMenu>

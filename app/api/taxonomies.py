@@ -17,6 +17,7 @@
 
 from flask import Response, g, jsonify
 from sqlalchemy import func, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
@@ -67,5 +68,5 @@ def get_taxonomies() -> Response | tuple[Response, int]:
                 },
             }
         )
-    except Exception:
+    except SQLAlchemyError:
         return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500

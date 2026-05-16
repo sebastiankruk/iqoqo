@@ -202,6 +202,7 @@ jobs:
       - name: Start Flask Backend
         run: |
           python scripts/init_db.py --seed-file data/seed_example.json
+          PYTHONPATH=. python scripts/init_auth.py
           PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
           FLASK_APP=app python -m flask run --port 5000 &
           # Wait until the API is actually ready (up to 30 s)

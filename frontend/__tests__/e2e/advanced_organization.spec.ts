@@ -95,7 +95,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
     expect(loginRes.ok()).toBeTruthy();
     const tokenData = await loginRes.json();
-    const token = tokenData.access_token;
+    const token = tokenData.token;
 
     const manRes = await request.get("/api/public/manifestations?limit=2");
     expect(manRes.ok()).toBeTruthy();
@@ -171,7 +171,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     });
 
     expect(loginRes.ok()).toBeTruthy();
-    const { access_token: token } = await loginRes.json();
+    const { token } = await loginRes.json();
 
     const taxRes = await request.get("/api/taxonomies", {
       headers: { Authorization: `Bearer ${token}` }
