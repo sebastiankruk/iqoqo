@@ -28,7 +28,7 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
     // Navigation timeout: give pages longer to load in CI
-    navigationTimeout: process.env.CI ? 30000 : 10000,
+    navigationTimeout: 30000,
     actionTimeout: process.env.CI ? 15000 : 5000,
   },
   projects: [
