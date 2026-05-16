@@ -20,7 +20,7 @@ import json
 import pytest
 
 from app.db.core import MediaCategory, MediaFormat
-from app.db.models import Expression, Item, Manifestation, User, Work, db
+from app.db.models import Expression, Item, Manifestation, User, Work, WorkPart, db
 
 
 def _is_sqlite(app):
@@ -45,7 +45,7 @@ def complex_shelf_data(app):
         db.session.add(w1)
         db.session.flush()
 
-        e1 = Expression(work_id=w1.id, content_type=MediaCategory.TEXT)
+        e1 = Expression(work_id=w1.id, content_type=MediaCategory.TEXT, language="en")
         db.session.add(e1)
         db.session.flush()
 
@@ -140,6 +140,15 @@ def test_unauthorized_access_blocked(client):
 
     res2 = client.get("/api/works/shelf")
     assert res2.status_code == 401
+
+    res3 = client.get("/api/expressions/shelf")
+    assert res3.status_code == 401
+
+    res4 = client.post("/api/works/1/parts", json={"part_work_id": 2})
+    assert res4.status_code == 401
+
+    res5 = client.delete("/api/works/1/parts/2")
+    assert res5.status_code == 401
 
 
 @pytest.mark.skipif(_requires_postgresql(), reason="JSONB functions require PostgreSQL")
@@ -274,3 +283,126 @@ def test_get_works_shelf_orphaned_items(client, app):
 
     assert response.status_code == 200
     assert response.json["data"] == []
+
+
+@pytest.fixture
+def series_data(app):
+    """Seed the database with a complex work (series) and its parts (F15 Complex Work)."""
+    with app.app_context():
+        user = User(email="series_tester@iqoqo.local", display_name="Series Tester")
+        db.session.add(user)
+        db.session.flush()
+
+        container = Work(title="The Lord of the Rings Series")
+        db.session.add(container)
+        db.session.flush()
+
+        part1 = Work(title="The Fellowship of the Ring")
+        part2 = Work(title="The Two Towers")
+        db.session.add_all([part1, part2])
+        db.session.flush()
+
+        wp1 = WorkPart(container_work_id=container.id, part_work_id=part1.id, sequence=1)
+        wp2 = WorkPart(container_work_id=container.id, part_work_id=part2.id, sequence=2)
+        db.session.add_all([wp1, wp2])
+
+        db.session.commit()
+
+        return {
+            "user_id": user.id,
+            "container_id": container.id,
+            "part1_id": part1.id,
+            "part2_id": part2.id
+        }
+
+
+def test_get_expressions_shelf_aggregation(client, complex_shelf_data, app):
+    """Test GET /api/expressions/shelf aggregates manifestations at the Expression layer."""
+    user_id = complex_shelf_data
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/expressions/shelf", headers=headers)
+    assert response.status_code == 200
+    data = response.json["data"]
+
+    assert len(data) == 1
+    expr_data = data[0]
+
+    assert expr_data["work_title"] == "The Lord of the Rings"
+    assert expr_data["content_type"] == MediaCategory.TEXT
+    assert expr_data["language"] == "en"
+
+    assert expr_data["total_items"] == 2
+    assert len(expr_data["owned_manifestations"]) == 2
+
+
+def test_get_work_parts(client, series_data):
+    """Test GET /api/works/<id>/parts retrieves the sequence of a complex work."""
+    container_id = series_data["container_id"]
+    response = client.get(f"/api/works/{container_id}/parts")
+
+    assert response.status_code == 200
+    data = response.json["data"]
+
+    assert len(data) == 2
+    assert data[0]["sequence"] == 1
+    assert data[0]["title"] == "The Fellowship of the Ring"
+
+    assert data[1]["sequence"] == 2
+    assert data[1]["title"] == "The Two Towers"
+
+
+def test_add_work_part(client, series_data, app):
+    """Test POST /api/works/<id>/parts adds a new part to a complex work."""
+    container_id = series_data["container_id"]
+    user_id = series_data["user_id"]
+
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+
+        part3 = Work(title="The Return of the King")
+        db.session.add(part3)
+        db.session.commit()
+        part3_id = part3.id
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {"part_work_id": part3_id, "sequence": 3}
+
+    response = client.post(f"/api/works/{container_id}/parts", json=payload, headers=headers)
+    assert response.status_code == 200
+    assert response.json["success"] is True
+
+    verify_response = client.get(f"/api/works/{container_id}/parts")
+    assert len(verify_response.json["data"]) == 3
+    assert verify_response.json["data"][2]["title"] == "The Return of the King"
+
+
+def test_remove_work_part(client, series_data, app):
+    """Test DELETE /api/works/<id>/parts/<part_id> removes a part from the series."""
+    container_id = series_data["container_id"]
+    part1_id = series_data["part1_id"]
+    user_id = series_data["user_id"]
+
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.delete(f"/api/works/{container_id}/parts/{part1_id}", headers=headers)
+    assert response.status_code == 200
+    assert response.json["success"] is True
+
+    verify_response = client.get(f"/api/works/{container_id}/parts")
+    assert len(verify_response.json["data"]) == 1
+    assert verify_response.json["data"][0]["title"] == "The Two Towers"

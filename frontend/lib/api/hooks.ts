@@ -17,7 +17,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile } from "@/types/frbr";
+import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile, WorkShelfEntry, ExpressionShelfEntry, WorkPartEntry } from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -74,6 +74,9 @@ export const queryKeys = {
   manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
     ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  worksShelf: ["works", "shelf"] as const,
+  expressionsShelf: ["expressions", "shelf"] as const,
+  workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
 };
 
@@ -243,6 +246,41 @@ export function useManifestation(id: number) {
       return res.data?.data ?? null;
     },
     enabled: id > 0,
+  });
+}
+
+/* ── Shelves & Views ─────────────────────────────────────────────────────── */
+
+export function useWorksShelf() {
+  return useQuery({
+    queryKey: queryKeys.worksShelf,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf");
+      return res.data;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useExpressionsShelf() {
+  return useQuery({
+    queryKey: queryKeys.expressionsShelf,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf");
+      return res.data;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useWorkParts(workId: number) {
+  return useQuery({
+    queryKey: queryKeys.workParts(workId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WorkPartEntry[]>>(`/works/${workId}/parts`);
+      return res.data;
+    },
+    enabled: !!workId,
   });
 }
 

@@ -72,6 +72,8 @@ vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useWorksShelf: vi.fn(),
+  useExpressionsShelf: vi.fn(),
 }));
 
 // ── Stub heavy / irrelevant sub-components ─────────────────────────────────
@@ -101,7 +103,7 @@ vi.mock("@/components/collection/mobile-filter-drawer", () => ({
 }));
 
 // ── Imports (after mocks are defined) ─────────────────────────────────────
-import { useItems, useStats, useManifestations, useProfile } from "@/lib/api/hooks";
+import { useItems, useStats, useManifestations, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
 
@@ -109,6 +111,8 @@ const mockUseItems = vi.mocked(useItems);
 const mockUseStats = vi.mocked(useStats);
 const mockUseManifestations = vi.mocked(useManifestations);
 const mockUseProfile = vi.mocked(useProfile);
+const mockUseWorksShelf = vi.mocked(useWorksShelf);
+const mockUseExpressionsShelf = vi.mocked(useExpressionsShelf);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -132,7 +136,21 @@ const FULL_STATS: DashboardStats = {
 };
 
 /** Mock user profile */
-const MOCK_PROFILE: UserProfile = { id: "1", email: "test@example.com" };
+const MOCK_PROFILE: UserProfile = { id: "1", email: "test@example.com", permissions: ["write:metadata"] };
+
+const MOCK_WORKS_DATA = {
+  success: true,
+  data: [{ work_id: 1, title: "Mock Work Anthology", creators: ["J.R.R. Tolkien"], owned_manifestations: [], total_items: 4 }],
+  total: 1,
+  error: null,
+};
+
+const MOCK_EXPRS_DATA = {
+  success: true,
+  data: [{ expression_id: 1, work_title: "Mock Expression Trans", content_type: "text", language: "pl", creators: ["J.R.R. Tolkien"], owned_manifestations: [], total_items: 2 }],
+  total: 1,
+  error: null,
+};
 
 /**
  * Make a mock API response for items.
@@ -182,6 +200,8 @@ describe("CollectionPage – statusCounts from useStats()", () => {
       data: undefined,
       isLoading: false,
     } as ReturnType<typeof useManifestations>);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("shows the global 'available' count from useStats, not the page count", () => {
@@ -223,6 +243,8 @@ describe("CollectionPage – resultCount from meta.total", () => {
       data: undefined,
       isLoading: false,
     } as ReturnType<typeof useManifestations>);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("shows meta.total as the result count, not the local items length", () => {
@@ -256,6 +278,8 @@ describe("CollectionPage – filter toggles reset page to 1", () => {
       data: undefined,
       isLoading: false,
     } as ReturnType<typeof useManifestations>);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("resets to page 1 when a status filter is toggled from page 2", () => {
@@ -339,6 +363,8 @@ describe("CollectionPage – Authentication & View Modes", () => {
     mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
       typeof useManifestations
     >);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("switches to Global Library manifestations via tabs when logged in", () => {
@@ -369,6 +395,42 @@ describe("CollectionPage – Authentication & View Modes", () => {
   });
 });
 
+describe("CollectionPage – Advanced Organization Views (Works & Expressions)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
+    mockUseItems.mockReturnValue({ data: makeItemsResponse({}, 2), isLoading: false } as ReturnType<typeof useItems>);
+    mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useManifestations>);
+  });
+
+  it("renders the Works shelf when the Works view mode is selected", () => {
+    mockUseWorksShelf.mockReturnValue({ data: MOCK_WORKS_DATA, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+
+    render(<CollectionPage />);
+
+    const worksBtn = screen.getByRole("button", { name: /Works/i });
+    fireEvent.click(worksBtn);
+
+    expect(screen.getByText("Mock Work Anthology")).toBeInTheDocument();
+    expect(screen.getByText(/4 items in collection/i)).toBeInTheDocument();
+  });
+
+  it("renders the Expressions shelf when the Expressions view mode is selected", () => {
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: MOCK_EXPRS_DATA, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+
+    render(<CollectionPage />);
+
+    const exprBtn = screen.getByRole("button", { name: /Expressions/i });
+    fireEvent.click(exprBtn);
+
+    expect(screen.getByText("Mock Expression Trans")).toBeInTheDocument();
+    expect(screen.getByText(/text \/ pl/i)).toBeInTheDocument();
+  });
+});
+
 describe("CollectionPage – Sorting Behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -378,6 +440,8 @@ describe("CollectionPage – Sorting Behavior", () => {
     mockUseManifestations.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
       typeof useManifestations
     >);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
   });
 
   it("defaults to recently updated sorting when entering the collection", () => {

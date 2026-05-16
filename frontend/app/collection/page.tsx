@@ -16,7 +16,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
-import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
+import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen, Layers, Type } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
@@ -25,8 +25,8 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
-import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
-import type { Item, CatalogEntry } from "@/types/frbr";
+import { useItems, useManifestations, useStats, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
+import type { Item, CatalogEntry, WorkShelfEntry, ExpressionShelfEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 
@@ -47,13 +47,13 @@ function CollectionContent() {
   const initialFilters: ActiveFilter[] = initialStatuses
     ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
     : [];
-  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
+  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations" | "works" | "expressions";
   const initialQuery = searchParams?.get("q") ?? "";
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";
 
   const [page, setPage] = useState(initialPage);
-  const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
+  const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions">(initialViewMode);
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
   const [sortBy, setSortBy] = useState(initialSort);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -80,7 +80,7 @@ function CollectionContent() {
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
     setPrevIsLoggedIn(isLoggedIn);
-    if (!isLoggedIn && viewMode === "items") {
+    if (!isLoggedIn && (viewMode === "items" || viewMode === "works" || viewMode === "expressions")) {
       setViewMode("manifestations");
       setPage(1);
     }
@@ -162,17 +162,22 @@ function CollectionContent() {
     missingIdOnly
   );
 
+  const { data: worksData, isLoading: worksLoading } = useWorksShelf();
+  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf();
+
   const { data: statsData } = useStats();
 
-  const currentData = viewMode === "items" ? itemsData : manifestationsData;
-  const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
+  const currentData = viewMode === "items" ? itemsData : viewMode === "manifestations" ? manifestationsData : undefined;
+  const isLoading = viewMode === "items" ? itemsLoading : viewMode === "manifestations" ? manifestationsLoading : viewMode === "works" ? worksLoading : exprsLoading;
 
-  const allItems = useMemo<Array<Item | CatalogEntry>>(
-    () => (currentData?.data as Array<Item | CatalogEntry>) ?? [],
-    [currentData?.data]
-  );
+  const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
+    if (viewMode === "items" || viewMode === "manifestations") {
+      return (currentData?.data as Array<Item | CatalogEntry>) ?? [];
+    }
+    return [];
+  }, [currentData?.data, viewMode]);
 
-  const total = currentData?.meta?.total ?? 0;
+  const total = viewMode === "works" ? worksData?.total ?? 0 : viewMode === "expressions" ? exprsData?.total ?? 0 : currentData?.meta?.total ?? 0;
   const pages = currentData?.meta?.pages ?? 1;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
@@ -303,6 +308,22 @@ function CollectionContent() {
                   >
                     <LibraryIcon className="h-4 w-4" /> Global Library
                   </button>
+                  <button
+                    onClick={() => { setViewMode("works"); setPage(1); }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "works" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Layers className="h-4 w-4" /> Works
+                  </button>
+                  <button
+                    onClick={() => { setViewMode("expressions"); setPage(1); }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "expressions" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Type className="h-4 w-4" /> Expressions
+                  </button>
                 </div>
 
                 {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
@@ -410,11 +431,44 @@ function CollectionContent() {
                   </div>
                 ))}
               </div>
+            ) : viewMode === "works" && worksData?.data ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {worksData.data.map(work => (
+                  <div key={work.work_id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
+                    <h3 className="font-bold text-lg truncate">{work.title}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{work.creators.join(", ")}</p>
+                    <div className="mt-3 flex -space-x-3 overflow-hidden">
+                      {work.owned_manifestations.slice(0, 5).map(m => (
+                        <div key={m.manifestation_id} className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center" style={{backgroundImage: `url(${m.cover_url || ''})`}} />
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs font-semibold text-primary">{work.total_items} items in collection</p>
+                  </div>
+                ))}
+              </div>
+            ) : viewMode === "expressions" && exprsData?.data ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exprsData.data.map(expr => (
+                  <div key={expr.expression_id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
+                    <h3 className="font-bold text-lg truncate">{expr.work_title}</h3>
+                    <p className="text-sm text-muted-foreground mb-2 truncate">{expr.creators.join(", ")}</p>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                      {expr.content_type} / {expr.language}
+                    </span>
+                    <div className="mt-3 flex -space-x-3 overflow-hidden">
+                      {expr.owned_manifestations.slice(0, 5).map(m => (
+                        <div key={m.manifestation_id} className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center" style={{backgroundImage: `url(${m.cover_url || ''})`}} />
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs font-semibold text-primary">{expr.total_items} items in collection</p>
+                  </div>
+                ))}
+              </div>
             ) : (
               <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
             )}
 
-            {pages > 1 && (
+            {(viewMode === "items" || viewMode === "manifestations") && pages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}

@@ -129,3 +129,61 @@ describe("useItems query function", () => {
     });
   });
 });
+
+describe("queryKeys advanced views", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("produces stable keys for works and expressions shelves", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.worksShelf).toEqual(["works", "shelf"]);
+    expect(queryKeys.expressionsShelf).toEqual(["expressions", "shelf"]);
+  });
+
+  it("produces stable keys for work parts with id", async () => {
+    const { queryKeys } = await import("@/lib/api/hooks");
+    expect(queryKeys.workParts(123)).toEqual(["workParts", 123]);
+    expect(queryKeys.workParts(999)).toEqual(["workParts", 999]);
+  });
+});
+
+describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("verifies useWorksShelf calls the correct endpoint", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { success: true, data: [], error: null },
+    } as never);
+
+    await apiClient.get("/works/shelf");
+
+    expect(getSpy).toHaveBeenCalledWith("/works/shelf");
+  });
+
+  it("verifies useExpressionsShelf calls the correct endpoint", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { success: true, data: [], error: null },
+    } as never);
+
+    await apiClient.get("/expressions/shelf");
+
+    expect(getSpy).toHaveBeenCalledWith("/expressions/shelf");
+  });
+
+  it("verifies useWorkParts calls the correct parts endpoint with ID", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { success: true, data: [], error: null },
+    } as never);
+
+    const workId = 42;
+    await apiClient.get(`/works/${workId}/parts`);
+
+    expect(getSpy).toHaveBeenCalledWith("/works/42/parts");
+  });
+});

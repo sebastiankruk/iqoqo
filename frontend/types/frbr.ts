@@ -137,6 +137,33 @@ export interface Item {
 /** Backward compatible alias for ProgressStatus */
 export type ItemStatus = ProgressStatus;
 
+/** Work level shelf entry DTO */
+export interface WorkShelfEntry {
+  work_id: number;
+  title: string;
+  creators: string[];
+  owned_manifestations: Array<{ manifestation_id: number; format: string; cover_url?: string | null }>;
+  total_items: number;
+}
+
+/** Expression level shelf entry DTO */
+export interface ExpressionShelfEntry {
+  expression_id: number;
+  content_type: string;
+  language: string;
+  work_title: string;
+  creators: string[];
+  owned_manifestations: Array<{ manifestation_id: number; format: string; cover_url?: string | null }>;
+  total_items: number;
+}
+
+/** Work part (F15 Complex Work) entry DTO */
+export interface WorkPartEntry {
+  part_work_id: number;
+  title: string;
+  sequence: number;
+}
+
 /** API Response envelope */
 export interface ApiResponse<T> {
   success: boolean;
