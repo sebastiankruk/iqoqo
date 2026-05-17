@@ -199,24 +199,22 @@ jobs:
           psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;"
           psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;"
 
-      - name: Start Flask Backend
+      - name: Prepare E2E database
         run: |
           python scripts/init_db.py --seed-file data/seed_example.json --reset
-          PYTHONPATH=. python scripts/init_auth.py
+          ADMIN_PASSWORD=admin PYTHONPATH=. python scripts/init_auth.py
           PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
-          FLASK_APP=app python -m flask run --port 5000 &
-          # Wait until the API is actually ready (up to 30 s)
-          for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:5000/api/health && break || sleep 1
-          done
         env:
           SECRET_KEY: test-secret-key
+          ADMIN_PASSWORD: admin
 
       - name: Run Playwright E2E tests
         run: cd frontend && npx playwright test
         env:
           CI: true
           FLASK_API_URL: http://127.0.0.1:5000/api
+          ADMIN_PASSWORD: admin
+          SECRET_KEY: test-secret-key
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

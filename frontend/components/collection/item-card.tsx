@@ -274,7 +274,9 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         <div className="flex items-start gap-2 px-3 py-2.5">
           {!isCatalog && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={dotTitle} />}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-snug text-foreground">{title}</p>
+            <p data-testid="card-title" className="truncate text-sm font-semibold leading-snug text-foreground">
+              {title}
+            </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
             {isCatalog && userOwns && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">

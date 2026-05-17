@@ -21,12 +21,38 @@ import uuid
 
 from app import create_app
 from app.db import db
-from app.db.models import Expression, Item, Manifestation, User, Work
+from app.db.models import Expression, Item, Manifestation, Role, User, Work
 
 
 def seed_e2e_data():
     app = create_app()
     with app.app_context():
+        # ── Dedicated E2E admin with stable credentials ────────────────────────
+        # Always upserted so tests work in the live local DB (VS Code /
+        # Antigravity) as well as after a full db-reset (make test-e2e).
+        E2E_EMAIL = "e2e-admin@iqoqo.local"
+        E2E_PASSWORD = "E2ETestPassword123!"
+        admin_role = Role.query.filter_by(name="admin").first()
+        e2e_admin = User.query.filter_by(email=E2E_EMAIL).first()
+        if not e2e_admin:
+            e2e_admin = User(
+                email=E2E_EMAIL,
+                display_name="E2E Admin",
+                public_username="e2e_admin",
+                is_active=True,
+            )
+            e2e_admin.set_password(E2E_PASSWORD)
+            if admin_role:
+                e2e_admin.roles.append(admin_role)  # type: ignore[attr-defined]
+            db.session.add(e2e_admin)
+        else:
+            # Always reset to known password so VS-Code runs stay stable
+            e2e_admin.set_password(E2E_PASSWORD)
+            e2e_admin.is_active = True
+            if admin_role and admin_role not in e2e_admin.roles:  # type: ignore[operator]
+                e2e_admin.roles.append(admin_role)  # type: ignore[attr-defined]
+        db.session.commit()
+
         # Create privateuser
         private_user = User.query.filter_by(public_username="privateuser").first()
         if not private_user:

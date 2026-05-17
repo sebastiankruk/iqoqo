@@ -71,16 +71,16 @@ test.describe("Infinite Scrolling Collection", () => {
 
     await page.goto("/collection");
 
-    // Assert first page items rendered
-    await expect(page.getByText("Mock Infinite Item 1-0")).toBeVisible();
+    // data-testid="card-title" targets only the card-info p, not the decorative cover placeholder span
+    await expect(page.getByTestId("card-title").filter({ hasText: "Mock Infinite Item 1-0" }).first()).toBeVisible();
 
     // Assert second page items NOT yet in DOM
-    await expect(page.getByText("Mock Infinite Item 2-0")).toBeHidden();
+    await expect(page.getByTestId("card-title").filter({ hasText: "Mock Infinite Item 2-0" })).toHaveCount(0);
 
     // Scroll to bottom to trigger IntersectionObserver
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
     // Assert second page items now rendered via infinite scroll
-    await expect(page.getByText("Mock Infinite Item 2-0")).toBeVisible();
+    await expect(page.getByTestId("card-title").filter({ hasText: "Mock Infinite Item 2-0" }).first()).toBeVisible();
   });
 });

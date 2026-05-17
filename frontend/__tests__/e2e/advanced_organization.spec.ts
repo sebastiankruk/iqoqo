@@ -89,9 +89,12 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
     await page.goto("/collection");
 
-    await expect(page.getByText("Dune Messiah")).toBeVisible();
+    // Use data-testid="card-title" which only appears in the card info section,
+    // not in the decorative cover placeholder span.
+    await expect(page.getByTestId("card-title").filter({ hasText: "Dune Messiah" }).first()).toBeVisible();
 
-    const duneCards = page.getByRole("heading", { name: "Dune", exact: true });
+    // Only one grouped card for "Dune" (manifestation_id=100 x2 should be deduplicated)
+    const duneCards = page.getByTestId("card-title").filter({ hasText: /^Dune$/ });
     await expect(duneCards).toHaveCount(1);
 
     const badge = page.getByText("x2");
@@ -136,22 +139,27 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
     await page.goto("/collection");
 
-    const authorLink = page.getByText("Isaac Asimov");
+    // Author links are rendered inside the card – click the first matching one
+    const authorLink = page.getByText("Isaac Asimov").first();
     await expect(authorLink).toBeVisible();
 
     await authorLink.click();
 
     await page.waitForURL("**/collection?q=Isaac+Asimov*");
 
-    const searchInput = page.getByPlaceholder(/search/i);
-    if (await searchInput.isVisible()) {
+    // Target the main collection search box specifically (not the Navbar search)
+    const searchInput = page.getByPlaceholder("Search your collection...");
+    if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await expect(searchInput).toHaveValue("Isaac Asimov");
     }
   });
 
   test("bulk add API endpoint successfully accepts strict payloads", async ({ request }) => {
+    // Use the dedicated E2E admin seeded by tests/e2e/scripts/seed_e2e.py.
+    // This user is always upserted with a known password so the test works
+    // with the live local DB (VS Code) and after a db-reset (make test-e2e).
     const loginRes = await request.post("/api/auth/login", {
-      data: { email: "admin@iqoqo.local", password: "admin" },
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
     });
 
     expect(loginRes.ok()).toBeTruthy();
@@ -200,62 +208,68 @@ test.describe("Advanced Organization & Views - Step 2", () => {
       });
     });
 
-    await page.route("**/api/items?*page=1*", async route => {
-      await route.fulfill({
-        json: {
-          success: true,
-          data: [
-            {
-              id: 1,
-              manifestation_id: 100,
-              title: "Page One Book",
-              authors: ["Author A"],
-              status: "read",
-              collection_status: "available",
-              meta: {},
-            },
-          ],
-          meta: { total: 2, page: 1, pages: 2, limit: 40 },
-        },
-      });
-    });
-
+    // Single handler avoids glob-ambiguity where ?*page=2* could match page-1
+    // requests whose URL lacks an explicit page param, loading both pages at once.
     let page2Requested = false;
-    await page.route("**/api/items?*page=2*", async route => {
-      page2Requested = true;
-      await route.fulfill({
-        json: {
-          success: true,
-          data: [
-            {
-              id: 2,
-              manifestation_id: 101,
-              title: "Page Two Book",
-              authors: ["Author B"],
-              status: "read",
-              collection_status: "available",
-              meta: {},
-            },
-          ],
-          meta: { total: 2, page: 2, pages: 2, limit: 40 },
-        },
-      });
+    await page.route("**/api/items**", async route => {
+      const url = new URL(route.request().url());
+      const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
+      if (pageParam >= 2) {
+        page2Requested = true;
+        await route.fulfill({
+          json: {
+            success: true,
+            data: [
+              {
+                id: 2,
+                manifestation_id: 101,
+                title: "Page Two Book",
+                authors: ["Author B"],
+                status: "read",
+                collection_status: "available",
+                meta: {},
+              },
+            ],
+            meta: { total: 2, page: 2, pages: 2, limit: 40 },
+          },
+        });
+      } else {
+        await route.fulfill({
+          json: {
+            success: true,
+            data: [
+              {
+                id: 1,
+                manifestation_id: 100,
+                title: "Page One Book",
+                authors: ["Author A"],
+                status: "read",
+                collection_status: "available",
+                meta: {},
+              },
+            ],
+            meta: { total: 2, page: 1, pages: 2, limit: 40 },
+          },
+        });
+      }
     });
 
     await page.goto("/collection");
 
-    await expect(page.getByText("Page One Book")).toBeVisible();
-    await expect(page.getByText("Page Two Book")).not.toBeVisible();
+    // data-testid="card-title" only targets the card info p, not the decorative cover placeholder span
+    await expect(page.getByTestId("card-title").filter({ hasText: "Page One Book" }).first()).toBeVisible();
+    await expect(page.getByTestId("card-title").filter({ hasText: "Page Two Book" })).toHaveCount(0);
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
-    await expect(page.getByText("Page Two Book")).toBeVisible();
+    await expect(page.getByTestId("card-title").filter({ hasText: "Page Two Book" }).first()).toBeVisible();
     expect(page2Requested).toBe(true);
   });
 
   test("advanced view API endpoints (taxonomies, works) respond correctly", async ({ request }) => {
+    // Use the dedicated E2E admin seeded by tests/e2e/scripts/seed_e2e.py.
     const loginRes = await request.post("/api/auth/login", {
-      data: { email: "admin@iqoqo.local", password: "admin" },
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
     });
 
     expect(loginRes.ok()).toBeTruthy();

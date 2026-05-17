@@ -43,10 +43,21 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  webServer: [
+    {
+      // Next.js dev server – reused locally, always started in CI
+      command: "npm run dev",
+      url: "http://localhost:3000",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
+    },
+    {
+      // Flask API – reused if already running (local dev), started otherwise (VS Code, Antigravity, CI)
+      command:
+        "ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=.. ../.venv/bin/python -m flask run --port 5000",
+      url: "http://127.0.0.1:5000/api/health",
+      reuseExistingServer: true,
+      timeout: 60000,
+    },
+  ],
 });
