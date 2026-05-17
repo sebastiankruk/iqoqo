@@ -32,6 +32,9 @@ vi.mock("next/navigation", () => ({
 
 /**
  * Make a mock Item.
+ *
+ * @param overrides - Partial overrides for the Item.
+ * @returns A fully populated mock Item.
  */
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -49,6 +52,9 @@ function makeItem(overrides: Partial<Item> = {}): Item {
 
 /**
  * Make a mock CatalogEntry.
+ *
+ * @param overrides - Partial overrides for the CatalogEntry.
+ * @returns A fully populated mock CatalogEntry.
  */
 function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
@@ -90,7 +96,7 @@ describe("ItemCard", () => {
 
   it("shows a quantity badge when _quantity > 1", () => {
     const item = makeItem();
-    (item as any)._quantity = 3;
+    (item as Item & { _quantity?: number })._quantity = 3;
     render(<ItemCard item={item} />);
     expect(screen.getByText("x3")).toBeInTheDocument();
   });

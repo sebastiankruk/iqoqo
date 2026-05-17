@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-export docker-backup db-stats init-auth build-frontend generate-taxonomy
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -208,9 +208,18 @@ test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
-test-e2e: db-init init-auth db-seed-e2e
+test-e2e:
+	@if [ -z "$(NO_RESET)" ]; then \
+		echo "Resetting database for E2E tests..."; \
+		$(MAKE) db-reset; \
+		$(MAKE) init-auth; \
+		$(MAKE) db-seed-e2e; \
+	else \
+		echo "Skipping database reset (NO_RESET is set)..."; \
+	fi
 	@echo "Running end-to-end tests (Playwright)..."
 	cd frontend && $(NPX) playwright test
+
 
 test: test-backend test-frontend test-e2e
 	@echo "All tests completed!"
@@ -248,9 +257,13 @@ docker-backup:
 	@ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python scripts/backup.py
 	@echo "Backup complete! Check the ./exports folder on your host."
 
+db-reset:
+	@echo "Resetting database..."
+	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset
+
 init-auth:
 	@echo "Initializing auth (roles, permissions, admin user)..."
-	@PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+	ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python scripts/init_auth.py
 
 db-stats:
 	@echo "Database statistics:"

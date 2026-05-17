@@ -33,6 +33,44 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     """
     user_id = getattr(g, "user_id", None)
 
+    if db.engine.dialect.name == "sqlite":
+        try:
+            items = db.session.query(Item).filter(Item.owner_id == user_id).all()
+            tags_set = set()
+            genres_set = set()
+            collections_set = set()
+            publishers_set = set()
+            for item in items:
+                meta = item.meta or {}
+                # Extract arrays
+                for t in meta.get("tags", []):
+                    if isinstance(t, str) and t.strip():
+                        tags_set.add(t.strip())
+                for gen in meta.get("genres", []):
+                    if isinstance(gen, str) and gen.strip():
+                        genres_set.add(gen.strip())
+                for col in meta.get("collections", []):
+                    if isinstance(col, str) and col.strip():
+                        collections_set.add(col.strip())
+                # Extract string
+                pub = meta.get("publisher")
+                if isinstance(pub, str) and pub.strip():
+                    publishers_set.add(pub.strip())
+
+            return jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "tags": sorted(tags_set),
+                        "genres": sorted(genres_set),
+                        "collections": sorted(collections_set),
+                        "publishers": sorted(publishers_set),
+                    },
+                }
+            )
+        except SQLAlchemyError:
+            return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500
+
     def get_jsonb_array_elements(field_name: str):
         return (
             db.session.query(
@@ -46,16 +84,16 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     def get_jsonb_string_elements(field_name: str):
         return (
             db.session.query(Item.meta.op("->>")(field_name).label("element"))
-            .filter(Item.owner_id == user_id, Item.meta.op("->>")(field_name) is not None)
+            .filter(Item.owner_id == user_id, Item.meta.op("->>")(field_name).isnot(None))
             .distinct()
             .all()
         )
 
     try:
-        tags = [row.element for row in get_jsonb_array_elements("tags")]
-        genres = [row.element for row in get_jsonb_array_elements("genres")]
-        collections = [row.element for row in get_jsonb_array_elements("collections")]
-        publishers = [row.element for row in get_jsonb_string_elements("publisher")]
+        tags = [row.element for row in get_jsonb_array_elements("tags") if row.element]
+        genres = [row.element for row in get_jsonb_array_elements("genres") if row.element]
+        collections = [row.element for row in get_jsonb_array_elements("collections") if row.element]
+        publishers = [row.element for row in get_jsonb_string_elements("publisher") if row.element]
 
         return jsonify(
             {

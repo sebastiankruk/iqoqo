@@ -20,6 +20,9 @@
  * assert that the correct URL parameters are forwarded to the API.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // queryKeys – pure unit tests, no mocking required
@@ -149,9 +152,28 @@ describe("queryKeys advanced views", () => {
 });
 
 describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
+  let queryClient: QueryClient;
+
   beforeEach(() => {
     vi.resetModules();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
   });
+
+  const getWrapper = () => {
+    /**
+     * TestWrapper component wraps test hooks with QueryClientProvider.
+     *
+     * @param props - Wrapper properties.
+     * @param props.children - Children nodes.
+     * @returns Wrapped component.
+     */
+    function TestWrapper({ children }: { children: React.ReactNode }) {
+      return React.createElement(QueryClientProvider, { client: queryClient }, children);
+    }
+    return TestWrapper;
+  };
 
   it("verifies useWorksShelf calls the correct endpoint", async () => {
     const { apiClient } = await import("@/lib/api/client");
@@ -159,8 +181,10 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
       data: { success: true, data: [], error: null },
     } as never);
 
-    await apiClient.get("/works/shelf");
+    const { useWorksShelf } = await import("@/lib/api/hooks");
+    const { result } = renderHook(() => useWorksShelf(true), { wrapper: getWrapper() });
 
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getSpy).toHaveBeenCalledWith("/works/shelf");
   });
 
@@ -170,8 +194,10 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
       data: { success: true, data: [], error: null },
     } as never);
 
-    await apiClient.get("/expressions/shelf");
+    const { useExpressionsShelf } = await import("@/lib/api/hooks");
+    const { result } = renderHook(() => useExpressionsShelf(true), { wrapper: getWrapper() });
 
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getSpy).toHaveBeenCalledWith("/expressions/shelf");
   });
 
@@ -181,9 +207,10 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
       data: { success: true, data: [], error: null },
     } as never);
 
-    const workId = 42;
-    await apiClient.get(`/works/${workId}/parts`);
+    const { useWorkParts } = await import("@/lib/api/hooks");
+    const { result } = renderHook(() => useWorkParts(42), { wrapper: getWrapper() });
 
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getSpy).toHaveBeenCalledWith("/works/42/parts");
   });
 });

@@ -30,16 +30,19 @@ test.describe("Infinite Scrolling Collection", () => {
       }));
 
     // Route profile so the page renders in logged-in (items) mode
-    await page.route("**/api/profile/**", async (route) => {
+    await page.route("**/api/profile/**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ username: "testuser", permissions: [] }),
+        body: JSON.stringify({
+          success: true,
+          data: { username: "testuser", permissions: [] },
+        }),
       });
     });
 
     // Route items API - serve page 1 or 2 based on query param
-    await page.route("**/api/items**", async (route) => {
+    await page.route("**/api/items**", async route => {
       const url = new URL(route.request().url());
       const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
 

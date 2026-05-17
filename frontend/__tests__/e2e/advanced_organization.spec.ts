@@ -17,7 +17,6 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Advanced Organization & Views - Step 2", () => {
-
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
 
@@ -29,23 +28,61 @@ test.describe("Advanced Organization & Views - Step 2", () => {
         await page.getByRole("button", { name: /sign in/i }).click();
         await page.waitForURL("**/dashboard*");
       }
-    } catch (e) {
+    } catch {
       // Already logged in
     }
   });
 
   test("identical manifestations are visually grouped with a quantity badge", async ({ page }) => {
-    await page.route("**/api/items*", async (route) => {
+    await page.route("**/api/profile/**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { username: "admin", permissions: ["write:metadata", "read:metadata"] },
+        }),
+      });
+    });
+
+    await page.route("**/api/items*", async route => {
       const json = {
         success: true,
         data: [
-          { id: 1, manifestation_id: 100, title: "Dune", authors: ["Frank Herbert"], status: "want_to_read", collection_status: "available", meta: {} },
-          { id: 2, manifestation_id: 100, title: "Dune", authors: ["Frank Herbert"], status: "read", collection_status: "available", meta: {} },
-          { id: 3, manifestation_id: 101, title: "Dune Messiah", authors: ["Frank Herbert"], status: "read", collection_status: "available", meta: {} }
+          {
+            id: 1,
+            manifestation_id: 100,
+            title: "Dune",
+            authors: ["Frank Herbert"],
+            status: "want_to_read",
+            collection_status: "available",
+            meta: {},
+          },
+          {
+            id: 2,
+            manifestation_id: 100,
+            title: "Dune",
+            authors: ["Frank Herbert"],
+            status: "read",
+            collection_status: "available",
+            meta: {},
+          },
+          {
+            id: 3,
+            manifestation_id: 101,
+            title: "Dune Messiah",
+            authors: ["Frank Herbert"],
+            status: "read",
+            collection_status: "available",
+            meta: {},
+          },
         ],
-        total: 3,
-        page: 1,
-        pages: 1
+        meta: {
+          total: 3,
+          page: 1,
+          pages: 1,
+          limit: 40,
+        },
       };
       await route.fulfill({ json });
     });
@@ -62,13 +99,37 @@ test.describe("Advanced Organization & Views - Step 2", () => {
   });
 
   test("clicking an author navigates to a filtered discovery view", async ({ page }) => {
-    await page.route("**/api/items*", async (route) => {
+    await page.route("**/api/profile/**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { username: "admin", permissions: ["write:metadata", "read:metadata"] },
+        }),
+      });
+    });
+
+    await page.route("**/api/items*", async route => {
       const json = {
         success: true,
         data: [
-          { id: 1, manifestation_id: 100, title: "Foundation", authors: ["Isaac Asimov"], status: "read", collection_status: "available", meta: {} }
+          {
+            id: 1,
+            manifestation_id: 100,
+            title: "Foundation",
+            authors: ["Isaac Asimov"],
+            status: "read",
+            collection_status: "available",
+            meta: {},
+          },
         ],
-        total: 1, page: 1, pages: 1
+        meta: {
+          total: 1,
+          page: 1,
+          pages: 1,
+          limit: 40,
+        },
       };
       await route.fulfill({ json });
     });
@@ -90,7 +151,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
   test("bulk add API endpoint successfully accepts strict payloads", async ({ request }) => {
     const loginRes = await request.post("/api/auth/login", {
-      data: { email: "admin@iqoqo.local", password: "admin" }
+      data: { email: "admin@iqoqo.local", password: "admin" },
     });
 
     expect(loginRes.ok()).toBeTruthy();
@@ -109,8 +170,8 @@ test.describe("Advanced Organization & Views - Step 2", () => {
         data: {
           manifestation_ids: ids,
           status: "want_to_read",
-          collection_status: "wishlist"
-        }
+          collection_status: "wish_list",
+        },
       });
 
       expect(bulkRes.status()).toBe(200);
@@ -121,36 +182,63 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
       const badBulkRes = await request.post("/api/items/bulk", {
         headers: { Authorization: `Bearer ${token}` },
-        data: { manifestation_ids: [] }
+        data: { manifestation_ids: [] },
       });
       expect(badBulkRes.status()).toBe(400);
     }
   });
 
   test("infinite scrolling triggers next page load on scroll", async ({ page }) => {
-    await page.route("**/api/items?*page=1*", async (route) => {
+    await page.route("**/api/profile/**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { username: "admin", permissions: ["write:metadata", "read:metadata"] },
+        }),
+      });
+    });
+
+    await page.route("**/api/items?*page=1*", async route => {
       await route.fulfill({
         json: {
           success: true,
           data: [
-            { id: 1, manifestation_id: 100, title: "Page One Book", authors: ["Author A"], status: "read", collection_status: "available", meta: {} }
+            {
+              id: 1,
+              manifestation_id: 100,
+              title: "Page One Book",
+              authors: ["Author A"],
+              status: "read",
+              collection_status: "available",
+              meta: {},
+            },
           ],
-          total: 2, page: 1, pages: 2
-        }
+          meta: { total: 2, page: 1, pages: 2, limit: 40 },
+        },
       });
     });
 
     let page2Requested = false;
-    await page.route("**/api/items?*page=2*", async (route) => {
+    await page.route("**/api/items?*page=2*", async route => {
       page2Requested = true;
       await route.fulfill({
         json: {
           success: true,
           data: [
-            { id: 2, manifestation_id: 101, title: "Page Two Book", authors: ["Author B"], status: "read", collection_status: "available", meta: {} }
+            {
+              id: 2,
+              manifestation_id: 101,
+              title: "Page Two Book",
+              authors: ["Author B"],
+              status: "read",
+              collection_status: "available",
+              meta: {},
+            },
           ],
-          total: 2, page: 2, pages: 2
-        }
+          meta: { total: 2, page: 2, pages: 2, limit: 40 },
+        },
       });
     });
 
@@ -167,14 +255,14 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
   test("advanced view API endpoints (taxonomies, works) respond correctly", async ({ request }) => {
     const loginRes = await request.post("/api/auth/login", {
-      data: { email: "admin@iqoqo.local", password: "admin" }
+      data: { email: "admin@iqoqo.local", password: "admin" },
     });
 
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
 
     const taxRes = await request.get("/api/taxonomies", {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
     expect(taxRes.status()).toBe(200);
 
@@ -185,7 +273,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     expect(Array.isArray(taxJson.data.publishers)).toBe(true);
 
     const worksRes = await request.get("/api/works/shelf", {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
     expect(worksRes.status()).toBe(200);
 

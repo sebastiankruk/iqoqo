@@ -19,7 +19,8 @@ from flask import Response, g, jsonify, request
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth
+from app.api.decorators import require_auth, require_permission
+from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, Work, WorkPart, db
 
 
@@ -47,10 +48,13 @@ def get_user_works() -> Response:
 
         work = item.manifestation.expression.work
         if work.id not in works_map:
+            creators: list[str] = []
+            if work.meta:
+                creators = work.meta.get("creators") or work.meta.get("authors") or []
             works_map[work.id] = {
                 "work_id": work.id,
                 "title": work.title,
-                "creators": work.meta.get("creators", []) if work.meta else [],
+                "creators": creators,
                 "owned_manifestations": [],
                 "total_items": 0,
             }
@@ -100,12 +104,15 @@ def get_user_expressions() -> Response:
         expr = item.manifestation.expression
         work = expr.work
         if expr.id not in expr_map:
+            creators: list[str] = []
+            if work and work.meta:
+                creators = work.meta.get("creators") or work.meta.get("authors") or []
             expr_map[expr.id] = {
                 "expression_id": expr.id,
                 "content_type": expr.content_type,
                 "language": expr.language,
                 "work_title": work.title if work else "Unknown",
-                "creators": work.meta.get("creators", []) if work and work.meta else [],
+                "creators": creators,
                 "owned_manifestations": [],
                 "total_items": 0,
             }
@@ -154,6 +161,7 @@ def get_work_parts(work_id: int) -> Response | tuple[Response, int]:
 
 @api_bp.route("/works/<int:work_id>/parts", methods=["POST"])
 @require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def add_work_part(work_id: int) -> Response | tuple[Response, int]:
     """Add a part to a complex work (series/anthology)."""
     data = request.get_json()
@@ -162,6 +170,9 @@ def add_work_part(work_id: int) -> Response | tuple[Response, int]:
 
     part_id = data["part_work_id"]
     seq = data.get("sequence", 0)
+
+    if work_id == part_id:
+        return jsonify({"error": "A work cannot be its own part", "code": 400}), 400
 
     container = db.session.get(Work, work_id)
     part = db.session.get(Work, part_id)
@@ -182,6 +193,7 @@ def add_work_part(work_id: int) -> Response | tuple[Response, int]:
 
 @api_bp.route("/works/<int:work_id>/parts/<int:part_id>", methods=["DELETE"])
 @require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def remove_work_part(work_id: int, part_id: int) -> Response | tuple[Response, int]:
     """Remove a part from a complex work."""
     wp = WorkPart.query.filter_by(container_work_id=work_id, part_work_id=part_id).first()

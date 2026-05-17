@@ -28,6 +28,18 @@ interface CollectionGridProps {
   onLoadMore?: () => void;
 }
 
+/**
+ * CollectionGrid component renders a responsive grid of items or manifestations
+ * with automatic virtual infinite scrolling support.
+ *
+ * @param props - Component properties.
+ * @param props.items - List of items or manifestations to display.
+ * @param props.isManifestationView - Flag indicating if grouping should be disabled.
+ * @param props.hasMore - Flag indicating if more items can be loaded.
+ * @param props.isLoadingMore - Flag indicating if loading is currently in progress.
+ * @param props.onLoadMore - Callback to trigger loading more items.
+ * @returns Responsive grid component.
+ */
 export function CollectionGrid({
   items,
   isManifestationView = false,
@@ -39,7 +51,7 @@ export function CollectionGrid({
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
+      entries => {
         if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMore) {
           onLoadMore();
         }
@@ -57,7 +69,7 @@ export function CollectionGrid({
   const displayItems = useMemo(() => {
     if (isManifestationView) return items;
 
-    const map = new Map<number, any>();
+    const map = new Map<number, (Item | CatalogEntry) & { _quantity?: number }>();
     for (const item of items) {
       const mId = (item as Item).manifestation_id;
       if (mId === undefined) {
@@ -69,7 +81,9 @@ export function CollectionGrid({
         map.set(mId, { ...item, _quantity: 1 });
       } else {
         const existing = map.get(mId);
-        existing._quantity += 1;
+        if (existing) {
+          existing._quantity = (existing._quantity || 1) + 1;
+        }
       }
     }
     return Array.from(map.values()) as (Item | CatalogEntry)[];
@@ -99,11 +113,7 @@ export function CollectionGrid({
 
       {hasMore && (
         <div ref={loadMoreRef} className="flex justify-center py-6">
-          {isLoadingMore ? (
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="h-6" />
-          )}
+          {isLoadingMore ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : <div className="h-6" />}
         </div>
       )}
     </div>

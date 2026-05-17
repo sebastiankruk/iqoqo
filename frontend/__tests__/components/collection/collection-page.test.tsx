@@ -71,7 +71,7 @@ function infiniteQueryResult(overrides: Record<string, unknown> = {}) {
     hasNextPage: false,
     isFetchingNextPage: false,
     ...overrides,
-  };
+  } as never;
 }
 
 // ── Mock hooks ─────────────────────────────────────────────────────────────
@@ -112,7 +112,14 @@ vi.mock("@/components/collection/mobile-filter-drawer", () => ({
 }));
 
 // ── Imports (after mocks are defined) ─────────────────────────────────────
-import { useInfiniteItems, useStats, useInfiniteManifestations, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
+import {
+  useInfiniteItems,
+  useStats,
+  useInfiniteManifestations,
+  useProfile,
+  useWorksShelf,
+  useExpressionsShelf,
+} from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
 
@@ -149,14 +156,32 @@ const MOCK_PROFILE: UserProfile = { id: "1", email: "test@example.com", permissi
 
 const MOCK_WORKS_DATA = {
   success: true,
-  data: [{ work_id: 1, title: "Mock Work Anthology", creators: ["J.R.R. Tolkien"], owned_manifestations: [], total_items: 4 }],
+  data: [
+    {
+      work_id: 1,
+      title: "Mock Work Anthology",
+      creators: ["J.R.R. Tolkien"],
+      owned_manifestations: [],
+      total_items: 4,
+    },
+  ],
   total: 1,
   error: null,
 };
 
 const MOCK_EXPRS_DATA = {
   success: true,
-  data: [{ expression_id: 1, work_title: "Mock Expression Trans", content_type: "text", language: "pl", creators: ["J.R.R. Tolkien"], owned_manifestations: [], total_items: 2 }],
+  data: [
+    {
+      expression_id: 1,
+      work_title: "Mock Expression Trans",
+      content_type: "text",
+      language: "pl",
+      creators: ["J.R.R. Tolkien"],
+      owned_manifestations: [],
+      total_items: 2,
+    },
+  ],
   total: 1,
   error: null,
 };
@@ -197,16 +222,20 @@ describe("CollectionPage – statusCounts from useStats()", () => {
     vi.clearAllMocks();
     // Simulate a logged-in user so the page renders normally
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({}, 2)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({}, 2)] },
+      })
+    );
     mockUseStats.mockReturnValue({
       data: FULL_STATS,
       isLoading: false,
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useExpressionsShelf
+    >);
   });
 
   it("shows the global 'available' count from useStats, not the page count", () => {
@@ -246,22 +275,28 @@ describe("CollectionPage – resultCount from meta.total", () => {
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useExpressionsShelf
+    >);
   });
 
   it("shows meta.total as the result count, not the local items length", () => {
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({ total: 237 }, 2)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({ total: 237 }, 2)] },
+      })
+    );
     render(<CollectionPage />);
     expect(screen.getByText("237")).toBeInTheDocument();
   });
 
   it("shows 0 items while loading", () => {
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: undefined,
-      isLoading: true,
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: undefined,
+        isLoading: true,
+      })
+    );
     render(<CollectionPage />);
     expect(screen.getByTestId("result-count")).toHaveTextContent("0 items");
   });
@@ -277,13 +312,17 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useExpressionsShelf
+    >);
   });
 
   it("passes the toggled status as a server-side filter (statuses @ index 1)", () => {
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({ total: 150, pages: 4 }, 40)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({ total: 150, pages: 4 }, 40)] },
+      })
+    );
 
     render(<CollectionPage />);
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
@@ -295,9 +334,11 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
   });
 
   it("removes the status filter when toggled off", () => {
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({}, 40)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({}, 40)] },
+      })
+    );
 
     render(<CollectionPage />);
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
@@ -309,9 +350,11 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
   });
 
   it("re-fetches (new queryKey) when a filter chip is removed", () => {
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({ page: 1, pages: 6, total: 237 }, 40)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({ page: 1, pages: 6, total: 237 }, 40)] },
+      })
+    );
 
     render(<CollectionPage />);
 
@@ -334,7 +377,9 @@ describe("CollectionPage – Authentication & View Modes", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useExpressionsShelf
+    >);
   });
 
   it("switches to Global Library manifestations via tabs when logged in", () => {
@@ -372,15 +417,17 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     vi.clearAllMocks();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [makeItemsResponse({}, 2)] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({}, 2)] },
+      })
+    );
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
   });
 
   it("renders the Works shelf when the Works view mode is selected", () => {
-    mockUseWorksShelf.mockReturnValue({ data: MOCK_WORKS_DATA, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseWorksShelf.mockReturnValue({ data: MOCK_WORKS_DATA, isLoading: false } as never);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as never);
 
     render(<CollectionPage />);
 
@@ -392,8 +439,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
   });
 
   it("renders the Expressions shelf when the Expressions view mode is selected", () => {
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: MOCK_EXPRS_DATA, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as never);
+    mockUseExpressionsShelf.mockReturnValue({ data: MOCK_EXPRS_DATA, isLoading: false } as never);
 
     render(<CollectionPage />);
 
@@ -413,7 +460,9 @@ describe("CollectionPage – Sorting Behavior", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
     mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useExpressionsShelf>);
+    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
+      typeof useExpressionsShelf
+    >);
   });
 
   it("defaults to recently updated sorting when entering the collection", () => {

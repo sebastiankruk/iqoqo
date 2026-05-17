@@ -28,9 +28,18 @@ class MockIntersectionObserver {
 }
 
 beforeAll(() => {
-  window.IntersectionObserver = MockIntersectionObserver as any;
+  window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
 });
 
+/**
+ * Helper to make a mock Item.
+ *
+ * @param id - Item ID.
+ * @param title - Item title.
+ * @param author - Author name.
+ * @param manifestation_id - Optional manifestation ID.
+ * @returns Fully populated Item mock object.
+ */
 function makeItem(id: number, title: string, author: string, manifestation_id: number = id): Item {
   return {
     id,

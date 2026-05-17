@@ -17,7 +17,17 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile, WorkShelfEntry, ExpressionShelfEntry, WorkPartEntry } from "@/types/frbr";
+import type {
+  Item,
+  CatalogEntry,
+  DashboardStats,
+  IsbnMeta,
+  ApiResponse,
+  UserProfile,
+  WorkShelfEntry,
+  ExpressionShelfEntry,
+  WorkPartEntry,
+} from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -229,7 +239,7 @@ export function useInfiniteItems(
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: lastPage => {
       if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
         return lastPage.meta.page + 1;
       }
@@ -314,7 +324,12 @@ export function useInfiniteManifestations(
   missingId?: boolean
 ) {
   return useInfiniteQuery({
-    queryKey: [...queryKeys.manifestations(1, limit, query, category, formatFilter), "infinite", missingCover, missingId],
+    queryKey: [
+      ...queryKeys.manifestations(1, limit, query, category, formatFilter),
+      "infinite",
+      missingCover,
+      missingId,
+    ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
       const params: Record<string, string | number | boolean> = { page: pageParam, limit };
@@ -326,7 +341,7 @@ export function useInfiniteManifestations(
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: lastPage => {
       if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
         return lastPage.meta.page + 1;
       }
@@ -356,7 +371,14 @@ export function useManifestation(id: number) {
 
 /* ── Shelves & Views ─────────────────────────────────────────────────────── */
 
-export function useWorksShelf() {
+/**
+ * React Query hook to fetch the specialized Works Shelf view for the authenticated user.
+ * Grouped at the F1 Work level, aggregating manifestations.
+ *
+ * @param enabled - Whether the query is enabled or not.
+ * @returns The query result containing the works shelf entries.
+ */
+export function useWorksShelf(enabled = true) {
   return useQuery({
     queryKey: queryKeys.worksShelf,
     queryFn: async () => {
@@ -364,10 +386,18 @@ export function useWorksShelf() {
       return res.data;
     },
     staleTime: 30_000,
+    enabled,
   });
 }
 
-export function useExpressionsShelf() {
+/**
+ * React Query hook to fetch the specialized Expressions Shelf view for the authenticated user.
+ * Grouped at the F2 Expression level, showing different languages or content types.
+ *
+ * @param enabled - Whether the query is enabled or not.
+ * @returns The query result containing the expressions shelf entries.
+ */
+export function useExpressionsShelf(enabled = true) {
   return useQuery({
     queryKey: queryKeys.expressionsShelf,
     queryFn: async () => {
@@ -375,9 +405,17 @@ export function useExpressionsShelf() {
       return res.data;
     },
     staleTime: 30_000,
+    enabled,
   });
 }
 
+/**
+ * React Query hook to fetch the parts/sequence of a complex work (e.g. book series).
+ * Grouped at the F15 Complex Work level.
+ *
+ * @param workId - The database ID of the container work.
+ * @returns The query result containing the work parts.
+ */
 export function useWorkParts(workId: number) {
   return useQuery({
     queryKey: queryKeys.workParts(workId),

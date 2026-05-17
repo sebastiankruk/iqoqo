@@ -70,6 +70,16 @@ interface ItemCardProps {
   isManifestationView?: boolean;
 }
 
+/**
+ * ItemCard displays an item card with cover art, titles, creators, status dots,
+ * and quantity indicators. Supports vertical and horizontal layout variants.
+ *
+ * @param props - Component properties.
+ * @param props.item - The Item or CatalogEntry to display.
+ * @param props.variant - The layout variant ("vertical" or "horizontal").
+ * @param props.isManifestationView - Flag indicating if this is grouped manifestation view.
+ * @returns An interactive card component linked to detail pages.
+ */
 export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
   const router = useRouter();
   const isCatalog = isManifestationView;
@@ -84,7 +94,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
   const isBorrowed = !isCatalog && (item as Item).is_borrowed;
 
-  const quantity = (item as any)._quantity || 1;
+  const quantity = (item as (Item | CatalogEntry) & { _quantity?: number })._quantity || 1;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
@@ -132,16 +142,17 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
       <span className="relative z-20">
         {authorsList.map((author, idx) => (
           <span key={author}>
-            <span
-              onClick={(e) => {
+            <button
+              type="button"
+              onClick={e => {
                 e.preventDefault();
                 e.stopPropagation();
                 router.push(`/collection?q=${encodeURIComponent(author)}`);
               }}
-              className="hover:text-primary hover:underline cursor-pointer"
+              className="hover:text-primary hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit text-left inline"
             >
               {author}
-            </span>
+            </button>
             {idx < authorsList.length - 1 ? ", " : ""}
           </span>
         ))}

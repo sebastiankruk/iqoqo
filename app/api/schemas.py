@@ -17,7 +17,9 @@
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.taxonomy import COLLECTION_STATUSES, PROGRESS_STATUSES
 
 
 class ItemCreateSchema(BaseModel):
@@ -36,6 +38,20 @@ class ItemBulkCreateSchema(BaseModel):
     status: str | None = Field(default=None, description="The progress status of the items")
     collection_status: str | None = Field(default="available", description="The physical status of the items")
     is_hidden: bool | None = Field(default=False, description="Whether the items are hidden from public profiles")
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in PROGRESS_STATUSES:
+            raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
+        return v
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
 
 
 class ItemUpdateSchema(BaseModel):

@@ -285,9 +285,25 @@ def test_get_works_shelf_orphaned_items(client, app):
 def series_data(app):
     """Seed the database with a complex work (series) and its parts (F15 Complex Work)."""
     with app.app_context():
+        from app.db.models import Permission, Role
+
         user = User(email="series_tester@iqoqo.local", display_name="Series Tester")
         db.session.add(user)
         db.session.flush()
+
+        # Grant write:metadata permission
+        perm = Permission.query.filter_by(name="write:metadata").first()
+        if not perm:
+            perm = Permission(name="write:metadata")
+            db.session.add(perm)
+            db.session.flush()
+
+        role = Role(name="series_tester_role")
+        role.permissions.append(perm)
+        db.session.add(role)
+        db.session.flush()
+
+        user.roles.append(role)
 
         container = Work(title="The Lord of the Rings Series")
         db.session.add(container)

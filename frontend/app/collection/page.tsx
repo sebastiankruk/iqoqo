@@ -25,7 +25,14 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
-import { useInfiniteItems, useInfiniteManifestations, useStats, useProfile, useWorksShelf, useExpressionsShelf } from "@/lib/api/hooks";
+import {
+  useInfiniteItems,
+  useInfiniteManifestations,
+  useStats,
+  useProfile,
+  useWorksShelf,
+  useExpressionsShelf,
+} from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
@@ -46,7 +53,11 @@ function CollectionContent() {
   const initialFilters: ActiveFilter[] = initialStatuses
     ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
     : [];
-  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations" | "works" | "expressions";
+  const initialViewMode = (searchParams?.get("view") || "items") as
+    | "items"
+    | "manifestations"
+    | "works"
+    | "expressions";
   const initialQuery = searchParams?.get("q") ?? "";
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";
@@ -167,12 +178,19 @@ function CollectionContent() {
     missingIdOnly
   );
 
-  const { data: worksData, isLoading: worksLoading } = useWorksShelf();
-  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf();
+  const { data: worksData, isLoading: worksLoading } = useWorksShelf(viewMode === "works" && isLoggedIn);
+  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf(viewMode === "expressions" && isLoggedIn);
 
   const { data: statsData } = useStats();
 
-  const isLoading = viewMode === "items" ? itemsLoading : viewMode === "manifestations" ? manifestationsLoading : viewMode === "works" ? worksLoading : exprsLoading;
+  const isLoading =
+    viewMode === "items"
+      ? itemsLoading
+      : viewMode === "manifestations"
+        ? manifestationsLoading
+        : viewMode === "works"
+          ? worksLoading
+          : exprsLoading;
 
   const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
     if (viewMode === "items") {
@@ -184,10 +202,16 @@ function CollectionContent() {
     return [];
   }, [itemsData, manifestationsData, viewMode]);
 
-  const total = viewMode === "works" ? worksData?.total ?? 0 :
-                viewMode === "expressions" ? exprsData?.total ?? 0 :
-                viewMode === "items" ? itemsData?.pages?.[0]?.meta?.total ?? 0 :
-                viewMode === "manifestations" ? manifestationsData?.pages?.[0]?.meta?.total ?? 0 : 0;
+  const total =
+    viewMode === "works"
+      ? (worksData?.data?.length ?? 0)
+      : viewMode === "expressions"
+        ? (exprsData?.data?.length ?? 0)
+        : viewMode === "items"
+          ? (itemsData?.pages?.[0]?.meta?.total ?? 0)
+          : viewMode === "manifestations"
+            ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
+            : 0;
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
     setActiveFilters(prev => {
@@ -313,17 +337,25 @@ function CollectionContent() {
                     <LibraryIcon className="h-4 w-4" /> Global Library
                   </button>
                   <button
-                    onClick={() => { setViewMode("works"); }}
+                    onClick={() => {
+                      setViewMode("works");
+                    }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                      viewMode === "works" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      viewMode === "works"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
                     <Layers className="h-4 w-4" /> Works
                   </button>
                   <button
-                    onClick={() => { setViewMode("expressions"); }}
+                    onClick={() => {
+                      setViewMode("expressions");
+                    }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                      viewMode === "expressions" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      viewMode === "expressions"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
                     <Type className="h-4 w-4" /> Expressions
@@ -440,7 +472,11 @@ function CollectionContent() {
                     <p className="text-sm text-muted-foreground truncate">{work.creators.join(", ")}</p>
                     <div className="mt-3 flex -space-x-3 overflow-hidden">
                       {work.owned_manifestations.slice(0, 5).map(m => (
-                        <div key={m.manifestation_id} className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center" style={{backgroundImage: `url(${m.cover_url || ''})`}} />
+                        <div
+                          key={m.manifestation_id}
+                          className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center"
+                          style={{ backgroundImage: `url(${m.cover_url || ""})` }}
+                        />
                       ))}
                     </div>
                     <p className="mt-3 text-xs font-semibold text-primary">{work.total_items} items in collection</p>
@@ -458,7 +494,11 @@ function CollectionContent() {
                     </span>
                     <div className="mt-3 flex -space-x-3 overflow-hidden">
                       {expr.owned_manifestations.slice(0, 5).map(m => (
-                        <div key={m.manifestation_id} className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center" style={{backgroundImage: `url(${m.cover_url || ''})`}} />
+                        <div
+                          key={m.manifestation_id}
+                          className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center"
+                          style={{ backgroundImage: `url(${m.cover_url || ""})` }}
+                        />
                       ))}
                     </div>
                     <p className="mt-3 text-xs font-semibold text-primary">{expr.total_items} items in collection</p>
@@ -466,11 +506,19 @@ function CollectionContent() {
                 ))}
               </div>
             ) : (
-              <CollectionGrid 
-                items={filteredItems} 
-                isManifestationView={viewMode === "manifestations"} 
-                hasMore={viewMode === "items" ? hasMoreItems : viewMode === "manifestations" ? hasMoreManifestations : false}
-                isLoadingMore={viewMode === "items" ? isFetchingMoreItems : viewMode === "manifestations" ? isFetchingMoreManifestations : false}
+              <CollectionGrid
+                items={filteredItems}
+                isManifestationView={viewMode === "manifestations"}
+                hasMore={
+                  viewMode === "items" ? hasMoreItems : viewMode === "manifestations" ? hasMoreManifestations : false
+                }
+                isLoadingMore={
+                  viewMode === "items"
+                    ? isFetchingMoreItems
+                    : viewMode === "manifestations"
+                      ? isFetchingMoreManifestations
+                      : false
+                }
                 onLoadMore={() => {
                   if (viewMode === "items" && hasMoreItems) fetchNextItems();
                   if (viewMode === "manifestations" && hasMoreManifestations) fetchNextManifestations();

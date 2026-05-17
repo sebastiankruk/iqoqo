@@ -89,22 +89,9 @@ describe("useInfiniteItems", () => {
       },
     });
 
-    renderHook(
-      () =>
-        useInfiniteItems(
-          10,
-          ["reading"],
-          "dune",
-          "title",
-          true,
-          "fiction",
-          "book",
-          false,
-          true,
-          false
-        ),
-      { wrapper: Wrapper }
-    );
+    renderHook(() => useInfiniteItems(10, ["reading"], "dune", "title", true, "fiction", "book", false, true, false), {
+      wrapper: Wrapper,
+    });
 
     await waitFor(() => {
       expect(apiClient.get).toHaveBeenCalledWith("/items", {
