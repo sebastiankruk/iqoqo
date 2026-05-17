@@ -158,22 +158,27 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     // Use the dedicated E2E admin seeded by tests/e2e/scripts/seed_e2e.py.
     // This user is always upserted with a known password so the test works
     // with the live local DB (VS Code) and after a db-reset (make test-e2e).
-    const loginRes = await request.post("/api/auth/login", {
+    // Direct backend call to avoid Next.js proxy dropping headers/body in test env.
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await request.post(`${flaskApiUrl}/auth/login`, {
       data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
     });
 
+    if (!loginRes.ok()) {
+      console.log("LOGIN FAILED:", await loginRes.text());
+    }
     expect(loginRes.ok()).toBeTruthy();
     const tokenData = await loginRes.json();
     const token = tokenData.token;
 
-    const manRes = await request.get("/api/public/manifestations?limit=2");
+    const manRes = await request.get(`${flaskApiUrl}/manifestations?limit=2`);
     expect(manRes.ok()).toBeTruthy();
 
     const manData = await manRes.json();
     if (manData.data && manData.data.length >= 2) {
       const ids = [manData.data[0].id, manData.data[1].id];
 
-      const bulkRes = await request.post("/api/items/bulk", {
+      const bulkRes = await request.post(`${flaskApiUrl}/items/bulk`, {
         headers: { Authorization: `Bearer ${token}` },
         data: {
           manifestation_ids: ids,
@@ -213,6 +218,9 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     let page2Requested = false;
     await page.route("**/api/items**", async route => {
       const url = new URL(route.request().url());
+      if (!url.pathname.endsWith("/api/items")) {
+        return route.fallback();
+      }
       const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
       if (pageParam >= 2) {
         page2Requested = true;
@@ -221,8 +229,8 @@ test.describe("Advanced Organization & Views - Step 2", () => {
             success: true,
             data: [
               {
-                id: 2,
-                manifestation_id: 101,
+                id: 41,
+                manifestation_id: 201,
                 title: "Page Two Book",
                 authors: ["Author B"],
                 status: "read",
@@ -234,21 +242,20 @@ test.describe("Advanced Organization & Views - Step 2", () => {
           },
         });
       } else {
+        console.log(`[TEST] Serving page ${pageParam}. page2Requested = ${page2Requested}`);
         await route.fulfill({
           json: {
             success: true,
-            data: [
-              {
-                id: 1,
-                manifestation_id: 100,
-                title: "Page One Book",
-                authors: ["Author A"],
-                status: "read",
-                collection_status: "available",
-                meta: {},
-              },
-            ],
-            meta: { total: 2, page: 1, pages: 2, limit: 40 },
+            data: Array.from({ length: 40 }, (_, i) => ({
+              id: i + 1,
+              manifestation_id: 100 + i,
+              title: i === 0 ? "Page One Book" : `Other Book ${i}`,
+              authors: ["Author A"],
+              status: "read",
+              collection_status: "available",
+              meta: {},
+            })),
+            meta: { total: 41, page: 1, pages: 2, limit: 40 },
           },
         });
       }
@@ -260,7 +267,9 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     await expect(page.getByTestId("card-title").filter({ hasText: "Page One Book" }).first()).toBeVisible();
     await expect(page.getByTestId("card-title").filter({ hasText: "Page Two Book" })).toHaveCount(0);
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Scroll the trigger element into view to reliably trigger IntersectionObserver
+    await page.getByTestId("load-more-trigger").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500); // Give IO time to trigger
 
     await expect(page.getByTestId("card-title").filter({ hasText: "Page Two Book" }).first()).toBeVisible();
     expect(page2Requested).toBe(true);
@@ -268,14 +277,18 @@ test.describe("Advanced Organization & Views - Step 2", () => {
 
   test("advanced view API endpoints (taxonomies, works) respond correctly", async ({ request }) => {
     // Use the dedicated E2E admin seeded by tests/e2e/scripts/seed_e2e.py.
-    const loginRes = await request.post("/api/auth/login", {
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await request.post(`${flaskApiUrl}/auth/login`, {
       data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
     });
 
+    if (!loginRes.ok()) {
+      console.log("LOGIN FAILED:", await loginRes.text());
+    }
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
 
-    const taxRes = await request.get("/api/taxonomies", {
+    const taxRes = await request.get(`${flaskApiUrl}/taxonomies`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(taxRes.status()).toBe(200);
@@ -286,7 +299,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     expect(Array.isArray(taxJson.data.genres)).toBe(true);
     expect(Array.isArray(taxJson.data.publishers)).toBe(true);
 
-    const worksRes = await request.get("/api/works/shelf", {
+    const worksRes = await request.get(`${flaskApiUrl}/works/shelf`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(worksRes.status()).toBe(200);

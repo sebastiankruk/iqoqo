@@ -18,6 +18,11 @@ Seed E2E data for Playwright tests.
 """
 
 import uuid
+from dotenv import load_dotenv
+
+# Load .env before importing any app models so that SCHEMA assignments (like auth.users)
+# are correctly evaluated based on the DATABASE_URL.
+load_dotenv()
 
 from app import create_app
 from app.db import db

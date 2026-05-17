@@ -214,6 +214,8 @@ test-e2e:
 		$(MAKE) db-reset; \
 		$(MAKE) init-auth; \
 		$(MAKE) db-seed-e2e; \
+		echo "Killing old Flask server on port 5000 (if any) to ensure connection to new DB..."; \
+		lsof -ti tcp:5000 | xargs kill -9 2>/dev/null || true; \
 	else \
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi

@@ -54,10 +54,11 @@ export default defineConfig({
     {
       // Flask API – reused if already running (local dev), started otherwise (VS Code, Antigravity, CI)
       command:
-        "ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=.. ../.venv/bin/python -m flask run --port 5000",
+        "PYTHONUNBUFFERED=1 ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=. .venv/bin/python -m flask run --port 5000",
       url: "http://127.0.0.1:5000/api/health",
       reuseExistingServer: true,
       timeout: 60000,
+      cwd: "..", // Run from project root so sqlite.db and paths resolve correctly
     },
   ],
 });
