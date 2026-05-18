@@ -142,6 +142,11 @@ def get_manifestations() -> tuple[Response, int]:
                 "id": m.id,
                 "expression_id": m.expression_id,
                 "work_id": m.expression.work.id if (m.expression and m.expression.work) else None,
+                "container_work_id": (
+                    m.expression.work.member_of[0].container_work_id
+                    if (m.expression and m.expression.work and m.expression.work.member_of)
+                    else None
+                ),
                 "isbn13": m.isbn13,
                 "publisher": m.publisher,
                 "year": resolved_year,
@@ -201,6 +206,11 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "id": m.id,
         "expression_id": m.expression_id,
         "work_id": m.expression.work.id if (m.expression and m.expression.work) else None,
+        "container_work_id": (
+            m.expression.work.member_of[0].container_work_id
+            if (m.expression and m.expression.work and m.expression.work.member_of)
+            else None
+        ),
         "isbn13": m.isbn13,
         "publisher": m.publisher,
         "year": resolved_year,

@@ -308,11 +308,13 @@ def get_item_detail(item_id: int):
 
             if expression.work:
                 work = expression.work
+                container_work_id = work.member_of[0].container_work_id if work.member_of else None
                 item_data["work"] = {
                     "id": work.id,
                     "title": work.title,
                     "authors": work.meta.get("authors", []) if work.meta else [],
                     "meta": work.meta,
+                    "container_work_id": container_work_id,
                 }
 
     return jsonify({"success": True, "data": item_data, "error": None})

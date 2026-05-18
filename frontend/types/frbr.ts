@@ -25,6 +25,7 @@ export interface Work {
   title: string;
   authors: string[];
   meta: Record<string, unknown>;
+  container_work_id?: number | null;
 }
 
 /**
@@ -58,6 +59,7 @@ export interface Manifestation {
   id: number;
   expression_id: number;
   work_id?: number | null;
+  container_work_id?: number | null;
   isbn13?: string;
   publisher?: string;
   year?: number;
@@ -138,7 +140,7 @@ export interface Item {
   authors?: string[];
   manifestation_meta?: Record<string, unknown>;
   expression?: Pick<Expression, "id" | "content_type" | "language">;
-  work?: Pick<Work, "id" | "title" | "authors" | "meta">;
+  work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
 }
 
 /** Backward compatible alias for ProgressStatus */
@@ -179,6 +181,9 @@ export interface WorkPartEntry {
   part_work_id: number;
   title: string;
   sequence: number;
+  manifestation_id?: number | null;
+  cover_url?: string | null;
+  item_id?: number | null;
 }
 
 /** API Response envelope */

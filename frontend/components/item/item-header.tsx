@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
 
 interface ItemHeaderProps {
@@ -39,6 +40,10 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
 
+  const { data: partsResponse } = useWorkParts(work?.container_work_id ?? work?.id ?? 0);
+  const parts = partsResponse?.data ?? [];
+  const isSeries = parts.length > 0;
+
   const title = work?.title ?? item.title ?? "Untitled";
 
   const timestamp = getCoverTimestamp(meta);
@@ -55,6 +60,15 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
   const publisher = (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
   const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
+
+  // Resolve special series label
+  const contentType = item.expression?.content_type ?? "text";
+  let baseLabel = "Book";
+  if (contentType === "movie") baseLabel = "Movie";
+  else if (contentType === "music") baseLabel = "Music";
+  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
+
+  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
@@ -76,24 +90,13 @@ export function ItemHeader({ item }: ItemHeaderProps) {
       <div className="flex flex-col flex-1 w-full">
         {/* Media type Badge */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {isAudio && (
-            <Badge
-              variant="secondary"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
-            >
-              <Disc className="h-3 w-3" />
-              CD / Audio
-            </Badge>
-          )}
-          {!isAudio && (
-            <Badge
-              variant="outline"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
-            >
-              <BookOpen className="h-3 w-3" />
-              Book
-            </Badge>
-          )}
+          <Badge
+            variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
+          >
+            {isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+            {badgeLabel}
+          </Badge>
         </div>
 
         {/* Tags */}

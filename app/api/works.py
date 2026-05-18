@@ -19,7 +19,7 @@ from flask import Response, g, jsonify, request
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, Work, WorkPart, db
 
@@ -196,20 +196,52 @@ def get_user_expressions() -> Response:
 
 
 @api_bp.route("/works/<int:work_id>/parts", methods=["GET"])
+@optional_auth
 def get_work_parts(work_id: int) -> Response | tuple[Response, int]:
     """Get the series/parts associated with a given complex work."""
     work = db.session.get(Work, work_id)
     if not work:
         return jsonify({"error": "Work not found", "code": 404}), 404
 
+    user_id = getattr(g, "user_id", None)
+    owned_items_map = {}
+    if user_id:
+        items = Item.query.filter_by(owner_id=user_id).all()
+        for item in items:
+            owned_items_map[item.manifestation_id] = item.id
+
     parts = []
     for wp in work.parts:  # type: ignore[attr-defined]
         part_work = wp.part
+
+        manifestation_id = None
+        cover_url = None
+        item_id = None
+
+        for expr in part_work.expressions:
+            for manif in expr.manifestations:
+                if not manifestation_id:
+                    manifestation_id = manif.id
+                    cover_url = manif.cover_url or (manif.meta.get("cover_url") if manif.meta else None)
+
+                if manif.id in owned_items_map:
+                    item_id = owned_items_map[manif.id]
+                    m_cover = manif.cover_url or (manif.meta.get("cover_url") if manif.meta else None)
+                    if m_cover:
+                        cover_url = m_cover
+                    manifestation_id = manif.id
+                    break
+            if item_id:
+                break
+
         parts.append(
             {
                 "part_work_id": part_work.id,
                 "title": part_work.title,
                 "sequence": wp.sequence,
+                "manifestation_id": manifestation_id,
+                "cover_url": cover_url,
+                "item_id": item_id,
             }
         )
 
