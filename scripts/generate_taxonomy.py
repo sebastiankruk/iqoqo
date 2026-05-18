@@ -265,7 +265,7 @@ def generate_turtle(data: dict) -> str:
     ttl_code.append("")
 
     # Progress Statuses
-    status_to_cats = {}
+    status_to_cats: dict[str, list[str]] = {}
     for cat, statuses in data["progress_statuses"].items():
         for status in statuses:
             status_to_cats.setdefault(status, []).append(cat)
