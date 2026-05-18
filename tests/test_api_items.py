@@ -326,6 +326,27 @@ def test_bulk_add_items_invalid_payload(client, items_for_quality_filters, app):
     assert response.status_code == 400
 
 
+def test_bulk_add_items_bola_guard(client, items_for_quality_filters, app):
+    """Test POST /api/items/bulk rejects payloads with extra fields (BOLA injection attempt)."""
+    user_id = items_for_quality_filters
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+        manifestation = db.session.query(Manifestation).first()
+        man_id = manifestation.id
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {"manifestation_ids": [man_id], "role": "admin"}
+
+    response = client.post("/api/items/bulk", json=payload, headers=headers)
+    assert response.status_code == 400
+    data = response.get_json()
+    assert "error" in data
+    assert "Extra inputs are not permitted" in data["error"]
+
+
 def test_bulk_add_items_not_found(client, items_for_quality_filters, app):
     """Test POST /api/items/bulk handles non-existent manifestation IDs gracefully."""
     user_id = items_for_quality_filters

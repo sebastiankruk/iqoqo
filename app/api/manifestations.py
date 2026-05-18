@@ -150,6 +150,7 @@ def get_manifestations() -> tuple[Response, int]:
                 "cover_url": m.cover_url,
                 "cover_status": m.meta.get("cover_status") if m.meta else None,
                 "user_owns": user_owns,
+                "content_type": m.expression.content_type if m.expression else None,
             }
         )
 

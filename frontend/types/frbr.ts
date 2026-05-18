@@ -102,6 +102,8 @@ export interface CatalogEntry extends Manifestation {
   cover_url?: string | null;
   cover_status?: string | null;
   user_owns: boolean;
+  /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */
+  content_type?: string | null;
 }
 
 /**

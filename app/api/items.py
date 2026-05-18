@@ -529,7 +529,6 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
 
 @api_bp.route("/items/bulk", methods=["POST"])
 @require_auth
-@require_permission(PermissionName.WRITE_ITEM)
 def add_items_bulk() -> Response | tuple[Response, int]:
     """Bulk add multiple manifestations to user's collection."""
     user_id = getattr(g, "user_id", None)

@@ -25,6 +25,7 @@ import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
+import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
 import {
   useInfiniteItems,
   useInfiniteManifestations,
@@ -66,6 +67,8 @@ function CollectionContent() {
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
   const [sortBy, setSortBy] = useState(initialSort);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  /** Manifestations selected for bulk-add (id → CatalogEntry) in Global Library view. */
+  const [selectedManifestations, setSelectedManifestations] = useState<Map<number, CatalogEntry>>(new Map());
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
@@ -212,6 +215,29 @@ function CollectionContent() {
           : viewMode === "manifestations"
             ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
             : 0;
+
+  /** Clears all selected manifestations (e.g. after switching view mode). */
+  const clearManifestationSelection = useCallback(() => {
+    setSelectedManifestations(new Map());
+  }, []);
+
+  /** Toggles selection of a single manifestation, storing the full CatalogEntry. */
+  const toggleManifestationSelection = useCallback(
+    (id: number) => {
+      // Find the CatalogEntry from the current pages of loaded manifestations
+      const entry = allItems.find(item => item.id === id) as CatalogEntry | undefined;
+      setSelectedManifestations(prev => {
+        const next = new Map(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else if (entry) {
+          next.set(id, entry);
+        }
+        return next;
+      });
+    },
+    [allItems]
+  );
 
   const toggleFilter = useCallback((filter: ActiveFilter) => {
     setActiveFilters(prev => {
@@ -523,12 +549,22 @@ function CollectionContent() {
                   if (viewMode === "items" && hasMoreItems) fetchNextItems();
                   if (viewMode === "manifestations" && hasMoreManifestations) fetchNextManifestations();
                 }}
+                selectedIds={viewMode === "manifestations" ? new Set(selectedManifestations.keys()) : undefined}
+                onToggleSelect={viewMode === "manifestations" && isLoggedIn ? toggleManifestationSelection : undefined}
               />
             )}
           </div>
         </div>
       </div>
       <Footer />
+      {/* Bulk-add toolbar – floats above footer when manifestations are selected */}
+      {isLoggedIn && viewMode === "manifestations" && (
+        <BulkAddToolbar
+          selectedItems={Array.from(selectedManifestations.values())}
+          onClearSelection={clearManifestationSelection}
+          onSuccess={clearManifestationSelection}
+        />
+      )}
       <MobileFilterDrawer
         open={mobileFiltersOpen}
         onClose={() => setMobileFiltersOpen(false)}

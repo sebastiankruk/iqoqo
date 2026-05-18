@@ -26,6 +26,10 @@ interface CollectionGridProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  /** IDs of currently selected manifestations (multi-select mode). */
+  selectedIds?: Set<number>;
+  /** Toggle selection of a manifestation. */
+  onToggleSelect?: (id: number) => void;
 }
 
 /**
@@ -38,6 +42,8 @@ interface CollectionGridProps {
  * @param props.hasMore - Flag indicating if more items can be loaded.
  * @param props.isLoadingMore - Flag indicating if loading is currently in progress.
  * @param props.onLoadMore - Callback to trigger loading more items.
+ * @param props.selectedIds - IDs of currently selected manifestations.
+ * @param props.onToggleSelect - Callback to toggle selection of a manifestation.
  * @returns Responsive grid component.
  */
 export function CollectionGrid({
@@ -46,6 +52,8 @@ export function CollectionGrid({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  selectedIds,
+  onToggleSelect,
 }: CollectionGridProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -107,7 +115,13 @@ export function CollectionGrid({
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {displayItems.map(item => (
-          <ItemCard key={item.id} item={item as Item} isManifestationView={isManifestationView} />
+          <ItemCard
+            key={item.id}
+            item={item as Item}
+            isManifestationView={isManifestationView}
+            isSelected={selectedIds?.has(item.id) ?? false}
+            onToggleSelect={onToggleSelect}
+          />
         ))}
       </div>
 

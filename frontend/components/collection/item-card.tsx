@@ -18,7 +18,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
@@ -68,6 +68,10 @@ interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
   isManifestationView?: boolean;
+  /** Whether this card is currently selected for bulk operations. */
+  isSelected?: boolean;
+  /** Callback to toggle selection of this card (enables selection mode). */
+  onToggleSelect?: (id: number) => void;
 }
 
 /**
@@ -78,9 +82,17 @@ interface ItemCardProps {
  * @param props.item - The Item or CatalogEntry to display.
  * @param props.variant - The layout variant ("vertical" or "horizontal").
  * @param props.isManifestationView - Flag indicating if this is grouped manifestation view.
+ * @param props.isSelected - Whether this card is currently selected.
+ * @param props.onToggleSelect - Callback to toggle selection of this card.
  * @returns An interactive card component linked to detail pages.
  */
-export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
+export function ItemCard({
+  item,
+  variant = "vertical",
+  isManifestationView = false,
+  isSelected = false,
+  onToggleSelect,
+}: ItemCardProps) {
   const router = useRouter();
   const isCatalog = isManifestationView;
 
@@ -166,6 +178,27 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
     </div>
   );
 
+  // Checkbox overlay shown in Global Library (manifestation) view when selection mode is active.
+  const selectionOverlay = isCatalog && onToggleSelect && (
+    <button
+      type="button"
+      aria-label={isSelected ? "Deselect" : "Select"}
+      aria-pressed={isSelected}
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleSelect(item.id);
+      }}
+      className={`absolute top-2 left-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 shadow transition-colors ${
+        isSelected
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-background/80 text-transparent hover:border-primary"
+      }`}
+    >
+      {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+    </button>
+  );
+
   if (variant === "horizontal") {
     return (
       <Link
@@ -242,11 +275,14 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   return (
     <Link
       href={targetHref}
-      className={`group block transition-all ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""}`}
+      className={`group block transition-all ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""} ${
+        isSelected ? "ring-2 ring-primary rounded-lg" : ""
+      }`}
     >
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {quantityBadge}
+          {selectionOverlay}
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
