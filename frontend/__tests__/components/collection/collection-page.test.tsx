@@ -161,7 +161,7 @@ const MOCK_WORKS_DATA = {
       work_id: 1,
       title: "Mock Work Anthology",
       creators: ["J.R.R. Tolkien"],
-      owned_manifestations: [],
+      owned_manifestations: [{ manifestation_id: 10, item_id: 42, format: "book", cover_url: "/test-cover.jpg" }],
       total_items: 4,
     },
   ],
@@ -178,7 +178,7 @@ const MOCK_EXPRS_DATA = {
       content_type: "text",
       language: "pl",
       creators: ["J.R.R. Tolkien"],
-      owned_manifestations: [],
+      owned_manifestations: [{ manifestation_id: 20, item_id: 84, format: "book", cover_url: "/test-cover2.jpg" }],
       total_items: 2,
     },
   ],
@@ -436,6 +436,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
 
     expect(screen.getByText("Mock Work Anthology")).toBeInTheDocument();
     expect(screen.getByText(/4 items/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Edition/i }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole("button", { name: /My Item/i }).length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders the Expressions shelf when the Expressions view mode is selected", () => {
@@ -450,6 +452,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     expect(screen.getByText("Mock Expression Trans")).toBeInTheDocument();
     expect(screen.getByText("text")).toBeInTheDocument();
     expect(screen.getByText("pl")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Edition/i }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole("button", { name: /My Item/i }).length).toBeGreaterThanOrEqual(1);
   });
 });
 

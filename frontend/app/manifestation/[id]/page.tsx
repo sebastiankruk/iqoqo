@@ -194,20 +194,27 @@ export default function ManifestationPage() {
                 <div className="flex flex-col items-start gap-2">
                   <div>
                     {manifestation.user_owns ? (
-                      <Button
-                        onClick={() =>
-                          router.push(
-                            `/collection?view=items&q=${encodeURIComponent(
-                              manifestation.isbn13 || manifestation.title || ""
-                            )}`
-                          )
-                        }
-                        variant="secondary"
-                        size="sm"
-                      >
-                        <BookOpen className="mr-2 h-4 w-4 text-primary" />
-                        View in My Collection
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        {manifestation.item_id && (
+                          <Button onClick={() => router.push(`/item/${manifestation.item_id}`)} size="sm">
+                            <BookOpen className="mr-2 h-4 w-4" />
+                            View My Item
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() =>
+                            router.push(
+                              `/collection?view=items&q=${encodeURIComponent(
+                                manifestation.isbn13 || manifestation.title || ""
+                              )}`
+                            )
+                          }
+                          variant="secondary"
+                          size="sm"
+                        >
+                          View in Collection
+                        </Button>
+                      </div>
                     ) : (
                       <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
                         {isAdding ? (

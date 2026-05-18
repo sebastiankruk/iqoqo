@@ -150,13 +150,23 @@ describe("ItemCard", () => {
   });
 
   it("shows 'In Collection' badge when isManifestationView is true and user_owns is true", () => {
-    render(<ItemCard item={makeCatalogEntry({ user_owns: true })} isManifestationView={true} />);
-    expect(screen.getByText("In Collection")).toBeInTheDocument();
+    // When item_id is not present
+    const { rerender } = render(
+      <ItemCard item={makeCatalogEntry({ user_owns: true, item_id: null })} isManifestationView={true} />
+    );
+    expect(screen.getByText(/In Collection/i)).toBeInTheDocument();
+
+    // When item_id is present
+    rerender(<ItemCard item={makeCatalogEntry({ user_owns: true, item_id: 123 })} isManifestationView={true} />);
+    const links = screen.getAllByRole("link");
+    const itemLink = links.find(l => l.getAttribute("href")?.includes("/item/123"));
+    expect(itemLink).toBeInTheDocument();
   });
 
   it("does not show 'In Collection' badge when user_owns is false", () => {
     render(<ItemCard item={makeCatalogEntry({ user_owns: false })} isManifestationView={true} />);
     expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
+    expect(screen.queryByText("In Collection →")).not.toBeInTheDocument();
   });
 
   it("renders a cover image in horizontal variant when coverUrl is provided", () => {

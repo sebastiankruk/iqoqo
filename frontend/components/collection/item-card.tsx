@@ -97,6 +97,7 @@ export function ItemCard({
   const isCatalog = isManifestationView;
 
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
+  const userItemId = isCatalog ? (item as CatalogEntry).item_id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
 
   const progressStatus = isCatalog ? undefined : (item as Item).status;
@@ -253,7 +254,18 @@ export function ItemCard({
                     Borrowed
                   </span>
                 )}
-                {isCatalog && userOwns && (
+                {isCatalog && userOwns && userItemId && (
+                  <Link
+                    href={`/item/${userItemId}`}
+                    onClick={e => {
+                      e.stopPropagation();
+                    }}
+                    className="inline-flex items-center rounded-full bg-primary/10 hover:bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap z-20 transition-colors cursor-pointer"
+                  >
+                    In Collection →
+                  </Link>
+                )}
+                {isCatalog && userOwns && !userItemId && (
                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
                     In Collection
                   </span>
@@ -314,7 +326,19 @@ export function ItemCard({
               {title}
             </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
-            {isCatalog && userOwns && (
+            {isCatalog && userOwns && userItemId && (
+              <Link
+                href={`/item/${userItemId}`}
+                onClick={e => {
+                  e.stopPropagation();
+                }}
+                className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary hover:underline z-20 cursor-pointer"
+              >
+                <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
+                In Collection →
+              </Link>
+            )}
+            {isCatalog && userOwns && !userItemId && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
                 In Collection

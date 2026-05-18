@@ -102,6 +102,8 @@ export interface CatalogEntry extends Manifestation {
   cover_url?: string | null;
   cover_status?: string | null;
   user_owns: boolean;
+  /** Item ID if the authenticated user owns this manifestation */
+  item_id?: number | null;
   /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */
   content_type?: string | null;
 }
@@ -144,7 +146,12 @@ export interface WorkShelfEntry {
   work_id: number;
   title: string;
   creators: string[];
-  owned_manifestations: Array<{ manifestation_id: number; format: string; cover_url?: string | null }>;
+  owned_manifestations: Array<{
+    manifestation_id: number;
+    item_id?: number;
+    format: string;
+    cover_url?: string | null;
+  }>;
   total_items: number;
 }
 
@@ -155,7 +162,12 @@ export interface ExpressionShelfEntry {
   language: string;
   work_title: string;
   creators: string[];
-  owned_manifestations: Array<{ manifestation_id: number; format: string; cover_url?: string | null }>;
+  owned_manifestations: Array<{
+    manifestation_id: number;
+    item_id?: number;
+    format: string;
+    cover_url?: string | null;
+  }>;
   total_items: number;
 }
 

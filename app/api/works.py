@@ -80,11 +80,20 @@ def get_user_works() -> Response:
 
         man_dict = next((m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
         if not man_dict:
+            # Cascade cover: prefer the manifestation cover, fall back to meta fields
+            effective_cover = None
+            if item.manifestation:
+                effective_cover = item.manifestation.cover_url or (
+                    item.manifestation.meta.get("cover_url") if item.manifestation.meta else None
+                )
+            if not effective_cover and item.meta:
+                effective_cover = item.meta.get("cover_url")
             works_map[work.id]["owned_manifestations"].append(
                 {
                     "manifestation_id": item.manifestation.id,
+                    "item_id": item.id,
                     "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                    "cover_url": item.manifestation.cover_url,
+                    "cover_url": effective_cover,
                 }
             )
 
@@ -158,11 +167,20 @@ def get_user_expressions() -> Response:
 
         man_dict = next((m for m in expr_map[expr.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
         if not man_dict:
+            # Cascade cover: prefer the manifestation cover, fall back to meta fields
+            effective_cover = None
+            if item.manifestation:
+                effective_cover = item.manifestation.cover_url or (
+                    item.manifestation.meta.get("cover_url") if item.manifestation.meta else None
+                )
+            if not effective_cover and item.meta:
+                effective_cover = item.meta.get("cover_url")
             expr_map[expr.id]["owned_manifestations"].append(
                 {
                     "manifestation_id": item.manifestation.id,
+                    "item_id": item.id,
                     "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                    "cover_url": item.manifestation.cover_url,
+                    "cover_url": effective_cover,
                 }
             )
 

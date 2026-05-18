@@ -125,6 +125,12 @@ def test_get_works_shelf_aggregation(client, complex_shelf_data, app):
     assert work_data["total_items"] == 2
     assert len(work_data["owned_manifestations"]) == 2
 
+    # Assert item_id and cover_url are populated and mapped
+    m_data = work_data["owned_manifestations"][0]
+    assert "item_id" in m_data
+    assert m_data["item_id"] is not None
+    assert "cover_url" in m_data
+
 
 def test_unauthorized_access_blocked(client):
     """Ensure taxonomy and work routes enforce authentication."""
@@ -346,6 +352,12 @@ def test_get_expressions_shelf_aggregation(client, complex_shelf_data, app):
 
     assert expr_data["total_items"] == 2
     assert len(expr_data["owned_manifestations"]) == 2
+
+    # Assert item_id and cover_url are populated and mapped
+    m_data = expr_data["owned_manifestations"][0]
+    assert "item_id" in m_data
+    assert m_data["item_id"] is not None
+    assert "cover_url" in m_data
 
 
 def test_get_work_parts(client, series_data):

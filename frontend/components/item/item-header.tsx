@@ -43,9 +43,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
   const timestamp = getCoverTimestamp(meta);
 
-  // Normalize cover URL handling for both external and local static paths
+  // Cover cascade: item's own cover → manifestation meta cover_url → item meta cover_url → placeholder
   const coverUrl =
-    getCoverUrl(item.cover_url || undefined, timestamp) || (meta["cover_url"] as string | undefined) || "/file.svg";
+    getCoverUrl(item.cover_url || undefined, timestamp) ||
+    (item.manifestation_meta?.["cover_url"] as string | undefined) ||
+    (meta["cover_url"] as string | undefined) ||
+    "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);

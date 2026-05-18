@@ -111,16 +111,14 @@ def get_manifestations() -> tuple[Response, int]:
         total = query.count()
         manifestations = query.offset(offset).limit(limit).all()
 
-    owned_manifestation_ids = set()
+    owned_manifestation_map = {}
     if user_id and manifestations:
         manifestation_ids = [m.id for m in manifestations]
-        owned_ids_query = (
-            db.session.query(Manifestation.id)
-            .join(Item, Item.manifestation_id == Manifestation.id)
-            .filter(Item.owner_id == user_id, Manifestation.id.in_(manifestation_ids))
-            .distinct()
+        owned_items_query = db.session.query(Item.manifestation_id, Item.id).filter(
+            Item.owner_id == user_id, Item.manifestation_id.in_(manifestation_ids)
         )
-        owned_manifestation_ids = {str(row[0]) for row in owned_ids_query.all()}
+        for m_id, item_id in owned_items_query.all():
+            owned_manifestation_map[m_id] = item_id
 
     data = []
     for m in manifestations:
@@ -132,8 +130,10 @@ def get_manifestations() -> tuple[Response, int]:
             authors = work.meta.get("authors", []) if work.meta else []
 
         user_owns = False
+        item_id = None
         if user_id:
-            user_owns = str(m.id) in owned_manifestation_ids
+            user_owns = m.id in owned_manifestation_map
+            item_id = owned_manifestation_map.get(m.id)
 
         resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -150,6 +150,7 @@ def get_manifestations() -> tuple[Response, int]:
                 "cover_url": m.cover_url,
                 "cover_status": m.meta.get("cover_status") if m.meta else None,
                 "user_owns": user_owns,
+                "item_id": item_id,
                 "content_type": m.expression.content_type if m.expression else None,
             }
         )
@@ -184,11 +185,13 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         authors = work.meta.get("authors", []) if work.meta else []
 
     user_owns = False
+    item_id: int | None = None
     owner_count = 0
     if user_id:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
+            item_id = owned_item.id
     owner_count = Item.query.filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False)).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
@@ -205,6 +208,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
+        "item_id": item_id,
         "owner_count": owner_count,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200

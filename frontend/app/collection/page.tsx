@@ -382,18 +382,6 @@ function CollectionContent() {
                   </button>
                   <button
                     onClick={() => {
-                      setViewMode("works");
-                    }}
-                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                      viewMode === "works"
-                        ? "bg-primary text-primary-foreground shadow"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    }`}
-                  >
-                    <Layers className="h-4 w-4" /> Works
-                  </button>
-                  <button
-                    onClick={() => {
                       setViewMode("expressions");
                     }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -403,6 +391,18 @@ function CollectionContent() {
                     }`}
                   >
                     <Type className="h-4 w-4" /> Expressions
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewMode("works");
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "works"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Layers className="h-4 w-4" /> Works
                   </button>
                 </div>
 
@@ -527,24 +527,27 @@ function CollectionContent() {
                       key={work.work_id}
                       className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
                     >
-                      {/* Cover thumbnails strip */}
+                      {/* Cover thumbnails strip – each clickable to its manifestation */}
                       <div className="flex gap-1 p-3 bg-muted/30 border-b border-border/50">
                         {work.owned_manifestations.slice(0, 4).map(m => (
-                          <div
+                          <button
                             key={m.manifestation_id}
-                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm"
+                            type="button"
+                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
                             style={{
                               backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
                               backgroundSize: "cover",
                               backgroundPosition: "center",
                             }}
+                            title={`View ${m.format} edition`}
                           >
                             {!m.cover_url && (
                               <div className="flex h-full items-center justify-center">
                                 <BookOpen className="h-4 w-4 text-muted-foreground/40" />
                               </div>
                             )}
-                          </div>
+                          </button>
                         ))}
                         {work.owned_manifestations.length > 4 && (
                           <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
@@ -583,18 +586,32 @@ function CollectionContent() {
                               {work.total_items} {work.total_items === 1 ? "item" : "items"}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             {work.owned_manifestations.slice(0, 1).map(m => (
-                              <button
-                                key={m.manifestation_id}
-                                type="button"
-                                onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
-                                className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                              >
-                                <Globe className="h-3 w-3" />
-                                View
-                                <ChevronRight className="h-3 w-3" />
-                              </button>
+                              <>
+                                <button
+                                  key={`man-${m.manifestation_id}`}
+                                  type="button"
+                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                  title="View manifestation"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  Edition
+                                </button>
+                                {m.item_id && (
+                                  <button
+                                    key={`item-${m.item_id}`}
+                                    type="button"
+                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                                    title="View my item"
+                                  >
+                                    <BookOpen className="h-3 w-3" />
+                                    My Item
+                                  </button>
+                                )}
+                              </>
                             ))}
                           </div>
                         </div>
@@ -690,18 +707,32 @@ function CollectionContent() {
                               {expr.total_items} {expr.total_items === 1 ? "item" : "items"}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             {expr.owned_manifestations.slice(0, 1).map(m => (
-                              <button
-                                key={m.manifestation_id}
-                                type="button"
-                                onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
-                                className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                              >
-                                <Globe className="h-3 w-3" />
-                                View
-                                <ChevronRight className="h-3 w-3" />
-                              </button>
+                              <>
+                                <button
+                                  key={`man-${m.manifestation_id}`}
+                                  type="button"
+                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                  title="View manifestation"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  Edition
+                                </button>
+                                {m.item_id && (
+                                  <button
+                                    key={`item-${m.item_id}`}
+                                    type="button"
+                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                                    title="View my item"
+                                  >
+                                    <BookOpen className="h-3 w-3" />
+                                    My Item
+                                  </button>
+                                )}
+                              </>
                             ))}
                           </div>
                         </div>
