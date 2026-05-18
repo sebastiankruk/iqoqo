@@ -71,15 +71,15 @@ def get_taxonomies() -> Response | tuple[Response, int]:
         except SQLAlchemyError:
             return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500
 
-    from sqlalchemy.dialects.postgresql import JSONB
     from sqlalchemy import cast
+    from sqlalchemy.dialects.postgresql import JSONB
 
     def get_jsonb_array_elements(field_name: str):
         return (
             db.session.query(
-                func.jsonb_array_elements_text(
-                    func.coalesce(cast(Item.meta, JSONB).op("->")(field_name), text("'[]'::jsonb"))
-                ).label("element")
+                func.jsonb_array_elements_text(func.coalesce(cast(Item.meta, JSONB).op("->")(field_name), text("'[]'::jsonb"))).label(
+                    "element"
+                )
             )
             .filter(Item.owner_id == user_id)
             .distinct()
