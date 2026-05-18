@@ -215,3 +215,42 @@ CATEGORY_INGEST_METHOD: dict[str, str] = {
     "board_game": "ingest_game_from_barcode",
     "puzzle": "ingest_puzzle_from_barcode",
 }
+
+GENRES_HIERARCHY: dict[str, list[str]] = {
+    "text": [
+        "Fiction",
+        "Non-Fiction",
+        "Science Fiction",
+        "Fantasy",
+        "Mystery",
+        "Thriller",
+        "Romance",
+        "Historical Fiction",
+        "Biography",
+        "History",
+        "Science",
+        "Self-Help",
+        "Poetry",
+    ],
+    "audiobook": [
+        "Fiction",
+        "Non-Fiction",
+        "Science Fiction",
+        "Fantasy",
+        "Mystery",
+        "Thriller",
+        "Romance",
+        "Historical Fiction",
+        "Biography",
+        "History",
+        "Science",
+        "Self-Help",
+        "Poetry",
+    ],
+    "music": ["Rock", "Pop", "Hip-Hop", "Jazz", "Classical", "Electronic", "Folk", "Country", "R&B", "Metal", "Blues"],
+    "movie": ["Action", "Comedy", "Drama", "Sci-Fi", "Horror", "Romance", "Documentary", "Animation", "Thriller", "Family"],
+    "board_game": ["Strategy", "Family", "Party", "Cooperative", "Deck-Building", "Worker Placement", "Abstract", "Role-Playing"],
+    "puzzle": ["Jigsaw", "3D", "Logic", "Mechanical"],
+}
+
+ALL_GENRES = tuple(sorted({genre for genres in GENRES_HIERARCHY.values() for genre in genres}))

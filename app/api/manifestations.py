@@ -359,6 +359,9 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
     metadata = payload.model_dump(exclude_unset=True)
 
     if metadata:
+        if "publisher" in metadata:
+            manifestation.publisher = metadata.pop("publisher")
+
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
             if "Title" in metadata:

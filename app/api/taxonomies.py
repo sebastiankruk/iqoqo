@@ -16,100 +16,60 @@
 """API routes for extracting and exposing generic taxonomies."""
 
 from flask import Response, g, jsonify
-from sqlalchemy import func, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
-from app.db.models import Item, db
+from app.core.taxonomy import ALL_GENRES
+from app.db.core import Manifestation, Tag, UserCollection, db
 
 
 @api_bp.route("/taxonomies", methods=["GET"])
 @require_auth
 def get_taxonomies() -> Response | tuple[Response, int]:
     """
-    Extract distinct tags, collections, genres, and publishers from the user's items.
-    Relies on PostgreSQL JSONB functions to extract arrays and unnest them.
+    Extract distinct tags, collections, genres, and publishers.
+    - Tags: All tags in the global folksonomy.
+    - Collections: All collection names for the current user.
+    - Publishers: Distinct publisher strings from manifestations.
+    - Genres: Static ontology from app.core.taxonomy.
     """
     user_id = getattr(g, "user_id", None)
 
-    if db.engine.dialect.name == "sqlite":
-        try:
-            items = db.session.query(Item).filter(Item.owner_id == user_id).all()
-            tags_set = set()
-            genres_set = set()
-            collections_set = set()
-            publishers_set = set()
-            for item in items:
-                meta = item.meta or {}
-                # Extract arrays
-                for t in meta.get("tags", []):
-                    if isinstance(t, str) and t.strip():
-                        tags_set.add(t.strip())
-                for gen in meta.get("genres", []):
-                    if isinstance(gen, str) and gen.strip():
-                        genres_set.add(gen.strip())
-                for col in meta.get("collections", []):
-                    if isinstance(col, str) and col.strip():
-                        collections_set.add(col.strip())
-                # Extract string
-                pub = meta.get("publisher")
-                if isinstance(pub, str) and pub.strip():
-                    publishers_set.add(pub.strip())
-
-            return jsonify(
-                {
-                    "success": True,
-                    "data": {
-                        "tags": sorted(tags_set),
-                        "genres": sorted(genres_set),
-                        "collections": sorted(collections_set),
-                        "publishers": sorted(publishers_set),
-                    },
-                }
-            )
-        except SQLAlchemyError:
-            return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500
-
-    from sqlalchemy import cast
-    from sqlalchemy.dialects.postgresql import JSONB
-
-    def get_jsonb_array_elements(field_name: str):
-        return (
-            db.session.query(
-                func.jsonb_array_elements_text(func.coalesce(cast(Item.meta, JSONB).op("->")(field_name), text("'[]'::jsonb"))).label(
-                    "element"
-                )
-            )
-            .filter(Item.owner_id == user_id)
-            .distinct()
-            .all()
-        )
-
-    def get_jsonb_string_elements(field_name: str):
-        return (
-            db.session.query(cast(Item.meta, JSONB).op("->>")(field_name).label("element"))
-            .filter(Item.owner_id == user_id, cast(Item.meta, JSONB).op("->>")(field_name).isnot(None))
-            .distinct()
-            .all()
-        )
-
     try:
-        tags = [row.element for row in get_jsonb_array_elements("tags") if row.element]
-        genres = [row.element for row in get_jsonb_array_elements("genres") if row.element]
-        collections = [row.element for row in get_jsonb_array_elements("collections") if row.element]
-        publishers = [row.element for row in get_jsonb_string_elements("publisher") if row.element]
+        # Global folksonomy tags
+        tags_query = db.session.query(Tag.name).distinct().all()
+        tags = sorted([t[0] for t in tags_query if t[0]])
+
+        # User's collection names
+        collections_query = db.session.query(UserCollection.name).filter(UserCollection.owner_id == user_id).distinct().all()
+        collections = sorted([c[0] for c in collections_query if c[0]])
+
+        # Global distinct publishers
+        publishers_query = (
+            db.session.query(Manifestation.publisher)
+            .filter(Manifestation.publisher.isnot(None), Manifestation.publisher != "")
+            .distinct()
+            .all()
+        )
+        publishers = sorted([p[0].strip() for p in publishers_query if p[0] and p[0].strip()])
+
+        # Static genres
+        genres = sorted(ALL_GENRES)
 
         return jsonify(
             {
                 "success": True,
                 "data": {
-                    "tags": sorted(tags),
-                    "genres": sorted(genres),
-                    "collections": sorted(collections),
-                    "publishers": sorted(publishers),
+                    "tags": tags,
+                    "genres": genres,
+                    "collections": collections,
+                    "publishers": publishers,
                 },
             }
         )
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        import logging
+
+        logging.getLogger(__name__).error(f"Error fetching taxonomies: {e}")
         return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500

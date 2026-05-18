@@ -296,3 +296,75 @@ class ImageScan(db.Model):  # type: ignore[name-defined]
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
     manifestation = db.relationship("Manifestation", backref=db.backref("image_scans", cascade="all, delete", lazy="selectin"))
+
+
+class UserCollection(db.Model):  # type: ignore[name-defined]
+    """
+    A user-defined hierarchical collection of items or other collections.
+    """
+
+    __tablename__ = "user_collections"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="CASCADE"), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    owner = db.relationship("User", backref=db.backref("collections", cascade="all, delete-orphan", lazy="dynamic"))
+    children = db.relationship(
+        "UserCollection", backref=db.backref("parent", remote_side=[id]), cascade="all, delete-orphan", lazy="selectin"
+    )
+    items = db.relationship("UserCollectionItem", backref="collection", cascade="all, delete-orphan", lazy="dynamic")
+
+
+class UserCollectionItem(db.Model):  # type: ignore[name-defined]
+    """
+    Association table linking Items to UserCollections.
+    """
+
+    __tablename__ = "user_collection_items"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    collection_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item = db.relationship("Item", backref=db.backref("collection_links", cascade="all, delete-orphan", lazy="selectin"))
+
+
+class Tag(db.Model):  # type: ignore[name-defined]
+    """
+    Global folksonomy tags.
+    """
+
+    __tablename__ = "tags"
+    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item_links = db.relationship("ItemTag", backref="tag", cascade="all, delete-orphan", lazy="dynamic")
+
+
+class ItemTag(db.Model):  # type: ignore[name-defined]
+    """
+    Association table linking Items to Tags, including the user who added it.
+    """
+
+    __tablename__ = "item_tags"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}tags.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_by_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"), nullable=True)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item = db.relationship("Item", backref=db.backref("tag_links", cascade="all, delete-orphan", lazy="selectin"))
+    added_by = db.relationship("User")

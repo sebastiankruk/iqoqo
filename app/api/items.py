@@ -26,7 +26,35 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, Work, db
+
+
+def sync_tags(item_id: int, user_id, tags: list[str] | None):
+    if tags is None:
+        return
+    existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
+    existing_tag_ids = {link.tag_id: link for link in existing_links}
+    desired_tag_names = {t.strip() for t in tags if t.strip()}
+
+    db_tags = []
+    for name in desired_tag_names:
+        tag = db.session.query(Tag).filter(Tag.name == name).first()
+        if not tag:
+            tag = Tag(name=name)
+            db.session.add(tag)
+            db.session.flush()
+        db_tags.append(tag)
+
+    desired_tag_ids = {t.id for t in db_tags}
+
+    for tag_id, link in existing_tag_ids.items():
+        if tag_id not in desired_tag_ids:
+            db.session.delete(link)
+
+    for tag in db_tags:
+        if tag.id not in existing_tag_ids:
+            link = ItemTag(item_id=item_id, tag_id=tag.id, added_by_id=user_id)
+            db.session.add(link)
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -221,6 +249,7 @@ def get_items():
                 "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                 "is_owner": is_owner,
                 "is_borrowed": not is_owner,
+                "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }
@@ -280,6 +309,7 @@ def get_item_detail(item_id: int):
         "collection_status": item.collection_status,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
+        "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
     }
 
@@ -378,6 +408,8 @@ def update_item(item_id: int):
             item.manifestation.update_meta(**metadata)
         # Also update item.meta if needed, but usually extra fields are for manifestation
         item.meta = {**item.meta, **metadata} if item.meta else metadata
+
+    sync_tags(item.id, user_id, payload.tags)
 
     try:
         db.session.commit()
@@ -483,6 +515,8 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     )
     db.session.add(item)
     try:
+        db.session.flush()
+        sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
@@ -524,6 +558,8 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         meta={},
     )
     db.session.add(item)
+    db.session.flush()
+    sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
 
     return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
@@ -668,6 +704,8 @@ def add_item_manual() -> Response | tuple[Response, int]:
             meta={},
         )
         db.session.add(item)
+        db.session.flush()
+        sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
 
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})

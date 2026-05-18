@@ -48,9 +48,13 @@ from app.db.core import (  # noqa: F401
     ImageScan,
     Item,
     ItemStatusLog,
+    ItemTag,
     Manifestation,
     MediaCategory,
     MediaFormat,
+    Tag,
+    UserCollection,
+    UserCollectionItem,
     Work,
 )
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401

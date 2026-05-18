@@ -130,6 +130,11 @@ def generate_python(data: dict) -> str:
     # Ingest Methods
     py_code.append(f'CATEGORY_INGEST_METHOD: dict[str, str] = {json.dumps(data.get("ingest_methods", {}), indent=4)}\n')
 
+    # Genres
+    if "genres" in data:
+        py_code.append(f'GENRES_HIERARCHY: dict[str, list[str]] = {json.dumps(data["genres"], indent=4)}\n')
+        py_code.append("ALL_GENRES = tuple(sorted({genre for genres in GENRES_HIERARCHY.values() for genre in genres}))\n")
+
     return "\n".join(py_code)
 
 
@@ -213,6 +218,12 @@ def generate_typescript(data: dict) -> str:
 
     image_types = " | ".join(f'"{t}"' for t in sorted(all_image_types))
     ts_code.append(f"export type ImageType = {image_types};\n")
+
+    if "genres" in data:
+        ts_code.append(f"export const GENRES_HIERARCHY: Record<MediaCategory, string[]> = {json.dumps(data['genres'], indent=2)};\n")
+        all_genres = sorted({genre for genres in data["genres"].values() for genre in genres})
+        ts_code.append(f"export const ALL_GENRES = {json.dumps(all_genres)} as const;")
+        ts_code.append("export type Genre = (typeof ALL_GENRES)[number];\n")
 
     return "\n".join(ts_code)
 
