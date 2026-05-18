@@ -31,8 +31,14 @@ def get_user_works() -> Response:
     Returns a specialized view of the user's shelf grouped by Conceptual Work.
     This resolves the F15 Complex Work/Series requirement by allowing the UI
     to display a 'Series' or 'Work' card that contains multiple manifestations.
+
+    Supports optional query parameters:
+    - q: filter by work title or creator name (case-insensitive substring match)
+    - category: filter by expression content_type (e.g. 'text', 'music', 'movie')
     """
     user_id = getattr(g, "user_id", None)
+    search_q = (request.args.get("q") or "").strip().lower()
+    category = (request.args.get("category") or "").strip().lower()
 
     items = (
         db.session.query(Item)
@@ -41,16 +47,29 @@ def get_user_works() -> Response:
         .all()
     )
 
-    works_map = {}
+    works_map: dict[int, dict] = {}
     for item in items:
         if not item.manifestation or not item.manifestation.expression or not item.manifestation.expression.work:
             continue
 
-        work = item.manifestation.expression.work
+        expr = item.manifestation.expression
+        work = expr.work
+
+        # Apply category filter at the expression level
+        if category and (expr.content_type or "").lower() != category:
+            continue
+
+        creators: list[str] = []
+        if work.meta:
+            creators = work.meta.get("creators") or work.meta.get("authors") or []
+
+        # Apply search filter against title and creator names
+        if search_q:
+            haystack = (work.title or "").lower() + " " + " ".join(creators).lower()
+            if search_q not in haystack:
+                continue
+
         if work.id not in works_map:
-            creators: list[str] = []
-            if work.meta:
-                creators = work.meta.get("creators") or work.meta.get("authors") or []
             works_map[work.id] = {
                 "work_id": work.id,
                 "title": work.title,
@@ -86,8 +105,14 @@ def get_user_expressions() -> Response:
     """
     Returns a specialized view of the user's shelf grouped by Expression.
     Allows browsing distinct variations (translations, abridgements) of works.
+
+    Supports optional query parameters:
+    - q: filter by work title or creator name (case-insensitive substring match)
+    - category: filter by expression content_type (e.g. 'text', 'music', 'movie')
     """
     user_id = getattr(g, "user_id", None)
+    search_q = (request.args.get("q") or "").strip().lower()
+    category = (request.args.get("category") or "").strip().lower()
 
     items = (
         db.session.query(Item)
@@ -96,22 +121,36 @@ def get_user_expressions() -> Response:
         .all()
     )
 
-    expr_map = {}
+    expr_map: dict[int, dict] = {}
     for item in items:
         if not item.manifestation or not item.manifestation.expression:
             continue
 
         expr = item.manifestation.expression
         work = expr.work
+
+        # Apply category filter at the expression level
+        if category and (expr.content_type or "").lower() != category:
+            continue
+
+        creators: list[str] = []
+        if work and work.meta:
+            creators = work.meta.get("creators") or work.meta.get("authors") or []
+
+        work_title = work.title if work else "Unknown"
+
+        # Apply search filter against work title and creator names
+        if search_q:
+            haystack = work_title.lower() + " " + " ".join(creators).lower()
+            if search_q not in haystack:
+                continue
+
         if expr.id not in expr_map:
-            creators: list[str] = []
-            if work and work.meta:
-                creators = work.meta.get("creators") or work.meta.get("authors") or []
             expr_map[expr.id] = {
                 "expression_id": expr.id,
                 "content_type": expr.content_type,
                 "language": expr.language,
-                "work_title": work.title if work else "Unknown",
+                "work_title": work_title,
                 "creators": creators,
                 "owned_manifestations": [],
                 "total_items": 0,

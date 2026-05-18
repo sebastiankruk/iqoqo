@@ -16,7 +16,17 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
-import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen, Layers, Type } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Search,
+  Library as LibraryIcon,
+  BookOpen,
+  Layers,
+  Type,
+  ChevronRight,
+  Users,
+  Globe,
+} from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
@@ -181,8 +191,16 @@ function CollectionContent() {
     missingIdOnly
   );
 
-  const { data: worksData, isLoading: worksLoading } = useWorksShelf(viewMode === "works" && isLoggedIn);
-  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf(viewMode === "expressions" && isLoggedIn);
+  const { data: worksData, isLoading: worksLoading } = useWorksShelf(
+    viewMode === "works" && isLoggedIn,
+    appliedQuery,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined
+  );
+  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf(
+    viewMode === "expressions" && isLoggedIn,
+    appliedQuery,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined
+  );
 
   const { data: statsData } = useStats();
 
@@ -473,6 +491,7 @@ function CollectionContent() {
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
                 disableStatus={viewMode === "manifestations"}
+                viewMode={viewMode}
               />
             </div>
           </div>
@@ -491,45 +510,205 @@ function CollectionContent() {
                 ))}
               </div>
             ) : viewMode === "works" && worksData?.data ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {worksData.data.map(work => (
-                  <div key={work.work_id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
-                    <h3 className="font-bold text-lg truncate">{work.title}</h3>
-                    <p className="text-sm text-muted-foreground truncate">{work.creators.join(", ")}</p>
-                    <div className="mt-3 flex -space-x-3 overflow-hidden">
-                      {work.owned_manifestations.slice(0, 5).map(m => (
-                        <div
-                          key={m.manifestation_id}
-                          className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center"
-                          style={{ backgroundImage: `url(${m.cover_url || ""})` }}
-                        />
-                      ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {worksData.data.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Layers className="h-7 w-7 text-muted-foreground" />
                     </div>
-                    <p className="mt-3 text-xs font-semibold text-primary">{work.total_items} items in collection</p>
+                    <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
+                      {appliedQuery ? `No works matching "${appliedQuery}"` : "No works in collection"}
+                    </h3>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
                   </div>
-                ))}
+                ) : (
+                  worksData.data.map(work => (
+                    <div
+                      key={work.work_id}
+                      className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
+                    >
+                      {/* Cover thumbnails strip */}
+                      <div className="flex gap-1 p-3 bg-muted/30 border-b border-border/50">
+                        {work.owned_manifestations.slice(0, 4).map(m => (
+                          <div
+                            key={m.manifestation_id}
+                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm"
+                            style={{
+                              backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }}
+                          >
+                            {!m.cover_url && (
+                              <div className="flex h-full items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {work.owned_manifestations.length > 4 && (
+                          <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
+                            +{work.owned_manifestations.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                          {work.title}
+                        </h3>
+                        {work.creators.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {work.creators.map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(c);
+                                  setAppliedQuery(c);
+                                  setViewMode("items");
+                                }}
+                                className="text-xs text-primary hover:underline font-medium"
+                                title={`Browse all items by ${c}`}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {work.total_items} {work.total_items === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {work.owned_manifestations.slice(0, 1).map(m => (
+                              <button
+                                key={m.manifestation_id}
+                                type="button"
+                                onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                              >
+                                <Globe className="h-3 w-3" />
+                                View
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             ) : viewMode === "expressions" && exprsData?.data ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {exprsData.data.map(expr => (
-                  <div key={expr.expression_id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
-                    <h3 className="font-bold text-lg truncate">{expr.work_title}</h3>
-                    <p className="text-sm text-muted-foreground mb-2 truncate">{expr.creators.join(", ")}</p>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                      {expr.content_type} / {expr.language}
-                    </span>
-                    <div className="mt-3 flex -space-x-3 overflow-hidden">
-                      {expr.owned_manifestations.slice(0, 5).map(m => (
-                        <div
-                          key={m.manifestation_id}
-                          className="inline-block h-10 w-10 rounded-full ring-2 ring-background bg-muted bg-cover bg-center"
-                          style={{ backgroundImage: `url(${m.cover_url || ""})` }}
-                        />
-                      ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {exprsData.data.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Type className="h-7 w-7 text-muted-foreground" />
                     </div>
-                    <p className="mt-3 text-xs font-semibold text-primary">{expr.total_items} items in collection</p>
+                    <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
+                      {appliedQuery ? `No expressions matching "${appliedQuery}"` : "No expressions in collection"}
+                    </h3>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
                   </div>
-                ))}
+                ) : (
+                  exprsData.data.map(expr => (
+                    <div
+                      key={expr.expression_id}
+                      className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
+                    >
+                      {/* Cover thumbnails strip */}
+                      <div className="flex gap-1 p-3 bg-muted/30 border-b border-border/50">
+                        {expr.owned_manifestations.slice(0, 4).map(m => (
+                          <button
+                            key={m.manifestation_id}
+                            type="button"
+                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
+                            style={{
+                              backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }}
+                            title={`${m.format} edition`}
+                          >
+                            {!m.cover_url && (
+                              <div className="flex h-full items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                        {expr.owned_manifestations.length > 4 && (
+                          <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
+                            +{expr.owned_manifestations.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                          {expr.work_title}
+                        </h3>
+                        {expr.creators.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {expr.creators.map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(c);
+                                  setAppliedQuery(c);
+                                  setViewMode("items");
+                                }}
+                                className="text-xs text-primary hover:underline font-medium"
+                                title={`Browse all items by ${c}`}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="inline-flex items-center rounded-full bg-secondary/60 px-2.5 py-0.5 text-xs font-medium text-secondary-foreground capitalize">
+                            {expr.content_type}
+                          </span>
+                          {expr.language && (
+                            <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent uppercase">
+                              {expr.language}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {expr.total_items} {expr.total_items === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {expr.owned_manifestations.slice(0, 1).map(m => (
+                              <button
+                                key={m.manifestation_id}
+                                type="button"
+                                onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                              >
+                                <Globe className="h-3 w-3" />
+                                View
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             ) : (
               <CollectionGrid

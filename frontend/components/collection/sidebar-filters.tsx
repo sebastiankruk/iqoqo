@@ -27,6 +27,8 @@ interface SidebarFiltersProps {
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   disableStatus?: boolean;
+  /** Current view mode, used to contextually hide irrelevant filters */
+  viewMode?: "items" | "manifestations" | "works" | "expressions";
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -119,6 +121,7 @@ function AccordionSection({
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
  * @param root0.disableStatus - Whether to disable the status filter
+ * @param root0.viewMode - The current view mode
  * @returns {JSX.Element} The component*/
 export function SidebarFilters({
   activeFilters,
@@ -126,6 +129,7 @@ export function SidebarFilters({
   statusCounts = {},
   formatCounts = {},
   disableStatus = false,
+  viewMode = "items",
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
 
@@ -136,6 +140,9 @@ export function SidebarFilters({
   const validFormats = activeCategory
     ? MEDIA_HIERARCHY[activeCategory as keyof typeof MEDIA_HIERARCHY]?.formats || []
     : [];
+
+  /** True when viewing Works or Expressions – status/format don't apply at those levels */
+  const isHierarchyView = viewMode === "works" || viewMode === "expressions";
 
   return (
     <aside className="w-full h-full overflow-y-auto pr-2 pb-20 custom-scrollbar">
@@ -171,7 +178,7 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      {validFormats.length > 0 && (
+      {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title="Physical Kind">
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
@@ -198,7 +205,11 @@ export function SidebarFilters({
       )}
 
       <AccordionSection title="Collection Status">
-        {disableStatus ? (
+        {isHierarchyView ? (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Status filters apply to physical items only. Switch to &ldquo;My Items&rdquo; view to filter by status.
+          </p>
+        ) : disableStatus ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">Not applicable here.</p>
         ) : (
           <div className="flex flex-col gap-1">
@@ -225,7 +236,7 @@ export function SidebarFilters({
         )}
       </AccordionSection>
 
-      {activeCategory && validProgressStatuses.length > 0 && (
+      {!isHierarchyView && activeCategory && validProgressStatuses.length > 0 && (
         <AccordionSection title="Progress">
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {

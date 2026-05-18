@@ -84,8 +84,9 @@ export const queryKeys = {
   manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
     ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
-  worksShelf: ["works", "shelf"] as const,
-  expressionsShelf: ["expressions", "shelf"] as const,
+  worksShelf: (query?: string, category?: string) => ["works", "shelf", query ?? "", category ?? ""] as const,
+  expressionsShelf: (query?: string, category?: string) =>
+    ["expressions", "shelf", query ?? "", category ?? ""] as const,
   workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
 };
@@ -376,13 +377,18 @@ export function useManifestation(id: number) {
  * Grouped at the F1 Work level, aggregating manifestations.
  *
  * @param enabled - Whether the query is enabled or not.
+ * @param query - Optional search query to filter by work title or creator name.
+ * @param category - Optional content_type category filter (e.g. 'text', 'music').
  * @returns The query result containing the works shelf entries.
  */
-export function useWorksShelf(enabled = true) {
+export function useWorksShelf(enabled = true, query?: string, category?: string) {
   return useQuery({
-    queryKey: queryKeys.worksShelf,
+    queryKey: queryKeys.worksShelf(query, category),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf");
+      const params: Record<string, string> = {};
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
       return res.data;
     },
     staleTime: 30_000,
@@ -395,13 +401,18 @@ export function useWorksShelf(enabled = true) {
  * Grouped at the F2 Expression level, showing different languages or content types.
  *
  * @param enabled - Whether the query is enabled or not.
+ * @param query - Optional search query to filter by work title or creator name.
+ * @param category - Optional content_type category filter (e.g. 'text', 'music').
  * @returns The query result containing the expressions shelf entries.
  */
-export function useExpressionsShelf(enabled = true) {
+export function useExpressionsShelf(enabled = true, query?: string, category?: string) {
   return useQuery({
-    queryKey: queryKeys.expressionsShelf,
+    queryKey: queryKeys.expressionsShelf(query, category),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf");
+      const params: Record<string, string> = {};
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
     },
     staleTime: 30_000,

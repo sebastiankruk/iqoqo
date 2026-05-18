@@ -16,6 +16,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -33,12 +34,12 @@ interface ItemHeaderProps {
  * @returns {JSX.Element} The component
  */
 export function ItemHeader({ item }: ItemHeaderProps) {
+  const router = useRouter();
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
 
   const title = work?.title ?? item.title ?? "Untitled";
-  const authorDisplay = work?.authors?.join(", ") ?? item.authors?.join(", ") ?? "Unknown Artist/Author";
 
   const timestamp = getCoverTimestamp(meta);
 
@@ -112,7 +113,27 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight">
             {title}
           </h1>
-          <h2 className="text-xl md:text-2xl text-muted-foreground font-medium">{authorDisplay}</h2>
+          <div className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium">
+            {(work?.authors ?? item.authors ?? []).length > 0 ? (
+              (work?.authors ?? item.authors ?? []).map((author, idx, arr) => (
+                <span key={author}>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                    onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                    className="hover:text-primary hover:underline cursor-pointer transition-colors"
+                    title={`Browse all works by ${author}`}
+                  >
+                    {author}
+                  </span>
+                  {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
+                </span>
+              ))
+            ) : (
+              <span>Unknown Artist/Author</span>
+            )}
+          </div>
         </div>
 
         {/* Quick Meta block */}
