@@ -112,6 +112,8 @@ function AccordionSection({
   );
 }
 
+import { useTaxonomies } from "@/lib/api/hooks";
+
 /**
  * Desktop sidebar with collapsible filter sections.
  *
@@ -132,6 +134,7 @@ export function SidebarFilters({
   viewMode = "items",
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
+  const { data: taxonomies } = useTaxonomies();
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []
@@ -177,6 +180,102 @@ export function SidebarFilters({
           })}
         </div>
       </AccordionSection>
+
+      {taxonomies?.collections && taxonomies.collections.length > 0 && (
+        <AccordionSection title="My Collections">
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.collections.map(col => {
+              const active = isActive(activeFilters, "collection", col);
+              return (
+                <label
+                  key={col}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "collection", value: col })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{col}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.tags && taxonomies.tags.length > 0 && (
+        <AccordionSection title="Tags" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.tags.map(tag => {
+              const active = isActive(activeFilters, "tag", tag);
+              return (
+                <label
+                  key={tag}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "tag", value: tag })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{tag}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.genres && taxonomies.genres.length > 0 && (
+        <AccordionSection title="Genres" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.genres.map(genre => {
+              const active = isActive(activeFilters, "genre", genre);
+              return (
+                <label
+                  key={genre}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "genre", value: genre })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{genre}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.publishers && taxonomies.publishers.length > 0 && (
+        <AccordionSection title="Publishers" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.publishers.map(pub => {
+              const active = isActive(activeFilters, "publisher", pub);
+              return (
+                <label
+                  key={pub}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "publisher", value: pub })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{pub}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
 
       {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title="Physical Kind">

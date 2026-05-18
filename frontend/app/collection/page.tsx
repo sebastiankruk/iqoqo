@@ -23,9 +23,7 @@ import {
   BookOpen,
   Layers,
   Type,
-  ChevronRight,
   Users,
-  Globe,
 } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -61,9 +59,19 @@ function CollectionContent() {
   // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
   const initialSort = searchParams?.get("sort") || "updated";
   const initialStatuses = searchParams?.get("statuses") || "";
-  const initialFilters: ActiveFilter[] = initialStatuses
-    ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
-    : [];
+  const initialTags = searchParams?.get("tags") || "";
+  const initialCollections = searchParams?.get("collections") || "";
+  const initialGenres = searchParams?.get("genres") || "";
+  const initialPublishers = searchParams?.get("publishers") || "";
+
+  const initialFilters: ActiveFilter[] = [
+    ...(initialStatuses ? initialStatuses.split(",").map(s => ({ type: "status" as const, value: s })) : []),
+    ...(initialTags ? initialTags.split(",").map(s => ({ type: "tag" as const, value: s })) : []),
+    ...(initialCollections ? initialCollections.split(",").map(s => ({ type: "collection" as const, value: s })) : []),
+    ...(initialGenres ? initialGenres.split(",").map(s => ({ type: "genre" as const, value: s })) : []),
+    ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
+  ];
+
   const initialViewMode = (searchParams?.get("view") || "items") as
     | "items"
     | "manifestations"
@@ -128,6 +136,17 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const tagFilters = useMemo(() => activeFilters.filter(f => f.type === "tag").map(f => f.value), [activeFilters]);
+  const collectionFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "collection").map(f => f.value),
+    [activeFilters]
+  );
+  const genreFilters = useMemo(() => activeFilters.filter(f => f.type === "genre").map(f => f.value), [activeFilters]);
+  const publisherFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "publisher").map(f => f.value),
+    [activeFilters]
+  );
+
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
     const params = new URLSearchParams();
@@ -135,6 +154,12 @@ function CollectionContent() {
 
     const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
+
+    if (tagFilters.length > 0) params.set("tags", tagFilters.join(","));
+    if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
+    if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
+    if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
+
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
     if (isBorrowedFilterActive) params.set("borrowed", "true");
@@ -147,6 +172,10 @@ function CollectionContent() {
   }, [
     sortBy,
     activeFilters,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters,
     appliedQuery,
     viewMode,
     isBorrowedFilterActive,
@@ -172,7 +201,11 @@ function CollectionContent() {
     formatFilters.length > 0 ? formatFilters[0] : undefined,
     isBorrowedFilterActive,
     missingCoverOnly,
-    missingIdOnly
+    missingIdOnly,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
 
   const {

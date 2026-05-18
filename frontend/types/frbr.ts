@@ -138,6 +138,9 @@ export interface Item {
   title?: string;
   isbn?: string;
   authors?: string[];
+  tags?: string[];
+  genres?: string[];
+  publisher?: string;
   manifestation_meta?: Record<string, unknown>;
   expression?: Pick<Expression, "id" | "content_type" | "language">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
@@ -273,3 +276,17 @@ export interface UserProfile {
   permissions?: string[];
   created_at?: string;
 }
+
+export type UserCollection = {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  created_at: string | null;
+};
+
+export type TaxonomiesResponse = {
+  tags: string[];
+  genres: string[];
+  collections: string[];
+  publishers: string[];
+};

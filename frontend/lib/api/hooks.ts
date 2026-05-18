@@ -37,15 +37,19 @@ export const queryKeys = {
    */
   stats: ["stats"] as const,
   /**
-   * Query key for a list of items.
+   * Query key for items.
    *
-   * @param page - The page number.
-   * @param limit - The number of items per page.
-   * @param statuses - Optional array of item statuses to filter by.
-   * @param query - Optional search query string.
-   * @param sort - Optional sort order (updated, added, title, title-desc, author).
-   * @param category - Optional category filter.
-   * @param formatFilter - Optional format filter.
+   * @param page - Page number
+   * @param limit - Items per page
+   * @param statuses - Filter by statuses
+   * @param query - Search query
+   * @param sort - Sort order
+   * @param category - Category filter
+   * @param formatFilter - Format filter
+   * @param tags - Tags filter
+   * @param collections - Collections filter
+   * @param genres - Genres filter
+   * @param publishers - Publishers filter
    * @returns The query key for items.
    */
   items: (
@@ -55,7 +59,11 @@ export const queryKeys = {
     query?: string,
     sort?: string,
     category?: string,
-    formatFilter?: string
+    formatFilter?: string,
+    tags?: string[],
+    collections?: string[],
+    genres?: string[],
+    publishers?: string[]
   ) =>
     [
       "items",
@@ -66,6 +74,10 @@ export const queryKeys = {
       sort ?? "",
       category ?? "",
       formatFilter ?? "",
+      tags?.join(",") ?? "",
+      collections?.join(",") ?? "",
+      genres?.join(",") ?? "",
+      publishers?.join(",") ?? "",
     ] as const,
   /**
    * Query key for a single item.
@@ -204,6 +216,10 @@ export function useItems(
  * @param borrowed - Filter by borrowed status
  * @param missingCover - Filter items missing a cover
  * @param missingId - Filter items missing an external identifier
+ * @param tags - Filter by tags
+ * @param collections - Filter by collections
+ * @param genres - Filter by genres
+ * @param publishers - Filter by publishers
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<Item[]>>} Infinite query result
  */
 export function useInfiniteItems(
@@ -216,11 +232,27 @@ export function useInfiniteItems(
   formatFilter?: string,
   borrowed?: boolean,
   missingCover?: boolean,
-  missingId?: boolean
+  missingId?: boolean,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
-      ...queryKeys.items(1, limit, statuses, query, sort, category, formatFilter),
+      ...queryKeys.items(
+        1,
+        limit,
+        statuses,
+        query,
+        sort,
+        category,
+        formatFilter,
+        tags,
+        collections,
+        genres,
+        publishers
+      ),
       "infinite",
       borrowed,
       missingCover,
@@ -237,6 +269,10 @@ export function useInfiniteItems(
       if (borrowed) params.borrowed = true;
       if (missingCover) params.missing_cover = true;
       if (missingId) params.missing_id = true;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
@@ -554,6 +590,8 @@ type ManualItemPayload = {
   PublicationDate?: string;
   Publisher?: string;
   Description?: string;
+  tags?: string[];
+  genres?: string[];
 };
 
 /**
@@ -702,5 +740,39 @@ export function useRecentManifestations(limit = 10) {
     queryKey: ["recentManifestations", limit],
     queryFn: () => apiFetch<CatalogEntry[]>("/manifestations/recent", { limit }),
     staleTime: 30_000,
+  });
+}
+
+import type { TaxonomiesResponse, UserCollection } from "@/types/frbr";
+
+/**
+ * Custom hook to fetch all global taxonomies.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<TaxonomiesResponse>>} The query result
+ */
+export function useTaxonomies() {
+  return useQuery({
+    queryKey: ["taxonomies"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<TaxonomiesResponse>>("/taxonomies");
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Custom hook to fetch all user collections.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<UserCollection[]>>} The query result
+ */
+export function useUserCollections() {
+  return useQuery({
+    queryKey: ["collections"],
+    queryFn: async () => {
+      const res = await apiClient.get<{ success: boolean; collections: UserCollection[] }>("/collections");
+      return res.data.collections;
+    },
+    staleTime: 60_000,
   });
 }

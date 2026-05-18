@@ -23,6 +23,7 @@ import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
+import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -442,6 +443,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             onUploadComplete={handleUploadComplete}
           />
         )}
+
+        {canModifyItem && <TaxonomyEditor item={item} />}
       </div>
 
       {/* FRBR quick info */}
