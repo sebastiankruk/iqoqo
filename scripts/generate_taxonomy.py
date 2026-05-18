@@ -311,4 +311,14 @@ if __name__ == "__main__":
         check=False,
         cwd=str(ROOT_DIR),
     )
+
+    # Auto-format the generated TypeScript so ESLint/Prettier never drifts
+    subprocess.run(
+        ["make", "format-js"],
+        check=False,
+        cwd=str(ROOT_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
     print("Taxonomy generated successfully.")
