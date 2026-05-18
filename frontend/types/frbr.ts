@@ -57,6 +57,7 @@ export interface AdditionalImage {
 export interface Manifestation {
   id: number;
   expression_id: number;
+  work_id?: number | null;
   isbn13?: string;
   publisher?: string;
   year?: number;
@@ -102,6 +103,8 @@ export interface CatalogEntry extends Manifestation {
   cover_url?: string | null;
   cover_status?: string | null;
   user_owns: boolean;
+  /** Work ID if available */
+  work_id?: number | null;
   /** Item ID if the authenticated user owns this manifestation */
   item_id?: number | null;
   /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */

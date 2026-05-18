@@ -20,6 +20,14 @@ import * as adminApi from "@/lib/api/admin";
 
 vi.mock("@/lib/api/admin");
 
+vi.mock("@/lib/api/hooks", () => ({
+  useWorkParts: vi.fn(() => ({
+    data: { data: [] },
+    isLoading: false,
+    refetch: vi.fn(),
+  })),
+}));
+
 describe("FrbrEditor Component", () => {
   const mockFrbrTree = {
     work: { id: 1, title: "Dune", meta: { original_language: "en" } },

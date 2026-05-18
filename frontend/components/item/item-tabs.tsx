@@ -18,7 +18,7 @@
 import { useState } from "react";
 import { FileText, Globe, History, Images } from "lucide-react";
 import type { Item } from "@/types/frbr";
-import { useAppConfig } from "@/lib/api/hooks";
+import { useAppConfig, useWorkParts } from "@/lib/api/hooks";
 import Link from "next/link";
 import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
@@ -44,6 +44,8 @@ type TabId = (typeof TABS)[number]["id"];
  */
 function DetailsTab({ item }: { item: Item }) {
   const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
+  const { data: partsResponse } = useWorkParts(item.work?.id ?? 0);
+  const parts = partsResponse?.data ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,6 +82,45 @@ function DetailsTab({ item }: { item: Item }) {
           </div>
         </dl>
       </div>
+
+      {/* Series parts info */}
+      {item.work && parts.length > 0 && (
+        <div className="border-t pt-6">
+          <h4 className="mb-3 font-serif text-sm font-bold text-foreground">Series / Complex Work Parts</h4>
+          <p className="text-xs text-muted-foreground mb-3">
+            This title is part of a complex work / series. Here are all the elements in this series:
+          </p>
+          <div className="border rounded-xl divide-y bg-muted/10 overflow-hidden">
+            {parts.map(part => {
+              const isCurrent = part.part_work_id === item.work?.id;
+              return (
+                <div
+                  key={part.part_work_id}
+                  className={`flex items-center justify-between p-3 text-sm transition-colors hover:bg-muted/5 ${
+                    isCurrent ? "bg-primary/5 font-semibold" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {part.sequence}
+                    </span>
+                    <span className={isCurrent ? "text-primary" : "text-foreground"}>{part.title}</span>
+                  </div>
+                  {isCurrent && (
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                      Current Item
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

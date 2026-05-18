@@ -20,7 +20,7 @@ import Image from "next/image";
 import { BookOpen, Loader2 } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
+import { useManifestation, useProfile, useAddItem, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
@@ -41,6 +41,8 @@ export default function ManifestationPage() {
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
   const { mutate: addItem, isPending: isAdding } = useAddItem();
+  const { data: partsResponse } = useWorkParts(manifestation?.work_id ?? 0);
+  const parts = partsResponse?.data ?? [];
   const router = useRouter();
 
   if (isLoading) {
@@ -188,6 +190,41 @@ export default function ManifestationPage() {
                 )}
               </dl>
             </div>
+
+            {manifestation.work_id && parts.length > 0 && (
+              <div className="pt-6 border-t border-border space-y-3">
+                <h2 className="text-lg font-semibold">Series / Complex Work Parts</h2>
+                <div className="border border-border/60 rounded-xl divide-y bg-muted/5 overflow-hidden">
+                  {parts.map(part => {
+                    const isCurrent = part.part_work_id === manifestation.work_id;
+                    return (
+                      <div
+                        key={part.part_work_id}
+                        className={`flex items-center justify-between p-3 text-sm ${
+                          isCurrent ? "bg-primary/5 font-semibold" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                              isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {part.sequence}
+                          </span>
+                          <span className={isCurrent ? "text-primary" : "text-foreground"}>{part.title}</span>
+                        </div>
+                        {isCurrent && (
+                          <span className="text-xs font-semibold uppercase tracking-wider text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                            Current Edition
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {userProfile && (
               <div className="pt-6 space-y-4">
