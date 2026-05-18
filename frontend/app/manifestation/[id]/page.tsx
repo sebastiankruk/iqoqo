@@ -128,9 +128,27 @@ export default function ManifestationPage() {
               <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground">
                 {manifestation.title || "Untitled Work"}
               </h1>
-              <p className="mt-2 text-xl text-muted-foreground">
-                {manifestation.authors?.join(", ") || "Unknown Author"}
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium">
+                {(manifestation.authors ?? []).length > 0 ? (
+                  (manifestation.authors ?? []).map((author, idx, arr) => (
+                    <span key={author}>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                        onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                        className="hover:text-primary hover:underline cursor-pointer transition-colors"
+                        title={`Browse all works by ${author}`}
+                      >
+                        {author}
+                      </span>
+                      {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
+                    </span>
+                  ))
+                ) : (
+                  <span>Unknown Author</span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3 pt-6 border-t border-border">

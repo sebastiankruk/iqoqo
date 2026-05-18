@@ -25,11 +25,13 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import admin_required, require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
+from app.core.limiter import limiter
 from app.db.models import Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, GALLERY_DIR
 
 
 @api_bp.route("/static/covers/<path:filename>", methods=["GET", "HEAD"])
+@limiter.exempt
 def serve_cover(filename: str):
     """Serve a cover image from the covers directory."""
     response = make_response(send_from_directory(COVERS_DIR, filename))
@@ -68,6 +70,7 @@ def serve_cover(filename: str):
 
 
 @api_bp.route("/static/gallery/<path:filename>", methods=["GET"])
+@limiter.exempt
 def serve_gallery_image(filename: str):
     """Serve a gallery image from the gallery directory."""
     return send_from_directory(GALLERY_DIR, filename)

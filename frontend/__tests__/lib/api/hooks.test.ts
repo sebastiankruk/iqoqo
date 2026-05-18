@@ -140,8 +140,8 @@ describe("queryKeys advanced views", () => {
 
   it("produces stable keys for works and expressions shelves", async () => {
     const { queryKeys } = await import("@/lib/api/hooks");
-    expect(queryKeys.worksShelf).toEqual(["works", "shelf"]);
-    expect(queryKeys.expressionsShelf).toEqual(["expressions", "shelf"]);
+    expect(queryKeys.worksShelf()).toEqual(["works", "shelf", "", ""]);
+    expect(queryKeys.expressionsShelf()).toEqual(["expressions", "shelf", "", ""]);
   });
 
   it("produces stable keys for work parts with id", async () => {
@@ -185,7 +185,7 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
     const { result } = renderHook(() => useWorksShelf(true), { wrapper: getWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(getSpy).toHaveBeenCalledWith("/works/shelf");
+    expect(getSpy).toHaveBeenCalledWith("/works/shelf", { params: {} });
   });
 
   it("verifies useExpressionsShelf calls the correct endpoint", async () => {
@@ -198,7 +198,7 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
     const { result } = renderHook(() => useExpressionsShelf(true), { wrapper: getWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(getSpy).toHaveBeenCalledWith("/expressions/shelf");
+    expect(getSpy).toHaveBeenCalledWith("/expressions/shelf", { params: {} });
   });
 
   it("verifies useWorkParts calls the correct parts endpoint with ID", async () => {

@@ -435,7 +435,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     fireEvent.click(worksBtn);
 
     expect(screen.getByText("Mock Work Anthology")).toBeInTheDocument();
-    expect(screen.getByText(/4 items in collection/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 items/i)).toBeInTheDocument();
   });
 
   it("renders the Expressions shelf when the Expressions view mode is selected", () => {
@@ -448,7 +448,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     fireEvent.click(exprBtn);
 
     expect(screen.getByText("Mock Expression Trans")).toBeInTheDocument();
-    expect(screen.getByText(/text \/ pl/i)).toBeInTheDocument();
+    expect(screen.getByText("text")).toBeInTheDocument();
+    expect(screen.getByText("pl")).toBeInTheDocument();
   });
 });
 
