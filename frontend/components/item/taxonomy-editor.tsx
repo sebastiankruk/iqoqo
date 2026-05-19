@@ -27,7 +27,7 @@ interface TaxonomyEditorProps {
 
 /**
  * TaxonomyEditor component for managing item tags
- * 
+ *
  * @param root0 - The props object
  * @param root0.item - The item to edit taxonomies for
  * @returns {JSX.Element} The component

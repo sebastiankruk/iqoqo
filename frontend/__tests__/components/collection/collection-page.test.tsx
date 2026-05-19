@@ -83,6 +83,15 @@ vi.mock("@/lib/api/hooks", () => ({
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
   useWorksShelf: vi.fn(),
   useExpressionsShelf: vi.fn(),
+  useTaxonomies: vi.fn(() => ({
+    data: {
+      collections: [],
+      tags: [],
+      genres: [],
+      publishers: [],
+    },
+    isLoading: false,
+  })),
 }));
 
 // ── Stub heavy / irrelevant sub-components ─────────────────────────────────

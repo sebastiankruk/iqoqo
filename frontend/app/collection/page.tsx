@@ -16,15 +16,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
-import {
-  SlidersHorizontal,
-  Search,
-  Library as LibraryIcon,
-  BookOpen,
-  Layers,
-  Type,
-  Users,
-} from "lucide-react";
+import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen, Layers, Type, Users } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
