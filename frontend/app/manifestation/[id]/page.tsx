@@ -17,12 +17,14 @@
 
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, Loader2, Disc } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-import { useManifestation, useProfile, useAddItem } from "@/lib/api/hooks";
+import { useManifestation, useProfile, useAddItem, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { ImagePlus } from "lucide-react";
@@ -41,6 +43,8 @@ export default function ManifestationPage() {
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
   const { mutate: addItem, isPending: isAdding } = useAddItem();
+  const { data: partsResponse } = useWorkParts(manifestation?.container_work_id ?? manifestation?.work_id ?? 0);
+  const parts = partsResponse?.data ?? [];
   const router = useRouter();
 
   if (isLoading) {
@@ -73,6 +77,27 @@ export default function ManifestationPage() {
     (manifestation.meta?.["cover_url"] as string | undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
+  const isSeries = parts.length > 0;
+  const childCovers = parts.map(p => p.cover_url).filter(Boolean) as string[];
+
+  const format =
+    (manifestation.meta?.format as string | undefined) || (manifestation.meta?.Format as string | undefined) || "book";
+  const isAudio =
+    manifestation.content_type === "audiobook" ||
+    manifestation.content_type === "music" ||
+    format.toLowerCase() === "cd" ||
+    format.toLowerCase() === "vinyl" ||
+    format.toLowerCase() === "audiobook_cd";
+
+  // Resolve special series label
+  const contentType = manifestation.content_type ?? "text";
+  let baseLabel = "Book";
+  if (contentType === "movie") baseLabel = "Movie";
+  else if (contentType === "music") baseLabel = "Music";
+  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
+
+  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
+
   /**
    * Add the current manifestation to the user's collection.
    * @returns {void}
@@ -89,7 +114,34 @@ export default function ManifestationPage() {
           {/* Cover Art */}
           <div className="w-full md:w-1/3 max-w-sm mx-auto">
             <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl border border-border bg-secondary shadow-lg">
-              {coverUrl ? (
+              {coverUrl && manifestation.meta?.format !== "series" && manifestation.meta?.format !== "Series" ? (
+                <Image
+                  src={coverUrl}
+                  alt={`Cover of ${manifestation.title}`}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  unoptimized
+                  priority
+                  className="object-cover"
+                />
+              ) : childCovers.length > 0 ? (
+                <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-0.5 bg-background">
+                  {childCovers.slice(0, 4).map((url, idx) => (
+                    <div key={url + idx} className="relative h-full w-full">
+                      <Image src={url} alt={`Collage Part ${idx + 1}`} fill className="object-cover" unoptimized />
+                    </div>
+                  ))}
+                  {childCovers.length < 4 &&
+                    Array.from({ length: 4 - childCovers.length }).map((_, idx) => (
+                      <div
+                        key={`empty-${idx}`}
+                        className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground/30"
+                      >
+                        <BookOpen className="h-6 w-6" />
+                      </div>
+                    ))}
+                </div>
+              ) : coverUrl ? (
                 <Image
                   src={coverUrl}
                   alt={`Cover of ${manifestation.title}`}
@@ -125,12 +177,39 @@ export default function ManifestationPage() {
           {/* Metadata */}
           <div className="flex-1 space-y-6">
             <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge
+                  variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
+                >
+                  {isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+                  {badgeLabel}
+                </Badge>
+              </div>
               <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground">
                 {manifestation.title || "Untitled Work"}
               </h1>
-              <p className="mt-2 text-xl text-muted-foreground">
-                {manifestation.authors?.join(", ") || "Unknown Author"}
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium">
+                {(manifestation.authors ?? []).length > 0 ? (
+                  (manifestation.authors ?? []).map((author, idx, arr) => (
+                    <span key={author}>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                        onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                        className="hover:text-primary hover:underline cursor-pointer transition-colors"
+                        title={`Browse all works by ${author}`}
+                      >
+                        {author}
+                      </span>
+                      {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
+                    </span>
+                  ))
+                ) : (
+                  <span>Unknown Author</span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3 pt-6 border-t border-border">
@@ -171,25 +250,111 @@ export default function ManifestationPage() {
               </dl>
             </div>
 
+            {(manifestation.container_work_id || parts.length > 0) && parts.length > 0 && (
+              <div className="pt-6 border-t border-border space-y-3">
+                <h2 className="text-lg font-semibold">Series / Complex Work Parts</h2>
+                <div className="border border-border/60 rounded-xl divide-y bg-muted/5 overflow-hidden">
+                  {parts.map(part => {
+                    const isCurrent = part.part_work_id === manifestation.work_id;
+                    const isLinkable = !!(part.item_id || part.manifestation_id);
+                    const linkUrl = part.item_id ? `/item/${part.item_id}` : `/manifestation/${part.manifestation_id}`;
+
+                    const content = (
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {part.sequence}
+                        </span>
+                        {part.cover_url ? (
+                          <div className="relative h-12 w-8 shrink-0 overflow-hidden rounded-md border border-border/80 bg-secondary shadow-sm">
+                            <Image
+                              src={part.cover_url}
+                              alt={`Cover of ${part.title}`}
+                              fill
+                              sizes="32px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-12 w-8 shrink-0 items-center justify-center rounded-md border border-border/80 bg-muted text-muted-foreground/30 shadow-sm">
+                            <BookOpen className="h-4 w-4" />
+                          </div>
+                        )}
+                        <span
+                          className={
+                            isCurrent
+                              ? "text-primary font-semibold"
+                              : "text-foreground hover:text-primary transition-colors"
+                          }
+                        >
+                          {part.title}
+                        </span>
+                      </div>
+                    );
+
+                    return (
+                      <div
+                        key={part.part_work_id}
+                        className={`flex items-center justify-between p-3 text-sm transition-all duration-200 ${
+                          isCurrent ? "bg-primary/5 font-semibold" : "hover:bg-muted/40"
+                        }`}
+                      >
+                        {isLinkable ? (
+                          <Link href={linkUrl} className="flex-1">
+                            {content}
+                          </Link>
+                        ) : (
+                          <div className="flex-1">{content}</div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          {part.item_id && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full bg-green-500/10">
+                              In Collection
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="text-xs font-semibold uppercase tracking-wider text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                              Current Edition
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {userProfile && (
               <div className="pt-6 space-y-4">
                 <div className="flex flex-col items-start gap-2">
                   <div>
                     {manifestation.user_owns ? (
-                      <Button
-                        onClick={() =>
-                          router.push(
-                            `/collection?view=items&q=${encodeURIComponent(
-                              manifestation.isbn13 || manifestation.title || ""
-                            )}`
-                          )
-                        }
-                        variant="secondary"
-                        size="sm"
-                      >
-                        <BookOpen className="mr-2 h-4 w-4 text-primary" />
-                        View in My Collection
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        {manifestation.item_id && (
+                          <Button onClick={() => router.push(`/item/${manifestation.item_id}`)} size="sm">
+                            <BookOpen className="mr-2 h-4 w-4" />
+                            View My Item
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() =>
+                            router.push(
+                              `/collection?view=items&q=${encodeURIComponent(
+                                manifestation.isbn13 || manifestation.title || ""
+                              )}`
+                            )
+                          }
+                          variant="secondary"
+                          size="sm"
+                        >
+                          View in Collection
+                        </Button>
+                      </div>
                     ) : (
                       <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
                         {isAdding ? (

@@ -16,9 +16,11 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
 
 interface ItemHeaderProps {
@@ -33,24 +35,40 @@ interface ItemHeaderProps {
  * @returns {JSX.Element} The component
  */
 export function ItemHeader({ item }: ItemHeaderProps) {
+  const router = useRouter();
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
 
+  const { data: partsResponse } = useWorkParts(work?.container_work_id ?? work?.id ?? 0);
+  const parts = partsResponse?.data ?? [];
+  const isSeries = parts.length > 0;
+
   const title = work?.title ?? item.title ?? "Untitled";
-  const authorDisplay = work?.authors?.join(", ") ?? item.authors?.join(", ") ?? "Unknown Artist/Author";
 
   const timestamp = getCoverTimestamp(meta);
 
-  // Normalize cover URL handling for both external and local static paths
+  // Cover cascade: item's own cover → manifestation meta cover_url → item meta cover_url → placeholder
   const coverUrl =
-    getCoverUrl(item.cover_url || undefined, timestamp) || (meta["cover_url"] as string | undefined) || "/file.svg";
+    getCoverUrl(item.cover_url || undefined, timestamp) ||
+    (item.manifestation_meta?.["cover_url"] as string | undefined) ||
+    (meta["cover_url"] as string | undefined) ||
+    "/file.svg";
 
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);
   const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
   const publisher = (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
   const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
+
+  // Resolve special series label
+  const contentType = item.expression?.content_type ?? "text";
+  let baseLabel = "Book";
+  if (contentType === "movie") baseLabel = "Movie";
+  else if (contentType === "music") baseLabel = "Music";
+  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
+
+  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
@@ -72,24 +90,13 @@ export function ItemHeader({ item }: ItemHeaderProps) {
       <div className="flex flex-col flex-1 w-full">
         {/* Media type Badge */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {isAudio && (
-            <Badge
-              variant="secondary"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
-            >
-              <Disc className="h-3 w-3" />
-              CD / Audio
-            </Badge>
-          )}
-          {!isAudio && (
-            <Badge
-              variant="outline"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
-            >
-              <BookOpen className="h-3 w-3" />
-              Book
-            </Badge>
-          )}
+          <Badge
+            variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
+          >
+            {isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+            {badgeLabel}
+          </Badge>
         </div>
 
         {/* Tags */}
@@ -112,7 +119,27 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight">
             {title}
           </h1>
-          <h2 className="text-xl md:text-2xl text-muted-foreground font-medium">{authorDisplay}</h2>
+          <div className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium">
+            {(work?.authors ?? item.authors ?? []).length > 0 ? (
+              (work?.authors ?? item.authors ?? []).map((author, idx, arr) => (
+                <span key={author}>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                    onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
+                    className="hover:text-primary hover:underline cursor-pointer transition-colors"
+                    title={`Browse all works by ${author}`}
+                  >
+                    {author}
+                  </span>
+                  {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
+                </span>
+              ))
+            ) : (
+              <span>Unknown Artist/Author</span>
+            )}
+          </div>
         </div>
 
         {/* Quick Meta block */}

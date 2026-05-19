@@ -31,6 +31,13 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+// Mock API hooks
+vi.mock("@/lib/api/hooks", () => ({
+  useWorkParts: () => ({
+    data: { data: [] },
+  }),
+}));
+
 const mockItem: Item = {
   id: 1,
   owner_id: "user1",

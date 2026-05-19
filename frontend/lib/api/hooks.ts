@@ -15,9 +15,19 @@
 //
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type { Item, CatalogEntry, DashboardStats, IsbnMeta, ApiResponse, UserProfile } from "@/types/frbr";
+import type {
+  Item,
+  CatalogEntry,
+  DashboardStats,
+  IsbnMeta,
+  ApiResponse,
+  UserProfile,
+  WorkShelfEntry,
+  ExpressionShelfEntry,
+  WorkPartEntry,
+} from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -27,15 +37,19 @@ export const queryKeys = {
    */
   stats: ["stats"] as const,
   /**
-   * Query key for a list of items.
+   * Query key for items.
    *
-   * @param page - The page number.
-   * @param limit - The number of items per page.
-   * @param statuses - Optional array of item statuses to filter by.
-   * @param query - Optional search query string.
-   * @param sort - Optional sort order (updated, added, title, title-desc, author).
-   * @param category - Optional category filter.
-   * @param formatFilter - Optional format filter.
+   * @param page - Page number
+   * @param limit - Items per page
+   * @param statuses - Filter by statuses
+   * @param query - Search query
+   * @param sort - Sort order
+   * @param category - Category filter
+   * @param formatFilter - Format filter
+   * @param tags - Tags filter
+   * @param collections - Collections filter
+   * @param genres - Genres filter
+   * @param publishers - Publishers filter
    * @returns The query key for items.
    */
   items: (
@@ -45,7 +59,11 @@ export const queryKeys = {
     query?: string,
     sort?: string,
     category?: string,
-    formatFilter?: string
+    formatFilter?: string,
+    tags?: string[],
+    collections?: string[],
+    genres?: string[],
+    publishers?: string[]
   ) =>
     [
       "items",
@@ -56,6 +74,10 @@ export const queryKeys = {
       sort ?? "",
       category ?? "",
       formatFilter ?? "",
+      tags?.join(",") ?? "",
+      collections?.join(",") ?? "",
+      genres?.join(",") ?? "",
+      publishers?.join(",") ?? "",
     ] as const,
   /**
    * Query key for a single item.
@@ -74,6 +96,10 @@ export const queryKeys = {
   manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
     ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  worksShelf: (query?: string, category?: string) => ["works", "shelf", query ?? "", category ?? ""] as const,
+  expressionsShelf: (query?: string, category?: string) =>
+    ["expressions", "shelf", query ?? "", category ?? ""] as const,
+  workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
 };
 
@@ -177,6 +203,90 @@ export function useItems(
   });
 }
 
+/**
+ * Custom hook to fetch an infinite scrolling list of items.
+ *
+ * @param limit - Items per page
+ * @param statuses - Filter by statuses
+ * @param query - Search query
+ * @param sort - Sort order (updated, added, title, title-desc, author)
+ * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param borrowed - Filter by borrowed status
+ * @param missingCover - Filter items missing a cover
+ * @param missingId - Filter items missing an external identifier
+ * @param tags - Filter by tags
+ * @param collections - Filter by collections
+ * @param genres - Filter by genres
+ * @param publishers - Filter by publishers
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<Item[]>>} Infinite query result
+ */
+export function useInfiniteItems(
+  limit = 20,
+  statuses?: string[],
+  query?: string,
+  sort?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  borrowed?: boolean,
+  missingCover?: boolean,
+  missingId?: boolean,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
+) {
+  return useInfiniteQuery({
+    queryKey: [
+      ...queryKeys.items(
+        1,
+        limit,
+        statuses,
+        query,
+        sort,
+        category,
+        formatFilter,
+        tags,
+        collections,
+        genres,
+        publishers
+      ),
+      "infinite",
+      borrowed,
+      missingCover,
+      missingId,
+    ],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: Record<string, string | number | boolean> = { page: pageParam, limit };
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (query && query.length > 0) params.q = query;
+      if (sort) params.sort = sort;
+      if (category) params.category = category;
+      if (formatFilter) params.format = formatFilter;
+      if (borrowed) params.borrowed = true;
+      if (missingCover) params.missing_cover = true;
+      if (missingId) params.missing_id = true;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
+      return res.data;
+    },
+    getNextPageParam: lastPage => {
+      if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
+        return lastPage.meta.page + 1;
+      }
+      return undefined;
+    },
+    staleTime: 10_000,
+    enabled,
+  });
+}
+
 /* ── Manifestations list (global catalog) ─────────────────────────────────── */
 
 /**
@@ -230,6 +340,56 @@ export function useManifestations(
 }
 
 /**
+ * Custom hook to fetch an infinite scrolling list of manifestations.
+ *
+ * @param limit - Items per page
+ * @param query - Search query
+ * @param enabled - Whether the query is enabled
+ * @param category - Category filter
+ * @param formatFilter - Format filter
+ * @param missingCover - Filter manifestations missing a cover
+ * @param missingId - Filter manifestations missing an external identifier
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
+ */
+export function useInfiniteManifestations(
+  limit = 20,
+  query?: string,
+  enabled = true,
+  category?: string,
+  formatFilter?: string,
+  missingCover?: boolean,
+  missingId?: boolean
+) {
+  return useInfiniteQuery({
+    queryKey: [
+      ...queryKeys.manifestations(1, limit, query, category, formatFilter),
+      "infinite",
+      missingCover,
+      missingId,
+    ],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: Record<string, string | number | boolean> = { page: pageParam, limit };
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      if (formatFilter) params.format = formatFilter;
+      if (missingCover) params.missing_cover = true;
+      if (missingId) params.missing_id = true;
+      const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
+      return res.data;
+    },
+    getNextPageParam: lastPage => {
+      if (lastPage.meta && lastPage.meta.page < lastPage.meta.pages) {
+        return lastPage.meta.page + 1;
+      }
+      return undefined;
+    },
+    staleTime: 10_000,
+    enabled,
+  });
+}
+
+/**
  * Custom hook to fetch a single manifestation by ID.
  *
  * @param id - Manifestation ID
@@ -243,6 +403,74 @@ export function useManifestation(id: number) {
       return res.data?.data ?? null;
     },
     enabled: id > 0,
+  });
+}
+
+/* ── Shelves & Views ─────────────────────────────────────────────────────── */
+
+/**
+ * React Query hook to fetch the specialized Works Shelf view for the authenticated user.
+ * Grouped at the F1 Work level, aggregating manifestations.
+ *
+ * @param enabled - Whether the query is enabled or not.
+ * @param query - Optional search query to filter by work title or creator name.
+ * @param category - Optional content_type category filter (e.g. 'text', 'music').
+ * @returns The query result containing the works shelf entries.
+ */
+export function useWorksShelf(enabled = true, query?: string, category?: string) {
+  return useQuery({
+    queryKey: queryKeys.worksShelf(query, category),
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
+      return res.data;
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/**
+ * React Query hook to fetch the specialized Expressions Shelf view for the authenticated user.
+ * Grouped at the F2 Expression level, showing different languages or content types.
+ *
+ * @param enabled - Whether the query is enabled or not.
+ * @param query - Optional search query to filter by work title or creator name.
+ * @param category - Optional content_type category filter (e.g. 'text', 'music').
+ * @returns The query result containing the expressions shelf entries.
+ */
+export function useExpressionsShelf(enabled = true, query?: string, category?: string) {
+  return useQuery({
+    queryKey: queryKeys.expressionsShelf(query, category),
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
+      return res.data;
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/**
+ * React Query hook to fetch the parts/sequence of a complex work (e.g. book series).
+ * Grouped at the F15 Complex Work level.
+ *
+ * @param workId - The database ID of the container work.
+ * @returns The query result containing the work parts.
+ */
+export function useWorkParts(workId: number) {
+  return useQuery({
+    queryKey: queryKeys.workParts(workId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WorkPartEntry[]>>(`/works/${workId}/parts`);
+      return res.data;
+    },
+    enabled: !!workId,
   });
 }
 
@@ -362,6 +590,8 @@ type ManualItemPayload = {
   PublicationDate?: string;
   Publisher?: string;
   Description?: string;
+  tags?: string[];
+  genres?: string[];
 };
 
 /**
@@ -510,5 +740,39 @@ export function useRecentManifestations(limit = 10) {
     queryKey: ["recentManifestations", limit],
     queryFn: () => apiFetch<CatalogEntry[]>("/manifestations/recent", { limit }),
     staleTime: 30_000,
+  });
+}
+
+import type { TaxonomiesResponse, UserCollection } from "@/types/frbr";
+
+/**
+ * Custom hook to fetch all global taxonomies.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<TaxonomiesResponse>>} The query result
+ */
+export function useTaxonomies() {
+  return useQuery({
+    queryKey: ["taxonomies"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<TaxonomiesResponse>>("/taxonomies");
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Custom hook to fetch all user collections.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<UserCollection[]>>} The query result
+ */
+export function useUserCollections() {
+  return useQuery({
+    queryKey: ["collections"],
+    queryFn: async () => {
+      const res = await apiClient.get<{ success: boolean; collections: UserCollection[] }>("/collections");
+      return res.data.collections;
+    },
+    staleTime: 60_000,
   });
 }

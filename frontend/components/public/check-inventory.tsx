@@ -100,7 +100,10 @@ export function CheckInventory({ username }: CheckInventoryProps) {
       </form>
 
       {result && (
-        <Card id="inventory-result-card" className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 text-left">
+        <Card
+          id="inventory-result-card"
+          className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 text-left"
+        >
           <CardContent className="p-4">
             {result.data && result.data.length > 0 ? (
               <div className="flex flex-wrap justify-center gap-4">

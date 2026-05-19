@@ -20,15 +20,21 @@
  * next/link is mocked globally via vitest.setup.ts.
  */
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
 
 /**
  * Make a mock Item.
  *
- * @param overrides - Item overrides
- * @returns {Item} Mock Item
+ * @param overrides - Partial overrides for the Item.
+ * @returns A fully populated mock Item.
  */
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -47,8 +53,8 @@ function makeItem(overrides: Partial<Item> = {}): Item {
 /**
  * Make a mock CatalogEntry.
  *
- * @param overrides - CatalogEntry overrides
- * @returns {CatalogEntry} Mock CatalogEntry
+ * @param overrides - Partial overrides for the CatalogEntry.
+ * @returns A fully populated mock CatalogEntry.
  */
 function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
@@ -86,6 +92,19 @@ describe("ItemCard", () => {
   it("links to the item detail page", () => {
     render(<ItemCard item={makeItem({ id: 42 })} />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/item/42");
+  });
+
+  it("shows a quantity badge when _quantity > 1", () => {
+    const item = makeItem();
+    (item as Item & { _quantity?: number })._quantity = 3;
+    render(<ItemCard item={item} />);
+    expect(screen.getByText("x3")).toBeInTheDocument();
+  });
+
+  it("does not show a quantity badge when _quantity is 1 or undefined", () => {
+    const item = makeItem();
+    render(<ItemCard item={item} />);
+    expect(screen.queryByText(/^x\d+$/)).not.toBeInTheDocument();
   });
 
   it("renders a cover placeholder when coverUrl is absent", () => {
@@ -131,13 +150,23 @@ describe("ItemCard", () => {
   });
 
   it("shows 'In Collection' badge when isManifestationView is true and user_owns is true", () => {
-    render(<ItemCard item={makeCatalogEntry({ user_owns: true })} isManifestationView={true} />);
-    expect(screen.getByText("In Collection")).toBeInTheDocument();
+    // When item_id is not present
+    const { rerender } = render(
+      <ItemCard item={makeCatalogEntry({ user_owns: true, item_id: null })} isManifestationView={true} />
+    );
+    expect(screen.getByText(/In Collection/i)).toBeInTheDocument();
+
+    // When item_id is present
+    rerender(<ItemCard item={makeCatalogEntry({ user_owns: true, item_id: 123 })} isManifestationView={true} />);
+    const links = screen.getAllByRole("link");
+    const itemLink = links.find(l => l.getAttribute("href")?.includes("/item/123"));
+    expect(itemLink).toBeInTheDocument();
   });
 
   it("does not show 'In Collection' badge when user_owns is false", () => {
     render(<ItemCard item={makeCatalogEntry({ user_owns: false })} isManifestationView={true} />);
     expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
+    expect(screen.queryByText("In Collection →")).not.toBeInTheDocument();
   });
 
   it("renders a cover image in horizontal variant when coverUrl is provided", () => {

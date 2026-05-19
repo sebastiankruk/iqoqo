@@ -14,6 +14,16 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Determine the Python executable to use (check for local virtualenv first)
+const hasLocalVenv = fs.existsSync(path.join(__dirname, "../.venv/bin/python"));
+const pythonExecutable = hasLocalVenv ? ".venv/bin/python" : "python";
 
 export default defineConfig({
   testDir: "./__tests__/e2e",
@@ -43,10 +53,24 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  webServer: [
+    {
+      // Next.js dev server – reused locally, always started in CI
+      command: "npm run dev",
+      url: "http://localhost:3000",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
+    },
+    {
+      // Flask API – reused if already running (local dev), started otherwise (VS Code, Antigravity, CI)
+      command:
+        "PYTHONUNBUFFERED=1 ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=. " +
+        pythonExecutable +
+        " -m flask run --port 5000",
+      url: "http://127.0.0.1:5000/api/health",
+      reuseExistingServer: true,
+      timeout: 60000,
+      cwd: "..", // Run from project root so sqlite.db and paths resolve correctly
+    },
+  ],
 });

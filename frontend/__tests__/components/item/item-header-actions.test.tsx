@@ -30,6 +30,13 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+// Mock API hooks
+vi.mock("@/lib/api/hooks", () => ({
+  useWorkParts: () => ({
+    data: { data: [] },
+  }),
+}));
+
 // Mock Item data — uses work-level fields as returned by the API
 const mockItem: Item = {
   id: 1,

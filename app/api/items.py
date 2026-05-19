@@ -24,9 +24,37 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.manifestations import lookup_isbn
-from app.api.schemas import ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, ItemStatusLog, Manifestation, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, Work, db
+
+
+def sync_tags(item_id: int, user_id, tags: list[str] | None):
+    if tags is None:
+        return
+    existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
+    existing_tag_ids = {link.tag_id: link for link in existing_links}
+    desired_tag_names = {t.strip() for t in tags if t.strip()}
+
+    db_tags = []
+    for name in desired_tag_names:
+        tag = db.session.query(Tag).filter(Tag.name == name).first()
+        if not tag:
+            tag = Tag(name=name)
+            db.session.add(tag)
+            db.session.flush()
+        db_tags.append(tag)
+
+    desired_tag_ids = {t.id for t in db_tags}
+
+    for tag_id, link in existing_tag_ids.items():
+        if tag_id not in desired_tag_ids:
+            db.session.delete(link)
+
+    for tag in db_tags:
+        if tag.id not in existing_tag_ids:
+            link = ItemTag(item_id=item_id, tag_id=tag.id, added_by_id=user_id)
+            db.session.add(link)
 
 
 @api_bp.route("/items", methods=["GET"])
@@ -221,6 +249,7 @@ def get_items():
                 "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                 "is_owner": is_owner,
                 "is_borrowed": not is_owner,
+                "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
                 "added_at": item.added_at.isoformat() if item.added_at else None,
                 "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
             }
@@ -280,6 +309,7 @@ def get_item_detail(item_id: int):
         "collection_status": item.collection_status,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
+        "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
     }
 
@@ -308,11 +338,13 @@ def get_item_detail(item_id: int):
 
             if expression.work:
                 work = expression.work
+                container_work_id = work.member_of[0].container_work_id if work.member_of else None
                 item_data["work"] = {
                     "id": work.id,
                     "title": work.title,
                     "authors": work.meta.get("authors", []) if work.meta else [],
                     "meta": work.meta,
+                    "container_work_id": container_work_id,
                 }
 
     return jsonify({"success": True, "data": item_data, "error": None})
@@ -376,6 +408,8 @@ def update_item(item_id: int):
             item.manifestation.update_meta(**metadata)
         # Also update item.meta if needed, but usually extra fields are for manifestation
         item.meta = {**item.meta, **metadata} if item.meta else metadata
+
+    sync_tags(item.id, user_id, payload.tags)
 
     try:
         db.session.commit()
@@ -481,6 +515,8 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     )
     db.session.add(item)
     try:
+        db.session.flush()
+        sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
@@ -522,9 +558,69 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         meta={},
     )
     db.session.add(item)
+    db.session.flush()
+    sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
 
     return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+
+
+@api_bp.route("/items/bulk", methods=["POST"])
+@require_auth
+def add_items_bulk() -> Response | tuple[Response, int]:
+    """Bulk add multiple manifestations to user's collection."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = ItemBulkCreateSchema(**payload_json)
+    except ValidationError as e:
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    manifestations = Manifestation.query.filter(Manifestation.id.in_(payload.manifestation_ids)).all()
+    if not manifestations:
+        return jsonify({"success": False, "data": None, "error": "No valid manifestations found"}), 404
+
+    created_items = []
+    for man in manifestations:
+        status = payload.status
+        if not status:
+            content_type = man.expression.content_type if man.expression else "text"
+            from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_ALIAS_TO_CATEGORY, MediaCategory
+
+            _fmt_lower = (content_type or "").lower()
+            category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+            status = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))[0]
+
+        item = Item(
+            manifestation_id=man.id,
+            owner_id=user_id,
+            status=status,
+            collection_status=payload.collection_status,
+            is_hidden=payload.is_hidden or False,
+            meta={},
+        )
+        db.session.add(item)
+        created_items.append(item)
+
+    try:
+        db.session.commit()
+        return jsonify(
+            {
+                "success": True,
+                "data": {"item_ids": [i.id for i in created_items], "manifestation_ids": [m.id for m in manifestations]},
+                "error": None,
+            }
+        )
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to bulk add items for user %s: %s", user_id, e)
+        return jsonify({"success": False, "data": None, "error": "Failed to create items"}), 500
 
 
 @api_bp.route("/items/manual", methods=["POST"])
@@ -608,6 +704,8 @@ def add_item_manual() -> Response | tuple[Response, int]:
             meta={},
         )
         db.session.add(item)
+        db.session.flush()
+        sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
 
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})

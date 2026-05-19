@@ -25,6 +25,7 @@ export interface Work {
   title: string;
   authors: string[];
   meta: Record<string, unknown>;
+  container_work_id?: number | null;
 }
 
 /**
@@ -57,6 +58,8 @@ export interface AdditionalImage {
 export interface Manifestation {
   id: number;
   expression_id: number;
+  work_id?: number | null;
+  container_work_id?: number | null;
   isbn13?: string;
   publisher?: string;
   year?: number;
@@ -102,6 +105,12 @@ export interface CatalogEntry extends Manifestation {
   cover_url?: string | null;
   cover_status?: string | null;
   user_owns: boolean;
+  /** Work ID if available */
+  work_id?: number | null;
+  /** Item ID if the authenticated user owns this manifestation */
+  item_id?: number | null;
+  /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */
+  content_type?: string | null;
 }
 
 /**
@@ -129,13 +138,56 @@ export interface Item {
   title?: string;
   isbn?: string;
   authors?: string[];
+  tags?: string[];
+  genres?: string[];
+  publisher?: string;
   manifestation_meta?: Record<string, unknown>;
   expression?: Pick<Expression, "id" | "content_type" | "language">;
-  work?: Pick<Work, "id" | "title" | "authors" | "meta">;
+  work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
 }
 
 /** Backward compatible alias for ProgressStatus */
 export type ItemStatus = ProgressStatus;
+
+/** Work level shelf entry DTO */
+export interface WorkShelfEntry {
+  work_id: number;
+  title: string;
+  creators: string[];
+  owned_manifestations: Array<{
+    manifestation_id: number;
+    item_id?: number;
+    format: string;
+    cover_url?: string | null;
+  }>;
+  total_items: number;
+}
+
+/** Expression level shelf entry DTO */
+export interface ExpressionShelfEntry {
+  expression_id: number;
+  content_type: string;
+  language: string;
+  work_title: string;
+  creators: string[];
+  owned_manifestations: Array<{
+    manifestation_id: number;
+    item_id?: number;
+    format: string;
+    cover_url?: string | null;
+  }>;
+  total_items: number;
+}
+
+/** Work part (F15 Complex Work) entry DTO */
+export interface WorkPartEntry {
+  part_work_id: number;
+  title: string;
+  sequence: number;
+  manifestation_id?: number | null;
+  cover_url?: string | null;
+  item_id?: number | null;
+}
 
 /** API Response envelope */
 export interface ApiResponse<T> {
@@ -224,3 +276,17 @@ export interface UserProfile {
   permissions?: string[];
   created_at?: string;
 }
+
+export type UserCollection = {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  created_at: string | null;
+};
+
+export type TaxonomiesResponse = {
+  tags: string[];
+  genres: string[];
+  collections: string[];
+  publishers: string[];
+};

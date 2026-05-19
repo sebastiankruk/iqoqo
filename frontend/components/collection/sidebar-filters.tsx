@@ -27,6 +27,8 @@ interface SidebarFiltersProps {
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   disableStatus?: boolean;
+  /** Current view mode, used to contextually hide irrelevant filters */
+  viewMode?: "items" | "manifestations" | "works" | "expressions";
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -110,6 +112,8 @@ function AccordionSection({
   );
 }
 
+import { useTaxonomies } from "@/lib/api/hooks";
+
 /**
  * Desktop sidebar with collapsible filter sections.
  *
@@ -119,6 +123,7 @@ function AccordionSection({
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
  * @param root0.disableStatus - Whether to disable the status filter
+ * @param root0.viewMode - The current view mode
  * @returns {JSX.Element} The component*/
 export function SidebarFilters({
   activeFilters,
@@ -126,8 +131,10 @@ export function SidebarFilters({
   statusCounts = {},
   formatCounts = {},
   disableStatus = false,
+  viewMode = "items",
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
+  const { data: taxonomies } = useTaxonomies();
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []
@@ -136,6 +143,9 @@ export function SidebarFilters({
   const validFormats = activeCategory
     ? MEDIA_HIERARCHY[activeCategory as keyof typeof MEDIA_HIERARCHY]?.formats || []
     : [];
+
+  /** True when viewing Works or Expressions – status/format don't apply at those levels */
+  const isHierarchyView = viewMode === "works" || viewMode === "expressions";
 
   return (
     <aside className="w-full h-full overflow-y-auto pr-2 pb-20 custom-scrollbar">
@@ -171,7 +181,103 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      {validFormats.length > 0 && (
+      {taxonomies?.collections && taxonomies.collections.length > 0 && (
+        <AccordionSection title="My Collections">
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.collections.map(col => {
+              const active = isActive(activeFilters, "collection", col);
+              return (
+                <label
+                  key={col}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "collection", value: col })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{col}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.tags && taxonomies.tags.length > 0 && (
+        <AccordionSection title="Tags" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.tags.map(tag => {
+              const active = isActive(activeFilters, "tag", tag);
+              return (
+                <label
+                  key={tag}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "tag", value: tag })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{tag}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.genres && taxonomies.genres.length > 0 && (
+        <AccordionSection title="Genres" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.genres.map(genre => {
+              const active = isActive(activeFilters, "genre", genre);
+              return (
+                <label
+                  key={genre}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "genre", value: genre })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{genre}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {taxonomies?.publishers && taxonomies.publishers.length > 0 && (
+        <AccordionSection title="Publishers" defaultOpen={false}>
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {taxonomies.publishers.map(pub => {
+              const active = isActive(activeFilters, "publisher", pub);
+              return (
+                <label
+                  key={pub}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "publisher", value: pub })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{pub}</span>
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title="Physical Kind">
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
@@ -198,7 +304,11 @@ export function SidebarFilters({
       )}
 
       <AccordionSection title="Collection Status">
-        {disableStatus ? (
+        {isHierarchyView ? (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Status filters apply to physical items only. Switch to &ldquo;My Items&rdquo; view to filter by status.
+          </p>
+        ) : disableStatus ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">Not applicable here.</p>
         ) : (
           <div className="flex flex-col gap-1">
@@ -225,7 +335,7 @@ export function SidebarFilters({
         )}
       </AccordionSection>
 
-      {activeCategory && validProgressStatuses.length > 0 && (
+      {!isHierarchyView && activeCategory && validProgressStatuses.length > 0 && (
         <AccordionSection title="Progress">
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {
