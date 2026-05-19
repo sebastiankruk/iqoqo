@@ -21,6 +21,7 @@ import type { Item } from "@/types/frbr";
 import { useUpdateItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface TaxonomyEditorProps {
   item: Item;
@@ -91,7 +92,9 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
             key={tag}
             className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-500 ring-1 ring-blue-500/20"
           >
-            {tag}
+            <DiscoveryPivot type="tags" value={tag} variant="link" className="hover:underline">
+              {tag}
+            </DiscoveryPivot>
             <button
               onClick={() => handleRemoveTag(tag)}
               disabled={updateItem.isPending}
