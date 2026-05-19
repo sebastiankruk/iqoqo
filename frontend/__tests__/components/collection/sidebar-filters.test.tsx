@@ -18,6 +18,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
+import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useTaxonomies } from "@/lib/api/hooks";
 
