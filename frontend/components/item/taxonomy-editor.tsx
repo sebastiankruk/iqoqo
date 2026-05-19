@@ -20,6 +20,7 @@ import { X, Tag } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 interface TaxonomyEditorProps {
   item: Item;
@@ -103,7 +104,7 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
         {currentTags.length === 0 && <span className="text-xs text-muted-foreground italic">No tags added yet.</span>}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <input
           type="text"
           value={tagInput}
@@ -116,15 +117,16 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
           }}
           disabled={updateItem.isPending}
           placeholder="Add a new tag..."
-          className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         />
-        <button
+        <Button
           onClick={handleAddTag}
           disabled={updateItem.isPending || !tagInput.trim()}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          size="sm"
+          className="shrink-0"
         >
           Add
-        </button>
+        </Button>
       </div>
     </div>
   );
