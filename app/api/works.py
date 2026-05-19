@@ -40,10 +40,46 @@ def get_user_works() -> Response:
     search_q = (request.args.get("q") or "").strip().lower()
     category = (request.args.get("category") or "").strip().lower()
 
+    limit = request.args.get("limit", 20, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    # Base query for works owned by the user
+    base_query = (
+        db.session.query(Work.id)
+        .join(Expression, Expression.work_id == Work.id)
+        .join(Manifestation, Manifestation.expression_id == Expression.id)
+        .join(Item, Item.manifestation_id == Manifestation.id)
+        .filter(Item.owner_id == user_id)
+    )
+
+    if category:
+        base_query = base_query.filter(Expression.content_type == category)
+
+    if search_q:
+        # Search title and creators (authors)
+        # Using a pattern search for both fields
+        pattern = f"%{search_q}%"
+        base_query = base_query.filter(
+            db.or_(
+                Work.title.ilike(pattern),
+                db.cast(Work.meta["authors"], db.String).ilike(pattern),
+                db.cast(Work.meta["creators"], db.String).ilike(pattern),
+            )
+        )
+
+    # Get the total count of distinct works matching the filters
+    total_count = base_query.distinct().count()
+
+    # Get the paginated list of work IDs
+    work_ids = [row[0] for row in base_query.distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()]
+
+    # Fetch all items for the paginated works to aggregate them
     items = (
         db.session.query(Item)
         .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        .filter(Item.owner_id == user_id)
+        .filter(Item.owner_id == user_id, Expression.work_id.in_(work_ids))
         .all()
     )
 
@@ -55,19 +91,13 @@ def get_user_works() -> Response:
         expr = item.manifestation.expression
         work = expr.work
 
-        # Apply category filter at the expression level
+        # Re-apply category filter (redundant but safe given how we fetch items)
         if category and (expr.content_type or "").lower() != category:
             continue
 
         creators: list[str] = []
         if work.meta:
             creators = work.meta.get("creators") or work.meta.get("authors") or []
-
-        # Apply search filter against title and creator names
-        if search_q:
-            haystack = (work.title or "").lower() + " " + " ".join(creators).lower()
-            if search_q not in haystack:
-                continue
 
         if work.id not in works_map:
             works_map[work.id] = {
@@ -78,9 +108,11 @@ def get_user_works() -> Response:
                 "total_items": 0,
             }
 
-        man_dict = next((m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
+        man_dict = next(
+            (m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id),
+            None,
+        )
         if not man_dict:
-            # Cascade cover: prefer the manifestation cover, fall back to meta fields
             effective_cover = None
             if item.manifestation:
                 effective_cover = item.manifestation.cover_url or (
@@ -88,6 +120,7 @@ def get_user_works() -> Response:
                 )
             if not effective_cover and item.meta:
                 effective_cover = item.meta.get("cover_url")
+
             works_map[work.id]["owned_manifestations"].append(
                 {
                     "manifestation_id": item.manifestation.id,
@@ -99,11 +132,20 @@ def get_user_works() -> Response:
 
         works_map[work.id]["total_items"] += 1
 
+    # Sort the resulting list by title to match the ID query order
+    result_data = sorted(list(works_map.values()), key=lambda x: x["title"].lower())
+
     return jsonify(
         {
             "success": True,
-            "data": list(works_map.values()),
-            "total": len(works_map),
+            "data": result_data,
+            "total": total_count,
+            "pagination": {
+                "total": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + limit) < total_count,
+            },
         }
     )
 

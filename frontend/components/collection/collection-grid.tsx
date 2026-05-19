@@ -64,7 +64,7 @@ export function CollectionGrid({
           onLoadMore();
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: "400px" }
     );
 
     if (loadMoreRef.current) {

@@ -84,9 +84,9 @@ def get_items():
     except (TypeError, ValueError):
         return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
-    if page < 1 or limit < 1:
-        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
-
+    # Hard cap the limit to prevent users/bots from requesting the entire DB at once
+    limit = min(max(limit, 1), 100)
+    page = max(page, 1)
     offset = (page - 1) * limit
 
     if q:
@@ -139,6 +139,7 @@ def get_items():
                 "success": True,
                 "data": items_data,
                 "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
                 "error": None,
             }
         )
@@ -260,6 +261,7 @@ def get_items():
             "success": True,
             "data": items_data,
             "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+            "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
             "error": None,
         }
     )

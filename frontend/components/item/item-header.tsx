@@ -16,6 +16,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
@@ -103,13 +104,14 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {tags.map(tag => (
-              <span
+              <Link
                 key={tag}
-                className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+                href={`/collection?tags=${encodeURIComponent(tag)}`}
+                className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground hover:bg-muted transition-colors border border-transparent hover:border-border"
               >
                 <Tag className="h-2.5 w-2.5" />
                 {tag}
-              </span>
+              </Link>
             ))}
           </div>
         )}
