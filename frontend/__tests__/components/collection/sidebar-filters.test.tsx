@@ -42,10 +42,10 @@ describe("SidebarFilters with Searchable Facets", () => {
       publishers: ["Penguin"],
       collections: ["My Collection"],
     };
-    (useTaxonomies as any).mockReturnValue({ data: taxonomies });
+    vi.mocked(useTaxonomies).mockReturnValue({ data: taxonomies } as unknown as ReturnType<typeof useTaxonomies>);
   });
 
-  const renderComponent = (activeFilters: any[] = []) =>
+  const renderComponent = (activeFilters: ActiveFilter[] = []) =>
     render(
       <QueryClientProvider client={queryClient}>
         <SidebarFilters activeFilters={activeFilters} onToggleFilter={vi.fn()} />

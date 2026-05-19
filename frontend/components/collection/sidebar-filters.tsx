@@ -134,8 +134,16 @@ interface SearchableFacetProps {
 
 /**
  * Renders a list of facet options with a local search filter.
+ *
+ * @param root0 - Component props
+ * @param root0.options - The options to display
+ * @param root0.activeFilters - The active filters
+ * @param root0.type - The filter type
+ * @param root0.onToggle - Callback to toggle an option
+ * @param root0.placeholder - Search placeholder
+ * @returns {JSX.Element} The component
  */
-function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
+export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredOptions = useMemo(() => {

@@ -55,7 +55,7 @@ describe("CollectionQuickAdd", () => {
 
   it("submits a new collection and clears input on success", async () => {
     const mockOnCreated = vi.fn();
-    (apiClient.post as any).mockResolvedValueOnce({
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
       data: { success: true, collection: { id: 99, name: "Sci-Fi" } },
     });
 

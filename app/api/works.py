@@ -133,7 +133,7 @@ def get_user_works() -> Response:
         works_map[work.id]["total_items"] += 1
 
     # Sort the resulting list by title to match the ID query order
-    result_data = sorted(list(works_map.values()), key=lambda x: x["title"].lower())
+    result_data = sorted(works_map.values(), key=lambda x: x["title"].lower())
 
     return jsonify(
         {

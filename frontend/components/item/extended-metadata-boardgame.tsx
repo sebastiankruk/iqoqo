@@ -10,12 +10,9 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>
-//
-import { Badge } from "@/components/ui/badge";
 import { BggAttribution } from "@/components/ui/bgg-attribution";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataBoardGameProps {
   meta: Record<string, unknown>;
@@ -70,9 +67,7 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
             <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Mechanics</span>
             <div className="flex flex-wrap gap-2 mt-1">
               {mechanics.map(m => (
-                <Badge key={m} variant="secondary" className="font-normal">
-                  {m}
-                </Badge>
+                <DiscoveryPivot key={m} type="tags" value={m} badgeVariant="secondary" className="font-normal" />
               ))}
             </div>
           </div>

@@ -35,6 +35,11 @@ export interface ManageCollectionsModalProps {
 
 /**
  * A dedicated modal to manage (rename, delete, list) the user's hierarchy of custom collections.
+ *
+ * @param root0 - Component props
+ * @param root0.isOpen - Whether the modal is open
+ * @param root0.onClose - Callback to close the modal
+ * @returns {JSX.Element | null} The component or null if not open
  */
 export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsModalProps) {
   const queryClient = useQueryClient();

@@ -16,8 +16,8 @@
 "use client";
 
 import { Puzzle, Factory, Ruler, User } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataPuzzleProps {
   meta: Record<string, unknown>;
@@ -64,23 +64,29 @@ export function ExtendedMetadataPuzzle({ meta }: ExtendedMetadataPuzzleProps) {
           </div>
         )}
         {manufacturer && (
-          <div className="flex flex-col gap-2 p-3 bg-background rounded-lg border">
+          <DiscoveryPivot
+            type="publishers"
+            value={manufacturer}
+            className="flex flex-col gap-2 p-3 bg-background rounded-lg border hover:bg-muted/50 transition-colors"
+          >
             <Factory className="h-5 w-5 text-muted-foreground" />
             <span className="text-sm font-semibold">{manufacturer}</span>
-          </div>
+          </DiscoveryPivot>
         )}
         {artist && (
-          <div className="flex flex-col gap-2 p-3 bg-background rounded-lg border">
+          <DiscoveryPivot
+            type="q"
+            value={artist}
+            className="flex flex-col gap-2 p-3 bg-background rounded-lg border hover:bg-muted/50 transition-colors"
+          >
             <User className="h-5 w-5 text-muted-foreground" />
             <span className="text-sm font-semibold">{artist}</span>
-          </div>
+          </DiscoveryPivot>
         )}
       </div>
       {puzzleType && (
         <div className="mt-4">
-          <Badge variant="secondary" className="capitalize">
-            {puzzleType}
-          </Badge>
+          <DiscoveryPivot type="tags" value={puzzleType} badgeVariant="secondary" className="capitalize" />
         </div>
       )}
     </div>

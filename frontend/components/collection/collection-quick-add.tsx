@@ -28,6 +28,10 @@ interface CollectionQuickAddProps {
 /**
  * A lightweight inline input to instantly create a new Collection folder.
  * Best nested at the bottom of standard "Add to Collection" dropdowns.
+ *
+ * @param root0 - Component props
+ * @param root0.onCollectionCreated - Callback when a collection is created
+ * @returns {JSX.Element} The component
  */
 export function CollectionQuickAdd({ onCollectionCreated }: CollectionQuickAddProps) {
   const [name, setName] = useState("");

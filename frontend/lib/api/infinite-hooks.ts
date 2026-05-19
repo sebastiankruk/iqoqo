@@ -28,6 +28,11 @@ interface FetchItemsParams {
 /**
  * Custom hook for infinite scrolling through the collection grid.
  * Merges sidebar filters and handles offset-based pagination.
+ *
+ * @param root0 - Hook parameters
+ * @param root0.viewMode - The current view mode (items, manifestations, works)
+ * @param root0.filters - Active filters to apply
+ * @returns {object} The infinite query object
  */
 export function useInfiniteCollection({ viewMode, filters }: FetchItemsParams) {
   return useInfiniteQuery({
@@ -48,7 +53,7 @@ export function useInfiniteCollection({ viewMode, filters }: FetchItemsParams) {
 
       const endpoint =
         viewMode === "works" ? "/works/shelf" : viewMode === "manifestations" ? "/manifestations" : "/items";
-      const res = await apiClient.get<ApiResponse<any>>(`${endpoint}?${params.toString()}`);
+      const res = await apiClient.get<ApiResponse<unknown>>(`${endpoint}?${params.toString()}`);
 
       return res.data;
     },

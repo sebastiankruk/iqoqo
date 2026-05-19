@@ -200,6 +200,12 @@ export interface ApiResponse<T> {
     total: number;
     pages: number;
   };
+  pagination?: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
 }
 
 /** Dashboard statistics */

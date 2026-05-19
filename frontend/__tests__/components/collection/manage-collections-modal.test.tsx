@@ -39,7 +39,7 @@ describe("ManageCollectionsModal", () => {
     vi.clearAllMocks();
     global.confirm = vi.fn(() => true);
 
-    (apiClient.get as any).mockImplementation((url: string) => {
+    vi.mocked(apiClient.get).mockImplementation((url: string) => {
       if (url === "/collections") {
         return Promise.resolve({
           data: {
@@ -78,7 +78,7 @@ describe("ManageCollectionsModal", () => {
     const editInput = screen.getByDisplayValue("Fantasy");
     fireEvent.change(editInput, { target: { value: "High Fantasy" } });
 
-    (apiClient.put as any).mockResolvedValueOnce({ data: { success: true } });
+    vi.mocked(apiClient.put).mockResolvedValueOnce({ data: { success: true } });
 
     const saveButton = screen.getByText("Save");
     fireEvent.click(saveButton);
@@ -94,7 +94,7 @@ describe("ManageCollectionsModal", () => {
     const deleteButtons = await screen.findAllByTitle("Delete Collection");
     fireEvent.click(deleteButtons[0]);
 
-    (apiClient.delete as any).mockResolvedValueOnce({ data: { success: true } });
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({ data: { success: true } });
 
     await waitFor(() => {
       expect(global.confirm).toHaveBeenCalled();
