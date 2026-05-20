@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **i18n Foundation**: Integrated `next-intl` for multi-language support (EN, PL).
   - **Social Metadata**: Added `public_username` and `bio` to user profiles.
   - **Web Share Integration**: New `ShareButton` with native Web Share API support and clipboard fallback.
+
+- **Custom Taxonomies & Collections (Step 3)**:
+  - **Facet Mini-Search**: Added sticky client-side search input to each facet list (Tags, Genres, Publishers) in `sidebar-filters.tsx` via a new `SearchableFacet` sub-component with real-time `includes()` filtering.
+  - **User Collections CRUD**: Full REST API (`app/api/collections.py`) for hierarchical `UserCollection` folders with parent-child validation, cycle detection, and child-deletion protection.
+  - **Quick-Create Collection**: `collection-quick-add.tsx` — inline form in "Add to Collection" dropdowns for on-the-fly folder creation.
+  - **Manage Collections Modal**: `manage-collections-modal.tsx` — dedicated modal for listing, renaming, and deleting custom collections with React Query mutation lifecycle.
+  - **Clickable Taxonomy Pivots**: `DiscoveryPivot` component wraps tags, genres, and publishers as `<Link>` badges that navigate to the discovery grid pre-filtered by that value.
+  - **TaxonomyEditor**: Unified component in `item-header.tsx` / `item-tabs.tsx` for editing tags, genres, publisher assignments on items.
 - **Backend Architecture**:
   - `SharedCollection` model with automated secure token generation.
   - Cascade deletes for social data when a user account is removed.
