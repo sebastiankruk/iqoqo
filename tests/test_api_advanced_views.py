@@ -98,10 +98,12 @@ def user_scoped_taxonomy_data(app):
         db.session.add_all([tag_a1, tag_a2])
         db.session.flush()
 
-        db.session.add_all([
-            ItemTag(item_id=i_a.id, tag_id=tag_a1.id, added_by_id=user_a.id),
-            ItemTag(item_id=i_a.id, tag_id=tag_a2.id, added_by_id=user_a.id),
-        ])
+        db.session.add_all(
+            [
+                ItemTag(item_id=i_a.id, tag_id=tag_a1.id, added_by_id=user_a.id),
+                ItemTag(item_id=i_a.id, tag_id=tag_a2.id, added_by_id=user_a.id),
+            ]
+        )
 
         # --- User B's data ---
         w_b = Work(title="B's Sci-Fi Book", meta={"genre": "Sci-Fi"})
