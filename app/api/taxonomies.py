@@ -20,8 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
-from app.core.taxonomy import ALL_GENRES
-from app.db.core import Manifestation, Tag, UserCollection, db
+from app.db.core import Item, ItemTag, Manifestation, Tag, UserCollection, Work, db
 
 
 @api_bp.route("/taxonomies", methods=["GET"])
@@ -29,33 +28,64 @@ from app.db.core import Manifestation, Tag, UserCollection, db
 def get_taxonomies() -> Response | tuple[Response, int]:
     """
     Extract distinct tags, collections, genres, and publishers.
-    - Tags: All tags in the global folksonomy.
+    - Tags: Tags attached to the current user's items.
     - Collections: All collection names for the current user.
-    - Publishers: Distinct publisher strings from manifestations.
-    - Genres: Static ontology from app.core.taxonomy.
+    - Publishers: Publishers from the current user's items.
+    - Genres: Genres present in works owned by the current user.
     """
     user_id = getattr(g, "user_id", None)
 
     try:
-        # Global folksonomy tags
-        tags_query = db.session.query(Tag.name).distinct().all()
+        # Tags scoped to current user's items
+        tags_query = (
+            db.session.query(Tag.name)
+            .join(ItemTag, ItemTag.tag_id == Tag.id)
+            .join(Item, Item.id == ItemTag.item_id)
+            .filter(Item.owner_id == user_id)
+            .distinct()
+            .all()
+        )
         tags = sorted([t[0] for t in tags_query if t[0]])
 
         # User's collection names
         collections_query = db.session.query(UserCollection.name).filter(UserCollection.owner_id == user_id).distinct().all()
         collections = sorted([c[0] for c in collections_query if c[0]])
 
-        # Global distinct publishers
+        # Publishers scoped to current user's items
         publishers_query = (
             db.session.query(Manifestation.publisher)
-            .filter(Manifestation.publisher.isnot(None), Manifestation.publisher != "")
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(
+                Item.owner_id == user_id,
+                Manifestation.publisher.isnot(None),
+                Manifestation.publisher != "",
+            )
             .distinct()
             .all()
         )
         publishers = sorted([p[0].strip() for p in publishers_query if p[0] and p[0].strip()])
 
-        # Static genres
-        genres = sorted(ALL_GENRES)
+        # Genres extracted from Works linked to the current user's items
+        works = (
+            db.session.query(Work)
+            .join(Work.expressions)
+            .join(Manifestation)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(Item.owner_id == user_id)
+            .distinct()
+            .all()
+        )
+        genres_set: set[str] = set()
+        for w in works:
+            if w.meta:
+                raw = w.meta.get("genres") or w.meta.get("genre")
+                if isinstance(raw, list):
+                    for g_val in raw:
+                        if isinstance(g_val, str) and g_val.strip():
+                            genres_set.add(g_val.strip())
+                elif isinstance(raw, str) and raw.strip():
+                    genres_set.add(raw.strip())
+        genres = sorted(genres_set)
 
         return jsonify(
             {

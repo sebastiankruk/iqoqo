@@ -93,12 +93,66 @@ export const queryKeys = {
    * @returns {readonly ["isbn", string]} The query key for ISBN lookup.
    */
   isbn: (isbn: string) => ["isbn", isbn] as const,
-  manifestations: (page = 1, limit = 20, query?: string, category?: string, formatFilter?: string) =>
-    ["manifestations", page, limit, query ?? "", category ?? "", formatFilter ?? ""] as const,
+  manifestations: (
+    page = 1,
+    limit = 20,
+    query?: string,
+    category?: string,
+    formatFilter?: string,
+    tags?: string[],
+    collections?: string[],
+    genres?: string[],
+    publishers?: string[]
+  ) =>
+    [
+      "manifestations",
+      page,
+      limit,
+      query ?? "",
+      category ?? "",
+      formatFilter ?? "",
+      tags?.join(",") ?? "",
+      collections?.join(",") ?? "",
+      genres?.join(",") ?? "",
+      publishers?.join(",") ?? "",
+    ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
-  worksShelf: (query?: string, category?: string) => ["works", "shelf", query ?? "", category ?? ""] as const,
-  expressionsShelf: (query?: string, category?: string) =>
-    ["expressions", "shelf", query ?? "", category ?? ""] as const,
+  worksShelf: (
+    query?: string,
+    category?: string,
+    tags?: string[],
+    collections?: string[],
+    genres?: string[],
+    publishers?: string[]
+  ) =>
+    [
+      "works",
+      "shelf",
+      query ?? "",
+      category ?? "",
+      tags?.join(",") ?? "",
+      collections?.join(",") ?? "",
+      genres?.join(",") ?? "",
+      publishers?.join(",") ?? "",
+    ] as const,
+  expressionsShelf: (
+    query?: string,
+    category?: string,
+    tags?: string[],
+    collections?: string[],
+    genres?: string[],
+    publishers?: string[]
+  ) =>
+    [
+      "expressions",
+      "shelf",
+      query ?? "",
+      category ?? "",
+      tags?.join(",") ?? "",
+      collections?.join(",") ?? "",
+      genres?.join(",") ?? "",
+      publishers?.join(",") ?? "",
+    ] as const,
   workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
 };
@@ -349,6 +403,10 @@ export function useManifestations(
  * @param formatFilter - Format filter
  * @param missingCover - Filter manifestations missing a cover
  * @param missingId - Filter manifestations missing an external identifier
+ * @param tags - Optional tags filter
+ * @param collections - Optional collections filter
+ * @param genres - Optional genres filter
+ * @param publishers - Optional publishers filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
  */
 export function useInfiniteManifestations(
@@ -358,11 +416,15 @@ export function useInfiniteManifestations(
   category?: string,
   formatFilter?: string,
   missingCover?: boolean,
-  missingId?: boolean
+  missingId?: boolean,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
-      ...queryKeys.manifestations(1, limit, query, category, formatFilter),
+      ...queryKeys.manifestations(1, limit, query, category, formatFilter, tags, collections, genres, publishers),
       "infinite",
       missingCover,
       missingId,
@@ -375,6 +437,10 @@ export function useInfiniteManifestations(
       if (formatFilter) params.format = formatFilter;
       if (missingCover) params.missing_cover = true;
       if (missingId) params.missing_id = true;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
@@ -415,15 +481,31 @@ export function useManifestation(id: number) {
  * @param enabled - Whether the query is enabled or not.
  * @param query - Optional search query to filter by work title or creator name.
  * @param category - Optional content_type category filter (e.g. 'text', 'music').
+ * @param tags - Optional tags filter.
+ * @param collections - Optional collections filter.
+ * @param genres - Optional genres filter.
+ * @param publishers - Optional publishers filter.
  * @returns The query result containing the works shelf entries.
  */
-export function useWorksShelf(enabled = true, query?: string, category?: string) {
+export function useWorksShelf(
+  enabled = true,
+  query?: string,
+  category?: string,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
+) {
   return useQuery({
-    queryKey: queryKeys.worksShelf(query, category),
+    queryKey: queryKeys.worksShelf(query, category, tags, collections, genres, publishers),
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (query && query.length > 0) params.q = query;
       if (category) params.category = category;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
       return res.data;
     },
@@ -439,15 +521,31 @@ export function useWorksShelf(enabled = true, query?: string, category?: string)
  * @param enabled - Whether the query is enabled or not.
  * @param query - Optional search query to filter by work title or creator name.
  * @param category - Optional content_type category filter (e.g. 'text', 'music').
+ * @param tags - Optional tags filter.
+ * @param collections - Optional collections filter.
+ * @param genres - Optional genres filter.
+ * @param publishers - Optional publishers filter.
  * @returns The query result containing the expressions shelf entries.
  */
-export function useExpressionsShelf(enabled = true, query?: string, category?: string) {
+export function useExpressionsShelf(
+  enabled = true,
+  query?: string,
+  category?: string,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
+) {
   return useQuery({
-    queryKey: queryKeys.expressionsShelf(query, category),
+    queryKey: queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers),
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (query && query.length > 0) params.q = query;
       if (category) params.category = category;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
     },

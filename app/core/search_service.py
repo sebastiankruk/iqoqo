@@ -24,6 +24,7 @@ from typing import Any
 
 from sqlalchemy import bindparam, text
 
+from app.api.filters import apply_genre_filter
 from app.db import db
 from app.db.models import Expression, Item, Manifestation, Work
 
@@ -40,7 +41,7 @@ _INVENTORY = "inventory." if _USE_PG else ""
 
 class SearchService:
     @staticmethod
-    def search_manifestations(
+    def search_manifestations(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
         limit: int,
         offset: int,
@@ -48,22 +49,40 @@ class SearchService:
         format_filter: str | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        user_id: Any = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql":
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
                 logger.exception("PostgreSQL FTS failed, falling back to ILIKE", exc_info=exc)
                 db.session.rollback()
 
-        return SearchService._ilike_manifestation_search(q, limit, offset, category, format_filter, missing_cover, missing_id)
+        return SearchService._ilike_manifestation_search(
+            q,
+            limit,
+            offset,
+            category,
+            format_filter,
+            missing_cover,
+            missing_id,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            user_id=user_id,
+        )
 
     @staticmethod
-    def search_items(
+    def search_items(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
         user_id: Any,
         limit: int,
@@ -74,12 +93,16 @@ class SearchService:
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
     ) -> tuple[int, list[dict]]:
         """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql":
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
             try:
                 return SearchService._pg_item_fts(
                     q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
@@ -89,7 +112,20 @@ class SearchService:
                 db.session.rollback()
 
         return SearchService._ilike_item_search(
-            q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
+            q,
+            user_id,
+            limit,
+            offset,
+            statuses,
+            category,
+            format_filter,
+            borrowed_only,
+            missing_cover,
+            missing_id,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
         )
 
     @staticmethod
@@ -150,7 +186,7 @@ class SearchService:
         return total, result_ids
 
     @staticmethod
-    def _ilike_manifestation_search(
+    def _ilike_manifestation_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
         limit: int,
         offset: int,
@@ -158,6 +194,11 @@ class SearchService:
         format_filter: str | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        user_id: Any = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
         base_query = (
@@ -196,6 +237,38 @@ class SearchService:
                     ),
                 )
             )
+
+        # Apply taxonomy filters
+        has_item_joined = False
+        if tags:
+            from app.db.models import ItemTag, Tag
+
+            if not has_item_joined:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+                has_item_joined = True
+            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+            base_query = base_query.filter(Tag.name.in_(tags))
+            if user_id:
+                base_query = base_query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+
+        if collections:
+            from app.db.models import UserCollection, UserCollectionItem
+
+            if not has_item_joined:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+                has_item_joined = True
+            base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
+            base_query = base_query.filter(UserCollection.name.in_(collections))
+            if user_id:
+                base_query = base_query.filter(UserCollection.owner_id == user_id)
+
+        if genres:
+            base_query = apply_genre_filter(base_query, genres)
+
+        if publishers:
+            base_query = base_query.filter(Manifestation.publisher.in_(publishers))
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -287,7 +360,7 @@ class SearchService:
         return total, [dict(r) for r in results]
 
     @staticmethod
-    def _ilike_item_search(
+    def _ilike_item_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
         user_id: Any,
         limit: int,
@@ -298,6 +371,10 @@ class SearchService:
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
     ) -> tuple[int, list[dict]]:
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
@@ -364,6 +441,27 @@ class SearchService:
 
         if format_filter:
             query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+
+        # Apply taxonomy filters
+        if tags:
+            from app.db.models import ItemTag, Tag
+
+            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+            query = query.filter(Tag.name.in_(tags))
+
+        if collections:
+            from app.db.models import UserCollection, UserCollectionItem
+
+            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
+            query = query.filter(UserCollection.name.in_(collections), UserCollection.owner_id == user_id)
+
+        if genres:
+            query = apply_genre_filter(query, genres)
+
+        if publishers:
+            query = query.filter(Manifestation.publisher.in_(publishers))
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()

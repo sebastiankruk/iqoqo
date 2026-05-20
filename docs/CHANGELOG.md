@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Faceted Navigation — Scoped Facets & Non-Empty Results**:
+  - Genre filter now correctly handles JSON array (`Work.meta["genres"]`) and scalar (`Work.meta["genre"]`) values — uses JSONB `@>` on PostgreSQL, ILIKE fallback on SQLite.
+  - Genre facet now shows only genres present in the current user's works (previously returned a hardcoded ~200-genre list).
+  - Tags facet now scoped to tags attached to the current user's items (previously global).
+  - Publishers facet now scoped to publishers from the current user's items (previously global).
+  - Extracted shared `apply_genre_filter` helper into `app/api/filters.py`.
 - **Serialization Reliability**: Resolved `AttributeError` in public API when serializing complex FRBR relationships for unauthenticated views.
 - **Database Constraints**: Fixed `NOT NULL` constraint violations in SQLite during user deletion by correctly implementing relationship cascades.
 

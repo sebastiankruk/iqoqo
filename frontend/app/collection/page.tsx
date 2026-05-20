@@ -213,18 +213,30 @@ function CollectionContent() {
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
     formatFilters.length > 0 ? formatFilters[0] : undefined,
     missingCoverOnly,
-    missingIdOnly
+    missingIdOnly,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
 
   const { data: worksData, isLoading: worksLoading } = useWorksShelf(
     viewMode === "works" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
   const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf(
     viewMode === "expressions" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
 
   const { data: statsData } = useStats();

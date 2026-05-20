@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
+from app.api.filters import apply_genre_filter
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, Work, WorkPart, db
 
@@ -39,6 +40,15 @@ def get_user_works() -> Response:
     user_id = getattr(g, "user_id", None)
     search_q = (request.args.get("q") or "").strip().lower()
     category = (request.args.get("category") or "").strip().lower()
+    tags_filter = request.args.get("tags")
+    collections_filter = request.args.get("collections")
+    genres_filter = request.args.get("genres")
+    publishers_filter = request.args.get("publishers")
+
+    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
+    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
+    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
+    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
     limit = request.args.get("limit", 20, type=int)
     offset = request.args.get("offset", 0, type=int)
@@ -69,16 +79,37 @@ def get_user_works() -> Response:
             )
         )
 
+    if tags_list:
+        from app.db.models import ItemTag, Tag
+
+        base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+        base_query = base_query.filter(Tag.name.in_(tags_list))
+
+    if collections_list:
+        from app.db.models import UserCollection, UserCollectionItem
+
+        base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+            UserCollection, UserCollectionItem.collection_id == UserCollection.id
+        )
+        base_query = base_query.filter(UserCollection.name.in_(collections_list), UserCollection.owner_id == user_id)
+
+    if genres_list:
+        base_query = apply_genre_filter(base_query, genres_list)
+
+    if publishers_list:
+        base_query = base_query.filter(Manifestation.publisher.in_(publishers_list))
+
     # Get the total count of distinct works matching the filters
     total_count = base_query.distinct().count()
 
     # Get the paginated list of work IDs
     work_ids = [row[0] for row in base_query.distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()]
 
-    # Fetch all items for the paginated works to aggregate them
     items = (
         db.session.query(Item)
         .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
         .filter(Item.owner_id == user_id, Expression.work_id.in_(work_ids))
         .all()
     )
@@ -165,12 +196,60 @@ def get_user_expressions() -> Response:
     search_q = (request.args.get("q") or "").strip().lower()
     category = (request.args.get("category") or "").strip().lower()
 
-    items = (
+    query = (
         db.session.query(Item)
         .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .join(Work, Expression.work_id == Work.id)
         .filter(Item.owner_id == user_id)
-        .all()
     )
+
+    if category:
+        query = query.filter(Expression.content_type == category)
+
+    if search_q:
+        pattern = f"%{search_q}%"
+        query = query.filter(
+            db.or_(
+                Work.title.ilike(pattern),
+                db.cast(Work.meta["authors"], db.String).ilike(pattern),
+                db.cast(Work.meta["creators"], db.String).ilike(pattern),
+            )
+        )
+
+    # Apply taxonomy filters
+    tags_filter = request.args.get("tags")
+    collections_filter = request.args.get("collections")
+    genres_filter = request.args.get("genres")
+    publishers_filter = request.args.get("publishers")
+
+    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
+    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
+    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
+    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+
+    if tags_list:
+        from app.db.models import ItemTag, Tag
+
+        query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+        query = query.filter(Tag.name.in_(tags_list))
+
+    if collections_list:
+        from app.db.models import UserCollection, UserCollectionItem
+
+        query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+            UserCollection, UserCollectionItem.collection_id == UserCollection.id
+        )
+        query = query.filter(UserCollection.name.in_(collections_list), UserCollection.owner_id == user_id)
+
+    if genres_list:
+        query = apply_genre_filter(query, genres_list)
+
+    if publishers_list:
+        query = query.filter(Manifestation.publisher.in_(publishers_list))
+
+    items = query.all()
 
     expr_map: dict[int, dict] = {}
     for item in items:
@@ -180,21 +259,11 @@ def get_user_expressions() -> Response:
         expr = item.manifestation.expression
         work = expr.work
 
-        # Apply category filter at the expression level
-        if category and (expr.content_type or "").lower() != category:
-            continue
-
         creators: list[str] = []
         if work and work.meta:
             creators = work.meta.get("creators") or work.meta.get("authors") or []
 
         work_title = work.title if work else "Unknown"
-
-        # Apply search filter against work title and creator names
-        if search_q:
-            haystack = work_title.lower() + " " + " ".join(creators).lower()
-            if search_q not in haystack:
-                continue
 
         if expr.id not in expr_map:
             expr_map[expr.id] = {
