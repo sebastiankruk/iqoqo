@@ -274,41 +274,35 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      {taxonomies?.tags && taxonomies.tags.length > 0 && (
-        <AccordionSection title="Tags" defaultOpen={false}>
-          <SearchableFacet
-            options={taxonomies.tags}
-            activeFilters={activeFilters}
-            type="tag"
-            onToggle={value => onToggleFilter({ type: "tag", value })}
-            placeholder="Find tag..."
-          />
-        </AccordionSection>
-      )}
+      <AccordionSection title="Tags" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.tags ?? []}
+          activeFilters={activeFilters}
+          type="tag"
+          onToggle={value => onToggleFilter({ type: "tag", value })}
+          placeholder="Find tag..."
+        />
+      </AccordionSection>
 
-      {taxonomies?.genres && taxonomies.genres.length > 0 && (
-        <AccordionSection title="Genres" defaultOpen={false}>
-          <SearchableFacet
-            options={taxonomies.genres}
-            activeFilters={activeFilters}
-            type="genre"
-            onToggle={value => onToggleFilter({ type: "genre", value })}
-            placeholder="Find genre..."
-          />
-        </AccordionSection>
-      )}
+      <AccordionSection title="Genres" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.genres ?? []}
+          activeFilters={activeFilters}
+          type="genre"
+          onToggle={value => onToggleFilter({ type: "genre", value })}
+          placeholder="Find genre..."
+        />
+      </AccordionSection>
 
-      {taxonomies?.publishers && taxonomies.publishers.length > 0 && (
-        <AccordionSection title="Publishers" defaultOpen={false}>
-          <SearchableFacet
-            options={taxonomies.publishers}
-            activeFilters={activeFilters}
-            type="publisher"
-            onToggle={value => onToggleFilter({ type: "publisher", value })}
-            placeholder="Find publisher..."
-          />
-        </AccordionSection>
-      )}
+      <AccordionSection title="Publishers" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.publishers ?? []}
+          activeFilters={activeFilters}
+          type="publisher"
+          onToggle={value => onToggleFilter({ type: "publisher", value })}
+          placeholder="Find publisher..."
+        />
+      </AccordionSection>
 
       {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title="Physical Kind">
