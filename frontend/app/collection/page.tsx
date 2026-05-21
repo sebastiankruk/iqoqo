@@ -15,8 +15,17 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
-import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen, Layers, Type, Users } from "lucide-react";
+import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import {
+  SlidersHorizontal,
+  Search,
+  Library as LibraryIcon,
+  BookOpen,
+  Layers,
+  Type,
+  Users,
+  Loader2,
+} from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
@@ -31,12 +40,52 @@ import {
   useInfiniteManifestations,
   useStats,
   useProfile,
-  useWorksShelf,
-  useExpressionsShelf,
+  useInfiniteWorksShelf,
+  useInfiniteExpressionsShelf,
 } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
+
+/**
+ * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
+ *
+ * @param props - Component props.
+ * @param props.hasMore - Whether there are more items to load.
+ * @param props.isLoadingMore - Whether items are currently being loaded.
+ * @param props.onLoadMore - Callback fired when the trigger is intersected.
+ * @returns Trigger component or null if no more items.
+ */
+function LoadMoreTrigger({
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+}: {
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
+  if (!hasMore) return null;
+  return (
+    <div ref={loadMoreRef} className="flex justify-center py-6 w-full col-span-full">
+      {isLoadingMore ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : <div className="h-6" />}
+    </div>
+  );
+}
 
 /**
  * Collection browser page with filtering, sorting and pagination.
@@ -220,7 +269,14 @@ function CollectionContent() {
     publisherFilters
   );
 
-  const { data: worksData, isLoading: worksLoading } = useWorksShelf(
+  const {
+    data: worksData,
+    isLoading: worksLoading,
+    fetchNextPage: fetchNextWorks,
+    hasNextPage: hasMoreWorks,
+    isFetchingNextPage: isFetchingMoreWorks,
+  } = useInfiniteWorksShelf(
+    limit,
     viewMode === "works" && isLoggedIn,
     appliedQuery,
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
@@ -229,7 +285,14 @@ function CollectionContent() {
     genreFilters,
     publisherFilters
   );
-  const { data: exprsData, isLoading: exprsLoading } = useExpressionsShelf(
+  const {
+    data: exprsData,
+    isLoading: exprsLoading,
+    fetchNextPage: fetchNextExprs,
+    hasNextPage: hasMoreExprs,
+    isFetchingNextPage: isFetchingMoreExprs,
+  } = useInfiniteExpressionsShelf(
+    limit,
     viewMode === "expressions" && isLoggedIn,
     appliedQuery,
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
@@ -260,11 +323,19 @@ function CollectionContent() {
     return [];
   }, [itemsData, manifestationsData, viewMode]);
 
+  const allWorks = useMemo(() => {
+    return worksData?.pages.flatMap(page => page.data || []) ?? [];
+  }, [worksData]);
+
+  const allExprs = useMemo(() => {
+    return exprsData?.pages.flatMap(page => page.data || []) ?? [];
+  }, [exprsData]);
+
   const total =
     viewMode === "works"
-      ? (worksData?.data?.length ?? 0)
+      ? (worksData?.pages?.[0]?.pagination?.total ?? 0)
       : viewMode === "expressions"
-        ? (exprsData?.data?.length ?? 0)
+        ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
         : viewMode === "items"
           ? (itemsData?.pages?.[0]?.meta?.total ?? 0)
           : viewMode === "manifestations"
@@ -546,9 +617,9 @@ function CollectionContent() {
                   </div>
                 ))}
               </div>
-            ) : viewMode === "works" && worksData?.data ? (
+            ) : viewMode === "works" && worksData ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {worksData.data.length === 0 ? (
+                {allWorks.length === 0 ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                       <Layers className="h-7 w-7 text-muted-foreground" />
@@ -559,7 +630,7 @@ function CollectionContent() {
                     <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
                   </div>
                 ) : (
-                  worksData.data.map(work => (
+                  allWorks.map(work => (
                     <div
                       key={work.work_id}
                       className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
@@ -656,10 +727,15 @@ function CollectionContent() {
                     </div>
                   ))
                 )}
+                <LoadMoreTrigger
+                  hasMore={!!hasMoreWorks}
+                  isLoadingMore={isFetchingMoreWorks}
+                  onLoadMore={() => hasMoreWorks && fetchNextWorks()}
+                />
               </div>
-            ) : viewMode === "expressions" && exprsData?.data ? (
+            ) : viewMode === "expressions" && exprsData ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {exprsData.data.length === 0 ? (
+                {allExprs.length === 0 ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                       <Type className="h-7 w-7 text-muted-foreground" />
@@ -670,7 +746,7 @@ function CollectionContent() {
                     <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
                   </div>
                 ) : (
-                  exprsData.data.map(expr => (
+                  allExprs.map(expr => (
                     <div
                       key={expr.expression_id}
                       className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
@@ -777,6 +853,11 @@ function CollectionContent() {
                     </div>
                   ))
                 )}
+                <LoadMoreTrigger
+                  hasMore={!!hasMoreExprs}
+                  isLoadingMore={isFetchingMoreExprs}
+                  onLoadMore={() => hasMoreExprs && fetchNextExprs()}
+                />
               </div>
             ) : (
               <CollectionGrid

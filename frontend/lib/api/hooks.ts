@@ -515,6 +515,54 @@ export function useWorksShelf(
 }
 
 /**
+ * Custom hook to fetch an infinite scrolling list of works shelf entries.
+ *
+ * @param limit - Items per page
+ * @param enabled - Whether the query is enabled
+ * @param query - Search query
+ * @param category - Category filter
+ * @param tags - Tags filter
+ * @param collections - Collections filter
+ * @param genres - Genres filter
+ * @param publishers - Publishers filter
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<WorkShelfEntry[]>>} Infinite query result
+ */
+export function useInfiniteWorksShelf(
+  limit = 20,
+  enabled = true,
+  query?: string,
+  category?: string,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
+) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.worksShelf(query, category, tags, collections, genres, publishers), "infinite"],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam = 0 }) => {
+      const params: Record<string, string | number> = { offset: pageParam, limit };
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
+      return res.data;
+    },
+    getNextPageParam: lastPage => {
+      if (lastPage.pagination?.has_more) {
+        return lastPage.pagination.offset + lastPage.pagination.limit;
+      }
+      return undefined;
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/**
  * React Query hook to fetch the specialized Expressions Shelf view for the authenticated user.
  * Grouped at the F2 Expression level, showing different languages or content types.
  *
@@ -548,6 +596,54 @@ export function useExpressionsShelf(
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/**
+ * Custom hook to fetch an infinite scrolling list of expressions shelf entries.
+ *
+ * @param limit - Items per page
+ * @param enabled - Whether the query is enabled
+ * @param query - Search query
+ * @param category - Category filter
+ * @param tags - Tags filter
+ * @param collections - Collections filter
+ * @param genres - Genres filter
+ * @param publishers - Publishers filter
+ * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<ExpressionShelfEntry[]>>} Infinite query result
+ */
+export function useInfiniteExpressionsShelf(
+  limit = 20,
+  enabled = true,
+  query?: string,
+  category?: string,
+  tags?: string[],
+  collections?: string[],
+  genres?: string[],
+  publishers?: string[]
+) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers), "infinite"],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam = 0 }) => {
+      const params: Record<string, string | number> = { offset: pageParam, limit };
+      if (query && query.length > 0) params.q = query;
+      if (category) params.category = category;
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+      if (collections && collections.length > 0) params.collections = collections.join(",");
+      if (genres && genres.length > 0) params.genres = genres.join(",");
+      if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
+      return res.data;
+    },
+    getNextPageParam: lastPage => {
+      if (lastPage.pagination?.has_more) {
+        return lastPage.pagination.offset + lastPage.pagination.limit;
+      }
+      return undefined;
     },
     staleTime: 30_000,
     enabled,

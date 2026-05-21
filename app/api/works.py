@@ -249,7 +249,25 @@ def get_user_expressions() -> Response:
     if publishers_list:
         query = query.filter(Manifestation.publisher.in_(publishers_list))
 
-    items = query.all()
+    limit = request.args.get("limit", 20, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    # Base query for distinct expression IDs
+    base_expr_query = query.with_entities(Expression.id).distinct()
+    total_count = base_expr_query.count()
+
+    expr_ids = [row[0] for row in base_expr_query.order_by(Expression.id.asc()).offset(offset).limit(limit).all()]
+
+    items = (
+        db.session.query(Item)
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .filter(Item.owner_id == user_id, Expression.id.in_(expr_ids))
+        .all()
+    )
 
     expr_map: dict[int, dict] = {}
     for item in items:
@@ -297,11 +315,20 @@ def get_user_expressions() -> Response:
 
         expr_map[expr.id]["total_items"] += 1
 
+    # Sort by work title for consistent display
+    result_data = sorted(expr_map.values(), key=lambda x: x["work_title"].lower())
+
     return jsonify(
         {
             "success": True,
-            "data": list(expr_map.values()),
-            "total": len(expr_map),
+            "data": result_data,
+            "total": total_count,
+            "pagination": {
+                "total": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + limit) < total_count,
+            },
         }
     )
 
