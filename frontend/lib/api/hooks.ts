@@ -942,13 +942,16 @@ import type { TaxonomiesResponse, UserCollection } from "@/types/frbr";
 /**
  * Custom hook to fetch all global taxonomies.
  *
+ * @param {object} [options] - Options for fetching taxonomies.
+ * @param {"global" | "user"} [options.scope] - The scope of the taxonomies to fetch. Defaults to 'global'.
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<TaxonomiesResponse>>} The query result
  */
-export function useTaxonomies() {
+export function useTaxonomies(options?: { scope?: "global" | "user" }) {
+  const scope = options?.scope || "global";
   return useQuery({
-    queryKey: ["taxonomies"],
+    queryKey: ["taxonomies", scope],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<TaxonomiesResponse>>("/taxonomies");
+      const res = await apiClient.get<ApiResponse<TaxonomiesResponse>>(`/taxonomies?scope=${scope}`);
       return res.data.data;
     },
     staleTime: 60_000,

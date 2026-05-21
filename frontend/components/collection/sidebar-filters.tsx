@@ -215,7 +215,7 @@ export function SidebarFilters({
   viewMode = "items",
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
-  const { data: taxonomies } = useTaxonomies();
+  const { data: taxonomies } = useTaxonomies({ scope: viewMode === "items" ? "user" : "global" });
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []

@@ -103,7 +103,10 @@ def get_user_works() -> Response:
     total_count = base_query.with_entities(Work.id).distinct().count()
 
     # Get the paginated list of work IDs
-    work_ids = [row[0] for row in base_query.with_entities(Work.id, Work.title).distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()]
+    work_ids = [
+        row[0]
+        for row in base_query.with_entities(Work.id, Work.title).distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()
+    ]
 
     items = (
         db.session.query(Item)
