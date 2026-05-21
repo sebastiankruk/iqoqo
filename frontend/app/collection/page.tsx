@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import { Fragment, useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
 import {
   SlidersHorizontal,
   Search,
@@ -696,9 +696,8 @@ function CollectionContent() {
                           </div>
                           <div className="flex items-center gap-1">
                             {work.owned_manifestations.slice(0, 1).map(m => (
-                              <>
+                              <Fragment key={`man-${m.manifestation_id}`}>
                                 <button
-                                  key={`man-${m.manifestation_id}`}
                                   type="button"
                                   onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -709,7 +708,6 @@ function CollectionContent() {
                                 </button>
                                 {m.item_id && (
                                   <button
-                                    key={`item-${m.item_id}`}
                                     type="button"
                                     onClick={() => router.push(`/item/${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
@@ -719,7 +717,7 @@ function CollectionContent() {
                                     My Item
                                   </button>
                                 )}
-                              </>
+                              </Fragment>
                             ))}
                           </div>
                         </div>
@@ -822,9 +820,8 @@ function CollectionContent() {
                           </div>
                           <div className="flex items-center gap-1">
                             {expr.owned_manifestations.slice(0, 1).map(m => (
-                              <>
+                              <Fragment key={`man-${m.manifestation_id}`}>
                                 <button
-                                  key={`man-${m.manifestation_id}`}
                                   type="button"
                                   onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -835,7 +832,6 @@ function CollectionContent() {
                                 </button>
                                 {m.item_id && (
                                   <button
-                                    key={`item-${m.item_id}`}
                                     type="button"
                                     onClick={() => router.push(`/item/${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
@@ -845,7 +841,7 @@ function CollectionContent() {
                                     My Item
                                   </button>
                                 )}
-                              </>
+                              </Fragment>
                             ))}
                           </div>
                         </div>
