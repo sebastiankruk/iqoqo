@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Two new React Query hooks: `useInfiniteItems` and `useInfiniteManifestations` using `useInfiniteQuery` with page-based `getNextPageParam`.
   - Vitest unit tests for infinite query hooks (`infinite-hooks.test.tsx`).
   - Playwright E2E test for scroll-triggered data fetching (`infinite_scroll.spec.ts`).
+  - Added infinite scroll support for Works and Expressions shelves with `useInfiniteWorksShelf` and `useInfiniteExpressionsShelf` hooks.
+  - Implemented backend pagination for `GET /api/works/shelf` and `GET /api/expressions/shelf` with `limit` and `offset` query parameters.
 
 - **Library Sharing & Public Discovery (Phase 1)**:
   - **Public Profiles**: Users can opt-in to public profiles via `u/[public_username]`.
@@ -50,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extracted shared `apply_genre_filter` helper into `app/api/filters.py`.
 - **Serialization Reliability**: Resolved `AttributeError` in public API when serializing complex FRBR relationships for unauthenticated views.
 - **Database Constraints**: Fixed `NOT NULL` constraint violations in SQLite during user deletion by correctly implementing relationship cascades.
+- **Taxonomies Query**: Fixed PostgreSQL json type distinct error in `/api/taxonomies` by querying distinct Work IDs prior to metadata extraction.
 
 ## [0.6.0] - 2026-05-10
 

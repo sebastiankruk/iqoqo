@@ -100,10 +100,10 @@ def get_user_works() -> Response:
         base_query = base_query.filter(Manifestation.publisher.in_(publishers_list))
 
     # Get the total count of distinct works matching the filters
-    total_count = base_query.distinct().count()
+    total_count = base_query.with_entities(Work.id).distinct().count()
 
     # Get the paginated list of work IDs
-    work_ids = [row[0] for row in base_query.distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()]
+    work_ids = [row[0] for row in base_query.with_entities(Work.id, Work.title).distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()]
 
     items = (
         db.session.query(Item)

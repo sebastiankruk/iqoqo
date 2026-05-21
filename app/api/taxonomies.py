@@ -66,8 +66,8 @@ def get_taxonomies() -> Response | tuple[Response, int]:
         publishers = sorted([p[0].strip() for p in publishers_query if p[0] and p[0].strip()])
 
         # Genres extracted from Works linked to the current user's items
-        works = (
-            db.session.query(Work)
+        work_ids = (
+            db.session.query(Work.id)
             .join(Work.expressions)
             .join(Manifestation)
             .join(Item, Item.manifestation_id == Manifestation.id)
@@ -75,16 +75,21 @@ def get_taxonomies() -> Response | tuple[Response, int]:
             .distinct()
             .all()
         )
+        w_ids = [r[0] for r in work_ids]
+
         genres_set: set[str] = set()
-        for w in works:
-            if w.meta:
-                raw = w.meta.get("genres") or w.meta.get("genre")
-                if isinstance(raw, list):
-                    for g_val in raw:
-                        if isinstance(g_val, str) and g_val.strip():
-                            genres_set.add(g_val.strip())
-                elif isinstance(raw, str) and raw.strip():
-                    genres_set.add(raw.strip())
+        if w_ids:
+            works_meta = db.session.query(Work.meta).filter(Work.id.in_(w_ids)).all()
+            for row in works_meta:
+                meta = row[0]
+                if meta:
+                    raw = meta.get("genres") or meta.get("genre")
+                    if isinstance(raw, list):
+                        for g_val in raw:
+                            if isinstance(g_val, str) and g_val.strip():
+                                genres_set.add(g_val.strip())
+                    elif isinstance(raw, str) and raw.strip():
+                        genres_set.add(raw.strip())
         genres = sorted(genres_set)
 
         return jsonify(
