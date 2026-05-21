@@ -346,7 +346,13 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": f"Metadata not found for ISBN = {canonical_isbn}"}), 404
 
     if not manifestation:
-        work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
+        from app.core.ingest import _extract_genres
+
+        work_genres = _extract_genres(metadata)
+        work_meta: dict[str, object] = {"authors": metadata.get("Authors", [])}
+        if work_genres:
+            work_meta["genres"] = work_genres
+        work = Work(title=metadata["Title"], meta=work_meta)
         db.session.add(work)
         db.session.flush()
 

@@ -38,8 +38,8 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     scope = request.args.get("scope", "global")
 
     try:
+        # 1. Tags & Collections (Scope-dependent)
         if scope == "user":
-            # Tags scoped to current user's items
             tags_query = (
                 db.session.query(Tag.name)
                 .join(ItemTag, ItemTag.tag_id == Tag.id)
@@ -48,50 +48,24 @@ def get_taxonomies() -> Response | tuple[Response, int]:
                 .distinct()
                 .all()
             )
-
-            # User's collection names
             collections_query = db.session.query(UserCollection.name).filter(UserCollection.owner_id == user_id).distinct().all()
-
-            # Publishers scoped to current user's items
-            publishers_query = (
-                db.session.query(Manifestation.publisher)
-                .join(Item, Item.manifestation_id == Manifestation.id)
-                .filter(
-                    Item.owner_id == user_id,
-                    Manifestation.publisher.isnot(None),
-                    Manifestation.publisher != "",
-                )
-                .distinct()
-                .all()
-            )
-
-            # Genres extracted from Works linked to the current user's items
-            work_ids = (
-                db.session.query(Work.id)
-                .join(Work.expressions)
-                .join(Manifestation)
-                .join(Item, Item.manifestation_id == Manifestation.id)
-                .filter(Item.owner_id == user_id)
-                .distinct()
-                .all()
-            )
-            w_ids = [r[0] for r in work_ids]
         else:
-            # Global scope
             tags_query = db.session.query(Tag.name).distinct().all()
             collections_query = db.session.query(UserCollection.name).distinct().all()
-            publishers_query = (
-                db.session.query(Manifestation.publisher)
-                .filter(
-                    Manifestation.publisher.isnot(None),
-                    Manifestation.publisher != "",
-                )
-                .distinct()
-                .all()
+
+        # 2. Publishers & Genres (Always Global, per FRBR tier logic)
+        publishers_query = (
+            db.session.query(Manifestation.publisher)
+            .filter(
+                Manifestation.publisher.isnot(None),
+                Manifestation.publisher != "",
             )
-            # All works that have metadata
-            work_ids = db.session.query(Work.id).distinct().all()
-            w_ids = [r[0] for r in work_ids]
+            .distinct()
+            .all()
+        )
+
+        work_ids = db.session.query(Work.id).distinct().all()
+        w_ids = [r[0] for r in work_ids]
 
         tags = sorted([t[0] for t in tags_query if t[0]])
         collections = sorted([c[0] for c in collections_query if c[0]])
