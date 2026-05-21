@@ -73,7 +73,7 @@ function LoadMoreTrigger({
           onLoadMore();
         }
       },
-      { rootMargin: "400px" }
+      { rootMargin: "200px" }
     );
     if (loadMoreRef.current) observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
@@ -142,7 +142,7 @@ function CollectionContent() {
     setAppliedQuery(initialQuery);
   }
 
-  const limit = 40;
+  const limit = 20;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
   const isLoggedIn = !!profile;

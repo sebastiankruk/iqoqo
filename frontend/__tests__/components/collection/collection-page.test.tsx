@@ -81,8 +81,8 @@ vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useInfiniteManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  useWorksShelf: vi.fn(),
-  useExpressionsShelf: vi.fn(),
+  useInfiniteWorksShelf: vi.fn(),
+  useInfiniteExpressionsShelf: vi.fn(),
   useTaxonomies: vi.fn(() => ({
     data: {
       collections: [],
@@ -126,8 +126,8 @@ import {
   useStats,
   useInfiniteManifestations,
   useProfile,
-  useWorksShelf,
-  useExpressionsShelf,
+  useInfiniteWorksShelf,
+  useInfiniteExpressionsShelf,
 } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
@@ -136,8 +136,8 @@ const mockUseItems = vi.mocked(useInfiniteItems);
 const mockUseStats = vi.mocked(useStats);
 const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseProfile = vi.mocked(useProfile);
-const mockUseWorksShelf = vi.mocked(useWorksShelf);
-const mockUseExpressionsShelf = vi.mocked(useExpressionsShelf);
+const mockUseWorksShelf = vi.mocked(useInfiniteWorksShelf);
+const mockUseExpressionsShelf = vi.mocked(useInfiniteExpressionsShelf);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -241,10 +241,8 @@ describe("CollectionPage – statusCounts from useStats()", () => {
       isLoading: false,
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useExpressionsShelf
-    >);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
   });
 
   it("shows the global 'available' count from useStats, not the page count", () => {
@@ -283,10 +281,8 @@ describe("CollectionPage – resultCount from meta.total", () => {
       isLoading: false,
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useExpressionsShelf
-    >);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
   });
 
   it("shows meta.total as the result count, not the local items length", () => {
@@ -320,10 +316,8 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
       isLoading: false,
     } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useExpressionsShelf
-    >);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
   });
 
   it("passes the toggled status as a server-side filter (statuses @ index 1)", () => {
@@ -385,10 +379,8 @@ describe("CollectionPage – Authentication & View Modes", () => {
     mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useExpressionsShelf
-    >);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
   });
 
   it("switches to Global Library manifestations via tabs when logged in", () => {
@@ -435,8 +427,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
   });
 
   it("renders the Works shelf when the Works view mode is selected", () => {
-    mockUseWorksShelf.mockReturnValue({ data: MOCK_WORKS_DATA, isLoading: false } as never);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as never);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult({ data: { pages: [MOCK_WORKS_DATA] } }));
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
 
     render(<CollectionPage />);
 
@@ -450,8 +442,8 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
   });
 
   it("renders the Expressions shelf when the Expressions view mode is selected", () => {
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as never);
-    mockUseExpressionsShelf.mockReturnValue({ data: MOCK_EXPRS_DATA, isLoading: false } as never);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult({ data: { pages: [MOCK_EXPRS_DATA] } }));
 
     render(<CollectionPage />);
 
@@ -473,10 +465,8 @@ describe("CollectionPage – Sorting Behavior", () => {
     mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
-    mockUseWorksShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useWorksShelf>);
-    mockUseExpressionsShelf.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<
-      typeof useExpressionsShelf
-    >);
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
   });
 
   it("defaults to recently updated sorting when entering the collection", () => {

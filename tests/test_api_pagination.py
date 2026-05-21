@@ -34,7 +34,7 @@ def test_works_shelf_pagination(client, normal_user_headers, app):
             db.session.add(expr)
             db.session.commit()
 
-            man = Manifestation(expression_id=expr.id, title=f"Man {i}", format="book")
+            man = Manifestation(expression_id=expr.id, meta={"title": f"Man {i}", "format": "book"})
             db.session.add(man)
             db.session.commit()
 
@@ -76,7 +76,7 @@ def test_expressions_shelf_pagination(client, normal_user_headers, app):
             db.session.add(expr)
             db.session.commit()
 
-            man = Manifestation(expression_id=expr.id, title=f"Man Expr {i}", format="book")
+            man = Manifestation(expression_id=expr.id, meta={"title": f"Man Expr {i}", "format": "book"})
             db.session.add(man)
             db.session.commit()
 
