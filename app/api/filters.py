@@ -26,11 +26,13 @@ def apply_genre_filter(query, genres_list):
     SQLite falls back to ILIKE on ``.as_string()``.
     """
     if db.engine.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import JSONB
+
         for gen in genres_list:
             query = query.filter(
                 db.or_(
-                    Work.meta.contains({"genre": gen}),
-                    Work.meta.contains({"genres": [gen]}),
+                    db.cast(Work.meta, JSONB).contains({"genre": gen}),
+                    db.cast(Work.meta, JSONB).contains({"genres": [gen]}),
                 )
             )
     else:

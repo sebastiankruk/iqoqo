@@ -248,8 +248,6 @@ class SearchService:
                 has_item_joined = True
             base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
             base_query = base_query.filter(Tag.name.in_(tags))
-            if user_id:
-                base_query = base_query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
         if collections:
             from app.db.models import UserCollection, UserCollectionItem

@@ -140,8 +140,6 @@ def get_manifestations() -> tuple[Response, int]:
 
             query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
             query = query.filter(Tag.name.in_(tags_list))
-            if user_id:
-                query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
         if collections_list:
             if not has_item_joined:
