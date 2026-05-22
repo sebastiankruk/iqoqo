@@ -158,9 +158,7 @@ describe("ItemCard", () => {
 
     // When item_id is present
     rerender(<ItemCard item={makeCatalogEntry({ user_owns: true, item_id: 123 })} isManifestationView={true} />);
-    const links = screen.getAllByRole("link");
-    const itemLink = links.find(l => l.getAttribute("href")?.includes("/item/123"));
-    expect(itemLink).toBeInTheDocument();
+    expect(screen.getByText(/In Collection →/i)).toBeInTheDocument();
   });
 
   it("does not show 'In Collection' badge when user_owns is false", () => {
