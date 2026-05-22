@@ -129,6 +129,34 @@ def seed_e2e_data():
             hidden_item = Item(owner_id=test_user.id, manifestation_id=m_hidden.id, is_hidden=True, status="available")
             db.session.add(hidden_item)
 
+        # Seed global Fiction/Atlantic novel that has no user-owned items
+        from sqlalchemy import select
+
+        global_work_stmt = select(Work).filter(Work.title == "Global Fiction Novel")
+        global_work = db.session.execute(global_work_stmt).scalar_one_or_none()
+        if not global_work:
+            global_work = Work(
+                title="Global Fiction Novel",
+                meta={"genres": ["Fiction"], "authors": ["Atlantic Author"]},
+            )
+            db.session.add(global_work)
+            db.session.flush()
+            global_expr = Expression(
+                work_id=global_work.id,
+                content_type="text",
+                language="en",
+            )
+            db.session.add(global_expr)
+            db.session.flush()
+            global_manif = Manifestation(
+                expression_id=global_expr.id,
+                isbn13="9999999999999",
+                publisher="Atlantic",
+                cover_url="https://images.unsplash.com/photo-1543002588-bfa74002ed7e",
+            )
+            db.session.add(global_manif)
+            db.session.flush()
+
         db.session.commit()
         print("E2E seed data created successfully")
 

@@ -39,6 +39,7 @@ interface SidebarFiltersProps {
   disableStatus?: boolean;
   /** Current view mode, used to contextually hide irrelevant filters */
   viewMode?: "items" | "manifestations" | "works" | "expressions";
+  isLoggedIn?: boolean;
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -213,9 +214,10 @@ export function SidebarFilters({
   formatCounts = {},
   disableStatus = false,
   viewMode = "items",
+  isLoggedIn = false,
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
-  const { data: taxonomies } = useTaxonomies({ scope: viewMode === "manifestations" ? "global" : "user" });
+  const { data: taxonomies } = useTaxonomies({ scope: isLoggedIn ? "user" : "global" });
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []

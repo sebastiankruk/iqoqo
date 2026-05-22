@@ -55,21 +55,28 @@ def get_user_works() -> Response:
     limit = min(max(limit, 1), 100)
     offset = max(offset, 0)
 
-    # Base query for works owned by the user
-    base_query = (
-        db.session.query(Work.id)
-        .join(Expression, Expression.work_id == Work.id)
-        .join(Manifestation, Manifestation.expression_id == Expression.id)
-        .join(Item, Item.manifestation_id == Manifestation.id)
-        .filter(Item.owner_id == user_id)
-    )
+    is_global = bool(genres_list or publishers_list or tags_list)
+
+    # Base query
+    if is_global:
+        base_query = (
+            db.session.query(Work.id)
+            .join(Expression, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+        )
+    else:
+        base_query = (
+            db.session.query(Work.id)
+            .join(Expression, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(Item.owner_id == user_id)
+        )
 
     if category:
         base_query = base_query.filter(Expression.content_type == category)
 
     if search_q:
-        # Search title and creators (authors)
-        # Using a pattern search for both fields
         pattern = f"%{search_q}%"
         base_query = base_query.filter(
             db.or_(
@@ -79,9 +86,13 @@ def get_user_works() -> Response:
             )
         )
 
+    has_item_joined = not is_global
     if tags_list:
         from app.db.models import ItemTag, Tag
 
+        if not has_item_joined:
+            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            has_item_joined = True
         base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
         tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
         base_query = base_query.filter(db.or_(*tags_conditions))
@@ -89,6 +100,9 @@ def get_user_works() -> Response:
     if collections_list:
         from app.db.models import UserCollection, UserCollectionItem
 
+        if not has_item_joined:
+            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            has_item_joined = True
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
         )
@@ -111,63 +125,72 @@ def get_user_works() -> Response:
         for row in base_query.with_entities(Work.id, Work.title).distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()
     ]
 
-    items = (
-        db.session.query(Item)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        .join(Manifestation, Item.manifestation_id == Manifestation.id)
-        .join(Expression, Manifestation.expression_id == Expression.id)
-        .filter(Item.owner_id == user_id, Expression.work_id.in_(work_ids))
+    works = (
+        db.session.query(Work)
+        .options(selectinload(Work.expressions).selectinload(Expression.manifestations))
+        .filter(Work.id.in_(work_ids))
         .all()
     )
 
+    manifestation_ids = []
+    for w in works:
+        for expr in w.expressions:
+            for manif in expr.manifestations:
+                manifestation_ids.append(manif.id)
+
+    owned_items = []
+    if user_id and manifestation_ids:
+        owned_items = db.session.query(Item).filter(Item.owner_id == user_id, Item.manifestation_id.in_(manifestation_ids)).all()
+
+    owned_items_map = {item.manifestation_id: item for item in owned_items}
+
     works_map: dict[int, dict] = {}
-    for item in items:
-        if not item.manifestation or not item.manifestation.expression or not item.manifestation.expression.work:
-            continue
-
-        expr = item.manifestation.expression
-        work = expr.work
-
-        # Re-apply category filter (redundant but safe given how we fetch items)
-        if category and (expr.content_type or "").lower() != category:
-            continue
-
+    for work in works:
         creators: list[str] = []
         if work.meta:
             creators = work.meta.get("creators") or work.meta.get("authors") or []
 
-        if work.id not in works_map:
-            works_map[work.id] = {
-                "work_id": work.id,
-                "title": work.title,
-                "creators": creators,
-                "owned_manifestations": [],
-                "total_items": 0,
-            }
+        owned_manifestations = []
+        total_items = 0
 
-        man_dict = next(
-            (m for m in works_map[work.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id),
-            None,
-        )
-        if not man_dict:
-            effective_cover = None
-            if item.manifestation:
-                effective_cover = item.manifestation.cover_url or (
-                    item.manifestation.meta.get("cover_url") if item.manifestation.meta else None
-                )
-            if not effective_cover and item.meta:
-                effective_cover = item.meta.get("cover_url")
+        for expr in work.expressions:
+            if category and (expr.content_type or "").lower() != category:
+                continue
 
-            works_map[work.id]["owned_manifestations"].append(
-                {
-                    "manifestation_id": item.manifestation.id,
-                    "item_id": item.id,
-                    "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                    "cover_url": effective_cover,
-                }
-            )
+            for manif in expr.manifestations:
+                owned_item = owned_items_map.get(manif.id)
+                effective_cover = manif.cover_url or (manif.meta.get("cover_url") if manif.meta else None)
 
-        works_map[work.id]["total_items"] += 1
+                if owned_item:
+                    if not effective_cover and owned_item.meta:
+                        effective_cover = owned_item.meta.get("cover_url")
+
+                    owned_manifestations.append(
+                        {
+                            "manifestation_id": manif.id,
+                            "item_id": owned_item.id,
+                            "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
+                            "cover_url": effective_cover,
+                        }
+                    )
+                    total_items += 1
+                elif is_global:
+                    owned_manifestations.append(
+                        {
+                            "manifestation_id": manif.id,
+                            "item_id": None,
+                            "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
+                            "cover_url": effective_cover,
+                        }
+                    )
+
+        works_map[work.id] = {
+            "work_id": work.id,
+            "title": work.title,
+            "creators": creators,
+            "owned_manifestations": owned_manifestations,
+            "total_items": total_items,
+        }
 
     # Sort the resulting list by title to match the ID query order
     result_data = sorted(works_map.values(), key=lambda x: x["title"].lower())
@@ -201,30 +224,6 @@ def get_user_expressions() -> Response:
     user_id = getattr(g, "user_id", None)
     search_q = (request.args.get("q") or "").strip().lower()
     category = (request.args.get("category") or "").strip().lower()
-
-    query = (
-        db.session.query(Item)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        .join(Manifestation, Item.manifestation_id == Manifestation.id)
-        .join(Expression, Manifestation.expression_id == Expression.id)
-        .join(Work, Expression.work_id == Work.id)
-        .filter(Item.owner_id == user_id)
-    )
-
-    if category:
-        query = query.filter(Expression.content_type == category)
-
-    if search_q:
-        pattern = f"%{search_q}%"
-        query = query.filter(
-            db.or_(
-                Work.title.ilike(pattern),
-                db.cast(Work.meta["authors"], db.String).ilike(pattern),
-                db.cast(Work.meta["creators"], db.String).ilike(pattern),
-            )
-        )
-
-    # Apply taxonomy filters
     tags_filter = request.args.get("tags")
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
@@ -235,94 +234,142 @@ def get_user_expressions() -> Response:
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
-    if tags_list:
-        from app.db.models import ItemTag, Tag
-
-        query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-        tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
-        query = query.filter(db.or_(*tags_conditions))
-
-    if collections_list:
-        from app.db.models import UserCollection, UserCollectionItem
-
-        query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-            UserCollection, UserCollectionItem.collection_id == UserCollection.id
-        )
-        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
-        query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
-
-    if genres_list:
-        query = apply_genre_filter(query, genres_list)
-
-    if publishers_list:
-        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
-        query = query.filter(db.or_(*pubs_conditions))
-
     limit = request.args.get("limit", 20, type=int)
     offset = request.args.get("offset", 0, type=int)
     limit = min(max(limit, 1), 100)
     offset = max(offset, 0)
 
+    is_global = bool(genres_list or publishers_list or tags_list)
+
+    if is_global:
+        base_query = (
+            db.session.query(Expression.id)
+            .join(Work, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+        )
+    else:
+        base_query = (
+            db.session.query(Expression.id)
+            .join(Work, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(Item.owner_id == user_id)
+        )
+
+    if category:
+        base_query = base_query.filter(Expression.content_type == category)
+
+    if search_q:
+        pattern = f"%{search_q}%"
+        base_query = base_query.filter(
+            db.or_(
+                Work.title.ilike(pattern),
+                db.cast(Work.meta["authors"], db.String).ilike(pattern),
+                db.cast(Work.meta["creators"], db.String).ilike(pattern),
+            )
+        )
+
+    has_item_joined = not is_global
+    if tags_list:
+        from app.db.models import ItemTag, Tag
+
+        if not has_item_joined:
+            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            has_item_joined = True
+        base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+        tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
+        base_query = base_query.filter(db.or_(*tags_conditions))
+
+    if collections_list:
+        from app.db.models import UserCollection, UserCollectionItem
+
+        if not has_item_joined:
+            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            has_item_joined = True
+        base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+            UserCollection, UserCollectionItem.collection_id == UserCollection.id
+        )
+        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+        base_query = base_query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
+
+    if genres_list:
+        base_query = apply_genre_filter(base_query, genres_list)
+
+    if publishers_list:
+        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        base_query = base_query.filter(db.or_(*pubs_conditions))
+
     # Base query for distinct expression IDs
-    base_expr_query = query.with_entities(Expression.id).distinct()
+    base_expr_query = base_query.with_entities(Expression.id).distinct()
     total_count = base_expr_query.count()
 
     expr_ids = [row[0] for row in base_expr_query.order_by(Expression.id.asc()).offset(offset).limit(limit).all()]
 
-    items = (
-        db.session.query(Item)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        .join(Manifestation, Item.manifestation_id == Manifestation.id)
-        .join(Expression, Manifestation.expression_id == Expression.id)
-        .filter(Item.owner_id == user_id, Expression.id.in_(expr_ids))
+    expressions = (
+        db.session.query(Expression)
+        .options(selectinload(Expression.work), selectinload(Expression.manifestations))
+        .filter(Expression.id.in_(expr_ids))
         .all()
     )
 
+    manifestation_ids = []
+    for expr in expressions:
+        for manif in expr.manifestations:
+            manifestation_ids.append(manif.id)
+
+    owned_items = []
+    if user_id and manifestation_ids:
+        owned_items = db.session.query(Item).filter(Item.owner_id == user_id, Item.manifestation_id.in_(manifestation_ids)).all()
+
+    owned_items_map = {item.manifestation_id: item for item in owned_items}
+
     expr_map: dict[int, dict] = {}
-    for item in items:
-        if not item.manifestation or not item.manifestation.expression:
-            continue
-
-        expr = item.manifestation.expression
+    for expr in expressions:
         work = expr.work
-
         creators: list[str] = []
         if work and work.meta:
             creators = work.meta.get("creators") or work.meta.get("authors") or []
-
         work_title = work.title if work else "Unknown"
 
-        if expr.id not in expr_map:
-            expr_map[expr.id] = {
-                "expression_id": expr.id,
-                "content_type": expr.content_type,
-                "language": expr.language,
-                "work_title": work_title,
-                "creators": creators,
-                "owned_manifestations": [],
-                "total_items": 0,
-            }
+        owned_manifestations = []
+        total_items = 0
 
-        man_dict = next((m for m in expr_map[expr.id]["owned_manifestations"] if m["manifestation_id"] == item.manifestation.id), None)
-        if not man_dict:
-            # Cascade cover: prefer the manifestation cover, fall back to meta fields
-            effective_cover = None
-            if item.manifestation:
-                effective_cover = item.manifestation.cover_url or (
-                    item.manifestation.meta.get("cover_url") if item.manifestation.meta else None
+        for manif in expr.manifestations:
+            owned_item = owned_items_map.get(manif.id)
+            effective_cover = manif.cover_url or (manif.meta.get("cover_url") if manif.meta else None)
+
+            if owned_item:
+                if not effective_cover and owned_item.meta:
+                    effective_cover = owned_item.meta.get("cover_url")
+
+                owned_manifestations.append(
+                    {
+                        "manifestation_id": manif.id,
+                        "item_id": owned_item.id,
+                        "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
+                        "cover_url": effective_cover,
+                    }
                 )
-            if not effective_cover and item.meta:
-                effective_cover = item.meta.get("cover_url")
-            expr_map[expr.id]["owned_manifestations"].append(
-                {
-                    "manifestation_id": item.manifestation.id,
-                    "item_id": item.id,
-                    "format": item.manifestation.meta.get("format", "Unknown") if item.manifestation.meta else "Unknown",
-                    "cover_url": effective_cover,
-                }
-            )
+                total_items += 1
+            elif is_global:
+                owned_manifestations.append(
+                    {
+                        "manifestation_id": manif.id,
+                        "item_id": None,
+                        "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
+                        "cover_url": effective_cover,
+                    }
+                )
 
-        expr_map[expr.id]["total_items"] += 1
+        expr_map[expr.id] = {
+            "expression_id": expr.id,
+            "content_type": expr.content_type,
+            "language": expr.language,
+            "work_title": work_title,
+            "creators": creators,
+            "owned_manifestations": owned_manifestations,
+            "total_items": total_items,
+        }
 
     # Sort by work title for consistent display
     result_data = sorted(expr_map.values(), key=lambda x: x["work_title"].lower())

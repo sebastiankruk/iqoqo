@@ -91,4 +91,22 @@ describe("SidebarFilters with Searchable Facets", () => {
 
     expect(mockToggle).toHaveBeenCalledWith({ type: "genre", value: "Fantasy" });
   });
+
+  it("passes correct scope based on isLoggedIn prop", () => {
+    // 1. When isLoggedIn is false (default)
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={false} />
+      </QueryClientProvider>
+    );
+    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "global" });
+
+    // 2. When isLoggedIn is true
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} />
+      </QueryClientProvider>
+    );
+    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user" });
+  });
 });

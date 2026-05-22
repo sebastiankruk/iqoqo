@@ -805,3 +805,83 @@ def test_taxonomy_filtering_case_insensitive(client: FlaskClient, app: Flask) ->
     data = get_data("/api/manifestations?tags=cosmos")
     manif_ids = [d["id"] for d in data["data"]]
     assert m1_id in manif_ids, "tag 'cosmos' must match tag 'Cosmos' on manifestations view"
+
+
+def test_global_catalog_visibility_unowned_items(client, app):
+    """Test that global catalog items with active filters are returned with item_id=None
+    for users who do not own them, whereas they are excluded without active global filters.
+    """
+    from app.api.auth import generate_internal_jwt
+
+    with app.app_context():
+        user = User(email="unowned_test@iqoqo.local", display_name="Unowned Tester")
+        db.session.add(user)
+        db.session.flush()
+        user_id = user.id
+
+        # Seed global Work/Expression/Manifestation not owned by anyone
+        w_global = Work(title="Global Unowned Book", meta={"genres": ["History"], "publisher": "Oxford"})
+        db.session.add(w_global)
+        db.session.flush()
+
+        e_global = Expression(work_id=w_global.id, content_type=MediaCategory.TEXT, language="en")
+        db.session.add(e_global)
+        db.session.flush()
+
+        m_global = Manifestation(expression_id=e_global.id, publisher="Oxford", meta={})
+        db.session.add(m_global)
+        db.session.flush()
+
+        # Seed another work that IS owned by this user
+        w_owned = Work(title="My Personal Book", meta={"genres": ["Fiction"], "publisher": "Penguin"})
+        db.session.add(w_owned)
+        db.session.flush()
+
+        e_owned = Expression(work_id=w_owned.id, content_type=MediaCategory.TEXT, language="en")
+        db.session.add(e_owned)
+        db.session.flush()
+
+        m_owned = Manifestation(expression_id=e_owned.id, publisher="Penguin", meta={})
+        db.session.add(m_owned)
+        db.session.flush()
+
+        i_owned = Item(manifestation_id=m_owned.id, owner_id=user_id, status="owned")
+        db.session.add(i_owned)
+
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Without filters, works/shelf and expressions/shelf should only return owned works
+    res_works = client.get("/api/works/shelf", headers=headers)
+    assert res_works.status_code == 200
+    work_titles = [w["title"] for w in res_works.json["data"]]
+    assert "My Personal Book" in work_titles
+    assert "Global Unowned Book" not in work_titles
+
+    res_exprs = client.get("/api/expressions/shelf", headers=headers)
+    assert res_exprs.status_code == 200
+    expr_titles = [e["work_title"] for e in res_exprs.json["data"]]
+    assert "My Personal Book" in expr_titles
+    assert "Global Unowned Book" not in expr_titles
+
+    # 2. With global filter (genres=History), global unowned book should be returned with item_id=None
+    res_works_filtered = client.get("/api/works/shelf?genres=History", headers=headers)
+    assert res_works_filtered.status_code == 200
+    assert len(res_works_filtered.json["data"]) == 1
+    work_data = res_works_filtered.json["data"][0]
+    assert work_data["title"] == "Global Unowned Book"
+    assert work_data["total_items"] == 0
+    assert len(work_data["owned_manifestations"]) == 1
+    assert work_data["owned_manifestations"][0]["item_id"] is None
+
+    res_exprs_filtered = client.get("/api/expressions/shelf?genres=History", headers=headers)
+    assert res_exprs_filtered.status_code == 200
+    assert len(res_exprs_filtered.json["data"]) == 1
+    expr_data = res_exprs_filtered.json["data"][0]
+    assert expr_data["work_title"] == "Global Unowned Book"
+    assert expr_data["total_items"] == 0
+    assert len(expr_data["owned_manifestations"]) == 1
+    assert expr_data["owned_manifestations"][0]["item_id"] is None

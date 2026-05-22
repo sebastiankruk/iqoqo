@@ -478,8 +478,11 @@ function CollectionContent() {
           <div className="flex flex-wrap items-center gap-4">
             {isLoggedIn && (
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+                <div role="tablist" className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "items"}
+                    aria-label="Items"
                     onClick={() => {
                       setViewMode("items");
                     }}
@@ -492,6 +495,9 @@ function CollectionContent() {
                     <BookOpen className="h-4 w-4" /> My Items
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "manifestations"}
+                    aria-label="Manifestations"
                     onClick={() => {
                       setViewMode("manifestations");
                     }}
@@ -504,6 +510,9 @@ function CollectionContent() {
                     <LibraryIcon className="h-4 w-4" /> Global Library
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "expressions"}
+                    aria-label="Expressions"
                     onClick={() => {
                       setViewMode("expressions");
                     }}
@@ -516,6 +525,9 @@ function CollectionContent() {
                     <Type className="h-4 w-4" /> Expressions
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "works"}
+                    aria-label="Works"
                     onClick={() => {
                       setViewMode("works");
                     }}
@@ -615,6 +627,7 @@ function CollectionContent() {
                 formatCounts={formatCounts}
                 disableStatus={viewMode === "manifestations"}
                 viewMode={viewMode}
+                isLoggedIn={isLoggedIn}
               />
             </div>
           </div>
