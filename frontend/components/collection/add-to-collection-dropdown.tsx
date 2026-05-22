@@ -16,17 +16,22 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Loader2, Check } from "lucide-react";
+import { BookOpen, ChevronDown, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useUserCollections } from "@/lib/api/hooks";
 import { CollectionQuickAdd } from "./collection-quick-add";
-import type { UserCollection } from "@/types/frbr";
 
 interface AddToCollectionDropdownProps {
   manifestationId: number;
 }
 
+/**
+ * Dropdown button that lets the user add a manifestation to one of their collections.
+ * @param root0 - Component props
+ * @param root0.manifestationId - The ID of the manifestation to add
+ * @returns React node representing the dropdown component
+ */
 export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -34,6 +39,10 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
   const { data: collections, isLoading: collectionsLoading } = useUserCollections();
 
   useEffect(() => {
+    /**
+     * Closes the dropdown when clicking outside its bounds.
+     * @param event - Mouse click event
+     */
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
