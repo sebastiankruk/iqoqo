@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
-from app.db.core import Item, ItemTag, Manifestation, Tag, UserCollection, Work, db
+from app.db.core import Expression, Item, ItemTag, Manifestation, Tag, UserCollection, Work, db
 
 
 @api_bp.route("/taxonomies", methods=["GET"])
@@ -53,18 +53,37 @@ def get_taxonomies() -> Response | tuple[Response, int]:
             tags_query = db.session.query(Tag.name).distinct().all()
             collections_query = db.session.query(UserCollection.name).distinct().all()
 
-        # 2. Publishers & Genres (Always Global, per FRBR tier logic)
-        publishers_query = (
-            db.session.query(Manifestation.publisher)
-            .filter(
-                Manifestation.publisher.isnot(None),
-                Manifestation.publisher != "",
+        # 2. Publishers & Genres
+        if scope == "user":
+            publishers_query = (
+                db.session.query(Manifestation.publisher)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .filter(Manifestation.publisher.isnot(None), Manifestation.publisher != "", Item.owner_id == user_id)
+                .distinct()
+                .all()
             )
-            .distinct()
-            .all()
-        )
 
-        work_ids = db.session.query(Work.id).distinct().all()
+            work_ids = (
+                db.session.query(Work.id)
+                .join(Expression, Expression.work_id == Work.id)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .filter(Item.owner_id == user_id)
+                .distinct()
+                .all()
+            )
+        else:
+            publishers_query = (
+                db.session.query(Manifestation.publisher)
+                .filter(
+                    Manifestation.publisher.isnot(None),
+                    Manifestation.publisher != "",
+                )
+                .distinct()
+                .all()
+            )
+            work_ids = db.session.query(Work.id).distinct().all()
+
         w_ids = [r[0] for r in work_ids]
 
         tags = sorted([t[0] for t in tags_query if t[0]])

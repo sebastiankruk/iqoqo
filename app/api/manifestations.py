@@ -139,7 +139,10 @@ def get_manifestations() -> tuple[Response, int]:
             from app.db.models import ItemTag, Tag
 
             query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            query = query.filter(Tag.name.in_(tags_list))
+            tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
+            query = query.filter(db.or_(*tags_conditions))
+            if user_id:
+                query = query.filter(Item.owner_id == user_id)
 
         if collections_list:
             if not has_item_joined:
@@ -150,7 +153,8 @@ def get_manifestations() -> tuple[Response, int]:
             query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
                 UserCollection, UserCollectionItem.collection_id == UserCollection.id
             )
-            query = query.filter(UserCollection.name.in_(collections_list))
+            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+            query = query.filter(db.or_(*coll_conditions))
             if user_id:
                 query = query.filter(UserCollection.owner_id == user_id)
 
@@ -158,7 +162,8 @@ def get_manifestations() -> tuple[Response, int]:
             query = apply_genre_filter(query, genres_list)
 
         if publishers_list:
-            query = query.filter(Manifestation.publisher.in_(publishers_list))
+            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            query = query.filter(db.or_(*pubs_conditions))
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()

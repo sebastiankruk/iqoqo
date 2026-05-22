@@ -83,7 +83,8 @@ def get_user_works() -> Response:
         from app.db.models import ItemTag, Tag
 
         base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-        base_query = base_query.filter(Tag.name.in_(tags_list))
+        tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
+        base_query = base_query.filter(db.or_(*tags_conditions))
 
     if collections_list:
         from app.db.models import UserCollection, UserCollectionItem
@@ -91,13 +92,15 @@ def get_user_works() -> Response:
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
         )
-        base_query = base_query.filter(UserCollection.name.in_(collections_list), UserCollection.owner_id == user_id)
+        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+        base_query = base_query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
 
     if genres_list:
         base_query = apply_genre_filter(base_query, genres_list)
 
     if publishers_list:
-        base_query = base_query.filter(Manifestation.publisher.in_(publishers_list))
+        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        base_query = base_query.filter(db.or_(*pubs_conditions))
 
     # Get the total count of distinct works matching the filters
     total_count = base_query.with_entities(Work.id).distinct().count()
@@ -236,7 +239,8 @@ def get_user_expressions() -> Response:
         from app.db.models import ItemTag, Tag
 
         query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-        query = query.filter(Tag.name.in_(tags_list))
+        tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
+        query = query.filter(db.or_(*tags_conditions))
 
     if collections_list:
         from app.db.models import UserCollection, UserCollectionItem
@@ -244,13 +248,15 @@ def get_user_expressions() -> Response:
         query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
         )
-        query = query.filter(UserCollection.name.in_(collections_list), UserCollection.owner_id == user_id)
+        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+        query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
 
     if genres_list:
         query = apply_genre_filter(query, genres_list)
 
     if publishers_list:
-        query = query.filter(Manifestation.publisher.in_(publishers_list))
+        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        query = query.filter(db.or_(*pubs_conditions))
 
     limit = request.args.get("limit", 20, type=int)
     offset = request.args.get("offset", 0, type=int)

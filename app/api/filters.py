@@ -20,25 +20,10 @@ from app.db.models import Work
 
 
 def apply_genre_filter(query, genres_list):
-    """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres``.
-
-    PostgreSQL uses JSONB ``@>`` containment (via ``.contains()``).
-    SQLite falls back to ILIKE on ``.as_string()``.
-    """
-    if db.engine.dialect.name == "postgresql":
-        from sqlalchemy.dialects.postgresql import JSONB
-
-        for gen in genres_list:
-            query = query.filter(
-                db.or_(
-                    db.cast(Work.meta, JSONB).contains({"genre": gen}),
-                    db.cast(Work.meta, JSONB).contains({"genres": [gen]}),
-                )
-            )
-    else:
-        conditions = []
-        for gen in genres_list:
-            conditions.append(Work.meta["genre"].as_string() == gen)
-            conditions.append(Work.meta["genres"].as_string().ilike(f"%{gen}%"))
-        query = query.filter(db.or_(*conditions))
+    """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively."""
+    conditions = []
+    for gen in genres_list:
+        conditions.append(Work.meta["genre"].as_string().ilike(f"%{gen}%"))
+        conditions.append(Work.meta["genres"].as_string().ilike(f"%{gen}%"))
+    query = query.filter(db.or_(*conditions))
     return query
