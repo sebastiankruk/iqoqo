@@ -144,7 +144,7 @@ def test_taxonomies_user_scoped(client, user_scoped_taxonomy_data, app):
         token_b = generate_internal_jwt(user_b)
 
     # User A sees only A's data
-    res = client.get("/api/taxonomies", headers={"Authorization": f"Bearer {token_a}"})
+    res = client.get("/api/taxonomies?scope=user", headers={"Authorization": f"Bearer {token_a}"})
     assert res.status_code == 200
     body = res.json["data"]
     assert "fantasy" in body["tags"]
@@ -157,7 +157,7 @@ def test_taxonomies_user_scoped(client, user_scoped_taxonomy_data, app):
     assert "Penguin" not in body["publishers"]
 
     # User B sees only B's data
-    res = client.get("/api/taxonomies", headers={"Authorization": f"Bearer {token_b}"})
+    res = client.get("/api/taxonomies?scope=user", headers={"Authorization": f"Bearer {token_b}"})
     assert res.status_code == 200
     body = res.json["data"]
     assert "sci-fi" in body["tags"]
@@ -691,3 +691,117 @@ def test_taxonomy_filtering_across_endpoints(client: FlaskClient, app: Flask) ->
     data = get_data("/api/expressions/shelf?publishers=HarperCollins")
     assert len(data["data"]) == 1
     assert data["data"][0]["expression_id"] == e1_id
+
+
+def test_taxonomy_filtering_case_insensitive(client: FlaskClient, app: Flask) -> None:
+    """Regression test: filtering by tags/genres/publishers must be case-insensitive
+    and trim whitespace, so that URL params like ?tags=cosmo or ?genres=Fiction
+    still match DB entries like 'Cosmos' or 'Fiction ' respectively.
+
+    Reproduces the bug where Work/Expression/Manifestation views returned empty
+    results even though the same data showed up in the manifestations global catalog.
+    """
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import ItemTag, Tag
+
+    with app.app_context():
+        user = User(email="case_filter@iqoqo.local", display_name="Case Filter Tester")
+        db.session.add(user)
+        db.session.flush()
+        user_id = user.id
+
+        # Work with genre stored with trailing whitespace (common data-quality issue)
+        w1 = Work(title="Genre Whitespace Book", meta={"creators": [], "genres": ["Fiction "]})
+        # Work with genre stored as mixed-case
+        w2 = Work(title="Publisher Case Book", meta={"creators": [], "genre": "Mystery"})
+        db.session.add_all([w1, w2])
+        db.session.flush()
+
+        e1 = Expression(work_id=w1.id, content_type=MediaCategory.TEXT)
+        e2 = Expression(work_id=w2.id, content_type=MediaCategory.TEXT)
+        db.session.add_all([e1, e2])
+        db.session.flush()
+
+        # Publisher with mixed-case and slash (e.g. "Black Swan/Carousel/Corgi")
+        m1 = Manifestation(expression_id=e1.id, publisher="Black Swan/Carousel/Corgi", meta={})
+        m2 = Manifestation(expression_id=e2.id, publisher="Allyn & Bacon", meta={})
+        db.session.add_all([m1, m2])
+        db.session.flush()
+
+        i1 = Item(manifestation_id=m1.id, owner_id=user_id, status="owned")
+        i2 = Item(manifestation_id=m2.id, owner_id=user_id, status="owned")
+        db.session.add_all([i1, i2])
+        db.session.flush()
+
+        # Tag stored as "Cosmos" but URL will send "cosmo" (substring partial-match via ilike)
+        tag_cosmos = Tag(name="Cosmos")
+        db.session.add(tag_cosmos)
+        db.session.flush()
+        db.session.add(ItemTag(item_id=i1.id, tag_id=tag_cosmos.id, added_by_id=user_id))
+
+        db.session.commit()
+
+        e1_id = e1.id
+        e2_id = e2.id
+        w1_id = w1.id
+        m1_id = m1.id
+
+        token = generate_internal_jwt(user)
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def get_data(path: str) -> dict[str, Any]:
+        r = client.get(path, headers=headers)
+        assert r.status_code == 200
+        result: dict[str, Any] = r.get_json()
+        return result
+
+    # --- Genre filtering: URL sends "Fiction" but DB has "Fiction " (trailing space) ---
+    # Regression: previously returned empty results
+
+    data = get_data("/api/works/shelf?genres=Fiction")
+    work_ids = [d["work_id"] for d in data["data"]]
+    assert w1_id in work_ids, "genre 'Fiction' must match 'Fiction ' (with trailing space) on works shelf"
+
+    data = get_data("/api/expressions/shelf?genres=Fiction")
+    expr_ids = [d["expression_id"] for d in data["data"]]
+    assert e1_id in expr_ids, "genre 'Fiction' must match 'Fiction ' on expressions shelf"
+
+    data = get_data("/api/manifestations?genres=Fiction")
+    manif_ids = [d["id"] for d in data["data"]]
+    assert m1_id in manif_ids, "genre 'Fiction' must match 'Fiction ' on manifestations view"
+
+    # --- Publisher filtering: URL sends "Black Swan" (substring) but DB has full compound name ---
+    # Regression: ilike('%Black Swan%') should match "Black Swan/Carousel/Corgi"
+
+    data = get_data("/api/works/shelf?publishers=Black+Swan%2FCarousel%2FCorgi")
+    work_ids = [d["work_id"] for d in data["data"]]
+    assert w1_id in work_ids, "publisher filter must match compound publisher name on works shelf"
+
+    data = get_data("/api/expressions/shelf?publishers=Black+Swan%2FCarousel%2FCorgi")
+    expr_ids = [d["expression_id"] for d in data["data"]]
+    assert e1_id in expr_ids, "publisher filter must match compound publisher name on expressions shelf"
+
+    data = get_data("/api/manifestations?publishers=Black+Swan%2FCarousel%2FCorgi")
+    manif_ids = [d["id"] for d in data["data"]]
+    assert m1_id in manif_ids, "publisher filter must match compound publisher name on manifestations"
+
+    # --- Publisher: partial substring match (Allyn & Bacon) ---
+    data = get_data("/api/expressions/shelf?publishers=Allyn+%26+Bacon")
+    expr_ids = [d["expression_id"] for d in data["data"]]
+    assert e2_id in expr_ids, "publisher 'Allyn & Bacon' must match on expressions shelf"
+
+    # --- Tag case-insensitive: "cosmos" (lowercase) must match tag named "Cosmos" ---
+    # Regression: previously exact in_() meant only exact case "Cosmos" worked
+
+    data = get_data("/api/works/shelf?tags=cosmos")
+    work_ids = [d["work_id"] for d in data["data"]]
+    assert w1_id in work_ids, "tag 'cosmos' (lowercase) must match tag 'Cosmos' on works shelf"
+
+    data = get_data("/api/expressions/shelf?tags=cosmos")
+    expr_ids = [d["expression_id"] for d in data["data"]]
+    assert e1_id in expr_ids, "tag 'cosmos' must match tag 'Cosmos' on expressions shelf"
+
+    data = get_data("/api/manifestations?tags=cosmos")
+    manif_ids = [d["id"] for d in data["data"]]
+    assert m1_id in manif_ids, "tag 'cosmos' must match tag 'Cosmos' on manifestations view"

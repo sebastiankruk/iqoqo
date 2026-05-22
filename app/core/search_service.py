@@ -247,7 +247,8 @@ class SearchService:
                 base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
                 has_item_joined = True
             base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            base_query = base_query.filter(Tag.name.in_(tags))
+            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
+            base_query = base_query.filter(db.or_(*tags_conditions))
 
         if collections:
             from app.db.models import UserCollection, UserCollectionItem
@@ -258,7 +259,8 @@ class SearchService:
             base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
                 UserCollection, UserCollectionItem.collection_id == UserCollection.id
             )
-            base_query = base_query.filter(UserCollection.name.in_(collections))
+            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
+            base_query = base_query.filter(db.or_(*coll_conditions))
             if user_id:
                 base_query = base_query.filter(UserCollection.owner_id == user_id)
 
@@ -266,7 +268,8 @@ class SearchService:
             base_query = apply_genre_filter(base_query, genres)
 
         if publishers:
-            base_query = base_query.filter(Manifestation.publisher.in_(publishers))
+            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            base_query = base_query.filter(db.or_(*pubs_conditions))
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -445,7 +448,8 @@ class SearchService:
             from app.db.models import ItemTag, Tag
 
             query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            query = query.filter(Tag.name.in_(tags))
+            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
+            query = query.filter(db.or_(*tags_conditions))
 
         if collections:
             from app.db.models import UserCollection, UserCollectionItem
@@ -453,13 +457,15 @@ class SearchService:
             query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
                 UserCollection, UserCollectionItem.collection_id == UserCollection.id
             )
-            query = query.filter(UserCollection.name.in_(collections), UserCollection.owner_id == user_id)
+            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
+            query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
 
         if genres:
             query = apply_genre_filter(query, genres)
 
         if publishers:
-            query = query.filter(Manifestation.publisher.in_(publishers))
+            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            query = query.filter(db.or_(*pubs_conditions))
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()

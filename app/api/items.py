@@ -210,19 +210,22 @@ def get_items():
     # Apply taxonomy filters
     if tags_list:
         query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-        query = query.filter(Tag.name.in_(tags_list))
+        tags_conditions = [Tag.name.ilike(t.strip()) for t in tags_list]
+        query = query.filter(db.or_(*tags_conditions))
 
     if collections_list:
         query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
         )
-        query = query.filter(UserCollection.name.in_(collections_list), UserCollection.owner_id == user_id)
+        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+        query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
 
     if genres_list:
         query = apply_genre_filter(query, genres_list)
 
     if publishers_list:
-        query = query.filter(Manifestation.publisher.in_(publishers_list))
+        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        query = query.filter(db.or_(*pubs_conditions))
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
