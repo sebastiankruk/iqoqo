@@ -142,6 +142,21 @@ function CollectionContent() {
     setAppliedQuery(initialQuery);
   }
 
+  // Sync viewMode when searchParams becomes available after Suspense hydration
+  const [lastUrlViewMode, setLastUrlViewMode] = useState(initialViewMode);
+  if (initialViewMode !== lastUrlViewMode) {
+    setLastUrlViewMode(initialViewMode);
+    setViewMode(initialViewMode);
+  }
+
+  // Sync filters when searchParams becomes available after Suspense hydration
+  const initialFilterKey = JSON.stringify(initialFilters);
+  const [lastFilterKey, setLastFilterKey] = useState(initialFilterKey);
+  if (initialFilterKey !== lastFilterKey) {
+    setLastFilterKey(initialFilterKey);
+    setActiveFilters(initialFilters);
+  }
+
   const limit = 20;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
