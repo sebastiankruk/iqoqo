@@ -20,12 +20,13 @@ import Image from "next/image";
 import { BookOpen, Loader2, Disc } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-import { useManifestation, useProfile, useAddItem, useWorkParts } from "@/lib/api/hooks";
+import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
+import { AddToCollectionDropdown } from "@/components/collection/add-to-collection-dropdown";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { ImagePlus } from "lucide-react";
 import { toast } from "sonner";
@@ -42,7 +43,6 @@ export default function ManifestationPage() {
 
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
-  const { mutate: addItem, isPending: isAdding } = useAddItem();
   const { data: partsResponse } = useWorkParts(manifestation?.container_work_id ?? manifestation?.work_id ?? 0);
   const parts = partsResponse?.data ?? [];
   const router = useRouter();
@@ -97,14 +97,6 @@ export default function ManifestationPage() {
   else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
 
   const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
-
-  /**
-   * Add the current manifestation to the user's collection.
-   * @returns {void}
-   */
-  const handleAddToCollection = () => {
-    addItem({ manifestation_id: manifestation.id });
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -356,14 +348,7 @@ export default function ManifestationPage() {
                         </Button>
                       </div>
                     ) : (
-                      <Button onClick={handleAddToCollection} disabled={isAdding} size="sm">
-                        {isAdding ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <BookOpen className="mr-2 h-4 w-4" />
-                        )}
-                        Add to My Collection
-                      </Button>
+                      <AddToCollectionDropdown manifestationId={manifestation.id} />
                     )}
                   </div>
                   {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (

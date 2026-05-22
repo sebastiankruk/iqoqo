@@ -27,7 +27,7 @@ from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, UserCollection, UserCollectionItem, Work, db
 
 
 def sync_tags(item_id: int, user_id, tags: list[str] | None):
@@ -213,8 +213,6 @@ def get_items():
         query = query.filter(Tag.name.in_(tags_list))
 
     if collections_list:
-        from app.db.models import UserCollection, UserCollectionItem
-
         query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
         )
@@ -596,6 +594,9 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     )
     db.session.add(item)
     db.session.flush()
+    if payload.collection_id:
+        link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
+        db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
 
