@@ -14,8 +14,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy.model import Model
 
-db = SQLAlchemy()
+
+class BaseModel(Model):
+    """Custom base model to allow unmapped properties for SQLAlchemy 2.0 compatibility."""
+
+    __allow_unmapped__ = True
+
+
+db = SQLAlchemy(model_class=BaseModel)
 
 
 def import_models() -> None:

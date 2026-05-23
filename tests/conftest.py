@@ -56,6 +56,7 @@ def app():
 def celery_eager(app):
     """Ensure Celery is in eager mode and isolated for all tests."""
     from app.core.celery_app import celery
+    from app.core.tasks import _task_wrapper
 
     old_broker = celery.conf.broker_url
     old_backend = celery.conf.result_backend
@@ -66,7 +67,18 @@ def celery_eager(app):
     celery.conf.result_backend = "cache+memory://"
     celery.conf.task_always_eager = True
     celery.conf.task_store_eager_result = True
+
+    original_run = _task_wrapper.run
+
+    def run_with_context(self, *args, **kwargs):
+        with app.app_context():
+            return original_run(self, *args, **kwargs)
+
+    _task_wrapper.run = run_with_context
+
     yield
+
+    _task_wrapper.run = original_run
     celery.conf.broker_url = old_broker
     celery.conf.result_backend = old_backend
     celery.conf.task_always_eager = old_eager
