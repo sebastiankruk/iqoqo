@@ -50,9 +50,12 @@ def get_user_works() -> Response:
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
-    limit = request.args.get("limit", 20, type=int)
+    limit_arg = request.args.get("limit")
+    limit = int(limit_arg) if limit_arg is not None else 1000
+    if limit_arg is not None:
+        limit = min(max(limit, 1), 100)
+
     offset = request.args.get("offset", 0, type=int)
-    limit = min(max(limit, 1), 100)
     offset = max(offset, 0)
 
     is_global = bool(genres_list or publishers_list or tags_list)
@@ -234,9 +237,12 @@ def get_user_expressions() -> Response:
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
-    limit = request.args.get("limit", 20, type=int)
+    limit_arg = request.args.get("limit")
+    limit = int(limit_arg) if limit_arg is not None else 1000
+    if limit_arg is not None:
+        limit = min(max(limit, 1), 100)
+
     offset = request.args.get("offset", 0, type=int)
-    limit = min(max(limit, 1), 100)
     offset = max(offset, 0)
 
     is_global = bool(genres_list or publishers_list or tags_list)

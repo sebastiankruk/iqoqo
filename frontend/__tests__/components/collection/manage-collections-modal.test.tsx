@@ -92,9 +92,10 @@ describe("ManageCollectionsModal", () => {
     renderComponent();
 
     const deleteButtons = await screen.findAllByTitle("Delete Collection");
-    fireEvent.click(deleteButtons[0]);
 
     vi.mocked(apiClient.delete).mockResolvedValueOnce({ data: { success: true } });
+
+    fireEvent.click(deleteButtons[0]);
 
     await waitFor(() => {
       expect(global.confirm).toHaveBeenCalled();

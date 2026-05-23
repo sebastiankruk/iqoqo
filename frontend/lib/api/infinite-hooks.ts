@@ -41,6 +41,7 @@ export function useInfiniteCollection({ viewMode, filters }: FetchItemsParams) {
       const params = new URLSearchParams();
       params.append("limit", "20");
       params.append("offset", pageParam.toString());
+      params.append("page", (Math.floor(pageParam / 20) + 1).toString());
 
       // Merge active sidebar filters
       Object.entries(filters).forEach(([key, val]) => {
