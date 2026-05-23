@@ -19,9 +19,39 @@ import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Item Acquisition and Collection Workflow", () => {
   test.beforeEach(async ({ page }) => {
-    // 1. Pre-seed localStorage to avoid 'Small crumbs of data' toast interception
+    // 1. Pre-seed localStorage and mock mediaDevices.getUserMedia/video.play to prevent camera hangs
     await page.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
+
+      if (typeof window !== "undefined") {
+        // Redefine HTMLVideoElement.prototype.play to resolve instantly
+        HTMLVideoElement.prototype.play = async () => {};
+
+        if (navigator.mediaDevices) {
+          const dummyStream = new MediaStream();
+          const mockTrack = {
+            stop: () => {},
+            getCapabilities: () => ({ torch: true }),
+            applyConstraints: async () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            enabled: true,
+            readyState: "live",
+          };
+          dummyStream.getVideoTracks = () => [mockTrack as unknown as MediaStreamTrack];
+          dummyStream.getTracks = () => [mockTrack as unknown as MediaStreamTrack];
+
+          try {
+            Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+              value: async () => dummyStream,
+              configurable: true,
+              writable: true,
+            });
+          } catch (err) {
+            console.error("Failed to redefine getUserMedia", err);
+          }
+        }
+      }
     });
 
     // 2. Mock user authentication state (matching useProfile hook)
@@ -212,7 +242,11 @@ test.describe("Item Acquisition and Collection Workflow", () => {
   });
 
   test.describe("Mobile View", () => {
-    test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
+    test.use({
+      viewport: { width: 375, height: 812 },
+      hasTouch: true,
+      permissions: ["camera"],
+    });
 
     test("Acquire CD via Barcode Scanner", async ({ page }) => {
       // 1. Barcode tab is default, verify it's active
@@ -220,8 +254,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
 
       // 2. Open mobile scanner
       // Click the big round camera button
-      // Using force: true because sometimes toasts or other overlays might intercept the click check
-      await page.locator("button.group.relative.flex.items-center").click({ force: true });
+      await page.getByTestId("start-camera-button").click();
 
       // 3. Verify scanner starts
       // 3. Verify scanner starts (wait longer for the camera to 'turn on')

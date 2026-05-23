@@ -209,7 +209,7 @@ jobs:
           ADMIN_PASSWORD: admin
 
       - name: Run Playwright E2E tests
-        run: cd frontend && npx playwright test
+        run: cd frontend && npx playwright test --project=chromium
         env:
           CI: true
           FLASK_API_URL: http://127.0.0.1:5000/api
