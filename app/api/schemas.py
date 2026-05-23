@@ -30,6 +30,7 @@ class ItemCreateSchema(BaseModel):
     is_hidden: bool | None = Field(default=False, description="Whether the item is hidden from public profiles")
     tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
+    collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
 
 
 class ItemBulkCreateSchema(BaseModel):

@@ -16,12 +16,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
+
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ItemHeaderProps {
   item: Item;
@@ -35,7 +36,6 @@ interface ItemHeaderProps {
  * @returns {JSX.Element} The component
  */
 export function ItemHeader({ item }: ItemHeaderProps) {
-  const router = useRouter();
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
   const tags = (meta["tags"] as string[] | undefined) ?? [];
@@ -103,13 +103,15 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {tags.map(tag => (
-              <span
+              <DiscoveryPivot
                 key={tag}
-                className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+                type="tags"
+                value={tag}
+                className="rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium border border-transparent hover:border-border"
               >
                 <Tag className="h-2.5 w-2.5" />
                 {tag}
-              </span>
+              </DiscoveryPivot>
             ))}
           </div>
         )}
@@ -123,16 +125,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {(work?.authors ?? item.authors ?? []).length > 0 ? (
               (work?.authors ?? item.authors ?? []).map((author, idx, arr) => (
                 <span key={author}>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
-                    onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
-                    className="hover:text-primary hover:underline cursor-pointer transition-colors"
-                    title={`Browse all works by ${author}`}
-                  >
-                    {author}
-                  </span>
+                  <DiscoveryPivot
+                    type="q"
+                    value={author}
+                    variant="link"
+                    className="hover:text-primary transition-colors"
+                  />
                   {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
                 </span>
               ))
@@ -157,7 +155,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
               <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
                 {isAudio ? "Label" : "Publisher"}
               </span>
-              <span className="font-semibold">{publisher}</span>
+              <DiscoveryPivot type="publishers" value={publisher} variant="link" className="font-semibold" />
             </div>
           )}
           {year && (

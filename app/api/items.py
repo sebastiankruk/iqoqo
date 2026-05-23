@@ -23,10 +23,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
+from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, Work, db
+from app.db.models import Expression, Item, ItemStatusLog, ItemTag, Manifestation, Tag, User, UserCollection, UserCollectionItem, Work, db
 
 
 def sync_tags(item_id: int, user_id, tags: list[str] | None):
@@ -77,6 +78,15 @@ def get_items():
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    tags_filter = request.args.get("tags", None)
+    collections_filter = request.args.get("collections", None)
+    genres_filter = request.args.get("genres", None)
+    publishers_filter = request.args.get("publishers", None)
+
+    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
+    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
+    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
+    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
     try:
         page = int(page_param)
@@ -84,9 +94,9 @@ def get_items():
     except (TypeError, ValueError):
         return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
-    if page < 1 or limit < 1:
-        return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
-
+    # Hard cap the limit to prevent users/bots from requesting the entire DB at once
+    limit = min(max(limit, 1), 100)
+    page = max(page, 1)
     offset = (page - 1) * limit
 
     if q:
@@ -104,6 +114,10 @@ def get_items():
             borrowed_only=borrowed_only,
             missing_cover=missing_cover,
             missing_id=missing_id,
+            tags=tags_list,
+            collections=collections_list,
+            genres=genres_list,
+            publishers=publishers_list,
         )
 
         items_data = []
@@ -139,6 +153,7 @@ def get_items():
                 "success": True,
                 "data": items_data,
                 "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
                 "error": None,
             }
         )
@@ -151,7 +166,9 @@ def get_items():
     else:
         query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-    if category_filter or format_filter or missing_cover or missing_id or sort_by in ("title", "title-desc", "author"):
+    needs_mfn_join = bool(category_filter or format_filter or missing_cover or missing_id)
+    needs_work_join = bool(genres_list or publishers_list or sort_by in ("title", "title-desc", "author"))
+    if needs_mfn_join or needs_work_join:
         # We need to join these models if we have filters or specific sorting
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
         query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
@@ -189,6 +206,26 @@ def get_items():
                 ),
             )
         )
+
+    # Apply taxonomy filters
+    if tags_list:
+        query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+        tags_conditions = [Tag.name.ilike(t.strip()) for t in tags_list]
+        query = query.filter(db.or_(*tags_conditions))
+
+    if collections_list:
+        query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+            UserCollection, UserCollectionItem.collection_id == UserCollection.id
+        )
+        coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+        query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
+
+    if genres_list:
+        query = apply_genre_filter(query, genres_list)
+
+    if publishers_list:
+        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        query = query.filter(db.or_(*pubs_conditions))
 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
@@ -260,6 +297,7 @@ def get_items():
             "success": True,
             "data": items_data,
             "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+            "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
             "error": None,
         }
     )
@@ -559,6 +597,9 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     )
     db.session.add(item)
     db.session.flush()
+    if payload.collection_id:
+        link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
+        db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
 

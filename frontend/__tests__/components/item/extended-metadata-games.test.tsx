@@ -30,7 +30,8 @@ describe("Video Metadata Display", () => {
     const meta = { directors: ["Director One", "Director Two"] };
     render(<ExtendedMetadataVideo meta={meta} />);
     expect(screen.getByText("Director(s)")).toBeInTheDocument();
-    expect(screen.getByText("Director One, Director Two")).toBeInTheDocument();
+    expect(screen.getByText("Director One")).toBeInTheDocument();
+    expect(screen.getByText("Director Two")).toBeInTheDocument();
   });
 
   it("returns null when no video metadata is present", () => {

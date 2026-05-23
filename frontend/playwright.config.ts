@@ -27,10 +27,10 @@ const pythonExecutable = hasLocalVenv ? ".venv/bin/python" : "python";
 
 export default defineConfig({
   testDir: "./__tests__/e2e",
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: "html",
   // Global per-test timeout: 60s in CI, default in dev
   timeout: process.env.CI ? 60000 : 30000,
@@ -48,21 +48,37 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         permissions: ["camera"],
         launchOptions: {
-          args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-gpu",
+          ],
         },
+      },
+    },
+    {
+      name: "firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+      },
+    },
+    {
+      name: "webkit",
+      use: {
+        ...devices["Desktop Safari"],
       },
     },
   ],
   webServer: [
     {
-      // Next.js dev server – reused locally, always started in CI
-      command: "npm run dev",
+      command: "NODE_OPTIONS='--no-warnings' npm run dev",
       url: "http://localhost:3000",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120000,
     },
     {
-      // Flask API – reused if already running (local dev), started otherwise (VS Code, Antigravity, CI)
       command:
         "PYTHONUNBUFFERED=1 ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
@@ -70,7 +86,7 @@ export default defineConfig({
       url: "http://127.0.0.1:5000/api/health",
       reuseExistingServer: true,
       timeout: 60000,
-      cwd: "..", // Run from project root so sqlite.db and paths resolve correctly
+      cwd: "..",
     },
   ],
 });

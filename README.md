@@ -78,11 +78,11 @@ iqoqo provides comprehensive tools for managing your library's data and media as
 
 - [x] Multi-user authentication and authorization
 - [x] Support for different types of media (books, vinyl, board games, etc.)
-- [ ] Admin web UI for data management
-- [ ] Federation protocol for cross-instance discovery
+- [x] Admin web UI for data management
+- [x] Socializing collections with sharing and recommendations
 - [ ] Mobile apps (iOS & Android)
+- [ ] Federation protocol for cross-instance discovery
 - [ ] Advanced search with SPARQL queries
-- [ ] Collection sharing and social features
 
 ## 📜 License
 

@@ -144,8 +144,8 @@ describe("queryKeys advanced views", () => {
 
   it("produces stable keys for works and expressions shelves", async () => {
     const { queryKeys } = await import("@/lib/api/hooks");
-    expect(queryKeys.worksShelf()).toEqual(["works", "shelf", "", ""]);
-    expect(queryKeys.expressionsShelf()).toEqual(["expressions", "shelf", "", ""]);
+    expect(queryKeys.worksShelf()).toEqual(["works", "shelf", "", "", "", "", "", ""]);
+    expect(queryKeys.expressionsShelf()).toEqual(["expressions", "shelf", "", "", "", "", "", ""]);
   });
 
   it("produces stable keys for work parts with id", async () => {
@@ -216,5 +216,56 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getSpy).toHaveBeenCalledWith("/works/42/parts");
+  });
+
+  it("verifies useWorksShelf calls endpoint with filter parameters", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { success: true, data: [], error: null },
+    } as never);
+
+    const { useWorksShelf } = await import("@/lib/api/hooks");
+    const { result } = renderHook(() => useWorksShelf(true, "lotr", "text", ["tag1"], ["col1"], ["genre1"], ["pub1"]), {
+      wrapper: getWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getSpy).toHaveBeenCalledWith("/works/shelf", {
+      params: {
+        q: "lotr",
+        category: "text",
+        tags: "tag1",
+        collections: "col1",
+        genres: "genre1",
+        publishers: "pub1",
+      },
+    });
+  });
+
+  it("verifies useExpressionsShelf calls endpoint with filter parameters", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const getSpy = vi.spyOn(apiClient, "get").mockResolvedValueOnce({
+      data: { success: true, data: [], error: null },
+    } as never);
+
+    const { useExpressionsShelf } = await import("@/lib/api/hooks");
+    const { result } = renderHook(
+      () => useExpressionsShelf(true, "lotr", "text", ["tag1"], ["col1"], ["genre1"], ["pub1"]),
+      {
+        wrapper: getWrapper(),
+      }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getSpy).toHaveBeenCalledWith("/expressions/shelf", {
+      params: {
+        q: "lotr",
+        category: "text",
+        tags: "tag1",
+        collections: "col1",
+        genres: "genre1",
+        publishers: "pub1",
+      },
+    });
   });
 });

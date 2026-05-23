@@ -24,6 +24,11 @@ import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile } from "@/lib/api/hooks";
 
+// Mock the modal — it uses useQuery internally, separate tests cover it
+vi.mock("@/components/collection/manage-collections-modal", () => ({
+  ManageCollectionsModal: () => null,
+}));
+
 // Mock the hook
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),

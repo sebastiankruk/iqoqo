@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Two new React Query hooks: `useInfiniteItems` and `useInfiniteManifestations` using `useInfiniteQuery` with page-based `getNextPageParam`.
   - Vitest unit tests for infinite query hooks (`infinite-hooks.test.tsx`).
   - Playwright E2E test for scroll-triggered data fetching (`infinite_scroll.spec.ts`).
+  - Added infinite scroll support for Works and Expressions shelves with `useInfiniteWorksShelf` and `useInfiniteExpressionsShelf` hooks.
+  - Implemented backend pagination for `GET /api/works/shelf` and `GET /api/expressions/shelf` with `limit` and `offset` query parameters.
 
 - **Library Sharing & Public Discovery (Phase 1)**:
   - **Public Profiles**: Users can opt-in to public profiles via `u/[public_username]`.
@@ -23,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **i18n Foundation**: Integrated `next-intl` for multi-language support (EN, PL).
   - **Social Metadata**: Added `public_username` and `bio` to user profiles.
   - **Web Share Integration**: New `ShareButton` with native Web Share API support and clipboard fallback.
+
+- **Custom Taxonomies & Collections (Step 3)**:
+  - **Facet Mini-Search**: Added sticky client-side search input to each facet list (Tags, Genres, Publishers) in `sidebar-filters.tsx` via a new `SearchableFacet` sub-component with real-time `includes()` filtering.
+  - **User Collections CRUD**: Full REST API (`app/api/collections.py`) for hierarchical `UserCollection` folders with parent-child validation, cycle detection, and child-deletion protection.
+  - **Quick-Create Collection**: `collection-quick-add.tsx` — inline form in "Add to Collection" dropdowns for on-the-fly folder creation.
+  - **Manage Collections Modal**: `manage-collections-modal.tsx` — dedicated modal for listing, renaming, and deleting custom collections with React Query mutation lifecycle.
+  - **Clickable Taxonomy Pivots**: `DiscoveryPivot` component wraps tags, genres, and publishers as `<Link>` badges that navigate to the discovery grid pre-filtered by that value.
+  - **TaxonomyEditor**: Unified component in `item-header.tsx` / `item-tabs.tsx` for editing tags, genres, publisher assignments on items.
 - **Backend Architecture**:
   - `SharedCollection` model with automated secure token generation.
   - Cascade deletes for social data when a user account is removed.
@@ -34,8 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Faceted Navigation — Scoped Facets & Non-Empty Results**:
+  - Genre filter now correctly handles JSON array (`Work.meta["genres"]`) and scalar (`Work.meta["genre"]`) values — uses JSONB `@>` on PostgreSQL, ILIKE fallback on SQLite.
+  - Genre facet now shows only genres present in the current user's works (previously returned a hardcoded ~200-genre list).
+  - Tags facet now scoped to tags attached to the current user's items (previously global).
+  - Publishers facet now scoped to publishers from the current user's items (previously global).
+  - Extracted shared `apply_genre_filter` helper into `app/api/filters.py`.
 - **Serialization Reliability**: Resolved `AttributeError` in public API when serializing complex FRBR relationships for unauthenticated views.
 - **Database Constraints**: Fixed `NOT NULL` constraint violations in SQLite during user deletion by correctly implementing relationship cascades.
+- **Taxonomies Query**: Fixed PostgreSQL json type distinct error in `/api/taxonomies` by querying distinct Work IDs prior to metadata extraction.
 
 ## [0.6.0] - 2026-05-10
 

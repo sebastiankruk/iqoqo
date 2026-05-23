@@ -255,15 +255,16 @@ export function ItemCard({
                   </span>
                 )}
                 {isCatalog && userOwns && userItemId && (
-                  <Link
-                    href={`/item/${userItemId}`}
+                  <button
+                    type="button"
                     onClick={e => {
                       e.stopPropagation();
+                      router.push(`/item/${userItemId}`);
                     }}
                     className="inline-flex items-center rounded-full bg-primary/10 hover:bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap z-20 transition-colors cursor-pointer"
                   >
                     In Collection →
-                  </Link>
+                  </button>
                 )}
                 {isCatalog && userOwns && !userItemId && (
                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
@@ -327,16 +328,17 @@ export function ItemCard({
             </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
             {isCatalog && userOwns && userItemId && (
-              <Link
-                href={`/item/${userItemId}`}
+              <button
+                type="button"
                 onClick={e => {
                   e.stopPropagation();
+                  router.push(`/item/${userItemId}`);
                 }}
                 className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary hover:underline z-20 cursor-pointer"
               >
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
                 In Collection →
-              </Link>
+              </button>
             )}
             {isCatalog && userOwns && !userItemId && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">

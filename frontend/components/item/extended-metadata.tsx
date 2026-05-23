@@ -16,16 +16,15 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn, isAudioMedia } from "@/lib/utils";
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
@@ -156,9 +155,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {categories.map(cat => (
-            <Badge key={cat} variant="secondary">
-              {cat}
-            </Badge>
+            <DiscoveryPivot key={cat} type="genres" value={cat} />
           ))}
         </div>
       )}
@@ -182,7 +179,12 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                 <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
                   Label / Publisher
                 </span>
-                <span className="font-semibold">{String(meta["label"] || meta["publisher"])}</span>
+                <DiscoveryPivot
+                  type="publishers"
+                  value={String(meta["label"] || meta["publisher"])}
+                  variant="link"
+                  className="font-semibold"
+                />
               </div>
             )}
             {Boolean(meta["catalog_number"] || meta["Catalog Number"]) && (
@@ -297,12 +299,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                       {value.map((item, idx) => (
                         <span key={idx}>
                           {isContributorField ? (
-                            <Link
-                              href={`/collection?q=${encodeURIComponent(String(item))}`}
-                              className="text-primary hover:underline hover:text-accent transition-colors font-medium"
-                            >
-                              {String(item)}
-                            </Link>
+                            <DiscoveryPivot type="q" value={String(item)} variant="link" />
                           ) : (
                             <span className="bg-muted px-2 py-0.5 rounded text-xs">{String(item)}</span>
                           )}

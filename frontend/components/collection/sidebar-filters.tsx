@@ -15,8 +15,18 @@
 //
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, SlidersHorizontal, Book, Music, Film, Puzzle as PuzzleIcon, LayoutGrid } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import {
+  ChevronDown,
+  SlidersHorizontal,
+  Book,
+  Music,
+  Film,
+  Puzzle as PuzzleIcon,
+  LayoutGrid,
+  Search,
+  Check,
+} from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
 
@@ -26,9 +36,16 @@ interface SidebarFiltersProps {
   onToggleFilter: (filter: ActiveFilter) => void;
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
+  categoryCounts?: Record<string, number>;
   disableStatus?: boolean;
   /** Current view mode, used to contextually hide irrelevant filters */
   viewMode?: "items" | "manifestations" | "works" | "expressions";
+  isLoggedIn?: boolean;
+  isCurator?: boolean;
+  missingCover?: boolean;
+  onChangeMissingCover?: (checked: boolean) => void;
+  missingId?: boolean;
+  onChangeMissingId?: (checked: boolean) => void;
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -105,8 +122,81 @@ function AccordionSection({
         {title}
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
       </button>
-      <div className={`overflow-hidden transition-all ${open ? "max-h-96 pb-3 opacity-100" : "max-h-0 opacity-0"}`}>
+      <div
+        className={`overflow-hidden transition-all ${open ? "max-h-[500px] pb-3 opacity-100" : "max-h-0 opacity-0"}`}
+      >
         {children}
+      </div>
+    </div>
+  );
+}
+
+interface SearchableFacetProps {
+  options: string[];
+  activeFilters: ActiveFilter[];
+  type: string;
+  onToggle: (option: string) => void;
+  placeholder?: string;
+}
+
+/**
+ * Renders a list of facet options with a local search filter.
+ *
+ * @param root0 - Component props
+ * @param root0.options - The options to display
+ * @param root0.activeFilters - The active filters
+ * @param root0.type - The filter type
+ * @param root0.onToggle - Callback to toggle an option
+ * @param root0.placeholder - Search placeholder
+ * @returns {JSX.Element} The component
+ */
+export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    if (!searchQuery.trim()) return options;
+    const lowerQuery = searchQuery.toLowerCase();
+    return options.filter(opt => opt.toLowerCase().includes(lowerQuery));
+  }, [options, searchQuery]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {options.length > 5 && (
+        <div className="relative sticky top-0 z-10 bg-background pb-1">
+          <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder={placeholder || "Search..."}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex h-7 w-full rounded-md border border-input bg-transparent px-7 py-1 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+        {filteredOptions.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground italic py-1 px-2">No matches.</p>
+        ) : (
+          filteredOptions.map(option => {
+            const active = isActive(activeFilters, type, option);
+            return (
+              <label
+                key={option}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => onToggle(option)}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
+                />
+                <span className="flex-1 truncate">{option}</span>
+                {active && <Check className="h-3 w-3 text-primary" />}
+              </label>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -124,17 +214,32 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.formatCounts - The counts for each format
  * @param root0.disableStatus - Whether to disable the status filter
  * @param root0.viewMode - The current view mode
- * @returns {JSX.Element} The component*/
+ * @param root0.isLoggedIn - Whether the user is logged in
+ * @param root0.categoryCounts - The counts for each category
+ * @param root0.isCurator - Whether the user is a curator
+ * @param root0.missingCover - Filter for items with missing cover
+ * @param root0.onChangeMissingCover - Change handler for missing cover filter
+ * @param root0.missingId - Filter for items with missing ID
+ * @param root0.onChangeMissingId - Change handler for missing ID filter
+ * @returns {JSX.Element} The component
+ */
 export function SidebarFilters({
   activeFilters,
   onToggleFilter,
   statusCounts = {},
   formatCounts = {},
+  categoryCounts = {},
   disableStatus = false,
   viewMode = "items",
+  isLoggedIn = false,
+  isCurator = false,
+  missingCover = false,
+  onChangeMissingCover,
+  onChangeMissingId,
+  missingId = false,
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
-  const { data: taxonomies } = useTaxonomies();
+  const { data: taxonomies } = useTaxonomies({ scope: isLoggedIn ? "user" : "global" });
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []
@@ -174,6 +279,7 @@ export function SidebarFilters({
                   {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}
                 </span>
                 <span className="flex-1 font-medium">{info.label}</span>
+                <span className="text-xs tabular-nums text-muted-foreground mr-1">{categoryCounts[id] ?? 0}</span>
                 {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </label>
             );
@@ -183,99 +289,45 @@ export function SidebarFilters({
 
       {taxonomies?.collections && taxonomies.collections.length > 0 && (
         <AccordionSection title="My Collections">
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-            {taxonomies.collections.map(col => {
-              const active = isActive(activeFilters, "collection", col);
-              return (
-                <label
-                  key={col}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => onToggleFilter({ type: "collection", value: col })}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
-                  />
-                  <span className="flex-1 truncate">{col}</span>
-                </label>
-              );
-            })}
-          </div>
+          <SearchableFacet
+            options={taxonomies.collections}
+            activeFilters={activeFilters}
+            type="collection"
+            onToggle={value => onToggleFilter({ type: "collection", value })}
+            placeholder="Find collection..."
+          />
         </AccordionSection>
       )}
 
-      {taxonomies?.tags && taxonomies.tags.length > 0 && (
-        <AccordionSection title="Tags" defaultOpen={false}>
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-            {taxonomies.tags.map(tag => {
-              const active = isActive(activeFilters, "tag", tag);
-              return (
-                <label
-                  key={tag}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => onToggleFilter({ type: "tag", value: tag })}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
-                  />
-                  <span className="flex-1 truncate">{tag}</span>
-                </label>
-              );
-            })}
-          </div>
-        </AccordionSection>
-      )}
+      <AccordionSection title="Tags" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.tags ?? []}
+          activeFilters={activeFilters}
+          type="tag"
+          onToggle={value => onToggleFilter({ type: "tag", value })}
+          placeholder="Find tag..."
+        />
+      </AccordionSection>
 
-      {taxonomies?.genres && taxonomies.genres.length > 0 && (
-        <AccordionSection title="Genres" defaultOpen={false}>
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-            {taxonomies.genres.map(genre => {
-              const active = isActive(activeFilters, "genre", genre);
-              return (
-                <label
-                  key={genre}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => onToggleFilter({ type: "genre", value: genre })}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
-                  />
-                  <span className="flex-1 truncate">{genre}</span>
-                </label>
-              );
-            })}
-          </div>
-        </AccordionSection>
-      )}
+      <AccordionSection title="Genres" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.genres ?? []}
+          activeFilters={activeFilters}
+          type="genre"
+          onToggle={value => onToggleFilter({ type: "genre", value })}
+          placeholder="Find genre..."
+        />
+      </AccordionSection>
 
-      {taxonomies?.publishers && taxonomies.publishers.length > 0 && (
-        <AccordionSection title="Publishers" defaultOpen={false}>
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-            {taxonomies.publishers.map(pub => {
-              const active = isActive(activeFilters, "publisher", pub);
-              return (
-                <label
-                  key={pub}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => onToggleFilter({ type: "publisher", value: pub })}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
-                  />
-                  <span className="flex-1 truncate">{pub}</span>
-                </label>
-              );
-            })}
-          </div>
-        </AccordionSection>
-      )}
+      <AccordionSection title="Publishers" defaultOpen={false}>
+        <SearchableFacet
+          options={taxonomies?.publishers ?? []}
+          activeFilters={activeFilters}
+          type="publisher"
+          onToggle={value => onToggleFilter({ type: "publisher", value })}
+          placeholder="Find publisher..."
+        />
+      </AccordionSection>
 
       {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title="Physical Kind">
@@ -358,6 +410,35 @@ export function SidebarFilters({
                 </label>
               );
             })}
+          </div>
+        </AccordionSection>
+      )}
+
+      {isCurator && (
+        <AccordionSection title="Curation" defaultOpen={false}>
+          <div className="flex flex-col gap-1">
+            <label
+              className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${missingCover ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+            >
+              <input
+                type="checkbox"
+                checked={missingCover}
+                onChange={e => onChangeMissingCover?.(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-primary"
+              />
+              <span className="flex-1">No Cover</span>
+            </label>
+            <label
+              className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${missingId ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+            >
+              <input
+                type="checkbox"
+                checked={missingId}
+                onChange={e => onChangeMissingId?.(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-primary"
+              />
+              <span className="flex-1">No ID</span>
+            </label>
           </div>
         </AccordionSection>
       )}

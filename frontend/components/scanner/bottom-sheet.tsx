@@ -329,6 +329,8 @@ export function BottomSheet({
           <div className="flex w-full flex-col items-center gap-4">
             <div className="relative flex w-full items-center justify-center">
               <button
+                data-testid="start-camera-button"
+                aria-label="Start camera"
                 onClick={scannerActive ? undefined : startScanner}
                 disabled={isSearching}
                 className="group relative flex items-center justify-center"

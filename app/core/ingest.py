@@ -27,6 +27,19 @@ from app.utils.tmdb import clean_video_title, fetch_video_metadata
 from app.utils.upc import resolve_physical_media
 
 
+def _extract_genres(meta: dict) -> list[str]:
+    genres: list[str] = []
+    for key in ("Categories", "genres", "genre", "Genre"):
+        raw = meta.get(key)
+        if isinstance(raw, list):
+            for v in raw:
+                if isinstance(v, str) and v.strip():
+                    genres.append(v.strip())
+        elif isinstance(raw, str) and raw.strip():
+            genres.append(raw.strip())
+    return genres
+
+
 class IngestService:
     @staticmethod
     def ingest_from_meta(meta: dict) -> Manifestation:
@@ -46,7 +59,10 @@ class IngestService:
         # Map format string → FRBR content type (canonical formats + aliases)
         content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
 
+        work_genres = _extract_genres(meta)
         work_meta: dict = {"authors": [author_name] if author_name else []}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
@@ -92,7 +108,10 @@ class IngestService:
         author_name = meta.get("manufacturer") or meta.get("brand") or "Unknown Manufacturer"
         cover_url = meta.get("cover_url")
 
-        work_meta = {"authors": [author_name]} if author_name else {}
+        work_genres = _extract_genres(meta)
+        work_meta: dict = {"authors": [author_name]} if author_name else {}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
@@ -142,7 +161,10 @@ class IngestService:
         cover_url = meta.get("cover_url") or meta.get("cover") or meta.get("thumbnail")
 
         # Create FRBR hierarchy
+        work_genres = _extract_genres(meta)
         work_meta = {"authors": [author_name]} if author_name else {}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
@@ -194,7 +216,10 @@ class IngestService:
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
 
         # Create FRBR hierarchy
+        work_genres = _extract_genres(meta)
         work_meta = {"authors": [author_name]} if author_name else {}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
@@ -259,7 +284,10 @@ class IngestService:
         author_name = meta.get("author") or meta.get("director") or meta.get("Director")
         cover_url = meta.get("cover_url")
 
+        work_genres = _extract_genres(meta)
         work_meta = {"authors": [author_name]} if author_name else {}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()
@@ -328,7 +356,10 @@ class IngestService:
         cover_url = meta.get("cover_url")
         mechanics = meta.get("Mechanics", []) or meta.get("mechanics", [])
 
+        work_genres = _extract_genres(meta)
         work_meta = {"authors": [author_name], "mechanics": mechanics} if author_name else {"mechanics": mechanics}
+        if work_genres:
+            work_meta["genres"] = work_genres
         work = Work(title=title, meta=work_meta)
         db.session.add(work)
         db.session.flush()

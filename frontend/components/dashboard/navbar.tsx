@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle } from "lucide-react";
+import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle, Folder } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
+import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
 
 /**
  * Sticky top navigation bar – "Modern Athenaeum" style.
@@ -45,6 +46,7 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || searchParams?.get("search") || "");
   const [mounted, setMounted] = useState(false);
   const queryClient = useQueryClient();
+  const [manageCollOpen, setManageCollOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -194,6 +196,12 @@ export function Navbar() {
                       <Settings className="mr-2 h-4 w-4" /> Profile Settings
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setManageCollOpen(true)}
+                    className="cursor-pointer rounded-md py-2 px-3 text-sm"
+                  >
+                    <Folder className="mr-2 h-4 w-4" /> Manage Collections
+                  </DropdownMenuItem>
                   {profile.roles?.includes("admin") && (
                     <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                       <Link href="/admin/settings?tab=instance">
@@ -222,6 +230,7 @@ export function Navbar() {
           )}
         </div>
       </div>
+      <ManageCollectionsModal isOpen={manageCollOpen} onClose={() => setManageCollOpen(false)} />
     </nav>
   );
 }

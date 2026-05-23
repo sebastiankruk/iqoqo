@@ -62,6 +62,13 @@ def create_collection() -> Response | tuple[Response, int]:
     except ValidationError as e:
         return jsonify({"success": False, "error": e.errors()}), 400
 
+    if data.parent_id is not None:
+        parent_collection = (
+            db.session.query(UserCollection).filter(UserCollection.id == data.parent_id, UserCollection.owner_id == user_id).first()
+        )
+        if not parent_collection:
+            return jsonify({"success": False, "error": "Invalid parent collection"}), 400
+
     new_collection = UserCollection(owner_id=user_id, name=data.name, parent_id=data.parent_id)
     try:
         db.session.add(new_collection)
@@ -102,6 +109,13 @@ def update_collection(collection_id: int) -> Response | tuple[Response, int]:
     if data.name is not None:
         collection.name = data.name
     if data.parent_id is not None:
+        if data.parent_id == collection.id:
+            return jsonify({"success": False, "error": "A collection cannot be its own parent"}), 400
+        parent_collection = (
+            db.session.query(UserCollection).filter(UserCollection.id == data.parent_id, UserCollection.owner_id == user_id).first()
+        )
+        if not parent_collection:
+            return jsonify({"success": False, "error": "Invalid parent collection"}), 400
         collection.parent_id = data.parent_id
 
     try:
@@ -130,6 +144,13 @@ def delete_collection(collection_id: int) -> Response | tuple[Response, int]:
     collection = db.session.query(UserCollection).filter(UserCollection.id == collection_id, UserCollection.owner_id == user_id).first()
     if not collection:
         return jsonify({"success": False, "error": "Collection not found"}), 404
+
+    # Prevent deletion if there are nested children
+    has_children = (
+        db.session.query(UserCollection).filter(UserCollection.parent_id == collection.id, UserCollection.owner_id == user_id).first()
+    )
+    if has_children:
+        return jsonify({"success": False, "error": "Cannot delete a collection that contains sub-collections"}), 400
 
     try:
         db.session.delete(collection)

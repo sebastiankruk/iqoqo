@@ -30,11 +30,7 @@ test.describe("Public Sharing", () => {
   });
 
   test("check inventory tool works", async ({ page }) => {
-    await page.goto("/u/testuser");
-    const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
-    await input.fill("1111111111111");
-
-    // Mock the inventory check API to return a known result
+    // 1. Mock the inventory check API before navigating
     await page.route("**/public/u/testuser/check", route =>
       route.fulfill({
         status: 200,
@@ -55,21 +51,27 @@ test.describe("Public Sharing", () => {
       })
     );
 
-    // Wait for the search API response
-    const responsePromise = page.waitForResponse(
-      r => r.url().includes("/public/u/testuser/check") && r.status() === 200
-    );
-    await page.getByRole("button", { name: "Check if I have it" }).first().click();
-    await responsePromise;
+    // 2. Navigate and wait for loading state
+    await page.goto("/u/testuser");
+    await page.waitForLoadState("networkidle");
 
-    // Wait for the search result card to appear
+    // 3. Fill the input
+    const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
+    await input.fill("1111111111111");
+
+    // 4. Submit form by pressing Enter to avoid React state hydration lag on button click
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes("/public/u/testuser/check") && r.status() === 200, { timeout: 15000 }),
+      input.press("Enter"),
+    ]);
+
+    // 5. Wait for the search result card to appear
     const resultCard = page.locator("#inventory-result-card");
     await expect(resultCard).toBeVisible();
 
     // Check if the item title appears WITHIN the result card (use fuzzy match)
     await expect(resultCard.getByText(/Treasure/i).first()).toBeVisible();
     // Then check for the success label container WITHIN the result card
-    // The label text itself might be localized (I have this! / Mam to!)
     await expect(resultCard.locator("p.text-primary.uppercase").first()).toBeVisible();
   });
 });
