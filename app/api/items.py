@@ -16,6 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import uuid
+
 from flask import Response, current_app, g, jsonify, request
 from pydantic import ValidationError
 from sqlalchemy import func
@@ -418,15 +420,29 @@ def update_item(item_id: int):
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_status, new_status=item.status)
         db.session.add(log)
 
+    # Check if final status will be "lent"
+    final_collection_status = payload.collection_status if payload.collection_status is not None else item.collection_status
+    if final_collection_status == "lent":
+        final_lent_to_user_id = payload.lent_to_user_id if "lent_to_user_id" in payload.model_fields_set else item.lent_to_user_id
+        final_lent_to_name = payload.lent_to_name if "lent_to_name" in payload.model_fields_set else item.lent_to_name
+        if not final_lent_to_user_id and not (final_lent_to_name and final_lent_to_name.strip()):
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
     if payload.collection_status and payload.collection_status != item.collection_status:
         old_c_status = item.collection_status
         item.collection_status = payload.collection_status
         log = ItemStatusLog(item_id=item.id, user_id=user_id, old_status=old_c_status, new_status=item.collection_status)
         db.session.add(log)
+        # If we transition away from "lent", auto-clear borrower details
+        if old_c_status == "lent" and payload.collection_status != "lent":
+            if "lent_to_user_id" not in payload.model_fields_set:
+                item.lent_to_user_id = None
+            if "lent_to_name" not in payload.model_fields_set:
+                item.lent_to_name = None
 
-    if payload.lent_to_user_id is not None:
-        item.lent_to_user_id = payload.lent_to_user_id
-    if payload.lent_to_name is not None:
+    if "lent_to_user_id" in payload.model_fields_set:
+        item.lent_to_user_id = uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None
+    if "lent_to_name" in payload.model_fields_set:
         item.lent_to_name = payload.lent_to_name
     if payload.is_hidden is not None:
         item.is_hidden = payload.is_hidden
@@ -544,11 +560,17 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
 
+    if payload.collection_status == "lent":
+        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
     item = Item(
         manifestation_id=manifestation.id,
         owner_id=user_id,
         status=payload.status or "want_to_read",
         collection_status=payload.collection_status,
+        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+        lent_to_name=payload.lent_to_name,
         meta={},
     )
     db.session.add(item)
@@ -588,11 +610,17 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     except (ValidationError, TypeError) as e:
         return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
+    if payload.collection_status == "lent":
+        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
     item = Item(
         manifestation_id=manifestation.id,
         owner_id=user_id,
         status=payload.status or "want_to_read",
         collection_status=payload.collection_status,
+        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+        lent_to_name=payload.lent_to_name,
         meta={},
     )
     db.session.add(item)
@@ -622,6 +650,9 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         payload = ItemBulkCreateSchema(**payload_json)
     except ValidationError as e:
         return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    if payload.collection_status == "lent":
+        return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     manifestations = Manifestation.query.filter(Manifestation.id.in_(payload.manifestation_ids)).all()
     if not manifestations:
@@ -737,11 +768,17 @@ def add_item_manual() -> Response | tuple[Response, int]:
             db.session.add(manifestation)
             db.session.flush()
 
+        if payload.collection_status == "lent":
+            if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+                return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
         item = Item(
             manifestation_id=manifestation.id,
             owner_id=user_id,
             status=payload.status or default_status,
             collection_status=payload.collection_status,
+            lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+            lent_to_name=payload.lent_to_name,
             meta={},
         )
         db.session.add(item)

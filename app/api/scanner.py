@@ -19,6 +19,7 @@ import copy
 import hashlib
 import io
 import re
+import uuid
 
 from flask import Response, current_app, g, jsonify, request
 from PIL import Image
@@ -413,12 +414,18 @@ def scan_barcode() -> Response | tuple[Response, int]:
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
     default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
 
+    if collection_status == "lent":
+        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
         manifestation_id=manifestation.id,
         owner_id=getattr(g, "user_id", None),
         status=default_progress,
         collection_status=collection_status,
+        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+        lent_to_name=payload.lent_to_name,
     )
     db.session.add(new_item)
 

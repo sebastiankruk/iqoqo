@@ -31,6 +31,8 @@ class ItemCreateSchema(BaseModel):
     tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
     collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
+    lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
+    lent_to_name: str | None = Field(default=None, description="The name of the borrower")
 
 
 class ItemBulkCreateSchema(BaseModel):
@@ -80,6 +82,8 @@ class ItemManualCreateSchema(BaseModel):
     status: str | None = None
     collection_status: str | None = "available"
     tags: list[str] | None = None
+    lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
+    lent_to_name: str | None = Field(default=None, description="The name of the borrower")
 
 
 class ManifestationUpdateSchema(BaseModel):
@@ -98,6 +102,8 @@ class ScanBarcodeSchema(BaseModel):
     manifestation_id: int | None = None
     format: str | None = None
     collection_status: str | None = "available"
+    lent_to_user_id: str | None = None
+    lent_to_name: str | None = None
 
 
 class UserCollectionCreateSchema(BaseModel):
