@@ -387,7 +387,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     render(<CollectionPage />);
 
-    const libraryBtn = screen.getByRole("button", { name: /Global Library/i });
+    const libraryBtn = screen.getByRole("tab", { name: /Global Library/i });
     fireEvent.click(libraryBtn);
 
     const calls = mockUseManifestations.mock.calls;
@@ -402,7 +402,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
     render(<CollectionPage />);
 
     // Toggle should not exist
-    expect(screen.queryByRole("button", { name: /My Items/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /My Items/i })).not.toBeInTheDocument();
 
     // It should automatically trigger the manifestations fetch
     const calls = mockUseManifestations.mock.calls;
@@ -432,7 +432,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
 
     render(<CollectionPage />);
 
-    const worksBtn = screen.getByRole("button", { name: /Works/i });
+    const worksBtn = screen.getByRole("tab", { name: /Works/i });
     fireEvent.click(worksBtn);
 
     expect(screen.getByText("Mock Work Anthology")).toBeInTheDocument();
@@ -447,7 +447,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
 
     render(<CollectionPage />);
 
-    const exprBtn = screen.getByRole("button", { name: /Expressions/i });
+    const exprBtn = screen.getByRole("tab", { name: /Expressions/i });
     fireEvent.click(exprBtn);
 
     expect(screen.getByText("Mock Expression Trans")).toBeInTheDocument();

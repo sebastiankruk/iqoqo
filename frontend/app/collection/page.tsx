@@ -482,7 +482,7 @@ function CollectionContent() {
                   <button
                     role="tab"
                     aria-selected={viewMode === "items"}
-                    aria-label="Items"
+                    aria-label="My Items"
                     onClick={() => {
                       setViewMode("items");
                     }}
@@ -497,7 +497,7 @@ function CollectionContent() {
                   <button
                     role="tab"
                     aria-selected={viewMode === "manifestations"}
-                    aria-label="Manifestations"
+                    aria-label="Global Library"
                     onClick={() => {
                       setViewMode("manifestations");
                     }}

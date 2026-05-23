@@ -257,7 +257,7 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
     await expect(page.getByText("Global Fiction Novel").first()).toBeVisible();
 
     // Step 3: Inventory Layer Isolation & Empty State Verification (Items view)
-    const itemsTab = page.getByRole("tab", { name: "Items" });
+    const itemsTab = page.getByRole("tab", { name: "My Items" });
     await itemsTab.click();
 
     // Assert active URL updates to items (view parameter omitted because it's default)

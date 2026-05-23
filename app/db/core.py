@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -107,7 +108,7 @@ class Work(db.Model):  # type: ignore[name-defined]
     )
 
     # Relationships
-    expressions = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
+    expressions: Any = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("WorkContribution", backref="work", lazy="selectin", cascade="all, delete-orphan")
     parts = db.relationship(
         "WorkPart",
@@ -142,7 +143,8 @@ class Expression(db.Model):  # type: ignore[name-defined]
     meta = db.Column(db.JSON, default=dict)
 
     # Relationships
-    manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
+    work: Any
+    manifestations: Any = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("ExpressionContribution", backref="expression", lazy="selectin", cascade="all, delete-orphan")
 
 
@@ -189,6 +191,8 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         db.Index("ix_manifestations_fts", fts_simple, postgresql_using="gin"),
         {"schema": _CATALOG},
     )
+
+    expression: Any
 
     @property
     def title(self) -> str:

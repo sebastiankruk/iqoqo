@@ -206,7 +206,9 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.formatCounts - The counts for each format
  * @param root0.disableStatus - Whether to disable the status filter
  * @param root0.viewMode - The current view mode
- * @returns {JSX.Element} The component*/
+ * @param root0.isLoggedIn - Whether the user is logged in
+ * @returns {JSX.Element} The component
+ */
 export function SidebarFilters({
   activeFilters,
   onToggleFilter,
