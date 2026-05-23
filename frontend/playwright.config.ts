@@ -53,6 +53,8 @@ export default defineConfig({
             "--use-fake-device-for-media-stream",
             "--no-sandbox",
             "--disable-setuid-sandbox",
+            "--single-process",
+            "--disable-gpu",
           ],
         },
       },

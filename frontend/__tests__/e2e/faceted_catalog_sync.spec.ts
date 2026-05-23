@@ -23,6 +23,10 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
+    // Log all requests and responses
+    page.on("request", request => console.log(">> Request:", request.method(), request.url()));
+    page.on("response", response => console.log("<< Response:", response.status(), response.url()));
+
     // 2. Mock user profile
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
@@ -119,6 +123,7 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
               {
                 expression_id: 999,
                 work_title: "Global Fiction Novel",
+                creators: ["Atlantic Author"],
                 content_type: "text",
                 language: "en",
                 total_items: 0,
@@ -201,6 +206,24 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
         }),
       });
     });
+
+    // 9. Mock stats
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 1,
+            expressions: 1,
+            manifestations: 1,
+            items: 0,
+            format_book: 1,
+          },
+        }),
+      });
+    });
   });
 
   test("should sync global catalog across tabs and isolate personal items layer", async ({ page }) => {
@@ -237,8 +260,9 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
     const itemsTab = page.getByRole("tab", { name: "Items" });
     await itemsTab.click();
 
-    // Assert active URL updates to items
-    await expect(page).toHaveURL(/.*view=items/);
+    // Assert active URL updates to items (view parameter omitted because it's default)
+    await expect(page).not.toHaveURL(/.*view=/);
+    await expect(page).toHaveURL(/.*genres=Fiction/);
 
     // Assert that the list displays the empty state: "No items found"
     await expect(page.getByText("No items found").first()).toBeVisible();
