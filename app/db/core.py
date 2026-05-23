@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy.dialects.postgresql import UUID
 

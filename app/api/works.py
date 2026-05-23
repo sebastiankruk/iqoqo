@@ -127,14 +127,14 @@ def get_user_works() -> Response:
 
     works = (
         db.session.query(Work)
-        .options(selectinload(Work.expressions).selectinload(Expression.manifestations))
+        .options(selectinload(Work.expressions).selectinload(Expression.manifestations))  # type: ignore[arg-type]
         .filter(Work.id.in_(work_ids))
         .all()
     )
 
     manifestation_ids = []
     for w in works:
-        for expr in w.expressions:
+        for expr in w.expressions:  # type: ignore[attr-defined]
             for manif in expr.manifestations:
                 manifestation_ids.append(manif.id)
 
@@ -153,7 +153,7 @@ def get_user_works() -> Response:
         owned_manifestations = []
         total_items = 0
 
-        for expr in work.expressions:
+        for expr in work.expressions:  # type: ignore[attr-defined]
             if category and (expr.content_type or "").lower() != category:
                 continue
 
@@ -307,14 +307,14 @@ def get_user_expressions() -> Response:
 
     expressions = (
         db.session.query(Expression)
-        .options(selectinload(Expression.work), selectinload(Expression.manifestations))
+        .options(selectinload(Expression.work), selectinload(Expression.manifestations))  # type: ignore[arg-type]
         .filter(Expression.id.in_(expr_ids))
         .all()
     )
 
     manifestation_ids = []
     for expr in expressions:
-        for manif in expr.manifestations:
+        for manif in expr.manifestations:  # type: ignore[attr-defined]
             manifestation_ids.append(manif.id)
 
     owned_items = []
@@ -334,7 +334,7 @@ def get_user_expressions() -> Response:
         owned_manifestations = []
         total_items = 0
 
-        for manif in expr.manifestations:
+        for manif in expr.manifestations:  # type: ignore[attr-defined]
             owned_item = owned_items_map.get(manif.id)
             effective_cover = manif.cover_url or (manif.meta.get("cover_url") if manif.meta else None)
 

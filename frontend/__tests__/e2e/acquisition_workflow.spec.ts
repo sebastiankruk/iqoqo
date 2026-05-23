@@ -19,7 +19,6 @@ import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Item Acquisition and Collection Workflow", () => {
   test.beforeEach(async ({ page }) => {
-    // 1. Pre-seed localStorage and mock mediaDevices.getUserMedia/video.play to prevent camera hangs
     await page.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
 
@@ -27,29 +26,41 @@ test.describe("Item Acquisition and Collection Workflow", () => {
         // Redefine HTMLVideoElement.prototype.play to resolve instantly
         HTMLVideoElement.prototype.play = async () => {};
 
-        if (navigator.mediaDevices) {
-          const dummyStream = new MediaStream();
-          const mockTrack = {
-            stop: () => {},
-            getCapabilities: () => ({ torch: true }),
-            applyConstraints: async () => {},
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            enabled: true,
-            readyState: "live",
-          };
-          dummyStream.getVideoTracks = () => [mockTrack as unknown as MediaStreamTrack];
-          dummyStream.getTracks = () => [mockTrack as unknown as MediaStreamTrack];
+        const dummyStream = new MediaStream();
+        const mockTrack = {
+          stop: () => {},
+          getCapabilities: () => ({ torch: true }),
+          applyConstraints: async () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          enabled: true,
+          readyState: "live",
+        };
+        dummyStream.getVideoTracks = () => [mockTrack as unknown as MediaStreamTrack];
+        dummyStream.getTracks = () => [mockTrack as unknown as MediaStreamTrack];
 
-          try {
-            Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
-              value: async () => dummyStream,
-              configurable: true,
-              writable: true,
-            });
-          } catch (err) {
-            console.error("Failed to redefine getUserMedia", err);
-          }
+        const mockMediaDevices = {
+          getUserMedia: async () => dummyStream,
+          enumerateDevices: async () => [
+            {
+              kind: "videoinput",
+              deviceId: "fake-camera",
+              groupId: "fake-group",
+              label: "Fake Camera",
+            } as MediaDeviceInfo,
+          ],
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        };
+
+        try {
+          Object.defineProperty(navigator, "mediaDevices", {
+            value: mockMediaDevices,
+            configurable: true,
+            writable: true,
+          });
+        } catch (err) {
+          console.error("Failed to redefine mediaDevices on navigator", err);
         }
       }
     });
@@ -180,7 +191,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await page.getByRole("button", { name: "Snap Cover" }).click();
 
       const fileChooserPromise = page.waitForEvent("filechooser");
-      await page.getByRole("button", { name: "Browse Files" }).click();
+      await page.getByRole("button", { name: "Browse Files" }).first().click();
       const fileChooser = await fileChooserPromise;
       await fileChooser.setFiles({
         name: "vinyl_cover.jpg",
@@ -245,7 +256,6 @@ test.describe("Item Acquisition and Collection Workflow", () => {
     test.use({
       viewport: { width: 375, height: 812 },
       hasTouch: true,
-      permissions: ["camera"],
     });
 
     test("Acquire CD via Barcode Scanner", async ({ page }) => {

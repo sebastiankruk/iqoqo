@@ -161,6 +161,7 @@ function CollectionContent() {
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
   const isLoggedIn = !!profile;
+  const isCurator = isLoggedIn && !!profile?.permissions?.includes(PermissionName.WRITE_METADATA);
 
   // Track profile state to adjust viewMode dynamically
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
@@ -414,6 +415,17 @@ function CollectionContent() {
     return counts;
   }, [statsData]);
 
+  const categoryCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("format_")) {
+        counts[key.replace("format_", "")] = value as number;
+      }
+    }
+    return counts;
+  }, [statsData]);
+
   const statusCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
@@ -541,32 +553,7 @@ function CollectionContent() {
                   </button>
                 </div>
 
-                {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={missingCoverOnly}
-                        onChange={() => {
-                          setMissingCoverOnly(!missingCoverOnly);
-                        }}
-                        className="h-4 w-4 rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">No Cover</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={missingIdOnly}
-                        onChange={() => {
-                          setMissingIdOnly(!missingIdOnly);
-                        }}
-                        className="h-4 w-4 rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">No ID</span>
-                    </label>
-                  </div>
-                )}
+                {/* Curation filters moved to sidebar curation facet */}
               </div>
             )}
 
@@ -625,9 +612,15 @@ function CollectionContent() {
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
+                categoryCounts={categoryCounts}
                 disableStatus={viewMode === "manifestations"}
                 viewMode={viewMode}
                 isLoggedIn={isLoggedIn}
+                isCurator={isCurator}
+                missingCover={missingCoverOnly}
+                onChangeMissingCover={setMissingCoverOnly}
+                missingId={missingIdOnly}
+                onChangeMissingId={setMissingIdOnly}
               />
             </div>
           </div>
@@ -924,6 +917,15 @@ function CollectionContent() {
         onToggleFilter={toggleFilter}
         statusCounts={statusCounts}
         formatCounts={formatCounts}
+        categoryCounts={categoryCounts}
+        disableStatus={viewMode === "manifestations"}
+        viewMode={viewMode}
+        isLoggedIn={isLoggedIn}
+        isCurator={isCurator}
+        missingCover={missingCoverOnly}
+        onChangeMissingCover={setMissingCoverOnly}
+        missingId={missingIdOnly}
+        onChangeMissingId={setMissingIdOnly}
       />
     </div>
   );

@@ -38,10 +38,10 @@ describe("SidebarFilters with Searchable Facets", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const taxonomies = {
-      genres: ["Fantasy", "Sci-Fi"],
-      tags: ["Read", "Unread"],
-      publishers: ["Penguin"],
-      collections: ["My Collection"],
+      genres: ["Fantasy", "Sci-Fi", "Mystery", "Thriller", "Romance", "Horror"],
+      tags: ["Read", "Unread", "Favorite", "To Read", "Borrowed", "Reference"],
+      publishers: ["Penguin", "Tor", "Bantam", "Del Rey", "HarperCollins", "Macmillan"],
+      collections: ["My Collection", "Favorites", "To Read", "Wishlist", "School", "Work"],
     };
     vi.mocked(useTaxonomies).mockReturnValue({ data: taxonomies } as unknown as ReturnType<typeof useTaxonomies>);
   });
