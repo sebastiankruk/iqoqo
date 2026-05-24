@@ -60,6 +60,15 @@ def sync_tags(item_id: int, user_id, tags: list[str] | None):
             db.session.add(link)
 
 
+def log_initial_item_status(item_id: int, user_id: uuid.UUID, status: str, collection_status: str | None = None) -> None:
+    """Helper to log initial item status and collection status when item is added."""
+    progress_log = ItemStatusLog(item_id=item_id, user_id=user_id, old_status=None, new_status=status)
+    db.session.add(progress_log)
+    if collection_status:
+        collection_log = ItemStatusLog(item_id=item_id, user_id=user_id, old_status=None, new_status=collection_status)
+        db.session.add(collection_log)
+
+
 @api_bp.route("/items", methods=["GET"])
 @require_auth
 def get_items():
@@ -588,6 +597,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     db.session.add(item)
     try:
         db.session.flush()
+        log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
@@ -637,6 +647,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     )
     db.session.add(item)
     db.session.flush()
+    log_initial_item_status(item.id, user_id, item.status, item.collection_status)
     if payload.collection_id:
         link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
         db.session.add(link)
@@ -699,6 +710,9 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         created_items.append(item)
 
     try:
+        db.session.flush()
+        for item in created_items:
+            log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         db.session.commit()
         return jsonify(
             {
@@ -802,6 +816,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         )
         db.session.add(item)
         db.session.flush()
+        log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
 
@@ -814,7 +829,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
 
 @api_bp.route("/items/<int:item_id>/logs", methods=["GET"])
 @require_auth
-def get_item_logs(item_id: int):
+def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     """Get the status timeline for an item."""
     item = db.session.get(Item, item_id)
     if not item:
@@ -832,21 +847,50 @@ def get_item_logs(item_id: int):
     if not (is_owner or is_admin or has_update_permission):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
-    logs = db.session.query(ItemStatusLog).filter(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc()).all()
-    return jsonify(
-        {
-            "success": True,
-            "data": [
-                {
-                    "old_status": entry.old_status,
-                    "new_status": entry.new_status,
-                    "changed_at": entry.changed_at.isoformat(),
-                }
-                for entry in logs
-            ],
-            "error": None,
-        }
+    from app.core.taxonomy import PROGRESS_STATUSES
+
+    logs = (
+        db.session.query(ItemStatusLog)
+        .filter(ItemStatusLog.item_id == item_id)
+        .order_by(ItemStatusLog.changed_at.desc(), ItemStatusLog.id.desc())
+        .all()
     )
+
+    category = "text"
+    if item.manifestation and item.manifestation.expression:
+        category = item.manifestation.expression.content_type or "text"
+
+    data = []
+    for entry in logs:
+        if entry.old_status is None:
+            if entry.new_status in PROGRESS_STATUSES:
+                log_type = "creation"
+            else:
+                log_type = "collection"
+        elif entry.new_status in PROGRESS_STATUSES:
+            log_type = "progress"
+        else:
+            log_type = "collection"
+
+        operator_name = "System"
+        if entry.user:
+            if str(entry.user_id) == str(user_id):
+                operator_name = "You"
+            else:
+                operator_name = entry.user.display_name or entry.user.email or "Unknown User"
+
+        data.append(
+            {
+                "old_status": entry.old_status,
+                "new_status": entry.new_status,
+                "changed_at": entry.changed_at.isoformat(),
+                "log_type": log_type,
+                "operator_name": operator_name,
+                "category": category,
+            }
+        )
+
+    return jsonify({"success": True, "data": data, "error": None})
 
 
 @api_bp.route("/items/<int:item_id>/visibility", methods=["PATCH"])
