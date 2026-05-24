@@ -422,11 +422,12 @@ def update_item(item_id: int):
 
     # Check if final status will be "lent"
     final_collection_status = payload.collection_status if payload.collection_status is not None else item.collection_status
+    validation_error = None
     if final_collection_status == "lent":
         final_lent_to_user_id = payload.lent_to_user_id if "lent_to_user_id" in payload.model_fields_set else item.lent_to_user_id
         final_lent_to_name = payload.lent_to_name if "lent_to_name" in payload.model_fields_set else item.lent_to_name
         if not final_lent_to_user_id and not (final_lent_to_name and final_lent_to_name.strip()):
-            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+            validation_error = jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     if payload.collection_status and payload.collection_status != item.collection_status:
         old_c_status = item.collection_status
@@ -454,8 +455,11 @@ def update_item(item_id: int):
 
     # BOLA protection: block sensitive fields
     forbidden = {"owner_id", "id", "created_at"}
-    if any(k in metadata for k in forbidden):
-        return jsonify({"success": False, "error": "Invalid payload: forbidden fields"}), 400
+    if validation_error is None and any(k in metadata for k in forbidden):
+        validation_error = jsonify({"success": False, "error": "Invalid payload: forbidden fields"}), 400
+
+    if validation_error is not None:
+        return validation_error
 
     if metadata:
         if item.manifestation:
@@ -533,16 +537,24 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     payload_json = request.get_json(silent=True)
+    payload = None
+    error_response = None
     if not isinstance(payload_json, dict):
         if payload_json is None and not request.data:
             payload_json = {}
         else:
-            return invalid_json_payload_response()
+            error_response = invalid_json_payload_response()
 
-    try:
-        payload = ItemCreateSchema(**payload_json)
-    except (ValidationError, TypeError) as e:
-        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+    if not error_response:
+        assert isinstance(payload_json, dict)
+        try:
+            payload = ItemCreateSchema(**payload_json)
+        except (ValidationError, TypeError) as e:
+            error_response = jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    if error_response:
+        return error_response
+    assert payload is not None
 
     metadata = payload.model_extra or {}
     if isinstance(payload.meta, dict):
@@ -561,7 +573,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
                 manifestation.expression.work.meta = work_meta
 
     if payload.collection_status == "lent":
-        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+        if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     item = Item(
@@ -611,7 +623,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
     if payload.collection_status == "lent":
-        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+        if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     item = Item(
@@ -643,13 +655,19 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
     payload_json = request.get_json(silent=True)
+    payload = None
+    error_response = None
     if not isinstance(payload_json, dict):
-        return invalid_json_payload_response()
+        error_response = invalid_json_payload_response()
+    else:
+        try:
+            payload = ItemBulkCreateSchema(**payload_json)
+        except ValidationError as e:
+            error_response = jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
 
-    try:
-        payload = ItemBulkCreateSchema(**payload_json)
-    except ValidationError as e:
-        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+    if error_response:
+        return error_response
+    assert payload is not None
 
     if payload.collection_status == "lent":
         return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
@@ -769,7 +787,8 @@ def add_item_manual() -> Response | tuple[Response, int]:
             db.session.flush()
 
         if payload.collection_status == "lent":
-            if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+            lent_to_name = payload.lent_to_name
+            if not payload.lent_to_user_id and not (lent_to_name and lent_to_name.strip()):
                 return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
         item = Item(

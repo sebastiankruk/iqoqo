@@ -353,20 +353,13 @@ def scan_barcode() -> Response | tuple[Response, int]:
     if collection_status in STATUS_ALIASES:  # pylint: disable=consider-using-get
         collection_status = STATUS_ALIASES[collection_status]
 
-    if collection_status not in COLLECTION_STATUSES:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "data": None,
-                    "error": f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}",
-                }
-            ),
-            400,
-        )
-
+    error = None
     if not barcode and not manifestation_id:
-        return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
+        error = "Barcode or Manifestation ID is required"
+    elif collection_status not in COLLECTION_STATUSES:
+        error = f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}"
+    if error:
+        return jsonify({"success": False, "data": None, "error": error}), 400
 
     is_new_manifestation = False
     manifestation = None
