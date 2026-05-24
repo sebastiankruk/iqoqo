@@ -55,6 +55,7 @@ from app.db.core import (  # noqa: F401
     Tag,
     UserCollection,
     UserCollectionItem,
+    UserWorkIntent,
     Work,
 )
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401

@@ -973,3 +973,41 @@ export function useUserCollections() {
     staleTime: 60_000,
   });
 }
+
+import { getWorkIntent, setWorkIntent } from "./intents";
+
+/**
+ * Custom hook to fetch a user's intent for a given Conceptual Work (F1).
+ *
+ * @param workId - Work ID
+ * @returns React Query query result for the intent
+ */
+export function useWorkIntent(workId: number) {
+  return useQuery({
+    queryKey: ["workIntent", workId],
+    queryFn: () => getWorkIntent(workId),
+    enabled: !!workId && workId > 0,
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * Custom hook to set or update a user's intent for a given Conceptual Work (F1).
+ *
+ * @returns React Query mutation hook
+ */
+export function useSetWorkIntent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workId, status }: { workId: number; status: string | null }) => {
+      return setWorkIntent(workId, status);
+    },
+    onSuccess: (_, variables) => {
+      void qc.invalidateQueries({ queryKey: ["workIntent", variables.workId] });
+      void qc.invalidateQueries({ queryKey: queryKeys.stats });
+      void qc.invalidateQueries({ queryKey: ["items"] });
+      void qc.invalidateQueries({ queryKey: ["worksShelf"] });
+      void qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
+    },
+  });
+}

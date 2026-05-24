@@ -22,7 +22,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, Manifestation, Work, WorkPart, db
+from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, db
 
 
 @api_bp.route("/works/shelf", methods=["GET"])
@@ -72,8 +72,9 @@ def get_user_works() -> Response:
             db.session.query(Work.id)
             .join(Expression, Expression.work_id == Work.id)
             .join(Manifestation, Manifestation.expression_id == Expression.id)
-            .join(Item, Item.manifestation_id == Manifestation.id)
-            .filter(Item.owner_id == user_id)
+            .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id))
+            .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
+            .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
         )
 
     if category:
@@ -147,6 +148,12 @@ def get_user_works() -> Response:
 
     owned_items_map = {item.manifestation_id: item for item in owned_items}
 
+    # Fetch user work intents for the loaded works
+    intents = []
+    if user_id and work_ids:
+        intents = db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == user_id, UserWorkIntent.work_id.in_(work_ids)).all()
+    intents_map = {intent.work_id: intent for intent in intents}
+
     works_map: dict[int, dict] = {}
     for work in works:
         creators: list[str] = []
@@ -155,6 +162,7 @@ def get_user_works() -> Response:
 
         owned_manifestations = []
         total_items = 0
+        has_intent = work.id in intents_map
 
         for expr in work.expressions:  # type: ignore[attr-defined]
             if category and (expr.content_type or "").lower() != category:
@@ -177,13 +185,14 @@ def get_user_works() -> Response:
                         }
                     )
                     total_items += 1
-                elif is_global:
+                elif is_global or has_intent:
                     owned_manifestations.append(
                         {
                             "manifestation_id": manif.id,
                             "item_id": None,
                             "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
                             "cover_url": effective_cover,
+                            "intent_status": intents_map[work.id].status if has_intent else None,
                         }
                     )
 
@@ -258,8 +267,9 @@ def get_user_expressions() -> Response:
             db.session.query(Expression.id)
             .join(Work, Expression.work_id == Work.id)
             .join(Manifestation, Manifestation.expression_id == Expression.id)
-            .join(Item, Item.manifestation_id == Manifestation.id)
-            .filter(Item.owner_id == user_id)
+            .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id))
+            .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
+            .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
         )
 
     if category:
@@ -329,6 +339,13 @@ def get_user_expressions() -> Response:
 
     owned_items_map = {item.manifestation_id: item for item in owned_items}
 
+    # Fetch user work intents for the loaded expressions
+    work_ids = [expr.work_id for expr in expressions if expr.work_id]
+    intents = []
+    if user_id and work_ids:
+        intents = db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == user_id, UserWorkIntent.work_id.in_(work_ids)).all()
+    intents_map = {intent.work_id: intent for intent in intents}
+
     expr_map: dict[int, dict] = {}
     for expr in expressions:
         work = expr.work
@@ -339,6 +356,7 @@ def get_user_expressions() -> Response:
 
         owned_manifestations = []
         total_items = 0
+        has_intent = work and work.id in intents_map
 
         for manif in expr.manifestations:  # type: ignore[attr-defined]
             owned_item = owned_items_map.get(manif.id)
@@ -357,13 +375,14 @@ def get_user_expressions() -> Response:
                     }
                 )
                 total_items += 1
-            elif is_global:
+            elif is_global or has_intent:
                 owned_manifestations.append(
                     {
                         "manifestation_id": manif.id,
                         "item_id": None,
                         "format": manif.meta.get("format", "Unknown") if manif.meta else "Unknown",
                         "cover_url": effective_cover,
+                        "intent_status": intents_map[work.id].status if has_intent else None,
                     }
                 )
 
@@ -490,3 +509,71 @@ def remove_work_part(work_id: int, part_id: int) -> Response | tuple[Response, i
         db.session.delete(wp)
         db.session.commit()
     return jsonify({"success": True})
+
+
+@api_bp.route("/works/<int:work_id>/intent", methods=["GET"])
+@require_auth
+def get_work_intent(work_id: int) -> Response | tuple[Response, int]:
+    """Get the current user's intent for a given Conceptual Work (F1)."""
+    user_id = getattr(g, "user_id", None)
+    work = db.session.get(Work, work_id)
+    if not work:
+        return jsonify({"error": "Work not found", "code": 404}), 404
+
+    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work_id).first()
+    status = intent.status if intent else None
+    return jsonify({"success": True, "data": {"status": status}})
+
+
+@api_bp.route("/works/<int:work_id>/intent", methods=["POST"])
+@require_auth
+def set_work_intent(work_id: int) -> Response | tuple[Response, int]:
+    """Set or update the current user's intent for a given Conceptual Work (F1)."""
+    user_id = getattr(g, "user_id", None)
+    work = db.session.get(Work, work_id)
+    if not work:
+        return jsonify({"error": "Work not found", "code": 404}), 404
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    status = data.get("status")
+    if not status:
+        intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work_id).first()
+        if intent:
+            db.session.delete(intent)
+            db.session.commit()
+        return jsonify({"success": True, "data": {"status": None}})
+
+    from app.core.taxonomy import PROGRESS_STATUSES
+
+    if status not in PROGRESS_STATUSES:
+        return jsonify({"error": f"Invalid intent status. Valid values: {list(PROGRESS_STATUSES)}", "code": 400}), 400
+
+    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work_id).first()
+    if intent:
+        intent.status = status
+    else:
+        intent = UserWorkIntent(user_id=user_id, work_id=work_id, status=status)
+        db.session.add(intent)
+
+    db.session.commit()
+    return jsonify({"success": True, "data": {"status": status}})
+
+
+@api_bp.route("/works/<int:work_id>/intent", methods=["DELETE"])
+@require_auth
+def delete_work_intent(work_id: int) -> Response | tuple[Response, int]:
+    """Delete the current user's intent for a given Conceptual Work (F1)."""
+    user_id = getattr(g, "user_id", None)
+    work = db.session.get(Work, work_id)
+    if not work:
+        return jsonify({"error": "Work not found", "code": 404}), 404
+
+    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work_id).first()
+    if intent:
+        db.session.delete(intent)
+        db.session.commit()
+
+    return jsonify({"success": True, "data": {"status": None}})

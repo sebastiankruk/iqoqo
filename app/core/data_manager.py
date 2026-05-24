@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db import db
-from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, Work
+from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, UserWorkIntent, Work
 
 
 class DataManager:
@@ -331,25 +331,53 @@ class DataManager:
             if c_status in status_counts:
                 status_counts[c_status] += cnt
 
+        intent_filter = [UserWorkIntent.user_id == owner_id] if owner_id else []
+        intent_count = (
+            db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar() or 0  # pylint: disable=not-callable
+        )
+        status_counts["wish_list"] = intent_count
+
         if owner_id:
-            # Single aggregate query for user-scoped FRBR entity counts using joins.
-            # This is more efficient than separate IN-subquery counts on large datasets.
             from sqlalchemy import distinct
 
-            frbr_counts = db.session.execute(
-                select(
-                    func.count(distinct(Work.id)),  # pylint: disable=not-callable
-                    func.count(distinct(Expression.id)),  # pylint: disable=not-callable
-                    func.count(distinct(Manifestation.id)),  # pylint: disable=not-callable
-                )
-                .select_from(Item)
-                .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                .join(Expression, Manifestation.expression_id == Expression.id)
-                .join(Work, Expression.work_id == Work.id)
-                .where(Item.owner_id == owner_id)
-            ).first()
+            works_count = (
+                db.session.execute(
+                    select(func.count(distinct(Work.id)))  # pylint: disable=not-callable
+                    .select_from(Work)
+                    .outerjoin(Expression, Expression.work_id == Work.id)
+                    .outerjoin(Manifestation, Manifestation.expression_id == Expression.id)
+                    .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id))
+                    .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == owner_id))
+                    .where(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
+                ).scalar()
+                or 0
+            )
 
-            works_count, expressions_count, manifestations_count = frbr_counts if frbr_counts else (0, 0, 0)
+            expressions_count = (
+                db.session.execute(
+                    select(func.count(distinct(Expression.id)))  # pylint: disable=not-callable
+                    .select_from(Expression)
+                    .join(Work, Expression.work_id == Work.id)
+                    .outerjoin(Manifestation, Manifestation.expression_id == Expression.id)
+                    .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id))
+                    .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == owner_id))
+                    .where(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
+                ).scalar()
+                or 0
+            )
+
+            manifestations_count = (
+                db.session.execute(
+                    select(func.count(distinct(Manifestation.id)))  # pylint: disable=not-callable
+                    .select_from(Manifestation)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .join(Work, Expression.work_id == Work.id)
+                    .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id))
+                    .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == owner_id))
+                    .where(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
+                ).scalar()
+                or 0
+            )
         else:
             works_count = Work.query.count()
             expressions_count = Expression.query.count()

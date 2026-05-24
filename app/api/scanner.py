@@ -33,7 +33,7 @@ from app.core.ingest import IngestService
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, UserWorkIntent, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
@@ -318,6 +318,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 @limiter.limit("20 per minute")
 def scan_barcode() -> Response | tuple[Response, int]:
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
+    # pylint: disable=too-many-return-statements
     payload_json = request.get_json(silent=True)
     error_response = None
     payload = None
@@ -410,6 +411,76 @@ def scan_barcode() -> Response | tuple[Response, int]:
     if collection_status == "lent":
         if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
+    if collection_status == "wish_list":
+        user_id = getattr(g, "user_id", None)
+        work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
+        if not work:
+            return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
+
+        # Check if intent already exists
+        intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
+        if not intent:
+            intent = UserWorkIntent(
+                user_id=user_id,
+                work_id=work.id,
+                status=default_progress,
+            )
+            db.session.add(intent)
+            db.session.flush()
+
+        # For name-based lookups (no barcode), store the hash_id in meta
+        if barcode:
+            is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
+            if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
+                computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
+                updated_meta = dict(manifestation.meta)
+                updated_meta["hash_id"] = computed_hash
+                manifestation.meta = updated_meta
+
+        db.session.commit()
+
+        # Success: record telemetry with manifestation_id
+        _record_scan_telemetry(
+            barcode or manifestation.title,
+            format_hint,
+            provider=format_hint or "ingest",
+            status="success",
+            manifestation_id=manifestation.id,
+        )
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "message": "Item successfully added to your collection",
+                        "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
+                        "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
+                        "item_id": -intent.id,
+                        "manifestation_id": manifestation.id,
+                        "title": (
+                            manifestation.meta.get("title") or manifestation.meta.get("Title")
+                            if manifestation.meta
+                            else manifestation.title
+                        ),
+                        "author": (
+                            manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
+                            if manifestation.meta
+                            else manifestation.author
+                        ),
+                        "cover_url": (
+                            manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
+                            if manifestation.meta
+                            else manifestation.cover_url
+                        ),
+                        "is_new_manifestation": is_new_manifestation,
+                    },
+                    "error": None,
+                }
+            ),
+            201,
+        )
 
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(

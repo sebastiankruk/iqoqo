@@ -264,6 +264,33 @@ class Item(db.Model):  # type: ignore[name-defined]
     meta = db.Column(db.JSON, default=dict)
 
 
+class UserWorkIntent(db.Model):  # type: ignore[name-defined]
+    """
+    User intent toward a Conceptual Work (F1).
+    E.g., "want_to_read" or other progress intent.
+    """
+
+    __tablename__ = "user_work_intents"
+    __table_args__: tuple = (
+        (
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),)
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = db.Column(db.String(50), default="want_to_read", nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    work = db.relationship("Work", backref=db.backref("intents", cascade="all, delete-orphan", lazy="dynamic"))
+    user = db.relationship("User", backref=db.backref("work_intents", cascade="all, delete-orphan", lazy="dynamic"))
+
+
 class ItemStatusLog(db.Model):  # type: ignore[name-defined]
     """Timeline of status changes for a specific item."""
 
