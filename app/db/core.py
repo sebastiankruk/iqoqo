@@ -109,6 +109,9 @@ class Work(db.Model):  # type: ignore[name-defined]
     # Relationships
     expressions = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("WorkContribution", backref="work", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.work_id", backref="work", lazy="dynamic", cascade="all, delete-orphan"
+    )
     parts = db.relationship(
         "WorkPart",
         foreign_keys="WorkPart.container_work_id",
@@ -144,6 +147,9 @@ class Expression(db.Model):  # type: ignore[name-defined]
     # Relationships
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("ExpressionContribution", backref="expression", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.expression_id", backref="expression", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class Manifestation(db.Model):  # type: ignore[name-defined]
@@ -229,6 +235,13 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     items = db.relationship("Item", backref="manifestation", lazy=True, cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback",
+        foreign_keys="SocialFeedback.manifestation_id",
+        backref="manifestation",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -262,6 +275,9 @@ class Item(db.Model):  # type: ignore[name-defined]
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class UserWorkIntent(db.Model):  # type: ignore[name-defined]

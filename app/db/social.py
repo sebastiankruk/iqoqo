@@ -33,6 +33,9 @@ _INVENTORY_PFX: str = f"{_INVENTORY}." if _INVENTORY else ""
 _AUTH: str | None = "auth" if _USE_PG else None
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 
+_CATALOG: str | None = "catalog" if _USE_PG else None
+_CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""
+
 
 class SharedCollection(db.Model):  # type: ignore[name-defined]
     """
@@ -62,4 +65,80 @@ class SharedCollection(db.Model):  # type: ignore[name-defined]
             "description": self.description,
             "filters": self.filters,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SocialFeedback(db.Model):  # type: ignore[name-defined]
+    """
+    User rating and comment on any level of the FRBR hierarchy.
+    Exactly one of work_id, expression_id, manifestation_id, or item_id must be set.
+    """
+
+    __tablename__ = "social_feedbacks"
+    __table_args__: tuple = (
+        (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) = 1",
+                name="chk_feedback_target_exactly_one",
+            ),
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_feedback"),
+            db.UniqueConstraint("user_id", "expression_id", name="uq_user_expression_feedback"),
+            db.UniqueConstraint("user_id", "manifestation_id", name="uq_user_manifestation_feedback"),
+            db.UniqueConstraint("user_id", "item_id", name="uq_user_item_feedback"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) = 1",
+                name="chk_feedback_target_exactly_one",
+            ),
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_feedback"),
+            db.UniqueConstraint("user_id", "expression_id", name="uq_user_expression_feedback"),
+            db.UniqueConstraint("user_id", "manifestation_id", name="uq_user_manifestation_feedback"),
+            db.UniqueConstraint("user_id", "item_id", name="uq_user_item_feedback"),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # FRBR hierarchy relations
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=True, index=True)
+    expression_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="CASCADE"), nullable=True, index=True)
+    manifestation_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    rating = db.Column(db.Integer, nullable=True)  # rating 1 to 5
+    comment = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+
+    user = db.relationship("User", backref=db.backref("feedbacks", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self) -> dict:
+        """Serialize the feedback details."""
+        return {
+            "id": self.id,
+            "user_id": str(self.user_id),
+            "user_display_name": self.user.display_name if self.user else "Anonymous",
+            "user_username": self.user.public_username if self.user else None,
+            "user_avatar_url": self.user.avatar_url if self.user else None,
+            "work_id": self.work_id,
+            "expression_id": self.expression_id,
+            "manifestation_id": self.manifestation_id,
+            "item_id": self.item_id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
