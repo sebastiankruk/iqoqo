@@ -1192,3 +1192,61 @@ def toggle_item_visibility(item_id: int):
             "is_hidden": item.is_hidden,
         }
     )
+
+
+@api_bp.route("/qrcode/<int(signed=True):item_id>", methods=["GET"])
+@require_auth
+def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
+    """
+    Generates a QR code image for a specific item to allow physical copy tracking.
+    Supports ?format=svg and ?format=png (default).
+    """
+    import io
+    import os
+
+    import qrcode
+    from flask import send_file
+
+    if item_id < 0:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    user_id = getattr(g, "user_id", None)
+    is_owner = str(item.owner_id) == str(user_id) if user_id else False
+    is_admin = False
+
+    if user_id:
+        user = db.session.get(User, user_id)
+        if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
+            is_admin = True
+
+    if not (is_owner or is_admin):
+        # Return 404 to protect privacy (BOLA)
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    item_url = f"{frontend_url}/item/{item_id}"
+
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(item_url)
+    qr.make(fit=True)
+
+    img_format = request.args.get("format", "png").lower()
+
+    if img_format == "svg":
+        import qrcode.image.svg
+
+        img = qr.make_image(image_factory=qrcode.image.svg.SvgImage)
+        img_io = io.BytesIO()
+        img.save(img_io)
+        img_io.seek(0)
+        return send_file(img_io, mimetype="image/svg+xml")
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    img_io = io.BytesIO()
+    img.save(img_io, "PNG")
+    img_io.seek(0)
+    return send_file(img_io, mimetype="image/png")

@@ -17,13 +17,14 @@
 
 import * as React from "react";
 import { ChangeEvent } from "react";
-import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
+import { Pencil, QrCode, BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
 import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
+import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -123,6 +124,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   };
 
   const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);
+  const [isQrOpen, setIsQrOpen] = React.useState(false);
   const [borrowerName, setBorrowerName] = React.useState(item.lent_to_name || "");
   const [borrowerId, setBorrowerId] = React.useState<string | undefined>(item.lent_to_user_id || undefined);
 
@@ -407,16 +409,16 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
           </button>
         )}
-        {/* Print QR Code - Hidden until implementation is ready */}
-        {/*
-        <button
-          onClick={handleQrCode}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-        >
-          <QrCode className="h-4 w-4" />
-          Print QR Code
-        </button>
-        */}
+        {/* Print QR Code */}
+        {canModifyItem && (
+          <button
+            onClick={() => setIsQrOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          >
+            <QrCode className="h-4 w-4" />
+            Print QR Code
+          </button>
+        )}
 
         {canModifyItem && hasUploadPermission && (
           <CameraCapture
@@ -542,6 +544,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PrintQrCodeDialog isOpen={isQrOpen} onOpenChange={setIsQrOpen} item={item} />
     </div>
   );
 }
