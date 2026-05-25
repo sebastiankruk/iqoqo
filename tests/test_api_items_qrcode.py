@@ -63,6 +63,7 @@ def test_get_qrcode_png_success(client, seeded_item, app) -> None:
 
     with app.app_context():
         user = db.session.get(User, user_id)
+        assert user is not None
         token = generate_internal_jwt(user)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -81,6 +82,7 @@ def test_get_qrcode_svg_success(client, seeded_item, app) -> None:
 
     with app.app_context():
         user = db.session.get(User, user_id)
+        assert user is not None
         token = generate_internal_jwt(user)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -106,6 +108,7 @@ def test_get_qrcode_forbidden_bola(client, seeded_item, app) -> None:
 
     with app.app_context():
         user = db.session.get(User, user_id)
+        assert user is not None
         token = generate_internal_jwt(user)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -123,6 +126,7 @@ def test_get_qrcode_nonexistent(client, seeded_item, app) -> None:
 
     with app.app_context():
         user = db.session.get(User, user_id)
+        assert user is not None
         token = generate_internal_jwt(user)
     headers = {"Authorization": f"Bearer {token}"}
 

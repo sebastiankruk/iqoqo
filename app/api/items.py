@@ -437,74 +437,72 @@ def get_items():
     )
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["GET"])
-@optional_auth
-def get_item_detail(item_id: int):
-    # pylint: disable=too-many-return-statements
-    if item_id < 0:
-        intent_id = -item_id
-        intent = db.session.get(UserWorkIntent, intent_id)
-        if not intent:
-            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
+    intent_id = -item_id
+    intent = db.session.get(UserWorkIntent, intent_id)
+    if not intent:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-        user_id = getattr(g, "user_id", None)
-        is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-        if not is_owner:
-            return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+    user_id = getattr(g, "user_id", None)
+    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
+    if not is_owner:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-        work = intent.work
-        manifestation = None
-        for expr in work.expressions:
-            if expr.manifestations:
-                manifestation = expr.manifestations[0]
-                break
+    work = intent.work
+    manifestation = None
+    for expr in work.expressions:
+        if expr.manifestations:
+            manifestation = expr.manifestations[0]
+            break
 
-        if not manifestation:
-            return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
+    if not manifestation:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
 
-        owner = db.session.get(User, intent.user_id)
-        owner_name = (owner.display_name or owner.email) if owner else None
+    owner = db.session.get(User, intent.user_id)
+    owner_name = (owner.display_name or owner.email) if owner else None
 
-        item_data = {
-            "id": item_id,
-            "owner_id": str(intent.user_id),
-            "is_owner": True,
-            "is_borrowed": False,
-            "owner_name": owner_name,
-            "owner_count": 0,
-            "status": intent.status,
-            "collection_status": "wish_list",
-            "is_hidden": False,
-            "manifestation_id": manifestation.id,
-            "tags": [],
-            "meta": {},
-            "isbn": manifestation.isbn13,
-            "manifestation_meta": manifestation.meta,
-            "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
-            "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
+    item_data = {
+        "id": item_id,
+        "owner_id": str(intent.user_id),
+        "is_owner": True,
+        "is_borrowed": False,
+        "owner_name": owner_name,
+        "owner_count": 0,
+        "status": intent.status,
+        "collection_status": "wish_list",
+        "is_hidden": False,
+        "manifestation_id": manifestation.id,
+        "tags": [],
+        "meta": {},
+        "isbn": manifestation.isbn13,
+        "manifestation_meta": manifestation.meta,
+        "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
+        "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
+    }
+
+    if manifestation.expression:
+        expression = manifestation.expression
+        item_data["expression"] = {
+            "id": expression.id,
+            "content_type": expression.content_type,
+            "language": expression.language,
         }
 
-        if manifestation.expression:
-            expression = manifestation.expression
-            item_data["expression"] = {
-                "id": expression.id,
-                "content_type": expression.content_type,
-                "language": expression.language,
+        if expression.work:
+            work = expression.work
+            container_work_id = work.member_of[0].container_work_id if work.member_of else None
+            item_data["work"] = {
+                "id": work.id,
+                "title": work.title,
+                "authors": work.meta.get("authors", []) if work.meta else [],
+                "meta": work.meta,
+                "container_work_id": container_work_id,
             }
 
-            if expression.work:
-                work = expression.work
-                container_work_id = work.member_of[0].container_work_id if work.member_of else None
-                item_data["work"] = {
-                    "id": work.id,
-                    "title": work.title,
-                    "authors": work.meta.get("authors", []) if work.meta else [],
-                    "meta": work.meta,
-                    "container_work_id": container_work_id,
-                }
+    return jsonify({"success": True, "data": item_data, "error": None})
 
-        return jsonify({"success": True, "data": item_data, "error": None})
 
+def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
@@ -514,10 +512,6 @@ def get_item_detail(item_id: int):
     is_borrowed = user_id and str(item.lent_to_user_id) == str(user_id)
     is_admin = False
     has_read_owners = False
-
-    if item.is_hidden and not (is_owner or is_borrowed):
-        # We check admin/read_owners later, but first pass: if hidden, you must have a reason to see it
-        pass
 
     if user_id:
         user = db.session.get(User, user_id)
@@ -587,66 +581,77 @@ def get_item_detail(item_id: int):
     return jsonify({"success": True, "data": item_data, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["PUT"])
-@require_auth
-def update_item(item_id: int):
-    # pylint: disable=too-many-return-statements
-    user_id = getattr(g, "user_id", None)
-    user = db.session.get(User, user_id) if user_id else None
-
+@api_bp.route("/items/<int(signed=True):item_id>", methods=["GET"])
+@optional_auth
+def get_item_detail(item_id: int):
     if item_id < 0:
-        intent_id = -item_id
-        intent = db.session.get(UserWorkIntent, intent_id)
-        if not intent:
-            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+        return _get_virtual_item_detail(item_id)
+    return _get_physical_item_detail(item_id)
 
-        is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-        is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
-        if not (is_owner or is_admin):
-            return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            return invalid_json_payload_response()
+def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tuple[Response, int] | None]:
+    """Helper to parse and validate request payload."""
+    data = req.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, invalid_json_payload_response()
 
-        try:
-            payload = ItemUpdateSchema(**data)
-        except ValidationError as e:
-            return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+    try:
+        return ItemUpdateSchema(**data), None
+    except ValidationError as e:
+        return None, (jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400)
 
-        # If transitioning away from wishlist status, convert to physical item
-        if payload.collection_status and payload.collection_status != "wish_list":
-            work = intent.work
-            manifestation = None
-            for expr in work.expressions:
-                if expr.manifestations:
-                    manifestation = expr.manifestations[0]
-                    break
 
-            if not manifestation:
-                return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
+def _update_virtual_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
+    intent_id = -item_id
+    intent = db.session.get(UserWorkIntent, intent_id)
+    if not intent:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-            # Assign dynamically passed collection_status (Library vs Wishlist)
-            new_item = Item(
-                manifestation_id=manifestation.id,
-                owner_id=intent.user_id,
-                status=payload.status or intent.status,
-                collection_status=payload.collection_status,
-                is_hidden=payload.is_hidden or False,
-                lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
-                lent_to_name=payload.lent_to_name,
-            )
-            db.session.add(new_item)
-            db.session.delete(intent)
-            db.session.commit()
+    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
+    is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
+    if not (is_owner or is_admin):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
-            return jsonify({"success": True, "data": {"id": new_item.id}})
+    payload, err = _parse_update_payload(request)
+    if err:
+        return err
+    assert payload is not None
 
-        if payload.status:
-            intent.status = payload.status
+    # If transitioning away from wishlist status, convert to physical item
+    if payload.collection_status and payload.collection_status != "wish_list":
+        work = intent.work
+        manifestation = None
+        for expr in work.expressions:
+            if expr.manifestations:
+                manifestation = expr.manifestations[0]
+                break
+
+        if not manifestation:
+            return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
+
+        # Assign dynamically passed collection_status (Library vs Wishlist)
+        new_item = Item(
+            manifestation_id=manifestation.id,
+            owner_id=intent.user_id,
+            status=payload.status or intent.status,
+            collection_status=payload.collection_status,
+            is_hidden=payload.is_hidden or False,
+            lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+            lent_to_name=payload.lent_to_name,
+        )
+        db.session.add(new_item)
+        db.session.delete(intent)
         db.session.commit()
-        return jsonify({"success": True, "data": {"id": item_id}})
 
+        return jsonify({"success": True, "data": {"id": new_item.id}})
+
+    if payload.status:
+        intent.status = payload.status
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": item_id}})
+
+
+def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
     item = db.session.get(Item, item_id)
     is_owner = (str(item.owner_id) == str(user_id)) if item and user_id else False
     is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
@@ -656,14 +661,10 @@ def update_item(item_id: int):
         error, code = ("Item not found", 404) if not item else ("Forbidden", 403)
         return jsonify({"success": False, "data": None, "error": error}), code
 
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return invalid_json_payload_response()
-
-    try:
-        payload = ItemUpdateSchema(**data)
-    except ValidationError as e:
-        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+    payload, err = _parse_update_payload(request)
+    if err:
+        return err
+    assert payload is not None
 
     if payload.status and payload.status != item.status:
         old_status = item.status
@@ -728,48 +729,60 @@ def update_item(item_id: int):
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
+@api_bp.route("/items/<int(signed=True):item_id>", methods=["PUT"])
+@require_auth
+def update_item(item_id: int):
+    user_id = getattr(g, "user_id", None)
+    user = db.session.get(User, user_id) if user_id else None
+
+    if item_id < 0:
+        return _update_virtual_item(item_id, user_id, user)
+    return _update_physical_item(item_id, user_id, user)
+
+
+def _delete_virtual_item(item_id: int, user_id: uuid.UUID | None, is_admin: bool) -> tuple[Response, int] | Response:
+    intent_id = -item_id
+    intent = db.session.get(UserWorkIntent, intent_id)
+    if not intent:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
+    if not (is_owner or is_admin):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+
+    db.session.delete(intent)
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": item_id}, "error": None})
+
+
+def _delete_physical_item(item_id: int, user_id: uuid.UUID | None, is_admin: bool) -> tuple[Response, int] | Response:
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
+    if not (is_owner or is_admin):
+        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": item_id}, "error": None})
+
+
 @api_bp.route("/items/<int(signed=True):item_id>", methods=["DELETE"])
 @require_auth
 @require_permission(PermissionName.DELETE_ITEM)
 def delete_item(item_id: int):
-    # pylint: disable=too-many-return-statements
     user_id = getattr(g, "user_id", None)
     is_admin = False
     user = db.session.get(User, user_id)
     if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
         is_admin = True
 
-    if item_id < 0:
-        intent_id = -item_id
-        intent = db.session.get(UserWorkIntent, intent_id)
-        if not intent:
-            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-        is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-        if not (is_owner or is_admin):
-            return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
-
-        try:
-            db.session.delete(intent)
-            db.session.commit()
-            return jsonify({"success": True, "data": {"id": item_id}, "error": None})
-        except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-            db.session.rollback()
-            return jsonify({"success": False, "data": None, "error": str(e)}), 500
-
-    item = db.session.get(Item, item_id)
-    if not item:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
-
-    if not (is_owner or is_admin):
-        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
-
     try:
-        db.session.delete(item)
-        db.session.commit()
-        return jsonify({"success": True, "data": {"id": item_id}, "error": None})
+        if item_id < 0:
+            return _delete_virtual_item(item_id, user_id, is_admin)
+        return _delete_physical_item(item_id, user_id, is_admin)
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500

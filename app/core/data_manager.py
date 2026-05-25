@@ -335,7 +335,7 @@ class DataManager:
         intent_count = (
             db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar() or 0  # pylint: disable=not-callable
         )
-        status_counts["wish_list"] = intent_count
+        status_counts["wish_list"] += intent_count
 
         if owner_id:
             from sqlalchemy import distinct
