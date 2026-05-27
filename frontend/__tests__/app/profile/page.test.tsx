@@ -127,4 +127,37 @@ describe("ProfilePage", () => {
       );
     });
   });
+
+  it("toggles telemetry consent specifically", async () => {
+    vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: false, version: "0.0.7" } } as never);
+    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test User")).toBeInTheDocument();
+    });
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {},
+        error: null,
+      },
+    } as never);
+
+    // Get telemetry opt-in button
+    const telemetryButton = screen.getByRole("button", { name: "Opted In" });
+    fireEvent.click(telemetryButton);
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/profile/consent",
+        expect.objectContaining({
+          consent_type: "telemetry",
+          is_granted: false,
+        })
+      );
+    });
+  });
 });

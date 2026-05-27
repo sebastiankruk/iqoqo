@@ -139,7 +139,7 @@ export function Navbar() {
             <Library className="h-3.5 w-3.5" />
             Collection
           </Link>
-          {profile ? (
+          {mounted && profile ? (
             <div className="flex items-center gap-2">
               <Link
                 href="/scan"
