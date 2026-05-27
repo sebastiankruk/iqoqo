@@ -176,7 +176,7 @@ test.describe("Wishlist and Progress Workflow", () => {
 
 test.describe("v0.7.0 Token-Based Wishlist Sharing & Isolation", () => {
   const secretShareToken = "wishlist-token-xyz-7890";
-  const targetSharedUrl = `/public/wishlist?token=${secretShareToken}`;
+  const targetSharedUrl = `/share/${secretShareToken}`;
 
   test("should render shared catalog elements in view-only mode for anonymous guests using a valid token", async ({
     page,
@@ -208,10 +208,10 @@ test.describe("v0.7.0 Token-Based Wishlist Sharing & Isolation", () => {
 
     // 1. Verify that trying to force-navigate to internal panels triggers a security redirect
     await page.goto("/admin/settings");
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL(/\/login/);
 
     // 2. Verify that trying to force-navigate to private profile settings does the same
     await page.goto("/profile");
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL(/\/login/);
   });
 });

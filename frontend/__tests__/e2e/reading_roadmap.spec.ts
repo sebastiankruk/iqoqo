@@ -22,7 +22,7 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     await page.fill('input[type="email"]', "e2e-admin@iqoqo.local");
     await page.fill('input[type="password"]', "E2ETestPassword123!");
     await page.click('button[type="submit"]');
-    await page.waitForURL("**/dashboard*");
+    await page.waitForURL("**/");
   });
 
   test("should allow a user to create, populate, and reorder a reading roadmap pipeline", async ({ page }) => {

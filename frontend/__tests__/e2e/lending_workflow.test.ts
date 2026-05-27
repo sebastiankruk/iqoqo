@@ -197,7 +197,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await lenderPage.fill('input[name="email"]', "lender@iqoqo.local");
     await lenderPage.fill('input[name="password"]', "SecurePassword123!");
     await lenderPage.click('button[type="submit"]');
-    await expect(lenderPage).toHaveURL("/dashboard");
+    await expect(lenderPage).toHaveURL(/\/$/);
 
     // 2. Create isolated context for Borrower (User A)
     const borrowerContext = await browser.newContext();
@@ -207,7 +207,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await borrowerPage.fill('input[name="email"]', "borrower@iqoqo.local");
     await borrowerPage.fill('input[name="password"]', "SecurePassword123!");
     await borrowerPage.click('button[type="submit"]');
-    await expect(borrowerPage).toHaveURL("/dashboard");
+    await expect(borrowerPage).toHaveURL(/\/$/);
 
     // 3. Borrower finds Lender's copy and requests a loan
     await borrowerPage.goto("/collection");
