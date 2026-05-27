@@ -197,29 +197,6 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     );
   };
 
-  /**
-   * Handles generating and opening the QR code for the item.
-   * TODO: Implementation for QR code printing is not ready yet.
-   */
-  /*
-  const handleQrCode = async () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-    const url = `${apiBase}/qrcode/${item.id}`;
-    try {
-      const response = await fetch(url, { method: "HEAD" });
-
-      if (!response.ok) {
-        toast.error("Unable to generate QR code. Please try again later.");
-        return;
-      }
-
-      window.open(url, "_blank");
-    } catch {
-      toast.error("Failed to contact QR code service. Please check your connection and try again.");
-    }
-  };
-  */
-
   return (
     <div className="flex flex-col items-center gap-5">
       {/* Book/Audio cover */}
