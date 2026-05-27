@@ -17,7 +17,7 @@ Use this workflow when asked to "Review and finalize PR <number>" or prepare a b
 1. **Context Gathering**
 
    - Execute the `github-pr-reviewer` skill to fetch diffs, reviews, and unresolved comments for `PR_NUMBER`.
-   - Read all plans outlined in `.context/private-notes/plan/*.md`.
+   - Read all plans outlined in `.context/notes/plan/*.md`.
    - Identify gaps between the PR state, the comments, and the private notes plan.
 
 1. **Critical Assessment (Do Not Blindly Follow)**

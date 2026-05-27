@@ -193,5 +193,7 @@
     ],
     "[svg]": {
         "editor.defaultFormatter": "jock.svg"
-    }
+    },
+    "markdown.extension.completion.enabled": false,
+    "markdown.extension.tableFormatter.enabled": false
 }
