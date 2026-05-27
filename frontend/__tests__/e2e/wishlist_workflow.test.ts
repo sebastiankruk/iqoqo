@@ -12,6 +12,7 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
+//
 
 import { test, expect } from "@playwright/test";
 import packageJson from "../../package.json" assert { type: "json" };
@@ -170,5 +171,47 @@ test.describe("Wishlist and Progress Workflow", () => {
     // 7. Verify status badges (case insensitive as they might be CSS transformed)
     await expect(page.locator("span.rounded-full", { hasText: /WANT TO READ/i })).toBeVisible({ timeout: 10000 });
     await expect(page.locator("span.rounded-full", { hasText: /ON WISH LIST/i })).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe("v0.7.0 Token-Based Wishlist Sharing & Isolation", () => {
+  const secretShareToken = "wishlist-token-xyz-7890";
+  const targetSharedUrl = `/public/wishlist?token=${secretShareToken}`;
+
+  test("should render shared catalog elements in view-only mode for anonymous guests using a valid token", async ({
+    page,
+  }) => {
+    // Navigate anonymously directly to the shared public wishlist endpoint
+    await page.goto(targetSharedUrl);
+    await page.waitForLoadState("networkidle");
+
+    // Confirm that the wishlist owner's shared catalog elements are parsed and rendered properly
+    const gridContainer = page.locator('[data-testid="collection-grid"]');
+    await expect(gridContainer).toBeVisible();
+    await expect(gridContainer.locator('[data-testid="item-card"]')).not.toHaveCount(0);
+
+    // Assert strict view-only constraints on the layout to verify read-only boundaries
+    const addContributionButton = page.locator('button:has-text("Add Item")');
+    const deleteIconButton = page.locator('button[aria-label="Delete manifestation"]').first();
+    const editMetadataButton = page.locator('button:has-text("Edit Metadata")').first();
+
+    await expect(addContributionButton).not.toBeVisible();
+    await expect(deleteIconButton).not.toBeVisible();
+    await expect(editMetadataButton).not.toBeVisible();
+  });
+
+  test("should reject unauthorized actions and block directory traversing to restricted admin panels", async ({
+    page,
+  }) => {
+    // Navigate anonymously
+    await page.goto(targetSharedUrl);
+
+    // 1. Verify that trying to force-navigate to internal panels triggers a security redirect
+    await page.goto("/admin/settings");
+    await expect(page).toHaveURL("/login");
+
+    // 2. Verify that trying to force-navigate to private profile settings does the same
+    await page.goto("/profile");
+    await expect(page).toHaveURL("/login");
   });
 });

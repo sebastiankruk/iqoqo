@@ -19,10 +19,10 @@ test.describe("Reading Roadmap E2E Workflow", () => {
   test.beforeEach(async ({ page }) => {
     // Enforce user authentication step prior to lifecycle execution
     await page.goto("/login");
-    await page.fill('input[type="email"]', "architect@iqoqo.cc");
-    await page.fill('input[type="password"]', "SecurePassword123!");
+    await page.fill('input[type="email"]', "e2e-admin@iqoqo.local");
+    await page.fill('input[type="password"]', "E2ETestPassword123!");
     await page.click('button[type="submit"]');
-    await page.waitForURL("/collection");
+    await page.waitForURL("**/dashboard*");
   });
 
   test("should allow a user to create, populate, and reorder a reading roadmap pipeline", async ({ page }) => {

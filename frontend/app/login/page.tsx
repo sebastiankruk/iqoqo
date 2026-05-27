@@ -72,6 +72,7 @@ export default function LoginPage() {
           <form onSubmit={handleLocalLogin} className="space-y-4">
             <input
               type="email"
+              name="email"
               autoComplete="email"
               placeholder="Email"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -80,6 +81,7 @@ export default function LoginPage() {
             />
             <input
               type="password"
+              name="password"
               autoComplete="current-password"
               placeholder="Password"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
