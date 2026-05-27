@@ -104,6 +104,7 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
         target_date = None
         if target_date_str:
             from datetime import datetime
+
             try:
                 target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
             except ValueError:

@@ -94,3 +94,34 @@ describe("Landing / Dashboard page", () => {
     expect(screen.getByText("Welcome back, testuser")).toBeInTheDocument();
   });
 });
+
+describe("Dashboard RSS Feed Integration", () => {
+  it("should expose correct RSS alternate discovery links in the layout metadata", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const layoutPath = path.resolve(__dirname, "../../app/layout.tsx");
+    const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+    expect(layoutContent).toContain('url: "/api/public/feed.xml"');
+    expect(layoutContent).toContain('title: "iqoqo Fresh Arrivals Feed"');
+    expect(layoutContent).toContain('"application/rss+xml"');
+  });
+
+  it("should render the RSS button next to Fresh Arrivals header pointing to the global feed", () => {
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: null, isLoading: false } as any);
+    vi.spyOn(hooks, "useGlobalStats").mockReturnValue({
+      data: { works: 10, manifestations: 20, items: 30, users: 5 },
+      isLoading: false,
+    } as any);
+    vi.spyOn(hooks, "useRecentManifestations").mockReturnValue({ data: [], isLoading: false } as any);
+
+    renderWithQueryClient(<DashboardPage />);
+
+    const heading = screen.getByRole("heading", { name: /Fresh Arrivals/i });
+    expect(heading).toBeInTheDocument();
+
+    const rssLink = screen.getByTitle("Subscribe to Fresh Arrivals RSS feed");
+    expect(rssLink).toBeInTheDocument();
+    expect(rssLink.getAttribute("href")).toBe("/api/public/feed.xml");
+    expect(rssLink.getAttribute("target")).toBe("_blank");
+  });
+});

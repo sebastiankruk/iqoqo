@@ -101,8 +101,34 @@ export default function ManifestationPage() {
 
   const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
+  const isBoardGame = manifestation.content_type === "board_game";
+  const schemaType = isBoardGame ? "Game" : "Book";
+
+  const jsonLdData = {
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    name: manifestation.title || "Untitled Work",
+    author: {
+      "@type": "Person",
+      name: manifestation.authors?.[0] || "Unknown Author",
+    },
+    isbn: manifestation.isbn13,
+    identifier: manifestation.id,
+    publisher: manifestation.meta?.Publisher,
+    datePublished: resolved_year,
+  };
+
+  const tags = (manifestation.meta?.tags || manifestation.meta?.genres || ["Classic", "Fantasy"]) as string[];
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div
+      className="min-h-screen flex flex-col bg-background"
+      vocab="http://iflastandards.info/ns/frbr/frbrer/"
+      prefix="sioc: http://rdfs.org/sioc/ns# schema: https://schema.org/"
+      typeof="Manifestation"
+      resource={`#manifestation-${manifestation.id}`}
+    >
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }} />
       <Navbar />
       <div className="flex-1 mx-auto w-full max-w-5xl px-6 py-12">
         <div className="flex flex-col md:flex-row gap-8">
@@ -181,13 +207,17 @@ export default function ManifestationPage() {
                   {badgeLabel}
                 </Badge>
               </div>
-              <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground">
+              <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground" property="schema:name">
                 {manifestation.title || "Untitled Work"}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium">
+              <div
+                className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
+                property="schema:author"
+                typeof="Person"
+              >
                 {(manifestation.authors ?? []).length > 0 ? (
                   (manifestation.authors ?? []).map((author, idx, arr) => (
-                    <span key={author}>
+                    <span key={author} property="name">
                       <span
                         role="button"
                         tabIndex={0}
@@ -213,7 +243,23 @@ export default function ManifestationPage() {
                 {manifestation.isbn13 && (
                   <div>
                     <dt className="text-muted-foreground">ISBN-13</dt>
-                    <dd className="font-medium text-foreground">{String(manifestation.isbn13)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:isbn">
+                      {String(manifestation.isbn13)}
+                    </dd>
+                  </div>
+                )}
+                {manifestation.work_id && (
+                  <div>
+                    <dt className="text-muted-foreground">FRBR Work ID</dt>
+                    <dd className="font-medium text-foreground">
+                      <a
+                        rel="embodimentOf"
+                        href={`/api/public/works/${manifestation.work_id}`}
+                        className="text-primary hover:underline font-mono text-xs"
+                      >
+                        {String(manifestation.work_id)}
+                      </a>
+                    </dd>
                   </div>
                 )}
                 {!!(
@@ -244,6 +290,24 @@ export default function ManifestationPage() {
                 )}
               </dl>
             </div>
+
+            {tags.length > 0 && (
+              <div className="pt-6 border-t border-border space-y-3">
+                <h2 className="text-lg font-semibold">Indexed Tags</h2>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag: string) => (
+                    <span
+                      key={tag}
+                      property="sioc:topic"
+                      content={tag}
+                      className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10 dark:bg-orange-400/10 dark:text-orange-400 dark:ring-orange-400/20"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(manifestation.container_work_id || parts.length > 0) && parts.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
