@@ -141,9 +141,12 @@ def create_app(config_class=Config, config_override=None):
     # Flask-Limiter will use storage_uri.
     limiter.init_app(app)
 
+    from app.api.roadmap import roadmap_bp
+
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(roadmap_bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):  # pylint: disable=unused-argument
