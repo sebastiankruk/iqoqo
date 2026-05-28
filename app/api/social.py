@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
-from app.db.models import Expression, Item, Manifestation, SocialFeedback, Work, db
+from app.db.models import Expression, Item, Manifestation, SocialFeedback, SocialNote, Work, db
 
 VALID_LEVELS = {"work", "expression", "manifestation", "item"}
 
@@ -183,3 +183,116 @@ def delete_social_feedback(level: str, target_id: int) -> Response | tuple[Respo
     db.session.commit()
 
     return jsonify({"success": True, "message": "Feedback deleted successfully"})
+
+
+@api_bp.route("/notes/<string:level>/<int:target_id>", methods=["GET"])
+def get_social_notes(level: str, target_id: int) -> Response | tuple[Response, int]:
+    """
+    Get all social notes/comments for a specific FRBR level and resource ID.
+    Notes are returned chronologically (newest first).
+    """
+    if level not in VALID_LEVELS:
+        return jsonify({"error": f"Invalid level. Must be one of {list(VALID_LEVELS)}", "code": 400}), 400
+
+    if not _verify_target_exists(level, target_id):
+        return jsonify({"error": f"{level.capitalize()} not found", "code": 404}), 404
+
+    column_name = f"{level}_id"
+    stmt = select(SocialNote).where(getattr(SocialNote, column_name) == target_id).order_by(SocialNote.created_at.desc())
+    notes = db.session.execute(stmt).scalars().all()
+
+    return jsonify(
+        {
+            "success": True,
+            "data": [note.to_dict() for note in notes],
+        }
+    )
+
+
+@api_bp.route("/notes/<string:level>/<int:target_id>", methods=["POST"])
+@require_auth
+def create_social_note(level: str, target_id: int) -> Response | tuple[Response, int]:
+    """
+    Add a new personal note or comment for a specific FRBR level and resource ID.
+    """
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    if level not in VALID_LEVELS:
+        return jsonify({"error": f"Invalid level. Must be one of {list(VALID_LEVELS)}", "code": 400}), 400
+
+    if not _verify_target_exists(level, target_id):
+        return jsonify({"error": f"{level.capitalize()} not found", "code": 404}), 404
+
+    data = request.get_json(silent=True)
+    if not data or "note" not in data:
+        return jsonify({"error": "Missing note content", "code": 400}), 400
+
+    note_text = str(data["note"]).strip()
+    if not note_text:
+        return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
+
+    column_name = f"{level}_id"
+    kwargs = {"user_id": user_id, "note": note_text, column_name: target_id}
+    new_note = SocialNote(**kwargs)
+
+    db.session.add(new_note)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": new_note.to_dict()}), 201
+
+
+@api_bp.route("/notes/<int:note_id>", methods=["PUT"])
+@require_auth
+def update_social_note(note_id: int) -> Response | tuple[Response, int]:
+    """
+    Update the text of a user's personal note or comment.
+    """
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    note = db.session.get(SocialNote, note_id)
+    if not note:
+        return jsonify({"error": "Note not found", "code": 404}), 404
+
+    if str(note.user_id) != str(user_id):
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
+    data = request.get_json(silent=True)
+    if not data or "note" not in data:
+        return jsonify({"error": "Missing note content", "code": 400}), 400
+
+    note_text = str(data["note"]).strip()
+    if not note_text:
+        return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
+
+    note.note = note_text
+    note.updated_at = datetime.now(UTC)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": note.to_dict()})
+
+
+@api_bp.route("/notes/<int:note_id>", methods=["DELETE"])
+@require_auth
+def delete_social_note(note_id: int) -> Response | tuple[Response, int]:
+    """
+    Delete a user's personal note or comment.
+    """
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    note = db.session.get(SocialNote, note_id)
+    if not note:
+        return jsonify({"error": "Note not found", "code": 404}), 404
+
+    if str(note.user_id) != str(user_id):
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
+    db.session.delete(note)
+    db.session.commit()
+
+    return jsonify({"success": True, "message": "Note deleted successfully"})

@@ -142,3 +142,70 @@ class SocialFeedback(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class SocialNote(db.Model):  # type: ignore[name-defined]
+    """
+    User personal note or comment on any level of the FRBR hierarchy.
+    A user can create multiple notes on the same resource without rating.
+    Exactly one of work_id, expression_id, manifestation_id, or item_id must be set.
+    """
+
+    __tablename__ = "social_notes"
+    __table_args__: tuple = (
+        (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) = 1",
+                name="chk_note_target_exactly_one",
+            ),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) = 1",
+                name="chk_note_target_exactly_one",
+            ),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # FRBR hierarchy relations
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=True, index=True)
+    expression_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="CASCADE"), nullable=True, index=True)
+    manifestation_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    note = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+
+    user = db.relationship("User", backref=db.backref("notes", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self) -> dict:
+        """Serialize the note details."""
+        return {
+            "id": self.id,
+            "user_id": str(self.user_id),
+            "user_display_name": self.user.display_name if self.user else "Anonymous",
+            "user_username": self.user.public_username if self.user else None,
+            "user_avatar_url": self.user.avatar_url if self.user else None,
+            "work_id": self.work_id,
+            "expression_id": self.expression_id,
+            "manifestation_id": self.manifestation_id,
+            "item_id": self.item_id,
+            "note": self.note,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

@@ -20,6 +20,7 @@ import type { SocialFeedback } from "@/lib/api/social";
 import { useSocialFeedback, useSubmitFeedback, useDeleteFeedback } from "@/lib/api/social";
 import { useProfile } from "@/lib/api/hooks";
 import { StarRating } from "./star-rating";
+import { FRBRNotes } from "./frbr-notes";
 import { Button } from "@/components/ui/button";
 import { Loader2, MessageSquare, Trash2, Edit3, User } from "lucide-react";
 import { toast } from "sonner";
@@ -180,7 +181,11 @@ function FeedbackForm({ level, targetId, title, userFeedback, refetch }: Feedbac
  */
 export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
   const { data: profile } = useProfile();
-  const { data: feedbackData, isLoading, isError, refetch } = useSocialFeedback(level, targetId);
+  const { data: feedbackData, isLoading, isError, refetch } = useSocialFeedback(level, targetId, level !== "item");
+
+  if (level === "item") {
+    return <FRBRNotes level={level} targetId={targetId} title={title} />;
+  }
 
   // Check if current user already submitted feedback
   const userFeedback = feedbackData?.feedbacks.find(
@@ -300,6 +305,11 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Notes / Remarks Section */}
+      <div className="pt-6 border-t border-border/50">
+        <FRBRNotes level={level} targetId={targetId} title={title} />
       </div>
     </div>
   );
