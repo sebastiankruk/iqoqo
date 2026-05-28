@@ -82,12 +82,14 @@ def get_social_feedback(level: str, target_id: int) -> Response | tuple[Response
     return jsonify(
         {
             "success": True,
-            "feedbacks": [f.to_dict() for f in feedbacks],
-            "stats": {
-                "average_rating": average_rating,
-                "total_count": len(feedbacks),
-                "total_ratings": total_rating_count,
-                "rating_counts": rating_counts,
+            "data": {
+                "feedbacks": [f.to_dict() for f in feedbacks],
+                "stats": {
+                    "average_rating": average_rating,
+                    "total_count": len(feedbacks),
+                    "total_ratings": total_rating_count,
+                    "rating_counts": rating_counts,
+                },
             },
         }
     )

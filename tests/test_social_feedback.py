@@ -168,11 +168,11 @@ def test_work_level_feedback_lifecycle(client, social_setup, app):
     response = client.get(f"/api/feedback/work/{work_id}")
     assert response.status_code == 200
     assert response.json["success"] is True
-    assert len(response.json["feedbacks"]) == 2
-    assert response.json["stats"]["average_rating"] == 4.0
-    assert response.json["stats"]["total_ratings"] == 2
-    assert response.json["stats"]["rating_counts"]["5"] == 1
-    assert response.json["stats"]["rating_counts"]["3"] == 1
+    assert len(response.json["data"]["feedbacks"]) == 2
+    assert response.json["data"]["stats"]["average_rating"] == 4.0
+    assert response.json["data"]["stats"]["total_ratings"] == 2
+    assert response.json["data"]["stats"]["rating_counts"]["5"] == 1
+    assert response.json["data"]["stats"]["rating_counts"]["3"] == 1
 
     # 4. Critic One updates review to 4-star
     response = client.post(
@@ -184,9 +184,9 @@ def test_work_level_feedback_lifecycle(client, social_setup, app):
 
     # 5. Verify average and reviews list updated
     response = client.get(f"/api/feedback/work/{work_id}")
-    assert response.json["stats"]["average_rating"] == 3.5
-    assert response.json["stats"]["rating_counts"]["4"] == 1
-    assert response.json["stats"]["rating_counts"]["5"] == 0
+    assert response.json["data"]["stats"]["average_rating"] == 3.5
+    assert response.json["data"]["stats"]["rating_counts"]["4"] == 1
+    assert response.json["data"]["stats"]["rating_counts"]["5"] == 0
 
     # 6. Critic One deletes review
     response = client.delete(f"/api/feedback/work/{work_id}", headers=u1_headers)
@@ -195,8 +195,8 @@ def test_work_level_feedback_lifecycle(client, social_setup, app):
 
     # 7. Verify review deleted in list and stats updated
     response = client.get(f"/api/feedback/work/{work_id}")
-    assert len(response.json["feedbacks"]) == 1
-    assert response.json["stats"]["average_rating"] == 3.0
+    assert len(response.json["data"]["feedbacks"]) == 1
+    assert response.json["data"]["stats"]["average_rating"] == 3.0
 
 
 def test_other_frbr_levels_feedback(client, social_setup, app):
@@ -239,8 +239,8 @@ def test_other_frbr_levels_feedback(client, social_setup, app):
     ]:
         res = client.get(f"/api/feedback/{level}/{target_id}")
         assert res.status_code == 200
-        assert len(res.json["feedbacks"]) == 1
-        assert res.json["stats"]["average_rating"] == expected_rating
+        assert len(res.json["data"]["feedbacks"]) == 1
+        assert res.json["data"]["stats"]["average_rating"] == expected_rating
 
 
 def test_cascading_deletes_reviews(social_setup, app):
