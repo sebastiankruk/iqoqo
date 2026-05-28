@@ -1235,6 +1235,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     """
     import io
     import os
+    import xml.etree.ElementTree as ET
 
     import qrcode
     from flask import send_file
@@ -1262,22 +1263,220 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
     item_url = f"{frontend_url}/item/{item_id}"
 
-    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    # Enable High error correction (30%) to handle the embedded logo in the center
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
     qr.add_data(item_url)
     qr.make(fit=True)
 
     img_format = request.args.get("format", "png").lower()
 
     if img_format == "svg":
+        import re
+
         import qrcode.image.svg
 
         img = qr.make_image(image_factory=qrcode.image.svg.SvgImage)
+        root = img._img
+
+        # Extract dimensions, safely ignoring units like 'mm' or 'px'
+        width_str = root.get("width", "290")
+        width_match = re.search(r"[\d.]+", width_str)
+        width = float(width_match.group(0)) if width_match else 290.0
+        center_x = width / 2.0
+        center_y = width / 2.0
+        logo_size = width * 0.22
+        padding = width * 0.02
+
+        rect_size = logo_size + 2 * padding
+        rect_x = center_x - rect_size / 2.0
+        rect_y = center_y - rect_size / 2.0
+
+        # Append white quiet zone rect
+        rect = ET.Element(
+            "rect",
+            x=str(rect_x),
+            y=str(rect_y),
+            width=str(rect_size),
+            height=str(rect_size),
+            fill="white",
+        )
+        root.append(rect)
+
+        # Load SVG path from logo file
+        logo_path = os.path.join(current_app.root_path, "../resources/images/iqoqo-logo.svg")
+        try:
+            with open(logo_path, encoding="utf-8") as f:
+                logo_svg = f.read()
+
+            root_logo = ET.fromstring(logo_svg)
+            path_el_logo = None
+            for el in root_logo.iter():
+                if el.tag.endswith("path"):
+                    path_el_logo = el
+                    break
+
+            if path_el_logo is not None:
+                d_attr = path_el_logo.get("d")
+                if d_attr:
+                    scale = logo_size / 200.0
+                    offset_x = center_x - logo_size / 2.0
+                    offset_y = center_y - logo_size / 2.0
+
+                    path_el = ET.Element(
+                        "path",
+                        d=d_attr,
+                        fill="#d15500",
+                        transform=f"translate({offset_x},{offset_y}) scale({scale})",
+                    )
+                    root.append(path_el)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            current_app.logger.error("Failed to embed logo in SVG QR code: %s", e)
+
         img_io = io.BytesIO()
         img.save(img_io)
         img_io.seek(0)
         return send_file(img_io, mimetype="image/svg+xml")
 
-    img = qr.make_image(fill_color="black", back_color="white")
+    # PNG Format
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    from PIL import ImageDraw
+
+    W, H = img.size
+    center_x = W // 2
+    center_y = H // 2
+    logo_size = int(W * 0.22)
+    padding = int(W * 0.02)
+
+    # Draw quiet zone white square in center
+    draw = ImageDraw.Draw(img)
+    half_rect = (logo_size + 2 * padding) // 2
+    draw.rectangle(
+        [center_x - half_rect, center_y - half_rect, center_x + half_rect, center_y + half_rect],
+        fill="white",
+    )
+
+    logo_path = os.path.join(current_app.root_path, "../resources/images/iqoqo-logo.svg")
+    try:
+        with open(logo_path, encoding="utf-8") as f:
+            logo_svg = f.read()
+
+        import re
+
+        root_logo = ET.fromstring(logo_svg)
+        path_el_logo = None
+        for el in root_logo.iter():
+            if el.tag.endswith("path"):
+                path_el_logo = el
+                break
+
+        if path_el_logo is not None:
+            d_attr = path_el_logo.get("d")
+            if d_attr:
+                # Parse path command tokens
+                tokens = re.findall(r"([a-zA-Z])|([-+]?\d*\.\d+|[-+]?\d+)", d_attr)
+                commands: list[tuple[str, list[float]]] = []
+                for cmd, val in tokens:
+                    if cmd:
+                        commands.append((cmd, []))
+                    elif val:
+                        if commands:
+                            commands[-1][1].append(float(val))
+
+                polygons: list[list[tuple[float, float]]] = []
+                current_polygon: list[tuple[float, float]] = []
+                cx, cy = 0.0, 0.0
+                start_x, start_y = 0.0, 0.0
+
+                for cmd, args in commands:
+                    if cmd == "M":
+                        if current_polygon:
+                            polygons.append(current_polygon)
+                        cx, cy = args[0], args[1]
+                        start_x, start_y = cx, cy
+                        current_polygon = [(cx, cy)]
+                        for idx in range(2, len(args), 2):
+                            cx, cy = args[idx], args[idx + 1]
+                            current_polygon.append((cx, cy))
+                    elif cmd == "m":
+                        if current_polygon:
+                            polygons.append(current_polygon)
+                        cx += args[0]
+                        cy += args[1]
+                        start_x, start_y = cx, cy
+                        current_polygon = [(cx, cy)]
+                        for idx in range(2, len(args), 2):
+                            cx += args[idx]
+                            cy += args[idx + 1]
+                            current_polygon.append((cx, cy))
+                    elif cmd == "L":
+                        for idx in range(0, len(args), 2):
+                            cx, cy = args[idx], args[idx + 1]
+                            current_polygon.append((cx, cy))
+                    elif cmd == "l":
+                        for idx in range(0, len(args), 2):
+                            cx += args[idx]
+                            cy += args[idx + 1]
+                            current_polygon.append((cx, cy))
+                    elif cmd == "c":
+                        for idx in range(0, len(args), 6):
+                            dx1, dy1, dx2, dy2, dx, dy = args[idx : idx + 6]
+                            x1, y1 = cx + dx1, cy + dy1
+                            x2, y2 = cx + dx2, cy + dy2
+                            x3, y3 = cx + dx, cy + dy
+                            steps = 5
+                            for s in range(1, steps + 1):
+                                t = s / steps
+                                b0 = (1 - t) ** 3
+                                b1 = 3 * ((1 - t) ** 2) * t
+                                b2 = 3 * (1 - t) * (t**2)
+                                b3 = t**3
+                                px = b0 * cx + b1 * x1 + b2 * x2 + b3 * x3
+                                py = b0 * cy + b1 * y1 + b2 * y2 + b3 * y3
+                                current_polygon.append((px, py))
+                            cx, cy = x3, y3
+                    elif cmd == "C":
+                        for idx in range(0, len(args), 6):
+                            x1, y1, x2, y2, x3, y3 = args[idx : idx + 6]
+                            steps = 5
+                            for s in range(1, steps + 1):
+                                t = s / steps
+                                b0 = (1 - t) ** 3
+                                b1 = 3 * ((1 - t) ** 2) * t
+                                b2 = 3 * (1 - t) * (t**2)
+                                b3 = t**3
+                                px = b0 * cx + b1 * x1 + b2 * x2 + b3 * x3
+                                py = b0 * cy + b1 * y1 + b2 * y2 + b3 * y3
+                                current_polygon.append((px, py))
+                            cx, cy = x3, y3
+                    elif cmd in ("z", "Z"):
+                        if current_polygon:
+                            current_polygon.append((start_x, start_y))
+                            polygons.append(current_polygon)
+                            current_polygon = []
+                        cx, cy = start_x, start_y
+
+                if current_polygon:
+                    polygons.append(current_polygon)
+
+                scale = logo_size / 200.0
+                offset_x = center_x - logo_size / 2.0
+                offset_y = center_y - logo_size / 2.0
+
+                for p_idx, poly in enumerate(polygons):
+                    scaled_poly = [(offset_x + x * scale, offset_y + y * scale) for x, y in poly]
+                    if len(scaled_poly) >= 3:
+                        # Alternate colors for cutouts vs solid fills
+                        color = "white" if p_idx in (1, 5, 7) else "#d15500"
+                        draw.polygon(scaled_poly, fill=color)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        current_app.logger.error("Failed to embed logo in PNG QR code: %s", e)
+
     img_io = io.BytesIO()
     img.save(img_io, "PNG")
     img_io.seek(0)

@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
+from flask import Flask
 
 # Load environment variables before importing models to ensure schema detection works
 load_dotenv()
@@ -28,7 +29,7 @@ from app.core.permissions import PermissionName
 from app.db.models import Item, Permission, Role, User, db
 
 
-def run_init_auth(app=None):
+def run_init_auth(app: Flask | None = None) -> None:
     if app is None:
         app = create_app()
 
@@ -51,7 +52,7 @@ def run_init_auth(app=None):
         for p_data in permissions_list:
             name = p_data["name"]
             description = p_data.get("description", "")
-            existing = Permission.query.filter_by(name=name).first()
+            existing = db.session.execute(db.select(Permission).filter_by(name=name)).scalar_one_or_none()
             if not existing:
                 db.session.add(Permission(name=name, description=description))
             else:
@@ -61,16 +62,17 @@ def run_init_auth(app=None):
         db.session.commit()
 
         # 2. Create Roles
-        admin_role = Role.query.filter_by(name="admin").first()
+        admin_role = db.session.execute(db.select(Role).filter_by(name="admin")).scalar_one_or_none()
         if not admin_role:
             admin_role = Role(name="admin")
             db.session.add(admin_role)
 
-        user_role = Role.query.filter_by(name="user").first()
+        user_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
         if not user_role:
-            db.session.add(Role(name="user"))
+            user_role = Role(name="user")
+            db.session.add(user_role)
 
-        contributor_role = Role.query.filter_by(name="contributor").first()
+        contributor_role = db.session.execute(db.select(Role).filter_by(name="contributor")).scalar_one_or_none()
         if not contributor_role:
             contributor_role = Role(name="contributor")
             db.session.add(contributor_role)
@@ -78,10 +80,10 @@ def run_init_auth(app=None):
         db.session.commit()
 
         # Admin gets everything
-        admin_role.permissions = Permission.query.all()
+        admin_role.permissions = db.session.execute(db.select(Permission)).scalars().all()
 
         # Contributor gets metadata, llm_generate, delete item, and edit:cover (full editor + upload)
-        all_perms = Permission.query.all()
+        all_perms = db.session.execute(db.select(Permission)).scalars().all()
         contributor_perms = [
             p
             for p in all_perms
@@ -92,21 +94,36 @@ def run_init_auth(app=None):
         ]
         contributor_role.permissions = contributor_perms
 
+        # Standard User gets permissions to interact with items and basic tasks
+        user_perm_names = {
+            PermissionName.WRITE_ITEM.value,
+            PermissionName.UPDATE_ITEM.value,
+            PermissionName.DELETE_ITEM.value,
+            PermissionName.READ_METADATA.value,
+            PermissionName.UPLOAD_COVER.value,
+            PermissionName.REGENERATE_COVER.value,
+            PermissionName.LLM_GENERATE_METADATA.value,
+            PermissionName.LLM_GENERATE_COVER.value,
+        }
+        user_role.permissions = [p for p in all_perms if p.name in user_perm_names]
+
         db.session.commit()
 
         # 3. Create Admin user
-        admin_email = app.config.get("ADMIN_EMAIL")
-        admin_user = User.query.filter_by(email=admin_email).first()
+        admin_email = str(app.config.get("ADMIN_EMAIL") or "")
+        admin_user = db.session.execute(db.select(User).filter_by(email=admin_email)).scalar_one_or_none()
         if not admin_user:
             admin_user = User(email=admin_email, display_name="Administrator", is_active=True)
-            admin_user.set_password(app.config.get("ADMIN_PASSWORD"))
-            admin_user.roles.append(admin_role)
+            admin_password = str(app.config.get("ADMIN_PASSWORD") or "")
+            admin_user.set_password(admin_password)
+            if admin_role is not None:
+                admin_user.roles.append(admin_role)
             db.session.add(admin_user)
             db.session.commit()
             print(f"Created admin user: {admin_email}")
 
         # 4. Migrate items to Admin UUID (including those of the legacy system user)
-        legacy_items = Item.query.all()
+        legacy_items = db.session.execute(db.select(Item)).scalars().all()
         migrated = 0
         LEGACY_USER_ID = "00000000-0000-4000-a000-000000000000"
 

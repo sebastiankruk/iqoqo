@@ -902,7 +902,8 @@ export function useProfile() {
           message.includes("Token expired") ||
           message.includes("Invalid token") ||
           message.includes("Token missing") ||
-          message.includes("Invalid user ID format")
+          message.includes("Invalid user ID format") ||
+          message.includes("User not found")
         ) {
           await fetch("/api/auth/logout", { method: "POST" });
         }

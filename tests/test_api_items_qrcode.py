@@ -90,6 +90,9 @@ def test_get_qrcode_svg_success(client, seeded_item, app) -> None:
     assert response.status_code == 200
     assert response.mimetype == "image/svg+xml"
     assert b"<svg" in response.data
+    # Assert that quiet zone rect and custom iqoqo logo are embedded
+    assert b"<rect" in response.data
+    assert b'fill="#d15500"' in response.data
 
 
 def test_get_qrcode_unauthorized(client, seeded_item) -> None:
