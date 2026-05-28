@@ -274,6 +274,7 @@ export function useItems(
  * @param collections - Filter by collections
  * @param genres - Filter by genres
  * @param publishers - Filter by publishers
+ * @param includePublic - Whether to include public items
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<Item[]>>} Infinite query result
  */
 export function useInfiniteItems(
@@ -290,7 +291,8 @@ export function useInfiniteItems(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  includePublic = true
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -311,6 +313,7 @@ export function useInfiniteItems(
       borrowed,
       missingCover,
       missingId,
+      includePublic,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -327,6 +330,7 @@ export function useInfiniteItems(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (includePublic) params.include_public = true;
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
@@ -1008,6 +1012,227 @@ export function useSetWorkIntent() {
       void qc.invalidateQueries({ queryKey: ["items"] });
       void qc.invalidateQueries({ queryKey: ["worksShelf"] });
       void qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
+    },
+  });
+}
+
+/* ── Reading Roadmap ─────────────────────────────────────────────────────── */
+
+export interface RoadmapItemData {
+  id: number;
+  work_id: number | null;
+  manifestation_id: number | null;
+  title: string;
+  creator: string;
+  position: number;
+  status: string;
+  target_date: string | null;
+  notes: string | null;
+  completed_at: string | null;
+}
+
+export interface RoadmapData {
+  id: number;
+  title: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  items: RoadmapItemData[];
+}
+
+/**
+ * Custom hook to fetch all reading roadmaps for the authenticated user.
+ *
+ * @returns {import('@tanstack/react-query').UseQueryResult} Query result
+ */
+export function useRoadmaps() {
+  return useQuery<RoadmapData[]>({
+    queryKey: ["roadmaps"],
+    queryFn: async () => {
+      const res = await apiClient.get<RoadmapData[]>("/v1/roadmaps");
+      return res.data ?? [];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Custom hook to create a new reading roadmap.
+ *
+ * @returns Mutation result
+ */
+export function useCreateRoadmap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ title, description }: { title: string; description?: string }) => {
+      const res = await apiClient.post<RoadmapData>("/v1/roadmaps", {
+        title,
+        description,
+      });
+      return res.data;
+    },
+    onSuccess: data => {
+      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+        if (!old) return [data];
+        if (old.some(r => r.id === data.id)) return old;
+        return [...old, data];
+      });
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to add an item to a reading roadmap.
+ *
+ * @returns Mutation result
+ */
+export function useAddRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      roadmapId,
+      manifestationId,
+      workId,
+      notes,
+    }: {
+      roadmapId: number;
+      manifestationId?: number;
+      workId?: number;
+      notes?: string;
+    }) => {
+      const res = await apiClient.post<RoadmapItemData>(`/v1/roadmaps/${roadmapId}/items`, {
+        manifestation_id: manifestationId,
+        work_id: workId,
+        notes,
+      });
+      return res.data;
+    },
+    onSuccess: (newItem, variables) => {
+      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+        if (!old) return old;
+        return old.map(r => {
+          if (r.id === variables.roadmapId) {
+            const items = r.items ? [...r.items] : [];
+            if (!items.some(i => i.id === newItem.id)) {
+              items.push(newItem);
+            }
+            return { ...r, items };
+          }
+          return r;
+        });
+      });
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to reorder a roadmap item.
+ *
+ * @returns Mutation result
+ */
+export function useReorderRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, position }: { itemId: number; position: number }) => {
+      const res = await apiClient.patch(`/v1/roadmaps/items/${itemId}/position`, {
+        position,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/* ── Lending Lifecycle ───────────────────────────────────────────────────── */
+
+export interface LoanRequestData {
+  id: number;
+  item_id: number;
+  item_title: string;
+  requester_id: string;
+  requester_name: string;
+  status: "pending" | "approved" | "rejected";
+  notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+/**
+ * Custom hook to fetch pending loan requests (for item owners / admins).
+ *
+ * @returns Query result
+ */
+export function useLoanRequests() {
+  return useQuery<LoanRequestData[]>({
+    queryKey: ["loanRequests"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<LoanRequestData[]>>("/lending/requests");
+      return res.data.data ?? [];
+    },
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * Custom hook to fetch the current user's loan request status for an item.
+ *
+ * @param itemId - The item to check loan status for
+ * @returns Query result
+ */
+export function useLoanStatus(itemId: number | null) {
+  return useQuery<LoanRequestData | null>({
+    queryKey: ["loanStatus", itemId],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<LoanRequestData | null>>(`/lending/items/${itemId}/loan-status`);
+      return res.data.data ?? null;
+    },
+    enabled: itemId != null && itemId > 0,
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * Custom hook to submit a loan request for an item.
+ *
+ * @returns Mutation result
+ */
+export function useRequestLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, notes }: { itemId: number; notes?: string }) => {
+      const res = await apiClient.post<ApiResponse<LoanRequestData>>(`/lending/items/${itemId}/loan-request`, {
+        notes,
+      });
+      return res.data.data!;
+    },
+    onSuccess: (_, variables) => {
+      void qc.invalidateQueries({ queryKey: ["loanStatus", variables.itemId] });
+      void qc.invalidateQueries({ queryKey: ["loanRequests"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to approve or reject a loan request.
+ *
+ * @returns Mutation result
+ */
+export function useResolveLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requestId, action }: { requestId: number; action: "approve" | "reject" }) => {
+      const res = await apiClient.patch<ApiResponse<LoanRequestData>>(`/lending/requests/${requestId}`, {
+        action,
+      });
+      return res.data.data!;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["loanRequests"] });
+      void qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
 }

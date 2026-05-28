@@ -59,6 +59,7 @@ from app.db.core import (  # noqa: F401
     Work,
 )
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401
+from app.db.lending import LoanRequest  # noqa: F401
 from app.db.puzzle import MANIFESTATION_PUZZLE_META_KEYS  # noqa: F401
 from app.db.roadmap import ReadingRoadmap, RoadmapItem  # noqa: F401
 from app.db.settings import InstanceSettings, LLMTelemetry, ScanTelemetry  # noqa: F401

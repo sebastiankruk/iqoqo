@@ -117,12 +117,42 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
     notes = db.Column(db.Text, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
 
+    # Relationships to resolve title/creator in to_dict()
+    work = db.relationship("Work", foreign_keys=[work_id], lazy="joined")
+    manifestation = db.relationship("Manifestation", foreign_keys=[manifestation_id], lazy="joined")
+
     def to_dict(self) -> dict[str, Any]:
-        """Converts individual roadmap nodes to dynamic dictionary objects."""
+        """Converts individual roadmap nodes to dynamic dictionary objects.
+
+        Resolves ``title`` and ``creator`` by walking the FRBR hierarchy:
+        manifestation → expression → work (title, meta.authors).
+        """
+        title: str = "Unknown"
+        creator: str = "Unknown"
+
+        # Prefer resolution via the linked manifestation (most specific)
+        if self.manifestation_id is not None and hasattr(self, "manifestation") and self.manifestation is not None:
+            man = self.manifestation
+            if man.expression and man.expression.work:
+                work = man.expression.work
+                title = work.title or "Unknown"
+                authors = work.meta.get("authors", []) if work.meta else []
+                if authors and isinstance(authors, list) and isinstance(authors[0], str):
+                    creator = authors[0]
+        # Fall back to direct work link
+        elif self.work_id is not None and hasattr(self, "work") and self.work is not None:
+            work = self.work
+            title = work.title or "Unknown"
+            authors = work.meta.get("authors", []) if work.meta else []
+            if authors and isinstance(authors, list) and isinstance(authors[0], str):
+                creator = authors[0]
+
         return {
             "id": self.id,
             "work_id": self.work_id,
             "manifestation_id": self.manifestation_id,
+            "title": title,
+            "creator": creator,
             "position": self.position,
             "status": self.status,
             "target_date": (self.target_date.isoformat() if isinstance(self.target_date, (date, datetime)) else None),

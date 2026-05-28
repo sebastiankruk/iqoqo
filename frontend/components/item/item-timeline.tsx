@@ -122,7 +122,7 @@ function TimelineItem({ log }: { log: StatusLog }) {
       IconComponent = Share2;
       bgClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
       badgeColor = "bg-amber-500/10 text-amber-700 dark:text-amber-300";
-      description = "Item lent out to borrower.";
+      description = "Loan approved by custodian.";
     } else if (newStatus === "damaged" || newStatus === "lost") {
       IconComponent = AlertTriangle;
       bgClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
@@ -137,7 +137,7 @@ function TimelineItem({ log }: { log: StatusLog }) {
   }
 
   return (
-    <div className="group relative flex gap-x-4 sm:gap-x-6">
+    <div className="group relative flex gap-x-4 sm:gap-x-6 timeline-event">
       {/* Dynamic colored timeline node */}
       <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-card shadow-sm transition-all duration-300 group-hover:scale-110 sm:h-12 sm:w-12 z-10">
         <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${bgClass}`}>
@@ -224,7 +224,7 @@ export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
     );
   }
 
-  if (!logs || logs.length === 0) {
+  if (!Array.isArray(logs) || logs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted border border-border/80 shadow-inner">

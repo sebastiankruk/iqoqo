@@ -105,6 +105,21 @@ test.describe("Lending Workflow", () => {
 
     // 1.6 Mock the target Item page to prevent timeout on redirect
     await page.route("**/api/items/1**", async route => {
+      const url = route.request().url();
+      if (url.endsWith("/logs")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: [] }),
+        });
+      }
+      if (url.includes("/loan-status")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: null }),
+        });
+      }
       if (route.request().method() === "PUT") {
         return route.fulfill({
           status: 200,
@@ -189,29 +204,40 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
   test("should execute full request, approval, and timeline logging loop between borrower and lender", async ({
     browser,
   }) => {
+    // Reset any stale lending state from previous browser runs
+    await fetch("http://127.0.0.1:5000/api/lending/test/reset", { method: "POST" });
+
     // 1. Create isolated context for Owner/Lender (User B)
     const lenderContext = await browser.newContext();
     const lenderPage = await lenderContext.newPage();
+    await lenderPage.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
 
     await lenderPage.goto("/login");
-    await lenderPage.fill('input[name="email"]', "lender@iqoqo.local");
-    await lenderPage.fill('input[name="password"]', "SecurePassword123!");
+    await lenderPage.waitForLoadState("networkidle");
+    await lenderPage.fill('input[type="email"]', "lender@iqoqo.local");
+    await lenderPage.fill('input[type="password"]', "SecurePassword123!");
     await lenderPage.click('button[type="submit"]');
-    await expect(lenderPage).toHaveURL(/\/$/);
+    await expect(lenderPage).toHaveURL(/\/(collection)?$/);
 
     // 2. Create isolated context for Borrower (User A)
     const borrowerContext = await browser.newContext();
     const borrowerPage = await borrowerContext.newPage();
+    await borrowerPage.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
 
     await borrowerPage.goto("/login");
-    await borrowerPage.fill('input[name="email"]', "borrower@iqoqo.local");
-    await borrowerPage.fill('input[name="password"]', "SecurePassword123!");
+    await borrowerPage.waitForLoadState("networkidle");
+    await borrowerPage.fill('input[type="email"]', "borrower@iqoqo.local");
+    await borrowerPage.fill('input[type="password"]', "SecurePassword123!");
     await borrowerPage.click('button[type="submit"]');
-    await expect(borrowerPage).toHaveURL(/\/$/);
+    await expect(borrowerPage).toHaveURL(/\/(collection)?$/);
 
     // 3. Borrower finds Lender's copy and requests a loan
     await borrowerPage.goto("/collection");
-    const targetItem = borrowerPage.locator('[data-testid="item-card"]').first();
+    const targetItem = borrowerPage.locator('[data-testid="item-card"]', { hasText: "Lendable Book" });
     const itemId = await targetItem.getAttribute("data-item-id");
 
     await targetItem.click();

@@ -234,9 +234,10 @@ test.describe("New Features Coverage", () => {
 
     // 3. Test Timeline Log (History tab)
     await page.getByRole("button", { name: "History" }).click();
-    await expect(page.getByText("Added to Collection")).toBeVisible();
-    await expect(page.getByText("Progress Updated")).toBeVisible();
-    await expect(page.getByText("by You").first()).toBeVisible();
+    const timelineLog = page.locator('[data-testid="frbr-timeline-log"]');
+    await expect(timelineLog.getByText("Added to Collection")).toBeVisible();
+    await expect(timelineLog.getByText("Progress Updated")).toBeVisible();
+    await expect(timelineLog.getByText("by You").first()).toBeVisible();
 
     // 4. Test Comments and Ratings (Reviews tab)
     await page.getByRole("button", { name: "Reviews" }).click();

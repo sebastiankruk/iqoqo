@@ -203,6 +203,9 @@ def get_items():
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    # When include_public=true, also include non-hidden available items from other users.
+    # This enables the social lending catalogue: borrowers can discover lendable items.
+    include_public = request.args.get("include_public", "false").lower() == "true"
     tags_filter = request.args.get("tags", None)
     collections_filter = request.args.get("collections", None)
     genres_filter = request.args.get("genres", None)
@@ -281,6 +284,20 @@ def get_items():
 
         if borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
+        elif include_public:
+            # Social lending catalogue: include own items, borrowed items, AND public
+            # available items from other users so borrowers can discover lendable items.
+            query = query.filter(
+                db.or_(
+                    Item.owner_id == user_id,
+                    Item.lent_to_user_id == user_id,
+                    db.and_(
+                        Item.owner_id != user_id,
+                        Item.is_hidden.is_(False),
+                        Item.collection_status == "available",
+                    ),
+                )
+            )
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
@@ -368,6 +385,7 @@ def get_items():
                 authors = work.meta.get("authors", []) if work.meta else []
 
             is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
+            is_borrowed = bool(item.lent_to_user_id and str(item.lent_to_user_id) == str(g.user_id)) if hasattr(g, "user_id") else False
             combined_items_data.append(
                 {
                     "id": item.id,
@@ -385,7 +403,7 @@ def get_items():
                     "authors": authors,
                     "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                     "is_owner": is_owner,
-                    "is_borrowed": not is_owner,
+                    "is_borrowed": is_borrowed,
                     "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
                     "added_at": item.added_at.isoformat() if item.added_at else None,
                     "updated_at": (item.updated_at or item.added_at).isoformat() if (item.updated_at or item.added_at) else None,
@@ -1121,7 +1139,8 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     is_admin = user and any(role.name == "admin" for role in getattr(user, "roles", []))
     has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
 
-    if not (is_owner or is_admin or has_update_permission):
+    is_borrower = item.lent_to_user_id is not None and str(item.lent_to_user_id) == str(user_id)
+    if not (is_owner or is_borrower or is_admin or has_update_permission):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     from app.core.taxonomy import PROGRESS_STATUSES

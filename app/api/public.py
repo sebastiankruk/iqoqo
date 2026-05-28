@@ -39,7 +39,7 @@ def generate_rss_xml(title: str, link: str, description: str, items: list[Any]) 
         f"  <title>{title}</title>",
         f"  <link>{link}</link>",
         f"  <description>{description}</description>",
-        f'  <lastBuildDate>{datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")}</lastBuildDate>',
+        f'  <lastBuildDate>{datetime.datetime.now(datetime.UTC).strftime("%a, %d %b %Y %H:%M:%S GMT")}</lastBuildDate>',
     ]
 
     for item in items[:50]:  # Constrain feed length payload dynamically
@@ -48,7 +48,7 @@ def generate_rss_xml(title: str, link: str, description: str, items: list[Any]) 
             title_val = item.get("title", "Untitled")
             creator = item.get("creator") or item.get("author") or "Unknown Creator"
             m_id = item.get("manifestation_id", item_id)
-            pub_date_val = item.get("created_at") or datetime.datetime.now(datetime.timezone.utc)
+            pub_date_val = item.get("created_at") or datetime.datetime.now(datetime.UTC)
         else:
             item_id = item.id
             m_id = item.manifestation_id
@@ -57,7 +57,7 @@ def generate_rss_xml(title: str, link: str, description: str, items: list[Any]) 
             if item.manifestation and item.manifestation.meta:
                 authors = item.manifestation.meta.get("authors", []) or item.manifestation.meta.get("Authors", [])
             creator = ", ".join(authors) if authors else "Unknown Creator"
-            pub_date_val = item.added_at or datetime.datetime.now(datetime.timezone.utc)
+            pub_date_val = item.added_at or datetime.datetime.now(datetime.UTC)
 
         item_title = title_val.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         item_desc = creator.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -233,7 +233,7 @@ def get_public_items(username: str):
         items = fetch_user_public_collection(username=username, limit=100)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
         return Response(rdf_payload, mimetype="application/ld+json")
-    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header:
+    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
         items = fetch_user_public_collection(username=username, limit=100)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
         return Response(rdf_payload, mimetype="text/turtle")
@@ -254,7 +254,7 @@ def get_public_items(username: str):
         .limit(per_page)
         .offset((page - 1) * per_page)
     )
-    items = db.session.execute(stmt).scalars().all()
+    items = list(db.session.execute(stmt).scalars().all())
 
     total_stmt = select(func.count(Item.id)).where(Item.owner_id == user.id, Item.is_hidden.is_(False))  # pylint: disable=not-callable
     total = db.session.execute(total_stmt).scalar()
@@ -296,7 +296,7 @@ def get_shared_collection(token: str):
         items = fetch_shared_collection_by_token(token=token, limit=100)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
         return Response(rdf_payload, mimetype="application/ld+json")
-    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header:
+    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
         items = fetch_shared_collection_by_token(token=token, limit=100)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
         return Response(rdf_payload, mimetype="text/turtle")
@@ -347,7 +347,7 @@ def get_shared_collection(token: str):
                 )
             )
 
-    items = db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all()
+    items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all())
 
     return jsonify(
         {
