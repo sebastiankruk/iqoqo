@@ -30,8 +30,26 @@ from app.db.models import Expression, Item, Manifestation, SharedCollection, Use
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 
 
-def generate_rss_xml(title: str, link: str, description: str, items: list[Any]) -> str:
-    """Generates standard safe RSS 2.0 XML payload for collection streams."""
+def generate_rss_xml(
+    title: str,
+    link: str,
+    description: str,
+    items: list[Any],
+    *,
+    use_item_guid: bool = False,
+) -> str:
+    """Generates standard safe RSS 2.0 XML payload for collection streams.
+
+    Args:
+        title: Feed channel title.
+        link: Canonical URL of the collection.
+        description: Channel description.
+        items: List of Item ORM objects or dicts to render as feed entries.
+        use_item_guid: When True, uses the unique item ID (``iqoqo-item-{id}``) as
+            the ``<guid>`` and ``/item/{id}`` as ``<link>``.  This is required for
+            per-user and shared-collection feeds where multiple items may share the
+            same manifestation.  Set to False (default) for global manifestation feeds.
+    """
     xml_lines = [
         '<?xml version="1.0" encoding="UTF-8" ?>',
         '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
@@ -67,11 +85,20 @@ def generate_rss_xml(title: str, link: str, description: str, items: list[Any]) 
         else:
             pub_date = pub_date_val.strftime("%a, %d %b %Y %H:%M:%S GMT")
 
+        # For user/shared feeds each entry must have a unique guid.
+        # Manifestation IDs repeat across users — using item ID avoids Feedly deduplication.
+        if use_item_guid and item_id:
+            entry_guid = f"iqoqo-item-{item_id}"
+            entry_link = f"{link.rstrip('/')}/item/{item_id}"
+        else:
+            entry_guid = f"iqoqo-manifestation-{m_id}"
+            entry_link = f"{link.rstrip('/')}/manifestation/{m_id}"
+
         xml_lines.append("  <item>")
         xml_lines.append(f"    <title>{item_title}</title>")
         xml_lines.append(f"    <description>{item_desc}</description>")
-        xml_lines.append(f'    <link>{link.rstrip("/")}/manifestation/{m_id}</link>')
-        xml_lines.append(f'    <guid isPermaLink="false">iqoqo-manifestation-{m_id}</guid>')
+        xml_lines.append(f"    <link>{entry_link}</link>")
+        xml_lines.append(f'    <guid isPermaLink="false">{entry_guid}</guid>')
         xml_lines.append(f"    <pubDate>{pub_date}</pubDate>")
         xml_lines.append("  </item>")
 
@@ -179,6 +206,7 @@ def user_collection_feed(username: str):
         link=f"{base_url}/u/{username}",
         description=f"Live feed of items curated by user {username}.",
         items=items,
+        use_item_guid=True,
     )
     return Response(rss_data, mimetype="application/rss+xml")
 
@@ -193,6 +221,7 @@ def shared_collection_feed(token: str):
         link=f"{base_url}/share/{token}",
         description="Live tracking feed for this specific shared collection space.",
         items=items,
+        use_item_guid=True,
     )
     return Response(rss_data, mimetype="application/rss+xml")
 

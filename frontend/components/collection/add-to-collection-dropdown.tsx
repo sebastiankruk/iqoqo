@@ -16,11 +16,12 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Loader2 } from "lucide-react";
+import { BookOpen, ChevronDown, Library, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useUserCollections } from "@/lib/api/hooks";
 import { CollectionQuickAdd } from "./collection-quick-add";
+import { toast } from "sonner";
 
 interface AddToCollectionDropdownProps {
   manifestationId: number;
@@ -28,6 +29,8 @@ interface AddToCollectionDropdownProps {
 
 /**
  * Dropdown button that lets the user add a manifestation to one of their collections.
+ * The top option always adds to the user's general library (no named collection folder).
+ *
  * @param root0 - Component props
  * @param root0.manifestationId - The ID of the manifestation to add
  * @returns React node representing the dropdown component
@@ -41,6 +44,7 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
   useEffect(() => {
     /**
      * Closes the dropdown when clicking outside its bounds.
+     *
      * @param event - Mouse click event
      */
     function handleClickOutside(event: MouseEvent) {
@@ -65,8 +69,13 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
+      toast.success("Added to your collection!");
       setIsOpen(false);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Failed to add to collection");
     },
   });
 
@@ -98,6 +107,19 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
 
       {isOpen && (
         <div className="absolute left-0 top-full mt-2 min-w-56 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-50">
+          {/* Primary option: add to general library without any named folder */}
+          <div className="border-b border-border/50">
+            <button
+              onClick={() => addMutation.mutate(null)}
+              disabled={addMutation.isPending}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
+            >
+              <Library className="h-4 w-4 shrink-0 text-primary" />
+              <span>Add to My Library</span>
+              <span className="ml-auto text-[10px] text-muted-foreground font-normal">No folder</span>
+            </button>
+          </div>
+
           {collectionsLoading ? (
             <div className="flex items-center justify-center px-4 py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -116,8 +138,8 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
               ))}
             </ul>
           ) : (
-            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-              No collections yet. Create one below.
+            <div className="px-4 py-3 text-center text-xs text-muted-foreground">
+              No named folders yet. Create one below.
             </div>
           )}
 

@@ -199,8 +199,6 @@ function FederationTab() {
  * @returns The rendered reviews tab.
  */
 function ReviewsTab({ item }: { item: Item }) {
-  const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation" | "item">("work");
-
   const subtabs = [
     { id: "work", label: "Conceptual Work", targetId: item.work?.id, description: "Story / artistic creation" },
     {
@@ -217,6 +215,14 @@ function ReviewsTab({ item }: { item: Item }) {
     },
     { id: "item", label: "Personal Copy", targetId: item.id, description: "Your copy rating & notes" },
   ] as const;
+
+  // Default to the first subtab that has a valid targetId (items may lack work/expression)
+  const firstAvailableLevel = (subtabs.find(s => !!s.targetId)?.id ?? "manifestation") as
+    | "work"
+    | "expression"
+    | "manifestation"
+    | "item";
+  const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation" | "item">(firstAvailableLevel);
 
   return (
     <div className="space-y-6">

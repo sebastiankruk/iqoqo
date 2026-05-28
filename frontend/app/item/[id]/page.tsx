@@ -24,11 +24,9 @@ import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
 import { ItemActions } from "@/components/item/item-actions";
 import { ItemTabs } from "@/components/item/item-tabs";
-import { ItemProvenanceTimeline } from "@/components/item/item-timeline";
-import { useItem, useManifestationWithPolling, useLoanStatus, useRequestLoan } from "@/lib/api/hooks";
+import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
-import { Button } from "@/components/ui/button";
 
 /** Page props for the Item page. */
 interface Props {
@@ -54,20 +52,6 @@ function ItemDetail(props: { item: Item }) {
     ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
       (item.meta?.["cover_url"] as string | undefined));
 
-  // Fetch active loan status if the current user is not the owner
-  const { data: loanStatus } = useLoanStatus(!item.is_owner ? item.id : null);
-  const requestLoanMutation = useRequestLoan();
-
-  const handleRequestLoan = async () => {
-    try {
-      await requestLoanMutation.mutateAsync({ itemId: item.id });
-    } catch (err) {
-      console.error("Failed to request loan:", err);
-    }
-  };
-
-  const showRequestButton = !item.is_owner && item.collection_status === "available" && !loanStatus;
-
   return (
     <>
       <HeroBanner coverUrl={coverUrl} title={item.work?.title ?? item.title} />
@@ -84,58 +68,7 @@ function ItemDetail(props: { item: Item }) {
             <div className="flex w-full flex-col gap-6 p-6 lg:w-[70%] lg:p-8">
               <ItemHeader item={item} />
 
-              {/* Loan Status & Request Loan Section */}
-              {!item.is_owner && (
-                <div className="bg-muted/30 border border-border/50 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                      Lending Lifecycle
-                    </span>
-                    <p className="text-sm text-muted-foreground">
-                      {item.collection_status === "available"
-                        ? "This copy is owned by another user and is currently available for borrowing."
-                        : "This copy is currently on loan."}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {loanStatus && (
-                      <span
-                        data-testid="loan-status-badge"
-                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
-                          loanStatus.status === "pending"
-                            ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-                            : loanStatus.status === "approved"
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                              : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
-                      >
-                        {loanStatus.status === "pending" && "Pending Approval"}
-                        {loanStatus.status === "approved" && "On Loan"}
-                        {loanStatus.status === "rejected" && "Request Rejected"}
-                      </span>
-                    )}
-
-                    {showRequestButton && (
-                      <Button
-                        onClick={handleRequestLoan}
-                        disabled={requestLoanMutation.isPending}
-                        className="bg-primary text-primary-foreground font-semibold"
-                      >
-                        {requestLoanMutation.isPending ? "Submitting..." : "Request Loan"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
               <ItemTabs item={item} />
-
-              {/* Event-Based Timeline Log */}
-              <div data-testid="frbr-timeline-log" className="mt-8 border-t pt-8">
-                <h3 className="font-serif text-lg font-bold text-foreground mb-4">Item Provenance Timeline</h3>
-                <ItemProvenanceTimeline itemId={item.id} />
-              </div>
 
               {/* Danger zone */}
               <ItemActions item={item} />

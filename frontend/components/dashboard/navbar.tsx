@@ -116,8 +116,8 @@ export function Navbar() {
           <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
         </Link>
 
-        {/* Search */}
-        <form onSubmit={handleSearch} className="relative mx-auto w-full max-w-md">
+        {/* Search – hidden on xs, visible from sm upward */}
+        <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-md sm:flex">
           <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
             <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
           </div>

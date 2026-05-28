@@ -210,12 +210,19 @@ test-frontend:
 
 test-e2e:
 	@if [ -z "$(NO_RESET)" ]; then \
-		echo "Resetting database for E2E tests..."; \
-		$(MAKE) db-reset; \
-		$(MAKE) init-auth; \
-		$(MAKE) db-seed-e2e; \
-		echo "Killing old Flask server on port 5000 (if any) to ensure connection to new DB..."; \
-		lsof -ti tcp:5000 | xargs kill -9 2>/dev/null || true; \
+		if [ -z "$$DATABASE_URL_TEST" ]; then \
+			echo "ERROR: DATABASE_URL_TEST is not set."; \
+			echo "  E2E tests reset the database and MUST use a dedicated test DB."; \
+			echo "  Set DATABASE_URL_TEST=postgresql://... or use NO_RESET=1 to skip reset."; \
+			echo "  Example: DATABASE_URL_TEST=\$$DATABASE_URL make test-e2e  (uses the same DB, dangerous!)"; \
+			exit 1; \
+		fi; \
+		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$$DATABASE_URL_TEST)..."; \
+		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-reset; \
+		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) init-auth; \
+		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-seed-e2e; \
+		echo "Killing old Flask server on port 5001 (if any) to ensure connection to test DB..."; \
+		lsof -ti tcp:5001 | xargs kill -9 2>/dev/null || true; \
 	else \
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi

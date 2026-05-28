@@ -103,10 +103,12 @@ export function RoadmapView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="font-serif text-2xl font-bold text-foreground">Reading Roadmaps</h1>
-          <p className="text-sm text-muted-foreground">Plan and sequence your learning tracks and reading pipelines.</p>
+          <p className="mt-1 text-sm text-muted-foreground max-w-prose">
+            Plan and sequence your learning tracks and reading pipelines.
+          </p>
         </div>
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -213,7 +215,7 @@ export function RoadmapView() {
                       <DialogHeader>
                         <DialogTitle>Add Book to Roadmap</DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-4 py-2">
+                      <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
                         {/* Search Input */}
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">Search Manifestations</label>
