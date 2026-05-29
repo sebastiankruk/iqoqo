@@ -79,9 +79,9 @@ def upgrade():
                 p_status = status if status else 'want_to_read'
                 insert_query = f"""
                     INSERT INTO {intents_table} (user_id, work_id, status)
-                    VALUES ('{user_id}', {work_id}, '{p_status}')
+                    VALUES (:user_id, :work_id, :status)
                 """
-                bind.execute(sa.text(insert_query))
+                bind.execute(sa.text(insert_query), {"user_id": str(user_id), "work_id": work_id, "status": p_status})
                 inserted.add(key)
                 
         # Delete legacy wish_list items

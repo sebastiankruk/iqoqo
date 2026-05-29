@@ -72,8 +72,13 @@ def generate_rss_xml(
             m_id = item.manifestation_id
             title_val = item.manifestation.title if item.manifestation else "Untitled"
             authors = []
-            if item.manifestation and item.manifestation.meta:
-                authors = item.manifestation.meta.get("authors", []) or item.manifestation.meta.get("Authors", [])
+            if item.manifestation:
+                if item.manifestation.expression and item.manifestation.expression.work and item.manifestation.expression.work.meta:
+                    authors = item.manifestation.expression.work.meta.get("authors", []) or item.manifestation.expression.work.meta.get(
+                        "Authors", []
+                    )
+                if not authors and item.manifestation.meta:
+                    authors = item.manifestation.meta.get("authors", []) or item.manifestation.meta.get("Authors", [])
             creator = ", ".join(authors) if authors else "Unknown Creator"
             pub_date_val = item.added_at or datetime.datetime.now(datetime.UTC)
 
@@ -108,15 +113,68 @@ def generate_rss_xml(
 
 
 def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") -> list[Any]:
-    """Fetch global fresh arrivals."""
-    query = (
+    """Fetch global fresh arrivals with granular level grouping."""
+    if level not in ("manifestations", "expressions", "works"):
+        level = "manifestations"
+
+    # Base query for public items, filtering hidden ones and only public users
+    stmt = (
         select(Item)
-        .options(selectinload(Item.manifestation))
-        .where(Item.is_hidden.is_(False))
-        .order_by(Item.updated_at.desc())
-        .limit(limit)
+        .join(User, Item.owner_id == User.id)
+        .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
     )
-    return list(db.session.execute(query).scalars().all())
+
+    if level == "works":
+        # Group or filter to get one item per unique work
+        stmt = stmt.join(Manifestation).join(Expression).join(Work).order_by(Item.updated_at.desc())
+        items = list(
+            db.session.execute(
+                stmt.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            )
+            .scalars()
+            .all()
+        )
+        seen_works = set()
+        unique_items = []
+        for it in items:
+            w_id = it.manifestation.expression.work_id if it.manifestation and it.manifestation.expression else None
+            if w_id and w_id not in seen_works:
+                seen_works.add(w_id)
+                unique_items.append(it)
+                if len(unique_items) >= limit:
+                    break
+        return unique_items
+
+    elif level == "expressions":
+        stmt = stmt.join(Manifestation).join(Expression).order_by(Item.updated_at.desc())
+        items = list(
+            db.session.execute(
+                stmt.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            )
+            .scalars()
+            .all()
+        )
+        seen_exprs = set()
+        unique_items = []
+        for it in items:
+            expr_id = it.manifestation.expression_id if it.manifestation else None
+            if expr_id and expr_id not in seen_exprs:
+                seen_exprs.add(expr_id)
+                unique_items.append(it)
+                if len(unique_items) >= limit:
+                    break
+        return unique_items
+
+    else:
+        query = (
+            select(Item)
+            .join(User, Item.owner_id == User.id)
+            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+            .order_by(Item.updated_at.desc())
+            .limit(limit)
+        )
+        return list(db.session.execute(query).scalars().all())
 
 
 def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
@@ -127,7 +185,7 @@ def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
         return []
     stmt = (
         select(Item)
-        .options(selectinload(Item.manifestation))
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
         .where(Item.owner_id == user.id, Item.is_hidden.is_(False))
         .order_by(Item.updated_at.desc())
         .limit(limit)
@@ -177,7 +235,13 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
             )
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
-    return list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all())
+    return list(
+        db.session.execute(
+            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        )
+        .scalars()
+        .all()
+    )
 
 
 @public_bp.route("/feed.xml", methods=["GET"])
@@ -193,7 +257,7 @@ def global_fresh_feed():
         description="Live tracking stream of global physical catalog updates.",
         items=items,
     )
-    return Response(rss_data, mimetype="application/rss+xml")
+    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
 
 
 @public_bp.route("/u/<string:username>/feed.xml", methods=["GET"])
@@ -208,7 +272,7 @@ def user_collection_feed(username: str):
         items=items,
         use_item_guid=True,
     )
-    return Response(rss_data, mimetype="application/rss+xml")
+    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
 
 
 @public_bp.route("/share/<string:token>/feed.xml", methods=["GET"])
@@ -223,7 +287,7 @@ def shared_collection_feed(token: str):
         items=items,
         use_item_guid=True,
     )
-    return Response(rss_data, mimetype="application/rss+xml")
+    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
 
 
 @public_bp.route("/u/<string:username>", methods=["GET"])

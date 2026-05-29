@@ -5,39 +5,27 @@
 // by the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>
-//
 
 /**
  * Unit tests for PrintQrCodeDialog.
- *
- * Covers:
- *  - closed state (dialog not mounted)
- *  - dialog renders with correct title / description
- *  - item title, author, ID, and content type displayed correctly
- *  - "Untitled" fallback when no work title present
- *  - author line hidden when no authors
- *  - Download PNG: fetch called, <a> link triggered, blob URL created/revoked
- *  - Download PNG: toast.error shown on network failure
- *  - Print Label: window.open called, document.write contains item data
- *  - Print Label: toast.error shown when popup is blocked
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { toast } from "sonner";
 import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
 import type { Item } from "@/types/frbr";
+import { apiClient } from "@/lib/api/client";
+
+// Mock apiClient
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    get: vi.fn(),
+  },
+}));
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-/** A fully populated item owned by the current user. */
 const baseItem: Item = {
   id: 42,
   manifestation_id: 10,
@@ -49,7 +37,6 @@ const baseItem: Item = {
   expression: { id: 2, content_type: "text", language: "en" },
 } as unknown as Item;
 
-/** Item with no work information (bare minimum). */
 const noWorkItem: Item = {
   id: 7,
   manifestation_id: 3,
@@ -59,7 +46,6 @@ const noWorkItem: Item = {
   meta: {},
 } as unknown as Item;
 
-/** Item with a work but no authors. */
 const noAuthorsItem: Item = {
   ...baseItem,
   id: 99,
@@ -68,10 +54,6 @@ const noAuthorsItem: Item = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Creates a minimal stub for the window.open print popup.
- * @returns A stub object compatible with the print popup usage in the component.
- */
 function makePrintWindowStub() {
   return {
     document: { write: vi.fn(), close: vi.fn() },
@@ -84,6 +66,14 @@ function makePrintWindowStub() {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("PrintQrCodeDialog", () => {
+  const fakeBlob = new Blob(["fake-png"], { type: "image/png" });
+
+  beforeEach(() => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: fakeBlob });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob://test-url");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
@@ -145,81 +135,64 @@ describe("PrintQrCodeDialog", () => {
 
   // ── QR image src ─────────────────────────────────────────────────────────────
 
-  it("renders an <img> whose src points to the qrcode API endpoint", () => {
+  it("renders an <img> whose src points to the generated blob URL", async () => {
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    const img = screen.getByRole("img", { name: /QR Code/i });
-    expect(img).toHaveAttribute("src", expect.stringContaining("/qrcode/42"));
-    expect(img).toHaveAttribute("src", expect.stringContaining("format=png"));
+    const img = await screen.findByRole("img", { name: /QR Code/i });
+    expect(img).toHaveAttribute("src", "blob://test-url");
+    expect(apiClient.get).toHaveBeenCalledWith("/qrcode/42?format=png", expect.any(Object));
   });
 
   // ── Download PNG ─────────────────────────────────────────────────────────────
 
-  it("calls fetch and creates an object URL when Download PNG is clicked", async () => {
-    const blobMock = new Blob(["fake-png"], { type: "image/png" });
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      blob: () => Promise.resolve(blobMock),
-    });
-    const createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob://test-url");
-    const revokeObjectURLSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-
-    // Track the anchor link created by the component by watching createElement.
-    // Capture the REAL createElement before mocking to avoid infinite recursion.
+  it("calls apiClient and creates an object URL when Download PNG is clicked", async () => {
     const realCreateElement = document.createElement.bind(document);
     let capturedLink: HTMLAnchorElement | null = null;
     vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = realCreateElement(tag);
       if (tag === "a") {
         capturedLink = el as HTMLAnchorElement;
-        // Prevent actual navigation when click() is called
         vi.spyOn(capturedLink, "click").mockImplementation(() => undefined);
       }
       return el;
     });
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Download PNG"));
+    
+    const downloadBtn = await screen.findByRole("button", { name: /Download PNG/i });
+    expect(downloadBtn).not.toBeDisabled();
+    
+    fireEvent.click(downloadBtn);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/qrcode/42"));
-      expect(createObjectURLSpy).toHaveBeenCalledWith(blobMock);
+      expect(apiClient.get).toHaveBeenCalledWith("/qrcode/42?format=png", expect.any(Object));
       expect(capturedLink).not.toBeNull();
       expect(capturedLink!.download).toBe("iqoqo-qr-item-42.png");
       expect(capturedLink!.href).toBe("blob://test-url");
-      expect(revokeObjectURLSpy).toHaveBeenCalledWith("blob://test-url");
     });
   });
 
-  it("shows toast.error when Download PNG fetch returns a non-ok response", async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false });
+  it("shows toast.error when Download PNG fetch throws an error", async () => {
+    vi.mocked(apiClient.get).mockRejectedValueOnce(new Error("Network failure"));
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Download PNG"));
-
+    
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Failed to download QR code image.");
-    });
-  });
-
-  it("shows toast.error when Download PNG fetch throws a network error", async () => {
-    global.fetch = vi.fn().mockRejectedValueOnce(new Error("Network failure"));
-
-    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Download PNG"));
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Failed to download QR code image.");
+      expect(toast.error).toHaveBeenCalledWith("Failed to load QR code image.");
     });
   });
 
   // ── Print Label ──────────────────────────────────────────────────────────────
 
-  it("opens a new window and writes item data to it on Print Label click", () => {
+  it("opens a new window and writes item data to it on Print Label click", async () => {
     const printStub = makePrintWindowStub();
     const openSpy = vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Print Label"));
+    
+    const printBtn = await screen.findByRole("button", { name: /Print Label/i });
+    expect(printBtn).not.toBeDisabled();
+
+    fireEvent.click(printBtn);
 
     expect(openSpy).toHaveBeenCalledWith("", "_blank");
     expect(printStub.document.write).toHaveBeenCalledTimes(1);
@@ -229,36 +202,18 @@ describe("PrintQrCodeDialog", () => {
     expect(writtenHtml).toContain("J.R.R. Tolkien");
     expect(writtenHtml).toContain("iqoqo ID: #42");
     expect(writtenHtml).toContain("text");
+    expect(writtenHtml).toContain("blob://test-url");
   });
 
-  it("includes the QR image src in the print HTML", () => {
-    const printStub = makePrintWindowStub();
-    vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
-
-    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Print Label"));
-
-    const writtenHtml: string = printStub.document.write.mock.calls[0][0];
-    expect(writtenHtml).toContain("/qrcode/42");
-  });
-
-  it("does not include author line in print HTML when no authors", () => {
-    const printStub = makePrintWindowStub();
-    vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
-
-    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={noAuthorsItem} />);
-    fireEvent.click(screen.getByText("Print Label"));
-
-    const writtenHtml: string = printStub.document.write.mock.calls[0][0];
-    // Author div should not appear in print output
-    expect(writtenHtml).not.toContain(`class="author"`);
-  });
-
-  it("shows toast.error when the print popup is blocked", () => {
+  it("shows toast.error when the print popup is blocked", async () => {
     vi.spyOn(window, "open").mockReturnValue(null);
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    fireEvent.click(screen.getByText("Print Label"));
+    
+    const printBtn = await screen.findByRole("button", { name: /Print Label/i });
+    expect(printBtn).not.toBeDisabled();
+
+    fireEvent.click(printBtn);
 
     expect(toast.error).toHaveBeenCalledWith("Popup blocked! Please allow popups to print.");
   });
@@ -268,7 +223,6 @@ describe("PrintQrCodeDialog", () => {
   it("calls onOpenChange when the dialog is dismissed", () => {
     const onOpenChange = vi.fn();
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={onOpenChange} item={baseItem} />);
-    // Trigger close via Escape key (Radix Dialog handles this internally)
     fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

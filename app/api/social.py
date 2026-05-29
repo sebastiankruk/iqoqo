@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 
 from flask import Response, g, jsonify, request
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
@@ -52,9 +53,14 @@ def get_social_feedback(level: str, target_id: int) -> Response | tuple[Response
     if not _verify_target_exists(level, target_id):
         return jsonify({"error": f"{level.capitalize()} not found", "code": 404}), 404
 
-    # Fetch feedbacks using SQLAlchemy 2.0 style syntax
+    # Fetch feedbacks using SQLAlchemy 2.0 style syntax with selectinload to avoid N+1 queries
     column_name = f"{level}_id"
-    stmt = select(SocialFeedback).where(getattr(SocialFeedback, column_name) == target_id).order_by(SocialFeedback.created_at.desc())
+    stmt = (
+        select(SocialFeedback)
+        .options(selectinload(SocialFeedback.user))
+        .where(getattr(SocialFeedback, column_name) == target_id)
+        .order_by(SocialFeedback.created_at.desc())
+    )
     feedbacks = db.session.execute(stmt).scalars().all()
 
     # Prefer GROUP BY aggregate queries to avoid N+1 count issues

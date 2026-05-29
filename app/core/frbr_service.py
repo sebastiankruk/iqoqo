@@ -491,12 +491,16 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 m = item.manifestation
                 title = m.title or "Untitled"
                 isbn = m.isbn13
-                if m.meta:
-                    authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
                 if m.expression:
                     work_id = m.expression.work_id
+                    if m.expression.work and m.expression.work.meta:
+                        authors = m.expression.work.meta.get("authors", []) or m.expression.work.meta.get("Authors", [])
+                    if not authors and m.meta:
+                        authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
                     if m.expression.meta:
                         tags = m.expression.meta.get("tags", []) or m.expression.meta.get("Tags", [])
+                elif m.meta:
+                    authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
 
         m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
         w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")

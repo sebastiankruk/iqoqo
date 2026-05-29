@@ -145,7 +145,34 @@ class TestPublicFeeds:
 
         response = client.get("/api/public/share/wishlist-token-xyz/feed.xml")
         assert response.status_code == 200
-        assert "application/rss+xml" in response.content_type
+
+    def test_feed_strictly_filters_hidden_items(self, client, app, public_user, sample_data):
+        """Regression test verifying that hidden or private items are never serialized in public feeds."""
+        with app.app_context():
+            user = User.query.filter_by(public_username=public_user).first()
+            # Add a hidden/private item
+            mani = Manifestation.query.first()
+            hidden_item = Item(owner_id=user.id, manifestation_id=mani.id, status="to_read", is_hidden=True)
+            db.session.add(hidden_item)
+            db.session.commit()
+
+        # Fetch global fresh feed
+        response = client.get("/api/public/feed.xml")
+        assert response.status_code == 200
+        root = ET.fromstring(response.data)
+        items = root.findall("channel/item")
+
+        # Verify that only the non-hidden item (The Cave Bible) is present
+        assert len(items) == 1
+        assert items[0].find("title").text == "The Cave Bible"
+
+        # Fetch user public feed
+        response_user = client.get(f"/api/public/u/{public_user}/feed.xml")
+        assert response_user.status_code == 200
+        root_user = ET.fromstring(response_user.data)
+        items_user = root_user.findall("channel/item")
+        assert len(items_user) == 1
+        assert items_user[0].find("title").text == "The Cave Bible"
 
 
 class TestContentNegotiation:

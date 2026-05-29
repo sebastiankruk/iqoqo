@@ -188,9 +188,11 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
   }
 
   // Check if current user already submitted feedback
-  const userFeedback = feedbackData?.feedbacks.find(
-    f => f.user_id === profile?.id || f.user_username === profile?.public_username
-  );
+  const userFeedback = feedbackData?.feedbacks.find(f => {
+    if (profile?.id && f.user_id === profile.id) return true;
+    if (profile?.public_username && f.user_username === profile.public_username) return true;
+    return false;
+  });
 
   if (isLoading) {
     return (
@@ -205,9 +207,12 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
   }
 
   const { feedbacks, stats } = feedbackData;
-  const otherFeedbacks = feedbacks.filter(
-    f => f.user_id !== profile?.id && f.user_username !== profile?.public_username
-  );
+  const otherFeedbacks = feedbacks.filter(f => {
+    const isCurrentUser =
+      (profile?.id && f.user_id === profile.id) ||
+      (profile?.public_username && f.user_username === profile.public_username);
+    return !isCurrentUser;
+  });
 
   return (
     <div className="space-y-6">

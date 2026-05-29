@@ -142,9 +142,16 @@ def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
             return jsonify({"error": "Roadmap item not found", "code": 404}), 404
 
         data = request.get_json() or {}
-        new_position = data.get("position")
-        if new_position is None:
+        new_position_val = data.get("position")
+        if new_position_val is None:
             return jsonify({"error": "Invalid target execution priority array coordinates", "code": 400}), 400
+
+        try:
+            new_position = int(new_position_val)
+            if new_position < 1:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return jsonify({"error": "Position must be a valid integer greater than or equal to 1", "code": 400}), 400
 
         items_stmt = select(RoadmapItem).filter(RoadmapItem.roadmap_id == item.roadmap_id).order_by(RoadmapItem.position)
         items = list(db.session.scalars(items_stmt).all())

@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { apiClient } from "@/lib/api/client";
 
 interface PrintQrCodeDialogProps {
   isOpen: boolean;
@@ -38,14 +39,49 @@ interface PrintQrCodeDialogProps {
  * @returns {React.JSX.Element} The component
  */
 export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDialogProps) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-  const qrUrlPng = `${apiBase}/qrcode/${item.id}?format=png`;
+  const [qrBlobUrl, setQrBlobUrl] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      if (qrBlobUrl) {
+        window.URL.revokeObjectURL(qrBlobUrl);
+        setQrBlobUrl("");
+      }
+      return;
+    }
+
+    let active = true;
+    const fetchQr = async () => {
+      try {
+        const res = await apiClient.get(`/qrcode/${item.id}?format=png`, {
+          responseType: "blob",
+        });
+        if (active) {
+          const url = window.URL.createObjectURL(res.data);
+          setQrBlobUrl(url);
+        }
+      } catch (err) {
+        toast.error("Failed to load QR code image.");
+      }
+    };
+
+    fetchQr();
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, item.id]);
 
   const title = item.work?.title || item.title || "Untitled";
   const authors = React.useMemo(() => item.work?.authors || [], [item.work?.authors]);
   const contentType = item.expression?.content_type || "Item";
 
   const handlePrint = React.useCallback(() => {
+    if (!qrBlobUrl) {
+      toast.error("QR Code is not loaded yet.");
+      return;
+    }
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       toast.error("Popup blocked! Please allow popups to print.");
@@ -119,7 +155,7 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
         </head>
         <body>
           <div class="label-container">
-            <img class="qr-image" src="${qrUrlPng}" alt="QR Code" />
+            <img class="qr-image" src="${qrBlobUrl}" alt="QR Code" />
             <div class="title">${title}</div>
             ${authorsText ? `<div class="author">${authorsText}</div>` : ""}
             <div class="meta">iqoqo ID: #${item.id} &bull; ${contentType}</div>
@@ -134,26 +170,25 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
       </html>
     `);
     printWindow.document.close();
-  }, [item.id, title, authors, contentType, qrUrlPng]);
+  }, [item.id, title, authors, contentType, qrBlobUrl]);
 
-  const handleDownload = React.useCallback(async () => {
+  const handleDownload = React.useCallback(() => {
+    if (!qrBlobUrl) {
+      toast.error("QR Code is not loaded yet.");
+      return;
+    }
     try {
-      const response = await fetch(qrUrlPng);
-      if (!response.ok) throw new Error("Fetch failed");
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = downloadUrl;
+      link.href = qrBlobUrl;
       link.download = `iqoqo-qr-item-${item.id}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
       toast.success("QR Code image downloaded.");
     } catch {
       toast.error("Failed to download QR code image.");
     }
-  }, [item.id, qrUrlPng]);
+  }, [item.id, qrBlobUrl]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -176,8 +211,12 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
           <div className="flex w-[260px] flex-col items-center rounded-xl border border-border/80 bg-card p-6 shadow-md ring-1 ring-border/20 transition-all hover:shadow-lg dark:bg-zinc-950/40">
             {/* QR code representation */}
             <div className="relative mb-4 flex h-[180px] w-[180px] items-center justify-center overflow-hidden rounded-lg border border-border/50 bg-white p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrUrlPng} alt="QR Code" className="h-full w-full object-contain" />
+              {qrBlobUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrBlobUrl} alt="QR Code" className="h-full w-full object-contain" />
+              ) : (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              )}
             </div>
             <div className="w-full text-center">
               <h4 className="line-clamp-2 text-sm font-bold text-foreground leading-tight">{title}</h4>
@@ -194,11 +233,11 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
         </div>
 
         <DialogFooter className="grid grid-cols-2 gap-2 sm:justify-start">
-          <Button variant="outline" className="flex items-center gap-2" onClick={handleDownload}>
+          <Button variant="outline" className="flex items-center gap-2" onClick={handleDownload} disabled={!qrBlobUrl}>
             <Download className="h-4 w-4" />
             Download PNG
           </Button>
-          <Button className="flex items-center gap-2" onClick={handlePrint}>
+          <Button className="flex items-center gap-2" onClick={handlePrint} disabled={!qrBlobUrl}>
             <Printer className="h-4 w-4" />
             Print Label
           </Button>

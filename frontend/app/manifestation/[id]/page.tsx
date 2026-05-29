@@ -118,7 +118,7 @@ export default function ManifestationPage() {
     datePublished: resolved_year,
   };
 
-  const tags = (manifestation.meta?.tags || manifestation.meta?.genres || ["Classic", "Fantasy"]) as string[];
+  const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];
 
   return (
     <div
@@ -217,7 +217,7 @@ export default function ManifestationPage() {
               >
                 {(manifestation.authors ?? []).length > 0 ? (
                   (manifestation.authors ?? []).map((author, idx, arr) => (
-                    <span key={author} property="name">
+                    <span key={author} property="schema:name">
                       <span
                         role="button"
                         tabIndex={0}

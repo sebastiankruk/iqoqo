@@ -223,6 +223,11 @@ def get_loan_status(item_id: int) -> Response | tuple[Response, int]:
 @lending_bp.route("/test/reset", methods=["POST"])
 def reset_lending_test_state() -> Response | tuple[Response, int]:
     """E2E test helper: resets all lender items to available and deletes loan requests."""
+    from flask import current_app
+
+    if not current_app.config.get("TESTING") and not current_app.config.get("DEBUG"):
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
     from app.db.core import db
 
     try:
