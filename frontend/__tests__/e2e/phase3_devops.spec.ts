@@ -71,7 +71,7 @@ test.describe("Phase 3 DevOps & UI Features", () => {
     );
 
     await page.goto("/");
-    const githubLink = page.getByRole("link", { name: /GitHub/i });
+    const githubLink = page.getByRole("link", { name: "GitHub", exact: true });
     await expect(githubLink).toBeVisible();
     await expect(githubLink).toHaveAttribute("href", "https://github.com/sebastiankruk/iqoqo");
     await expect(githubLink).toHaveAttribute("target", "_blank");
