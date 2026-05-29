@@ -57,7 +57,7 @@ def get_social_feedback(level: str, target_id: int) -> Response | tuple[Response
     column_name = f"{level}_id"
     stmt = (
         select(SocialFeedback)
-        .options(selectinload(SocialFeedback.user))
+        .options(selectinload(SocialFeedback.user))  # type: ignore[arg-type]
         .where(getattr(SocialFeedback, column_name) == target_id)
         .order_by(SocialFeedback.created_at.desc())
     )

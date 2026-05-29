@@ -84,6 +84,17 @@ iqoqo provides comprehensive tools for managing your library's data and media as
 - [ ] Federation protocol for cross-instance discovery
 - [ ] Advanced search with SPARQL queries
 
+## 💖 Support & Upstream Sustainability
+
+iqoqo is, and always will be, free and open-source software. However, maintaining the infrastructure, running global semantic validation tests, and paying localized gatekeeper tolls (such as the annual Apple Developer Program fee to allow distributed mobile PWA configurations or standalone builds) costs money.
+
+If you find value in this project or are running a public deployment for your community, please consider backing the upstream development ecosystem:
+
+- **GitHub Sponsors:** [Sponsor on GitHub](https://github.com/sponsors/sebastiankruk) (Best for recurring developer support)
+- **Buy Me a Coffee:** [Support on Buy Me a Coffee](https://buymeacoffee.com/iqoqo) (Best for quick, one-off micro-donations)
+
+Your support directly covers operational toll fees to keep target deployment channels open and unencumbered.
+
 ## 📜 License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE) for full details.

@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Manage Collections Modal**: `manage-collections-modal.tsx` — dedicated modal for listing, renaming, and deleting custom collections with React Query mutation lifecycle.
   - **Clickable Taxonomy Pivots**: `DiscoveryPivot` component wraps tags, genres, and publishers as `<Link>` badges that navigate to the discovery grid pre-filtered by that value.
   - **TaxonomyEditor**: Unified component in `item-header.tsx` / `item-tabs.tsx` for editing tags, genres, publisher assignments on items.
+- **Crowdfunding & Upstream Sustainability**:
+  - Added GitHub Sponsors and Buy Me a Coffee links to the app footer (`frontend/components/dashboard/footer.tsx`).
+  - Added "Support & Upstream Sustainability" section to `README.md` with sponsorship links and context on development cost offsets.
+
 - **Backend Architecture**:
   - `SharedCollection` model with automated secure token generation.
   - Cascade deletes for social data when a user account is removed.

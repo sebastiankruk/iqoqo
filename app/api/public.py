@@ -145,7 +145,7 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
                     break
         return unique_items
 
-    elif level == "expressions":
+    if level == "expressions":
         stmt = stmt.join(Manifestation).join(Expression).order_by(Item.updated_at.desc())
         items = list(
             db.session.execute(
@@ -165,16 +165,15 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
                     break
         return unique_items
 
-    else:
-        query = (
-            select(Item)
-            .join(User, Item.owner_id == User.id)
-            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-            .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
-            .order_by(Item.updated_at.desc())
-            .limit(limit)
-        )
-        return list(db.session.execute(query).scalars().all())
+    query = (
+        select(Item)
+        .join(User, Item.owner_id == User.id)
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+        .order_by(Item.updated_at.desc())
+        .limit(limit)
+    )
+    return list(db.session.execute(query).scalars().all())
 
 
 def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
