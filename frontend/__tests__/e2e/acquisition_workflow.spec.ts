@@ -134,6 +134,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
             data: {
               id: 123,
               title: "Test Book",
+              is_owner: true,
               manifestation: {
                 id: 456,
                 title: "Test Book",
@@ -225,6 +226,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
               id: 789,
               title: "Dark Side of the Moon",
               status: "available",
+              is_owner: true,
               manifestation: {
                 id: 101,
                 title: "Dark Side of the Moon",
