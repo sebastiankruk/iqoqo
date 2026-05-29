@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -58,7 +58,7 @@ help:
 	@echo "  test           - Run all tests (backend and frontend)"
 	@echo "  test-backend   - Run backend tests (pytest)"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
-	@echo "  test-e2e       - Run end-to-end tests (Playwright, requires running app)"
+	@echo "  test-e2e       - Run end-to-end tests (Playwright). Loads .env.test automatically."
 	@echo "  build-frontend - Build Next.js production bundle"
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
@@ -218,27 +218,64 @@ pg-create-schemas:
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
 	fi
 
-test-e2e:
+# Start the Docker DB (and Redis) for E2E tests, then wait until pg_isready.
+# Also creates the dedicated test database (iqoqo_test) if it doesn't exist.
+test-e2e-db-up:
+	@echo "Ensuring Docker DB and Redis are running for E2E tests..."
+	@docker compose up -d db redis
+	@echo "Waiting for PostgreSQL to be ready..."
+	@for i in $$(seq 1 30); do \
+		if docker compose exec -T db pg_isready -U "$${POSTGRES_USER:-iqoqo}" -d "$${POSTGRES_DB:-iqoqo}" > /dev/null 2>&1; then \
+			echo "PostgreSQL is ready."; \
+			break; \
+		fi; \
+		if [ "$$i" = "30" ]; then echo "ERROR: PostgreSQL did not become ready in time."; exit 1; fi; \
+		echo "Waiting... ($$i/30)"; \
+		sleep 1; \
+	done
+	@echo "Ensuring test database exists..."
+	@docker compose exec -T db psql -U "$${POSTGRES_USER:-iqoqo}" -d postgres \
+		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" \
+		| grep -q 1 \
+		|| docker compose exec -T db createdb -U "$${POSTGRES_USER:-iqoqo}" iqoqo_test \
+		&& echo "Test database iqoqo_test ready." || true
+
+test-e2e: test-e2e-db-up
+	@# Load .env.test to provide DATABASE_URL_TEST (and other test settings) when
+	@# they are not already present in the shell environment. This file is safe to
+	@# commit because it contains only non-secret test credentials.
+	@if [ -z "$$DATABASE_URL_TEST" ] && [ -f .env.test ]; then \
+		echo "Loading test environment from .env.test..."; \
+		export $$(grep -v '^#' .env.test | grep -v '^$$' | xargs); \
+		$(MAKE) _test-e2e-run DATABASE_URL_TEST="$$DATABASE_URL_TEST" NO_RESET="$(NO_RESET)"; \
+	else \
+		$(MAKE) _test-e2e-run DATABASE_URL_TEST="$$DATABASE_URL_TEST" NO_RESET="$(NO_RESET)"; \
+	fi
+
+# Internal target — called by test-e2e after env vars are resolved.
+_test-e2e-run:
 	@if [ -z "$(NO_RESET)" ]; then \
-		if [ -z "$$DATABASE_URL_TEST" ]; then \
+		if [ -z "$(DATABASE_URL_TEST)" ]; then \
 			echo "ERROR: DATABASE_URL_TEST is not set."; \
 			echo "  E2E tests reset the database and MUST use a dedicated test DB."; \
-			echo "  Set DATABASE_URL_TEST=postgresql://... or use NO_RESET=1 to skip reset."; \
-			echo "  Example: DATABASE_URL_TEST=\$$DATABASE_URL make test-e2e  (uses the same DB, dangerous!)"; \
+			echo "  Either:"; \
+			echo "    1. Create .env.test with DATABASE_URL_TEST=postgresql://... (recommended)"; \
+			echo "    2. Set DATABASE_URL_TEST in your shell before running make test-e2e"; \
+			echo "    3. Use NO_RESET=1 to skip the DB reset (dangerous — stale data!)"; \
 			exit 1; \
 		fi; \
-		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$$DATABASE_URL_TEST)..."; \
-		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) pg-create-schemas; \
-		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-reset; \
-		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) init-auth; \
-		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-seed-e2e; \
-		echo "Killing old Flask server on port 5001 (if any) to ensure connection to test DB..."; \
-		lsof -ti tcp:5001 | xargs kill -9 2>/dev/null || true; \
+		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$(DATABASE_URL_TEST))..."; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) pg-create-schemas; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-reset; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_PASSWORD="$${ADMIN_PASSWORD:-admin}" $(MAKE) init-auth; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-seed-e2e; \
+		echo "Killing old Flask server on port 5000 (if any) to ensure clean start against test DB..."; \
+		lsof -ti tcp:5000 | xargs kill -9 2>/dev/null || true; \
 	else \
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi
 	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && $(NPX) playwright test
+	cd frontend && DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test
 
 
 test: test-backend test-frontend test-e2e
