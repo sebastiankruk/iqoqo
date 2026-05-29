@@ -158,8 +158,10 @@ describe("PrintQrCodeDialog", () => {
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
     
-    const downloadBtn = await screen.findByRole("button", { name: /Download PNG/i });
-    expect(downloadBtn).not.toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Download PNG/i })).not.toBeDisabled();
+    });
+    const downloadBtn = screen.getByRole("button", { name: /Download PNG/i });
     
     fireEvent.click(downloadBtn);
 
@@ -189,8 +191,10 @@ describe("PrintQrCodeDialog", () => {
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
     
-    const printBtn = await screen.findByRole("button", { name: /Print Label/i });
-    expect(printBtn).not.toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled();
+    });
+    const printBtn = screen.getByRole("button", { name: /Print Label/i });
 
     fireEvent.click(printBtn);
 
@@ -210,8 +214,10 @@ describe("PrintQrCodeDialog", () => {
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
     
-    const printBtn = await screen.findByRole("button", { name: /Print Label/i });
-    expect(printBtn).not.toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled();
+    });
+    const printBtn = screen.getByRole("button", { name: /Print Label/i });
 
     fireEvent.click(printBtn);
 
