@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe, History, Images, BookOpen } from "lucide-react";
+import { FileText, Globe, History, Images, BookOpen, MessageSquare } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useAppConfig, useWorkParts } from "@/lib/api/hooks";
 import Link from "next/link";
@@ -24,9 +24,11 @@ import Image from "next/image";
 import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
+import { FRBRFeedback } from "../social/frbr-feedback";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
+  { id: "reviews", label: "Reviews", icon: MessageSquare },
   { id: "gallery", label: "Gallery", icon: Images },
   { id: "history", label: "History", icon: History },
   { id: "federation", label: "Federation", icon: Globe },
@@ -189,6 +191,78 @@ function FederationTab() {
   );
 }
 
+/**
+ * Renders the reviews tab content for an item, showing all levels of reviews (Work, Expression, Manifestation, Item).
+ *
+ * @param props - Component props.
+ * @param props.item - The item to display reviews for.
+ * @returns The rendered reviews tab.
+ */
+function ReviewsTab({ item }: { item: Item }) {
+  const subtabs = [
+    { id: "work", label: "Conceptual Work", targetId: item.work?.id, description: "Story / artistic creation" },
+    {
+      id: "expression",
+      label: "Expression",
+      targetId: item.expression?.id,
+      description: "Realization (Language/Format)",
+    },
+    {
+      id: "manifestation",
+      label: "Edition",
+      targetId: item.manifestation_id,
+      description: "Printed publication (ISBN)",
+    },
+    { id: "item", label: "Personal Copy", targetId: item.id, description: "Your copy rating & notes" },
+  ] as const;
+
+  // Default to the first subtab that has a valid targetId (items may lack work/expression)
+  const firstAvailableLevel = (subtabs.find(s => !!s.targetId)?.id ?? "manifestation") as
+    | "work"
+    | "expression"
+    | "manifestation"
+    | "item";
+  const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation" | "item">(firstAvailableLevel);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 border-b pb-4">
+        {subtabs.map(({ id, label, targetId, description }) => {
+          if (!targetId) return null;
+          const isSelected = activeLevel === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveLevel(id)}
+              className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-2.5 text-left transition-all cursor-pointer ${
+                isSelected
+                  ? "border-primary bg-primary/5 text-primary shadow-sm"
+                  : "border-border/60 hover:bg-muted/30 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-xs font-bold leading-none">{label}</span>
+              <span className="text-[10px] text-muted-foreground/80 leading-none mt-1">{description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        {activeLevel === "work" && item.work && (
+          <FRBRFeedback level="work" targetId={item.work.id} title="Conceptual Work" />
+        )}
+        {activeLevel === "expression" && item.expression && (
+          <FRBRFeedback level="expression" targetId={item.expression.id} title="Expression" />
+        )}
+        {activeLevel === "manifestation" && (
+          <FRBRFeedback level="manifestation" targetId={item.manifestation_id} title="Manifestation Edition" />
+        )}
+        {activeLevel === "item" && <FRBRFeedback level="item" targetId={item.id} title="Personal Copy" />}
+      </div>
+    </div>
+  );
+}
+
 /* ── Tabs component ──────────────────────────────────────────────────────── */
 
 /**
@@ -225,6 +299,7 @@ export function ItemTabs({ item }: { item: Item }) {
       {/* Tab content */}
       <div>
         {active === "details" && <DetailsTab item={item} />}
+        {active === "reviews" && <ReviewsTab item={item} />}
         {active === "gallery" && <MultiScanGallery manifestationId={item.manifestation_id} />}
         {active === "history" && <ItemProvenanceTimeline itemId={item.id} />}
         {active === "federation" && <FederationTab />}

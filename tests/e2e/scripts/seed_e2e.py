@@ -23,9 +23,11 @@ from dotenv import load_dotenv
 # are correctly evaluated based on the DATABASE_URL.
 load_dotenv()
 
+from sqlalchemy import select  # noqa: E402
+
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
-from app.db.models import Expression, Item, Manifestation, Role, User, Work  # noqa: E402
+from app.db.models import Expression, Item, Manifestation, Role, SharedCollection, User, Work  # noqa: E402
 
 
 def seed_e2e_data():
@@ -57,6 +59,67 @@ def seed_e2e_data():
                 e2e_admin.roles.append(admin_role)  # type: ignore[attr-defined]
         db.session.commit()
 
+        # ── Dedicated E2E lender and borrower for lending lifecycle tests ──────
+        LENDER_EMAIL = "lender@iqoqo.local"
+        BORROWER_EMAIL = "borrower@iqoqo.local"
+        E2E_SHARED_PASSWORD = "SecurePassword123!"
+
+        lender = User.query.filter_by(email=LENDER_EMAIL).first()
+        if not lender:
+            lender = User(email=LENDER_EMAIL, display_name="Lender", is_active=True)
+            lender.set_password(E2E_SHARED_PASSWORD)
+            db.session.add(lender)
+        else:
+            lender.set_password(E2E_SHARED_PASSWORD)
+            lender.is_active = True
+
+        borrower = User.query.filter_by(email=BORROWER_EMAIL).first()
+        if not borrower:
+            borrower = User(email=BORROWER_EMAIL, display_name="Borrower", is_active=True)
+            borrower.set_password(E2E_SHARED_PASSWORD)
+            db.session.add(borrower)
+        else:
+            borrower.set_password(E2E_SHARED_PASSWORD)
+            borrower.is_active = True
+
+        # Give lender some items so the lending test has items to request.
+        # collection_status must be 'available' so the include_public API mode can surface them.
+        if Item.query.filter_by(owner_id=lender.id).count() == 0:
+            w_lend = Work(title="Lendable Book", meta={"authors": ["Lender Author"]})
+            db.session.add(w_lend)
+            db.session.flush()
+            e_lend = Expression(work_id=w_lend.id, content_type="text", language="en")
+            db.session.add(e_lend)
+            db.session.flush()
+            m_lend = Manifestation(expression_id=e_lend.id, isbn13="4444444444444")
+            db.session.add(m_lend)
+            db.session.flush()
+            for _ in range(3):
+                item = Item(
+                    owner_id=lender.id,
+                    manifestation_id=m_lend.id,
+                    is_hidden=False,
+                    status="available",
+                    collection_status="available",
+                )
+                db.session.add(item)
+        else:
+            # Always reset collection_status to available and clear stale loan state
+            for item in Item.query.filter_by(owner_id=lender.id).all():
+                item.collection_status = "available"
+                item.status = "available"
+                item.lent_to_user_id = None
+                db.session.add(item)
+
+        # Clean up stale loan requests from previous test runs
+        from app.db.lending import LoanRequest  # noqa: E402
+
+        lender_item_ids = [i.id for i in Item.query.filter_by(owner_id=lender.id).all()]
+        if lender_item_ids:
+            LoanRequest.query.filter(LoanRequest.item_id.in_(lender_item_ids)).delete(synchronize_session=False)
+
+        db.session.commit()
+
         # Create privateuser
         private_user = User.query.filter_by(public_username="privateuser").first()
         if not private_user:
@@ -82,6 +145,37 @@ def seed_e2e_data():
             db.session.add(empty_user)
         else:
             empty_user.visibility = "public"
+
+        db.session.commit()
+
+        # Create items for e2e-admin to populate the shared wishlist
+        if Item.query.filter_by(owner_id=e2e_admin.id).count() == 0:
+            w_shared = Work(title="Shared Wishlist Book")
+            db.session.add(w_shared)
+            db.session.flush()
+            e_shared = Expression(work_id=w_shared.id, content_type="text", language="en")
+            db.session.add(e_shared)
+            db.session.flush()
+            m_shared = Manifestation(expression_id=e_shared.id, isbn13="5555555555555")
+            db.session.add(m_shared)
+            db.session.flush()
+            shared_item = Item(
+                owner_id=e2e_admin.id, manifestation_id=m_shared.id, is_hidden=False, status="available", collection_status="wish_list"
+            )
+            db.session.add(shared_item)
+
+        # Create SharedCollection for the token-based wishlist test
+        SHARE_TOKEN = "wishlist-token-xyz-7890"
+        existing = SharedCollection.query.filter_by(share_token=SHARE_TOKEN).first()
+        if not existing:
+            shared_coll = SharedCollection(
+                user_id=e2e_admin.id,
+                share_token=SHARE_TOKEN,
+                name="E2E Wishlist",
+                description="Shared wishlist for E2E token-based sharing tests",
+                filters={"status": "wish_list"},
+            )
+            db.session.add(shared_coll)
 
         db.session.commit()
 
@@ -130,8 +224,6 @@ def seed_e2e_data():
             db.session.add(hidden_item)
 
         # Seed global Fiction/Atlantic novel that has no user-owned items
-        from sqlalchemy import select
-
         global_work_stmt = select(Work).filter(Work.title == "Global Fiction Novel")
         global_work = db.session.execute(global_work_stmt).scalar_one_or_none()
         if not global_work:
@@ -155,6 +247,40 @@ def seed_e2e_data():
                 cover_url="https://images.unsplash.com/photo-1543002588-bfa74002ed7e",
             )
             db.session.add(global_manif)
+            db.session.flush()
+
+        # ── Roadmap E2E test data ───────────────────────────────────────────────
+        # Seed two books that the roadmap E2E test searches for by title.
+        ddia_stmt = select(Work).filter(Work.title == "Designing Data-Intensive Applications")
+        ddia_work = db.session.execute(ddia_stmt).scalar_one_or_none()
+        if not ddia_work:
+            ddia_work = Work(
+                title="Designing Data-Intensive Applications",
+                meta={"authors": ["Martin Kleppmann"]},
+            )
+            db.session.add(ddia_work)
+            db.session.flush()
+            ddia_expr = Expression(work_id=ddia_work.id, content_type="text", language="en")
+            db.session.add(ddia_expr)
+            db.session.flush()
+            ddia_manif = Manifestation(expression_id=ddia_expr.id, isbn13="9781491903629")
+            db.session.add(ddia_manif)
+            db.session.flush()
+
+        dist_sys_stmt = select(Work).filter(Work.title == "Distributed Systems: Principles and Paradigms")
+        dist_sys_work = db.session.execute(dist_sys_stmt).scalar_one_or_none()
+        if not dist_sys_work:
+            dist_sys_work = Work(
+                title="Distributed Systems: Principles and Paradigms",
+                meta={"authors": ["Andrew S. Tanenbaum", "Maarten Van Steen"]},
+            )
+            db.session.add(dist_sys_work)
+            db.session.flush()
+            dist_sys_expr = Expression(work_id=dist_sys_work.id, content_type="text", language="en")
+            db.session.add(dist_sys_expr)
+            db.session.flush()
+            dist_sys_manif = Manifestation(expression_id=dist_sys_expr.id, isbn13="9780132392273")
+            db.session.add(dist_sys_manif)
             db.session.flush()
 
         db.session.commit()

@@ -30,7 +30,7 @@ interface MobileFilterDrawerProps {
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
   disableStatus?: boolean;
-  viewMode?: "items" | "manifestations" | "works" | "expressions";
+  viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
   isCurator?: boolean;
   missingCover?: boolean;

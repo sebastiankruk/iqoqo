@@ -17,7 +17,7 @@
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { Library, Share2 } from "lucide-react";
+import { Library, Share2, Rss } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { CollectionGrid } from "@/components/collection/collection-grid";
@@ -61,6 +61,13 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
     title: `${collection.collection_name} - Shared by ${collection.author} - iqoqo`,
     description:
       collection.collection_description || `A shared collection on iqoqo with ${collection.items.length} items.`,
+    alternates: {
+      types: {
+        "application/rss+xml": [
+          { url: `/api/public/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` },
+        ],
+      },
+    },
   };
 }
 
@@ -111,6 +118,16 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
                 title={collection.collection_name}
                 text={`Check out this shared collection by ${collection.author} on iqoqo!`}
               />
+              <a
+                href={`/api/public/share/${token}/feed.xml`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground shadow-sm transition-all"
+                title="Subscribe to collection RSS feed"
+              >
+                <Rss className="h-4 w-4 text-orange-500" />
+                <span>RSS Feed</span>
+              </a>
             </div>
           </div>
         </div>

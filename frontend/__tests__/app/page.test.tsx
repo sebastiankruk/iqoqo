@@ -13,9 +13,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import fs from "fs";
+import path from "path";
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import DashboardPage from "@/app/page";
 import * as hooks from "@/lib/api/hooks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -92,5 +94,38 @@ describe("Landing / Dashboard page", () => {
     renderWithQueryClient(<DashboardPage />);
 
     expect(screen.getByText("Welcome back, testuser")).toBeInTheDocument();
+  });
+});
+
+describe("Dashboard RSS Feed Integration", () => {
+  it("should expose correct RSS alternate discovery links in the layout metadata", () => {
+    const layoutPath = path.resolve(__dirname, "../../app/layout.tsx");
+    const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+    expect(layoutContent).toContain('url: "/api/public/feed.xml"');
+    expect(layoutContent).toContain('title: "iqoqo Fresh Arrivals Feed"');
+    expect(layoutContent).toContain('"application/rss+xml"');
+  });
+
+  it("should render the RSS button next to Fresh Arrivals header pointing to the global feed", () => {
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: null, isLoading: false } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useGlobalStats").mockReturnValue({
+      data: { works: 10, manifestations: 20, items: 30, users: 5 },
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useGlobalStats>);
+    vi.spyOn(hooks, "useRecentManifestations").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useRecentManifestations
+    >);
+
+    renderWithQueryClient(<DashboardPage />);
+
+    const heading = screen.getByRole("heading", { name: /Fresh Arrivals/i });
+    expect(heading).toBeInTheDocument();
+
+    const rssLink = screen.getByTitle("Subscribe to Fresh Arrivals RSS feed");
+    expect(rssLink).toBeInTheDocument();
+    expect(rssLink.getAttribute("href")).toBe("/api/public/feed.xml");
+    expect(rssLink.getAttribute("target")).toBe("_blank");
   });
 });

@@ -109,6 +109,10 @@ class Work(db.Model):  # type: ignore[name-defined]
     # Relationships
     expressions = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("WorkContribution", backref="work", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.work_id", backref="work", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship("SocialNote", foreign_keys="SocialNote.work_id", backref="work", lazy="dynamic", cascade="all, delete-orphan")
     parts = db.relationship(
         "WorkPart",
         foreign_keys="WorkPart.container_work_id",
@@ -144,6 +148,12 @@ class Expression(db.Model):  # type: ignore[name-defined]
     # Relationships
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("ExpressionContribution", backref="expression", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.expression_id", backref="expression", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship(
+        "SocialNote", foreign_keys="SocialNote.expression_id", backref="expression", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class Manifestation(db.Model):  # type: ignore[name-defined]
@@ -229,6 +239,20 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     items = db.relationship("Item", backref="manifestation", lazy=True, cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback",
+        foreign_keys="SocialFeedback.manifestation_id",
+        backref="manifestation",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    notes = db.relationship(
+        "SocialNote",
+        foreign_keys="SocialNote.manifestation_id",
+        backref="manifestation",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -262,6 +286,37 @@ class Item(db.Model):  # type: ignore[name-defined]
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship("SocialNote", foreign_keys="SocialNote.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan")
+
+
+class UserWorkIntent(db.Model):  # type: ignore[name-defined]
+    """
+    User intent toward a Conceptual Work (F1).
+    E.g., "want_to_read" or other progress intent.
+    """
+
+    __tablename__ = "user_work_intents"
+    __table_args__: tuple = (
+        (
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),)
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = db.Column(db.String(50), default="want_to_read", nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    work = db.relationship("Work", backref=db.backref("intents", cascade="all, delete-orphan", lazy="dynamic"))
+    user = db.relationship("User", backref=db.backref("work_intents", cascade="all, delete-orphan", lazy="dynamic"))
 
 
 class ItemStatusLog(db.Model):  # type: ignore[name-defined]

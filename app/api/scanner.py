@@ -19,6 +19,7 @@ import copy
 import hashlib
 import io
 import re
+import uuid
 
 from flask import Response, current_app, g, jsonify, request
 from PIL import Image
@@ -32,7 +33,7 @@ from app.core.ingest import IngestService
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, db
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, UserWorkIntent, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
@@ -311,114 +312,156 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     return jsonify({"success": True, "data": meta, "error": None}), 200
 
 
-@api_bp.route("/scan", methods=["POST"])
-@require_auth
-@require_permission(PermissionName.WRITE_ITEM)
-@limiter.limit("20 per minute")
-def scan_barcode() -> Response | tuple[Response, int]:
-    """Scan a barcode and add the corresponding item to the authenticated user's collection."""
-    payload_json = request.get_json(silent=True)
-    error_response = None
-    payload = None
-    if not isinstance(payload_json, dict):
-        error_response = invalid_json_payload_response()
-    else:
-        try:
-            payload = ScanBarcodeSchema(**payload_json)
-        except (ValidationError, TypeError) as e:
-            error_response = (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Invalid payload",
-                        "details": str(e) if isinstance(e, TypeError) else e.errors(),
-                    }
-                ),
-                400,
-            )
-
-    if error_response or payload is None:
-        return error_response or (jsonify({"error": "Invalid payload"}), 400)
-
-    barcode: str | None = payload.barcode
-    manifestation_id: int | None = payload.manifestation_id
-    format_hint: str | None = payload.format
-    collection_status: str | None = payload.collection_status
+def _validate_scan_request(payload: ScanBarcodeSchema) -> str | None:
+    """Validate barcode and collection status."""
+    barcode = payload.barcode
+    manifestation_id = payload.manifestation_id
+    collection_status = payload.collection_status
 
     from app.core.taxonomy import COLLECTION_STATUSES
 
-    # Normalize legacy 'wishlist' to canonical 'wish_list'
-    STATUS_ALIASES = {"wishlist": "wish_list"}
-    if collection_status in STATUS_ALIASES:  # pylint: disable=consider-using-get
-        collection_status = STATUS_ALIASES[collection_status]
-
+    if not barcode and not manifestation_id:
+        return "Barcode or Manifestation ID is required"
     if collection_status not in COLLECTION_STATUSES:
-        return (
+        return f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}"
+    return None
+
+
+def _parse_scan_payload(req) -> tuple[ScanBarcodeSchema | None, Response | tuple[Response, int] | None]:
+    """Parse JSON payload into ScanBarcodeSchema."""
+    payload_json = req.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return None, invalid_json_payload_response()
+
+    try:
+        payload = ScanBarcodeSchema(**payload_json)
+        # Normalize legacy 'wishlist' to canonical 'wish_list'
+        STATUS_ALIASES = {"wishlist": "wish_list"}
+        if payload.collection_status in STATUS_ALIASES:
+            payload.collection_status = STATUS_ALIASES[payload.collection_status]
+        return payload, None
+    except (ValidationError, TypeError) as e:
+        return None, (
             jsonify(
                 {
                     "success": False,
-                    "data": None,
-                    "error": f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}",
+                    "error": "Invalid payload",
+                    "details": str(e) if isinstance(e, TypeError) else e.errors(),
                 }
             ),
             400,
         )
 
-    if not barcode and not manifestation_id:
-        return jsonify({"success": False, "data": None, "error": "Barcode or Manifestation ID is required"}), 400
 
-    is_new_manifestation = False
-    manifestation = None
-    if manifestation_id:
-        manifestation = db.session.get(Manifestation, manifestation_id)
+def _parse_and_validate_scan(req) -> tuple[ScanBarcodeSchema | None, Response | tuple[Response, int] | None]:
+    """Consolidated helper to parse and validate scan request."""
+    payload, err = _parse_scan_payload(req)
+    if err:
+        return None, err
+    assert payload is not None
 
-    if not manifestation and barcode:
-        manifestation = _find_locally(barcode)
-        if not manifestation:
-            try:
-                from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+    validation_error = _validate_scan_request(payload)
+    if validation_error:
+        return None, (jsonify({"success": False, "data": None, "error": validation_error}), 400)
 
-                category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+    return payload, None
 
-                # Support pure numeric Discogs Release IDs
-                is_discogs_numeric = False
-                if barcode and barcode.isdigit() and len(barcode) <= 8:
-                    is_discogs_numeric = True
 
-                if is_discogs_numeric and barcode and (category_hint == "music" or format_hint is None):
-                    meta = fetch_discogs_by_id(barcode)
-                    if meta:
-                        manifestation = IngestService.ingest_from_meta(meta)
+def _scan_to_wishlist(
+    barcode: str | None,
+    manifestation: Manifestation,
+    format_hint: str | None,
+    is_new_manifestation: bool,
+    default_progress: str,
+    user_id: uuid.UUID | None,
+) -> tuple[Response, int]:
+    """Helper to save intent to wishlist."""
+    work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
+    if not work:
+        return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
 
-                if not manifestation and barcode:
-                    manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
-                is_new_manifestation = True
+    # Check if intent already exists
+    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
+    if not intent:
+        intent = UserWorkIntent(
+            user_id=user_id,
+            work_id=work.id,
+            status=default_progress,
+        )
+        db.session.add(intent)
+        db.session.flush()
 
-            except (ValueError, ConnectionError, Exception) as e:  # pylint: disable=broad-exception-caught
-                _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
-                err_msg = str(e)
-                code = 404
-                if isinstance(e, ConnectionError):
-                    code = 503
-                elif isinstance(e, ValueError):
-                    code = 400
-                return jsonify({"success": False, "data": None, "error": f"Resolution failed: {err_msg}"}), code
+    # For name-based lookups (no barcode), store the hash_id in meta
+    if barcode:
+        is_barcode_like = bool(re.match(r"^[\dX]{8,14}$", barcode.strip().upper()))
+        if not is_barcode_like and manifestation.meta and not manifestation.meta.get("hash_id"):
+            computed_hash = hashlib.sha256(barcode.strip().lower().encode()).hexdigest()[:16]
+            updated_meta = dict(manifestation.meta)
+            updated_meta["hash_id"] = computed_hash
+            manifestation.meta = updated_meta
 
-    if not manifestation:
-        _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
-        return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
+    db.session.commit()
 
-    from app.db.core import CATEGORY_PROGRESS_STATUSES
+    # Success: record telemetry with manifestation_id
+    _record_scan_telemetry(
+        barcode or manifestation.title,
+        format_hint,
+        provider=format_hint or "ingest",
+        status="success",
+        manifestation_id=manifestation.id,
+    )
 
-    content_type = manifestation.expression.content_type if manifestation.expression else "text"
-    default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "message": "Item successfully added to your collection",
+                    "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
+                    "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
+                    "item_id": -intent.id,
+                    "manifestation_id": manifestation.id,
+                    "title": (
+                        manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
+                    ),
+                    "author": (
+                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
+                        if manifestation.meta
+                        else manifestation.author
+                    ),
+                    "cover_url": (
+                        manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
+                        if manifestation.meta
+                        else manifestation.cover_url
+                    ),
+                    "is_new_manifestation": is_new_manifestation,
+                },
+                "error": None,
+            }
+        ),
+        201,
+    )
 
+
+def _scan_to_library(
+    barcode: str | None,
+    manifestation: Manifestation,
+    format_hint: str | None,
+    collection_status: str,
+    payload: ScanBarcodeSchema,
+    is_new_manifestation: bool,
+    default_progress: str,
+    user_id: uuid.UUID | None,
+) -> tuple[Response, int]:
+    """Helper to save physical item to library."""
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
         manifestation_id=manifestation.id,
-        owner_id=getattr(g, "user_id", None),
+        owner_id=user_id,
         status=default_progress,
         collection_status=collection_status,
+        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+        lent_to_name=payload.lent_to_name,
     )
     db.session.add(new_item)
 
@@ -467,6 +510,82 @@ def scan_barcode() -> Response | tuple[Response, int]:
             }
         ),
         201,
+    )
+
+
+@api_bp.route("/scan", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+@limiter.limit("20 per minute")
+def scan_barcode() -> Response | tuple[Response, int]:
+    """Scan a barcode and add the corresponding item to the authenticated user's collection."""
+    payload, err = _parse_and_validate_scan(request)
+    if err:
+        return err
+    assert payload is not None
+
+    barcode: str | None = payload.barcode
+    manifestation_id: int | None = payload.manifestation_id
+    format_hint: str | None = payload.format
+    collection_status: str | None = payload.collection_status
+    assert collection_status is not None
+
+    is_new_manifestation = False
+    manifestation = None
+    if manifestation_id:
+        manifestation = db.session.get(Manifestation, manifestation_id)
+
+    if not manifestation and barcode:
+        manifestation = _find_locally(barcode)
+        if not manifestation:
+            try:
+                from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+                category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+
+                # Support pure numeric Discogs Release IDs
+                is_discogs_numeric = False
+                if barcode and barcode.isdigit() and len(barcode) <= 8:
+                    is_discogs_numeric = True
+
+                if is_discogs_numeric and barcode and (category_hint == "music" or format_hint is None):
+                    meta = fetch_discogs_by_id(barcode)
+                    if meta:
+                        manifestation = IngestService.ingest_from_meta(meta)
+
+                if not manifestation and barcode:
+                    manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
+                is_new_manifestation = True
+
+            except (ValueError, ConnectionError, Exception) as e:  # pylint: disable=broad-exception-caught
+                _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
+                err_msg = str(e)
+                code = 404
+                if isinstance(e, ConnectionError):
+                    code = 503
+                elif isinstance(e, ValueError):
+                    code = 400
+                return jsonify({"success": False, "data": None, "error": f"Resolution failed: {err_msg}"}), code
+
+    if not manifestation:
+        _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
+        return jsonify({"success": False, "data": None, "error": "Could not resolve barcode"}), 404
+
+    from app.db.core import CATEGORY_PROGRESS_STATUSES
+
+    content_type = manifestation.expression.content_type if manifestation.expression else "text"
+    default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
+
+    if collection_status == "lent":
+        if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
+    user_id = getattr(g, "user_id", None)
+    if collection_status == "wish_list":
+        return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
+
+    return _scan_to_library(
+        barcode, manifestation, format_hint, collection_status, payload, is_new_manifestation, default_progress, user_id
     )
 
 

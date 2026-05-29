@@ -32,6 +32,12 @@ describe("PermissionName Enum", () => {
     expect(PermissionName.EDIT_COVER).toBe("edit:cover");
   });
 
+  it("should have new LLM permissions", () => {
+    expect(PermissionName.LLM_GENERATE_CLOUD).toBe("llm_generate:cloud");
+    expect(PermissionName.LLM_GENERATE_COVER).toBe("llm_generate:cover");
+    expect(PermissionName.LLM_GENERATE_METADATA).toBe("llm_generate:metadata");
+  });
+
   it("should not contain legacy content permissions", () => {
     const values = Object.values(PermissionName) as string[];
     expect(values).not.toContain("read:content");

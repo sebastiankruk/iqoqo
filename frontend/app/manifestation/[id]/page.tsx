@@ -15,6 +15,7 @@
 //
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, Loader2, Disc } from "lucide-react";
@@ -23,6 +24,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import type { CatalogEntry } from "@/types/frbr";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
@@ -31,6 +33,7 @@ import { CameraCapture } from "@/components/scanner/camera-capture";
 import { ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { FRBRFeedback } from "@/components/social/frbr-feedback";
 
 /**
  * Page displaying a single manifestation with metadata and add-to-collection action.
@@ -98,8 +101,34 @@ export default function ManifestationPage() {
 
   const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
+  const isBoardGame = manifestation.content_type === "board_game";
+  const schemaType = isBoardGame ? "Game" : "Book";
+
+  const jsonLdData = {
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    name: manifestation.title || "Untitled Work",
+    author: {
+      "@type": "Person",
+      name: manifestation.authors?.[0] || "Unknown Author",
+    },
+    isbn: manifestation.isbn13,
+    identifier: manifestation.id,
+    publisher: manifestation.meta?.Publisher,
+    datePublished: resolved_year,
+  };
+
+  const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div
+      className="min-h-screen flex flex-col bg-background"
+      vocab="http://iflastandards.info/ns/frbr/frbrer/"
+      prefix="sioc: http://rdfs.org/sioc/ns# schema: https://schema.org/"
+      typeof="Manifestation"
+      resource={`#manifestation-${manifestation.id}`}
+    >
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }} />
       <Navbar />
       <div className="flex-1 mx-auto w-full max-w-5xl px-6 py-12">
         <div className="flex flex-col md:flex-row gap-8">
@@ -178,13 +207,17 @@ export default function ManifestationPage() {
                   {badgeLabel}
                 </Badge>
               </div>
-              <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground">
+              <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground" property="schema:name">
                 {manifestation.title || "Untitled Work"}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium">
+              <div
+                className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
+                property="schema:author"
+                typeof="Person"
+              >
                 {(manifestation.authors ?? []).length > 0 ? (
                   (manifestation.authors ?? []).map((author, idx, arr) => (
-                    <span key={author}>
+                    <span key={author} property="schema:name">
                       <span
                         role="button"
                         tabIndex={0}
@@ -210,7 +243,23 @@ export default function ManifestationPage() {
                 {manifestation.isbn13 && (
                   <div>
                     <dt className="text-muted-foreground">ISBN-13</dt>
-                    <dd className="font-medium text-foreground">{String(manifestation.isbn13)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:isbn">
+                      {String(manifestation.isbn13)}
+                    </dd>
+                  </div>
+                )}
+                {manifestation.work_id && (
+                  <div>
+                    <dt className="text-muted-foreground">FRBR Work ID</dt>
+                    <dd className="font-medium text-foreground">
+                      <a
+                        rel="embodimentOf"
+                        href={`/api/public/works/${manifestation.work_id}`}
+                        className="text-primary hover:underline font-mono text-xs"
+                      >
+                        {String(manifestation.work_id)}
+                      </a>
+                    </dd>
                   </div>
                 )}
                 {!!(
@@ -241,6 +290,24 @@ export default function ManifestationPage() {
                 )}
               </dl>
             </div>
+
+            {tags.length > 0 && (
+              <div className="pt-6 border-t border-border space-y-3">
+                <h2 className="text-lg font-semibold">Indexed Tags</h2>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag: string) => (
+                    <span
+                      key={tag}
+                      property="sioc:topic"
+                      content={tag}
+                      className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10 dark:bg-orange-400/10 dark:text-orange-400 dark:ring-orange-400/20"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(manifestation.container_work_id || parts.length > 0) && parts.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
@@ -365,8 +432,73 @@ export default function ManifestationPage() {
             )}
           </div>
         </div>
+
+        {/* Reviews Section */}
+        <ManifestationReviews manifestation={manifestation} />
       </div>
       <Footer />
+    </div>
+  );
+}
+
+/**
+ * Renders the reviews section for a manifestation, supporting Work, Expression, and Manifestation levels.
+ *
+ * @param props - Component props.
+ * @param props.manifestation - The catalog entry to display reviews for.
+ * @returns The rendered manifestation reviews tab.
+ */
+function ManifestationReviews({ manifestation }: { manifestation: CatalogEntry }) {
+  const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation">("work");
+
+  const subtabs = [
+    { id: "work", label: "Conceptual Work", targetId: manifestation.work_id, description: "Story / artistic creation" },
+    {
+      id: "expression",
+      label: "Expression",
+      targetId: manifestation.expression_id,
+      description: "Realization (Language/Format)",
+    },
+    { id: "manifestation", label: "Edition", targetId: manifestation.id, description: "Printed publication (ISBN)" },
+  ] as const;
+
+  return (
+    <div className="mt-12 border-t pt-10 space-y-6">
+      <h3 className="font-serif text-2xl font-bold text-foreground">Reviews & Feedback</h3>
+      <div className="overflow-hidden rounded-xl bg-card border p-6 shadow-sm">
+        <div className="flex flex-wrap gap-2 border-b pb-4 mb-6">
+          {subtabs.map(({ id, label, targetId, description }) => {
+            if (!targetId) return null;
+            const isSelected = activeLevel === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveLevel(id)}
+                className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-2.5 text-left transition-all cursor-pointer ${
+                  isSelected
+                    ? "border-primary bg-primary/5 text-primary shadow-sm"
+                    : "border-border/60 hover:bg-muted/30 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="text-xs font-bold leading-none">{label}</span>
+                <span className="text-[10px] text-muted-foreground/80 leading-none mt-1">{description}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div>
+          {activeLevel === "work" && manifestation.work_id && (
+            <FRBRFeedback level="work" targetId={manifestation.work_id} title="Conceptual Work" />
+          )}
+          {activeLevel === "expression" && manifestation.expression_id && (
+            <FRBRFeedback level="expression" targetId={manifestation.expression_id} title="Expression" />
+          )}
+          {activeLevel === "manifestation" && (
+            <FRBRFeedback level="manifestation" targetId={manifestation.id} title="Manifestation Edition" />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

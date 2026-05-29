@@ -67,6 +67,7 @@ function ItemDetail(props: { item: Item }) {
             {/* Main content – 70% */}
             <div className="flex w-full flex-col gap-6 p-6 lg:w-[70%] lg:p-8">
               <ItemHeader item={item} />
+
               <ItemTabs item={item} />
 
               {/* Danger zone */}

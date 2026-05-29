@@ -38,10 +38,21 @@ def app():
     """Create and configure a new app instance for each test."""
     from app.db.models import db
 
+    db_uri = os.environ.get("DATABASE_URL", "sqlite:///:memory:")
+    engine_opts = {}
+    if os.environ.get("ENABLE_FTS_TESTS") != "true":
+        db_uri = "sqlite:///:memory:"
+    else:
+        engine_opts = {
+            "pool_size": 5,
+            "max_overflow": 10,
+        }
+
     app = create_app(
         config_override={
             "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": db_uri,
+            "SQLALCHEMY_ENGINE_OPTIONS": engine_opts,
             "RATELIMIT_ENABLED": False,
         }
     )

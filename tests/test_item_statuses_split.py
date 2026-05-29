@@ -94,7 +94,9 @@ def test_update_item_collection_status(client, sample_item, normal_user_headers)
     """Verify updating only collection status."""
     item_id = sample_item.id
 
-    response = client.put(f"/api/items/{item_id}", json={"collection_status": "lent"}, headers=normal_user_headers)
+    response = client.put(
+        f"/api/items/{item_id}", json={"collection_status": "lent", "lent_to_name": "Caveman friend"}, headers=normal_user_headers
+    )
     assert response.status_code == 200
 
     with client.application.app_context():

@@ -104,6 +104,7 @@ class Config:
     BACKUP_CRON_MINUTE = os.environ.get("BACKUP_CRON_MINUTE", "0")
     BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE_DIR, "exports"))
     SCHEDULER_AUTOSTART = os.environ.get("SCHEDULER_AUTOSTART", "false").lower() in {"true", "1", "yes"}
+    RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "true").lower() in {"true", "1", "yes"}
 
     # Base URL for static cover image serving mapping
     COVERS_BASE_URL = os.environ.get("COVERS_BASE_URL", "/static/covers")

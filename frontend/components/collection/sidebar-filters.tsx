@@ -39,7 +39,7 @@ interface SidebarFiltersProps {
   categoryCounts?: Record<string, number>;
   disableStatus?: boolean;
   /** Current view mode, used to contextually hide irrelevant filters */
-  viewMode?: "items" | "manifestations" | "works" | "expressions";
+  viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
   isCurator?: boolean;
   missingCover?: boolean;

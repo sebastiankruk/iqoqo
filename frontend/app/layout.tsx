@@ -43,6 +43,11 @@ export const metadata: Metadata = {
     icon: "/icon.svg",
     apple: "/apple-icon",
   },
+  alternates: {
+    types: {
+      "application/rss+xml": [{ url: "/api/public/feed.xml", title: "iqoqo Fresh Arrivals Feed" }],
+    },
+  },
 };
 
 export const viewport: Viewport = {

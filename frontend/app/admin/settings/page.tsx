@@ -16,7 +16,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -103,9 +103,17 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps): 
  */
 function SettingsContent(): React.JSX.Element {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: profile, isLoading } = useProfile();
   const queryClient = useQueryClient();
   const [internalTab, setInternalTab] = useState<string | null>(null);
+
+  // Redirect to login if user is unauthenticated
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      router.push("/login");
+    }
+  }, [profile, isLoading, router]);
   const [displayName, setDisplayName] = useState<string>("");
   const [publicUsername, setPublicUsername] = useState<string>("");
   const [bio, setBio] = useState<string>("");

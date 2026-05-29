@@ -204,6 +204,8 @@ export function ItemCard({
     return (
       <Link
         href={targetHref}
+        data-testid="item-card"
+        data-item-id={itemId}
         className={`group overflow-hidden rounded-xl bg-card shadow-sm transition-all hover:shadow-md ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""}`}
       >
         <div className="flex h-full p-5 gap-4 items-center">
@@ -288,6 +290,8 @@ export function ItemCard({
   return (
     <Link
       href={targetHref}
+      data-testid="item-card"
+      data-item-id={itemId}
       className={`group block transition-all ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""} ${
         isSelected ? "ring-2 ring-primary rounded-lg" : ""
       }`}

@@ -17,13 +17,14 @@
 
 import * as React from "react";
 import { ChangeEvent } from "react";
-import { Pencil, /* QrCode, */ BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
+import { Pencil, QrCode, BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
+import { useUpdateItem, useProfile, useUserSearch, useLoanStatus, useRequestLoan } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
+import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -88,11 +89,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const permissions = profile?.permissions ?? [];
   const hasUploadPermission = permissions.includes(PermissionName.UPLOAD_COVER);
   const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
-  const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const isOwner = !!item.is_owner;
-  const canModifyItem = isOwner || hasUpdateItemPermission;
-
+  const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
+  const isAdmin = !!profile?.roles?.includes("admin");
+  const canModifyItem = isOwner || isAdmin;
   // Media type detection
   const format =
     (item.manifestation_meta?.["format"] as string | undefined) ??
@@ -123,12 +123,30 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   };
 
   const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);
+  const [isQrOpen, setIsQrOpen] = React.useState(false);
   const [borrowerName, setBorrowerName] = React.useState(item.lent_to_name || "");
   const [borrowerId, setBorrowerId] = React.useState<string | undefined>(item.lent_to_user_id || undefined);
 
   // Hook for user search, enabled when borrowerName is typed and doesn't exactly match the selected ID
   const [searchFocused, setSearchFocused] = React.useState(false);
   const { data: searchResults, isLoading: isSearching } = useUserSearch(borrowerName, searchFocused);
+
+  const { data: loanStatus } = useLoanStatus(isOwner ? null : item.id);
+  const requestLoan = useRequestLoan();
+
+  const handleRequestLoan = () => {
+    requestLoan.mutate(
+      { itemId: item.id },
+      {
+        onSuccess: () => {
+          toast.success("Loan request submitted");
+        },
+        onError: e => {
+          toast.error((e as Error).message);
+        },
+      }
+    );
+  };
 
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
@@ -194,29 +212,6 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       }
     );
   };
-
-  /**
-   * Handles generating and opening the QR code for the item.
-   * TODO: Implementation for QR code printing is not ready yet.
-   */
-  /*
-  const handleQrCode = async () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-    const url = `${apiBase}/qrcode/${item.id}`;
-    try {
-      const response = await fetch(url, { method: "HEAD" });
-
-      if (!response.ok) {
-        toast.error("Unable to generate QR code. Please try again later.");
-        return;
-      }
-
-      window.open(url, "_blank");
-    } catch {
-      toast.error("Failed to contact QR code service. Please check your connection and try again.");
-    }
-  };
-  */
 
   return (
     <div className="flex flex-col items-center gap-5">
@@ -375,6 +370,52 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             <div className="w-full rounded-lg bg-primary/10 px-4 py-2 text-xs font-semibold text-center text-primary border border-primary/20">
               {progressStatusInfo.label || "Unknown"}
             </div>
+
+            {/* Lending Actions for borrower/public user */}
+            {!isOwner && (
+              <div className="mt-4 border-t border-border/40 pt-4 flex flex-col gap-2">
+                {item.collection_status === "lent" && item.lent_to_user_id === profile?.id ? (
+                  <span
+                    data-testid="loan-status-badge"
+                    className="w-full rounded-lg bg-blue-50 text-blue-700 ring-blue-200 px-4 py-2 text-xs font-semibold text-center border border-blue-100"
+                  >
+                    On Loan
+                  </span>
+                ) : loanStatus ? (
+                  loanStatus.status === "pending" ? (
+                    <span
+                      data-testid="loan-status-badge"
+                      className="w-full rounded-lg bg-amber-50 text-amber-700 ring-amber-200 px-4 py-2 text-xs font-semibold text-center border border-amber-100"
+                    >
+                      Pending Approval
+                    </span>
+                  ) : loanStatus.status === "approved" ? (
+                    <span
+                      data-testid="loan-status-badge"
+                      className="w-full rounded-lg bg-blue-50 text-blue-700 ring-blue-200 px-4 py-2 text-xs font-semibold text-center border border-blue-100"
+                    >
+                      On Loan
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleRequestLoan}
+                      disabled={requestLoan.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                    >
+                      {requestLoan.isPending ? "Requesting..." : "Request Loan"}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    onClick={handleRequestLoan}
+                    disabled={requestLoan.isPending}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                  >
+                    {requestLoan.isPending ? "Requesting..." : "Request Loan"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -407,16 +448,16 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
           </button>
         )}
-        {/* Print QR Code - Hidden until implementation is ready */}
-        {/*
-        <button
-          onClick={handleQrCode}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-        >
-          <QrCode className="h-4 w-4" />
-          Print QR Code
-        </button>
-        */}
+        {/* Print QR Code */}
+        {canModifyItem && (
+          <button
+            onClick={() => setIsQrOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          >
+            <QrCode className="h-4 w-4" />
+            Print QR Code
+          </button>
+        )}
 
         {canModifyItem && hasUploadPermission && (
           <CameraCapture
@@ -542,6 +583,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PrintQrCodeDialog isOpen={isQrOpen} onOpenChange={setIsQrOpen} item={item} />
     </div>
   );
 }

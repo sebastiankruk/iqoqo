@@ -25,6 +25,7 @@ backups/*
 .env
 .env.*
 !.env.example
+!.env.test
 
 #npm
 node_modules/

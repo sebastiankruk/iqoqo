@@ -31,7 +31,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: "html",
+  reporter: [["html", { open: "never" }]],
   // Global per-test timeout: 60s in CI, default in dev
   timeout: process.env.CI ? 60000 : 30000,
   use: {
@@ -79,12 +79,17 @@ export default defineConfig({
       timeout: 120000,
     },
     {
+      // When DATABASE_URL_TEST is set (i.e. running make test-e2e), forward it
+      // as DATABASE_URL so Flask connects to the dedicated test database instead
+      // of the production/dev one. reuseExistingServer is disabled in this case
+      // to ensure the server always starts fresh against the test DB.
       command:
-        "PYTHONUNBUFFERED=1 ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=. " +
+        (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
+        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5000",
       url: "http://127.0.0.1:5000/api/health",
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.DATABASE_URL_TEST,
       timeout: 60000,
       cwd: "..",
     },

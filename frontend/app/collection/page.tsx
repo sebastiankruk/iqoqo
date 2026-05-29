@@ -46,6 +46,7 @@ import {
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
+import { RoadmapView } from "@/components/collection/roadmap-view";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -117,12 +118,15 @@ function CollectionContent() {
     | "items"
     | "manifestations"
     | "works"
-    | "expressions";
+    | "expressions"
+    | "roadmap";
   const initialQuery = searchParams?.get("q") ?? "";
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";
 
-  const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions">(initialViewMode);
+  const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
+    initialViewMode
+  );
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
   const [sortBy, setSortBy] = useState(initialSort);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -167,7 +171,10 @@ function CollectionContent() {
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
     setPrevIsLoggedIn(isLoggedIn);
-    if (!isLoggedIn && (viewMode === "items" || viewMode === "works" || viewMode === "expressions")) {
+    if (
+      !isLoggedIn &&
+      (viewMode === "items" || viewMode === "works" || viewMode === "expressions" || viewMode === "roadmap")
+    ) {
       setViewMode("manifestations");
     }
   }
@@ -321,13 +328,15 @@ function CollectionContent() {
   const { data: statsData } = useStats();
 
   const isLoading =
-    viewMode === "items"
-      ? itemsLoading
-      : viewMode === "manifestations"
-        ? manifestationsLoading
-        : viewMode === "works"
-          ? worksLoading
-          : exprsLoading;
+    viewMode === "roadmap"
+      ? false
+      : viewMode === "items"
+        ? itemsLoading
+        : viewMode === "manifestations"
+          ? manifestationsLoading
+          : viewMode === "works"
+            ? worksLoading
+            : exprsLoading;
 
   const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
     if (viewMode === "items") {
@@ -550,6 +559,21 @@ function CollectionContent() {
                     }`}
                   >
                     <Layers className="h-4 w-4" /> Works
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={viewMode === "roadmap"}
+                    aria-label="Roadmaps"
+                    onClick={() => {
+                      setViewMode("roadmap");
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "roadmap"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" /> Roadmaps
                   </button>
                 </div>
 
@@ -876,6 +900,8 @@ function CollectionContent() {
                   onLoadMore={() => hasMoreExprs && fetchNextExprs()}
                 />
               </div>
+            ) : viewMode === "roadmap" ? (
+              <RoadmapView />
             ) : (
               <CollectionGrid
                 items={filteredItems}

@@ -15,6 +15,9 @@
 #
 import logging
 
+from dotenv import load_dotenv
+
+load_dotenv()
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -57,6 +60,8 @@ def _coerce_list(value, default=None):
 
 
 def create_app(config_class=Config, config_override=None):
+    load_dotenv()
+
     # Configure logging early
     log_level_name = (
         config_override.get("LOG_LEVEL")
@@ -141,9 +146,14 @@ def create_app(config_class=Config, config_override=None):
     # Flask-Limiter will use storage_uri.
     limiter.init_app(app)
 
+    from app.api.lending import lending_bp
+    from app.api.roadmap import roadmap_bp
+
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(roadmap_bp)
+    app.register_blueprint(lending_bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):  # pylint: disable=unused-argument

@@ -68,7 +68,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        config: {} as any,
       });
 
       const result = await updateFrbrEntity("work", 1, mockPayload);
@@ -84,7 +84,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        config: {} as any,
       });
 
       const result = await updateFrbrEntity("expression", 2, mockPayload);
@@ -100,7 +100,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        config: {} as any,
       });
 
       const result = await updateFrbrEntity("manifestation", 3, mockPayload);
@@ -116,7 +116,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 200,
         statusText: "OK",
         headers: {},
-        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        config: {} as any,
       });
 
       const result = await updateFrbrEntity("item", 10, mockPayload);
@@ -131,7 +131,7 @@ describe("Admin API - FRBR endpoints", () => {
         status: 400,
         statusText: "Bad Request",
         headers: {},
-        config: {} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        config: {} as any,
       });
 
       await expect(updateFrbrEntity("expression", 2, {})).rejects.toThrow("Validation failed");

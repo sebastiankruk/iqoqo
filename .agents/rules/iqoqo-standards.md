@@ -9,7 +9,7 @@ Talk like caveman
 
 ## Decision Making & Feature Preservation
 
-- **Plan Over Comments:** The project plan files in `.context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
+- **Plan Over Comments:** The project plan files in `.context/notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
 - **Preserve Docs:** When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip, replace, or remove documentation that explains function behavior.
 
 ## General Architectural Principles

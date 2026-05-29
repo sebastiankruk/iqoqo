@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronRight, BookOpen, Loader2 } from "lucide-react";
+import { ChevronRight, BookOpen, Loader2, Rss } from "lucide-react";
 import { useRecentManifestations } from "@/lib/api/hooks";
 import { getCoverUrl } from "@/lib/utils";
 
@@ -49,6 +49,16 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
           <span className="hidden rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:inline-block">
             Latest
           </span>
+          <Link
+            href="/api/public/feed.xml"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            title="Subscribe to Fresh Arrivals RSS feed"
+          >
+            <Rss className="h-4 w-4" />
+            <span className="sr-only">RSS</span>
+          </Link>
         </div>
         {!publicMode && (
           <Link

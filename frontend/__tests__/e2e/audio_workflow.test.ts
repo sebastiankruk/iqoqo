@@ -58,6 +58,7 @@ test.describe("Audio Media Workflow", () => {
             status: "available",
             title: "Kind of Blue",
             authors: ["Miles Davis"],
+            is_owner: true,
             manifestation_meta: {
               format: "CD",
               label: "Columbia",

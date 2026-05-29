@@ -26,6 +26,7 @@ from . import (
     public,
     scanner,
     sharing,
+    social,
     system,
     taxonomies,
     works,
@@ -41,4 +42,4 @@ api_bp.register_blueprint(sharing.sharing_bp)
 # By simply importing these, Python runs the `@api_bp.route(...)` decorators
 # inside them, successfully hooking up the endpoints to the main API blueprint.
 # Note: These must remain imported to register routes.
-_ = (auth, collections, items, manifestations, profile, scanner, system, taxonomies, works)
+_ = (auth, collections, items, manifestations, profile, scanner, sharing, social, system, taxonomies, works)
