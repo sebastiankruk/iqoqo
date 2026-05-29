@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -208,6 +208,16 @@ test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
+# Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
+# Safe to call on SQLite (psql not installed; the app creates public only).
+pg-create-schemas:
+	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
+		echo "Creating PostgreSQL schemas (auth, catalog, inventory) if missing..."; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
+	fi
+
 test-e2e:
 	@if [ -z "$(NO_RESET)" ]; then \
 		if [ -z "$$DATABASE_URL_TEST" ]; then \
@@ -218,6 +228,7 @@ test-e2e:
 			exit 1; \
 		fi; \
 		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$$DATABASE_URL_TEST)..."; \
+		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) pg-create-schemas; \
 		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-reset; \
 		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) init-auth; \
 		DATABASE_URL="$$DATABASE_URL_TEST" $(MAKE) db-seed-e2e; \
@@ -242,6 +253,8 @@ clean:
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
 
 # Database targets
+# Note: pg-create-schemas is defined above (near test-e2e) so it can be
+# referenced by both test-e2e and db-reset.
 db-init:
 	@echo "Initializing database with seed data..."
 	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json
@@ -266,7 +279,7 @@ docker-backup:
 	@ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python scripts/backup.py
 	@echo "Backup complete! Check the ./exports folder on your host."
 
-db-reset:
+db-reset: pg-create-schemas
 	@echo "Resetting database..."
 	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset
 
