@@ -21,6 +21,8 @@ import type { Item } from "@/types/frbr";
 vi.mock("@/lib/api/hooks", () => ({
   useUpdateItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUserSearch: vi.fn(() => ({ data: [], isLoading: false })),
+  useLoanStatus: vi.fn(() => ({ data: null })),
+  useRequestLoan: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useProfile: vi.fn(() => ({
     data: {
       permissions: ["update:item"],
@@ -40,6 +42,7 @@ vi.mock("next/navigation", () => ({
 const baseItem = {
   id: 1,
   owner_id: "test-user",
+  is_owner: true,
   status: "available",
   meta: {},
 } as unknown as Item;
