@@ -4,6 +4,9 @@
 
 <div align="center">
 
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA.svg?style=flat&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/sebastiankruk)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/iqoqo)
+
 [![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask Version](https://img.shields.io/badge/Flask-3.1-black.svg?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![Next.js Version](https://img.shields.io/badge/Next.js-16.2-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
