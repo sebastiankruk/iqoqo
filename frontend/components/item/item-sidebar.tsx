@@ -20,7 +20,7 @@ import { ChangeEvent } from "react";
 import { Pencil, QrCode, BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { useUpdateItem, useProfile, useUserSearch } from "@/lib/api/hooks";
+import { useUpdateItem, useProfile, useUserSearch, useLoanStatus, useRequestLoan } from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
@@ -89,11 +89,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const permissions = profile?.permissions ?? [];
   const hasUploadPermission = permissions.includes(PermissionName.UPLOAD_COVER);
   const hasEditPermission = permissions.includes(PermissionName.WRITE_METADATA);
-  const hasUpdateItemPermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const isOwner = !!item.is_owner;
-  const canModifyItem = isOwner || hasUpdateItemPermission;
-
+  const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
+  const isAdmin = !!profile?.roles?.includes("admin");
+  const canModifyItem = isOwner || isAdmin;
   // Media type detection
   const format =
     (item.manifestation_meta?.["format"] as string | undefined) ??
@@ -131,6 +130,23 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   // Hook for user search, enabled when borrowerName is typed and doesn't exactly match the selected ID
   const [searchFocused, setSearchFocused] = React.useState(false);
   const { data: searchResults, isLoading: isSearching } = useUserSearch(borrowerName, searchFocused);
+
+  const { data: loanStatus } = useLoanStatus(isOwner ? null : item.id);
+  const requestLoan = useRequestLoan();
+
+  const handleRequestLoan = () => {
+    requestLoan.mutate(
+      { itemId: item.id },
+      {
+        onSuccess: () => {
+          toast.success("Loan request submitted");
+        },
+        onError: e => {
+          toast.error((e as Error).message);
+        },
+      }
+    );
+  };
 
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Item["status"];
@@ -354,6 +370,52 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             <div className="w-full rounded-lg bg-primary/10 px-4 py-2 text-xs font-semibold text-center text-primary border border-primary/20">
               {progressStatusInfo.label || "Unknown"}
             </div>
+
+            {/* Lending Actions for borrower/public user */}
+            {!isOwner && (
+              <div className="mt-4 border-t border-border/40 pt-4 flex flex-col gap-2">
+                {item.collection_status === "lent" && item.lent_to_user_id === profile?.id ? (
+                  <span
+                    data-testid="loan-status-badge"
+                    className="w-full rounded-lg bg-blue-50 text-blue-700 ring-blue-200 px-4 py-2 text-xs font-semibold text-center border border-blue-100"
+                  >
+                    On Loan
+                  </span>
+                ) : loanStatus ? (
+                  loanStatus.status === "pending" ? (
+                    <span
+                      data-testid="loan-status-badge"
+                      className="w-full rounded-lg bg-amber-50 text-amber-700 ring-amber-200 px-4 py-2 text-xs font-semibold text-center border border-amber-100"
+                    >
+                      Pending Approval
+                    </span>
+                  ) : loanStatus.status === "approved" ? (
+                    <span
+                      data-testid="loan-status-badge"
+                      className="w-full rounded-lg bg-blue-50 text-blue-700 ring-blue-200 px-4 py-2 text-xs font-semibold text-center border border-blue-100"
+                    >
+                      On Loan
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleRequestLoan}
+                      disabled={requestLoan.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                    >
+                      {requestLoan.isPending ? "Requesting..." : "Request Loan"}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    onClick={handleRequestLoan}
+                    disabled={requestLoan.isPending}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                  >
+                    {requestLoan.isPending ? "Requesting..." : "Request Loan"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

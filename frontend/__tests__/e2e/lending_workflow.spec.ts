@@ -264,6 +264,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await expect(borrowerPage.locator('[data-testid="loan-status-badge"]')).toHaveText("On Loan");
 
     // Validate Event-Based Timeline Entry
+    await borrowerPage.getByRole("button", { name: "History" }).click();
     const timelineContainer = borrowerPage.locator('[data-testid="frbr-timeline-log"]');
     await expect(timelineContainer).toBeVisible();
     await expect(timelineContainer.locator(".timeline-event").first()).toContainText("Loan approved by custodian");

@@ -80,7 +80,7 @@ export default defineConfig({
     },
     {
       command:
-        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_APP=app PYTHONPATH=. " +
+        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5000",
       url: "http://127.0.0.1:5000/api/health",

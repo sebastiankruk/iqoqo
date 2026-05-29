@@ -239,7 +239,10 @@ export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
   }
 
   return (
-    <div className="relative space-y-6 before:absolute before:inset-y-0 before:left-5 before:-translate-x-px before:w-0.5 before:bg-gradient-to-b before:from-border/80 before:via-border/60 before:to-transparent sm:before:left-[23px] pb-4">
+    <div
+      data-testid="frbr-timeline-log"
+      className="relative space-y-6 before:absolute before:inset-y-0 before:left-5 before:-translate-x-px before:w-0.5 before:bg-gradient-to-b before:from-border/80 before:via-border/60 before:to-transparent sm:before:left-[23px] pb-4"
+    >
       {logs.map((log, i) => (
         <TimelineItem key={i} log={log} />
       ))}

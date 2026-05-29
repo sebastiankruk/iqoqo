@@ -54,6 +54,11 @@ const noAuthorsItem: Item = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Stubs a browser window object for printing.
+ *
+ * @returns {object} The window stub object
+ */
 function makePrintWindowStub() {
   return {
     document: { write: vi.fn(), close: vi.fn() },
@@ -157,12 +162,12 @@ describe("PrintQrCodeDialog", () => {
     });
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Download PNG/i })).not.toBeDisabled();
     });
     const downloadBtn = screen.getByRole("button", { name: /Download PNG/i });
-    
+
     fireEvent.click(downloadBtn);
 
     await waitFor(() => {
@@ -177,7 +182,7 @@ describe("PrintQrCodeDialog", () => {
     vi.mocked(apiClient.get).mockRejectedValueOnce(new Error("Network failure"));
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    
+
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Failed to load QR code image.");
     });
@@ -190,7 +195,7 @@ describe("PrintQrCodeDialog", () => {
     const openSpy = vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled();
     });
@@ -213,7 +218,7 @@ describe("PrintQrCodeDialog", () => {
     vi.spyOn(window, "open").mockReturnValue(null);
 
     render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
-    
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled();
     });
