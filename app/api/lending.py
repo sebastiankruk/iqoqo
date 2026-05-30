@@ -225,7 +225,7 @@ def reset_lending_test_state() -> Response | tuple[Response, int]:
     """E2E test helper: resets all lender items to available and deletes loan requests."""
     from flask import current_app
 
-    if not current_app.config.get("TESTING"):
+    if not (current_app.config.get("TESTING") or current_app.debug or current_app.config.get("ENV") == "development"):
         return jsonify({"error": "Forbidden", "code": 403}), 403
 
     from app.db.core import db

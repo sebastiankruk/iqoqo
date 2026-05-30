@@ -480,30 +480,73 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
             work_id = item.get("work_id", manifestation_id)
         else:
             item_id = getattr(item, "id", None)
-            manifestation_id = getattr(item, "manifestation_id", item_id)
-            expression_id = manifestation_id
-            title = "Untitled"
-            isbn = None
-            authors = []
-            tags = []
-            status = getattr(item, "status", None)
-            work_id = manifestation_id
+            if hasattr(item, "manifestation_id"):
+                # Database Item object
+                manifestation_id = item.manifestation_id
+                expression_id = None
+                work_id = None
+                title = "Untitled"
+                isbn = None
+                authors = []
+                tags = []
+                status = getattr(item, "status", None)
 
-            if hasattr(item, "manifestation") and item.manifestation:
                 m = item.manifestation
-                title = m.title or "Untitled"
-                isbn = m.isbn13
-                if m.expression:
-                    expression_id = m.expression.id
-                    work_id = m.expression.work_id
-                    if m.expression.work and m.expression.work.meta:
-                        authors = m.expression.work.meta.get("authors", []) or m.expression.work.meta.get("Authors", [])
-                    if not authors and m.meta:
+                if m:
+                    manifestation_id = m.id
+                    expression_id = m.expression_id
+                    title = getattr(m, "title", "Untitled") or "Untitled"
+                    isbn = m.isbn13
+                    if m.expression:
+                        expression_id = m.expression.id
+                        work_id = m.expression.work_id
+                        if m.expression.work:
+                            work_id = m.expression.work.id
+                            title = m.expression.work.title or title
+                            if m.expression.work.meta:
+                                authors = m.expression.work.meta.get("authors", []) or m.expression.work.meta.get("Authors", [])
+                        if not authors and m.meta:
+                            authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
+                        if m.expression.meta:
+                            tags = m.expression.meta.get("tags", []) or m.expression.meta.get("Tags", [])
+                    elif m.meta:
                         authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
-                    if m.expression.meta:
-                        tags = m.expression.meta.get("tags", []) or m.expression.meta.get("Tags", [])
-                elif m.meta:
-                    authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
+
+                if expression_id is None:
+                    expression_id = item_id
+                if work_id is None:
+                    work_id = expression_id
+            else:
+                # Database Manifestation object
+                manifestation_id = item_id
+                expression_id = getattr(item, "expression_id", None)
+                work_id = None
+                title = getattr(item, "title", "Untitled") or "Untitled"
+                isbn = getattr(item, "isbn13", None)
+                authors = []
+                tags = []
+                status = getattr(item, "status", None)
+
+                if hasattr(item, "expression") and item.expression:
+                    expr = item.expression
+                    expression_id = expr.id
+                    work_id = expr.work_id
+                    if expr.work:
+                        work_id = expr.work.id
+                        title = expr.work.title or title
+                        if expr.work.meta:
+                            authors = expr.work.meta.get("authors", []) or expr.work.meta.get("Authors", [])
+                    if not authors and getattr(item, "meta", None):
+                        authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
+                    if expr.meta:
+                        tags = expr.meta.get("tags", []) or expr.meta.get("Tags", [])
+                elif getattr(item, "meta", None):
+                    authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
+
+                if expression_id is None:
+                    expression_id = item_id
+                if work_id is None:
+                    work_id = expression_id
 
         m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
         e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
