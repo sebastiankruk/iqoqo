@@ -300,9 +300,10 @@ def test_virtual_item_detail_update_delete(client, test_setup, app):
     assert physical_item_id > 0
 
     with app.app_context():
-        # UserWorkIntent deleted
+        # UserWorkIntent fulfilled, not deleted
         intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
-        assert intent is None
+        assert intent is not None
+        assert intent.status == "fulfilled"
 
         # Physical Item created
         item = db.session.get(Item, physical_item_id)
@@ -328,3 +329,136 @@ def test_virtual_item_detail_update_delete(client, test_setup, app):
     with app.app_context():
         intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
         assert intent is None
+
+
+def test_transition_virtual_to_physical(client, test_setup, app):
+    """Verify transition from virtual intent to physical item."""
+    headers = get_headers(app, test_setup["user_id"])
+    work_id = test_setup["work_id"]
+
+    # Create intent
+    client.post(
+        f"/api/works/{work_id}/intent",
+        json={"status": "want_to_read"},
+        headers=headers,
+    )
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        virtual_item_id = -intent.id
+
+    # Transition to physical
+    response = client.put(
+        f"/api/items/{virtual_item_id}",
+        json={"collection_status": "available", "status": "read"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    physical_item_id = response.json["data"]["id"]
+    assert physical_item_id > 0
+
+    with app.app_context():
+        # UserWorkIntent not deleted, marked as fulfilled
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        assert intent is not None
+        assert intent.status == "fulfilled"
+
+        # Physical Item created
+        item = db.session.get(Item, physical_item_id)
+        assert item is not None
+        assert item.collection_status == "available"
+        assert item.status == "read"
+        assert item.meta.get("intent_id") == -virtual_item_id
+
+
+def test_delete_virtual_item(client, test_setup, app):
+    """Verify delete of virtual intent."""
+    headers = get_headers(app, test_setup["user_id"])
+    work_id = test_setup["work_id"]
+
+    # Create intent
+    client.post(
+        f"/api/works/{work_id}/intent",
+        json={"status": "want_to_read"},
+        headers=headers,
+    )
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        virtual_item_id = -intent.id
+
+    # Delete intent
+    response = client.delete(f"/api/items/{virtual_item_id}", headers=headers)
+    assert response.status_code == 200
+    assert response.json["success"] is True
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        assert intent is None
+
+
+def test_transition_nonexistent_virtual_item(client, test_setup, app):
+    """Verify transition of non-existent virtual item returns 404."""
+    headers = get_headers(app, test_setup["user_id"])
+    response = client.put(
+        "/api/items/-99999",
+        json={"collection_status": "available", "status": "read"},
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+def test_transition_invalid_payload(client, test_setup, app):
+    """Verify transition with malformed collection_status returns 400."""
+    headers = get_headers(app, test_setup["user_id"])
+    work_id = test_setup["work_id"]
+
+    client.post(
+        f"/api/works/{work_id}/intent",
+        json={"status": "want_to_read"},
+        headers=headers,
+    )
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        virtual_item_id = -intent.id
+
+    response = client.put(
+        f"/api/items/{virtual_item_id}",
+        json={"collection_status": "invalid_c_status", "status": "read"},
+        headers=headers,
+    )
+    assert response.status_code == 400
+
+
+def test_transition_unauthorized(client, test_setup, app):
+    """Verify transition of other user's virtual item returns 403."""
+    headers = get_headers(app, test_setup["user_id"])
+    work_id = test_setup["work_id"]
+
+    client.post(
+        f"/api/works/{work_id}/intent",
+        json={"status": "want_to_read"},
+        headers=headers,
+    )
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        virtual_item_id = -intent.id
+
+    # Create another user and headers
+    with app.app_context():
+        other_user = User(email="other@iqoqo.local")
+        db.session.add(other_user)
+        db.session.commit()
+        other_user_id = other_user.id
+
+    other_headers = get_headers(app, other_user_id)
+
+    # Attempt to transition other user's intent
+    response = client.put(
+        f"/api/items/{virtual_item_id}",
+        json={"collection_status": "available", "status": "read"},
+        headers=other_headers,
+    )
+    assert response.status_code == 403

@@ -67,6 +67,7 @@ def get_user_works() -> Response:
             .join(Expression, Expression.work_id == Work.id)
             .join(Manifestation, Manifestation.expression_id == Expression.id)
         )
+        has_item_joined = False
     else:
         base_query = (
             db.session.query(Work.id)
@@ -76,6 +77,7 @@ def get_user_works() -> Response:
             .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
             .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
         )
+        has_item_joined = True
 
     if category:
         base_query = base_query.filter(Expression.content_type == category)
@@ -90,12 +92,14 @@ def get_user_works() -> Response:
             )
         )
 
-    has_item_joined = not is_global
     if tags_list:
         from app.db.models import ItemTag, Tag
 
         if not has_item_joined:
-            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            if user_id:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            else:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
             has_item_joined = True
         base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
         tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
@@ -105,7 +109,10 @@ def get_user_works() -> Response:
         from app.db.models import UserCollection, UserCollectionItem
 
         if not has_item_joined:
-            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            if user_id:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            else:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
             has_item_joined = True
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
@@ -262,6 +269,7 @@ def get_user_expressions() -> Response:
             .join(Work, Expression.work_id == Work.id)
             .join(Manifestation, Manifestation.expression_id == Expression.id)
         )
+        has_item_joined = False
     else:
         base_query = (
             db.session.query(Expression.id)
@@ -271,6 +279,7 @@ def get_user_expressions() -> Response:
             .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
             .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
         )
+        has_item_joined = True
 
     if category:
         base_query = base_query.filter(Expression.content_type == category)
@@ -285,12 +294,14 @@ def get_user_expressions() -> Response:
             )
         )
 
-    has_item_joined = not is_global
     if tags_list:
         from app.db.models import ItemTag, Tag
 
         if not has_item_joined:
-            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            if user_id:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            else:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
             has_item_joined = True
         base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
         tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
@@ -300,7 +311,10 @@ def get_user_expressions() -> Response:
         from app.db.models import UserCollection, UserCollectionItem
 
         if not has_item_joined:
-            base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            if user_id:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            else:
+                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
             has_item_joined = True
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id

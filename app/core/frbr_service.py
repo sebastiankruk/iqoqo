@@ -471,6 +471,7 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
         if isinstance(item, dict):
             item_id = item.get("id")
             manifestation_id = item.get("manifestation_id", item_id)
+            expression_id = item.get("expression_id", manifestation_id)
             title = item.get("title", "Untitled")
             isbn = item.get("isbn")
             authors = item.get("authors", [])
@@ -480,6 +481,7 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
         else:
             item_id = getattr(item, "id", None)
             manifestation_id = getattr(item, "manifestation_id", item_id)
+            expression_id = manifestation_id
             title = "Untitled"
             isbn = None
             authors = []
@@ -492,6 +494,7 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 title = m.title or "Untitled"
                 isbn = m.isbn13
                 if m.expression:
+                    expression_id = m.expression.id
                     work_id = m.expression.work_id
                     if m.expression.work and m.expression.work.meta:
                         authors = m.expression.work.meta.get("authors", []) or m.expression.work.meta.get("Authors", [])
@@ -503,12 +506,17 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                     authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
 
         m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
+        e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
         w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
 
         # FRBR Core Declarations
         g.add((m_uri, RDF.type, FRBR.Manifestation))
+        g.add((e_uri, RDF.type, FRBR.Expression))
         g.add((w_uri, RDF.type, FRBR.Work))
-        g.add((m_uri, FRBR.embodimentOf, w_uri))
+
+        # Manifestation embodies Expression, Expression is expression of Work
+        g.add((m_uri, FRBR.embodimentOf, e_uri))
+        g.add((e_uri, FRBR.expressionOf, w_uri))
 
         # High-level Schema.org Mapping for AI Agent Interoperability
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))

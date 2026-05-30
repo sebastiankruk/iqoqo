@@ -48,7 +48,7 @@ def list_collections() -> Response | tuple[Response, int]:
         ]
         return jsonify({"success": True, "collections": data})
     except SQLAlchemyError as e:
-        logger.error(f"Error fetching collections: {e}")
+        logger.error("Error fetching collections: %s", e)
         return jsonify({"success": False, "error": "Database error"}), 500
 
 
@@ -87,9 +87,29 @@ def create_collection() -> Response | tuple[Response, int]:
             201,
         )
     except SQLAlchemyError as e:
-        logger.error(f"Error creating collection: {e}")
+        logger.error("Error creating collection: %s", e)
         db.session.rollback()
         return jsonify({"success": False, "error": "Database error"}), 500
+
+
+def _validate_parent_hierarchy(collection_id: int, parent_id: int, user_id) -> str | None:
+    """Helper to validate parent collection hierarchy and detect circular references."""
+    if parent_id == collection_id:
+        return "A collection cannot be its own parent"
+    parent_collection = db.session.query(UserCollection).filter(UserCollection.id == parent_id, UserCollection.owner_id == user_id).first()
+    if not parent_collection:
+        return "Invalid parent collection"
+
+    # Walk up parent ancestor chain to prevent circular references
+    curr: UserCollection | None = parent_collection
+    while curr is not None:
+        if curr.id == collection_id:
+            return "Circular reference detected in collection hierarchy"
+        if curr.parent_id is not None:
+            curr = db.session.query(UserCollection).filter(UserCollection.id == curr.parent_id, UserCollection.owner_id == user_id).first()
+        else:
+            curr = None
+    return None
 
 
 @api_bp.route("/collections/<int:collection_id>", methods=["PUT"])
@@ -109,13 +129,9 @@ def update_collection(collection_id: int) -> Response | tuple[Response, int]:
     if data.name is not None:
         collection.name = data.name
     if data.parent_id is not None:
-        if data.parent_id == collection.id:
-            return jsonify({"success": False, "error": "A collection cannot be its own parent"}), 400
-        parent_collection = (
-            db.session.query(UserCollection).filter(UserCollection.id == data.parent_id, UserCollection.owner_id == user_id).first()
-        )
-        if not parent_collection:
-            return jsonify({"success": False, "error": "Invalid parent collection"}), 400
+        err = _validate_parent_hierarchy(collection.id, data.parent_id, user_id)
+        if err:
+            return jsonify({"success": False, "error": err}), 400
         collection.parent_id = data.parent_id
 
     try:
@@ -131,7 +147,7 @@ def update_collection(collection_id: int) -> Response | tuple[Response, int]:
             }
         )
     except SQLAlchemyError as e:
-        logger.error(f"Error updating collection: {e}")
+        logger.error("Error updating collection: %s", e)
         db.session.rollback()
         return jsonify({"success": False, "error": "Database error"}), 500
 
@@ -157,6 +173,6 @@ def delete_collection(collection_id: int) -> Response | tuple[Response, int]:
         db.session.commit()
         return jsonify({"success": True})
     except SQLAlchemyError as e:
-        logger.error(f"Error deleting collection: {e}")
+        logger.error("Error deleting collection: %s", e)
         db.session.rollback()
         return jsonify({"success": False, "error": "Database error"}), 500

@@ -21,9 +21,19 @@ from app.db.models import Work
 
 def apply_genre_filter(query, genres_list):
     """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively."""
+    bind = query.session.bind
+    is_postgres = bind.dialect.name == "postgresql" if bind else False
+
     conditions = []
     for gen in genres_list:
-        conditions.append(Work.meta["genre"].as_string().ilike(f"%{gen}%"))
-        conditions.append(Work.meta["genres"].as_string().ilike(f"%{gen}%"))
+        g_clean = gen.strip()
+        if is_postgres:
+            # PostgreSQL optimized GIN index path using JSONB containment
+            conditions.append(Work.meta.contains({"genre": g_clean}))
+            conditions.append(Work.meta["genres"].contains([g_clean]))
+        else:
+            # SQLite fallback path
+            conditions.append(Work.meta["genre"].as_string().ilike(f"%{g_clean}%"))
+            conditions.append(Work.meta["genres"].as_string().ilike(f"%{g_clean}%"))
     query = query.filter(db.or_(*conditions))
     return query

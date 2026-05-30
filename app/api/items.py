@@ -98,6 +98,8 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
         intent_query = intent_query.filter(UserWorkIntent.status.in_(statuses_list))
+    else:
+        intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
 
     if q:
         pattern = f"%{q.strip().lower()}%"
@@ -621,52 +623,90 @@ def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tupl
 
 def _update_virtual_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
     intent_id = -item_id
-    intent = db.session.get(UserWorkIntent, intent_id)
-    if not intent:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+    returned_id = None
 
-    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-    is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
-    if not (is_owner or is_admin):
-        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+    try:
+        with db.session.begin_nested():
+            # 1. Fetch intent with a row-level pessimistic write lock to block race conditions
+            intent = UserWorkIntent.query.filter_by(id=intent_id).with_for_update().first()
 
-    payload, err = _parse_update_payload(request)
-    if err:
-        return err
-    assert payload is not None
+            if not intent:
+                return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    # If transitioning away from wishlist status, convert to physical item
-    if payload.collection_status and payload.collection_status != "wish_list":
-        work = intent.work
-        manifestation = None
-        for expr in work.expressions:
-            if expr.manifestations:
-                manifestation = expr.manifestations[0]
-                break
+            is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
+            is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
+            if not (is_owner or is_admin):
+                return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
-        if not manifestation:
-            return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
+            payload, err = _parse_update_payload(request)
+            if err:
+                return err
+            assert payload is not None
 
-        # Assign dynamically passed collection_status (Library vs Wishlist)
-        new_item = Item(
-            manifestation_id=manifestation.id,
-            owner_id=intent.user_id,
-            status=payload.status or intent.status,
-            collection_status=payload.collection_status,
-            is_hidden=payload.is_hidden or False,
-            lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
-            lent_to_name=payload.lent_to_name,
-        )
-        db.session.add(new_item)
-        db.session.delete(intent)
+            # If transitioning away from wishlist status, convert to physical item
+            if payload.collection_status and payload.collection_status != "wish_list":
+                data = request.get_json(silent=True) or {}
+                manifestation_id = data.get("manifestation_id")
+                manifestation = None
+
+                if manifestation_id:
+                    manifestation = db.session.get(Manifestation, manifestation_id)
+                    if not manifestation:
+                        return jsonify({"success": False, "data": None, "error": "Invalid manifestation_id"}), 400
+                else:
+                    work = intent.work
+                    for expr in work.expressions:
+                        if expr.manifestations:
+                            manifestation = expr.manifestations[0]
+                            break
+
+                    if not manifestation:
+                        # Auto-create placeholder expression and manifestation to preserve FRBR graph purity
+                        expr = Expression(work_id=work.id, content_type="text", language="en")
+                        db.session.add(expr)
+                        db.session.flush()
+
+                        manifestation = Manifestation(expression_id=expr.id, meta={"Title": work.title, "placeholder": True})
+                        db.session.add(manifestation)
+                        db.session.flush()
+
+                # Assign dynamically passed collection_status (Library vs Wishlist)
+                item_meta = dict(payload.meta) if payload.meta else {}
+                item_meta["intent_id"] = intent.id
+                item_meta["origin"] = "wishlist_transition"
+
+                new_item = Item(
+                    manifestation_id=manifestation.id,
+                    owner_id=intent.user_id,
+                    status=payload.status or intent.status,
+                    collection_status=payload.collection_status,
+                    is_hidden=payload.is_hidden or False,
+                    lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+                    lent_to_name=payload.lent_to_name,
+                    meta=item_meta,
+                )
+                db.session.add(new_item)
+
+                # Implement state machine: do not delete intent, set status to fulfilled
+                intent.status = "fulfilled"
+                db.session.add(intent)
+                db.session.flush()
+                returned_id = new_item.id
+            else:
+                if payload.status:
+                    intent.status = payload.status
+                    db.session.add(intent)
+                returned_id = item_id
+
         db.session.commit()
+        return jsonify({"success": True, "data": {"id": returned_id}})
 
-        return jsonify({"success": True, "data": {"id": new_item.id}})
-
-    if payload.status:
-        intent.status = payload.status
-    db.session.commit()
-    return jsonify({"success": True, "data": {"id": item_id}})
+    except db.exc.SQLAlchemyError as exc:
+        db.session.rollback()
+        current_app.logger.critical(
+            "Database mutation failure handling resource transition for virtual ID %s: %s", item_id, str(exc), exc_info=True
+        )
+        return jsonify({"success": False, "error": "Internal storage transaction failure encountered during state resolution."}), 500
 
 
 def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:

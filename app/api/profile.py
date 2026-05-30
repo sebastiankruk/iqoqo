@@ -15,7 +15,7 @@
 #
 from datetime import UTC, datetime
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
 from app.db.models import ConsentRecord, User, db
@@ -93,16 +93,9 @@ def update_profile():
         user.display_name = data["display_name"]
 
     if "public_username" in data:
-        new_username = data["public_username"].strip().lower()
-        if new_username:
-            # Check if username is taken by someone else
-            stmt = select(User).where(User.public_username == new_username, User.id != user.id)
-            existing = db.session.execute(stmt).scalar_one_or_none()
-            if existing:
-                return jsonify({"error": "Public username is already taken."}), 409
-            user.public_username = new_username
-        else:
-            user.public_username = None
+        err = _set_public_username(user, data["public_username"])
+        if err:
+            return err
 
     if "bio" in data:
         user.bio = data["bio"].strip()
@@ -133,6 +126,21 @@ def delete_profile():
     db.session.commit()
 
     return jsonify({"message": "Account and all associated data permanently deleted."}), 200
+
+
+def _set_public_username(user: User, new_username: str | None) -> Response | tuple[Response, int] | None:
+    """Helper to validate and update public username, preventing duplicates."""
+    if new_username is not None:
+        clean_username = new_username.strip().lower()
+        if clean_username:
+            stmt = select(User).where(User.public_username == clean_username, User.id != user.id)
+            existing = db.session.execute(stmt).scalar_one_or_none()
+            if existing:
+                return jsonify({"error": "Public username is already taken."}), 409
+            user.public_username = clean_username
+        else:
+            user.public_username = None
+    return None
 
 
 def _mask_email(email: str) -> str:
@@ -196,14 +204,11 @@ def update_profile_settings():
         return jsonify({"error": "User not found"}), 404
 
     if "public_username" in data:
-        new_username = data["public_username"].strip().lower()
-        if new_username:
-            # Check if username is taken by someone else
-            stmt = select(User).where(User.public_username == new_username, User.id != user.id)
-            existing = db.session.execute(stmt).scalar_one_or_none()
-            if existing:
-                return jsonify({"error": "Public username is already taken."}), 409
-            user.public_username = new_username
+        new_username = data["public_username"]
+        if new_username and new_username.strip():
+            err = _set_public_username(user, new_username)
+            if err:
+                return err
 
     if "bio" in data:
         user.bio = data["bio"].strip()

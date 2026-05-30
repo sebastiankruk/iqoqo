@@ -47,7 +47,7 @@ def get_roadmaps() -> Response | tuple[Response, int]:
         roadmaps = db.session.scalars(stmt).unique().all()
         return jsonify([r.to_dict() for r in roadmaps]), 200
     except SQLAlchemyError as e:
-        logger.error(f"Error fetching roadmaps: {e}")
+        logger.error("Error fetching roadmaps: %s", e)
         return jsonify({"error": "Database error", "code": 500}), 500
 
 
@@ -75,7 +75,7 @@ def create_roadmap() -> Response | tuple[Response, int]:
         db.session.commit()
         return jsonify(roadmap.to_dict()), 201
     except SQLAlchemyError as e:
-        logger.error(f"Error creating roadmap: {e}")
+        logger.error("Error creating roadmap: %s", e)
         db.session.rollback()
         return jsonify({"error": "Database error", "code": 500}), 500
 
@@ -122,7 +122,7 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
         db.session.commit()
         return jsonify(item.to_dict()), 201
     except SQLAlchemyError as e:
-        logger.error(f"Error adding item to roadmap: {e}")
+        logger.error("Error adding item to roadmap: %s", e)
         db.session.rollback()
         return jsonify({"error": "Database error", "code": 500}), 500
 
@@ -169,6 +169,6 @@ def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
         db.session.commit()
         return jsonify({"success": True}), 200
     except SQLAlchemyError as e:
-        logger.error(f"Error reordering roadmap item: {e}")
+        logger.error("Error reordering roadmap item: %s", e)
         db.session.rollback()
         return jsonify({"error": "Database error", "code": 500}), 500
