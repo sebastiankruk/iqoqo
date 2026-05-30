@@ -28,6 +28,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy.exc import ProgrammingError
 
 # Add the parent directory to the path
@@ -64,6 +66,16 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
         # Create all tables
         print("Creating database tables...")
         db.create_all()
+
+        # Stamp the Alembic migration version to 'head' after a fresh create_all().
+        # create_all() builds the schema from ORM model definitions (always reflecting
+        # the latest structure), so there is nothing left for Alembic to migrate.
+        # Without this stamp, running `flask db upgrade head` afterwards would try to
+        # re-apply schema-separation steps (e.g. ALTER TABLE public.works SET SCHEMA
+        # catalog) on tables that already exist in the correct schema, causing errors.
+        alembic_cfg = AlembicConfig("migrations/alembic.ini")
+        alembic_cfg.set_main_option("script_location", "migrations")
+        alembic_command.stamp(alembic_cfg, "head")
 
         # Check if database is empty
         try:

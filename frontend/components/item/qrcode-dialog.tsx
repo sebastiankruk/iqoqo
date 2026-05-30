@@ -40,11 +40,13 @@ interface PrintQrCodeDialogProps {
  */
 export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDialogProps) {
   const [qrBlobUrl, setQrBlobUrl] = React.useState<string>("");
+  const blobUrlRef = React.useRef<string>("");
 
   React.useEffect(() => {
     if (!isOpen) {
-      if (qrBlobUrl) {
-        window.URL.revokeObjectURL(qrBlobUrl);
+      if (blobUrlRef.current) {
+        window.URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = "";
         setQrBlobUrl("");
       }
       return;
@@ -58,9 +60,10 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
         });
         if (active) {
           const url = window.URL.createObjectURL(res.data);
+          blobUrlRef.current = url;
           setQrBlobUrl(url);
         }
-      } catch (err) {
+      } catch {
         toast.error("Failed to load QR code image.");
       }
     };
