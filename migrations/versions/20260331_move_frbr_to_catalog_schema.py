@@ -48,8 +48,32 @@ def upgrade():
 
     # Move each FRBR table from public → catalog.
     # PostgreSQL preserves all indexes, constraints, and sequences.
+    conn = op.get_bind()
+    is_postgres = conn.dialect.name == "postgresql"
+
     for table in _FRBR_TABLES:
-        op.execute(f"ALTER TABLE public.{table} SET SCHEMA catalog")
+        if is_postgres:
+            # Check if table already exists in catalog schema
+            res = conn.execute(
+                sa.text(
+                    f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'catalog' AND table_name = '{table}')"
+                )
+            ).scalar()
+
+            if res:
+                # If table already exists in catalog, drop it in public if it exists there
+                op.execute(f"DROP TABLE IF EXISTS public.{table} CASCADE")
+            else:
+                # If it doesn't exist in catalog, but exists in public, move it
+                res_public = conn.execute(
+                    sa.text(
+                        f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '{table}')"
+                    )
+                ).scalar()
+                if res_public:
+                    op.execute(f"ALTER TABLE public.{table} SET SCHEMA catalog")
+        else:
+            op.execute(f"ALTER TABLE public.{table} SET SCHEMA catalog")
 
 
 def downgrade():

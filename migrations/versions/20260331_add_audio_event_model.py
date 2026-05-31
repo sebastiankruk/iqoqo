@@ -47,81 +47,88 @@ def upgrade():
     # safe to be idempotent here too).
     op.execute("CREATE SCHEMA IF NOT EXISTS catalog")
 
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # ------------------------------------------------------------------
     # catalog.contributors
     # ------------------------------------------------------------------
-    op.create_table(
-        "contributors",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(500), nullable=False),
-        sa.Column("type", sa.String(20), nullable=False, server_default="person"),
-        sa.Column("meta", sa.JSON(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        schema="catalog",
-    )
-    op.create_index("ix_contributors_name", "contributors", ["name"], schema="catalog")
+    if not inspector.has_table("contributors", schema="catalog"):
+        op.create_table(
+            "contributors",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("name", sa.String(500), nullable=False),
+            sa.Column("type", sa.String(20), nullable=False, server_default="person"),
+            sa.Column("meta", sa.JSON(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            schema="catalog",
+        )
+        op.create_index("ix_contributors_name", "contributors", ["name"], schema="catalog")
 
     # ------------------------------------------------------------------
     # catalog.work_contributions  (FRBRoo Composition Event)
     # ------------------------------------------------------------------
-    op.create_table(
-        "work_contributions",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("work_id", sa.Integer(), nullable=False),
-        sa.Column("contributor_id", sa.Integer(), nullable=False),
-        sa.Column("role", sa.String(100), nullable=False),
-        sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
-        sa.ForeignKeyConstraint(["contributor_id"], ["catalog.contributors.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["work_id"], ["catalog.works.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        schema="catalog",
-    )
-    op.create_index("ix_work_contributions_work_id", "work_contributions", ["work_id"], schema="catalog")
-    op.create_index("ix_work_contributions_contributor_id", "work_contributions", ["contributor_id"], schema="catalog")
+    if not inspector.has_table("work_contributions", schema="catalog"):
+        op.create_table(
+            "work_contributions",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("work_id", sa.Integer(), nullable=False),
+            sa.Column("contributor_id", sa.Integer(), nullable=False),
+            sa.Column("role", sa.String(100), nullable=False),
+            sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
+            sa.ForeignKeyConstraint(["contributor_id"], ["catalog.contributors.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["work_id"], ["catalog.works.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+            schema="catalog",
+        )
+        op.create_index("ix_work_contributions_work_id", "work_contributions", ["work_id"], schema="catalog")
+        op.create_index("ix_work_contributions_contributor_id", "work_contributions", ["contributor_id"], schema="catalog")
 
     # ------------------------------------------------------------------
     # catalog.expression_contributions  (FRBRoo Performance Event)
     # ------------------------------------------------------------------
-    op.create_table(
-        "expression_contributions",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("expression_id", sa.Integer(), nullable=False),
-        sa.Column("contributor_id", sa.Integer(), nullable=False),
-        sa.Column("role", sa.String(100), nullable=False),
-        sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
-        sa.ForeignKeyConstraint(["contributor_id"], ["catalog.contributors.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["expression_id"], ["catalog.expressions.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        schema="catalog",
-    )
-    op.create_index(
-        "ix_expression_contributions_expression_id",
-        "expression_contributions",
-        ["expression_id"],
-        schema="catalog",
-    )
-    op.create_index(
-        "ix_expression_contributions_contributor_id",
-        "expression_contributions",
-        ["contributor_id"],
-        schema="catalog",
-    )
+    if not inspector.has_table("expression_contributions", schema="catalog"):
+        op.create_table(
+            "expression_contributions",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("expression_id", sa.Integer(), nullable=False),
+            sa.Column("contributor_id", sa.Integer(), nullable=False),
+            sa.Column("role", sa.String(100), nullable=False),
+            sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
+            sa.ForeignKeyConstraint(["contributor_id"], ["catalog.contributors.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["expression_id"], ["catalog.expressions.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+            schema="catalog",
+        )
+        op.create_index(
+            "ix_expression_contributions_expression_id",
+            "expression_contributions",
+            ["expression_id"],
+            schema="catalog",
+        )
+        op.create_index(
+            "ix_expression_contributions_contributor_id",
+            "expression_contributions",
+            ["contributor_id"],
+            schema="catalog",
+        )
 
     # ------------------------------------------------------------------
     # catalog.work_parts  (FRBRoo F15 Complex Work — box-set containment)
     # ------------------------------------------------------------------
-    op.create_table(
-        "work_parts",
-        sa.Column("container_work_id", sa.Integer(), nullable=False),
-        sa.Column("part_work_id", sa.Integer(), nullable=False),
-        sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
-        sa.ForeignKeyConstraint(["container_work_id"], ["catalog.works.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["part_work_id"], ["catalog.works.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("container_work_id", "part_work_id"),
-        schema="catalog",
-    )
-    op.create_index("ix_work_parts_container_work_id", "work_parts", ["container_work_id"], schema="catalog")
-    op.create_index("ix_work_parts_part_work_id", "work_parts", ["part_work_id"], schema="catalog")
+    if not inspector.has_table("work_parts", schema="catalog"):
+        op.create_table(
+            "work_parts",
+            sa.Column("container_work_id", sa.Integer(), nullable=False),
+            sa.Column("part_work_id", sa.Integer(), nullable=False),
+            sa.Column("sequence", sa.Integer(), nullable=True, server_default="0"),
+            sa.ForeignKeyConstraint(["container_work_id"], ["catalog.works.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["part_work_id"], ["catalog.works.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("container_work_id", "part_work_id"),
+            schema="catalog",
+        )
+        op.create_index("ix_work_parts_container_work_id", "work_parts", ["container_work_id"], schema="catalog")
+        op.create_index("ix_work_parts_part_work_id", "work_parts", ["part_work_id"], schema="catalog")
 
 
 def downgrade():
