@@ -82,6 +82,11 @@ class Config:
     FEDERATION_ENABLED = os.environ.get("FEDERATION_ENABLED", "false").lower() == "true"
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    # Sign in with Apple (optional — required for App Store submissions, useful for sideloaded builds)
+    APPLE_CLIENT_ID = os.environ.get("APPLE_CLIENT_ID")  # Services ID (e.g. cc.iqoqo.app.signin)
+    APPLE_TEAM_ID = os.environ.get("APPLE_TEAM_ID")
+    APPLE_KEY_ID = os.environ.get("APPLE_KEY_ID")
+    APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY")  # Content of the .p8 key file
 
     # Admin Init
     ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@iqoqo.local")

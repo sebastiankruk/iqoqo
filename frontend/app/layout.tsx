@@ -43,6 +43,7 @@ export const metadata: Metadata = {
     icon: "/icon.svg",
     apple: "/apple-icon",
   },
+  manifest: "/manifest.json",
   alternates: {
     types: {
       "application/rss+xml": [{ url: "/api/public/feed.xml", title: "iqoqo Fresh Arrivals Feed" }],

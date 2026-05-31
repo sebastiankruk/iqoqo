@@ -12,9 +12,24 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "cap:init": "npx cap init iqoqo cc.iqoqo.app --web-dir=out",
+    "cap:sync": "next build && npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "cap:run:ios": "npx cap run ios",
+    "cap:run:android": "npx cap run android"
   },
   "dependencies": {
+    "@capacitor/app": "^7.x",
+    "@capacitor/browser": "^7.x",
+    "@capacitor/core": "^7.x",
+    "@capacitor/haptics": "^7.x",
+    "@capacitor/keyboard": "^7.x",
+    "@capacitor/preferences": "^7.x",
+    "@capacitor/splash-screen": "^7.x",
+    "@capacitor/status-bar": "^7.x",
+    "@capacitor-community/secure-storage": "^0.10.x",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -47,6 +62,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.x",
+    "@capacitor/cli": "^7.x",
+    "@capacitor/ios": "^7.x",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",

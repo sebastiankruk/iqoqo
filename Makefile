@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas mobile-build mobile-sync mobile-ios mobile-android mobile-run-ios mobile-run-android
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -345,3 +345,23 @@ sync-permissions:
 verify-perms:
 	@echo "Verifying permissions are synchronized"
 	.venv/bin/python scripts/sync_permissions.py --verify
+
+## ─── Mobile / Capacitor Targets ────────────────────────────────────────────
+
+mobile-build: ## Build frontend static export for Capacitor (sets CAPACITOR_BUILD=true)
+	cd frontend && CAPACITOR_BUILD=true npm run build
+
+mobile-sync: mobile-build ## Sync static web assets into both native projects
+	cd frontend && npx cap sync
+
+mobile-ios: mobile-sync ## Open the iOS project in Xcode
+	cd frontend && npx cap open ios
+
+mobile-android: mobile-sync ## Open the Android project in Android Studio
+	cd frontend && npx cap open android
+
+mobile-run-ios: mobile-sync ## Deploy & run on a connected iOS device (sideload)
+	cd frontend && npx cap run ios
+
+mobile-run-android: mobile-sync ## Deploy & run on a connected Android device (sideload / ADB)
+	cd frontend && npx cap run android

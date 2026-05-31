@@ -25,6 +25,10 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 const require = createRequire(import.meta.url);
 const { version: APP_VERSION } = require("./package.json") as { version: string };
 
+// When CAPACITOR_BUILD=true, emit a fully static export for Capacitor instead
+// of the default standalone server output used by the production Docker image.
+const isCapacitorBuild = process.env.CAPACITOR_BUILD === "true";
+
 const nextConfig: NextConfig = {
   // Expose the canonical version to client-side code via lib/version.ts
   env: {
@@ -36,9 +40,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  // Enable standalone output for the production Docker image (Dockerfile.prod)
-  output: "standalone",
-
+  // Standalone for Docker; static export for Capacitor native builds
+  output: isCapacitorBuild ? "export" : "standalone",
   allowedDevOrigins: ["dev.iqoqo.cc", "*.iqoqo.cc"],
 
   /**
@@ -73,7 +76,8 @@ const nextConfig: NextConfig = {
   // from multiple providers: Google Books, Open Library, etc.). Apply
   // optimization per provider once URLs are stabilised; unoptimized prop is
   // used in the component until then.
-  images: {
+  // In Capacitor builds there is no server-side optimiser, so disable it.
+  images: isCapacitorBuild ? { unoptimized: true } : {
     localPatterns: [
       {
         pathname: "/api/static/**",

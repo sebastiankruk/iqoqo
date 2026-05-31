@@ -15,6 +15,8 @@
 //
 import axios from "axios";
 import type { ApiResponse } from "@/types/frbr";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl, getAuthToken } from "@/lib/capacitor/storage";
 
 // In the browser we always use a relative "/api" base so requests are same-origin
 // and flow through the Next.js rewrite proxy (/api/:path* → Flask). This avoids
@@ -42,6 +44,23 @@ apiClient.interceptors.response.use(
     return Promise.reject(new Error(message));
   }
 );
+
+// In native Capacitor builds the app talks to a user-configured instance URL
+// (stored in Preferences) and cannot rely on httpOnly cookies, so we inject
+// the base URL and a Bearer token before every request.
+if (typeof window !== "undefined" && isNativeApp()) {
+  apiClient.interceptors.request.use(async config => {
+    const instanceUrl = await getInstanceUrl();
+    if (instanceUrl) {
+      config.baseURL = `${instanceUrl}/api`;
+    }
+    const token = await getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+}
 
 /**
  * Helper: GET and unwrap the `data` field from an ApiResponse envelope.

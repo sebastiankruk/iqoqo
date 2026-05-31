@@ -1,7 +1,7 @@
 {
   "Common": {
     "loading": "Loading...",
-    "error": "An error occurred",
+    "error": "Something went wrong",
     "noItems": "No items found",
     "back": "Back",
     "save": "Save",
@@ -9,17 +9,96 @@
     "delete": "Delete",
     "share": "Share",
     "copied": "Copied!",
-    "copySuccess": "Link copied to clipboard!",
-    "copyError": "Could not copy link"
+    "copySuccess": "Link copied to clipboard",
+    "copyError": "Failed to copy"
+  },
+  "Nav": {
+    "home": "Home",
+    "collection": "Collection",
+    "scan": "Scan",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Log out",
+    "search": "Search your library..."
+  },
+  "Auth": {
+    "login": "Log in",
+    "register": "Create account",
+    "email": "Email",
+    "password": "Password",
+    "displayName": "Display name",
+    "forgotPassword": "Forgot password?",
+    "loginWithGoogle": "Continue with Google",
+    "loginWithApple": "Continue with Apple",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "Dashboard": {
+    "welcomeBack": "Welcome back, {name}",
+    "recentArrivals": "Fresh Arrivals",
+    "readingProgress": "Reading Progress",
+    "stats": "Your Stats",
+    "works": "Works",
+    "items": "Items",
+    "quickAdd": "Quick Add"
+  },
+  "Collection": {
+    "title": "My Collection",
+    "filter": "Filter",
+    "sort": "Sort",
+    "gridView": "Grid",
+    "listView": "List",
+    "emptyState": "Your collection is empty. Start by scanning a book!",
+    "categories": "Categories",
+    "status": "Status",
+    "format": "Format"
+  },
+  "Scanner": {
+    "title": "Scan & Add",
+    "camera": "Camera",
+    "manual": "Manual Entry",
+    "batchMode": "Batch Mode",
+    "scanning": "Scanning...",
+    "found": "Found: {title}",
+    "addToLibrary": "Add to Library",
+    "scanAnother": "Scan Another",
+    "notFound": "No match found",
+    "tryManual": "Try entering details manually",
+    "isbn": "ISBN / UPC / EAN",
+    "title_field": "Title",
+    "author": "Author"
+  },
+  "Item": {
+    "details": "Details",
+    "notes": "Notes",
+    "rating": "Rating",
+    "status": "Status",
+    "lend": "Lend",
+    "return": "Return",
+    "edit": "Edit",
+    "delete": "Remove from collection",
+    "confirmDelete": "Are you sure you want to remove this item?",
+    "readingProgress": "Reading Progress",
+    "addNote": "Add a note..."
+  },
+  "Mobile": {
+    "serverSelector": "Connect to iqoqo",
+    "serverUrl": "Enter the URL of your iqoqo instance",
+    "verifyConnection": "Verify Connection",
+    "continueToLogin": "Continue to Login",
+    "connected": "Connected: {name}",
+    "connectionFailed": "Could not reach server",
+    "noInstance": "Don't have an instance? Visit iqoqo.cc to learn more.",
+    "adminWebOnly": "Admin features are available in the web version."
   },
   "Public": {
-    "profileTitle": "{name}'s Collection",
+    "profileTitle": "{name}'s Library",
     "checkInventory": "Check if I have it",
-    "checkPlaceholder": "Search by Title, ISBN, or UPC...",
-    "foundItem": "I have this!",
-    "foundManifestation": "This is in the catalog, but not in my collection.",
-    "notFound": "I don't have this item yet.",
+    "checkPlaceholder": "Enter ISBN or title...",
+    "foundItem": "Found in library!",
+    "foundManifestation": "Available in catalog",
+    "notFound": "Not in this library",
     "sharedCollection": "Shared Collection",
-    "hiddenItemNote": "Note: Some items may be hidden for privacy."
+    "hiddenItemNote": "Some items are hidden by the owner"
   }
 }

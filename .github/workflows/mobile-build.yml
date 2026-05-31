@@ -1,0 +1,94 @@
+name: Mobile Sideload Build
+
+# Builds unsigned APK (Android) and a development-signed IPA (iOS) for
+# direct sideloading — no App Store or Google Play submission required.
+#
+# Triggered on tags matching v0.8.* or manually.
+
+on:
+  push:
+    tags: ["v0.8.*"]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Android — produces a debug APK for direct ADB / sideload installation
+  # ---------------------------------------------------------------------------
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build Next.js static export
+        run: cd frontend && CAPACITOR_BUILD=true npm run build
+
+      - name: Sync Capacitor to Android project
+        run: cd frontend && npx cap sync android
+
+      - name: Build debug APK
+        run: cd frontend/android && ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqoqo-android-debug-${{ github.ref_name }}
+          path: frontend/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # iOS — produces an unsigned .xcarchive for development-signed sideloading.
+  # Sign it locally with Xcode or AltStore / Sideloadly.
+  # ---------------------------------------------------------------------------
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build Next.js static export
+        run: cd frontend && CAPACITOR_BUILD=true npm run build
+
+      - name: Sync Capacitor to iOS project
+        run: cd frontend && npx cap sync ios
+
+      - name: Build unsigned xcarchive
+        # CODE_SIGNING_ALLOWED=NO produces a signable archive without requiring
+        # provisioning profiles in CI.  Sign locally before sideloading.
+        run: |
+          cd frontend/ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -archivePath "${{ runner.temp }}/iqoqo.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Upload xcarchive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqoqo-ios-xcarchive-${{ github.ref_name }}
+          path: ${{ runner.temp }}/iqoqo.xcarchive
+          retention-days: 30
