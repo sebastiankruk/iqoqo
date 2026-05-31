@@ -212,10 +212,11 @@ test-frontend:
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
 	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
-		echo "Creating PostgreSQL schemas (auth, catalog, inventory) if missing..."; \
+		echo "Creating PostgreSQL schemas (auth, catalog, inventory, federation) if missing..."; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS federation;" 2>&1 | grep -v 'already exists' || true; \
 	fi
 
 # Start the Docker DB (and Redis) for E2E tests, then wait until pg_isready.

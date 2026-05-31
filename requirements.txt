@@ -20,6 +20,7 @@ pydantic>=2.6.0
 Flask-Limiter>=3.5.0
 pytesseract>=0.3.10
 tenacity==8.*
+cryptography>=43.0
 #~ opencv-python-headless==4.9.*
 #~ numpy==1.26.*
 

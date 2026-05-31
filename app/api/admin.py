@@ -281,7 +281,7 @@ API_KEYS = {
     "GOOGLE_CLIENT_SECRET",
 }
 
-FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
+FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL", "FEDERATION_AUTO_ACCEPT_FOLLOWS", "FEDERATION_DEFAULT_TRUST"}
 
 AFFILIATE_KEYS = {"AFFILIATE_AMAZON", "AFFILIATE_ALLEGRO", "AFFILIATE_EMPIK"}
 
@@ -735,3 +735,142 @@ def upload_cover():
             except OSError:
                 pass
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Federation Instance Management
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/federation/instances", methods=["GET"])
+@require_auth
+@admin_required
+def list_federation_instances():
+    """List all known federation instances with trust levels."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.CONFIG_FEDERATION):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    from app.db.federation import FederationInstance
+
+    instances = FederationInstance.query.order_by(FederationInstance.created_at.desc()).all()
+    return jsonify({"success": True, "data": [i.to_dict() for i in instances]})
+
+
+@admin_bp.route("/federation/instances", methods=["POST"])
+@require_auth
+@admin_required
+def add_federation_instance():
+    """Discover and add a remote federation instance."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.CONFIG_FEDERATION):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    data = request.get_json(silent=True) or {}
+    domain = data.get("domain", "").strip().lower()
+
+    if not domain:
+        return jsonify({"success": False, "error": "Domain is required"}), 400
+
+    from app.core.federation_discovery import discover_instance
+
+    instance = discover_instance(domain)
+    if not instance:
+        return jsonify({"success": False, "error": f"Could not discover instance at {domain}"}), 404
+
+    return jsonify({"success": True, "data": instance.to_dict()}), 201
+
+
+@admin_bp.route("/federation/instances/<int:instance_id>/trust", methods=["PUT"])
+@require_auth
+@admin_required
+def update_instance_trust(instance_id: int):
+    """Update the trust level of a federation instance."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.CONFIG_FEDERATION):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    from app.db.federation import FederationInstance, TrustLevel
+
+    instance = db.session.get(FederationInstance, instance_id)
+    if not instance:
+        return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    trust_level = data.get("trust_level", "").strip()
+
+    if trust_level not in TrustLevel.ALL:
+        return jsonify({"success": False, "error": f"Invalid trust level. Must be one of: {', '.join(TrustLevel.ALL)}"}), 400
+
+    instance.trust_level = trust_level
+    db.session.commit()
+
+    return jsonify({"success": True, "data": instance.to_dict()})
+
+
+@admin_bp.route("/federation/instances/<int:instance_id>", methods=["DELETE"])
+@require_auth
+@admin_required
+def remove_federation_instance(instance_id: int):
+    """Remove/block a federation instance."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.CONFIG_FEDERATION):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    from app.db.federation import FederationInstance
+
+    instance = db.session.get(FederationInstance, instance_id)
+    if not instance:
+        return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    db.session.delete(instance)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": {"deleted": True}})
+
+
+@admin_bp.route("/federation/activities", methods=["GET"])
+@require_auth
+@admin_required
+def list_federation_activities():
+    """List federation activities with optional filters."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.CONFIG_FEDERATION):
+        return jsonify({"success": False, "error": "Permission denied"}), 403
+
+    from app.db.federation import FederationActivity
+
+    query = FederationActivity.query
+
+    # Apply filters
+    direction = request.args.get("direction")
+    if direction in ("inbound", "outbound"):
+        query = query.filter_by(direction=direction)
+
+    activity_type = request.args.get("type")
+    if activity_type:
+        query = query.filter_by(activity_type=activity_type)
+
+    status = request.args.get("status")
+    if status:
+        query = query.filter_by(status=status)
+
+    # Pagination
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+    per_page = min(per_page, 100)
+
+    paginated = query.order_by(FederationActivity.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify(
+        {
+            "success": True,
+            "data": [a.to_dict() for a in paginated.items],
+            "pagination": {
+                "page": paginated.page,
+                "per_page": paginated.per_page,
+                "total": paginated.total,
+                "pages": paginated.pages,
+            },
+        }
+    )

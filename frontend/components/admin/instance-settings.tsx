@@ -60,6 +60,8 @@ const SETTING_GROUPS = {
   federation: [
     { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
     { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const },
+    { key: "FEDERATION_AUTO_ACCEPT_FOLLOWS", label: "Auto-Accept Follows (trusted)", type: "boolean" as const },
+    { key: "FEDERATION_DEFAULT_TRUST", label: "Default Trust Level", type: "text" as const, placeholder: "untrusted" },
   ],
   affiliate: [
     { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },

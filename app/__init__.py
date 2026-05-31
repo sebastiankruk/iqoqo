@@ -155,6 +155,11 @@ def create_app(config_class=Config, config_override=None):
     app.register_blueprint(roadmap_bp)
     app.register_blueprint(lending_bp)
 
+    # Federation blueprint (registered at app level for /.well-known/ routes)
+    from app.api.federation import federation_bp
+
+    app.register_blueprint(federation_bp)
+
     @app.teardown_appcontext
     def shutdown_session(exception=None):  # pylint: disable=unused-argument
         """Ensure scoped sessions are returned to the pool after each request."""

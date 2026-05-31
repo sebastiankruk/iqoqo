@@ -36,4 +36,5 @@ def import_models() -> None:
     # Order matters: auth / settings have no cross-module FKs, so they can be
     # imported first.  core.py references auth (users.id FK on Item), and
     # audio.py references core (works.id / expressions.id FKs).
-    from app.db import auth, settings, core, audio, video, games, social, roadmap, lending  # noqa: F401, I001 # isort: skip
+    # federation.py references auth (users.id FK on FederationFollower/Consent).
+    from app.db import auth, settings, core, audio, video, games, social, roadmap, lending, federation  # noqa: F401, I001 # isort: skip
