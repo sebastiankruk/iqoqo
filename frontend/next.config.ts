@@ -31,8 +31,12 @@ const isCapacitorBuild = process.env.CAPACITOR_BUILD === "true";
 
 const nextConfig: NextConfig = {
   // Expose the canonical version to client-side code via lib/version.ts
+  // NEXT_PUBLIC_IS_CAPACITOR is used in app/api/auth-exchange/route.ts to set
+  // `export const dynamic = "force-static"` so that `output: "export"` succeeds
+  // without making the route permanently static in web/standalone builds.
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,
+    NEXT_PUBLIC_IS_CAPACITOR: isCapacitorBuild ? "true" : "false",
   },
   // Remove the X-Powered-By: Next.js response header
   poweredByHeader: false,

@@ -349,7 +349,14 @@ verify-perms:
 ## ─── Mobile / Capacitor Targets ────────────────────────────────────────────
 
 mobile-build: ## Build frontend static export for Capacitor (sets CAPACITOR_BUILD=true)
-	cd frontend && CAPACITOR_BUILD=true npm run build
+	@# Swap in the static stub for the auth-exchange route (output:export forbids
+	@# dynamic route handlers; the native app never calls this endpoint anyway).
+	@cp frontend/app/api/auth-exchange/route.ts /tmp/iqoqo-auth-exchange-route.bak
+	@cp frontend/app/api/auth-exchange/route.capacitor.ts frontend/app/api/auth-exchange/route.ts
+	@cd frontend && CAPACITOR_BUILD=true npm run build; \
+	  EXIT_CODE=$$?; \
+	  cp /tmp/iqoqo-auth-exchange-route.bak frontend/app/api/auth-exchange/route.ts; \
+	  exit $$EXIT_CODE
 
 mobile-sync: mobile-build ## Sync static web assets into both native projects
 	cd frontend && npx cap sync
