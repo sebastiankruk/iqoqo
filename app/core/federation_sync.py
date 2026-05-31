@@ -173,9 +173,7 @@ def _auto_merge(obj: dict[str, Any], instance: FederationInstance) -> bool:
         if isbn:
             local = Manifestation.query.filter_by(isbn=isbn).first()
         if not local and title:
-            local = Manifestation.query.filter(
-                Manifestation.title.ilike(f"%{title}%")
-            ).first()
+            local = Manifestation.query.filter(Manifestation.title.ilike(f"%{title}%")).first()
 
         if local:
             return sync_manifestation(obj, local, instance)

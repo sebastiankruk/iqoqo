@@ -232,6 +232,20 @@ def verify_flask_request(request: Any) -> str:
     method = request.method
     path = request.full_path if request.query_string else request.path
 
+    # Validate Date header freshness (±5 minutes) to prevent replay attacks
+    date_header = headers.get("Date")
+    if date_header:
+        from email.utils import parsedate_to_datetime
+
+        try:
+            request_date = parsedate_to_datetime(date_header)
+            now = datetime.now(UTC)
+            delta = abs((now - request_date).total_seconds())
+            if delta > 300:  # 5 minutes
+                raise SignatureVerificationError("Request date is too far from current time (possible replay)")
+        except (TypeError, ValueError):
+            raise SignatureVerificationError("Invalid Date header format")
+
     # Parse signature to get keyId
     sig_header = headers.get("Signature", "")
     sig_parts = _parse_signature_header(sig_header)
@@ -245,6 +259,11 @@ def verify_flask_request(request: Any) -> str:
 
     # Look up cached public key
     actor = FederationActor.query.filter_by(actor_uri=actor_uri).first()
+
+    # If actor unknown or has no public key, attempt to fetch from remote
+    if not actor or not actor.public_key_pem:
+        actor = _fetch_and_cache_actor_key(actor_uri, actor)
+
     if not actor or not actor.public_key_pem:
         raise SignatureVerificationError(f"Unknown actor: {actor_uri}")
 
@@ -255,3 +274,72 @@ def verify_flask_request(request: Any) -> str:
         raise SignatureVerificationError("keyId domain does not match actor URI domain")
 
     return verify_request(method, path, headers, body, actor.public_key_pem)
+
+
+def _fetch_and_cache_actor_key(actor_uri: str, existing_actor: Any | None) -> Any | None:
+    """Fetch a remote actor's profile and cache their public key.
+
+    Args:
+        actor_uri: The actor's URI.
+        existing_actor: Existing FederationActor record (may have null key), or None.
+
+    Returns:
+        Updated FederationActor with public_key_pem populated, or None on failure.
+    """
+    from app.core.federation_client import FederationDeliveryError, SSRFError, federation_client
+    from app.db import db
+    from app.db.federation import FederationActor, FederationInstance, TrustLevel
+
+    try:
+        actor_data = federation_client.fetch_actor(actor_uri)
+    except (SSRFError, FederationDeliveryError) as exc:
+        logger.warning("Failed to fetch actor %s for key resolution: %s", actor_uri, exc)
+        return None
+
+    # Extract public key
+    public_key_block = actor_data.get("publicKey", {})
+    public_key_pem = public_key_block.get("publicKeyPem")
+    if not public_key_pem:
+        logger.warning("Actor %s has no publicKey in profile", actor_uri)
+        return None
+
+    if existing_actor:
+        existing_actor.public_key_pem = public_key_pem
+        existing_actor.display_name = actor_data.get("name") or existing_actor.display_name
+        existing_actor.username = actor_data.get("preferredUsername") or existing_actor.username
+        if actor_data.get("inbox"):
+            existing_actor.inbox_url = actor_data["inbox"]
+        if actor_data.get("outbox"):
+            existing_actor.outbox_url = actor_data["outbox"]
+        existing_actor.last_fetched_at = datetime.now(UTC)
+        db.session.commit()
+        return existing_actor
+
+    # Create new actor record
+    parsed = urlparse(actor_uri)
+    domain = parsed.hostname
+    if not domain:
+        return None
+
+    from app.core.config_service import ConfigService
+
+    instance = FederationInstance.query.filter_by(domain=domain).first()
+    if not instance:
+        default_trust = ConfigService.get("FEDERATION_DEFAULT_TRUST", TrustLevel.UNTRUSTED)
+        instance = FederationInstance(domain=domain, trust_level=str(default_trust))
+        db.session.add(instance)
+        db.session.flush()
+
+    actor = FederationActor(
+        actor_uri=actor_uri,
+        inbox_url=actor_data.get("inbox", f"{actor_uri}/inbox"),
+        outbox_url=actor_data.get("outbox"),
+        public_key_pem=public_key_pem,
+        instance_id=instance.id,
+        display_name=actor_data.get("name"),
+        username=actor_data.get("preferredUsername"),
+        last_fetched_at=datetime.now(UTC),
+    )
+    db.session.add(actor)
+    db.session.commit()
+    return actor

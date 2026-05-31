@@ -29,10 +29,11 @@ import json
 import logging
 from urllib.parse import urlparse
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 
 from app.api.federation_guard import federation_required
 from app.core.config_service import ConfigService
+from app.core.limiter import limiter
 from app.db import db
 from app.db.auth import User
 from app.db.federation import (
@@ -244,6 +245,7 @@ def actor_profile(username: str):
 
 @federation_bp.route("/api/federation/actor/<username>/inbox", methods=["POST"])
 @federation_required
+@limiter.limit("30 per minute")
 def actor_inbox(username: str):
     """Per-actor inbox — receives activities from remote servers.
 
@@ -254,6 +256,7 @@ def actor_inbox(username: str):
 
 @federation_bp.route("/api/federation/inbox", methods=["POST"])
 @federation_required
+@limiter.limit("60 per minute")
 def shared_inbox():
     """Shared inbox — receives activities targeting multiple local actors."""
     return _process_inbox(username=None)
