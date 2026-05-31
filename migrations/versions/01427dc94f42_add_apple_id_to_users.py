@@ -5,6 +5,7 @@ Revises: 20260529_add_social_notes
 Create Date: 2026-05-31 17:38:08.335661
 
 """
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -23,10 +24,9 @@ Create Date: 2026-05-31 17:38:08.335661
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
-revision = '01427dc94f42'
-down_revision = '20260529_add_social_notes'
+revision = "01427dc94f42"
+down_revision = "20260529_add_social_notes"
 branch_labels = None
 depends_on = None
 

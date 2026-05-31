@@ -19,6 +19,7 @@ In the native app the user cannot rely on httpOnly cookies, so the backend
 must accept a ``Authorization: Bearer <jwt>`` header in addition to the
 existing session-cookie flow.
 """
+
 import jwt as pyjwt
 import pytest
 

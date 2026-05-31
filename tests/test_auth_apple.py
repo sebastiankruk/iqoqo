@@ -19,6 +19,7 @@ Because we cannot perform a real Apple OAuth round-trip in CI, these tests
 verify route existence, guard behaviour (disabled when unconfigured), and
 the apple_id column is present on the User model.
 """
+
 import pytest
 
 

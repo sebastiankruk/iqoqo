@@ -165,7 +165,7 @@ def apple_callback():
         if user:
             user.apple_id = apple_sub  # type: ignore[attr-defined]
         else:
-            display_name = (user_info.get("name") or (email.split("@")[0] if email else "User"))
+            display_name = user_info.get("name") or (email.split("@")[0] if email else "User")
             user = User(
                 email=email,
                 apple_id=apple_sub,
