@@ -38,6 +38,18 @@ class Config:
     if not SECRET_KEY and os.environ.get("FLASK_ENV") == "production":
         raise RuntimeError("SECRET_KEY environment variable is missing. This is required in production! Please set it in your .env file.")
 
+    @staticmethod
+    def validate_secret_key(key: str) -> None:
+        """Enforce minimum SECRET_KEY length in production (OWASP A02)."""
+        if len(key.encode()) < 32:
+            raise RuntimeError(
+                "SECRET_KEY must be at least 32 bytes (OWASP A02). "
+                'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+
+    if os.environ.get("FLASK_ENV") == "production" and SECRET_KEY:
+        validate_secret_key(SECRET_KEY)
+
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 

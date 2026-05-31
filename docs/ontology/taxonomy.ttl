@@ -152,6 +152,24 @@
     rdfs:comment "Mechanical / 3D Puzzle" .
 
 # Format Aliases (non-canonical names)
+:FormatAliasText a :FormatAlias ;
+    rdfs:label "text" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasAudiobook a :FormatAlias ;
+    rdfs:label "audiobook" ;
+    :resolvesToCategory :MediaCategoryAudiobook .
+:FormatAliasMusic a :FormatAlias ;
+    rdfs:label "music" ;
+    :resolvesToCategory :MediaCategoryMusic .
+:FormatAliasMovie a :FormatAlias ;
+    rdfs:label "movie" ;
+    :resolvesToCategory :MediaCategoryMovie .
+:FormatAliasBoardGame a :FormatAlias ;
+    rdfs:label "board_game" ;
+    :resolvesToCategory :MediaCategoryBoardGame .
+:FormatAliasPuzzle a :FormatAlias ;
+    rdfs:label "puzzle" ;
+    :resolvesToCategory :MediaCategoryPuzzle .
 :FormatAliasStandard a :FormatAlias ;
     rdfs:label "standard" ;
     :resolvesToCategory :MediaCategoryText .
@@ -240,6 +258,10 @@
 
 :StatusWatched a :ProgressStatus ;
     rdfs:label "watched" ;
+    :applicableToCategory :MediaCategoryMovie .
+
+:StatusWatching a :ProgressStatus ;
+    rdfs:label "watching" ;
     :applicableToCategory :MediaCategoryMovie .
 
 

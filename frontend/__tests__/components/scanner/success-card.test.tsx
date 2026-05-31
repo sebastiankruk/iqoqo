@@ -28,6 +28,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import type { IsbnMeta } from "@/types/frbr";
 
 vi.mock("@/lib/api/client", () => ({
@@ -253,5 +254,33 @@ describe("SuccessCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Scan Another" }));
     expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("invalidates items, shelf, and stats queries after successful scan", async () => {
+    const mockInvalidateQueries = vi.fn();
+    vi.mocked(useQueryClient).mockReturnValue({
+      clear: vi.fn(),
+      invalidateQueries: mockInvalidateQueries,
+      removeQueries: vi.fn(),
+      resetQueries: vi.fn(),
+      cancelQueries: vi.fn(),
+      getQueryData: vi.fn(),
+      setQueryData: vi.fn(),
+    } as unknown as ReturnType<typeof useQueryClient>);
+
+    mockApiPost.mockResolvedValueOnce({
+      data: { success: true, data: { item_id: 42, manifestation_id: 55 } },
+    });
+
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
+
+    await waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["items"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["worksShelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["expressionsShelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["stats"] }));
+    });
   });
 });

@@ -225,7 +225,7 @@ export const CATEGORY_STATUS_MAP = {
   text: ["want_to_read", "reading", "read", "dnf"],
   audiobook: ["want_to_listen", "listening", "listened", "dnf"],
   music: ["want_to_listen", "listened"],
-  movie: ["want_to_watch", "watched", "dnf"],
+  movie: ["want_to_watch", "watching", "watched", "dnf"],
   board_game: ["want_to_play", "playing", "played"],
   puzzle: ["want_to_play", "playing", "played"],
 } as const;
@@ -279,6 +279,11 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   miniatures: "board_game",
   jigsaw_puzzle: "puzzle",
   mechanical_puzzle: "puzzle",
+  text: "text",
+  audiobook: "audiobook",
+  music: "music",
+  movie: "movie",
+  puzzle: "puzzle",
   standard: "text",
   audio: "music",
   sound: "music",
@@ -304,7 +309,8 @@ export type ProgressStatus =
   | "want_to_play"
   | "want_to_read"
   | "want_to_watch"
-  | "watched";
+  | "watched"
+  | "watching";
 
 export type ImageType =
   | "back"

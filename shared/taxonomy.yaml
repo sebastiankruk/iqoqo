@@ -136,6 +136,13 @@ media_categories:
 # merges these into FORMAT_TO_CATEGORY / FORMAT_ALIAS_TO_CATEGORY so that
 # lookup code never needs its own hardcoded fallback table.
 format_aliases:
+  # Identity mappings (category name → itself)
+  text: text
+  audiobook: audiobook
+  music: music
+  movie: movie
+  board_game: board_game
+  puzzle: puzzle
   # text aliases
   standard: text
   # music aliases
@@ -168,7 +175,7 @@ progress_statuses:
   text: ["want_to_read", "reading", "read", "dnf"]
   audiobook: ["want_to_listen", "listening", "listened", "dnf"]
   music: ["want_to_listen", "listened"]
-  movie: ["want_to_watch", "watched", "dnf"]
+  movie: ["want_to_watch", "watching", "watched", "dnf"]
   board_game: ["want_to_play", "playing", "played"]
   puzzle: ["want_to_play", "playing", "played"]
 

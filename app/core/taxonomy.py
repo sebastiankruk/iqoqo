@@ -99,13 +99,14 @@ PROGRESS_STATUSES: tuple[str, ...] = (
     "want_to_read",
     "want_to_watch",
     "watched",
+    "watching",
 )
 
 CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
     "text": ("want_to_read", "reading", "read", "dnf"),
     "audiobook": ("want_to_listen", "listening", "listened", "dnf"),
     "music": ("want_to_listen", "listened"),
-    "movie": ("want_to_watch", "watched", "dnf"),
+    "movie": ("want_to_watch", "watching", "watched", "dnf"),
     "board_game": ("want_to_play", "playing", "played"),
     "puzzle": ("want_to_play", "playing", "played"),
 }
@@ -166,6 +167,11 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "miniatures": "board_game",
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
+    "text": "text",
+    "audiobook": "audiobook",
+    "music": "music",
+    "movie": "movie",
+    "puzzle": "puzzle",
     "standard": "text",
     "audio": "music",
     "sound": "music",

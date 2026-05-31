@@ -99,7 +99,7 @@ describe("SidebarFilters with Searchable Facets", () => {
         <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={false} />
       </QueryClientProvider>
     );
-    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "global" });
+    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "global", filters: {} });
 
     // 2. When isLoggedIn is true
     rerender(
@@ -107,6 +107,6 @@ describe("SidebarFilters with Searchable Facets", () => {
         <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} />
       </QueryClientProvider>
     );
-    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user" });
+    expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user", filters: {} });
   });
 });

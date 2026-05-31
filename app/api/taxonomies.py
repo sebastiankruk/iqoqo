@@ -31,60 +31,83 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     Supports a 'scope' query parameter:
     - `scope=user`: (default for backward compatibility if needed, but let's default to global per user request)
     - `scope=global`: Returns all available values regardless of the user.
+
+    Cross-faceted narrowing: pass category, format, genre, or collection_status to narrow results.
     """
     from flask import request
 
     user_id = getattr(g, "user_id", None)
     scope = request.args.get("scope", "global")
+    # Cross-facet filter params
+    category = request.args.get("category")
+    format_filter = request.args.get("format")
+    genre_filter = request.args.get("genre")
 
     try:
-        # 1. Tags & Collections (Scope-dependent)
+        # Build base item query for scope + cross-facet filtering
+        base_item_q = (
+            db.session.query(Item.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .join(Work, Expression.work_id == Work.id)
+        )
+
         if scope == "user":
-            tags_query = (
-                db.session.query(Tag.name)
-                .join(ItemTag, ItemTag.tag_id == Tag.id)
-                .join(Item, Item.id == ItemTag.item_id)
-                .filter(Item.owner_id == user_id)
-                .distinct()
-                .all()
+            base_item_q = base_item_q.filter(Item.owner_id == user_id)
+
+        if category:
+            base_item_q = base_item_q.filter(Expression.content_type == category)
+        if format_filter:
+            base_item_q = base_item_q.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if genre_filter:
+            base_item_q = base_item_q.filter(
+                db.or_(
+                    Work.meta["genres"].as_string().contains(genre_filter),
+                    Work.meta["genre"].as_string().contains(genre_filter),
+                )
             )
+
+        item_ids_subq = base_item_q.subquery()
+
+        # 1. Tags
+        tags_query = (
+            db.session.query(Tag.name)
+            .join(ItemTag, ItemTag.tag_id == Tag.id)
+            .filter(ItemTag.item_id.in_(db.session.query(item_ids_subq.c.id)))
+            .distinct()
+            .all()
+        )
+
+        # 2. Collections
+        if scope == "user":
             collections_query = db.session.query(UserCollection.name).filter(UserCollection.owner_id == user_id).distinct().all()
         else:
-            tags_query = db.session.query(Tag.name).distinct().all()
             collections_query = db.session.query(UserCollection.name).distinct().all()
 
-        # 2. Publishers & Genres
-        if scope == "user":
-            publishers_query = (
-                db.session.query(Manifestation.publisher)
-                .join(Item, Item.manifestation_id == Manifestation.id)
-                .filter(Manifestation.publisher.isnot(None), Manifestation.publisher != "", Item.owner_id == user_id)
-                .distinct()
-                .all()
+        # 3. Publishers
+        publishers_query = (
+            db.session.query(Manifestation.publisher)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(
+                Manifestation.publisher.isnot(None),
+                Manifestation.publisher != "",
+                Item.id.in_(db.session.query(item_ids_subq.c.id)),
             )
+            .distinct()
+            .all()
+        )
 
-            work_ids = (
-                db.session.query(Work.id)
-                .join(Expression, Expression.work_id == Work.id)
-                .join(Manifestation, Manifestation.expression_id == Expression.id)
-                .join(Item, Item.manifestation_id == Manifestation.id)
-                .filter(Item.owner_id == user_id)
-                .distinct()
-                .all()
-            )
-        else:
-            publishers_query = (
-                db.session.query(Manifestation.publisher)
-                .filter(
-                    Manifestation.publisher.isnot(None),
-                    Manifestation.publisher != "",
-                )
-                .distinct()
-                .all()
-            )
-            work_ids = db.session.query(Work.id).distinct().all()
-
-        w_ids = [r[0] for r in work_ids]
+        # 4. Genres (from Work.meta)
+        work_ids_query = (
+            db.session.query(Work.id)
+            .join(Expression, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(Item.id.in_(db.session.query(item_ids_subq.c.id)))
+            .distinct()
+            .all()
+        )
+        w_ids = [r[0] for r in work_ids_query]
 
         tags = sorted([t[0] for t in tags_query if t[0]])
         collections = sorted([c[0] for c in collections_query if c[0]])
