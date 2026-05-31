@@ -38,6 +38,8 @@ interface BatchScanToggleProps {
  * must read the exported `useBatchMode` hook to control scanner reset behaviour.
  *
  * @param props - Component props.
+ * @param props.onItemAdded - Callback invoked each time an item is added in batch mode.
+ * @param props.compact - Whether the toggle should be rendered in a compact layout.
  * @returns {JSX.Element} The batch scan toggle.
  */
 export function BatchScanToggle({ onItemAdded, compact = false }: BatchScanToggleProps) {
@@ -72,10 +74,7 @@ export function BatchScanToggle({ onItemAdded, compact = false }: BatchScanToggl
         onCheckedChange={setBatchMode}
         aria-label="Toggle continuous scan mode"
       />
-      <label
-        htmlFor="batch-scan-toggle"
-        className="text-sm text-muted-foreground cursor-pointer select-none"
-      >
+      <label htmlFor="batch-scan-toggle" className="text-sm text-muted-foreground cursor-pointer select-none">
         Continuous Scan
       </label>
     </div>

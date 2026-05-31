@@ -41,6 +41,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
+    /** Check if the native app has a configured instance URL. */
     async function check() {
       if (!isNativeApp()) {
         setReady(true);

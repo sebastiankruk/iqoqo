@@ -47,9 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (isNativeApp()) {
     return (
       <div className="flex h-screen items-center justify-center p-6 text-center">
-        <p className="text-muted-foreground">
-          Admin features are available in the web version.
-        </p>
+        <p className="text-muted-foreground">Admin features are available in the web version.</p>
       </div>
     );
   }

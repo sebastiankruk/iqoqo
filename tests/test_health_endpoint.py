@@ -18,6 +18,7 @@
 The mobile app calls GET /api/health to verify that a user-entered URL points
 to a real iqoqo instance before persisting it.
 """
+
 import pytest
 
 
@@ -38,6 +39,4 @@ def test_health_contains_status_ok(client):
     res = client.get("/api/health")
     data = res.get_json()
     # Accept {"status": "ok"} or {"ok": true} — just verify something truthy.
-    assert data.get("status") == "ok" or data.get("ok") is True or data.get("healthy") is True, (
-        f"Unexpected health response body: {data}"
-    )
+    assert data.get("status") == "ok" or data.get("ok") is True or data.get("healthy") is True, f"Unexpected health response body: {data}"

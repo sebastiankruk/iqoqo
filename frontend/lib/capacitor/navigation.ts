@@ -23,6 +23,7 @@ import { isNativeApp } from "./platform";
  * exits the app. A no-op on iOS and web.
  *
  * @param router - Next.js router object (or any object with a `back()` method).
+ * @param router.back - Function to navigate back one step.
  */
 export function registerBackButtonHandler(router: { back: () => void }): void {
   if (!isNativeApp()) return;
@@ -47,6 +48,7 @@ export function registerBackButtonHandler(router: { back: () => void }): void {
  * A no-op on web.
  *
  * @param router - Next.js router object (or any object with a `push()` method).
+ * @param router.push - Function to navigate to a path.
  */
 export function registerDeepLinkHandler(router: { push: (path: string) => void }): void {
   if (!isNativeApp()) return;
@@ -54,8 +56,19 @@ export function registerDeepLinkHandler(router: { push: (path: string) => void }
   App.addListener("appUrlOpen", ({ url }) => {
     try {
       const parsed = new URL(url);
-      // Reconstruct relative path with query string (e.g. /auth-exchange?token=abc)
-      const fullPath = parsed.pathname + parsed.search;
+      let fullPath: string;
+
+      // For custom URL schemes (e.g. iqoqo://auth-exchange?token=...), the
+      // WHATWG URL parser treats the first segment after `//` as the hostname
+      // rather than part of the pathname. Reconstruct the intended path by
+      // prepending the hostname as a path segment.
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        const host = parsed.hostname;
+        fullPath = (host ? `/${host}` : "") + parsed.pathname + parsed.search;
+      } else {
+        fullPath = parsed.pathname + parsed.search;
+      }
+
       if (fullPath && fullPath !== "/") {
         router.push(fullPath);
       }

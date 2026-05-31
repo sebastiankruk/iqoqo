@@ -16,7 +16,7 @@
 /**
  * Unit tests for frontend/lib/capacitor/storage.ts
  *
- * Both @capacitor/preferences and @capacitor-community/secure-storage are
+ * Both @capacitor/preferences and capacitor-secure-storage-plugin are
  * mocked with in-memory stores so no native runtime is required.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,9 +28,7 @@ const secureStore: Record<string, string> = {};
 
 vi.mock("@capacitor/preferences", () => ({
   Preferences: {
-    get: vi.fn(({ key }: { key: string }) =>
-      Promise.resolve({ value: prefStore[key] ?? null })
-    ),
+    get: vi.fn(({ key }: { key: string }) => Promise.resolve({ value: prefStore[key] ?? null })),
     set: vi.fn(({ key, value }: { key: string; value: string }) => {
       prefStore[key] = value;
       return Promise.resolve();
@@ -42,7 +40,7 @@ vi.mock("@capacitor/preferences", () => ({
   },
 }));
 
-vi.mock("@capacitor-community/secure-storage", () => ({
+vi.mock("capacitor-secure-storage-plugin", () => ({
   SecureStoragePlugin: {
     get: vi.fn(({ key }: { key: string }) => {
       if (!(key in secureStore)) throw new Error("Key not found");

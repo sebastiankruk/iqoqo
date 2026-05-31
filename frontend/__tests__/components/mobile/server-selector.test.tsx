@@ -61,9 +61,7 @@ describe("ServerSelector", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /verify connection/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/connected: my library/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText(/connected: my library/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /continue to login/i })).toBeInTheDocument();
   });
 
@@ -76,9 +74,7 @@ describe("ServerSelector", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /verify connection/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/network failure/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText(/network failure/i)).toBeInTheDocument());
   });
 
   it("navigates to /login after connecting", async () => {
@@ -97,9 +93,7 @@ describe("ServerSelector", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /verify connection/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /continue to login/i })).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /continue to login/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /continue to login/i }));
 
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"));

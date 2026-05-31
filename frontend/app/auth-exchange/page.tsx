@@ -27,6 +27,8 @@ import { setAuthToken } from "@/lib/capacitor/storage";
  *   and navigates to the dashboard.
  * - **Web**: delegates to the existing BFF API route `/api/auth-exchange` which
  *   converts the token into an httpOnly session cookie, then follows the redirect.
+ *
+ * @returns {JSX.Element} Loading UI while the exchange is processed.
  */
 function AuthExchangeHandler() {
   const router = useRouter();
@@ -34,6 +36,7 @@ function AuthExchangeHandler() {
   const token = searchParams.get("token");
 
   useEffect(() => {
+    /** Exchange the token param for persistent auth (secure storage or cookie). */
     async function handleExchange() {
       if (!token) {
         router.replace("/login");
@@ -72,13 +75,7 @@ function AuthExchangeHandler() {
  */
 export default function AuthExchangePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-screen items-center justify-center">
-          Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading…</div>}>
       <AuthExchangeHandler />
     </Suspense>
   );

@@ -77,60 +77,62 @@ const nextConfig: NextConfig = {
   // optimization per provider once URLs are stabilised; unoptimized prop is
   // used in the component until then.
   // In Capacitor builds there is no server-side optimiser, so disable it.
-  images: isCapacitorBuild ? { unoptimized: true } : {
-    localPatterns: [
-      {
-        pathname: "/api/static/**",
+  images: isCapacitorBuild
+    ? { unoptimized: true }
+    : {
+        localPatterns: [
+          {
+            pathname: "/api/static/**",
+          },
+          {
+            pathname: "/static/**",
+          },
+          {
+            pathname: "/*.png",
+          },
+          {
+            pathname: "/*.svg",
+          },
+        ],
+        remotePatterns: [
+          {
+            protocol: "https",
+            hostname: "books.google.com",
+          },
+          {
+            protocol: "https",
+            hostname: "books.googleusercontent.com",
+          },
+          {
+            protocol: "https",
+            hostname: "lh3.googleusercontent.com",
+          },
+          {
+            protocol: "https",
+            hostname: "covers.openlibrary.org",
+          },
+          {
+            protocol: "https",
+            hostname: "i.discogs.com",
+          },
+          {
+            protocol: "https",
+            hostname: "coverartarchive.org",
+          },
+          {
+            protocol: "https",
+            hostname: "img.discogs.com",
+          },
+          {
+            protocol: "https",
+            hostname: "archive.org",
+          },
+          {
+            protocol: "https",
+            hostname: "images.sk-static.com",
+          },
+        ],
       },
-      {
-        pathname: "/static/**",
-      },
-      {
-        pathname: "/*.png",
-      },
-      {
-        pathname: "/*.svg",
-      },
-    ],
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "books.google.com",
-      },
-      {
-        protocol: "https",
-        hostname: "books.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "covers.openlibrary.org",
-      },
-      {
-        protocol: "https",
-        hostname: "i.discogs.com",
-      },
-      {
-        protocol: "https",
-        hostname: "coverartarchive.org",
-      },
-      {
-        protocol: "https",
-        hostname: "img.discogs.com",
-      },
-      {
-        protocol: "https",
-        hostname: "archive.org",
-      },
-      {
-        protocol: "https",
-        hostname: "images.sk-static.com",
-      },
-    ],
-  },
 };
 
 export default withNextIntl(nextConfig);

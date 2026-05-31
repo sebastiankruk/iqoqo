@@ -13,11 +13,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-// SECURITY NOTE: Auth tokens are stored in @capacitor-community/secure-storage
+// SECURITY NOTE: Auth tokens are stored in capacitor-secure-storage-plugin
 // (Keychain on iOS, EncryptedSharedPreferences on Android). Non-sensitive config
 // (instance URL, name, locale) uses standard @capacitor/preferences.
 import { Preferences } from "@capacitor/preferences";
-import { SecureStoragePlugin } from "@capacitor-community/secure-storage";
+import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 
 const INSTANCE_URL_KEY = "iqoqo_instance_url";
 const INSTANCE_NAME_KEY = "iqoqo_instance_name";

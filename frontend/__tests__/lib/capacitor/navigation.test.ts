@@ -43,6 +43,10 @@ vi.mock("@/lib/capacitor/platform", () => ({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Simulate firing a Capacitor App event.
+ * @param event - Event name to fire.
+ * @param data - Event payload.
+ */
 function fireEvent(event: string, data: unknown) {
   appListeners[event]?.(data);
 }

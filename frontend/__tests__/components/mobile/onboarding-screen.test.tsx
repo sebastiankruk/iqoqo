@@ -42,6 +42,11 @@ vi.mock("@/components/mobile/server-selector", () => ({
 }));
 
 // We must import AFTER mocks are registered.
+/**
+ * Dynamically import the OnboardingGuard after mocks are set up.
+ *
+ * @returns The OnboardingGuard component.
+ */
 async function importGuard() {
   const { OnboardingGuard } = await import("@/components/mobile/onboarding-screen");
   return OnboardingGuard;

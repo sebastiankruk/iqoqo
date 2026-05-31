@@ -39,6 +39,7 @@ export function ServerSelector() {
   const [errorMsg, setErrorMsg] = useState("");
   const [instanceInfo, setInstanceInfo] = useState<{ name?: string } | null>(null);
 
+  /** Verify the entered URL points to a valid iqoqo instance. */
   async function handleVerify() {
     const cleanUrl = url.replace(/\/+$/, "");
     setState("verifying");
@@ -62,6 +63,7 @@ export function ServerSelector() {
     }
   }
 
+  /** Persist the verified instance URL and navigate to login. */
   async function handleConnect() {
     const cleanUrl = url.replace(/\/+$/, "");
     await setInstanceUrl(cleanUrl);
@@ -77,9 +79,7 @@ export function ServerSelector() {
         <div className="text-center space-y-2">
           <Server className="mx-auto h-12 w-12 text-muted-foreground" />
           <h1 className="text-2xl font-bold">Connect to iqoqo</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter the URL of your iqoqo instance
-          </p>
+          <p className="text-sm text-muted-foreground">Enter the URL of your iqoqo instance</p>
         </div>
 
         <div className="space-y-4">
@@ -109,14 +109,8 @@ export function ServerSelector() {
           )}
 
           {state !== "success" ? (
-            <Button
-              onClick={handleVerify}
-              disabled={!url.trim() || state === "verifying"}
-              className="w-full"
-            >
-              {state === "verifying" && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+            <Button onClick={handleVerify} disabled={!url.trim() || state === "verifying"} className="w-full">
+              {state === "verifying" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Verify Connection
             </Button>
           ) : (
