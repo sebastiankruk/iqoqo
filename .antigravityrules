@@ -11,5 +11,6 @@ Do not proceed with any analysis, planning, or coding until you have fully loade
 - **Agent Definitions:** Review the agent personas and workflows in the `.agents/` directory.
 - **Provided Implementation**: If a task involves pre-written code snippets or diffs (usually in `.context/notes/code/`), you MUST use them as your primary source of truth.
 - **Venv Context**: Always execute Python commands from the `.venv/bin/` directory.
+- **UX Audits**: Use the `iqoqo-ux-auditor` skill and `/ux-audit` workflow to analyze button density, layouts, and item addition flows on https://dev.iqoqo.cc.
 
 Ensure all architectural decisions, code generation (Python/Flask backend, Next.js/React frontend), and database interactions comply strictly with the guidelines specified in these documents.
