@@ -976,3 +976,238 @@ class TestFederationSync:
 
         result = sync_remote_object({"type": "Document", "id": "urn:test"}, remote_instance)
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Consent API Tests
+# ---------------------------------------------------------------------------
+
+
+class TestConsentAPI:
+    """Test user consent GET/PUT endpoints."""
+
+    def test_get_consent_unauthenticated(self, federation_enabled_app):
+        """GET /federation/consent without auth returns 401."""
+        with federation_enabled_app.test_client() as client:
+            resp = client.get("/api/federation/consent")
+            assert resp.status_code == 401
+
+    def test_get_consent_default(self, federation_enabled_app, non_consenting_user):
+        """GET /federation/consent returns defaults when no record exists."""
+        from app.api.auth import generate_internal_jwt
+
+        with federation_enabled_app.test_client() as client:
+            token = generate_internal_jwt(non_consenting_user)
+            resp = client.get("/api/federation/consent", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["success"] is True
+            assert data["data"]["federated_profile"] is False
+            assert data["data"]["federated_collection"] is False
+
+    def test_put_consent_enables_federation(self, federation_enabled_app, non_consenting_user):
+        """PUT /federation/consent creates consent and generates keypair."""
+        from app.api.auth import generate_internal_jwt
+
+        with federation_enabled_app.test_client() as client:
+            token = generate_internal_jwt(non_consenting_user)
+            resp = client.put(
+                "/api/federation/consent",
+                json={"federated_profile": True},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["success"] is True
+            assert data["data"]["federated_profile"] is True
+
+            # Verify keypair was generated
+            from app.core.federation_keys import get_actor_public_key
+
+            pub_key = get_actor_public_key(str(non_consenting_user.id))
+            assert pub_key is not None
+            assert "BEGIN PUBLIC KEY" in pub_key
+
+    def test_put_consent_no_body(self, federation_enabled_app, federation_user):
+        """PUT /federation/consent with no body returns 400."""
+        from app.api.auth import generate_internal_jwt
+
+        with federation_enabled_app.test_client() as client:
+            token = generate_internal_jwt(federation_user)
+            resp = client.put(
+                "/api/federation/consent",
+                headers={"Authorization": f"Bearer {token}"},
+                content_type="application/json",
+            )
+            assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Date Header Replay Protection Tests
+# ---------------------------------------------------------------------------
+
+
+class TestDateHeaderReplayProtection:
+    """Test that stale Date headers are rejected."""
+
+    def test_stale_date_rejected(self, federation_enabled_app, federation_user, remote_actor):
+        """Inbox rejects requests with Date header older than 5 minutes."""
+        from email.utils import formatdate
+        from time import mktime
+
+        # Sign with a date 10 minutes in the past
+        from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
+
+        from app.core.http_signatures import sign_request
+
+        private_key = rsa_mod.generate_private_key(public_exponent=65537, key_size=2048)
+        public_pem = private_key.public_key().public_bytes(
+            encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.PEM,
+            format=__import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.SubjectPublicKeyInfo,
+        )
+
+        # Update remote actor with the real public key
+        from app.db.models import db
+
+        remote_actor.public_key_pem = public_pem.decode("utf-8")
+        db.session.commit()
+
+        # Create an activity with a stale date
+        from datetime import timedelta
+
+        stale_time = datetime.now(UTC) - timedelta(minutes=10)
+        stale_date = formatdate(timeval=mktime(stale_time.timetuple()), localtime=False, usegmt=True)
+
+        activity = {"type": "Follow", "actor": remote_actor.actor_uri, "object": "https://test.iqoqo.local/api/federation/actor/feduser"}
+        body = json.dumps(activity).encode()
+        sig_headers = sign_request(
+            method="POST",
+            url="https://test.iqoqo.local/api/federation/actor/feduser/inbox",
+            body=body,
+            actor_key_id=f"{remote_actor.actor_uri}#main-key",
+            private_key=private_key,
+        )
+        # Override Date header with stale value
+        sig_headers["Date"] = stale_date
+
+        with federation_enabled_app.test_client() as client:
+            resp = client.post(
+                "/api/federation/actor/feduser/inbox",
+                data=body,
+                headers=sig_headers,
+                content_type="application/activity+json",
+            )
+            assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Remote Actor Key Fetch Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteActorKeyFetch:
+    """Test that unknown actors' keys are fetched on first contact."""
+
+    def test_unknown_actor_key_fetched(self, federation_enabled_app, remote_instance, federation_user):
+        """verify_flask_request fetches actor profile when key is missing."""
+        from unittest.mock import MagicMock, patch
+
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
+
+        # Generate a real keypair
+        private_key = rsa_mod.generate_private_key(public_exponent=65537, key_size=2048)
+        public_pem = (
+            private_key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("utf-8")
+        )
+
+        actor_uri = "https://remote.example.com/api/federation/actor/newuser"
+
+        # Mock the federation client to return actor profile with public key
+        mock_actor_data = {
+            "id": actor_uri,
+            "type": "Person",
+            "preferredUsername": "newuser",
+            "name": "New User",
+            "inbox": f"{actor_uri}/inbox",
+            "outbox": f"{actor_uri}/outbox",
+            "publicKey": {
+                "id": f"{actor_uri}#main-key",
+                "owner": actor_uri,
+                "publicKeyPem": public_pem,
+            },
+        }
+
+        with federation_enabled_app.app_context():
+            from app.core.http_signatures import sign_request
+
+            # Sign a request
+            activity = {"type": "Follow", "actor": actor_uri, "object": "https://test.iqoqo.local/api/federation/actor/feduser"}
+            body = json.dumps(activity).encode()
+            sig_headers = sign_request(
+                method="POST",
+                url="https://test.iqoqo.local/api/federation/actor/feduser/inbox",
+                body=body,
+                actor_key_id=f"{actor_uri}#main-key",
+                private_key=private_key,
+            )
+
+            with patch("app.core.federation_client.federation_client.fetch_actor", return_value=mock_actor_data):
+                with federation_enabled_app.test_client() as client:
+                    resp = client.post(
+                        "/api/federation/actor/feduser/inbox",
+                        data=body,
+                        headers=sig_headers,
+                        content_type="application/activity+json",
+                    )
+                    # Should succeed (202 accepted) — actor was fetched and key cached
+                    assert resp.status_code == 202
+
+            # Verify actor was cached in DB
+            from app.db.federation import FederationActor
+
+            cached = FederationActor.query.filter_by(actor_uri=actor_uri).first()
+            assert cached is not None
+            assert cached.public_key_pem == public_pem
+            assert cached.username == "newuser"
+
+    def test_fetch_failure_returns_401(self, federation_enabled_app):
+        """verify_flask_request returns 401 when actor fetch fails."""
+        from unittest.mock import patch
+
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
+
+        from app.core.federation_client import FederationDeliveryError
+        from app.core.http_signatures import sign_request
+
+        private_key = rsa_mod.generate_private_key(public_exponent=65537, key_size=2048)
+        actor_uri = "https://unreachable.example.com/actor/ghost"
+
+        activity = {"type": "Follow", "actor": actor_uri, "object": "x"}
+        body = json.dumps(activity).encode()
+        sig_headers = sign_request(
+            method="POST",
+            url="https://test.iqoqo.local/api/federation/inbox",
+            body=body,
+            actor_key_id=f"{actor_uri}#main-key",
+            private_key=private_key,
+        )
+
+        with patch(
+            "app.core.federation_client.federation_client.fetch_actor",
+            side_effect=FederationDeliveryError("Connection refused"),
+        ):
+            with federation_enabled_app.test_client() as client:
+                resp = client.post(
+                    "/api/federation/inbox",
+                    data=body,
+                    headers=sig_headers,
+                    content_type="application/activity+json",
+                )
+                assert resp.status_code == 401

@@ -27,7 +27,6 @@ import logging
 import re
 from datetime import UTC, datetime
 from email.utils import formatdate
-from time import mktime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -78,7 +77,7 @@ def sign_request(
         path = f"{path}?{parsed.query}"
 
     now = datetime.now(UTC)
-    date_str = formatdate(timeval=mktime(now.timetuple()), localtime=False, usegmt=True)
+    date_str = formatdate(timeval=now.timestamp(), localtime=False, usegmt=True)
 
     headers: dict[str, str] = {
         "Host": host or "",
@@ -243,8 +242,8 @@ def verify_flask_request(request: Any) -> str:
             delta = abs((now - request_date).total_seconds())
             if delta > 300:  # 5 minutes
                 raise SignatureVerificationError("Request date is too far from current time (possible replay)")
-        except (TypeError, ValueError):
-            raise SignatureVerificationError("Invalid Date header format")
+        except (TypeError, ValueError) as exc:
+            raise SignatureVerificationError("Invalid Date header format") from exc
 
     # Parse signature to get keyId
     sig_header = headers.get("Signature", "")

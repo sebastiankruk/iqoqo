@@ -489,3 +489,91 @@ def actor_following(username: str):
         ),
         content_type="application/activity+json; charset=utf-8",
     )
+
+
+# ---------------------------------------------------------------------------
+# User Consent API
+# ---------------------------------------------------------------------------
+
+
+@federation_bp.route("/api/federation/consent", methods=["GET"])
+@federation_required
+def get_consent():
+    """Get current user's federation consent settings."""
+    from app.api.decorators import require_auth
+
+    @require_auth
+    def _inner():
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+        consent = FederationConsent.query.filter_by(user_id=user_id).first()
+        if not consent:
+            # Return defaults
+            return jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "user_id": str(user_id),
+                        "federated_profile": False,
+                        "federated_collection": False,
+                        "updated_at": None,
+                    },
+                }
+            )
+
+        return jsonify({"success": True, "data": consent.to_dict()})
+
+    return _inner()
+
+
+@federation_bp.route("/api/federation/consent", methods=["PUT"])
+@federation_required
+def update_consent():
+    """Update current user's federation consent settings.
+
+    Auto-generates an actor keypair when federated_profile is first enabled.
+    """
+    from app.api.decorators import require_auth
+
+    @require_auth
+    def _inner():
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "Missing request body"}), 400
+
+        consent = FederationConsent.query.filter_by(user_id=user_id).first()
+        if not consent:
+            consent = FederationConsent(user_id=user_id)
+            db.session.add(consent)
+
+        if "federated_profile" in data:
+            consent.federated_profile = bool(data["federated_profile"])
+        if "federated_collection" in data:
+            consent.federated_collection = bool(data["federated_collection"])
+
+        db.session.commit()
+
+        # Auto-generate keypair when profile federation is first enabled
+        if consent.federated_profile:
+            user = db.session.get(User, user_id)
+            if user and not user.federation_public_key:
+                from app.core.federation_keys import generate_actor_keypair
+
+                generate_actor_keypair(str(user_id))
+                # Store public key on user record
+                from app.core.federation_keys import get_actor_public_key
+
+                pub_key = get_actor_public_key(str(user_id))
+                if pub_key:
+                    user.federation_public_key = pub_key
+                    db.session.commit()
+
+        return jsonify({"success": True, "data": consent.to_dict()})
+
+    return _inner()
