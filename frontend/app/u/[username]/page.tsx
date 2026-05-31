@@ -58,6 +58,12 @@ async function getItems(username: string) {
   return res.json();
 }
 
+// Required for `output: "export"` (Capacitor builds). Public profile pages
+// are fetched at runtime; no pages are pre-rendered.
+export function generateStaticParams() {
+  return [{ username: "_" }];
+}
+
 /**
  * Generates SEO metadata for the public profile page.
  * @param props - Component props.
@@ -66,6 +72,10 @@ async function getItems(username: string) {
  */
 export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
   const { username } = await params;
+
+  // Placeholder route for Capacitor static export — skip fetch.
+  if (username === "_") return { title: "User Profile - iqoqo" };
+
   const profileRes = await getProfile(username);
 
   if (!profileRes || !profileRes.success) {
@@ -95,6 +105,11 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
   const { username } = await params;
   const t = await getTranslations("Public");
+
+  // Placeholder route for Capacitor static export — render a shell.
+  if (username === "_") {
+    return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading…</p></div>;
+  }
 
   const profileRes = await getProfile(username);
   if (!profileRes || !profileRes.success) {

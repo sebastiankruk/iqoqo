@@ -351,12 +351,13 @@ verify-perms:
 mobile-build: ## Build frontend static export for Capacitor (sets CAPACITOR_BUILD=true)
 	@# Swap in the static stub for the auth-exchange route (output:export forbids
 	@# dynamic route handlers; the native app never calls this endpoint anyway).
-	@cp frontend/app/api/auth-exchange/route.ts /tmp/iqoqo-auth-exchange-route.bak
-	@cp frontend/app/api/auth-exchange/route.capacitor.ts frontend/app/api/auth-exchange/route.ts
-	@cd frontend && CAPACITOR_BUILD=true npm run build; \
-	  EXIT_CODE=$$?; \
-	  cp /tmp/iqoqo-auth-exchange-route.bak frontend/app/api/auth-exchange/route.ts; \
-	  exit $$EXIT_CODE
+	@# `git restore` is used to reset route.ts cleanly on success or failure.
+	@cd frontend && \
+	  cp app/api/auth-exchange/route.capacitor.ts app/api/auth-exchange/route.ts && \
+	  CAPACITOR_BUILD=true npm run build; \
+	  BUILD_EXIT=$$?; \
+	  git restore app/api/auth-exchange/route.ts; \
+	  exit $$BUILD_EXIT
 
 mobile-sync: mobile-build ## Sync static web assets into both native projects
 	cd frontend && npx cap sync

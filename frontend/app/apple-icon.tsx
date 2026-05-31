@@ -16,7 +16,9 @@
 import { ImageResponse } from "next/og";
 
 // Route segment config
-export const runtime = "edge";
+// `force-static` is required for `output: "export"` (Capacitor builds).
+// The icon is a static graphic so there is no runtime behaviour to lose.
+export const dynamic = "force-static";
 
 // Image metadata
 export const size = {

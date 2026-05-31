@@ -42,6 +42,12 @@ async function getSharedCollection(token: string) {
   return res.json();
 }
 
+// Required for `output: "export"` (Capacitor builds). Shared collection pages
+// are fetched at runtime; no pages are pre-rendered.
+export function generateStaticParams() {
+  return [{ token: "_" }];
+}
+
 /**
  * Generates SEO metadata for the shared collection page.
  * @param props - Component props.
@@ -50,6 +56,10 @@ async function getSharedCollection(token: string) {
  */
 export async function generateMetadata({ params }: SharedCollectionPageProps): Promise<Metadata> {
   const { token } = await params;
+
+  // Placeholder route for Capacitor static export — skip fetch.
+  if (token === "_") return { title: "Shared Collection - iqoqo" };
+
   const collectionRes = await getSharedCollection(token);
 
   if (!collectionRes || !collectionRes.success) {
@@ -80,6 +90,11 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
 export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
   const { token } = await params;
   const t = await getTranslations("Public");
+
+  // Placeholder route for Capacitor static export — render a shell.
+  if (token === "_") {
+    return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading…</p></div>;
+  }
 
   const collectionRes = await getSharedCollection(token);
   if (!collectionRes || !collectionRes.success) {
