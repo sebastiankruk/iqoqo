@@ -521,6 +521,22 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
         manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
     )
 
+    if task_id is None:
+        # Queue unavailable (e.g. Redis down): raw file is saved; mark as pending so
+        # the user or admin can trigger regeneration once the queue recovers.
+        manifestation.update_meta(cover_status="pending")
+        db.session.commit()
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {"task_id": None, "message": "Cover saved; processing deferred — queue unavailable"},
+                    "error": None,
+                }
+            ),
+            202,
+        )
+
     return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover upload processing started"}, "error": None}), 202
 
 
@@ -639,6 +655,15 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
         description=description,
         genre=genre,
     )
+
+    if task_id is None:
+        # Queue unavailable: reset cover_status so the user can retry later.
+        manif.update_meta(cover_status="failed")
+        db.session.commit()
+        return (
+            jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}),
+            503,
+        )
 
     return (
         jsonify(

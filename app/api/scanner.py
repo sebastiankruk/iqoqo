@@ -111,6 +111,8 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
     ingest_map = {cat: getattr(IngestService, method) for cat, method in CATEGORY_INGEST_METHOD.items()}
 
+    current_app.logger.info("Ingesting barcode=%s format_hint=%s category_hint=%s", barcode, format_hint, category_hint)
+
     if category_hint in ingest_map:
         result: Manifestation = ingest_map[category_hint](barcode)
         return result
@@ -615,6 +617,9 @@ def extract_from_cover():
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
     task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=getattr(g, "user_id", None))
+
+    if task_id is None:
+        return jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}), 503
 
     return jsonify({"success": True, "data": {"task_id": task_id}, "error": None}), 202
 

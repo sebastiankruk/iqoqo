@@ -513,7 +513,8 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <BookOpen className="h-4 w-4" /> My Items
+                    <BookOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">My Items</span>
                   </button>
                   <button
                     role="tab"
@@ -528,7 +529,8 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <LibraryIcon className="h-4 w-4" /> Global Library
+                    <LibraryIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Global Library</span>
                   </button>
                   <button
                     role="tab"
@@ -543,7 +545,8 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <Type className="h-4 w-4" /> Expressions
+                    <Type className="h-4 w-4" />
+                    <span className="hidden sm:inline">Expressions</span>
                   </button>
                   <button
                     role="tab"
@@ -558,7 +561,8 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <Layers className="h-4 w-4" /> Works
+                    <Layers className="h-4 w-4" />
+                    <span className="hidden sm:inline">Works</span>
                   </button>
                   <button
                     role="tab"
@@ -573,7 +577,8 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <SlidersHorizontal className="h-4 w-4" /> Roadmaps
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="hidden sm:inline">Roadmaps</span>
                   </button>
                 </div>
 
