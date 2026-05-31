@@ -257,7 +257,11 @@ export function Navbar() {
           <span className="text-[10px] mt-1">Collection</span>
         </Link>
 
-        {profile ? (
+        {!mounted ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-1 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : profile ? (
           <>
             <Link
               href="/scan"
