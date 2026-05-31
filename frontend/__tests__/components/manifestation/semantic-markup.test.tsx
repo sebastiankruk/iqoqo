@@ -114,4 +114,73 @@ describe("Semantic Web Validation for Manifestation View", () => {
     expect(fantasyTag).toBeInTheDocument();
     expect(fantasyTag.getAttribute("property")).toBe("sioc:topic");
   });
+
+  it("should map content_type to correct Schema.org type for music", () => {
+    const musicManifestation = {
+      ...mockManifestation,
+      id: 200,
+      title: "Abbey Road",
+      content_type: "music",
+      authors: ["The Beatles"],
+    };
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: musicManifestation, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["@type"]).toBe("MusicAlbum");
+  });
+
+  it("should map content_type to correct Schema.org type for movie", () => {
+    const movieManifestation = {
+      ...mockManifestation,
+      id: 201,
+      title: "Inception",
+      content_type: "movie",
+      authors: ["Christopher Nolan"],
+    };
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: movieManifestation, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["@type"]).toBe("Movie");
+  });
+
+  it("should map content_type to correct Schema.org type for puzzle", () => {
+    const puzzleManifestation = {
+      ...mockManifestation,
+      id: 202,
+      title: "Ravensburger 1000pc",
+      content_type: "puzzle",
+      authors: [],
+    };
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: puzzleManifestation, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["@type"]).toBe("Product");
+  });
+
+  it("should include inLanguage in JSON-LD when available", () => {
+    const langManifestation = {
+      ...mockManifestation,
+      meta: { ...mockManifestation.meta, language: "en" },
+    };
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: langManifestation, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["inLanguage"]).toBe("en");
+  });
 });

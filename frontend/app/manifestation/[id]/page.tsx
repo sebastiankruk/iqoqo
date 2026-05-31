@@ -102,9 +102,18 @@ export default function ManifestationPage() {
   const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
   const isBoardGame = manifestation.content_type === "board_game";
-  const schemaType = isBoardGame ? "Game" : "Book";
+  const schemaTypeMap: Record<string, string> = {
+    text: "Book",
+    book: "Book",
+    audiobook: "Audiobook",
+    music: "MusicAlbum",
+    movie: "Movie",
+    board_game: "Game",
+    puzzle: "Product",
+  };
+  const schemaType = schemaTypeMap[manifestation.content_type ?? "text"] || "CreativeWork";
 
-  const jsonLdData = {
+  const jsonLdData: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": schemaType,
     name: manifestation.title || "Untitled Work",
@@ -116,6 +125,7 @@ export default function ManifestationPage() {
     identifier: manifestation.id,
     publisher: manifestation.meta?.Publisher,
     datePublished: resolved_year,
+    inLanguage: manifestation.meta?.language,
   };
 
   const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];

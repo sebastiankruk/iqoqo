@@ -455,6 +455,16 @@ FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
 
+# Schema.org type mapping for content types
+SCHEMA_TYPE_MAP = {
+    "text": SCHEMA.Book,
+    "audiobook": SCHEMA.Audiobook,
+    "music": SCHEMA.MusicAlbum,
+    "movie": SCHEMA.Movie,
+    "board_game": SCHEMA.Game,
+    "puzzle": SCHEMA.Product,
+}
+
 
 def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
     """
@@ -478,6 +488,9 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
             tags = item.get("tags", [])
             status = item.get("status")
             work_id = item.get("work_id", manifestation_id)
+            content_type = item.get("content_type")
+            publisher = item.get("publisher")
+            language = item.get("language")
         else:
             item_id = getattr(item, "id", None)
             if hasattr(item, "manifestation_id"):
@@ -490,6 +503,9 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                content_type = None
+                publisher = None
+                language = None
 
                 m = item.manifestation
                 if m:
@@ -497,9 +513,12 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                     expression_id = m.expression_id
                     title = getattr(m, "title", "Untitled") or "Untitled"
                     isbn = m.isbn13
+                    publisher = getattr(m, "publisher", None)
                     if m.expression:
                         expression_id = m.expression.id
                         work_id = m.expression.work_id
+                        content_type = m.expression.content_type
+                        language = getattr(m.expression, "language", None)
                         if m.expression.work:
                             work_id = m.expression.work.id
                             title = m.expression.work.title or title
@@ -526,11 +545,16 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                content_type = None
+                publisher = getattr(item, "publisher", None)
+                language = None
 
                 if hasattr(item, "expression") and item.expression:
                     expr = item.expression
                     expression_id = expr.id
                     work_id = expr.work_id
+                    content_type = expr.content_type
+                    language = getattr(expr, "language", None)
                     if expr.work:
                         work_id = expr.work.id
                         title = expr.work.title or title
@@ -565,8 +589,19 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
         g.add((m_uri, SCHEMA.name, Literal(title)))
 
+        # Add specific Schema.org type based on content_type
+        specific_type = SCHEMA_TYPE_MAP.get(content_type) if content_type else None
+        if specific_type:
+            g.add((m_uri, RDF.type, specific_type))
+
         if isbn:
             g.add((m_uri, SCHEMA.isbn, Literal(isbn)))
+
+        if publisher:
+            g.add((m_uri, SCHEMA.publisher, Literal(publisher)))
+
+        if language:
+            g.add((m_uri, SCHEMA.inLanguage, Literal(language)))
 
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))

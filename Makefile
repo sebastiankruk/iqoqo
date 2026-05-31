@@ -345,3 +345,12 @@ sync-permissions:
 verify-perms:
 	@echo "Verifying permissions are synchronized"
 	.venv/bin/python scripts/sync_permissions.py --verify
+
+# --- Semantic Web / Ontology ---
+audit-frbr:
+	@echo "Running FRBR integrity audit..."
+	@PYTHONPATH=. .venv/bin/python scripts/audit_frbr_integrity.py
+
+sync-ontology:
+	@echo "Checking ontology sync with DB models..."
+	@PYTHONPATH=. .venv/bin/python scripts/sync_ontology.py

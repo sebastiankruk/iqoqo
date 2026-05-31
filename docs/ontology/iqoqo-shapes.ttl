@@ -1,0 +1,109 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# SHACL Shapes for iqoqo FRBR entities
+# Validates RDF graphs produced by serialize_collection_to_rdf()
+
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+@prefix schema: <https://schema.org/> .
+@prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix : <https://iqoqo.org/shapes#> .
+
+# ---------------------------------------------------------------------------
+# Work Shape
+# ---------------------------------------------------------------------------
+
+:WorkShape a sh:NodeShape ;
+    sh:targetClass frbr:Work ;
+    sh:property [
+        sh:path frbr:creator ;
+        sh:datatype xsd:string ;
+        sh:message "Work creator must be a string literal." ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# Expression Shape
+# ---------------------------------------------------------------------------
+
+:ExpressionShape a sh:NodeShape ;
+    sh:targetClass frbr:Expression ;
+    sh:property [
+        sh:path frbr:expressionOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Expression must link to exactly one Work via frbr:expressionOf." ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# Manifestation Shape
+# ---------------------------------------------------------------------------
+
+:ManifestationShape a sh:NodeShape ;
+    sh:targetClass frbr:Manifestation ;
+    sh:property [
+        sh:path frbr:embodimentOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Manifestation must link to exactly one Expression via frbr:embodimentOf." ;
+    ] ;
+    sh:property [
+        sh:path schema:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Manifestation must have at least one schema:name." ;
+    ] ;
+    sh:property [
+        sh:path schema:isbn ;
+        sh:datatype xsd:string ;
+        sh:pattern "^\\d{13}$" ;
+        sh:message "ISBN must be exactly 13 digits." ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# Item Shape
+# ---------------------------------------------------------------------------
+
+:ItemShape a sh:NodeShape ;
+    sh:targetClass frbr:Item ;
+    sh:property [
+        sh:path frbr:exemplarOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Item must link to exactly one Manifestation via frbr:exemplarOf." ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# Cross-type constraints
+# ---------------------------------------------------------------------------
+
+# Schema.org CreativeWork overlay
+:CreativeWorkShape a sh:NodeShape ;
+    sh:targetClass schema:CreativeWork ;
+    sh:property [
+        sh:path schema:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "CreativeWork must have a schema:name." ;
+    ] ;
+    sh:property [
+        sh:path schema:author ;
+        sh:datatype xsd:string ;
+        sh:message "schema:author must be a string literal." ;
+    ] .
