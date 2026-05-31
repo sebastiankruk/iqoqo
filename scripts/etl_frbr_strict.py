@@ -67,9 +67,7 @@ def main() -> None:
             "timestamp": datetime.now(UTC).isoformat(),
             "works_count": len(works),
         }
-        backup_path.write_text(
-            json.dumps(backup_data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        backup_path.write_text(json.dumps(backup_data, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Backup metadata written to: {backup_path}")
 
         # --- 1. Merge duplicate Works (same title + same authors) ---
@@ -97,9 +95,7 @@ def main() -> None:
             print(f"Merged {merged_count} duplicate Works")
 
         # --- 2. Re-link orphan Expressions (without valid Work) ---
-        orphan_exprs = Expression.query.filter(
-            ~Expression.work_id.in_(db.session.query(Work.id))
-        ).all()
+        orphan_exprs = Expression.query.filter(~Expression.work_id.in_(db.session.query(Work.id))).all()
         relinked_exprs = 0
         for expr in orphan_exprs:
             # Create a placeholder Work for orphaned expressions
@@ -113,9 +109,7 @@ def main() -> None:
             print(f"Re-linked {relinked_exprs} orphan Expressions")
 
         # --- 3. Re-link orphan Manifestations (without valid Expression) ---
-        orphan_manifs = Manifestation.query.filter(
-            ~Manifestation.expression_id.in_(db.session.query(Expression.id))
-        ).all()
+        orphan_manifs = Manifestation.query.filter(~Manifestation.expression_id.in_(db.session.query(Expression.id))).all()
         relinked_manifs = 0
         for manif in orphan_manifs:
             # Create placeholder Expression + Work

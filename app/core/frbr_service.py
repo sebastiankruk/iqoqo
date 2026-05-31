@@ -501,9 +501,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # WorkContributions
     if seen_works:
-        contribs = WorkContribution.query.filter(
-            WorkContribution.work_id.in_(seen_works)
-        ).all()
+        contribs = WorkContribution.query.filter(WorkContribution.work_id.in_(seen_works)).all()
         for wc in contribs:
             w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
             c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
@@ -515,9 +513,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # ExpressionContributions
     if seen_expressions:
-        expr_contribs = ExpressionContribution.query.filter(
-            ExpressionContribution.expression_id.in_(seen_expressions)
-        ).all()
+        expr_contribs = ExpressionContribution.query.filter(ExpressionContribution.expression_id.in_(seen_expressions)).all()
         for ec in expr_contribs:
             e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
             c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
@@ -528,9 +524,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # WorkParts (container aggregation)
     if seen_works:
-        parts = WorkPart.query.filter(
-            WorkPart.container_work_id.in_(seen_works)
-        ).all()
+        parts = WorkPart.query.filter(WorkPart.container_work_id.in_(seen_works)).all()
         for wp in parts:
             container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
             part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
@@ -539,9 +533,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # ImageScans
     if seen_manifestations:
-        scans = ImageScan.query.filter(
-            ImageScan.manifestation_id.in_(seen_manifestations)
-        ).all()
+        scans = ImageScan.query.filter(ImageScan.manifestation_id.in_(seen_manifestations)).all()
         for scan in scans:
             m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
             img_uri = URIRef(f"{base_url}/{scan.file_path}")
@@ -549,9 +541,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # UserCollections
     if seen_items:
-        links = UserCollectionItem.query.filter(
-            UserCollectionItem.item_id.in_(seen_items)
-        ).all()
+        links = UserCollectionItem.query.filter(UserCollectionItem.item_id.in_(seen_items)).all()
         for link in links:
             coll = link.collection
             if coll:
@@ -563,9 +553,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     # DatePublished from manifestation meta
     if seen_manifestations:
-        manifests = Manifestation.query.filter(
-            Manifestation.id.in_(seen_manifestations)
-        ).all()
+        manifests = Manifestation.query.filter(Manifestation.id.in_(seen_manifestations)).all()
         for m in manifests:
             if m.meta and m.meta.get("publication_date"):
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")

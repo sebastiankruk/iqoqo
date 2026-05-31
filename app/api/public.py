@@ -565,27 +565,21 @@ def sitemap():
     base_url = request.url_root.rstrip("/")
 
     # Public users
-    users = db.session.execute(
-        select(User.public_username).where(User.visibility == "public")
-    ).scalars().all()
+    users = db.session.execute(select(User.public_username).where(User.visibility == "public")).scalars().all()
 
     # Shared collections
-    shares = db.session.execute(
-        select(SharedCollection.share_token)
-    ).scalars().all()
+    shares = db.session.execute(select(SharedCollection.share_token)).scalars().all()
 
     urls = []
     for username in users:
         loc = f"{base_url}/api/public/u/{username}/items"
-        urls.append(f'  <url><loc>{loc}</loc><changefreq>weekly</changefreq></url>')
+        urls.append(f"  <url><loc>{loc}</loc><changefreq>weekly</changefreq></url>")
     for token in shares:
         loc = f"{base_url}/api/public/share/{token}"
-        urls.append(f'  <url><loc>{loc}</loc><changefreq>monthly</changefreq></url>')
+        urls.append(f"  <url><loc>{loc}</loc><changefreq>monthly</changefreq></url>")
 
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + "\n".join(urls)
-        + "\n</urlset>"
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(urls) + "\n</urlset>"
     )
     return Response(xml, content_type="application/xml")
