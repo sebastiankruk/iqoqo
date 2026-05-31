@@ -15,8 +15,9 @@
 //
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
@@ -69,6 +70,23 @@ export default function ProfilePage() {
         setEditNameValue(data.display_name || "");
       })
       .catch(err => console.error("Failed to load profile", err));
+  }, []);
+
+  const handleExport = useCallback(async (format: "json-ld" | "turtle" | "json") => {
+    try {
+      const ext = format === "json-ld" ? "jsonld" : format === "turtle" ? "ttl" : "json";
+      const resp = await apiClient.get(`/v1/items/export?format=${format}`, { responseType: "blob" });
+      const blob = new Blob([resp.data as BlobPart], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `iqoqo-collection.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported as ${format}`);
+    } catch {
+      toast.error("Export failed");
+    }
   }, []);
 
   /**
@@ -237,6 +255,27 @@ export default function ProfilePage() {
               onClick={() => toggleConsent("telemetry", profile.consents?.telemetry)}
             >
               {profile.consents?.telemetry ? "Opted In" : "Opted Out"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-4 border rounded-lg bg-card space-y-4">
+          <h2 className="text-xl font-semibold">Export Collection</h2>
+          <p className="text-sm text-muted-foreground">
+            Download your full library as Linked Open Data for portability and interoperability.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => handleExport("json-ld")}>
+              <Download className="w-4 h-4 mr-2" />
+              JSON-LD
+            </Button>
+            <Button variant="outline" onClick={() => handleExport("turtle")}>
+              <Download className="w-4 h-4 mr-2" />
+              Turtle (RDF)
+            </Button>
+            <Button variant="outline" onClick={() => handleExport("json")}>
+              <Download className="w-4 h-4 mr-2" />
+              JSON
             </Button>
           </div>
         </div>

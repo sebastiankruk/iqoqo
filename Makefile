@@ -351,6 +351,10 @@ audit-frbr:
 	@echo "Running FRBR integrity audit..."
 	@PYTHONPATH=. .venv/bin/python scripts/audit_frbr_integrity.py
 
+etl-frbr:
+	@echo "Running FRBR ETL strict cleanup (idempotent)..."
+	@PYTHONPATH=. .venv/bin/python scripts/etl_frbr_strict.py
+
 sync-ontology:
 	@echo "Checking ontology sync with DB models..."
 	@PYTHONPATH=. .venv/bin/python scripts/sync_ontology.py
