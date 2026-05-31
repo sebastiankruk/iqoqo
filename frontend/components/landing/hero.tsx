@@ -46,18 +46,17 @@ export function Hero() {
           Built on the open Semantic Web, designed for a distributed future.
         </p>
         <div className="flex gap-4 justify-center flex-wrap">
-          <Button asChild variant="outline" size="sm">
+          <Button
+            asChild
+            size="sm"
+            className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md"
+          >
             <Link href="/register">Start Your Catalog</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/collection">Browse Instance</Link>
           </Button>
-          <Button
-            asChild
-            variant="secondary"
-            size="sm"
-            className="bg-black text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
-          >
+          <Button asChild variant="outline" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link href="https://github.com/sebastiankruk/iqoqo" target="_blank" rel="noopener noreferrer">
               <Github className="w-4 h-4 mr-2" />
               GitHub

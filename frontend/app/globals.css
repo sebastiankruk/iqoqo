@@ -266,3 +266,9 @@
     @apply text-destructive/70 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50;
   }
 }
+
+@media (max-width: 640px) {
+  body {
+    padding-bottom: 4.5rem !important;
+  }
+}

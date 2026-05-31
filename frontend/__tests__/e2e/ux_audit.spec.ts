@@ -39,7 +39,11 @@ test.describe("UX/UI Audit Workflow", () => {
       const isVisible = await btn.isVisible();
       if (isVisible) {
         console.log(`- Visible button text: "${text}"`);
-        if (text.toLowerCase().includes("sign in") || text.toLowerCase().includes("get started") || text.toLowerCase().includes("try")) {
+        if (
+          text.toLowerCase().includes("sign in") ||
+          text.toLowerCase().includes("get started") ||
+          text.toLowerCase().includes("try")
+        ) {
           primaryCTAs++;
         }
       }
@@ -95,7 +99,7 @@ test.describe("UX/UI Audit Workflow", () => {
                 status: "reading",
                 collection_status: "available",
                 is_owner: true,
-                manifestation: { id: 201, title: "Mocked Book on Shelf", format: "book" }
+                manifestation: { id: 201, title: "Mocked Book on Shelf", format: "book" },
               },
               {
                 id: 102,
@@ -104,10 +108,10 @@ test.describe("UX/UI Audit Workflow", () => {
                 status: "unread",
                 collection_status: "wish_list",
                 is_owner: true,
-                manifestation: { id: 202, title: "Mocked Vinyl in Wish List", format: "vinyl" }
-              }
+                manifestation: { id: 202, title: "Mocked Vinyl in Wish List", format: "vinyl" },
+              },
             ],
-            pagination: { page: 1, per_page: 10, total: 2, pages: 1 }
+            pagination: { page: 1, per_page: 10, total: 2, pages: 1 },
           },
         })
       );
@@ -127,11 +131,13 @@ test.describe("UX/UI Audit Workflow", () => {
       for (const btn of navbarButtons) {
         const text = (await btn.innerText()).trim();
         const ariaLabel = await btn.getAttribute("aria-label");
-        console.log(`  - Navbar action: "${text || ariaLabel || 'Icon/Link'}"`);
+        console.log(`  - Navbar action: "${text || ariaLabel || "Icon/Link"}"`);
       }
 
       // Count buttons inside the "Current Context" container
-      const contextButtons = await page.locator("section[aria-label='Currently active items'] button, section[aria-label='Currently active items'] a").all();
+      const contextButtons = await page
+        .locator("section[aria-label='Currently active items'] button, section[aria-label='Currently active items'] a")
+        .all();
       console.log(`[AUDIT] Currently active items section - total actions: ${contextButtons.length}`);
 
       // Count buttons inside individual ItemCards
@@ -151,7 +157,7 @@ test.describe("UX/UI Audit Workflow", () => {
               title: "Test Book",
               authors: ["Author A"],
               format: "book",
-              barcode: "9780134685991"
+              barcode: "9780134685991",
             },
           },
         })
@@ -220,6 +226,107 @@ test.describe("UX/UI Audit Workflow", () => {
       // Verify success redirect
       await expect(page).toHaveURL(/.*\/item\/123/);
       console.log(`[AUDIT] Manual Search Lookup Flow: Clicks = ${clickCount}, Inputs = 1, Success Redirect reached.`);
+    });
+
+    test.describe("Mobile Size UX Audit", () => {
+      test.use({
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+      });
+
+      test("Audit mobile landing page & authenticated dashboard", async ({ page }) => {
+        console.log("=== NAVIGATING TO MOBILE DASHBOARD ===");
+        await page.goto("/");
+        await page.waitForLoadState("networkidle");
+
+        // Take screenshot of mobile dashboard
+        await page.screenshot({ path: "../.context/notes/images/ux_mobile_dashboard.png" });
+        console.log("Mobile dashboard screenshot saved");
+
+        // Verify mobile navbar: "Collection" and "Scan" search box behaviour
+        const searchForm = page.locator("form input[placeholder='Search your collection...']");
+        const isSearchVisible = await searchForm.isVisible();
+        console.log(`[AUDIT] Mobile Navbar - Is search input visible? ${isSearchVisible}`);
+
+        // Verify navigation options (is mobile menu or other trigger available?)
+        const collectionLink = page.locator("nav").getByRole("link", { name: "Collection" });
+        const isCollectionVisible = await collectionLink.isVisible();
+        console.log(`[AUDIT] Mobile Navbar - Is Collection link visible? ${isCollectionVisible}`);
+      });
+
+      test("Audit mobile collection page & filter drawer layout", async ({ page }) => {
+        // Mock items search endpoint to render correctly
+        await page.route("**/api/items?**", route =>
+          route.fulfill({
+            status: 200,
+            json: {
+              success: true,
+              data: [
+                {
+                  id: 101,
+                  title: "Mobile Item 1",
+                  authors: ["Author One"],
+                  status: "reading",
+                  collection_status: "available",
+                  is_owner: true,
+                  manifestation: { id: 201, title: "Mobile Item 1", format: "book" },
+                },
+              ],
+              pagination: { page: 1, per_page: 10, total: 1, pages: 1 },
+            },
+          })
+        );
+
+        console.log("=== NAVIGATING TO MOBILE COLLECTION ===");
+        await page.goto("/collection");
+        await page.waitForLoadState("networkidle");
+
+        // Take initial mobile collection page screenshot
+        await page.screenshot({ path: "../.context/notes/images/ux_mobile_collection.png" });
+        console.log("Mobile collection screenshot saved");
+
+        // Locate and click the mobile filters trigger button
+        const filterTrigger = page.locator("button.lg\\:hidden:has-text('Filters')");
+        if (await filterTrigger.first().isVisible()) {
+          await filterTrigger.first().click();
+          await page.waitForTimeout(500); // Wait for transition
+          await page.screenshot({ path: "../.context/notes/images/ux_mobile_filters.png" });
+          console.log("Mobile filters drawer screenshot saved");
+
+          // Verify that MobileFilterDrawer content is visible
+          await expect(page.getByRole("dialog", { name: "Filter drawer" })).toBeVisible();
+
+          // Count active buttons inside filter drawer
+          const drawerButtons = await page.locator("[role='dialog'] button").all();
+          console.log(`[AUDIT] Mobile Filter Drawer - Total buttons inside drawer: ${drawerButtons.length}`);
+        } else {
+          console.log("[AUDIT] Mobile Filters button not visible on viewport");
+        }
+      });
+
+      test("Measure mobile scan viewfinder and bottom sheet layout", async ({ page }) => {
+        console.log("=== NAVIGATING TO MOBILE SCAN PAGE ===");
+        await page.goto("/scan");
+        await page.waitForLoadState("networkidle");
+
+        // Mobile scan page screenshot
+        await page.screenshot({ path: "../.context/notes/images/ux_mobile_scan.png" });
+        console.log("Mobile scan page screenshot saved");
+
+        // Verify camera start button is visible
+        const startCameraButton = page.getByTestId("start-camera-button");
+        await expect(startCameraButton).toBeVisible();
+
+        // Audit tab buttons in bottom sheet on mobile viewport
+        const tabBarcode = page.getByTestId("scanner-tab-barcode");
+        const tabCover = page.getByTestId("scanner-tab-cover");
+        const tabManual = page.getByTestId("scanner-tab-manual");
+        await expect(tabBarcode).toBeVisible();
+        await expect(tabCover).toBeVisible();
+        await expect(tabManual).toBeVisible();
+
+        console.log("[AUDIT] Mobile Scanner - Bottom sheet tabs are fully visible and accessible.");
+      });
     });
   });
 });

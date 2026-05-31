@@ -37,6 +37,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: () => ({ push: vi.fn() }),
 }));
 

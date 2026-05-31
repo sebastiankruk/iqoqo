@@ -31,6 +31,7 @@ vi.mock("@/lib/api/hooks", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: vi.fn(),
   useSearchParams: vi.fn(() => new URLSearchParams()),
 }));

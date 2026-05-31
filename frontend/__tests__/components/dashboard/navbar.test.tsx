@@ -55,7 +55,7 @@ describe("Navbar", () => {
 
   it("contains a link to the Collection page", () => {
     render(<Navbar />);
-    const link = screen.getByRole("link", { name: /collection/i });
+    const link = screen.getAllByRole("link", { name: /collection/i })[0];
     expect(link).toHaveAttribute("href", "/collection");
   });
 
@@ -82,7 +82,7 @@ describe("Navbar Auth State", () => {
     (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
 
-    expect(screen.getByText("Sign In")).toBeInTheDocument();
+    expect(screen.getAllByText("Sign In")[0]).toBeInTheDocument();
   });
 
   it("shows user initials and opens dropdown when authenticated (non-admin)", async () => {

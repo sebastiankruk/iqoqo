@@ -25,6 +25,7 @@ vi.mock("@/components/item/item-actions", () => ({
 
 // Mock Next.js navigation
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: () => ({
     push: vi.fn(),
   }),

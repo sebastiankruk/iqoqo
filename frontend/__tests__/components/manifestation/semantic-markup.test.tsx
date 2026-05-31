@@ -22,6 +22,7 @@ import * as hooks from "@/lib/api/hooks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useParams: () => ({ id: "123" }),
   useRouter: () => ({
     push: vi.fn(),

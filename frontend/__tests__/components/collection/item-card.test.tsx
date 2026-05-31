@@ -25,6 +25,7 @@ import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: () => ({
     push: vi.fn(),
   }),
