@@ -36,7 +36,7 @@ def test_profile_no_trailing_slash_redirect_fix(client, normal_user_headers):
     # PUT was the one failing with 308 in the browser/axios
     response = client.put("/api/profile", headers=normal_user_headers, json={"display_name": "Test Name"})
     assert response.status_code == 200
-    assert response.json["display_name"] == "Test Name"
+    assert response.json["data"]["display_name"] == "Test Name"
 
 
 def test_scan_by_manifestation_id(client, normal_user_headers):

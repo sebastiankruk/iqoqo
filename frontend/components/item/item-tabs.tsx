@@ -16,16 +16,19 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe, History, Images } from "lucide-react";
+import { FileText, Globe, History, Images, BookOpen, MessageSquare } from "lucide-react";
 import type { Item } from "@/types/frbr";
-import { useAppConfig } from "@/lib/api/hooks";
+import { useAppConfig, useWorkParts } from "@/lib/api/hooks";
 import Link from "next/link";
+import Image from "next/image";
 import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
+import { FRBRFeedback } from "../social/frbr-feedback";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
+  { id: "reviews", label: "Reviews", icon: MessageSquare },
   { id: "gallery", label: "Gallery", icon: Images },
   { id: "history", label: "History", icon: History },
   { id: "federation", label: "Federation", icon: Globe },
@@ -44,6 +47,8 @@ type TabId = (typeof TABS)[number]["id"];
  */
 function DetailsTab({ item }: { item: Item }) {
   const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
+  const { data: partsResponse } = useWorkParts(item.work?.container_work_id ?? item.work?.id ?? 0);
+  const parts = partsResponse?.data ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,6 +85,87 @@ function DetailsTab({ item }: { item: Item }) {
           </div>
         </dl>
       </div>
+
+      {/* Series parts info */}
+      {item.work && parts.length > 0 && (
+        <div className="border-t pt-6">
+          <h4 className="mb-3 font-serif text-sm font-bold text-foreground">Series / Complex Work Parts</h4>
+          <p className="text-xs text-muted-foreground mb-3">
+            This title is part of a complex work / series. Here are all the elements in this series:
+          </p>
+          <div className="border rounded-xl divide-y bg-muted/10 overflow-hidden">
+            {parts.map(part => {
+              const isCurrent = part.part_work_id === item.work?.id;
+              const isLinkable = !!(part.item_id || part.manifestation_id);
+              const linkUrl = part.item_id ? `/item/${part.item_id}` : `/manifestation/${part.manifestation_id}`;
+
+              const content = (
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {part.sequence}
+                  </span>
+                  {part.cover_url ? (
+                    <div className="relative h-12 w-8 shrink-0 overflow-hidden rounded-md border border-border/80 bg-secondary shadow-sm">
+                      <Image
+                        src={part.cover_url}
+                        alt={`Cover of ${part.title}`}
+                        fill
+                        sizes="32px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-12 w-8 shrink-0 items-center justify-center rounded-md border border-border/80 bg-muted text-muted-foreground/30 shadow-sm">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                  )}
+                  <span
+                    className={
+                      isCurrent ? "text-primary font-semibold" : "text-foreground hover:text-primary transition-colors"
+                    }
+                  >
+                    {part.title}
+                  </span>
+                </div>
+              );
+
+              return (
+                <div
+                  key={part.part_work_id}
+                  className={`flex items-center justify-between p-3 text-sm transition-all duration-200 ${
+                    isCurrent ? "bg-primary/5 font-semibold" : "hover:bg-muted/40"
+                  }`}
+                >
+                  {isLinkable ? (
+                    <Link href={linkUrl} className="flex-1">
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="flex-1">{content}</div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {part.item_id && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full bg-green-500/10">
+                        In Collection
+                      </span>
+                    )}
+                    {isCurrent && (
+                      <span className="text-xs font-semibold uppercase tracking-wider text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                        Current Item
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,6 +187,78 @@ function FederationTab() {
       <p className="mt-1 max-w-xs text-sm text-muted-foreground">
         Connect with other iqoqo libraries to discover who else has this title in their collection.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Renders the reviews tab content for an item, showing all levels of reviews (Work, Expression, Manifestation, Item).
+ *
+ * @param props - Component props.
+ * @param props.item - The item to display reviews for.
+ * @returns The rendered reviews tab.
+ */
+function ReviewsTab({ item }: { item: Item }) {
+  const subtabs = [
+    { id: "work", label: "Conceptual Work", targetId: item.work?.id, description: "Story / artistic creation" },
+    {
+      id: "expression",
+      label: "Expression",
+      targetId: item.expression?.id,
+      description: "Realization (Language/Format)",
+    },
+    {
+      id: "manifestation",
+      label: "Edition",
+      targetId: item.manifestation_id,
+      description: "Printed publication (ISBN)",
+    },
+    { id: "item", label: "Personal Copy", targetId: item.id, description: "Your copy rating & notes" },
+  ] as const;
+
+  // Default to the first subtab that has a valid targetId (items may lack work/expression)
+  const firstAvailableLevel = (subtabs.find(s => !!s.targetId)?.id ?? "manifestation") as
+    | "work"
+    | "expression"
+    | "manifestation"
+    | "item";
+  const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation" | "item">(firstAvailableLevel);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 border-b pb-4">
+        {subtabs.map(({ id, label, targetId, description }) => {
+          if (!targetId) return null;
+          const isSelected = activeLevel === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveLevel(id)}
+              className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-2.5 text-left transition-all cursor-pointer ${
+                isSelected
+                  ? "border-primary bg-primary/5 text-primary shadow-sm"
+                  : "border-border/60 hover:bg-muted/30 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-xs font-bold leading-none">{label}</span>
+              <span className="text-[10px] text-muted-foreground/80 leading-none mt-1">{description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        {activeLevel === "work" && item.work && (
+          <FRBRFeedback level="work" targetId={item.work.id} title="Conceptual Work" />
+        )}
+        {activeLevel === "expression" && item.expression && (
+          <FRBRFeedback level="expression" targetId={item.expression.id} title="Expression" />
+        )}
+        {activeLevel === "manifestation" && (
+          <FRBRFeedback level="manifestation" targetId={item.manifestation_id} title="Manifestation Edition" />
+        )}
+        {activeLevel === "item" && <FRBRFeedback level="item" targetId={item.id} title="Personal Copy" />}
+      </div>
     </div>
   );
 }
@@ -141,6 +299,7 @@ export function ItemTabs({ item }: { item: Item }) {
       {/* Tab content */}
       <div>
         {active === "details" && <DetailsTab item={item} />}
+        {active === "reviews" && <ReviewsTab item={item} />}
         {active === "gallery" && <MultiScanGallery manifestationId={item.manifestation_id} />}
         {active === "history" && <ItemProvenanceTimeline itemId={item.id} />}
         {active === "federation" && <FederationTab />}

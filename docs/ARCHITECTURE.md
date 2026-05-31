@@ -697,3 +697,28 @@ If you're unsure about where data should live in the FRBR hierarchy:
 4. Open an issue for discussion
 
 Remember: **When in doubt, follow the hierarchy!**
+
+## 👥 Social & Privacy Architecture (v0.7.0+)
+
+Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict user privacy.
+
+### 1. Opt-in Exposure
+
+- **`User.visibility`**: Reuses the existing `visibility` field. Only users with `visibility="public"` are discoverable via `/u/[username]`.
+- **`User.public_username`**: A unique, customizable handle used for public URLs.
+- **`User.bio`**: Optional public text for personalized profiles.
+
+### 2. Item-Level Privacy
+
+- **`Item.is_hidden`**: A granular toggle. Even if a profile is public, specific items can be hidden from the public grid.
+- **BOLA Protection**: All visibility toggles verify `owner_id`. Unauthorized access attempts return `404 Not Found` rather than `403 Forbidden` to prevent account enumeration.
+
+### 3. Dynamic Shared Collections
+
+- **`SharedCollection`**: Stores a secure `share_token` linked to a set of JSONB filters (e.g., `{"status": "wish_list"}`).
+- **Access**: Shared collections are accessible to anyone with the token, bypassing the general profile visibility if the specific collection was shared.
+
+### 4. Smart Inventory Discovery
+
+- **"Check if I have it"**: A visitor-facing tool that searches the joined FRBR chain (`Item` → `Manifestation` → `Expression` → `Work`).
+- **Logic**: If an exact match is found in the owner's collection, it returns the Item details. If not owned but exists in the global catalog, it returns the Manifestation details to indicate the item is known to iqoqo.

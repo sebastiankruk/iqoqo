@@ -30,6 +30,13 @@ const eslintConfig = defineConfig([
       'jsdoc/require-returns-type': 'off', // TypeScript already handles return types
     },
   },
+  // Allow `any` in test files for mock return values
+  {
+    files: ['__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

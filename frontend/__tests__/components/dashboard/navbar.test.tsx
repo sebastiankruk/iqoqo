@@ -24,6 +24,11 @@ import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile } from "@/lib/api/hooks";
 
+// Mock the modal — it uses useQuery internally, separate tests cover it
+vi.mock("@/components/collection/manage-collections-modal", () => ({
+  ManageCollectionsModal: () => null,
+}));
+
 // Mock the hook
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
@@ -50,7 +55,7 @@ describe("Navbar", () => {
 
   it("contains a link to the Collection page", () => {
     render(<Navbar />);
-    const link = screen.getByRole("link", { name: /collection/i });
+    const link = screen.getAllByRole("link", { name: /collection/i })[0];
     expect(link).toHaveAttribute("href", "/collection");
   });
 
@@ -77,7 +82,7 @@ describe("Navbar Auth State", () => {
     (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
 
-    expect(screen.getByText("Sign In")).toBeInTheDocument();
+    expect(screen.getAllByText("Sign In")[0]).toBeInTheDocument();
   });
 
   it("shows user initials and opens dropdown when authenticated (non-admin)", async () => {

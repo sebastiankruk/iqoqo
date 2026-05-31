@@ -28,6 +28,15 @@ interface MobileFilterDrawerProps {
   onToggleFilter: (filter: ActiveFilter) => void;
   statusCounts: Record<string, number>;
   formatCounts?: Record<string, number>;
+  categoryCounts?: Record<string, number>;
+  disableStatus?: boolean;
+  viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
+  isLoggedIn?: boolean;
+  isCurator?: boolean;
+  missingCover?: boolean;
+  onChangeMissingCover?: (checked: boolean) => void;
+  missingId?: boolean;
+  onChangeMissingId?: (checked: boolean) => void;
 }
 
 /**
@@ -40,6 +49,15 @@ interface MobileFilterDrawerProps {
  * @param root0.onToggleFilter - Callback to toggle a filter
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
+ * @param root0.categoryCounts - The counts for each category
+ * @param root0.disableStatus - Whether to disable the status filter
+ * @param root0.viewMode - The current view mode
+ * @param root0.isLoggedIn - Whether the user is logged in
+ * @param root0.isCurator - Whether the user is a curator
+ * @param root0.missingCover - Filter for items with missing cover
+ * @param root0.onChangeMissingCover - Change handler for missing cover filter
+ * @param root0.missingId - Filter for items with missing ID
+ * @param root0.onChangeMissingId - Change handler for missing ID filter
  * @returns {JSX.Element} The component*/
 export function MobileFilterDrawer({
   open,
@@ -48,6 +66,15 @@ export function MobileFilterDrawer({
   onToggleFilter,
   statusCounts,
   formatCounts,
+  categoryCounts = {},
+  disableStatus = false,
+  viewMode = "items",
+  isLoggedIn = false,
+  isCurator = false,
+  missingCover = false,
+  onChangeMissingCover,
+  onChangeMissingId,
+  missingId = false,
 }: MobileFilterDrawerProps) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -97,6 +124,15 @@ export function MobileFilterDrawer({
               onToggleFilter={onToggleFilter}
               statusCounts={statusCounts}
               formatCounts={formatCounts}
+              categoryCounts={categoryCounts}
+              disableStatus={disableStatus}
+              viewMode={viewMode}
+              isLoggedIn={isLoggedIn}
+              isCurator={isCurator}
+              missingCover={missingCover}
+              onChangeMissingCover={onChangeMissingCover}
+              missingId={missingId}
+              onChangeMissingId={onChangeMissingId}
             />
           </div>
 

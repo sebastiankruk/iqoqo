@@ -14,21 +14,31 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Determine the Python executable to use (check for local virtualenv first)
+const hasLocalVenv = fs.existsSync(path.join(__dirname, "../.venv/bin/python"));
+const pythonExecutable = hasLocalVenv ? ".venv/bin/python" : "python";
 
 export default defineConfig({
   testDir: "./__tests__/e2e",
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: "html",
+  workers: 1,
+  reporter: [["html", { open: "never" }]],
   // Global per-test timeout: 60s in CI, default in dev
   timeout: process.env.CI ? 60000 : 30000,
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
     // Navigation timeout: give pages longer to load in CI
-    navigationTimeout: process.env.CI ? 30000 : 10000,
+    navigationTimeout: 30000,
     actionTimeout: process.env.CI ? 15000 : 5000,
   },
   projects: [
@@ -38,15 +48,50 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         permissions: ["camera"],
         launchOptions: {
-          args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-gpu",
+          ],
         },
       },
     },
+    {
+      name: "firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+      },
+    },
+    {
+      name: "webkit",
+      use: {
+        ...devices["Desktop Safari"],
+      },
+    },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  webServer: [
+    {
+      command: "NODE_OPTIONS='--no-warnings' npm run dev",
+      url: "http://localhost:3000",
+      reuseExistingServer: true,
+      timeout: 120000,
+    },
+    {
+      // When DATABASE_URL_TEST is set (i.e. running make test-e2e), forward it
+      // as DATABASE_URL so Flask connects to the dedicated test database instead
+      // of the production/dev one. reuseExistingServer is disabled in this case
+      // to ensure the server always starts fresh against the test DB.
+      command:
+        (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
+        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
+        pythonExecutable +
+        " -m flask run --port 5000",
+      url: "http://127.0.0.1:5000/api/health",
+      reuseExistingServer: !process.env.DATABASE_URL_TEST,
+      timeout: 60000,
+      cwd: "..",
+    },
+  ],
 });

@@ -17,6 +17,9 @@
 #
 from typing import Any
 
+from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib.namespace import RDF
+
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
 from app.db.core import Expression, Item, Manifestation, Work
 from app.db.models import db
@@ -445,3 +448,152 @@ def update_item(
         item.meta = current_meta
     db.session.commit()
     return item
+
+
+# Define Namespaces
+FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+SIOC = Namespace("http://rdfs.org/sioc/ns#")
+SCHEMA = Namespace("https://schema.org/")
+
+
+def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
+    """
+    Serializes a list of collection items/manifestations into semantic RDF graphs
+    supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+    """
+    g = Graph()
+    g.bind("frbr", FRBR)
+    g.bind("sioc", SIOC)
+    g.bind("schema", SCHEMA)
+
+    for item in items:
+        # Resolve whether dict or db object
+        if isinstance(item, dict):
+            item_id = item.get("id")
+            manifestation_id = item.get("manifestation_id", item_id)
+            expression_id = item.get("expression_id", manifestation_id)
+            title = item.get("title", "Untitled")
+            isbn = item.get("isbn")
+            authors = item.get("authors", [])
+            tags = item.get("tags", [])
+            status = item.get("status")
+            work_id = item.get("work_id", manifestation_id)
+        else:
+            item_id = getattr(item, "id", None)
+            if hasattr(item, "manifestation_id"):
+                # Database Item object
+                manifestation_id = item.manifestation_id
+                expression_id = None
+                work_id = None
+                title = "Untitled"
+                isbn = None
+                authors = []
+                tags = []
+                status = getattr(item, "status", None)
+
+                m = item.manifestation
+                if m:
+                    manifestation_id = m.id
+                    expression_id = m.expression_id
+                    title = getattr(m, "title", "Untitled") or "Untitled"
+                    isbn = m.isbn13
+                    if m.expression:
+                        expression_id = m.expression.id
+                        work_id = m.expression.work_id
+                        if m.expression.work:
+                            work_id = m.expression.work.id
+                            title = m.expression.work.title or title
+                            if m.expression.work.meta:
+                                authors = m.expression.work.meta.get("authors", []) or m.expression.work.meta.get("Authors", [])
+                        if not authors and m.meta:
+                            authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
+                        if m.expression.meta:
+                            tags = m.expression.meta.get("tags", []) or m.expression.meta.get("Tags", [])
+                    elif m.meta:
+                        authors = m.meta.get("authors", []) or m.meta.get("Authors", [])
+
+                if expression_id is None:
+                    expression_id = item_id
+                if work_id is None:
+                    work_id = expression_id
+            else:
+                # Database Manifestation object
+                manifestation_id = item_id
+                expression_id = getattr(item, "expression_id", None)
+                work_id = None
+                title = getattr(item, "title", "Untitled") or "Untitled"
+                isbn = getattr(item, "isbn13", None)
+                authors = []
+                tags = []
+                status = getattr(item, "status", None)
+
+                if hasattr(item, "expression") and item.expression:
+                    expr = item.expression
+                    expression_id = expr.id
+                    work_id = expr.work_id
+                    if expr.work:
+                        work_id = expr.work.id
+                        title = expr.work.title or title
+                        if expr.work.meta:
+                            authors = expr.work.meta.get("authors", []) or expr.work.meta.get("Authors", [])
+                    if not authors and getattr(item, "meta", None):
+                        authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
+                    if expr.meta:
+                        tags = expr.meta.get("tags", []) or expr.meta.get("Tags", [])
+                elif getattr(item, "meta", None):
+                    authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
+
+                if expression_id is None:
+                    expression_id = item_id
+                if work_id is None:
+                    work_id = expression_id
+
+        m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
+        e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
+        w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+
+        # FRBR Core Declarations
+        g.add((m_uri, RDF.type, FRBR.Manifestation))
+        g.add((e_uri, RDF.type, FRBR.Expression))
+        g.add((w_uri, RDF.type, FRBR.Work))
+
+        # Manifestation embodies Expression, Expression is expression of Work
+        g.add((m_uri, FRBR.embodimentOf, e_uri))
+        g.add((e_uri, FRBR.expressionOf, w_uri))
+
+        # High-level Schema.org Mapping for AI Agent Interoperability
+        g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
+        g.add((m_uri, SCHEMA.name, Literal(title)))
+
+        if isbn:
+            g.add((m_uri, SCHEMA.isbn, Literal(isbn)))
+
+        for author in authors:
+            g.add((m_uri, SCHEMA.author, Literal(author)))
+            g.add((w_uri, FRBR.creator, Literal(author)))
+
+        # SIOC Semantics for Tagging / Folksonomy categorization
+        for tag in tags:
+            g.add((m_uri, SIOC.topic, Literal(tag)))
+
+        # Handle specific item tracking if item instances exist
+        if item_id:
+            i_uri = URIRef(f"{base_url}/api/public/items/{item_id}")
+            g.add((i_uri, RDF.type, FRBR.Item))
+            g.add((i_uri, FRBR.exemplarOf, m_uri))
+            if status:
+                g.add((i_uri, SCHEMA.itemCondition, Literal(status)))
+
+    # Serialization Context Setup for JSON-LD vs Turtle
+    if output_format == "json-ld":
+        context = {
+            "frbr": str(FRBR),
+            "sioc": str(SIOC),
+            "schema": str(SCHEMA),
+            "title": "schema:name",
+            "isbn": "schema:isbn",
+            "author": "schema:author",
+        }
+        return g.serialize(format="json-ld", context=context, indent=4)
+
+    return g.serialize(format="turtle")

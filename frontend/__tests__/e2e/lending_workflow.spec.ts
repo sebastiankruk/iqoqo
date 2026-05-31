@@ -7,7 +7,7 @@
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
 //
 // You should have received a copy of the GNU Affero General Public License
@@ -105,6 +105,21 @@ test.describe("Lending Workflow", () => {
 
     // 1.6 Mock the target Item page to prevent timeout on redirect
     await page.route("**/api/items/1**", async route => {
+      const url = route.request().url();
+      if (url.endsWith("/logs")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: [] }),
+        });
+      }
+      if (url.includes("/loan-status")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: null }),
+        });
+      }
       if (route.request().method() === "PUT") {
         return route.fulfill({
           status: 200,
@@ -182,5 +197,80 @@ test.describe("Lending Workflow", () => {
 
     // 16. Verify the success toast appears
     await expect(page.getByText(/Item marked as lent to Bob Friend/i)).toBeVisible();
+  });
+});
+
+test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
+  test("should execute full request, approval, and timeline logging loop between borrower and lender", async ({
+    browser,
+  }) => {
+    // Reset any stale lending state from previous browser runs
+    await fetch("http://127.0.0.1:5000/api/lending/test/reset", { method: "POST" });
+
+    // 1. Create isolated context for Owner/Lender (User B)
+    const lenderContext = await browser.newContext();
+    const lenderPage = await lenderContext.newPage();
+    await lenderPage.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    await lenderPage.goto("/login");
+    await lenderPage.waitForLoadState("networkidle");
+    await lenderPage.fill('input[type="email"]', "lender@iqoqo.local");
+    await lenderPage.fill('input[type="password"]', "SecurePassword123!");
+    await lenderPage.click('button[type="submit"]');
+    await expect(lenderPage).toHaveURL(/\/(collection)?$/);
+
+    // 2. Create isolated context for Borrower (User A)
+    const borrowerContext = await browser.newContext();
+    const borrowerPage = await borrowerContext.newPage();
+    await borrowerPage.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    await borrowerPage.goto("/login");
+    await borrowerPage.waitForLoadState("networkidle");
+    await borrowerPage.fill('input[type="email"]', "borrower@iqoqo.local");
+    await borrowerPage.fill('input[type="password"]', "SecurePassword123!");
+    await borrowerPage.click('button[type="submit"]');
+    await expect(borrowerPage).toHaveURL(/\/(collection)?$/);
+
+    // 3. Borrower finds Lender's copy and requests a loan
+    await borrowerPage.goto("/collection");
+    const targetItem = borrowerPage.locator('[data-testid="item-card"]', { hasText: "Lendable Book" });
+    const itemId = await targetItem.getAttribute("data-item-id");
+
+    await targetItem.click();
+    await expect(borrowerPage).toHaveURL(new RegExp(`/item/${itemId}`));
+
+    const requestButton = borrowerPage.locator('button:has-text("Request Loan")');
+    await expect(requestButton).toBeVisible();
+    await requestButton.click();
+
+    // Validate optimistic UI or pending request status banner
+    await expect(borrowerPage.locator('[data-testid="loan-status-badge"]')).toHaveText("Pending Approval");
+
+    // 4. Switch back to Lender to approve the pending request
+    await lenderPage.goto("/admin/lending");
+    const pendingRequestRow = lenderPage.locator(`[data-testid="request-row-${itemId}"]`);
+    await expect(pendingRequestRow).toBeVisible();
+
+    const approveButton = pendingRequestRow.locator('button[aria-label="Approve Loan"]');
+    await approveButton.click();
+    await expect(pendingRequestRow.locator('[data-testid="status-cell"]')).toHaveText("Lent");
+
+    // 5. Verify Borrower's side automatically synchronizes and updates the FRBR timeline log
+    await borrowerPage.reload();
+    await expect(borrowerPage.locator('[data-testid="loan-status-badge"]')).toHaveText("On Loan");
+
+    // Validate Event-Based Timeline Entry
+    await borrowerPage.getByRole("button", { name: "History" }).click();
+    const timelineContainer = borrowerPage.locator('[data-testid="frbr-timeline-log"]');
+    await expect(timelineContainer).toBeVisible();
+    await expect(timelineContainer.locator(".timeline-event").first()).toContainText("Loan approved by custodian");
+
+    // Cleanup contexts cleanly
+    await borrowerContext.close();
+    await lenderContext.close();
   });
 });

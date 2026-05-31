@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Public profiles are indexable
+Allow: /u/
+
+# Admin and API routes are not for crawlers
+Disallow: /api/
+Disallow: /admin/

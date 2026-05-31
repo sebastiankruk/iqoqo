@@ -13,9 +13,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { Badge } from "@/components/ui/badge";
 import { TmdbAttribution } from "@/components/ui/tmdb-attribution";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
+import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataVideoProps {
   meta: Record<string, unknown>;
@@ -58,7 +58,14 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
         {directors && directors.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Director(s)</span>
-            <span className="font-semibold">{directors.join(", ")}</span>
+            <div className="flex flex-wrap gap-1">
+              {directors.map((d, idx) => (
+                <span key={d}>
+                  <DiscoveryPivot type="q" value={d} variant="link" className="font-semibold" />
+                  {idx < directors.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
+                </span>
+              ))}
+            </div>
           </div>
         )}
         {cast && cast.length > 0 && (
@@ -66,9 +73,7 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
             <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Cast</span>
             <div className="flex flex-wrap gap-2 mt-1">
               {cast.map(c => (
-                <Badge key={c} variant="secondary" className="font-normal">
-                  {c}
-                </Badge>
+                <DiscoveryPivot key={c} type="q" value={c} badgeVariant="secondary" className="font-normal" />
               ))}
             </div>
           </div>

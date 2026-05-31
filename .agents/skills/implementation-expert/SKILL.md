@@ -12,7 +12,7 @@ This skill governs codebase changes. It handles provided code OR generates requi
 
 ## Core Rules
 
-1. **Source of Truth**: `.context/private-notes/` is law. Plan files there override all. Do not update those files unless explicitly told so.
+1. **Source of Truth**: `.context/notes/` is law. Plan files there override all. Do not update those files unless explicitly told so.
 2. **Mirror Patterns**: Match existing style, imports, and logic exactly. No "improvements" unless asked.
 3. **Type Safety**: No `# type: ignore` unless for SQLAlchemy dynamic attrs or broken external stubs. Fix the code.
 4. **Environment**: Use `.venv/bin/` for all Python tools (pytest, flask, alembic).
@@ -44,7 +44,7 @@ This skill governs codebase changes. It handles provided code OR generates requi
 
 ### Phase 4: Human verification
 - **Plan**: Provide plan for manual verification of changes introduced in this batch
-- **Context**: Use development notes and roadmap documents (in `.context/private-notes/`) to highlight what needs to be verified
+- **Context**: Use development notes and roadmap documents (in `.context/notes/`) to highlight what needs to be verified
 - **Update**: When human confirms all tests pass - you can tick corresponding checkboxes in development plan and roadmap documents to mark them as completed. If something is missing - ask human for clarification before continuing.
 - **CHANGELOG**: Update CHANGELOG.md to reflect introduced changes; use current version number.
 

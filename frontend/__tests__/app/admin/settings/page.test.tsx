@@ -21,12 +21,17 @@ import { useRouter } from "next/navigation";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { UserProfile } from "@/types/frbr";
 
+vi.mock("@/components/collection/manage-collections-modal", () => ({
+  ManageCollectionsModal: () => null,
+}));
+
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useAppConfig: vi.fn(() => ({ data: { maintenance_mode: false }, isLoading: false })),
 }));
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: vi.fn(),
   useSearchParams: vi.fn(() => new URLSearchParams()),
 }));

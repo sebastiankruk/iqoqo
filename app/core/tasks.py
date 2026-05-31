@@ -23,6 +23,7 @@ import logging
 from collections.abc import Callable
 
 from celery.result import AsyncResult
+from kombu.exceptions import KombuError
 
 from app.core.celery_app import celery
 
@@ -65,7 +66,7 @@ def _task_wrapper(self, func_path: str, *args, user_id=None, **kwargs):
         raise e
 
 
-def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> str:
+def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> str | None:
     """
     Submit a background task to the Celery queue.
 
@@ -75,12 +76,23 @@ def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> 
         user_id: Optional user ID for ownership tracking.
 
     Returns:
-        str: A unique task_id to poll for the result.
+        str | None: A unique task_id to poll for the result, or None if the queue
+            is unavailable (e.g. Redis is down). Callers must handle None gracefully.
     """
     # Convert function to dotted path for Celery serialization
     func_path = f"{func.__module__}.{func.__name__}"
-    result = _task_wrapper.delay(func_path, *args, user_id=user_id, **kwargs)
-    return str(result.id)
+    try:
+        # retry=False prevents blocking the gunicorn worker for ~20 s when Redis is
+        # unreachable (Celery default: 20 retries × 1 s each before raising).
+        result = _task_wrapper.apply_async(
+            args=(func_path,) + tuple(args),
+            kwargs={"user_id": user_id, **kwargs},
+            retry=False,
+        )
+        return str(result.id)
+    except (KombuError, OSError) as exc:
+        logger.warning("Background task queue unavailable for %s: %s", func.__name__, exc)
+        return None
 
 
 def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:

@@ -16,8 +16,20 @@
 """Pydantic schemas for API payload validation."""
 
 from typing import Any
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.taxonomy import COLLECTION_STATUSES, PROGRESS_STATUSES
+
+
+def _validate_uuid_str(v: str | None) -> str | None:
+    if v is not None and v.strip() != "":
+        try:
+            UUID(v)
+        except ValueError as err:
+            raise ValueError("Invalid UUID format") from err
+    return v
 
 
 class ItemCreateSchema(BaseModel):
@@ -25,7 +37,54 @@ class ItemCreateSchema(BaseModel):
 
     status: str | None = Field(default=None, description="The progress status of the item")
     collection_status: str | None = Field(default="available", description="The physical status of the item")
+    is_hidden: bool | None = Field(default=False, description="Whether the item is hidden from public profiles")
+    tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
+    collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
+    lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
+    lent_to_name: str | None = Field(default=None, description="The name of the borrower")
+
+    @field_validator("lent_to_user_id")
+    @classmethod
+    def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        return _validate_uuid_str(v)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in PROGRESS_STATUSES:
+            raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
+        return v
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
+
+
+class ItemBulkCreateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifestation_ids: list[int] = Field(..., min_length=1, description="List of manifestation IDs to add")
+    status: str | None = Field(default=None, description="The progress status of the items")
+    collection_status: str | None = Field(default="available", description="The physical status of the items")
+    is_hidden: bool | None = Field(default=False, description="Whether the items are hidden from public profiles")
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in PROGRESS_STATUSES:
+            raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
+        return v
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
 
 
 class ItemUpdateSchema(BaseModel):
@@ -35,7 +94,28 @@ class ItemUpdateSchema(BaseModel):
     collection_status: str | None = None
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
+    is_hidden: bool | None = None
+    tags: list[str] | None = None
     meta: dict[str, Any] | None = None
+
+    @field_validator("lent_to_user_id")
+    @classmethod
+    def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        return _validate_uuid_str(v)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in PROGRESS_STATUSES:
+            raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
+        return v
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
 
 
 class ItemManualCreateSchema(BaseModel):
@@ -49,6 +129,28 @@ class ItemManualCreateSchema(BaseModel):
     Description: str | None = None
     status: str | None = None
     collection_status: str | None = "available"
+    tags: list[str] | None = None
+    lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
+    lent_to_name: str | None = Field(default=None, description="The name of the borrower")
+
+    @field_validator("lent_to_user_id")
+    @classmethod
+    def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        return _validate_uuid_str(v)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in PROGRESS_STATUSES:
+            raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
+        return v
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
 
 
 class ManifestationUpdateSchema(BaseModel):
@@ -56,6 +158,8 @@ class ManifestationUpdateSchema(BaseModel):
 
     Title: str | None = None
     Authors: list[str] | None = None
+    genres: list[str] | None = None
+    publisher: str | None = None
 
 
 class ScanBarcodeSchema(BaseModel):
@@ -65,3 +169,31 @@ class ScanBarcodeSchema(BaseModel):
     manifestation_id: int | None = None
     format: str | None = None
     collection_status: str | None = "available"
+    lent_to_user_id: str | None = None
+    lent_to_name: str | None = None
+
+    @field_validator("lent_to_user_id")
+    @classmethod
+    def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        return _validate_uuid_str(v)
+
+    @field_validator("collection_status")
+    @classmethod
+    def validate_collection_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in COLLECTION_STATUSES:
+            raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
+
+
+class UserCollectionCreateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=255)
+    parent_id: int | None = Field(default=None, gt=0, description="Optional ID of the parent collection")
+
+
+class UserCollectionUpdateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    parent_id: int | None = Field(default=None, gt=0, description="Optional ID of the parent collection")

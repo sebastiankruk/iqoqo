@@ -18,7 +18,8 @@
 import { APP_VERSION } from "@/lib/version";
 
 /**
- * Site footer displaying the iqoqo brand name and the current UI version string.
+ * Site footer displaying the iqoqo brand name, open-source sponsorship links,
+ * and the current UI version string.
  *
  * @returns {JSX.Element} The footer component
  */
@@ -30,7 +31,24 @@ export function Footer() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <p className="text-xs text-muted-foreground">
           <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; The Library of Everything{" "}
-          &middot; {uiVersion}
+          &middot; {uiVersion} &middot;{" "}
+          <a
+            href="https://github.com/sponsors/sebastiankruk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors"
+          >
+            GitHub Sponsors
+          </a>{" "}
+          &middot;{" "}
+          <a
+            href="https://buymeacoffee.com/iqoqo"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors"
+          >
+            Buy Me a Coffee
+          </a>
         </p>
         <p className="text-xs text-muted-foreground">Your library, your rules.</p>
       </div>

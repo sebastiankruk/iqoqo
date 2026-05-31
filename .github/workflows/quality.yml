@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, test-frontend]
     env:
-      ADMIN_PASSWORD: dummy-admin-password
+      ADMIN_PASSWORD: admin
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
     services:
       postgres:
@@ -193,11 +193,28 @@ jobs:
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install --with-deps chromium
 
+      - name: Create Postgres schemas
+        run: |
+          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;"
+          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;"
+          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;"
+
+      - name: Prepare E2E database
+        run: |
+          python scripts/init_db.py --seed-file data/seed_example.json --reset
+          ADMIN_PASSWORD=admin PYTHONPATH=. python scripts/init_auth.py
+          PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
+        env:
+          SECRET_KEY: test-secret-key
+          ADMIN_PASSWORD: admin
+
       - name: Run Playwright E2E tests
-        run: cd frontend && npx playwright test
+        run: cd frontend && npx playwright test --project=chromium
         env:
           CI: true
           FLASK_API_URL: http://127.0.0.1:5000/api
+          ADMIN_PASSWORD: admin
+          SECRET_KEY: test-secret-key
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

@@ -4,6 +4,9 @@
 
 <div align="center">
 
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA.svg?style=flat&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/sebastiankruk)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/iqoqo)
+
 [![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask Version](https://img.shields.io/badge/Flask-3.1-black.svg?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![Next.js Version](https://img.shields.io/badge/Next.js-16.2-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -78,11 +81,22 @@ iqoqo provides comprehensive tools for managing your library's data and media as
 
 - [x] Multi-user authentication and authorization
 - [x] Support for different types of media (books, vinyl, board games, etc.)
-- [ ] Admin web UI for data management
-- [ ] Federation protocol for cross-instance discovery
+- [x] Admin web UI for data management
+- [x] Socializing collections with sharing and recommendations
 - [ ] Mobile apps (iOS & Android)
+- [ ] Federation protocol for cross-instance discovery
 - [ ] Advanced search with SPARQL queries
-- [ ] Collection sharing and social features
+
+## 💖 Support & Upstream Sustainability
+
+iqoqo is, and always will be, free and open-source software. However, maintaining the infrastructure, running global semantic validation tests, and paying localized gatekeeper tolls (such as the annual Apple Developer Program fee to allow distributed mobile PWA configurations or standalone builds) costs money.
+
+If you find value in this project or are running a public deployment for your community, please consider backing the upstream development ecosystem:
+
+- **GitHub Sponsors:** [Sponsor on GitHub](https://github.com/sponsors/sebastiankruk) (Best for recurring developer support)
+- **Buy Me a Coffee:** [Support on Buy Me a Coffee](https://buymeacoffee.com/iqoqo) (Best for quick, one-off micro-donations)
+
+Your support directly covers operational toll fees to keep target deployment channels open and unencumbered.
 
 ## 📜 License
 

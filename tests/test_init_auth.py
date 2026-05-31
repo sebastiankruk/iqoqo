@@ -51,3 +51,26 @@ def test_init_auth_roles_permissions(app):
         assert not missing, f"Contributor is missing expected permissions: {missing}"
         assert not extra, f"Contributor has unexpected permissions: {extra}"
         assert contributor_perms == expected_perms
+
+        # 3. Verify standard user has correct permissions
+        user_role = Role.query.filter_by(name="user").first()
+        assert user_role is not None, "User role should be created"
+
+        user_perms = {p.name for p in user_role.permissions}
+        expected_user_perms = {
+            "write:item",
+            "update:item",
+            "delete:item",
+            "read:metadata",
+            "upload:cover",
+            "regenerate:cover",
+            "llm_generate:metadata",
+            "llm_generate:cover",
+        }
+
+        missing_user = expected_user_perms - user_perms
+        extra_user = user_perms - expected_user_perms
+
+        assert not missing_user, f"User is missing expected permissions: {missing_user}"
+        assert not extra_user, f"User has unexpected permissions: {extra_user}"
+        assert user_perms == expected_user_perms

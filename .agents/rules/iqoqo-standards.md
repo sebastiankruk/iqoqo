@@ -9,7 +9,7 @@ Talk like caveman
 
 ## Decision Making & Feature Preservation
 
-- **Plan Over Comments:** The project plan files in `.context/private-notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
+- **Plan Over Comments:** The project plan files in `.context/notes/` are the absolute source of truth. Never blindly delete UI components, filters, or API parameters just because a PR review comment says they are "unused" or "unsupported". If the feature is planned, fix the implementation (e.g., pass the missing parameter to the backend) instead of removing the code.
 - **Preserve Docs:** When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip, replace, or remove documentation that explains function behavior.
 
 ## General Architectural Principles
@@ -43,6 +43,14 @@ Talk like caveman
 
 - **MarkdownLint:** Use ATX-style headings (`# Heading`) exclusively. Do not use Setext-style (`===` or `---` underlines).
 - **Code Blocks:** When writing shell commands in Markdown, explicitly tag them as `bash` or `sh`. Do not tag them as `markdown`.
+
+## Tests
+
+- Every new feature must include tests that cover the expected behavior and edge cases. Use `pytest` for backend tests and `Vitest` with React Testing Library for frontend tests. All tests must pass before merging.
+- For backend tests, ensure that you are testing the API endpoints with realistic data and that you are not mocking out critical logic that could lead to false positives. For frontend tests, focus on user interactions and component rendering rather than implementation details.
+- Check if E2E tests are required for new features that involve complex user flows or critical functionality. If so, write Playwright tests that simulate real user behavior and validate the entire flow from the UI to the backend.
+- Do not write tests that simply check if a function was called. Instead, test the actual output and side effects of the function to ensure that it behaves correctly under various conditions.
+- **IMPORTANT** When fixing a bug, write a test that reproduces the bug before implementing the fix. This ensures that the bug is properly addressed and prevents regressions in the future.
 
 ## Git & Pull Requests
 

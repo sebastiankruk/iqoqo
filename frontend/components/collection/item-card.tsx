@@ -17,19 +17,18 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Disc, Loader2, Film, Dices, Puzzle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 
 const statusDotColor: Record<string, string> = {
-  // Collection
   available: "bg-chart-3",
   wish_list: "bg-primary",
   lent: "bg-accent",
   lost: "bg-destructive",
   ordered: "bg-amber-400",
   damaged: "bg-orange-600",
-  // Progress
   reading: "bg-green-500",
   read: "bg-blue-500",
   unread: "bg-zinc-400",
@@ -45,14 +44,12 @@ const statusDotColor: Record<string, string> = {
 };
 
 const statusDotTitle: Record<string, string> = {
-  // Collection
   available: "On Shelf",
   wish_list: "On Wish List",
   lent: "Lent Out",
   lost: "Lost",
   ordered: "Ordered",
   damaged: "Damaged",
-  // Progress
   reading: "Reading",
   read: "Read",
   unread: "Unread",
@@ -71,30 +68,46 @@ interface ItemCardProps {
   item: Item | CatalogEntry;
   variant?: "vertical" | "horizontal";
   isManifestationView?: boolean;
+  /** Whether this card is currently selected for bulk operations. */
+  isSelected?: boolean;
+  /** Callback to toggle selection of this card (enables selection mode). */
+  onToggleSelect?: (id: number) => void;
 }
 
 /**
- * Individual item card shown in the collection grid.
+ * ItemCard displays an item card with cover art, titles, creators, status dots,
+ * and quantity indicators. Supports vertical and horizontal layout variants.
  *
- * @param root0 - The props object
- * @param root0.item - The item to display
- * @param root0.variant - The card variant
- * @param root0.isManifestationView - Whether to show the manifestation view
- * @returns {JSX.Element} The component
+ * @param props - Component properties.
+ * @param props.item - The Item or CatalogEntry to display.
+ * @param props.variant - The layout variant ("vertical" or "horizontal").
+ * @param props.isManifestationView - Flag indicating if this is grouped manifestation view.
+ * @param props.isSelected - Whether this card is currently selected.
+ * @param props.onToggleSelect - Callback to toggle selection of this card.
+ * @returns An interactive card component linked to detail pages.
  */
-export function ItemCard({ item, variant = "vertical", isManifestationView = false }: ItemCardProps) {
+export function ItemCard({
+  item,
+  variant = "vertical",
+  isManifestationView = false,
+  isSelected = false,
+  onToggleSelect,
+}: ItemCardProps) {
+  const router = useRouter();
   const isCatalog = isManifestationView;
 
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
+  const userItemId = isCatalog ? (item as CatalogEntry).item_id : (item as Item).id;
   const manifestationId = isCatalog ? (item as CatalogEntry).id : (item as Item).manifestation_id;
 
-  // Decide which status is more "interesting" to show on the card dot/badge
   const progressStatus = isCatalog ? undefined : (item as Item).status;
   const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
   const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
 
   const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
   const isBorrowed = !isCatalog && (item as Item).is_borrowed;
+
+  const quantity = (item as (Item | CatalogEntry) & { _quantity?: number })._quantity || 1;
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
@@ -134,18 +147,72 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";
-  const authors = item.authors?.join(", ") ?? "Unknown author";
+  const authorsList = item.authors ?? [];
+
+  const renderAuthors = () => {
+    if (authorsList.length === 0) return <span>Unknown author</span>;
+    return (
+      <span className="relative z-20">
+        {authorsList.map((author, idx) => (
+          <span key={author}>
+            <button
+              type="button"
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`/collection?q=${encodeURIComponent(author)}`);
+              }}
+              className="hover:text-primary hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit text-left inline"
+            >
+              {author}
+            </button>
+            {idx < authorsList.length - 1 ? ", " : ""}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
+  const quantityBadge = quantity > 1 && (
+    <div className="absolute top-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-md ring-2 ring-background">
+      x{quantity}
+    </div>
+  );
+
+  // Checkbox overlay shown in Global Library (manifestation) view when selection mode is active.
+  const selectionOverlay = isCatalog && onToggleSelect && (
+    <button
+      type="button"
+      aria-label={isSelected ? "Deselect" : "Select"}
+      aria-pressed={isSelected}
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleSelect(item.id);
+      }}
+      className={`absolute top-2 left-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 shadow transition-colors ${
+        isSelected
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-background/80 text-transparent hover:border-primary"
+      }`}
+    >
+      {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+    </button>
+  );
 
   if (variant === "horizontal") {
     return (
       <Link
         href={targetHref}
-        className="group overflow-hidden rounded-xl bg-card shadow-sm transition-shadow hover:shadow-md"
+        data-testid="item-card"
+        data-item-id={itemId}
+        className={`group overflow-hidden rounded-xl bg-card shadow-sm transition-all hover:shadow-md ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""}`}
       >
         <div className="flex h-full p-5 gap-4 items-center">
           <div
             className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}
           >
+            {quantityBadge}
             {(isProcessing || coverStatus === "pending") && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -177,7 +244,7 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-card-foreground truncate">
                 {title}
               </h3>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">{authors}</p>
+              <div className="text-xs sm:text-sm text-muted-foreground truncate relative z-10">{renderAuthors()}</div>
               <div className="mt-2.5 flex items-center gap-2">
                 {!isCatalog && (
                   <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent whitespace-nowrap">
@@ -189,9 +256,27 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
                     Borrowed
                   </span>
                 )}
-                {isCatalog && userOwns && (
+                {isCatalog && userOwns && userItemId && (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      router.push(`/item/${userItemId}`);
+                    }}
+                    className="inline-flex items-center rounded-full bg-primary/10 hover:bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap z-20 transition-colors cursor-pointer"
+                  >
+                    In Collection →
+                  </button>
+                )}
+                {isCatalog && userOwns && !userItemId && (
                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
                     In Collection
+                  </span>
+                )}
+                {!isCatalog && (item as Item).is_hidden && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2.5 py-0.5 text-[10px] font-bold text-zinc-100 ring-1 ring-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-300">
+                    <EyeOff className="h-2.5 w-2.5" />
+                    HIDDEN
                   </span>
                 )}
               </div>
@@ -203,9 +288,18 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
   }
 
   return (
-    <Link href={targetHref} className="group block">
+    <Link
+      href={targetHref}
+      data-testid="item-card"
+      data-item-id={itemId}
+      className={`group block transition-all ${!isCatalog && (item as Item).is_hidden ? "opacity-60" : ""} ${
+        isSelected ? "ring-2 ring-primary rounded-lg" : ""
+      }`}
+    >
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
+          {quantityBadge}
+          {selectionOverlay}
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -233,9 +327,24 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
         <div className="flex items-start gap-2 px-3 py-2.5">
           {!isCatalog && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={dotTitle} />}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-snug text-foreground">{title}</p>
-            <p className="truncate text-xs text-muted-foreground">{authors}</p>
-            {isCatalog && userOwns && (
+            <p data-testid="card-title" className="truncate text-sm font-semibold leading-snug text-foreground">
+              {title}
+            </p>
+            <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
+            {isCatalog && userOwns && userItemId && (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  router.push(`/item/${userItemId}`);
+                }}
+                className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary hover:underline z-20 cursor-pointer"
+              >
+                <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
+                In Collection →
+              </button>
+            )}
+            {isCatalog && userOwns && !userItemId && (
               <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary">
                 <span className="inline-block h-3 w-3 rounded-full bg-primary/20" />
                 In Collection
@@ -245,6 +354,12 @@ export function ItemCard({ item, variant = "vertical", isManifestationView = fal
               <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-accent">
                 <span className="inline-block h-3 w-3 rounded-full bg-accent/20" />
                 Borrowed
+              </div>
+            )}
+            {!isCatalog && (item as Item).is_hidden && (
+              <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-zinc-500">
+                <EyeOff className="h-2.5 w-2.5" />
+                HIDDEN
               </div>
             )}
           </div>

@@ -25,6 +25,7 @@ backups/*
 .env
 .env.*
 !.env.example
+!.env.test
 
 #npm
 node_modules/
@@ -50,9 +51,8 @@ exports/*
 .context
 
 # Process IDs
-.flask.pid
-.frontend.pid
 .pids
+*.pid
 
 # Generated covers - we want to keep the original ones but ignore the generated ones
 app/static/covers/*
@@ -67,6 +67,7 @@ backups/*
 # Testing
 test-results/
 playwright-report/
+scratch/
 
 # External services
 .allegro_token.json

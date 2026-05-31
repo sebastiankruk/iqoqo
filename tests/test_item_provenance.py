@@ -65,6 +65,71 @@ def test_item_status_logging(client, normal_user_headers, app):
     data = resp.get_json()["data"]
     assert len(data) == 1
     assert data[0]["new_status"] == "reading"
+    assert data[0]["log_type"] == "progress"
+    assert data[0]["operator_name"] == "You"
+    assert data[0]["category"] == "text"
+
+
+def test_item_creation_logging(client, normal_user_headers, app):
+    """Test that creating an item via the API automatically creates creation logs."""
+    token = normal_user_headers["Authorization"].split(" ")[1]
+    payload = jwt.decode(token, app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+    user_id = uuid.UUID(payload["sub"])
+
+    with app.app_context():
+        work = Work(title="Creation Log Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9876543210987")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    # Add via manifestation ID route: POST /api/manifestations/<manifestation_id>/add
+    resp = client.post(
+        f"/api/manifestations/{manif_id}/add",
+        json={"status": "want_to_read", "collection_status": "available"},
+        headers=normal_user_headers,
+    )
+    assert resp.status_code == 200
+    item_id = resp.get_json()["data"]["item_id"]
+
+    # Verify initial logs were created
+    with app.app_context():
+        logs = ItemStatusLog.query.filter_by(item_id=item_id).all()
+        assert len(logs) == 2
+        statuses = {log.new_status for log in logs}
+        assert statuses == {"want_to_read", "available"}
+        for log in logs:
+            assert log.old_status is None
+            assert log.user_id == user_id
+
+    # Get logs via API
+    resp = client.get(f"/api/items/{item_id}/logs", headers=normal_user_headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert len(data) == 2
+
+    # Check that one log is 'collection' and the other is 'creation'
+    log_types = {d["log_type"] for d in data}
+    assert log_types == {"collection", "creation"}
+
+    # Find and assert on the collection log
+    coll_log = next(d for d in data if d["log_type"] == "collection")
+    assert coll_log["new_status"] == "available"
+    assert coll_log["old_status"] is None
+    assert coll_log["operator_name"] == "You"
+    assert coll_log["category"] == "text"
+
+    # Find and assert on the creation log
+    creat_log = next(d for d in data if d["log_type"] == "creation")
+    assert creat_log["new_status"] == "want_to_read"
+    assert creat_log["old_status"] is None
+    assert creat_log["operator_name"] == "You"
+    assert creat_log["category"] == "text"
 
 
 def test_image_scan_provenance(client, admin_headers, app):

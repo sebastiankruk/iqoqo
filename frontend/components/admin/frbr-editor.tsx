@@ -18,10 +18,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getFrbrTree, updateFrbrEntity, type FrbrTree, type FrbrItem } from "@/lib/api/admin";
+import {
+  getFrbrTree,
+  updateFrbrEntity,
+  searchFrbrEntities,
+  type FrbrTree,
+  type FrbrItem,
+  type FrbrSearchResult,
+} from "@/lib/api/admin";
 import { toast } from "sonner";
-import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useWorkParts } from "@/lib/api/hooks";
+import { apiClient } from "@/lib/api/client";
 
 interface MetaField {
   key: string;
@@ -282,6 +291,191 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
         Save Work
       </Button>
     </form>
+  );
+}
+interface WorkPartsManagerProps {
+  workId: number;
+}
+
+/**
+ * Component to manage the parts of a complex work (series).
+ * Shows existing parts and provides a form to add/remove parts.
+ *
+ * @param props - Component properties
+ * @param props.workId - The ID of the container work
+ * @returns JSX element
+ */
+function WorkPartsManager({ workId }: WorkPartsManagerProps) {
+  const { data: partsResponse, refetch: refetchParts, isLoading } = useWorkParts(workId);
+  const parts = partsResponse?.data ?? [];
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
+  const [selectedWork, setSelectedWork] = useState<FrbrSearchResult | null>(null);
+  const [sequence, setSequence] = useState<number>(1);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    setSequence(parts.length + 1);
+  }, [parts.length]);
+
+  const handleSearch = async (val: string) => {
+    setSearchQuery(val);
+    if (val.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await searchFrbrEntities(val, "work", 10);
+      setSearchResults(res.filter(w => w.id !== workId));
+    } catch (err) {
+      console.error("Search failed:", err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleAddPart = async () => {
+    if (!selectedWork) return;
+    setAdding(true);
+    try {
+      await apiClient.post(`/works/${workId}/parts`, {
+        part_work_id: selectedWork.id,
+        sequence: sequence,
+      });
+      toast.success(`Added "${selectedWork.title}" as part of this series`);
+      setSelectedWork(null);
+      setSearchQuery("");
+      setSearchResults([]);
+      refetchParts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add part");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemovePart = async (partWorkId: number, title: string) => {
+    try {
+      await apiClient.delete(`/works/${workId}/parts/${partWorkId}`);
+      toast.success(`Removed "${title}" from series`);
+      refetchParts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove part");
+    }
+  };
+
+  return (
+    <div className="mt-8 border-t pt-6 space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">Series / Complex Work Parts</h3>
+        <p className="text-sm text-muted-foreground">
+          Define this work as a complex work (series/anthology) and manage its children.
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+        </div>
+      ) : parts.length === 0 ? (
+        <div className="text-center py-6 border border-dashed rounded-lg bg-muted/20">
+          <p className="text-sm text-muted-foreground">This work is currently not defined as a series.</p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden bg-card divide-y">
+          {parts.map(part => (
+            <div key={part.part_work_id} className="flex items-center justify-between p-3 sm:px-4 hover:bg-muted/30">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {part.sequence}
+                </span>
+                <span className="font-medium text-sm truncate">{part.title}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                onClick={() => handleRemovePart(part.part_work_id, part.title)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-muted/10 border rounded-lg p-4 space-y-4">
+        <h4 className="text-sm font-semibold">Add Part Work</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="sm:col-span-2 relative">
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Search Work</label>
+            {selectedWork ? (
+              <div className="flex items-center justify-between h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <span className="truncate font-medium">{selectedWork.title}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedWork(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <input
+                  placeholder="Type to search works..."
+                  value={searchQuery}
+                  onChange={e => handleSearch(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+                {searching && (
+                  <div className="absolute right-3 top-8">
+                    <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+                {searchResults.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 border rounded-md bg-popover text-popover-foreground shadow-md max-h-60 overflow-auto divide-y">
+                    {searchResults.map(work => (
+                      <button
+                        key={work.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                        onClick={() => {
+                          setSelectedWork(work);
+                          setSearchResults([]);
+                        }}
+                      >
+                        {work.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Sequence Number</label>
+            <input
+              type="number"
+              min="1"
+              value={sequence}
+              onChange={e => setSequence(parseInt(e.target.value, 10) || 1)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </div>
+        <Button type="button" disabled={!selectedWork || adding} onClick={handleAddPart} className="w-full sm:w-auto">
+          {adding ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+          Add to Series
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -776,7 +970,10 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.work ? (
-              <WorkEditor key={tree.work.id} tree={tree} onSubmit={handleWorkSubmit} />
+              <>
+                <WorkEditor key={tree.work.id} tree={tree} onSubmit={handleWorkSubmit} />
+                <WorkPartsManager workId={tree.work.id} />
+              </>
             ) : (
               <p className="text-muted-foreground">No Work associated with this manifestation.</p>
             )}

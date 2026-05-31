@@ -202,3 +202,70 @@ ingest_methods:
   movie: ingest_video_from_barcode
   board_game: ingest_game_from_barcode
   puzzle: ingest_puzzle_from_barcode
+
+genres:
+  text:
+    - Fiction
+    - Non-Fiction
+    - Science Fiction
+    - Fantasy
+    - Mystery
+    - Thriller
+    - Romance
+    - Historical Fiction
+    - Biography
+    - History
+    - Science
+    - Self-Help
+    - Poetry
+  audiobook:
+    - Fiction
+    - Non-Fiction
+    - Science Fiction
+    - Fantasy
+    - Mystery
+    - Thriller
+    - Romance
+    - Historical Fiction
+    - Biography
+    - History
+    - Science
+    - Self-Help
+    - Poetry
+  music:
+    - Rock
+    - Pop
+    - Hip-Hop
+    - Jazz
+    - Classical
+    - Electronic
+    - Folk
+    - Country
+    - R&B
+    - Metal
+    - Blues
+  movie:
+    - Action
+    - Comedy
+    - Drama
+    - Sci-Fi
+    - Horror
+    - Romance
+    - Documentary
+    - Animation
+    - Thriller
+    - Family
+  board_game:
+    - Strategy
+    - Family
+    - Party
+    - Cooperative
+    - Deck-Building
+    - Worker Placement
+    - Abstract
+    - Role-Playing
+  puzzle:
+    - Jigsaw
+    - 3D
+    - Logic
+    - Mechanical

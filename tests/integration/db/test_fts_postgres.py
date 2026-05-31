@@ -38,6 +38,7 @@ def postgres_db():
 
     app = create_app()
     with app.app_context():
+        db.drop_all()
         db.create_all()
 
         db.session.execute(text("ALTER TABLE works DROP COLUMN IF EXISTS fts_simple CASCADE"))
@@ -105,7 +106,9 @@ def test_fts_manifestations_computation(postgres_db):
         db.session.commit()
 
         # 3. Query fts_simple
-        result = db.session.execute(text("SELECT fts_simple FROM manifestations WHERE id = :id"), {"id": manifestation.id}).fetchone()
+        result = db.session.execute(
+            text("SELECT fts_simple FROM catalog.manifestations WHERE id = :id"), {"id": manifestation.id}
+        ).fetchone()
 
         assert result is not None
         fts_val = result[0]

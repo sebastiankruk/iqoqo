@@ -53,4 +53,4 @@ ENV FLASK_APP=run.py
 USER appuser
 
 # Run the command to start the server
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "run:app"]

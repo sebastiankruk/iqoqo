@@ -332,8 +332,14 @@ def start_cover_processing(
     user_image_path: str | None = None,
     description: str = "",
     genre: str = "",
-) -> str:
-    """Fires off the background executor using the centralized task pool."""
+) -> str | None:
+    """Fires off the background executor using the centralized task pool.
+
+    Returns:
+        str | None: Task ID, or None if the background queue is unavailable.
+            Callers should treat None as a deferred/unavailable state and still
+            return a success response — the data has been saved even without the task.
+    """
     return submit_task(
         process_cover_pipeline,
         manifestation_id,

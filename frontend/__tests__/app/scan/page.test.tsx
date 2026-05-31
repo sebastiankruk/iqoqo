@@ -19,6 +19,7 @@ import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn().mockReturnValue("/"),
   useRouter: vi.fn(() => ({ push: vi.fn() })),
 }));
 

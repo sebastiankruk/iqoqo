@@ -14,8 +14,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy.model import Model
 
-db = SQLAlchemy()
+
+class BaseModel(Model):
+    """Custom base model to allow unmapped properties for SQLAlchemy 2.0 compatibility."""
+
+    __allow_unmapped__ = True
+
+
+db = SQLAlchemy(model_class=BaseModel)
 
 
 def import_models() -> None:
@@ -28,4 +36,4 @@ def import_models() -> None:
     # Order matters: auth / settings have no cross-module FKs, so they can be
     # imported first.  core.py references auth (users.id FK on Item), and
     # audio.py references core (works.id / expressions.id FKs).
-    from app.db import auth, settings, core, audio, video, games  # noqa: F401, I001 # isort: skip
+    from app.db import auth, settings, core, audio, video, games, social, roadmap, lending  # noqa: F401, I001 # isort: skip

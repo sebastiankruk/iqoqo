@@ -15,8 +15,17 @@
 //
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
-import { SlidersHorizontal, Search, Library as LibraryIcon, BookOpen } from "lucide-react";
+import { Fragment, useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import {
+  SlidersHorizontal,
+  Search,
+  Library as LibraryIcon,
+  BookOpen,
+  Layers,
+  Type,
+  Users,
+  Loader2,
+} from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
@@ -24,10 +33,60 @@ import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
-import { useItems, useManifestations, useStats, useProfile } from "@/lib/api/hooks";
+import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
+import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
+import {
+  useInfiniteItems,
+  useInfiniteManifestations,
+  useStats,
+  useProfile,
+  useInfiniteWorksShelf,
+  useInfiniteExpressionsShelf,
+} from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
+import { RoadmapView } from "@/components/collection/roadmap-view";
+
+/**
+ * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
+ *
+ * @param props - Component props.
+ * @param props.hasMore - Whether there are more items to load.
+ * @param props.isLoadingMore - Whether items are currently being loaded.
+ * @param props.onLoadMore - Callback fired when the trigger is intersected.
+ * @returns Trigger component or null if no more items.
+ */
+function LoadMoreTrigger({
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+}: {
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && onLoadMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
+  if (!hasMore) return null;
+  return (
+    <div ref={loadMoreRef} className="flex justify-center py-6 w-full col-span-full">
+      {isLoadingMore ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : <div className="h-6" />}
+    </div>
+  );
+}
 
 /**
  * Collection browser page with filtering, sorting and pagination.
@@ -40,22 +99,39 @@ function CollectionContent() {
   const pathname = usePathname();
 
   // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
-  const initialPage = parseInt(searchParams?.get("page") || "1", 10) || 1;
   const initialSort = searchParams?.get("sort") || "updated";
   const initialStatuses = searchParams?.get("statuses") || "";
-  const initialFilters: ActiveFilter[] = initialStatuses
-    ? initialStatuses.split(",").map(s => ({ type: "status", value: s }))
-    : [];
-  const initialViewMode = (searchParams?.get("view") || "items") as "items" | "manifestations";
+  const initialTags = searchParams?.get("tags") || "";
+  const initialCollections = searchParams?.get("collections") || "";
+  const initialGenres = searchParams?.get("genres") || "";
+  const initialPublishers = searchParams?.get("publishers") || "";
+
+  const initialFilters: ActiveFilter[] = [
+    ...(initialStatuses ? initialStatuses.split(",").map(s => ({ type: "status" as const, value: s })) : []),
+    ...(initialTags ? initialTags.split(",").map(s => ({ type: "tag" as const, value: s })) : []),
+    ...(initialCollections ? initialCollections.split(",").map(s => ({ type: "collection" as const, value: s })) : []),
+    ...(initialGenres ? initialGenres.split(",").map(s => ({ type: "genre" as const, value: s })) : []),
+    ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
+  ];
+
+  const initialViewMode = (searchParams?.get("view") || "items") as
+    | "items"
+    | "manifestations"
+    | "works"
+    | "expressions"
+    | "roadmap";
   const initialQuery = searchParams?.get("q") ?? "";
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";
 
-  const [page, setPage] = useState(initialPage);
-  const [viewMode, setViewMode] = useState<"items" | "manifestations">(initialViewMode);
+  const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
+    initialViewMode
+  );
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>(initialFilters);
   const [sortBy, setSortBy] = useState(initialSort);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  /** Manifestations selected for bulk-add (id → CatalogEntry) in Global Library view. */
+  const [selectedManifestations, setSelectedManifestations] = useState<Map<number, CatalogEntry>>(new Map());
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
@@ -70,18 +146,36 @@ function CollectionContent() {
     setAppliedQuery(initialQuery);
   }
 
-  const limit = 40;
+  // Sync viewMode when searchParams becomes available after Suspense hydration
+  const [lastUrlViewMode, setLastUrlViewMode] = useState(initialViewMode);
+  if (initialViewMode !== lastUrlViewMode) {
+    setLastUrlViewMode(initialViewMode);
+    setViewMode(initialViewMode);
+  }
+
+  // Sync filters when searchParams becomes available after Suspense hydration
+  const initialFilterKey = JSON.stringify(initialFilters);
+  const [lastFilterKey, setLastFilterKey] = useState(initialFilterKey);
+  if (initialFilterKey !== lastFilterKey) {
+    setLastFilterKey(initialFilterKey);
+    setActiveFilters(initialFilters);
+  }
+
+  const limit = 20;
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
   const isLoggedIn = !!profile;
+  const isCurator = isLoggedIn && !!profile?.permissions?.includes(PermissionName.WRITE_METADATA);
 
   // Track profile state to adjust viewMode dynamically
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
     setPrevIsLoggedIn(isLoggedIn);
-    if (!isLoggedIn && viewMode === "items") {
+    if (
+      !isLoggedIn &&
+      (viewMode === "items" || viewMode === "works" || viewMode === "expressions" || viewMode === "roadmap")
+    ) {
       setViewMode("manifestations");
-      setPage(1);
     }
   }
 
@@ -106,14 +200,30 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const tagFilters = useMemo(() => activeFilters.filter(f => f.type === "tag").map(f => f.value), [activeFilters]);
+  const collectionFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "collection").map(f => f.value),
+    [activeFilters]
+  );
+  const genreFilters = useMemo(() => activeFilters.filter(f => f.type === "genre").map(f => f.value), [activeFilters]);
+  const publisherFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "publisher").map(f => f.value),
+    [activeFilters]
+  );
+
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
     const params = new URLSearchParams();
-    if (page > 1) params.set("page", page.toString());
     if (sortBy !== "updated") params.set("sort", sortBy);
 
     const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
     if (statuses.length > 0) params.set("statuses", statuses.join(","));
+
+    if (tagFilters.length > 0) params.set("tags", tagFilters.join(","));
+    if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
+    if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
+    if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
+
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
     if (isBorrowedFilterActive) params.set("borrowed", "true");
@@ -124,9 +234,12 @@ function CollectionContent() {
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [
-    page,
     sortBy,
     activeFilters,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters,
     appliedQuery,
     viewMode,
     isBorrowedFilterActive,
@@ -136,8 +249,13 @@ function CollectionContent() {
     router,
   ]);
 
-  const { data: itemsData, isLoading: itemsLoading } = useItems(
-    page,
+  const {
+    data: itemsData,
+    isLoading: itemsLoading,
+    fetchNextPage: fetchNextItems,
+    hasNextPage: hasMoreItems,
+    isFetchingNextPage: isFetchingMoreItems,
+  } = useInfiniteItems(
     limit,
     statusFilters.length > 0 ? statusFilters : undefined,
     appliedQuery,
@@ -147,35 +265,132 @@ function CollectionContent() {
     formatFilters.length > 0 ? formatFilters[0] : undefined,
     isBorrowedFilterActive,
     missingCoverOnly,
-    missingIdOnly
+    missingIdOnly,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
 
-  const { data: manifestationsData, isLoading: manifestationsLoading } = useManifestations(
-    page,
+  const {
+    data: manifestationsData,
+    isLoading: manifestationsLoading,
+    fetchNextPage: fetchNextManifestations,
+    hasNextPage: hasMoreManifestations,
+    isFetchingNextPage: isFetchingMoreManifestations,
+  } = useInfiniteManifestations(
     limit,
     appliedQuery,
     viewMode === "manifestations",
     categoryFilters.length > 0 ? categoryFilters[0] : undefined,
     formatFilters.length > 0 ? formatFilters[0] : undefined,
     missingCoverOnly,
-    missingIdOnly
+    missingIdOnly,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
+  );
+
+  const {
+    data: worksData,
+    isLoading: worksLoading,
+    fetchNextPage: fetchNextWorks,
+    hasNextPage: hasMoreWorks,
+    isFetchingNextPage: isFetchingMoreWorks,
+  } = useInfiniteWorksShelf(
+    limit,
+    viewMode === "works" && isLoggedIn,
+    appliedQuery,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
+  );
+  const {
+    data: exprsData,
+    isLoading: exprsLoading,
+    fetchNextPage: fetchNextExprs,
+    hasNextPage: hasMoreExprs,
+    isFetchingNextPage: isFetchingMoreExprs,
+  } = useInfiniteExpressionsShelf(
+    limit,
+    viewMode === "expressions" && isLoggedIn,
+    appliedQuery,
+    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters
   );
 
   const { data: statsData } = useStats();
 
-  const currentData = viewMode === "items" ? itemsData : manifestationsData;
-  const isLoading = viewMode === "items" ? itemsLoading : manifestationsLoading;
+  const isLoading =
+    viewMode === "roadmap"
+      ? false
+      : viewMode === "items"
+        ? itemsLoading
+        : viewMode === "manifestations"
+          ? manifestationsLoading
+          : viewMode === "works"
+            ? worksLoading
+            : exprsLoading;
 
-  const allItems = useMemo<Array<Item | CatalogEntry>>(
-    () => (currentData?.data as Array<Item | CatalogEntry>) ?? [],
-    [currentData?.data]
+  const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
+    if (viewMode === "items") {
+      return itemsData?.pages.flatMap(page => page.data || []) ?? [];
+    }
+    if (viewMode === "manifestations") {
+      return manifestationsData?.pages.flatMap(page => page.data || []) ?? [];
+    }
+    return [];
+  }, [itemsData, manifestationsData, viewMode]);
+
+  const allWorks = useMemo(() => {
+    return worksData?.pages.flatMap(page => page.data || []) ?? [];
+  }, [worksData]);
+
+  const allExprs = useMemo(() => {
+    return exprsData?.pages.flatMap(page => page.data || []) ?? [];
+  }, [exprsData]);
+
+  const total =
+    viewMode === "works"
+      ? (worksData?.pages?.[0]?.pagination?.total ?? 0)
+      : viewMode === "expressions"
+        ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
+        : viewMode === "items"
+          ? (itemsData?.pages?.[0]?.meta?.total ?? 0)
+          : viewMode === "manifestations"
+            ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
+            : 0;
+
+  /** Clears all selected manifestations (e.g. after switching view mode). */
+  const clearManifestationSelection = useCallback(() => {
+    setSelectedManifestations(new Map());
+  }, []);
+
+  /** Toggles selection of a single manifestation, storing the full CatalogEntry. */
+  const toggleManifestationSelection = useCallback(
+    (id: number) => {
+      // Find the CatalogEntry from the current pages of loaded manifestations
+      const entry = allItems.find(item => item.id === id) as CatalogEntry | undefined;
+      setSelectedManifestations(prev => {
+        const next = new Map(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else if (entry) {
+          next.set(id, entry);
+        }
+        return next;
+      });
+    },
+    [allItems]
   );
 
-  const total = currentData?.meta?.total ?? 0;
-  const pages = currentData?.meta?.pages ?? 1;
-
   const toggleFilter = useCallback((filter: ActiveFilter) => {
-    setPage(1);
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
       if (exists) {
@@ -191,16 +406,25 @@ function CollectionContent() {
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
-    setPage(1);
     setActiveFilters(prev => prev.filter(f => !(f.type === filter.type && f.value === filter.value)));
   }, []);
 
   const clearAll = useCallback(() => {
-    setPage(1);
     setActiveFilters([]);
   }, []);
 
   const formatCounts = useMemo<Record<string, number>>(() => {
+    if (!statsData) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(statsData)) {
+      if (key.startsWith("format_")) {
+        counts[key.replace("format_", "")] = value as number;
+      }
+    }
+    return counts;
+  }, [statsData]);
+
+  const categoryCounts = useMemo<Record<string, number>>(() => {
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -275,11 +499,13 @@ function CollectionContent() {
           <div className="flex flex-wrap items-center gap-4">
             {isLoggedIn && (
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
+                <div role="tablist" className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "items"}
+                    aria-label="My Items"
                     onClick={() => {
                       setViewMode("items");
-                      setPage(1);
                     }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "items"
@@ -287,12 +513,15 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <BookOpen className="h-4 w-4" /> My Items
+                    <BookOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">My Items</span>
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={viewMode === "manifestations"}
+                    aria-label="Global Library"
                     onClick={() => {
                       setViewMode("manifestations");
-                      setPage(1);
                     }}
                     className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === "manifestations"
@@ -300,45 +529,66 @@ function CollectionContent() {
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     }`}
                   >
-                    <LibraryIcon className="h-4 w-4" /> Global Library
+                    <LibraryIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Global Library</span>
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={viewMode === "expressions"}
+                    aria-label="Expressions"
+                    onClick={() => {
+                      setViewMode("expressions");
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "expressions"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Type className="h-4 w-4" />
+                    <span className="hidden sm:inline">Expressions</span>
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={viewMode === "works"}
+                    aria-label="Works"
+                    onClick={() => {
+                      setViewMode("works");
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "works"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Layers className="h-4 w-4" />
+                    <span className="hidden sm:inline">Works</span>
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={viewMode === "roadmap"}
+                    aria-label="Roadmaps"
+                    onClick={() => {
+                      setViewMode("roadmap");
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      viewMode === "roadmap"
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="hidden sm:inline">Roadmaps</span>
                   </button>
                 </div>
 
-                {isLoggedIn && profile?.permissions?.includes(PermissionName.WRITE_METADATA) && (
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={missingCoverOnly}
-                        onChange={() => {
-                          setMissingCoverOnly(!missingCoverOnly);
-                          setPage(1);
-                        }}
-                        className="h-4 w-4 rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">No Cover</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer bg-card border border-border rounded-lg px-3 py-1.5 shadow-sm hover:bg-secondary transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={missingIdOnly}
-                        onChange={() => {
-                          setMissingIdOnly(!missingIdOnly);
-                          setPage(1);
-                        }}
-                        className="h-4 w-4 rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">No ID</span>
-                    </label>
-                  </div>
-                )}
+                {/* Curation filters moved to sidebar curation facet */}
               </div>
             )}
 
             <form
               onSubmit={e => {
                 e.preventDefault();
-                setPage(1);
                 setAppliedQuery(searchQuery);
               }}
               className="relative w-full sm:w-64 md:w-80"
@@ -365,6 +615,10 @@ function CollectionContent() {
                 </span>
               )}
             </button>
+
+            {isLoggedIn && (activeFilters.length > 0 || appliedQuery) && (
+              <ShareCollectionDialog activeFilters={activeFilters} appliedQuery={appliedQuery} />
+            )}
           </div>
         </div>
 
@@ -387,7 +641,15 @@ function CollectionContent() {
                 onToggleFilter={toggleFilter}
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
+                categoryCounts={categoryCounts}
                 disableStatus={viewMode === "manifestations"}
+                viewMode={viewMode}
+                isLoggedIn={isLoggedIn}
+                isCurator={isCurator}
+                missingCover={missingCoverOnly}
+                onChangeMissingCover={setMissingCoverOnly}
+                missingId={missingIdOnly}
+                onChangeMissingId={setMissingIdOnly}
               />
             </div>
           </div>
@@ -405,35 +667,280 @@ function CollectionContent() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <CollectionGrid items={filteredItems} isManifestationView={viewMode === "manifestations"} />
-            )}
-
-            {pages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {pages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(pages, p + 1))}
-                  disabled={page === pages}
-                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
-                >
-                  Next
-                </button>
+            ) : viewMode === "works" && worksData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allWorks.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Layers className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
+                      {appliedQuery ? `No works matching "${appliedQuery}"` : "No works in collection"}
+                    </h3>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
+                  </div>
+                ) : (
+                  allWorks.map(work => (
+                    <div
+                      key={work.work_id}
+                      className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
+                    >
+                      {/* Cover thumbnails strip – each clickable to its manifestation */}
+                      <div className="flex gap-1 p-3 bg-muted/30 border-b border-border/50">
+                        {work.owned_manifestations.slice(0, 4).map(m => (
+                          <button
+                            key={m.manifestation_id}
+                            type="button"
+                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
+                            style={{
+                              backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }}
+                            title={`View ${m.format} edition`}
+                          >
+                            {!m.cover_url && (
+                              <div className="flex h-full items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                        {work.owned_manifestations.length > 4 && (
+                          <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
+                            +{work.owned_manifestations.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                          {work.title}
+                        </h3>
+                        {work.creators.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {work.creators.map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(c);
+                                  setAppliedQuery(c);
+                                  setViewMode("items");
+                                }}
+                                className="text-xs text-primary hover:underline font-medium"
+                                title={`Browse all items by ${c}`}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {work.total_items} {work.total_items === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {work.owned_manifestations.slice(0, 1).map(m => (
+                              <Fragment key={`man-${m.manifestation_id}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                  title="View manifestation"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  Edition
+                                </button>
+                                {m.item_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                                    title="View my item"
+                                  >
+                                    <BookOpen className="h-3 w-3" />
+                                    My Item
+                                  </button>
+                                )}
+                              </Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <LoadMoreTrigger
+                  hasMore={!!hasMoreWorks}
+                  isLoadingMore={isFetchingMoreWorks}
+                  onLoadMore={() => hasMoreWorks && fetchNextWorks()}
+                />
               </div>
+            ) : viewMode === "expressions" && exprsData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allExprs.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Type className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
+                      {appliedQuery ? `No expressions matching "${appliedQuery}"` : "No expressions in collection"}
+                    </h3>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
+                  </div>
+                ) : (
+                  allExprs.map(expr => (
+                    <div
+                      key={expr.expression_id}
+                      className="group flex flex-col rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden"
+                    >
+                      {/* Cover thumbnails strip */}
+                      <div className="flex gap-1 p-3 bg-muted/30 border-b border-border/50">
+                        {expr.owned_manifestations.slice(0, 4).map(m => (
+                          <button
+                            key={m.manifestation_id}
+                            type="button"
+                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
+                            style={{
+                              backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }}
+                            title={`${m.format} edition`}
+                          >
+                            {!m.cover_url && (
+                              <div className="flex h-full items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                        {expr.owned_manifestations.length > 4 && (
+                          <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
+                            +{expr.owned_manifestations.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                          {expr.work_title}
+                        </h3>
+                        {expr.creators.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {expr.creators.map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(c);
+                                  setAppliedQuery(c);
+                                  setViewMode("items");
+                                }}
+                                className="text-xs text-primary hover:underline font-medium"
+                                title={`Browse all items by ${c}`}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="inline-flex items-center rounded-full bg-secondary/60 px-2.5 py-0.5 text-xs font-medium text-secondary-foreground capitalize">
+                            {expr.content_type}
+                          </span>
+                          {expr.language && (
+                            <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent uppercase">
+                              {expr.language}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {expr.total_items} {expr.total_items === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {expr.owned_manifestations.slice(0, 1).map(m => (
+                              <Fragment key={`man-${m.manifestation_id}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                  title="View manifestation"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  Edition
+                                </button>
+                                {m.item_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                                    title="View my item"
+                                  >
+                                    <BookOpen className="h-3 w-3" />
+                                    My Item
+                                  </button>
+                                )}
+                              </Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <LoadMoreTrigger
+                  hasMore={!!hasMoreExprs}
+                  isLoadingMore={isFetchingMoreExprs}
+                  onLoadMore={() => hasMoreExprs && fetchNextExprs()}
+                />
+              </div>
+            ) : viewMode === "roadmap" ? (
+              <RoadmapView />
+            ) : (
+              <CollectionGrid
+                items={filteredItems}
+                isManifestationView={viewMode === "manifestations"}
+                hasMore={
+                  viewMode === "items" ? hasMoreItems : viewMode === "manifestations" ? hasMoreManifestations : false
+                }
+                isLoadingMore={
+                  viewMode === "items"
+                    ? isFetchingMoreItems
+                    : viewMode === "manifestations"
+                      ? isFetchingMoreManifestations
+                      : false
+                }
+                onLoadMore={() => {
+                  if (viewMode === "items" && hasMoreItems) fetchNextItems();
+                  if (viewMode === "manifestations" && hasMoreManifestations) fetchNextManifestations();
+                }}
+                selectedIds={viewMode === "manifestations" ? new Set(selectedManifestations.keys()) : undefined}
+                onToggleSelect={viewMode === "manifestations" && isLoggedIn ? toggleManifestationSelection : undefined}
+              />
             )}
           </div>
         </div>
       </div>
       <Footer />
+      {/* Bulk-add toolbar – floats above footer when manifestations are selected */}
+      {isLoggedIn && viewMode === "manifestations" && (
+        <BulkAddToolbar
+          selectedItems={Array.from(selectedManifestations.values())}
+          onClearSelection={clearManifestationSelection}
+          onSuccess={clearManifestationSelection}
+        />
+      )}
       <MobileFilterDrawer
         open={mobileFiltersOpen}
         onClose={() => setMobileFiltersOpen(false)}
@@ -441,6 +948,15 @@ function CollectionContent() {
         onToggleFilter={toggleFilter}
         statusCounts={statusCounts}
         formatCounts={formatCounts}
+        categoryCounts={categoryCounts}
+        disableStatus={viewMode === "manifestations"}
+        viewMode={viewMode}
+        isLoggedIn={isLoggedIn}
+        isCurator={isCurator}
+        missingCover={missingCoverOnly}
+        onChangeMissingCover={setMissingCoverOnly}
+        missingId={missingIdOnly}
+        onChangeMissingId={setMissingIdOnly}
       />
     </div>
   );

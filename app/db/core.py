@@ -109,6 +109,10 @@ class Work(db.Model):  # type: ignore[name-defined]
     # Relationships
     expressions = db.relationship("Expression", backref="work", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("WorkContribution", backref="work", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.work_id", backref="work", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship("SocialNote", foreign_keys="SocialNote.work_id", backref="work", lazy="dynamic", cascade="all, delete-orphan")
     parts = db.relationship(
         "WorkPart",
         foreign_keys="WorkPart.container_work_id",
@@ -144,6 +148,12 @@ class Expression(db.Model):  # type: ignore[name-defined]
     # Relationships
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
     contributions = db.relationship("ExpressionContribution", backref="expression", lazy="selectin", cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.expression_id", backref="expression", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship(
+        "SocialNote", foreign_keys="SocialNote.expression_id", backref="expression", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
 
 class Manifestation(db.Model):  # type: ignore[name-defined]
@@ -229,6 +239,20 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     items = db.relationship("Item", backref="manifestation", lazy=True, cascade="all, delete-orphan")
+    feedbacks = db.relationship(
+        "SocialFeedback",
+        foreign_keys="SocialFeedback.manifestation_id",
+        backref="manifestation",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    notes = db.relationship(
+        "SocialNote",
+        foreign_keys="SocialNote.manifestation_id",
+        backref="manifestation",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -258,9 +282,41 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
     lent_to_name = db.Column(db.String(255), nullable=True)
 
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
+    feedbacks = db.relationship(
+        "SocialFeedback", foreign_keys="SocialFeedback.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    notes = db.relationship("SocialNote", foreign_keys="SocialNote.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan")
+
+
+class UserWorkIntent(db.Model):  # type: ignore[name-defined]
+    """
+    User intent toward a Conceptual Work (F1).
+    E.g., "want_to_read" or other progress intent.
+    """
+
+    __tablename__ = "user_work_intents"
+    __table_args__: tuple = (
+        (
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),)
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = db.Column(db.String(50), default="want_to_read", nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    work = db.relationship("Work", backref=db.backref("intents", cascade="all, delete-orphan", lazy="dynamic"))
+    user = db.relationship("User", backref=db.backref("work_intents", cascade="all, delete-orphan", lazy="dynamic"))
 
 
 class ItemStatusLog(db.Model):  # type: ignore[name-defined]
@@ -295,3 +351,75 @@ class ImageScan(db.Model):  # type: ignore[name-defined]
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
     manifestation = db.relationship("Manifestation", backref=db.backref("image_scans", cascade="all, delete", lazy="selectin"))
+
+
+class UserCollection(db.Model):  # type: ignore[name-defined]
+    """
+    A user-defined hierarchical collection of items or other collections.
+    """
+
+    __tablename__ = "user_collections"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="CASCADE"), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    owner = db.relationship("User", backref=db.backref("collections", cascade="all, delete-orphan", lazy="dynamic"))
+    children = db.relationship(
+        "UserCollection", backref=db.backref("parent", remote_side=[id]), cascade="all, delete-orphan", lazy="selectin"
+    )
+    items = db.relationship("UserCollectionItem", backref="collection", cascade="all, delete-orphan", lazy="dynamic")
+
+
+class UserCollectionItem(db.Model):  # type: ignore[name-defined]
+    """
+    Association table linking Items to UserCollections.
+    """
+
+    __tablename__ = "user_collection_items"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    collection_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item = db.relationship("Item", backref=db.backref("collection_links", cascade="all, delete-orphan", lazy="selectin"))
+
+
+class Tag(db.Model):  # type: ignore[name-defined]
+    """
+    Global folksonomy tags.
+    """
+
+    __tablename__ = "tags"
+    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item_links = db.relationship("ItemTag", backref="tag", cascade="all, delete-orphan", lazy="dynamic")
+
+
+class ItemTag(db.Model):  # type: ignore[name-defined]
+    """
+    Association table linking Items to Tags, including the user who added it.
+    """
+
+    __tablename__ = "item_tags"
+    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}tags.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_by_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"), nullable=True)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    item = db.relationship("Item", backref=db.backref("tag_links", cascade="all, delete-orphan", lazy="selectin"))
+    added_by = db.relationship("User")

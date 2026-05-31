@@ -27,6 +27,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
+from app.api.filters import apply_genre_filter
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -44,6 +45,15 @@ def get_manifestations() -> tuple[Response, int]:
     format_filter = request.args.get("format")
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
+    tags_filter = request.args.get("tags")
+    collections_filter = request.args.get("collections")
+    genres_filter = request.args.get("genres")
+    publishers_filter = request.args.get("publishers")
+
+    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
+    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
+    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
+    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
 
     try:
         page = int(page_param)
@@ -60,7 +70,18 @@ def get_manifestations() -> tuple[Response, int]:
         from app.core.search_service import SearchService
 
         total, result_ids = SearchService.search_manifestations(
-            q, limit, offset, category=category_filter, format_filter=format_filter, missing_cover=missing_cover, missing_id=missing_id
+            q,
+            limit,
+            offset,
+            category=category_filter,
+            format_filter=format_filter,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            tags=tags_list,
+            collections=collections_list,
+            genres=genres_list,
+            publishers=publishers_list,
+            user_id=user_id,
         )
 
         if result_ids:
@@ -74,7 +95,9 @@ def get_manifestations() -> tuple[Response, int]:
         else:
             manifestations = []
     else:
-        query = Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression)
+        query = (
+            Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression).join(Work)
+        )
 
         if category_filter:
             query = query.filter(Expression.content_type == category_filter)
@@ -107,20 +130,51 @@ def get_manifestations() -> tuple[Response, int]:
                 )
             )
 
+        # Apply taxonomy filters
+        has_item_joined = False
+        if tags_list:
+            if not has_item_joined:
+                query = query.join(Item, Manifestation.id == Item.manifestation_id)
+                has_item_joined = True
+            from app.db.models import ItemTag, Tag
+
+            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+            tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
+            query = query.filter(db.or_(*tags_conditions))
+
+        if collections_list:
+            if not has_item_joined:
+                query = query.join(Item, Manifestation.id == Item.manifestation_id)
+                has_item_joined = True
+            from app.db.models import UserCollection, UserCollectionItem
+
+            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
+            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
+            query = query.filter(db.or_(*coll_conditions))
+            if user_id:
+                query = query.filter(UserCollection.owner_id == user_id)
+
+        if genres_list:
+            query = apply_genre_filter(query, genres_list)
+
+        if publishers_list:
+            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            query = query.filter(db.or_(*pubs_conditions))
+
         query = query.order_by(Manifestation.id.desc())
         total = query.count()
         manifestations = query.offset(offset).limit(limit).all()
 
-    owned_manifestation_ids = set()
+    owned_manifestation_map = {}
     if user_id and manifestations:
         manifestation_ids = [m.id for m in manifestations]
-        owned_ids_query = (
-            db.session.query(Manifestation.id)
-            .join(Item, Item.manifestation_id == Manifestation.id)
-            .filter(Item.owner_id == user_id, Manifestation.id.in_(manifestation_ids))
-            .distinct()
+        owned_items_query = db.session.query(Item.manifestation_id, Item.id).filter(
+            Item.owner_id == user_id, Item.manifestation_id.in_(manifestation_ids)
         )
-        owned_manifestation_ids = {str(row[0]) for row in owned_ids_query.all()}
+        for m_id, item_id in owned_items_query.all():
+            owned_manifestation_map[m_id] = item_id
 
     data = []
     for m in manifestations:
@@ -132,8 +186,10 @@ def get_manifestations() -> tuple[Response, int]:
             authors = work.meta.get("authors", []) if work.meta else []
 
         user_owns = False
+        item_id = None
         if user_id:
-            user_owns = str(m.id) in owned_manifestation_ids
+            user_owns = m.id in owned_manifestation_map
+            item_id = owned_manifestation_map.get(m.id)
 
         resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -141,6 +197,12 @@ def get_manifestations() -> tuple[Response, int]:
             {
                 "id": m.id,
                 "expression_id": m.expression_id,
+                "work_id": m.expression.work.id if (m.expression and m.expression.work) else None,
+                "container_work_id": (
+                    m.expression.work.member_of[0].container_work_id
+                    if (m.expression and m.expression.work and m.expression.work.member_of)
+                    else None
+                ),
                 "isbn13": m.isbn13,
                 "publisher": m.publisher,
                 "year": resolved_year,
@@ -150,6 +212,8 @@ def get_manifestations() -> tuple[Response, int]:
                 "cover_url": m.cover_url,
                 "cover_status": m.meta.get("cover_status") if m.meta else None,
                 "user_owns": user_owns,
+                "item_id": item_id,
+                "content_type": m.expression.content_type if m.expression else None,
             }
         )
 
@@ -183,18 +247,26 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         authors = work.meta.get("authors", []) if work.meta else []
 
     user_owns = False
+    item_id: int | None = None
     owner_count = 0
     if user_id:
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             user_owns = True
-    owner_count = Item.query.filter(Item.manifestation_id == m.id).count()
+            item_id = owned_item.id
+    owner_count = Item.query.filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False)).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
     data = {
         "id": m.id,
         "expression_id": m.expression_id,
+        "work_id": m.expression.work.id if (m.expression and m.expression.work) else None,
+        "container_work_id": (
+            m.expression.work.member_of[0].container_work_id
+            if (m.expression and m.expression.work and m.expression.work.member_of)
+            else None
+        ),
         "isbn13": m.isbn13,
         "publisher": m.publisher,
         "year": resolved_year,
@@ -204,6 +276,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_url": m.cover_url,
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
+        "item_id": item_id,
         "owner_count": owner_count,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
@@ -274,7 +347,13 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": f"Metadata not found for ISBN = {canonical_isbn}"}), 404
 
     if not manifestation:
-        work = Work(title=metadata["Title"], meta={"authors": metadata["Authors"]})
+        from app.core.ingest import _extract_genres
+
+        work_genres = _extract_genres(metadata)
+        work_meta: dict[str, object] = {"authors": metadata.get("Authors", [])}
+        if work_genres:
+            work_meta["genres"] = work_genres
+        work = Work(title=metadata["Title"], meta=work_meta)
         db.session.add(work)
         db.session.flush()
 
@@ -342,6 +421,9 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
     metadata = payload.model_dump(exclude_unset=True)
 
     if metadata:
+        if "publisher" in metadata:
+            manifestation.publisher = metadata.pop("publisher")
+
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
             if "Title" in metadata:
@@ -438,6 +520,22 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     task_id = start_cover_processing(
         manifestation.id, identifier, title, author, user_id_str, llm_permissions=llm_permissions, user_image_path=filepath
     )
+
+    if task_id is None:
+        # Queue unavailable (e.g. Redis down): raw file is saved; mark as pending so
+        # the user or admin can trigger regeneration once the queue recovers.
+        manifestation.update_meta(cover_status="pending")
+        db.session.commit()
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {"task_id": None, "message": "Cover saved; processing deferred — queue unavailable"},
+                    "error": None,
+                }
+            ),
+            202,
+        )
 
     return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover upload processing started"}, "error": None}), 202
 
@@ -557,6 +655,15 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
         description=description,
         genre=genre,
     )
+
+    if task_id is None:
+        # Queue unavailable: reset cover_status so the user can retry later.
+        manif.update_meta(cover_status="failed")
+        db.session.commit()
+        return (
+            jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}),
+            503,
+        )
 
     return (
         jsonify(
