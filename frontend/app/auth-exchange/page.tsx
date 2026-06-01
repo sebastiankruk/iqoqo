@@ -19,6 +19,7 @@ import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { setAuthToken } from "@/lib/capacitor/storage";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Handles the token exchange step after OAuth or local login.
@@ -34,6 +35,7 @@ function AuthExchangeHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     /** Exchange the token param for persistent auth (secure storage or cookie). */
@@ -46,6 +48,7 @@ function AuthExchangeHandler() {
       if (isNativeApp()) {
         // Native: persist token in OS-level encrypted storage, then go home.
         await setAuthToken(token);
+        queryClient.clear();
         router.replace("/");
       } else {
         // Web: call the BFF route handler which sets the httpOnly cookie.
@@ -58,7 +61,7 @@ function AuthExchangeHandler() {
       }
     }
     void handleExchange();
-  }, [token, router]);
+  }, [token, router, queryClient]);
 
   return (
     <div className="flex h-screen items-center justify-center">

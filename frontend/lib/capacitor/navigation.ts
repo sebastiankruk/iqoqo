@@ -53,7 +53,7 @@ export function registerBackButtonHandler(router: { back: () => void }): void {
 export function registerDeepLinkHandler(router: { push: (path: string) => void }): void {
   if (!isNativeApp()) return;
 
-  App.addListener("appUrlOpen", ({ url }) => {
+  const handleUrl = (url: string) => {
     try {
       const parsed = new URL(url);
       let fullPath: string;
@@ -74,6 +74,18 @@ export function registerDeepLinkHandler(router: { push: (path: string) => void }
       }
     } catch {
       // Malformed URL — ignore silently.
+    }
+  };
+
+  // 1. Warm start listener
+  App.addListener("appUrlOpen", ({ url }) => {
+    handleUrl(url);
+  });
+
+  // 2. Cold start check
+  void App.getLaunchUrl().then(result => {
+    if (result && result.url) {
+      handleUrl(result.url);
     }
   });
 }
