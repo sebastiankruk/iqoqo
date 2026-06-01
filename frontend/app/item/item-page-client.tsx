@@ -15,8 +15,7 @@
 //
 "use client";
 
-import { use } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { HeroBanner } from "@/components/item/hero-banner";
@@ -27,11 +26,6 @@ import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
-
-/** Page props for the Item page. */
-interface Props {
-  params: Promise<{ id: string }>;
-}
 
 /**
  * Renders the item detail content (hero, sidebar, tabs, actions).
@@ -97,14 +91,12 @@ function ItemDetail(props: { item: Item }) {
 /**
  * Item detail page showing the full FRBR hierarchy for one item.
  *
- * @param {Props} props - Page props containing `params` promise.
- * @param {Promise<{id: string}>} props.params - Route params promise provided by Next.js.
  * @returns {JSX.Element}
  */
-export default function ItemPageClient(props: Props) {
-  const { params } = props;
-  const { id } = use(params);
-  const itemId = parseInt(id, 10);
+export default function ItemPageClient() {
+  const searchParams = useSearchParams();
+  const id = searchParams?.get("id");
+  const itemId = id ? parseInt(id, 10) : NaN;
   const router = useRouter();
 
   const { data: item, isLoading, isError } = useItem(itemId);

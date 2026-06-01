@@ -1003,7 +1003,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
             <CardTitle>
               Edit Manifestation{" "}
               <Link
-                href={`/manifestation/${tree.manifestation.id}`}
+                href={`/manifestation?id=${tree.manifestation.id}`}
                 className="text-muted-foreground hover:underline hover:text-primary transition-colors"
                 target="_blank"
               >
@@ -1080,7 +1080,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
                           <div>
                             <span className="font-medium">
                               <Link
-                                href={`/item/${item.id}`}
+                                href={`/item?id=${item.id}`}
                                 className="hover:underline hover:text-primary transition-colors"
                                 target="_blank"
                                 onClick={e => e.stopPropagation()}

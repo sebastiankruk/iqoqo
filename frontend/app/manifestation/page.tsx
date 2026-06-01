@@ -14,29 +14,31 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-import ItemPageClient from "./item-page-client";
-
-export const dynamic = "force-static";
-
-interface Props {
-  params: Promise<{ id: string }>;
-}
+import ManifestationPageClient from "./manifestation-page-client";
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
+import { Footer } from "@/components/dashboard/footer";
 
 /**
- * Generates static params for routing.
+ * Server component wrapper that renders client-side ManifestationPageClient.
  *
- * @returns Array of default route parameters.
- */
-export function generateStaticParams() {
-  return [{ id: "_" }];
-}
-
-/**
- * Server component wrapper that renders client-side ItemPageClient.
- *
- * @param {Props} props - Page props containing params promise.
  * @returns {JSX.Element} The rendered client page.
  */
-export default function Page(props: Props) {
-  return <ItemPageClient {...props} />;
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col bg-background">
+          <Navbar />
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+          <Footer />
+        </div>
+      }
+    >
+      <ManifestationPageClient />
+    </Suspense>
+  );
 }

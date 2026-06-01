@@ -170,7 +170,7 @@ export function SuccessCard({
       }
 
       if (data.item_id) {
-        router.push(`/item/${data.item_id}`);
+        router.push(`/item?id=${data.item_id}`);
       } else {
         onDismiss();
       }
@@ -311,7 +311,7 @@ export function SuccessCard({
                   <Button
                     className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
                     variant="default"
-                    onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
+                    onClick={() => meta.item_id && router.push(`/item?id=${meta.item_id}`)}
                   >
                     View in Collection
                   </Button>

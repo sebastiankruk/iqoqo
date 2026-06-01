@@ -109,7 +109,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
               <div className="flex flex-wrap justify-center gap-4">
                 {result.data.map(item => (
                   <Link
-                    href={`/manifestation/${item.type === "item" ? item.manifestation_id : item.id}`}
+                    href={`/manifestation?id=${item.type === "item" ? item.manifestation_id : item.id}`}
                     key={`${item.type}-${item.id}`}
                     className="block group w-[130px]"
                   >

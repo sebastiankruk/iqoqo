@@ -241,7 +241,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     const itemId = await targetItem.getAttribute("data-item-id");
 
     await targetItem.click();
-    await expect(borrowerPage).toHaveURL(new RegExp(`/item/${itemId}`));
+    await expect(borrowerPage).toHaveURL(new RegExp(`/item?id=${itemId}`));
 
     const requestButton = borrowerPage.locator('button:has-text("Request Loan")');
     await expect(requestButton).toBeVisible();

@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, Loader2, Disc } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -41,8 +41,8 @@ import { FRBRFeedback } from "@/components/social/frbr-feedback";
  * @returns {JSX.Element}
  */
 export default function ManifestationPageClient() {
-  const params = useParams();
-  const manifestationId = Number(params?.id);
+  const searchParams = useSearchParams();
+  const manifestationId = Number(searchParams?.get("id"));
 
   const { data: userProfile } = useProfile();
   const { data: manifestation, isLoading, isError } = useManifestation(manifestationId);
@@ -316,7 +316,7 @@ export default function ManifestationPageClient() {
                   {parts.map(part => {
                     const isCurrent = part.part_work_id === manifestation.work_id;
                     const isLinkable = !!(part.item_id || part.manifestation_id);
-                    const linkUrl = part.item_id ? `/item/${part.item_id}` : `/manifestation/${part.manifestation_id}`;
+                    const linkUrl = part.item_id ? `/item?id=${part.item_id}` : `/manifestation?id=${part.manifestation_id}`;
 
                     const content = (
                       <div className="flex items-center gap-3">
@@ -395,7 +395,7 @@ export default function ManifestationPageClient() {
                     {manifestation.user_owns ? (
                       <div className="flex flex-wrap gap-2">
                         {manifestation.item_id && (
-                          <Button onClick={() => router.push(`/item/${manifestation.item_id}`)} size="sm">
+                          <Button onClick={() => router.push(`/item?id=${manifestation.item_id}`)} size="sm">
                             <BookOpen className="mr-2 h-4 w-4" />
                             View My Item
                           </Button>

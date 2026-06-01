@@ -111,7 +111,7 @@ export function ItemCard({
 
   const dotColor = status ? (statusDotColor[status] ?? "bg-muted") : "bg-muted";
   const dotTitle = status ? (statusDotTitle[status] ?? status) : "";
-  const targetHref = isCatalog ? `/manifestation/${manifestationId}` : `/item/${itemId}`;
+  const targetHref = isCatalog ? `/manifestation?id=${manifestationId}` : `/item?id=${itemId}`;
 
   const itemCoverUrl = item.cover_url;
   const coverStatus = item.cover_status;
@@ -261,7 +261,7 @@ export function ItemCard({
                     type="button"
                     onClick={e => {
                       e.stopPropagation();
-                      router.push(`/item/${userItemId}`);
+                      router.push(`/item?id=${userItemId}`);
                     }}
                     className="inline-flex items-center rounded-full bg-primary/10 hover:bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary whitespace-nowrap z-20 transition-colors cursor-pointer"
                   >
@@ -336,7 +336,7 @@ export function ItemCard({
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
-                  router.push(`/item/${userItemId}`);
+                  router.push(`/item?id=${userItemId}`);
                 }}
                 className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary hover:underline z-20 cursor-pointer"
               >

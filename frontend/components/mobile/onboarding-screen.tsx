@@ -50,6 +50,8 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
       const url = await getInstanceUrl();
       if (!url) {
         setNeedsSetup(true);
+      } else {
+        localStorage.setItem("iqoqo_instance_url_sync", url);
       }
       setReady(true);
     }

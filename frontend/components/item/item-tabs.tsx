@@ -74,7 +74,7 @@ function DetailsTab({ item }: { item: Item }) {
           <div className="flex flex-col gap-0.5">
             <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manifestation ID</dt>
             <dd className="text-sm font-mono text-foreground">
-              <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
+              <Link href={`/manifestation?id=${item.manifestation_id}`} className="hover:underline">
                 #{item.manifestation_id}
               </Link>
             </dd>
@@ -97,7 +97,7 @@ function DetailsTab({ item }: { item: Item }) {
             {parts.map(part => {
               const isCurrent = part.part_work_id === item.work?.id;
               const isLinkable = !!(part.item_id || part.manifestation_id);
-              const linkUrl = part.item_id ? `/item/${part.item_id}` : `/manifestation/${part.manifestation_id}`;
+              const linkUrl = part.item_id ? `/item?id=${part.item_id}` : `/manifestation?id=${part.manifestation_id}`;
 
               const content = (
                 <div className="flex items-center gap-3">

@@ -144,7 +144,7 @@ test.describe("Wishlist and Progress Workflow", () => {
     page.on("response", res => {
       if (res.status() === 404) console.log("404 URL:", res.url());
     });
-    await page.goto(`/item/${itemId}`);
+    await page.goto(`/item?id=${itemId}`);
     await page.waitForLoadState("networkidle");
     const bodyText = await page.innerText("body");
     console.log("BODY TEXT:", bodyText.slice(0, 200));
