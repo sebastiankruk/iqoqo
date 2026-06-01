@@ -121,6 +121,10 @@ class User(db.Model):  # type: ignore[name-defined]
     last_login = db.Column(db.DateTime, nullable=True)
     visibility = db.Column(db.String(20), default="private")
 
+    # Federation: ActivityPub actor identity
+    federation_key_id = db.Column(db.String(255), nullable=True)
+    federation_public_key = db.Column(db.Text, nullable=True)
+
     roles = db.relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
     items = db.relationship("Item", foreign_keys="Item.owner_id", backref="owner", lazy="dynamic", cascade="all, delete-orphan")
     lent_items = db.relationship("Item", foreign_keys="Item.lent_to_user_id", backref="borrower", lazy="dynamic")
