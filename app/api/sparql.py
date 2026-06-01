@@ -38,11 +38,7 @@ sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 
 def _get_user_items():
     """Fetch all items belonging to the authenticated user."""
-    return (
-        db.session.query(Item)
-        .filter(Item.owner_id == g.user_id)
-        .all()
-    )
+    return db.session.query(Item).filter(Item.owner_id == g.user_id).all()
 
 
 def _execute_and_respond(query: str) -> tuple[Response, int] | Response:  # pylint: disable=too-many-return-statements

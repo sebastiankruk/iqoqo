@@ -73,6 +73,12 @@ interface SPARQLResults {
   results: { bindings: SPARQLBinding[] };
 }
 
+/**
+ * SPARQL Explorer Page component.
+ * Allows users to query the FRBR/Schema.org RDF graph using SPARQL.
+ *
+ * @returns The SPARQL Explorer Page component UI.
+ */
 export default function SPARQLExplorerPage() {
   const [query, setQuery] = useState(EXAMPLE_QUERIES[0].query);
   const [results, setResults] = useState<SPARQLResults | null>(null);

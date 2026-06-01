@@ -373,12 +373,12 @@ function CollectionContent() {
     return {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
-      "name": `${profile.display_name || profile.username}'s Collection`,
+      "name": `${profile.display_name || profile.public_username}'s Collection`,
       "description": `Personal library collection with ${total} items`,
       "numberOfItems": total,
       "author": {
         "@type": "Person",
-        "name": profile.display_name || profile.username,
+        "name": profile.display_name || profile.public_username,
       },
     };
   }, [profile, total]);

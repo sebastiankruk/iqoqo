@@ -101,7 +101,6 @@ export default function ManifestationPage() {
 
   const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
 
-  const isBoardGame = manifestation.content_type === "board_game";
   const schemaTypeMap: Record<string, string> = {
     text: "Book",
     book: "Book",

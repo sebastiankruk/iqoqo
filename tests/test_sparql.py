@@ -170,9 +170,7 @@ class TestSPARQLService:
             }
         ]
         graph = build_graph(items, "http://localhost:5000")
-        result = execute_sparql(
-            graph, "CONSTRUCT { ?s <https://schema.org/name> ?name } WHERE { ?s <https://schema.org/name> ?name }"
-        )
+        result = execute_sparql(graph, "CONSTRUCT { ?s <https://schema.org/name> ?name } WHERE { ?s <https://schema.org/name> ?name }")
         assert result.graph is not None
         assert len(result.graph) > 0
 
