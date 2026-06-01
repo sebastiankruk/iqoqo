@@ -18,6 +18,7 @@ import { Merriweather, Inter, Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CookieConsent } from "@/components/cookie-consent";
+import { OnboardingGuard } from "@/components/mobile/onboarding-screen";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getMessages, getLocale } from "next-intl/server";
@@ -81,7 +82,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <Providers>
-              {children}
+              <OnboardingGuard>{children}</OnboardingGuard>
               <CookieConsent />
             </Providers>
           </NextIntlClientProvider>

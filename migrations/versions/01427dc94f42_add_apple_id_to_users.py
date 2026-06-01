@@ -6,6 +6,8 @@ Create Date: 2026-05-31 17:38:08.335661
 
 """
 
+import sqlalchemy as sa
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -22,7 +24,6 @@ Create Date: 2026-05-31 17:38:08.335661
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "01427dc94f42"
@@ -32,10 +33,10 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("users", sa.Column("apple_id", sa.String(255), unique=True, nullable=True))
-    op.create_index("ix_users_apple_id", "users", ["apple_id"], unique=True)
+    op.add_column("users", sa.Column("apple_id", sa.String(255), unique=True, nullable=True), schema="auth")
+    op.create_index("ix_users_apple_id", "users", ["apple_id"], unique=True, schema="auth")
 
 
 def downgrade():
-    op.drop_index("ix_users_apple_id", table_name="users")
-    op.drop_column("users", "apple_id")
+    op.drop_index("ix_users_apple_id", table_name="users", schema="auth")
+    op.drop_column("users", "apple_id", schema="auth")

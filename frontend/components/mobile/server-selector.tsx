@@ -71,6 +71,11 @@ export function ServerSelector() {
       await setInstanceName(instanceInfo.name);
     }
     router.replace("/login");
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
   }
 
   return (

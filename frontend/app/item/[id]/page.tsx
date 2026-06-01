@@ -16,6 +16,8 @@
 
 import ItemPageClient from "./item-page-client";
 
+export const dynamic = "force-static";
+
 interface Props {
   params: Promise<{ id: string }>;
 }
