@@ -367,6 +367,22 @@ function CollectionContent() {
             ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
             : 0;
 
+  // Schema.org CollectionPage structured data for SEO
+  const collectionJsonLd = useMemo(() => {
+    if (!profile) return null;
+    return {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: `${profile.display_name || profile.public_username}'s Collection`,
+      description: `Personal library collection with ${total} items`,
+      numberOfItems: total,
+      author: {
+        "@type": "Person",
+        name: profile.display_name || profile.public_username,
+      },
+    };
+  }, [profile, total]);
+
   /** Clears all selected manifestations (e.g. after switching view mode). */
   const clearManifestationSelection = useCallback(() => {
     setSelectedManifestations(new Map());
@@ -483,6 +499,9 @@ function CollectionContent() {
 
   return (
     <div className="min-h-screen bg-background">
+      {collectionJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
+      )}
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">

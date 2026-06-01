@@ -21,7 +21,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
-from app.db.core import Expression, Item, Manifestation, Work
+from app.db.core import Expression, ImageScan, Item, Manifestation, UserCollectionItem, Work
 from app.db.models import db
 
 
@@ -455,6 +455,110 @@ FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
 
+# Schema.org type mapping for content types
+SCHEMA_TYPE_MAP = {
+    "text": SCHEMA.Book,
+    "audiobook": SCHEMA.Audiobook,
+    "music": SCHEMA.MusicAlbum,
+    "movie": SCHEMA.Movie,
+    "board_game": SCHEMA.Game,
+    "puzzle": SCHEMA.Product,
+}
+
+
+def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
+    """Add contributor, WorkPart, ImageScan, and UserCollection triples from DB."""
+    seen_works: set[int] = set()
+    seen_expressions: set[int] = set()
+    seen_manifestations: set[int] = set()
+    seen_items: set[int] = set()
+
+    for item in items:
+        if isinstance(item, dict):
+            continue  # Skip plain dicts — no DB relationships
+
+        # Resolve IDs from ORM objects
+        if hasattr(item, "manifestation_id") and hasattr(item, "manifestation"):
+            # Item object
+            db_item = item
+            seen_items.add(db_item.id)
+            m = db_item.manifestation
+            if not m:
+                continue
+            seen_manifestations.add(m.id)
+            if m.expression:
+                seen_expressions.add(m.expression.id)
+                if m.expression.work:
+                    seen_works.add(m.expression.work.id)
+        elif hasattr(item, "expression_id"):
+            # Manifestation object
+            m = item
+            seen_manifestations.add(m.id)
+            if hasattr(m, "expression") and m.expression:
+                seen_expressions.add(m.expression.id)
+                if m.expression.work:
+                    seen_works.add(m.expression.work.id)
+
+    # WorkContributions
+    if seen_works:
+        contribs = WorkContribution.query.filter(WorkContribution.work_id.in_(seen_works)).all()
+        for wc in contribs:
+            w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
+            c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
+            g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
+            if wc.contributor:
+                g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
+            g.add((w_uri, SCHEMA.contributor, c_uri))
+            g.add((w_uri, FRBR.creator, c_uri))
+
+    # ExpressionContributions
+    if seen_expressions:
+        expr_contribs = ExpressionContribution.query.filter(ExpressionContribution.expression_id.in_(seen_expressions)).all()
+        for ec in expr_contribs:
+            e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
+            c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
+            g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
+            if ec.contributor:
+                g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
+            g.add((e_uri, SCHEMA.contributor, c_uri))
+
+    # WorkParts (container aggregation)
+    if seen_works:
+        parts = WorkPart.query.filter(WorkPart.container_work_id.in_(seen_works)).all()
+        for wp in parts:
+            container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
+            part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
+            g.add((part_uri, SCHEMA.isPartOf, container_uri))
+            g.add((container_uri, SCHEMA.hasPart, part_uri))
+
+    # ImageScans
+    if seen_manifestations:
+        scans = ImageScan.query.filter(ImageScan.manifestation_id.in_(seen_manifestations)).all()
+        for scan in scans:
+            m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
+            img_uri = URIRef(f"{base_url}/{scan.file_path}")
+            g.add((m_uri, SCHEMA.image, img_uri))
+
+    # UserCollections
+    if seen_items:
+        links = UserCollectionItem.query.filter(UserCollectionItem.item_id.in_(seen_items)).all()
+        for link in links:
+            coll = link.collection
+            if coll:
+                coll_uri = URIRef(f"{base_url}/api/public/collections/{coll.id}")
+                i_uri = URIRef(f"{base_url}/api/public/items/{link.item_id}")
+                g.add((coll_uri, RDF.type, SCHEMA.Collection))
+                g.add((coll_uri, SCHEMA.name, Literal(coll.name)))
+                g.add((coll_uri, SCHEMA.hasPart, i_uri))
+
+    # DatePublished from manifestation meta
+    if seen_manifestations:
+        manifests = Manifestation.query.filter(Manifestation.id.in_(seen_manifestations)).all()
+        for m in manifests:
+            if m.meta and m.meta.get("publication_date"):
+                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                g.add((m_uri, SCHEMA.datePublished, Literal(m.meta["publication_date"])))
+
 
 def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
     """
@@ -478,6 +582,9 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
             tags = item.get("tags", [])
             status = item.get("status")
             work_id = item.get("work_id", manifestation_id)
+            content_type = item.get("content_type")
+            publisher = item.get("publisher")
+            language = item.get("language")
         else:
             item_id = getattr(item, "id", None)
             if hasattr(item, "manifestation_id"):
@@ -490,6 +597,9 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                content_type = None
+                publisher = None
+                language = None
 
                 m = item.manifestation
                 if m:
@@ -497,9 +607,12 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                     expression_id = m.expression_id
                     title = getattr(m, "title", "Untitled") or "Untitled"
                     isbn = m.isbn13
+                    publisher = getattr(m, "publisher", None)
                     if m.expression:
                         expression_id = m.expression.id
                         work_id = m.expression.work_id
+                        content_type = m.expression.content_type
+                        language = getattr(m.expression, "language", None)
                         if m.expression.work:
                             work_id = m.expression.work.id
                             title = m.expression.work.title or title
@@ -526,11 +639,16 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                content_type = None
+                publisher = getattr(item, "publisher", None)
+                language = None
 
                 if hasattr(item, "expression") and item.expression:
                     expr = item.expression
                     expression_id = expr.id
                     work_id = expr.work_id
+                    content_type = expr.content_type
+                    language = getattr(expr, "language", None)
                     if expr.work:
                         work_id = expr.work.id
                         title = expr.work.title or title
@@ -565,8 +683,19 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
         g.add((m_uri, SCHEMA.name, Literal(title)))
 
+        # Add specific Schema.org type based on content_type
+        specific_type = SCHEMA_TYPE_MAP.get(content_type) if content_type else None
+        if specific_type:
+            g.add((m_uri, RDF.type, specific_type))
+
         if isbn:
             g.add((m_uri, SCHEMA.isbn, Literal(isbn)))
+
+        if publisher:
+            g.add((m_uri, SCHEMA.publisher, Literal(publisher)))
+
+        if language:
+            g.add((m_uri, SCHEMA.inLanguage, Literal(language)))
 
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))
@@ -583,6 +712,10 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
             g.add((i_uri, FRBR.exemplarOf, m_uri))
             if status:
                 g.add((i_uri, SCHEMA.itemCondition, Literal(status)))
+
+    # --- Enrichment pass: Contributors, WorkParts, ImageScans, UserCollections ---
+    # Only available when processing ORM objects with DB access
+    _enrich_graph_from_db(g, items, base_url)
 
     # Serialization Context Setup for JSON-LD vs Turtle
     if output_format == "json-ld":

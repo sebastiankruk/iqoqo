@@ -18,14 +18,16 @@
 import json
 from io import BytesIO
 
-from flask import g, jsonify, make_response, request, send_file, send_from_directory
+from flask import Response, g, jsonify, make_response, request, send_file, send_from_directory
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import admin_required, require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
+from app.core.frbr_service import serialize_collection_to_rdf
 from app.core.limiter import limiter
+from app.core.shacl_service import validate_rdf_string
 from app.db.models import Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, GALLERY_DIR
 
@@ -160,12 +162,78 @@ def export_data():
         return jsonify({"error": str(e)}), 500
 
 
+@api_bp.route("/v1/items/export", methods=["GET"])
+@require_auth
+def export_user_collection():
+    """Export the authenticated user's collection in JSON, JSON-LD, or Turtle format."""
+    fmt = request.args.get("format", "json")
+
+    if fmt == "json":
+        items = Item.query.filter_by(owner_id=g.user_id).all()
+        data = []
+        for item in items:
+            entry = {
+                "id": str(item.id),
+                "manifestation_id": str(item.manifestation_id),
+                "status": item.status,
+                "is_hidden": item.is_hidden,
+                "meta": item.meta,
+            }
+            if item.manifestation:
+                m = item.manifestation
+                entry["title"] = getattr(m, "title", None) or (m.expression.work.title if m.expression and m.expression.work else None)
+                entry["isbn13"] = m.isbn13
+                entry["publisher"] = m.publisher
+                if m.expression:
+                    entry["content_type"] = m.expression.content_type
+                    entry["language"] = m.expression.language
+                    if m.expression.work:
+                        entry["work_title"] = m.expression.work.title
+                        entry["authors"] = (m.expression.work.meta or {}).get("authors", [])
+            data.append(entry)
+        output = BytesIO()
+        output.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
+        output.seek(0)
+        return send_file(output, mimetype="application/json", as_attachment=True, download_name="iqoqo_collection.json")
+
+    if fmt in ("json-ld", "turtle"):
+        items = Item.query.filter_by(owner_id=g.user_id).all()
+        base_url = request.url_root.rstrip("/")
+        output_format = "json-ld" if fmt == "json-ld" else "turtle"
+        rdf_data = serialize_collection_to_rdf(items, base_url, output_format=output_format)
+
+        if output_format == "json-ld":
+            mimetype = "application/ld+json"
+            filename = "iqoqo_collection.jsonld"
+        else:
+            mimetype = "text/turtle"
+            filename = "iqoqo_collection.ttl"
+
+        return Response(
+            response=rdf_data,
+            status=200,
+            mimetype=mimetype,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    return jsonify({"error": f"Unsupported format: {fmt}. Use 'json', 'json-ld', or 'turtle'."}), 400
+
+
 @api_bp.route("/admin/import", methods=["POST"])
 @require_auth
 @admin_required
 def import_data():
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
+
+        # Detect RDF format imports and validate with SHACL
+        content_type = request.content_type or ""
+        if content_type in ("text/turtle", "application/ld+json") or request.args.get("format") in ("turtle", "json-ld"):
+            rdf_format = "turtle" if "turtle" in content_type or request.args.get("format") == "turtle" else "json-ld"
+            rdf_data = request.get_data(as_text=True)
+            conforms, report = validate_rdf_string(rdf_data, rdf_format)
+            if not conforms:
+                return jsonify({"error": "SHACL validation failed", "report": report}), 422
 
         if request.is_json:
             data = request.get_json(silent=True)
