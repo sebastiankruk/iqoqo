@@ -25,6 +25,7 @@ Usage:
 #
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -69,6 +70,16 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
                     print("Please drop the tables manually using a database tool.", file=sys.stderr)
                     sys.exit(1)
                 raise
+
+        # Create PostgreSQL schemas if using PostgreSQL
+        _use_pg = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+        if _use_pg:
+            for schema in ["catalog", "inventory", "auth", "federation"]:
+                try:
+                    db.session.execute(db.text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+                except ProgrammingError:
+                    pass
+            db.session.commit()
 
         # Create all tables
         print("Creating database tables...")

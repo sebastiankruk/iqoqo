@@ -198,6 +198,7 @@ jobs:
           psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;"
           psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;"
           psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;"
+          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS federation;"
 
       - name: Prepare E2E database
         run: |
