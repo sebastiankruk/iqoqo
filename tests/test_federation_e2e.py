@@ -449,9 +449,7 @@ class TestMetadataSyncFlow:
     def test_propose_metadata_merge(self, federation_app):
         """propose_metadata_merge creates a queued activity."""
         with federation_app.app_context():
-            activity_id = propose_metadata_merge(
-                {"title": "A Book", "isbn": "978-0-123"}, "remote.iqoqo.test"
-            )
+            activity_id = propose_metadata_merge({"title": "A Book", "isbn": "978-0-123"}, "remote.iqoqo.test")
             assert activity_id is not None
 
             activity = db.session.get(FederationActivity, activity_id)
@@ -486,11 +484,13 @@ class TestBlockFlow:
     def test_blocked_instance_inbox_rejected(self, federation_app, client, local_user, remote_instance_blocked):
         """Inbox rejects activities from blocked instances via HTTP."""
         with federation_app.app_context():
-            activity_json = json.dumps({
-                "type": "Follow",
-                "actor": "https://evil.example.com/users/mallory",
-                "object": "https://local.iqoqo.test/api/federation/actor/alice",
-            })
+            activity_json = json.dumps(
+                {
+                    "type": "Follow",
+                    "actor": "https://evil.example.com/users/mallory",
+                    "object": "https://local.iqoqo.test/api/federation/actor/alice",
+                }
+            )
 
             with patch("app.core.config_service.ConfigService.get") as mock_get:
                 mock_get.side_effect = lambda k, d=None: {
@@ -572,9 +572,7 @@ class TestDeleteFlow:
             assert remaining is None
 
             # Actor should be removed
-            actor = FederationActor.query.filter_by(
-                actor_uri="https://remote.iqoqo.test/api/federation/actor/bob"
-            ).first()
+            actor = FederationActor.query.filter_by(actor_uri="https://remote.iqoqo.test/api/federation/actor/bob").first()
             assert actor is None
 
 
@@ -605,9 +603,7 @@ class TestOutboundDispatch:
             dispatch_collection_update(user, item)
 
             # No activities should be created for this user
-            count = FederationActivity.query.filter(
-                FederationActivity.actor_uri.contains("nocon")
-            ).count()
+            count = FederationActivity.query.filter(FederationActivity.actor_uri.contains("nocon")).count()
             assert count == 0
 
     def test_dispatch_collection_update_with_followers(self, federation_app, local_user, remote_actor_bob):

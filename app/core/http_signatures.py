@@ -238,6 +238,8 @@ def verify_flask_request(request: Any) -> str:
 
         try:
             request_date = parsedate_to_datetime(date_header)
+            if request_date is None:
+                raise SignatureVerificationError("Invalid Date header format")
             now = datetime.now(UTC)
             delta = abs((now - request_date).total_seconds())
             if delta > 300:  # 5 minutes

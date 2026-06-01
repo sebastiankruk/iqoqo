@@ -54,6 +54,13 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
         if reset:
             print("Dropping all tables...")
             try:
+                # Drop alembic_version tables from all schemas to prevent branch transition issues
+                for schema in ["public", "auth", "catalog", "inventory", "federation"]:
+                    try:
+                        db.session.execute(db.text(f"DROP TABLE IF EXISTS {schema}.alembic_version CASCADE"))
+                    except ProgrammingError:
+                        pass
+                db.session.commit()
                 db.drop_all()
             except ProgrammingError as e:
                 if "must be owner of table" in str(e):

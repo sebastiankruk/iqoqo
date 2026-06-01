@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
-#
+# pylint: disable=too-many-lines
 """Unit tests for the federation module.
 
 Covers: HTTP signatures, WebFinger, Actor profiles, inbox routing,
@@ -1110,8 +1110,6 @@ class TestRemoteActorKeyFetch:
 
     def test_unknown_actor_key_fetched(self, federation_enabled_app, remote_instance, federation_user):
         """verify_flask_request fetches actor profile when key is missing."""
-        from unittest.mock import MagicMock, patch
-
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
 
@@ -1178,8 +1176,6 @@ class TestRemoteActorKeyFetch:
 
     def test_fetch_failure_returns_401(self, federation_enabled_app):
         """verify_flask_request returns 401 when actor fetch fails."""
-        from unittest.mock import patch
-
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
 
