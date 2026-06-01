@@ -22,7 +22,11 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-static";
 
-/** No-op handler — never called in Capacitor builds. */
+/**
+ * No-op handler — never called in Capacitor builds.
+ *
+ * @returns {Promise<NextResponse>} A promise resolving to a 204 no-content response.
+ */
 export async function GET() {
   return new NextResponse(null, { status: 204 });
 }

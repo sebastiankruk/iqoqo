@@ -60,6 +60,11 @@ async function getItems(username: string) {
 
 // Required for `output: "export"` (Capacitor builds). Public profile pages
 // are fetched at runtime; no pages are pre-rendered.
+/**
+ * Generates static params for routing.
+ *
+ * @returns Array of default route parameters.
+ */
 export function generateStaticParams() {
   return [{ username: "_" }];
 }
@@ -108,7 +113,11 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   // Placeholder route for Capacitor static export — render a shell.
   if (username === "_") {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading…</p></div>;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    );
   }
 
   const profileRes = await getProfile(username);

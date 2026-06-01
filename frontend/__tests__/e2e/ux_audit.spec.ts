@@ -22,7 +22,11 @@ test.describe("UX/UI Audit Workflow", () => {
   test("Audit dev.iqoqo.cc landing page button density and CTAs", async ({ page }) => {
     console.log("=== NAVIGATING TO DEV.IQOQO.CC ===");
     await page.goto("https://dev.iqoqo.cc", { timeout: 30000 });
-    await page.waitForLoadState("networkidle");
+    try {
+      await page.waitForLoadState("networkidle", { timeout: 10000 });
+    } catch {
+      console.log("Timeout waiting for networkidle on external site, proceeding.");
+    }
 
     // Take screenshot of landing page
     await page.screenshot({ path: "../.context/notes/images/ux_dev_landing.png", fullPage: true });

@@ -44,6 +44,11 @@ async function getSharedCollection(token: string) {
 
 // Required for `output: "export"` (Capacitor builds). Shared collection pages
 // are fetched at runtime; no pages are pre-rendered.
+/**
+ * Generates static params for routing.
+ *
+ * @returns Array of default route parameters.
+ */
 export function generateStaticParams() {
   return [{ token: "_" }];
 }
@@ -93,7 +98,11 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   // Placeholder route for Capacitor static export — render a shell.
   if (token === "_") {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading…</p></div>;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    );
   }
 
   const collectionRes = await getSharedCollection(token);

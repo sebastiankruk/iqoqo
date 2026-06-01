@@ -101,7 +101,6 @@ function ItemDetail(props: { item: Item }) {
  * @param {Promise<{id: string}>} props.params - Route params promise provided by Next.js.
  * @returns {JSX.Element}
  */
-
 export default function ItemPageClient(props: Props) {
   const { params } = props;
   const { id } = use(params);

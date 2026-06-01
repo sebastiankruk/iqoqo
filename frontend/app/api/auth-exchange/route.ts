@@ -13,16 +13,37 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-// frontend/app/api/auth-exchange/route.capacitor.ts
-//
-// Capacitor static-export STUB — substituted for route.ts during `make mobile-build`.
-// The native auth flow uses app/auth-exchange/page.tsx + setAuthToken() and never
-// calls this endpoint; this stub satisfies Next.js `output: "export"` requirements.
+
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-static";
+/**
+ * Handle GET requests to exchange a short-lived token for a session cookie.
+ *
+ * @param request - The incoming Next.js request.
+ * @returns The Next.js response redirecting to the dashboard.
+ */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
 
-/** No-op handler — never called in Capacitor builds. */
-export async function GET() {
-  return new NextResponse(null, { status: 204 });
+  // Use our explicit environment variable as the base URL, fallback to request.url just in case
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || request.url;
+
+  if (!token) {
+    return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
+  }
+
+  // Set the HttpOnly cookie
+  const cookieStore = await cookies();
+  cookieStore.set("iqoqo_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+
+  // Redirect to dashboard explicitly using the correct domain
+  return NextResponse.redirect(new URL("/", baseUrl));
 }

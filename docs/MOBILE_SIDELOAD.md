@@ -7,18 +7,19 @@ This document describes how to build and sideload the iqoqo native mobile app
 
 ## Prerequisites
 
-| Tool | Version | Required for |
-|------|---------|-------------|
-| Node.js | 20+ | npm install, Next.js build |
-| npm | 10+ | package management |
-| Java (JDK) | 17+ | Android Gradle build |
-| Android Studio | Latest | Android SDK, `adb`, emulator |
-| Xcode | 16+ | iOS build (macOS only) |
-| CocoaPods | Latest | iOS dependency resolution |
-| AltStore or Sideloadly | Latest | iOS sideload without $99 account |
-| `adb` (Android Debug Bridge) | SDK Platform Tools | Android device install |
+| Tool                         | Version            | Required for                      |
+| ---------------------------- | ------------------ | --------------------------------- |
+| Node.js                      | 20+                | npm install, Next.js build        |
+| npm                          | 10+                | package management                |
+| Java (JDK)                   | 17+                | Android Gradle build              |
+| Android Studio               | Latest             | Android SDK, `adb`, emulator      |
+| Xcode                        | 16+                | iOS build (macOS only)            |
+| CocoaPods                    | Latest             | iOS dependency resolution         |
+| AltStore or Sideloadly       | Latest             | iOS sideload without $99 account  |
+| `adb` (Android Debug Bridge) | SDK Platform Tools | Android device install            |
 
 Install CocoaPods if missing:
+
 ```bash
 sudo gem install cocoapods
 ```
@@ -103,6 +104,7 @@ npx cap open ios    # opens ios/App/App.xcworkspace in Xcode
 ```
 
 In Xcode:
+
 1. **Signing & Capabilities** tab → **Team**: select your personal Apple ID
    (free accounts work for direct device install)
 2. Connect your iPhone via USB and select it as the run target
@@ -118,10 +120,12 @@ npx cap open ios
 ```
 
 In Xcode:
+
 1. **Product → Archive** — produces an `.xcarchive`
 2. **Distribute App → Development → Export** — produces an `.ipa` file
 
-Then in AltStore (https://altstore.io) on your Mac:
+Then in AltStore ([altstore.io](https://altstore.io)) on your Mac:
+
 - Drag the `.ipa` into the AltStore window, or
 - Use **AltServer** (runs in menu bar) to install directly to the device
 
@@ -157,10 +161,10 @@ make mobile-run-android  # sync + deploy to connected Android device
 The GitHub Actions workflow `.github/workflows/mobile-build.yml` triggers on
 `v0.8.*` tags or `workflow_dispatch` and produces:
 
-| Artifact | Platform | Retention |
-|----------|----------|-----------|
-| `app-debug.apk` | Android | 30 days |
-| `iqoqo.xcarchive` (unsigned) | iOS | 30 days |
+| Artifact                     | Platform | Retention |
+| ---------------------------- | -------- | --------- |
+| `app-debug.apk`              | Android  | 30 days   |
+| `iqoqo.xcarchive` (unsigned) | iOS      | 30 days   |
 
 The xcarchive is unsigned (`CODE_SIGNING_ALLOWED=NO`). To install it, open the
 archive in Xcode (`File → Open`) and re-export with your own signing identity,
@@ -180,11 +184,11 @@ the backend is reachable from the device's network.
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| `cap sync` fails — plugins not found | Run `npm install` in `frontend/` first |
-| Xcode: "No signing certificate" | Signing & Capabilities → add personal Apple ID team |
-| Android: "INSTALL_FAILED_UPDATE_INCOMPATIBLE" | `adb uninstall cc.iqoqo.app` then re-install |
-| App white-screens on launch | Check that `frontend/out/index.html` exists after build |
-| Deep links not working (Android) | Verify `intent-filter` in `AndroidManifest.xml` after `cap sync` |
-| Auth loop after OAuth | Verify `NEXT_PUBLIC_FRONTEND_URL` points to the backend instance |
+| Problem                                        | Fix                                                                  |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| `cap sync` fails — plugins not found           | Run `npm install` in `frontend/` first                               |
+| Xcode: "No signing certificate"                | Signing & Capabilities → add personal Apple ID team                  |
+| Android: "INSTALL_FAILED_UPDATE_INCOMPATIBLE"  | `adb uninstall cc.iqoqo.app` then re-install                         |
+| App white-screens on launch                    | Check that `frontend/out/index.html` exists after build              |
+| Deep links not working (Android)               | Verify `intent-filter` in `AndroidManifest.xml` after `cap sync`     |
+| Auth loop after OAuth                          | Verify `NEXT_PUBLIC_FRONTEND_URL` points to the backend instance     |
