@@ -41,27 +41,29 @@ def _get_user_items():
     return db.session.query(Item).filter(Item.owner_id == g.user_id).all()
 
 
-def _execute_and_respond(query: str) -> tuple[Response, int] | Response:  # pylint: disable=too-many-return-statements
+def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
     """Validate, execute, and format a SPARQL query response."""
+    error_msg = None
+    status_code = 400
+
     try:
         validate_query(query)
-    except SPARQLQueryTooLarge as e:
-        return jsonify({"error": str(e)}), 400
-    except SPARQLWriteRejected as e:
-        return jsonify({"error": str(e)}), 400
-
-    items = _get_user_items()
-    base_url = request.url_root.rstrip("/")
-    graph = build_graph(items, base_url)
-
-    try:
+        items = _get_user_items()
+        base_url = request.url_root.rstrip("/")
+        graph = build_graph(items, base_url)
         result = execute_sparql(graph, query)
-    except SPARQLSyntaxError as e:
-        return jsonify({"error": str(e)}), 400
+    except (SPARQLQueryTooLarge, SPARQLWriteRejected, SPARQLSyntaxError) as e:
+        error_msg = str(e)
+        status_code = 400
     except SPARQLTimeout as e:
-        return jsonify({"error": str(e)}), 408
+        error_msg = str(e)
+        status_code = 408
     except SPARQLError as e:
-        return jsonify({"error": str(e)}), 500
+        error_msg = str(e)
+        status_code = 500
+
+    if error_msg is not None:
+        return jsonify({"error": error_msg}), status_code
 
     # Determine result type and format accordingly
     if result.type in ("SELECT", "ASK"):
@@ -76,9 +78,12 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:  # pyli
     accept = request.headers.get("Accept", "text/turtle")
     if "application/ld+json" in accept:
         output = format_graph_results(result, output_format="json-ld")
-        return Response(response=output, status=200, mimetype="application/ld+json")
-    output = format_graph_results(result, output_format="turtle")
-    return Response(response=output, status=200, mimetype="text/turtle")
+        mimetype = "application/ld+json"
+    else:
+        output = format_graph_results(result, output_format="turtle")
+        mimetype = "text/turtle"
+
+    return Response(response=output, status=200, mimetype=mimetype)
 
 
 @sparql_bp.route("", methods=["POST"])

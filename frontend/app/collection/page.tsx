@@ -373,12 +373,12 @@ function CollectionContent() {
     return {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
-      "name": `${profile.display_name || profile.public_username}'s Collection`,
-      "description": `Personal library collection with ${total} items`,
-      "numberOfItems": total,
-      "author": {
+      name: `${profile.display_name || profile.public_username}'s Collection`,
+      description: `Personal library collection with ${total} items`,
+      numberOfItems: total,
+      author: {
         "@type": "Person",
-        "name": profile.display_name || profile.public_username,
+        name: profile.display_name || profile.public_username,
       },
     };
   }, [profile, total]);
@@ -500,10 +500,7 @@ function CollectionContent() {
   return (
     <div className="min-h-screen bg-background">
       {collectionJsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
       )}
       <Navbar />
 

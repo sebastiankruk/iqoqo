@@ -21,7 +21,7 @@ test.describe("UX/UI Audit Workflow", () => {
   // 1. Audit public landing page of dev.iqoqo.cc
   test("Audit dev.iqoqo.cc landing page button density and CTAs", async ({ page }) => {
     console.log("=== NAVIGATING TO DEV.IQOQO.CC ===");
-    await page.goto("https://dev.iqoqo.cc", { timeout: 30000 });
+    await page.goto("/", { timeout: 30000 });
     await page.waitForLoadState("networkidle");
 
     // Take screenshot of landing page
