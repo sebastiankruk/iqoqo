@@ -44,6 +44,9 @@ data/*.json
 iqoqo_backup*.*
 exports/*
 
+# Federation private keys
+data/keys/
+
 # Virtual Env
 .venv*
 
@@ -60,6 +63,10 @@ app/static/archive/covers/*
 covers.tar.gz
 app/static/uploads/raw_covers/*
 app/static/uploads/covers/*
+
+# Generated gallery images (test artifacts)
+app/static/gallery/*_cover_*
+app/static/gallery/*_gallery_*
 
 # Backup
 backups/*
