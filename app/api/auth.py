@@ -64,6 +64,160 @@ def generate_internal_jwt(user: User) -> str:
     return pyjwt.encode(payload, current_app.config["JWT_SECRET_KEY"], algorithm="HS256")
 
 
+def render_mobile_redirect(scheme_url: str) -> str:
+    """Generate a premium HTML page to redirect the user to the mobile app."""
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>iqoqo - Return to App</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --background: #0f172a;
+                --card: #1e293b;
+                --text: #f8fafc;
+                --muted: #94a3b8;
+                --primary: #3b82f6;
+                --primary-glow: rgba(59, 130, 246, 0.5);
+            }}
+            body {{
+                margin: 0;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                background-color: var(--background);
+                font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                color: var(--text);
+                overflow: hidden;
+            }}
+            .bg-glow {{
+                position: absolute;
+                width: 300px;
+                height: 300px;
+                background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 0;
+                filter: blur(50px);
+                animation: pulse 8s infinite alternate;
+            }}
+            @keyframes pulse {{
+                0% {{ transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }}
+                100% {{ transform: translate(-50%, -50%) scale(1.2); opacity: 1; }}
+            }}
+            .card {{
+                position: relative;
+                z-index: 1;
+                background: rgba(30, 41, 59, 0.7);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 24px;
+                padding: 40px 32px;
+                width: 90%;
+                max-width: 380px;
+                text-align: center;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+                box-sizing: border-box;
+            }}
+            .logo {{
+                font-size: 32px;
+                font-weight: 800;
+                letter-spacing: -0.5px;
+                margin-bottom: 24px;
+                background: linear-gradient(135deg, #60a5fa, #3b82f6);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }}
+            .loader {{
+                width: 48px;
+                height: 48px;
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                margin: 0 auto 24px auto;
+                animation: spin 1s linear infinite;
+            }}
+            @keyframes spin {{
+                to {{ transform: rotate(360deg); }}
+            }}
+            h1 {{
+                font-size: 22px;
+                font-weight: 600;
+                margin: 0 0 8px 0;
+            }}
+            p {{
+                font-size: 14px;
+                color: var(--muted);
+                line-height: 1.5;
+                margin: 0 0 32px 0;
+            }}
+            .btn {{
+                display: block;
+                width: 100%;
+                padding: 16px;
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                color: white;
+                text-decoration: none;
+                border-radius: 14px;
+                font-weight: 600;
+                font-size: 16px;
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 4px 14px var(--primary-glow);
+                transition: all 0.2s ease;
+                box-sizing: border-box;
+            }}
+            .btn:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px var(--primary-glow);
+            }}
+            .btn:active {{
+                transform: translateY(0);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="bg-glow"></div>
+        <div class="card">
+            <div class="logo">iqoqo</div>
+            <div class="loader" id="loader"></div>
+            <h1>Connecting to App</h1>
+            <p id="status-msg">We are redirecting you back to your library. If it doesn't happen automatically, tap the button below.</p>
+            <a href="{scheme_url}" class="btn" id="open-btn">Return to iqoqo</a>
+        </div>
+        <script>
+            const schemeUrl = "{scheme_url}";
+            window.location.href = schemeUrl;
+
+            setTimeout(function() {{
+                const iframe = document.createElement("iframe");
+                iframe.style.display = "none";
+                iframe.src = schemeUrl;
+                document.body.appendChild(iframe);
+                setTimeout(function() {{ document.body.removeChild(iframe); }}, 1000);
+            }}, 500);
+
+            setTimeout(function() {{
+                const loader = document.getElementById("loader");
+                if (loader) {{
+                    loader.style.borderTopColor = "transparent";
+                    loader.style.animation = "none";
+                }}
+                document.getElementById("status-msg").textContent = "Please tap the button below to resume using the app.";
+            }}, 2500);
+        </script>
+    </body>
+    </html>
+    """
+
+
 @auth_bp.route("/login/google")
 def google_login():
     """Initiate Google OAuth flow.
@@ -82,10 +236,18 @@ def google_login():
     else:
         redirect_uri = request.url_root + "api/auth/callback/google"
 
-    # Bulletproof Fail-safe: Force HTTPS in production/preview environments
-    # just in case Nginx proxy headers strip the secure scheme.
-    if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
-        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+    # Bulletproof Fail-safe: Force HTTPS in production/preview environments,
+    # or if preferred scheme is HTTPS, or if host is not localhost.
+    if redirect_uri.startswith("http://"):
+        has_localhost = "localhost" in redirect_uri or "127.0.0.1" in redirect_uri
+        is_production = os.getenv("FLASK_ENV") == "production"
+        is_preferred_https = current_app.config.get("PREFERRED_URL_SCHEME") == "https"
+        if is_production or is_preferred_https or not has_localhost:
+            redirect_uri = redirect_uri.replace("http://", "https://", 1)
+
+    # Log details for debugging redirect_uri_mismatch
+    headers_dict = dict(request.headers)
+    current_app.logger.info("[GOOGLE OAUTH DEBUG] url_root=%s, redirect_uri=%s, headers=%s", request.url_root, redirect_uri, headers_dict)
 
     return oauth.google.authorize_redirect(redirect_uri)
 
@@ -143,7 +305,7 @@ def google_callback_mobile():
     token = oauth.google.authorize_access_token()
     user = _handle_google_user(token)
     internal_token = generate_internal_jwt(user)
-    return redirect(f"iqoqo://auth-exchange?token={internal_token}")
+    return render_mobile_redirect(f"iqoqo://auth-exchange?token={internal_token}")
 
 
 @auth_bp.route("/login/apple")
@@ -164,8 +326,12 @@ def apple_login():
     else:
         redirect_uri = request.url_root + "api/auth/callback/apple"
 
-    if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
-        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+    if redirect_uri.startswith("http://"):
+        has_localhost = "localhost" in redirect_uri or "127.0.0.1" in redirect_uri
+        is_production = os.getenv("FLASK_ENV") == "production"
+        is_preferred_https = current_app.config.get("PREFERRED_URL_SCHEME") == "https"
+        if is_production or is_preferred_https or not has_localhost:
+            redirect_uri = redirect_uri.replace("http://", "https://", 1)
 
     return oauth.apple.authorize_redirect(redirect_uri)
 
@@ -237,7 +403,7 @@ def apple_callback_mobile():
         return jsonify({"error": "Unable to identify user from Apple token."}), 400
 
     internal_token = generate_internal_jwt(user)
-    return redirect(f"iqoqo://auth-exchange?token={internal_token}")
+    return render_mobile_redirect(f"iqoqo://auth-exchange?token={internal_token}")
 
 
 @auth_bp.route("/login", methods=["POST"])

@@ -92,7 +92,7 @@ class TestGoogleCallbackMobile:
         return mock_token, mock_user_info
 
     def test_mobile_callback_redirects_to_deep_link(self, client, app):
-        """The /callback/google/mobile route must redirect to iqoqo://auth-exchange."""
+        """The /callback/google/mobile route must serve the redirect HTML page."""
         mock_token, mock_user_info = self._mock_oauth_token_exchange()
 
         with patch("app.api.auth.oauth") as mock_oauth:
@@ -101,9 +101,9 @@ class TestGoogleCallbackMobile:
 
             response = client.get("/api/auth/callback/google/mobile")
 
-            assert response.status_code == 302
-            location = response.headers.get("Location", "")
-            assert location.startswith("iqoqo://auth-exchange?token=")
+            assert response.status_code == 200
+            html = response.data.decode("utf-8")
+            assert "iqoqo://auth-exchange?token=" in html
 
     def test_web_callback_redirects_to_frontend(self, client, app):
         """The /callback/google (web) route must redirect to the frontend URL."""
@@ -134,7 +134,7 @@ class TestGoogleCallbackMobile:
 
             response = client.get("/api/auth/callback/google/mobile")
 
-            assert response.status_code == 302
+            assert response.status_code == 200
             # Verify user was created
             with app.app_context():
                 user = db.session.execute(db.select(User).filter_by(email="new_mobile@google.com")).scalar_one_or_none()
@@ -144,6 +144,8 @@ class TestGoogleCallbackMobile:
 
     def test_mobile_callback_token_is_valid_jwt(self, client, app):
         """The token in the deep-link redirect must be a valid JWT."""
+        import re
+
         import jwt as pyjwt
 
         mock_token, mock_user_info = self._mock_oauth_token_exchange()
@@ -154,8 +156,10 @@ class TestGoogleCallbackMobile:
 
             response = client.get("/api/auth/callback/google/mobile")
 
-            location = response.headers.get("Location", "")
-            token_value = location.split("token=")[1]
+            html = response.data.decode("utf-8")
+            match = re.search(r"token=([a-zA-Z0-9_\-\.]+)", html)
+            assert match is not None
+            token_value = match.group(1)
 
             # Decode and verify the token
             with app.app_context():

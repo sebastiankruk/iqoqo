@@ -62,8 +62,8 @@ export default function ProfilePage() {
   const { data: config } = useAppConfig();
 
   useEffect(() => {
-    // Note the trailing slash to match Flask's route: /profile/
-    apiFetch<UserProfile>("/profile/")
+    // Trailing slash removed to prevent CORS redirects
+    apiFetch<UserProfile>("/profile")
       .then(data => {
         setProfile(data);
         setEditNameValue(data.display_name || "");
@@ -93,7 +93,7 @@ export default function ProfilePage() {
 
   const handleUpdateName = async () => {
     try {
-      await apiClient.put("/profile/", { display_name: editNameValue });
+      await apiClient.put("/profile", { display_name: editNameValue });
       setProfile(prev => (prev ? { ...prev, display_name: editNameValue } : null));
       setIsEditingName(false);
       toast.success("Profile updated");
@@ -114,7 +114,7 @@ export default function ProfilePage() {
     if (!confirmed) return;
 
     try {
-      await apiClient.delete("/profile/");
+      await apiClient.delete("/profile");
       toast.success("Account deleted permanently.");
       handleLogout();
     } catch {

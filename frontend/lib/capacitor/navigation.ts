@@ -64,7 +64,11 @@ export function registerDeepLinkHandler(router: { push: (path: string) => void }
       // prepending the hostname as a path segment.
       if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
         const host = parsed.hostname;
-        fullPath = (host ? `/${host}` : "") + parsed.pathname + parsed.search;
+        let path = parsed.pathname;
+        if (path === "/") {
+          path = "";
+        }
+        fullPath = (host ? `/${host}` : "") + path + parsed.search;
       } else {
         fullPath = parsed.pathname + parsed.search;
       }
@@ -72,8 +76,8 @@ export function registerDeepLinkHandler(router: { push: (path: string) => void }
       if (fullPath && fullPath !== "/") {
         router.push(fullPath);
       }
-    } catch {
-      // Malformed URL — ignore silently.
+    } catch (err) {
+      console.error("[DEEP-LINK] Error parsing URL:", err);
     }
   };
 

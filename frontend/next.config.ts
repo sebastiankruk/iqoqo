@@ -47,6 +47,7 @@ const nextConfig: NextConfig = {
   // Standalone for Docker; static export for Capacitor native builds
   output: isCapacitorBuild ? "export" : "standalone",
   allowedDevOrigins: ["dev.iqoqo.cc", "*.iqoqo.cc"],
+  skipTrailingSlashRedirect: true,
 
   /**
    * Rewrites for API and other requests.

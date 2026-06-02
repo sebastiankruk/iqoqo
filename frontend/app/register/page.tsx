@@ -85,9 +85,10 @@ export default function RegisterPage() {
     }
   };
 
-  const handleGoogleSignup = () => {
+  const handleGoogleSignup = async () => {
     if (isNativeApp() && instanceUrl) {
-      window.location.href = `${instanceUrl}/api/auth/login/google?mobile_origin=capacitor`;
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: `${instanceUrl}/api/auth/login/google?mobile_origin=capacitor` });
     } else {
       window.location.href = `/api/auth/login/google`;
     }

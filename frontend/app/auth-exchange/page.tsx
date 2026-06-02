@@ -41,15 +41,19 @@ function AuthExchangeHandler() {
     /** Exchange the token param for persistent auth (secure storage or cookie). */
     async function handleExchange() {
       if (!token) {
+        console.error("[AUTH] Exchange error: Token parameter is missing!");
         router.replace("/login");
         return;
       }
 
       if (isNativeApp()) {
-        // Native: persist token in OS-level encrypted storage, then go home.
-        await setAuthToken(token);
-        queryClient.clear();
-        router.replace("/");
+        try {
+          await setAuthToken(token);
+          queryClient.clear();
+          router.replace("/");
+        } catch (err) {
+          console.error("[AUTH] SecureStorage error:", err);
+        }
       } else {
         // Web: call the BFF route handler which sets the httpOnly cookie.
         const res = await fetch(`/api/auth-exchange?token=${encodeURIComponent(token)}`);

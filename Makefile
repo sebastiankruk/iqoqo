@@ -352,6 +352,8 @@ mobile-build: ## Build frontend static export for Capacitor (sets CAPACITOR_BUIL
 	@# Swap in the static stub for the auth-exchange route (output:export forbids
 	@# dynamic route handlers; the native app never calls this endpoint anyway).
 	@# `git restore` is used to reset route.ts cleanly on success or failure.
+	@# Clear TypeScript build info cache to prevent type check failures due to stale cache-life.d.ts.
+	@rm -f frontend/tsconfig.tsbuildinfo frontend/.next/cache/.tsbuildinfo
 	@cd frontend && \
 	  cp app/api/auth-exchange/route.capacitor.ts app/api/auth-exchange/route.ts && \
 	  CAPACITOR_BUILD=true npm run build; \
