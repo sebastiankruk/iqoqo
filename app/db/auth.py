@@ -33,7 +33,7 @@ from . import db
 # ---------------------------------------------------------------------------
 # Schema selector
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 _AUTH: str | None = "auth" if _USE_PG else None
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""

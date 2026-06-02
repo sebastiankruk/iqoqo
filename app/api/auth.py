@@ -66,23 +66,35 @@ def generate_internal_jwt(user: User) -> str:
 
 @auth_bp.route("/login/google")
 def google_login():
-    redirect_uri = request.url_root + "api/auth/callback/google"
+    """Initiate Google OAuth flow.
+
+    When ``mobile_origin=capacitor`` is present, the login was initiated
+    from the native Capacitor app.  In that case we use a dedicated mobile
+    callback URL so the callback can always redirect to the ``iqoqo://``
+    deep-link scheme – without relying on ``state`` (overwritten by
+    authlib's CSRF token) or ``session`` (lost when the WebView opens
+    Google in the system browser).
+    """
+    mobile_origin = request.args.get("mobile_origin")
+
+    if mobile_origin == "capacitor":
+        redirect_uri = request.url_root + "api/auth/callback/google/mobile"
+    else:
+        redirect_uri = request.url_root + "api/auth/callback/google"
 
     # Bulletproof Fail-safe: Force HTTPS in production/preview environments
     # just in case Nginx proxy headers strip the secure scheme.
     if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
         redirect_uri = redirect_uri.replace("http://", "https://", 1)
 
-    # Preserve mobile_origin through the OAuth state parameter so the callback
-    # can redirect to the native deep-link scheme instead of the web URL.
-    mobile_origin = request.args.get("mobile_origin")
-    extra_params = {"state": f"mobile_origin={mobile_origin}"} if mobile_origin == "capacitor" else {}
-    return oauth.google.authorize_redirect(redirect_uri, **extra_params)
+    return oauth.google.authorize_redirect(redirect_uri)
 
 
-@auth_bp.route("/callback/google")
-def google_callback():
-    token = oauth.google.authorize_access_token()
+def _handle_google_user(token: dict) -> User:
+    """Find or create a user from a Google OAuth token and return the User object.
+
+    Shared by both the web and mobile Google callback routes.
+    """
     user_info = oauth.google.parse_id_token(token, nonce=None)
     email = user_info.get("email")
 
@@ -108,51 +120,62 @@ def google_callback():
 
     user.last_login = datetime.now(UTC)
     db.session.commit()
+    return user
 
+
+@auth_bp.route("/callback/google")
+def google_callback():
+    """Handle Google OAuth callback for web logins."""
+    token = oauth.google.authorize_access_token()
+    user = _handle_google_user(token)
     internal_token = generate_internal_jwt(user)
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
-
-    # If the login was initiated from the native Capacitor app, redirect via the
-    # custom URL scheme so the deep-link listener can route to /auth-exchange.
-    state = request.args.get("state", "")
-    if "mobile_origin=capacitor" in state:
-        return redirect(f"iqoqo://auth-exchange?token={internal_token}")
-
-    # Web: redirect to the client-side auth-exchange page (works in both
-    # standalone server and static-export / Capacitor builds).
     return redirect(f"{frontend_url}/auth-exchange?token={internal_token}")
+
+
+@auth_bp.route("/callback/google/mobile")
+def google_callback_mobile():
+    """Handle Google OAuth callback for native Capacitor logins.
+
+    Always redirects to the ``iqoqo://`` deep-link scheme so the native
+    app can intercept the token.
+    """
+    token = oauth.google.authorize_access_token()
+    user = _handle_google_user(token)
+    internal_token = generate_internal_jwt(user)
+    return redirect(f"iqoqo://auth-exchange?token={internal_token}")
 
 
 @auth_bp.route("/login/apple")
 def apple_login():
     """Initiate Sign in with Apple OAuth flow.
 
-    Requires APPLE_CLIENT_ID to be configured.  Preserves mobile_origin
-    so the callback can redirect to the native deep-link scheme.
+    Requires APPLE_CLIENT_ID to be configured.  Uses a dedicated mobile
+    callback URL when ``mobile_origin=capacitor`` is present (same
+    strategy as Google login — see ``google_login`` docstring).
     """
     if not current_app.config.get("APPLE_CLIENT_ID"):
         return jsonify({"error": "Apple Sign In is not configured on this instance."}), 503
 
-    redirect_uri = request.url_root + "api/auth/callback/apple"
+    mobile_origin = request.args.get("mobile_origin")
+
+    if mobile_origin == "capacitor":
+        redirect_uri = request.url_root + "api/auth/callback/apple/mobile"
+    else:
+        redirect_uri = request.url_root + "api/auth/callback/apple"
+
     if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
         redirect_uri = redirect_uri.replace("http://", "https://", 1)
 
-    mobile_origin = request.args.get("mobile_origin")
-    extra_params = {"state": f"mobile_origin={mobile_origin}"} if mobile_origin == "capacitor" else {}
-    return oauth.apple.authorize_redirect(redirect_uri, **extra_params)
+    return oauth.apple.authorize_redirect(redirect_uri)
 
 
-@auth_bp.route("/callback/apple", methods=["POST"])
-def apple_callback():
-    """Handle Apple OAuth callback (form_post response mode).
+def _handle_apple_user(token: dict) -> User | None:
+    """Find or create a user from an Apple OAuth token.
 
-    Apple sends the callback as a POST with the token and optional user JSON
-    (only on the very first login for that user).
+    Returns the User object, or None if identification fails.
+    Shared by both the web and mobile Apple callback routes.
     """
-    if not current_app.config.get("APPLE_CLIENT_ID"):
-        return jsonify({"error": "Apple Sign In is not configured on this instance."}), 503
-
-    token = oauth.apple.authorize_access_token()
     user_info = oauth.apple.parse_id_token(token)
 
     apple_sub: str = user_info.get("sub", "")
@@ -177,20 +200,44 @@ def apple_callback():
                 user.roles.append(default_role)  # type: ignore[attr-defined]
             db.session.add(user)
 
+    if user:
+        user.last_login = datetime.now(UTC)
+        db.session.commit()
+    return user
+
+
+@auth_bp.route("/callback/apple", methods=["POST"])
+def apple_callback():
+    """Handle Apple OAuth callback for web logins (form_post response mode)."""
+    if not current_app.config.get("APPLE_CLIENT_ID"):
+        return jsonify({"error": "Apple Sign In is not configured on this instance."}), 503
+
+    token = oauth.apple.authorize_access_token()
+    user = _handle_apple_user(token)
     if not user:
         return jsonify({"error": "Unable to identify user from Apple token."}), 400
 
-    user.last_login = datetime.now(UTC)
-    db.session.commit()
-
     internal_token = generate_internal_jwt(user)
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
-
-    state = request.form.get("state", "")
-    if "mobile_origin=capacitor" in state:
-        return redirect(f"iqoqo://auth-exchange?token={internal_token}")
-
     return redirect(f"{frontend_url}/auth-exchange?token={internal_token}")
+
+
+@auth_bp.route("/callback/apple/mobile", methods=["POST"])
+def apple_callback_mobile():
+    """Handle Apple OAuth callback for native Capacitor logins.
+
+    Always redirects to the ``iqoqo://`` deep-link scheme.
+    """
+    if not current_app.config.get("APPLE_CLIENT_ID"):
+        return jsonify({"error": "Apple Sign In is not configured on this instance."}), 503
+
+    token = oauth.apple.authorize_access_token()
+    user = _handle_apple_user(token)
+    if not user:
+        return jsonify({"error": "Unable to identify user from Apple token."}), 400
+
+    internal_token = generate_internal_jwt(user)
+    return redirect(f"iqoqo://auth-exchange?token={internal_token}")
 
 
 @auth_bp.route("/login", methods=["POST"])

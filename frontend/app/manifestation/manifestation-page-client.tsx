@@ -316,7 +316,9 @@ export default function ManifestationPageClient() {
                   {parts.map(part => {
                     const isCurrent = part.part_work_id === manifestation.work_id;
                     const isLinkable = !!(part.item_id || part.manifestation_id);
-                    const linkUrl = part.item_id ? `/item?id=${part.item_id}` : `/manifestation?id=${part.manifestation_id}`;
+                    const linkUrl = part.item_id
+                      ? `/item?id=${part.item_id}`
+                      : `/manifestation?id=${part.manifestation_id}`;
 
                     const content = (
                       <div className="flex items-center gap-3">

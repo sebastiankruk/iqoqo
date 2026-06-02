@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Schema prefixes — mirrors the logic in app/db/core.py.
 # Raw SQL must qualify table names when PostgreSQL named schemas are in use.
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 _CATALOG = "catalog." if _USE_PG else ""
 _INVENTORY = "inventory." if _USE_PG else ""
 

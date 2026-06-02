@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from . import db
 
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 #: The PostgreSQL schema name for FRBR catalog tables, or ``None`` for SQLite.
 _CATALOG: str | None = "catalog" if _USE_PG else None
