@@ -34,6 +34,9 @@ export default function LoginPage() {
   const [instanceUrl, setInstanceUrl] = useState("");
 
   useEffect(() => {
+    /**
+     * Load native configuration.
+     */
     async function load() {
       if (isNativeApp()) {
         const url = await getInstanceUrl();

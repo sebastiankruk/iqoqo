@@ -111,7 +111,7 @@ test.describe("Audio Media Workflow", () => {
     });
 
     // 3. Navigate to the item page
-    await page.goto("/item/1");
+    await page.goto("/item?id=1");
 
     // 4. Verify Audio Metadata rendering in ExtendedMetadata (usually in a tab or below header)
     // Based on ItemTabs default, it might be in the "Details" tab.
@@ -251,6 +251,6 @@ test.describe("Audio Media Workflow", () => {
     await page.getByRole("button", { name: "Add to Library" }).click();
 
     // 8. Expect routing to newly ingested item details page
-    await expect(page).toHaveURL(/.*\/item\/2/);
+    await expect(page).toHaveURL(/.*\/item\?id=2/);
   });
 });

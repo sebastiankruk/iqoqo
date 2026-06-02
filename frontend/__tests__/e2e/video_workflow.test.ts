@@ -135,6 +135,6 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText(/"Inception" added to your library!/i)).toBeVisible();
 
     // 12. Verify the application redirected to the newly created item
-    await expect(page).toHaveURL(/.*\/item\/1/);
+    await expect(page).toHaveURL(/.*\/item\?id=1/);
   });
 });

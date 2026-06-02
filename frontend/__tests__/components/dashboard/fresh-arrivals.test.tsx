@@ -149,7 +149,7 @@ describe("FreshArrivals", () => {
 
     // In React Testing Library with generic nested queries, checking closest link tag handles nested elements like spans
     const links = screen.getAllByRole("link", { name: /dune/i });
-    expect(links[0].closest("a")).toHaveAttribute("href", "/manifestation/1");
+    expect(links[0].closest("a")).toHaveAttribute("href", "/manifestation?id=1");
   });
 
   it("is wrapped in a landmark section for accessibility", () => {

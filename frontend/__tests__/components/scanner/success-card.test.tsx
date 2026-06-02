@@ -118,7 +118,7 @@ describe("SuccessCard", () => {
         collection_status: "available",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Library!');
-      expect(mockPush).toHaveBeenCalledWith("/item/99");
+      expect(mockPush).toHaveBeenCalledWith("/item?id=99");
     });
   });
 
@@ -150,7 +150,7 @@ describe("SuccessCard", () => {
         collection_status: "wish_list",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
-      expect(mockPush).toHaveBeenCalledWith("/item/101");
+      expect(mockPush).toHaveBeenCalledWith("/item?id=101");
     });
   });
 

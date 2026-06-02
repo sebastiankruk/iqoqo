@@ -188,7 +188,7 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
   }
 
   // Check if current user already submitted feedback
-  const userFeedback = feedbackData?.feedbacks.find(f => {
+  const userFeedback = feedbackData?.feedbacks?.find(f => {
     if (profile?.id && f.user_id === profile.id) return true;
     if (profile?.public_username && f.user_username === profile.public_username) return true;
     return false;
@@ -206,7 +206,15 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
     return <div className="py-6 text-center text-sm text-muted-foreground">Failed to load ratings and comments.</div>;
   }
 
-  const { feedbacks, stats } = feedbackData;
+  const {
+    feedbacks = [],
+    stats = {
+      average_rating: 0,
+      total_count: 0,
+      total_ratings: 0,
+      rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 },
+    },
+  } = feedbackData;
   const otherFeedbacks = feedbacks.filter(f => {
     const isCurrentUser =
       (profile?.id && f.user_id === profile.id) ||
@@ -219,20 +227,22 @@ export function FRBRFeedback({ level, targetId, title }: FRBRFeedbackProps) {
       {/* Overview Stat Section */}
       <div className="flex flex-col gap-6 rounded-xl border border-border/60 bg-muted/5 p-6 md:flex-row md:items-center">
         <div className="flex flex-col items-center justify-center text-center md:border-r md:pr-8">
-          <span className="font-serif text-5xl font-extrabold text-foreground">{stats.average_rating.toFixed(1)}</span>
+          <span className="font-serif text-5xl font-extrabold text-foreground">
+            {(stats.average_rating ?? 0).toFixed(1)}
+          </span>
           <div className="mt-2">
-            <StarRating rating={Math.round(stats.average_rating)} readOnly size="md" />
+            <StarRating rating={Math.round(stats.average_rating ?? 0)} readOnly size="md" />
           </div>
           <span className="mt-2 text-xs text-muted-foreground font-medium">
-            Based on {stats.total_ratings} {stats.total_ratings === 1 ? "rating" : "ratings"}
+            Based on {stats.total_ratings ?? 0} {(stats.total_ratings ?? 0) === 1 ? "rating" : "ratings"}
           </span>
         </div>
 
         {/* Star breakdown bar graphs */}
         <div className="flex-1 space-y-2">
           {([5, 4, 3, 2, 1] as const).map(stars => {
-            const count = stats.rating_counts[String(stars)] || 0;
-            const percentage = stats.total_ratings > 0 ? (count / stats.total_ratings) * 100 : 0;
+            const count = stats.rating_counts?.[String(stars)] ?? 0;
+            const percentage = (stats.total_ratings ?? 0) > 0 ? (count / (stats.total_ratings ?? 1)) * 100 : 0;
 
             return (
               <div key={stars} className="flex items-center gap-3 text-sm">

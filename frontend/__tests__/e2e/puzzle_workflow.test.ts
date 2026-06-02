@@ -101,6 +101,6 @@ test.describe("Jigsaw Puzzle Workflow", () => {
 
     // 7. Confirm addition
     await page.click('button:has-text("Add to Library")');
-    await expect(page).toHaveURL(/\/item\/.*/);
+    await expect(page).toHaveURL(/\/item\?id=.*/);
   });
 });

@@ -92,7 +92,7 @@ describe("ItemCard", () => {
 
   it("links to the item detail page", () => {
     render(<ItemCard item={makeItem({ id: 42 })} />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/item/42");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/item?id=42");
   });
 
   it("shows a quantity badge when _quantity > 1", () => {
@@ -142,7 +142,7 @@ describe("ItemCard", () => {
 
   it("links to the manifestation detail page when isManifestationView is true", () => {
     render(<ItemCard item={makeCatalogEntry({ id: 99 })} isManifestationView={true} />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/manifestation/99");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/manifestation?id=99");
   });
 
   it("hides the user item status dot when isManifestationView is true", () => {

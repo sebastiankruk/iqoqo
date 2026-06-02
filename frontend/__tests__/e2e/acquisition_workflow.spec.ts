@@ -162,7 +162,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await page.getByRole("button", { name: "Add to Library" }).click();
 
       // Verify Success Route
-      await expect(page).toHaveURL(/.*\/item\/123/);
+      await expect(page).toHaveURL(/.*\/item\?id=123/);
     });
 
     test("Acquire Vinyl via Uploaded Cover and Contribute Cover", async ({ page }) => {
@@ -246,7 +246,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await page.getByRole("button", { name: "Save Manual Entry" }).click();
 
       // Verify Redirect to Item Page
-      await expect(page).toHaveURL(/.*\/item\/789/);
+      await expect(page).toHaveURL(/.*\/item\?id=789/);
 
       // Check the sidebar button - it should be 'Contribute Cover' because it has no cover yet
       const contributeBtn = page.getByRole("button", { name: "Contribute Cover" });

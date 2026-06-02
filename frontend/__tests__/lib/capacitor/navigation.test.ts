@@ -34,6 +34,7 @@ vi.mock("@capacitor/app", () => ({
       appListeners[event] = cb;
     }),
     exitApp: mockExitApp,
+    getLaunchUrl: vi.fn().mockResolvedValue({ url: undefined }),
   },
 }));
 

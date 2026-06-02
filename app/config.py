@@ -53,7 +53,8 @@ class Config:
     # Protect against huge payload attacks
     MAX_CONTENT_LENGTH = _get_int_env("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)  # 16 MB max
 
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL").strip("'\"") if os.environ.get("DATABASE_URL") else None
+    _database_url: str | None = os.environ.get("DATABASE_URL")
+    SQLALCHEMY_DATABASE_URI = _database_url.strip("'\"") if _database_url else None
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console
     SQLALCHEMY_ECHO = os.environ.get("SQLALCHEMY_ECHO", "false").lower() in {"true", "1", "yes"}

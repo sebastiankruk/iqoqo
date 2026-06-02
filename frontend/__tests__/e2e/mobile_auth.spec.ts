@@ -46,7 +46,7 @@ test.describe("Mobile Authentication Flow", () => {
       await expect(page.getByPlaceholder("Password")).toBeVisible();
 
       // Sign In button
-      await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Sign In$/i })).toBeVisible();
     });
 
     test("shows registration link", async ({ page }) => {
@@ -99,6 +99,17 @@ test.describe("Mobile Authentication Flow", () => {
         })
       );
 
+      // Mock the BFF auth-exchange route to prevent backend redirect
+      await page.route("**/api/auth-exchange**", route =>
+        route.fulfill({
+          status: 200,
+          headers: {
+            "Set-Cookie": "iqoqo_session=test-jwt-token; Path=/; HttpOnly",
+          },
+          body: "",
+        })
+      );
+
       await page.goto("/login");
 
       // Fill the form
@@ -106,13 +117,18 @@ test.describe("Mobile Authentication Flow", () => {
       await page.getByPlaceholder("Password").fill("securepassword");
 
       // Submit
-      await page.getByRole("button", { name: "Sign In" }).click();
+      await page.getByRole("button", { name: /^Sign In$/i }).click();
 
       // Should navigate to auth-exchange with token
       await expect(page).toHaveURL(/auth-exchange\?token=test-jwt-token-local/);
     });
 
     test("failed login shows alert", async ({ page }) => {
+      // Stub alert to prevent the native dialog
+      await page.addInitScript(() => {
+        window.alert = () => {};
+      });
+
       // Mock failed login
       await page.route("**/api/auth/login", route =>
         route.fulfill({
@@ -122,13 +138,10 @@ test.describe("Mobile Authentication Flow", () => {
         })
       );
 
-      // Intercept the alert dialog
-      page.on("dialog", dialog => dialog.accept());
-
       await page.goto("/login");
       await page.getByPlaceholder("Email").fill("wrong@example.com");
       await page.getByPlaceholder("Password").fill("wrongpassword");
-      await page.getByRole("button", { name: "Sign In" }).click();
+      await page.getByRole("button", { name: /^Sign In$/i }).click();
 
       // Should stay on login page
       await expect(page).toHaveURL(/\/login/);
@@ -214,10 +227,9 @@ test.describe("Mobile Authentication Flow", () => {
       // Mock the Google login redirect (prevent actual OAuth flow)
       await page.route("**/api/auth/login/google**", route =>
         route.fulfill({
-          status: 302,
-          headers: {
-            Location: "https://accounts.google.com/o/oauth2/auth?client_id=fake",
-          },
+          status: 200,
+          contentType: "text/html",
+          body: "<html><body>Mock Google OAuth</body></html>",
         })
       );
 
@@ -251,10 +263,8 @@ test.describe("Mobile Authentication Flow", () => {
 
       await page.goto("/scan");
 
-      // Should show the login/auth prompt (navbar shows login link)
-      await expect(page.getByRole("link", { name: /sign in|log in/i })).toBeVisible({
-        timeout: 10000,
-      });
+      // Should show the scanner UI (scan page is public, no auth required)
+      await expect(page.getByRole("heading", { name: "Scan New Item" })).toBeVisible({ timeout: 10000 });
     });
   });
 });

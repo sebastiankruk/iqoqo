@@ -124,7 +124,7 @@ test.describe("Mobile Catalog Navigation", () => {
     });
 
     // Mock manifestation endpoint
-    await page.route("**/api/manifestations/201", async route => {
+    await page.route(/\/api\/manifestations\/201(?:\/|$)/, async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -160,13 +160,28 @@ test.describe("Mobile Catalog Navigation", () => {
       });
     });
 
-    // Mock social review feeds
-    await page.route("**/api/feedback**", async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ success: true, data: [] }),
-      });
+    // Mock social review feeds — match exact FRBR level+ID patterns so the
+    // wildcard route does not accidentally catch other /feedback calls.
+    const mockFeedback = {
+      success: true,
+      data: {
+        feedbacks: [],
+        stats: {
+          average_rating: 0,
+          total_count: 0,
+          total_ratings: 0,
+          rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 },
+        },
+      },
+    };
+    await page.route("**/api/feedback/work/*", async route => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockFeedback) });
+    });
+    await page.route("**/api/feedback/expression/*", async route => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockFeedback) });
+    });
+    await page.route("**/api/feedback/manifestation/*", async route => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockFeedback) });
     });
 
     // 2. Load dashboard
@@ -176,7 +191,7 @@ test.describe("Mobile Catalog Navigation", () => {
     // Verify item card is displayed
     const card = page.locator('[data-testid="item-card"]');
     await expect(card).toBeVisible();
-    await expect(page.getByText("Mobile Catalog Book")).toBeVisible();
+    await expect(page.getByText("Mobile Catalog Book").first()).toBeVisible();
 
     // 3. Click card to open Item detail page
     await card.click();
@@ -226,14 +241,15 @@ test.describe("Mobile Catalog Navigation", () => {
     await page.goto("/collection");
     await page.waitForLoadState("networkidle");
 
-    // Mobile nav bar checks
-    const bottomNav = page.locator("nav");
-    await expect(bottomNav).toBeVisible();
-
-    // Check for standard navigation links
-    const homeLink = bottomNav.getByRole("link", { name: /home|discover/i });
-    const collectionLink = bottomNav.getByRole("link", { name: /collection/i });
-    const scanLink = bottomNav.getByRole("link", { name: /scan/i });
+    // Mobile nav bar checks — bottom nav is a <div>, not a <nav>.
+    // On desktop, Collection/Scan links live in the top <nav> instead,
+    // so we use `.or()` to handle both layouts.
+    const desktopNav = page.locator("nav");
+    const mobileNav = page.locator("div.fixed.bottom-0");
+    const collectionLink = desktopNav
+      .getByRole("link", { name: /collection/i })
+      .or(mobileNav.getByRole("link", { name: /collection/i }));
+    const scanLink = desktopNav.getByRole("link", { name: /scan/i }).or(mobileNav.getByRole("link", { name: /scan/i }));
 
     await expect(collectionLink).toBeVisible();
     await expect(scanLink).toBeVisible();

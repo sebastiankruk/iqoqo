@@ -17,7 +17,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import ManifestationPage from "@/app/manifestation/[id]/page";
+import ManifestationPage from "@/app/manifestation/page";
 import * as hooks from "@/lib/api/hooks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -28,9 +28,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     refresh: vi.fn(),
   }),
-  useSearchParams: () => ({
-    get: () => null,
-  }),
+  useSearchParams: () => new URLSearchParams("id=123"),
 }));
 
 vi.mock("next/image", () => ({

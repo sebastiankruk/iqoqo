@@ -228,7 +228,7 @@ test.describe("UX/UI Audit Workflow", () => {
       clickCount++;
 
       // Verify success redirect
-      await expect(page).toHaveURL(/.*\/item\/123/);
+      await expect(page).toHaveURL(/.*\/item\?id=123/);
       console.log(`[AUDIT] Manual Search Lookup Flow: Clicks = ${clickCount}, Inputs = 1, Success Redirect reached.`);
     });
 

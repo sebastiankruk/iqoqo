@@ -85,7 +85,7 @@ test.describe("Complex Works & Series E2E", () => {
       });
     });
 
-    await page.goto("/manifestation/100");
+    await page.goto("/manifestation?id=100");
 
     // Verify visual components of series
     await expect(page.getByRole("heading", { name: "Series / Complex Work Parts" })).toBeVisible();
@@ -147,7 +147,7 @@ test.describe("Complex Works & Series E2E", () => {
       });
     });
 
-    await page.goto("/item/10");
+    await page.goto("/item?id=10");
 
     // Verify series list displays and highlights current
     await expect(page.getByRole("heading", { name: "Series / Complex Work Parts" })).toBeVisible();

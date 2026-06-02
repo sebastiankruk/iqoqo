@@ -125,7 +125,7 @@ export default function ManifestationPageClient() {
       className="min-h-screen flex flex-col bg-background"
       vocab="http://iflastandards.info/ns/frbr/frbrer/"
       prefix="sioc: http://rdfs.org/sioc/ns# schema: https://schema.org/"
-      typeof="Manifestation"
+      {...{ typeof: "Manifestation" }}
       resource={`#manifestation-${manifestation.id}`}
     >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }} />
@@ -213,7 +213,7 @@ export default function ManifestationPageClient() {
               <div
                 className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
                 property="schema:author"
-                typeof="Person"
+                {...{ typeof: "Person" }}
               >
                 {(manifestation.authors ?? []).length > 0 ? (
                   (manifestation.authors ?? []).map((author, idx, arr) => (

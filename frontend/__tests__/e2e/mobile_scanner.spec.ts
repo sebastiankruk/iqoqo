@@ -199,8 +199,8 @@ test.describe("Mobile Scanner Flow", () => {
     });
 
     // Verify manual entry is populated with extracted details
-    const titleInput = page.locator('input[placeholder="Title"]');
-    const authorInput = page.locator('input[placeholder="Authors (comma-separated)"]');
+    const titleInput = page.locator("#manual-title");
+    const authorInput = page.locator("#manual-authors");
 
     await expect(titleInput).toHaveValue("Extracted Mobile Book");
     await expect(authorInput).toHaveValue("Author Extracted");

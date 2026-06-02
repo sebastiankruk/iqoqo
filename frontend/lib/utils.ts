@@ -98,7 +98,7 @@ export function resolveApiUrl(path: string, isServer = false): string {
   // We must use the absolute URL stored in localStorage during onboarding.
   if (typeof window !== "undefined") {
     // We do a simple check for capacitor to avoid importing platform module and creating cycles
-    const isCapacitor = !!(window as any).Capacitor;
+    const isCapacitor = !!(window as unknown as Record<string, unknown>).Capacitor;
     if (isCapacitor) {
       const syncUrl = localStorage.getItem("iqoqo_instance_url_sync");
       if (syncUrl) {
