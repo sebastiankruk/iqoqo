@@ -92,7 +92,20 @@ export function resolveApiUrl(path: string, isServer = false): string {
   // to support tunnels/proxies where "localhost" is not resolvable.
   const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
   const apiBase = publicApiUrl.startsWith("http") ? "/api" : publicApiUrl;
-  const cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+  let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
+
+  // If we are in Capacitor, we don't have a relative "/api" proxy.
+  // We must use the absolute URL stored in localStorage during onboarding.
+  if (typeof window !== "undefined") {
+    // We do a simple check for capacitor to avoid importing platform module and creating cycles
+    const isCapacitor = !!(window as unknown as Record<string, unknown>).Capacitor;
+    if (isCapacitor) {
+      const syncUrl = localStorage.getItem("iqoqo_instance_url_sync");
+      if (syncUrl) {
+        cleanBase = `${syncUrl}/api`;
+      }
+    }
+  }
 
   if (cleanBase && cleanPath.startsWith(cleanBase)) {
     return cleanPath;

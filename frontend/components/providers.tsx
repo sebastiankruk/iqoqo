@@ -15,9 +15,27 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { useRouter } from "next/navigation";
+import { registerBackButtonHandler, registerDeepLinkHandler } from "@/lib/capacitor/navigation";
+
+/**
+ * Handles Capacitor listener registration for back button and deep links.
+ *
+ * @returns {null} Renders nothing.
+ */
+function CapacitorListener() {
+  const router = useRouter();
+
+  useEffect(() => {
+    registerBackButtonHandler(router);
+    registerDeepLinkHandler(router);
+  }, [router]);
+
+  return null;
+}
 
 /**
  * Global client-side providers: React Query + Sonner toasts.
@@ -44,6 +62,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <CapacitorListener />
       {children}
       <Toaster richColors position="bottom-right" />
     </QueryClientProvider>

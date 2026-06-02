@@ -146,7 +146,7 @@ export default function ScanPage() {
         }
 
         if (response.data?.item_id) {
-          router.push(`/item/${response.data.item_id}`);
+          router.push(`/item?id=${response.data.item_id}`);
         }
       },
       onError: err => {

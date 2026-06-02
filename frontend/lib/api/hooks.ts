@@ -894,10 +894,10 @@ export function useProfile() {
     queryKey: ["profile"],
     queryFn: async () => {
       try {
-        const res = await apiFetch<UserProfile>("/profile/");
+        const res = await apiFetch<UserProfile>("/profile");
         return res;
       } catch (err) {
-        const message = err instanceof Error ? err.message : "";
+        const message = err instanceof Error ? err.message : String(err);
         if (
           message.includes("Token expired") ||
           message.includes("Invalid token") ||

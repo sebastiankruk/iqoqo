@@ -40,22 +40,27 @@ def require_auth(f):
             token = request.cookies.get("iqoqo_session")
 
         if not token:
+            print("DEBUG AUTH - Missing token. Headers:", dict(request.headers), "Cookies:", dict(request.cookies))
             return jsonify({"error": "Token missing"}), 401
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
 
             # Check blocklist
             if _is_token_revoked(payload.get("jti")):
+                print("DEBUG AUTH - Token revoked:", token)
                 return jsonify({"error": "Token revoked"}), 401
 
             g.user_id = uuid.UUID(payload["sub"])
 
         except jwt.ExpiredSignatureError:
+            print("DEBUG AUTH - Token expired:", token)
             return jsonify({"error": "Token expired"}), 401
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            print("DEBUG AUTH - Invalid token:", token, "Error:", e)
             return jsonify({"error": "Invalid token"}), 401
-        except ValueError:
+        except ValueError as e:
             # Catches cases where the 'sub' is not a properly formatted UUID string
+            print("DEBUG AUTH - Invalid user ID format in token:", token, "Error:", e)
             return jsonify({"error": "Invalid user ID format"}), 401
 
         return f(*args, **kwargs)

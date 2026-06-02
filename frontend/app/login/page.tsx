@@ -15,11 +15,13 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl } from "@/lib/capacitor/storage";
 
 /**
  * Login page component.
@@ -29,6 +31,29 @@ import { Footer } from "@/components/dashboard/footer";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [instanceUrl, setInstanceUrl] = useState("");
+
+  useEffect(() => {
+    /**
+     * Load native configuration.
+     */
+    async function load() {
+      if (isNativeApp()) {
+        const url = await getInstanceUrl();
+        if (url) {
+          setInstanceUrl(url);
+        }
+      }
+    }
+    void load();
+  }, []);
+
+  const resolveUrl = (path: string) => {
+    if (isNativeApp() && instanceUrl) {
+      return `${instanceUrl}${path}`;
+    }
+    return path;
+  };
 
   /**
    * Handles the local login process.
@@ -37,7 +62,7 @@ export default function LoginPage() {
    */
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`/api/auth/login`, {
+    const res = await fetch(resolveUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -45,11 +70,22 @@ export default function LoginPage() {
 
     if (res.ok) {
       const data = await res.json();
-      // Exchange token in BFF — /api/auth-exchange is a Next.js route handler
-      // that sets the httpOnly session cookie then redirects to /.
-      window.location.href = `/api/auth-exchange?token=${data.token}`;
+      if (isNativeApp()) {
+        window.location.href = `/auth-exchange?token=${data.token}`;
+      } else {
+        window.location.href = `/api/auth-exchange?token=${data.token}`;
+      }
     } else {
       alert("Login failed");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (isNativeApp() && instanceUrl) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: `${instanceUrl}/api/auth/login/google?mobile_origin=capacitor` });
+    } else {
+      window.location.href = `/api/auth/login/google`;
     }
   };
 
@@ -59,11 +95,7 @@ export default function LoginPage() {
       <main className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
           <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => (window.location.href = `/api/auth/login/google`)}
-          >
+          <Button className="w-full" variant="outline" onClick={handleGoogleLogin}>
             Sign in with Google
           </Button>
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">

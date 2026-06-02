@@ -17,10 +17,12 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Privacy Management", () => {
-  test("private profile returns 404", async ({ page }) => {
-    // This assumes 'privateuser' is private
-    const response = await page.goto("/u/privateuser");
-    expect(response?.status()).toBe(404);
+  test("private profile shows 404 page", async ({ page }) => {
+    // This assumes 'privateuser' is private (or user doesn't exist)
+    await page.goto("/u/privateuser");
+    // Next.js App Router always returns HTTP 200 for matching routes;
+    // the notFound() call renders the 404 page client-side.
+    await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
   });
 
   test("hidden items are not visible in public grid", async ({ page }) => {

@@ -133,6 +133,31 @@ vi.mock("@tanstack/react-query", async importOriginal => {
   };
 });
 
+/* ── localStorage stub ─────────────────────────────────────────────────────
+ * happy-dom may not expose localStorage in all configurations.  Stub it
+ * globally so components that read/write instance URL sync (or any other
+ * key) don't crash tests that don't explicitly mock localStorage.          */
+if (typeof window !== "undefined" && !window.localStorage) {
+  const store: Record<string, string> = {};
+  Object.defineProperty(window, "localStorage", {
+    value: {
+      getItem: vi.fn((key: string) => store[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        store[key] = value;
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete store[key];
+      }),
+      clear: vi.fn(() => {
+        Object.keys(store).forEach(k => delete store[k]);
+      }),
+      length: 0,
+      key: vi.fn(() => null),
+    },
+    writable: true,
+  });
+}
+
 /* ── Global axios mock ────────────────────────────────────────────────────── */
 vi.mock("axios", async importOriginal => {
   const actual = await importOriginal<typeof import("axios")>();

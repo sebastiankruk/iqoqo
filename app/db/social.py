@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from . import db
 
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 _INVENTORY: str | None = "inventory" if _USE_PG else None
 _INVENTORY_PFX: str = f"{_INVENTORY}." if _INVENTORY else ""

@@ -91,7 +91,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
             const isGenerated = item.cover_status === "ready" && !item.meta?.["cover_url"];
 
             return (
-              <Link href={`/manifestation/${item.id}`} key={item.id} className="group w-36 shrink-0 sm:w-40">
+              <Link href={`/manifestation?id=${item.id}`} key={item.id} className="group w-36 shrink-0 sm:w-40">
                 <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg shadow-md bg-secondary transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
                   {(isProcessing || item.cover_status === "pending") && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">

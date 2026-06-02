@@ -1,7 +1,7 @@
 {
   "Common": {
     "loading": "Ładowanie...",
-    "error": "Wystąpił błąd",
+    "error": "Coś poszło nie tak",
     "noItems": "Nie znaleziono przedmiotów",
     "back": "Powrót",
     "save": "Zapisz",
@@ -9,17 +9,96 @@
     "delete": "Usuń",
     "share": "Udostępnij",
     "copied": "Skopiowano!",
-    "copySuccess": "Link skopiowany do schowka!",
-    "copyError": "Nie udało się skopiować linku"
+    "copySuccess": "Link skopiowany do schowka",
+    "copyError": "Nie udało się skopiować"
+  },
+  "Nav": {
+    "home": "Strona główna",
+    "collection": "Kolekcja",
+    "scan": "Skanuj",
+    "profile": "Profil",
+    "settings": "Ustawienia",
+    "logout": "Wyloguj",
+    "search": "Szukaj w bibliotece..."
+  },
+  "Auth": {
+    "login": "Zaloguj się",
+    "register": "Utwórz konto",
+    "email": "E-mail",
+    "password": "Hasło",
+    "displayName": "Nazwa wyświetlana",
+    "forgotPassword": "Zapomniałeś hasła?",
+    "loginWithGoogle": "Kontynuuj z Google",
+    "loginWithApple": "Kontynuuj z Apple",
+    "noAccount": "Nie masz konta?",
+    "hasAccount": "Masz już konto?"
+  },
+  "Dashboard": {
+    "welcomeBack": "Witaj z powrotem, {name}",
+    "recentArrivals": "Nowe nabytki",
+    "readingProgress": "Postęp czytania",
+    "stats": "Twoje statystyki",
+    "works": "Dzieła",
+    "items": "Egzemplarze",
+    "quickAdd": "Szybkie dodawanie"
+  },
+  "Collection": {
+    "title": "Moja kolekcja",
+    "filter": "Filtruj",
+    "sort": "Sortuj",
+    "gridView": "Siatka",
+    "listView": "Lista",
+    "emptyState": "Twoja kolekcja jest pusta. Zacznij od zeskanowania książki!",
+    "categories": "Kategorie",
+    "status": "Status",
+    "format": "Format"
+  },
+  "Scanner": {
+    "title": "Skanuj i dodaj",
+    "camera": "Kamera",
+    "manual": "Ręczne wpisanie",
+    "batchMode": "Tryb seryjny",
+    "scanning": "Skanowanie...",
+    "found": "Znaleziono: {title}",
+    "addToLibrary": "Dodaj do biblioteki",
+    "scanAnother": "Skanuj kolejny",
+    "notFound": "Nie znaleziono",
+    "tryManual": "Spróbuj wpisać dane ręcznie",
+    "isbn": "ISBN / UPC / EAN",
+    "title_field": "Tytuł",
+    "author": "Autor"
+  },
+  "Item": {
+    "details": "Szczegóły",
+    "notes": "Notatki",
+    "rating": "Ocena",
+    "status": "Status",
+    "lend": "Wypożycz",
+    "return": "Zwróć",
+    "edit": "Edytuj",
+    "delete": "Usuń z kolekcji",
+    "confirmDelete": "Czy na pewno chcesz usunąć ten przedmiot?",
+    "readingProgress": "Postęp czytania",
+    "addNote": "Dodaj notatkę..."
+  },
+  "Mobile": {
+    "serverSelector": "Połącz z iqoqo",
+    "serverUrl": "Podaj adres URL swojej instancji iqoqo",
+    "verifyConnection": "Sprawdź połączenie",
+    "continueToLogin": "Przejdź do logowania",
+    "connected": "Połączono: {name}",
+    "connectionFailed": "Nie można połączyć z serwerem",
+    "noInstance": "Nie masz własnej instancji? Odwiedź iqoqo.cc, aby dowiedzieć się więcej.",
+    "adminWebOnly": "Funkcje administracyjne są dostępne w wersji przeglądarkowej."
   },
   "Public": {
     "profileTitle": "Kolekcja użytkownika {name}",
     "checkInventory": "Sprawdź czy to mam",
-    "checkPlaceholder": "Szukaj po tytule, ISBN lub UPC...",
+    "checkPlaceholder": "Wpisz ISBN lub tytuł...",
     "foundItem": "Mam to!",
-    "foundManifestation": "To jest w katalogu, ale nie mam tego w kolekcji.",
-    "notFound": "Nie mam jeszcze tego przedmiotu.",
+    "foundManifestation": "Dostępne w katalogu",
+    "notFound": "Nie ma tego w bibliotece",
     "sharedCollection": "Udostępniona kolekcja",
-    "hiddenItemNote": "Uwaga: Niektóre przedmioty mogą być ukryte ze względu na prywatność."
+    "hiddenItemNote": "Niektóre przedmioty są ukryte przez właściciela"
   }
 }

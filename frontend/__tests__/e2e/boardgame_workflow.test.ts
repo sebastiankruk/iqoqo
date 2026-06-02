@@ -138,7 +138,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText(/"Catan" added to your library!/i)).toBeVisible();
 
     // 12. Verify the application redirected to the newly created item
-    await expect(page).toHaveURL(/.*\/item\/2/);
+    await expect(page).toHaveURL(/.*\/item\?id=2/);
   });
 
   test("should allow user to search board game by barcode", async ({ page }) => {

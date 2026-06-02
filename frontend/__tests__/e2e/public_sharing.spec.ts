@@ -56,7 +56,7 @@ test.describe("Public Sharing", () => {
     await page.waitForLoadState("networkidle");
 
     // 3. Fill the input
-    const input = page.getByPlaceholder(/Search by Title, ISBN, or UPC/i);
+    const input = page.getByPlaceholder(/(Search by Title, ISBN, or UPC|Enter ISBN or title)/i);
     await input.fill("1111111111111");
 
     // 4. Submit form by pressing Enter to avoid React state hydration lag on button click

@@ -30,6 +30,7 @@ from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
+from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
 # Add the parent directory to the path
@@ -38,6 +39,34 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 from app import create_app
 from app.core.data_manager import DataManager
 from app.db import db
+
+
+def _drop_orphan_schemas() -> None:
+    """Drop database schemas not tracked by SQLAlchemy metadata.
+
+    PostgreSQL-only: drops schemas (with CASCADE) whose tables are not
+    managed by any registered SQLAlchemy model.  This prevents ``DROP TABLE``
+    failures when orphan schemas (e.g. ``federation``) hold FK constraints
+    that reference tracked tables like ``auth.users``.
+
+    Safe no-op on SQLite (which has no ``pg_namespace``).
+    """
+    engine = db.engine
+    if engine.dialect.name != "postgresql":
+        return
+
+    known = {table.schema for table in db.metadata.tables.values() if table.schema}
+    system = {"pg_catalog", "pg_toast", "information_schema"}
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname NOT IN :system"),
+            {"system": tuple(system)},
+        )
+        for (schema,) in rows:
+            if schema not in known and schema != "public":
+                print(f"  Dropping orphan schema: {schema}")
+                conn.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+        conn.commit()
 
 
 def init_database(seed_file: Path | None = None, reset: bool = False):
@@ -51,8 +80,13 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
     app = create_app()
 
     with app.app_context():
+        _is_postgresql = db.engine.dialect.name == "postgresql"
+
         if reset:
             print("Dropping all tables...")
+            # Drop any schemas not tracked by SQLAlchemy metadata (e.g. federation)
+            # that may have FK constraints referencing tracked tables.
+            _drop_orphan_schemas()
             try:
                 db.drop_all()
             except ProgrammingError as e:
@@ -66,6 +100,14 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
         # Create all tables
         print("Creating database tables...")
         db.create_all()
+
+        # Drop the Alembic version table if it was left over from a previous
+        # reset.  `db.drop_all()` skips it (not in SQLAlchemy metadata), so a
+        # stale revision like '20260531_federation_schema' — whose migration
+        # file may no longer exist — would otherwise crash ``stamp("head")``.
+        if _is_postgresql:
+            db.session.execute(text("DROP TABLE IF EXISTS public.alembic_version"))
+            db.session.commit()
 
         # Stamp the Alembic migration version to 'head' after a fresh create_all().
         # create_all() builds the schema from ORM model definitions (always reflecting

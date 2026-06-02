@@ -29,7 +29,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from . import db
 
 load_dotenv()
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 #: The PostgreSQL schema name for inventory tables, or ``None`` for SQLite.
 _INVENTORY: str | None = "inventory" if _USE_PG else None

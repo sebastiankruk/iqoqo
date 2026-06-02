@@ -85,7 +85,7 @@ describe("ProfilePage", () => {
     });
 
     // Verify apiFetch was called with the correct path
-    expect(apiFetch).toHaveBeenCalledWith("/profile/");
+    expect(apiFetch).toHaveBeenCalledWith("/profile");
   });
 
   it("toggles GDPR consents", async () => {

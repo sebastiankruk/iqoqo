@@ -219,7 +219,7 @@ test.describe("New Features Coverage", () => {
     });
 
     // 1. Navigate to Item Detail Page
-    await page.goto(`/item/${itemId}`);
+    await page.goto(`/item?id=${itemId}`);
     await page.waitForLoadState("networkidle");
 
     // 2. Test QR Code Dialog

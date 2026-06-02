@@ -167,7 +167,7 @@ test.describe("Lending Workflow", () => {
     await expect(page.getByText(/"Lending Test Book" added to your library!/i)).toBeVisible();
 
     // 8. The application redirects to the newly created item
-    await expect(page).toHaveURL(/.*\/item\/\d+/);
+    await expect(page).toHaveURL(/.*\/item\?id=\d+/);
 
     // 9. Wait for the page to load
     await expect(page.getByText("Availability & Condition")).toBeVisible();
@@ -241,7 +241,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     const itemId = await targetItem.getAttribute("data-item-id");
 
     await targetItem.click();
-    await expect(borrowerPage).toHaveURL(new RegExp(`/item/${itemId}`));
+    await expect(borrowerPage).toHaveURL(new RegExp(`/item\\?id=${itemId}`));
 
     const requestButton = borrowerPage.locator('button:has-text("Request Loan")');
     await expect(requestButton).toBeVisible();

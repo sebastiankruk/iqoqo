@@ -14,12 +14,19 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { getRequestConfig } from "next-intl/server";
-import { cookies } from "next/headers";
+
+const isStaticExport = process.env.CAPACITOR_BUILD === "true";
 
 export default getRequestConfig(async () => {
-  const cookieStore = await cookies();
-  const localeFromCookie = cookieStore.get("NEXT_LOCALE")?.value || "en";
-  const locale = ["en", "pl"].includes(localeFromCookie) ? localeFromCookie : "en";
+  let locale = "en";
+
+  if (!isStaticExport) {
+    // Only access cookies() in server (non-export) mode.
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const localeFromCookie = cookieStore.get("NEXT_LOCALE")?.value || "en";
+    locale = ["en", "pl"].includes(localeFromCookie) ? localeFromCookie : "en";
+  }
 
   return {
     locale,

@@ -138,7 +138,7 @@ function SettingsContent(): React.JSX.Element {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      await apiClient.put("/profile/", {
+      await apiClient.put("/profile", {
         display_name: displayName.trim(),
         public_username: publicUsername.trim() || null,
         bio: bio.trim(),

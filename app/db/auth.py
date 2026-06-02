@@ -33,7 +33,7 @@ from . import db
 # ---------------------------------------------------------------------------
 # Schema selector
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 _AUTH: str | None = "auth" if _USE_PG else None
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
@@ -116,6 +116,7 @@ class User(db.Model):  # type: ignore[name-defined]
     bio = db.Column(db.Text, nullable=True)
     avatar_url = db.Column(db.String(500), nullable=True)
     google_id = db.Column(db.String(255), unique=True, nullable=True)
+    apple_id = db.Column(db.String(255), unique=True, nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     last_login = db.Column(db.DateTime, nullable=True)

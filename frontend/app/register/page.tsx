@@ -15,11 +15,13 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl } from "@/lib/capacitor/storage";
 
 /**
  * Register page component.
@@ -32,6 +34,29 @@ export default function RegisterPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [instanceUrl, setInstanceUrl] = useState("");
+
+  useEffect(() => {
+    /**
+     * Load native configuration.
+     */
+    async function load() {
+      if (isNativeApp()) {
+        const url = await getInstanceUrl();
+        if (url) {
+          setInstanceUrl(url);
+        }
+      }
+    }
+    void load();
+  }, []);
+
+  const resolveUrl = (path: string) => {
+    if (isNativeApp() && instanceUrl) {
+      return `${instanceUrl}${path}`;
+    }
+    return path;
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +66,7 @@ export default function RegisterPage() {
     }
     setError("");
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+    const res = await fetch(resolveUrl("/api/auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, display_name: displayName }),
@@ -49,11 +74,23 @@ export default function RegisterPage() {
 
     if (res.ok) {
       const data = await res.json();
-      // Exchange token in BFF to set the session cookie
-      window.location.href = `/api/auth-exchange?token=${data.token}`;
+      if (isNativeApp()) {
+        window.location.href = `/auth-exchange?token=${data.token}`;
+      } else {
+        window.location.href = `/api/auth-exchange?token=${data.token}`;
+      }
     } else {
       const errData = await res.json();
       setError(errData.error || "Registration failed. Please try again.");
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    if (isNativeApp() && instanceUrl) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: `${instanceUrl}/api/auth/login/google?mobile_origin=capacitor` });
+    } else {
+      window.location.href = `/api/auth/login/google`;
     }
   };
 
@@ -67,11 +104,7 @@ export default function RegisterPage() {
             <p className="text-sm text-muted-foreground">Join the distributed library</p>
           </div>
 
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`)}
-          >
+          <Button className="w-full" variant="outline" onClick={handleGoogleSignup}>
             Sign up with Google
           </Button>
 

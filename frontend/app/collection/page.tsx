@@ -691,7 +691,7 @@ function CollectionContent() {
                           <button
                             key={m.manifestation_id}
                             type="button"
-                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            onClick={() => router.push(`/manifestation?id=${m.manifestation_id}`)}
                             className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
                             style={{
                               backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
@@ -749,7 +749,7 @@ function CollectionContent() {
                               <Fragment key={`man-${m.manifestation_id}`}>
                                 <button
                                   type="button"
-                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  onClick={() => router.push(`/manifestation?id=${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                                   title="View manifestation"
                                 >
@@ -759,7 +759,7 @@ function CollectionContent() {
                                 {m.item_id && (
                                   <button
                                     type="button"
-                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    onClick={() => router.push(`/item?id=${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
                                     title="View my item"
                                   >
@@ -805,7 +805,7 @@ function CollectionContent() {
                           <button
                             key={m.manifestation_id}
                             type="button"
-                            onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                            onClick={() => router.push(`/manifestation?id=${m.manifestation_id}`)}
                             className="relative h-16 w-12 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm hover:ring-2 hover:ring-primary transition-all cursor-pointer"
                             style={{
                               backgroundImage: m.cover_url ? `url(${m.cover_url})` : undefined,
@@ -873,7 +873,7 @@ function CollectionContent() {
                               <Fragment key={`man-${m.manifestation_id}`}>
                                 <button
                                   type="button"
-                                  onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
+                                  onClick={() => router.push(`/manifestation?id=${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                                   title="View manifestation"
                                 >
@@ -883,7 +883,7 @@ function CollectionContent() {
                                 {m.item_id && (
                                   <button
                                     type="button"
-                                    onClick={() => router.push(`/item/${m.item_id}`)}
+                                    onClick={() => router.push(`/item?id=${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
                                     title="View my item"
                                   >

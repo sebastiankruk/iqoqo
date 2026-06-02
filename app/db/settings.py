@@ -26,7 +26,7 @@ from . import db
 # Use the "inventory" PostgreSQL schema in production.  SQLite (used in tests)
 # does not support named schemas, so we fall back to no schema.
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 _INVENTORY = "inventory" if _USE_PG else None
 _CATALOG = "catalog" if _USE_PG else None

@@ -70,6 +70,22 @@ export default defineConfig({
         ...devices["Desktop Safari"],
       },
     },
+    {
+      name: "mobile-chromium",
+      use: {
+        ...devices["Pixel 7"],
+        permissions: ["camera"],
+        launchOptions: {
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+          ],
+        },
+      },
+      testMatch: /mobile_.*\.spec\.ts/,
+    },
   ],
   webServer: [
     {

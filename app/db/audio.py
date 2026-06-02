@@ -38,7 +38,7 @@ from . import db
 # ---------------------------------------------------------------------------
 # Schema selector — mirrors the logic in app.db.core
 # ---------------------------------------------------------------------------
-_USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
+_USE_PG = os.environ.get("DATABASE_URL", "").strip("'\"").startswith("postgresql")
 
 _CATALOG: str | None = "catalog" if _USE_PG else None
 _CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""

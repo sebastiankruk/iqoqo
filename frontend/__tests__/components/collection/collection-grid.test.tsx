@@ -109,7 +109,7 @@ describe("CollectionGrid", () => {
     const items = [makeItem(7, "Neuromancer", "William Gibson")];
     render(<CollectionGrid items={items} />);
     const links = screen.getAllByRole("link");
-    expect(links[0]).toHaveAttribute("href", "/item/7");
+    expect(links[0]).toHaveAttribute("href", "/item?id=7");
   });
 
   describe("Lazy Loading / Infinite Scroll", () => {

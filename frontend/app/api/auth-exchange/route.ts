@@ -13,15 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-// frontend/app/api/auth-exchange/route.ts
+
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 /**
  * Handle GET requests to exchange a short-lived token for a session cookie.
  *
- * @param request - The incoming Next.js request
- * @returns {Promise<NextResponse>} The Next.js response redirecting to the dashboard
+ * @param request - The incoming Next.js request.
+ * @returns The Next.js response redirecting to the dashboard.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
