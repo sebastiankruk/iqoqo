@@ -292,7 +292,7 @@ export function useInfiniteItems(
   collections?: string[],
   genres?: string[],
   publishers?: string[],
-  includePublic = true
+  includePublic = false
 ) {
   return useInfiniteQuery({
     queryKey: [

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Roadmap Database Migrations**: Added missing database migration script to generate `reading_roadmaps` and `roadmap_items` tables, fixing the silent failure when attempting to create a new reading roadmap in the UI.
 - **Item History Visibility**: Restricted the visibility of the item history tab in the frontend based on user permissions to prevent "Failed to load item history" errors for unauthorized or unauthenticated users.
+- **Collection Grid Scope**: Changed `includePublic` default value to `false` in `useInfiniteItems` to ensure user's private collection grid only contains their own items, resolving incorrect linking to other users' public copies.
 
 ## [0.7.0] - 2026-05-20
 
