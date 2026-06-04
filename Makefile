@@ -36,6 +36,19 @@ COMPOSE_FILE     ?= docker-compose.prod.yml
 COMPOSE_PROJECT  ?= iqoqo
 COMPOSE_ENV_FILE ?= .env
 
+# When adding a Make target that writes files inside a Docker container, ensure
+# the output directory is mounted as a volume in docker-compose.yml under `web`
+# (and `worker` if applicable). Otherwise the files vanish on container restart.
+# Currently mounted:  ./exports  ./app/static/covers  ./app/static/gallery
+# If your target writes elsewhere, add the mount first.
+
+# Python execution context: set USE_DOCKER=true to run against a running container
+ifeq ($(USE_DOCKER),true)
+PYTHON_CMD = ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python
+else
+PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
+endif
+
 help:
 	@echo "Available targets:"
 	@echo ""
@@ -65,9 +78,9 @@ help:
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
 	@echo "  db-seed       - Load seed data into existing database"
-	@echo "  db-export     - Export database to data/backup.json"
+	@echo "  db-export     - Export database to exports/backup.json (USE_DOCKER=true for Docker)"
 	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
-	@echo "  db-stats      - Show database statistics"
+	@echo "  db-stats      - Show database statistics (USE_DOCKER=true for Docker)"
 	@echo ""
 	@echo "Version updates:"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
@@ -305,11 +318,10 @@ db-seed-e2e:
 	PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py
 
 db-export:
-	@echo "Exporting database to data/backup.json..."
-	@.venv/bin/python -c "from app import create_app; from app.core.data_manager import DataManager; \
-		app = create_app(); \
-		with app.app_context(): DataManager.export_to_file('data/backup.json')"
-	@echo "Export complete: data/backup.json"
+	@echo "Exporting database to exports/backup.json..."
+	@$(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"
+	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
+	@echo "Export complete: exports/backup.json"
 
 docker-backup:
 	@echo "Creating full backup in Docker (Project: $(COMPOSE_PROJECT), Env: $(COMPOSE_ENV_FILE))..."
@@ -326,15 +338,7 @@ init-auth:
 
 db-stats:
 	@echo "Database statistics:"
-	@.venv/bin/python -c "from app import create_app; from app.core.data_manager import DataManager; \
-		app = create_app(); \
-		with app.app_context(): \
-			stats = DataManager.get_stats(); \
-			print(f\"  Works: {stats['works']}\"); \
-			print(f\"  Expressions: {stats['expressions']}\"); \
-			print(f\"  Manifestations: {stats['manifestations']}\"); \
-			print(f\"  Items: {stats['items']}\"); \
-			print(f\"  Total: {sum(stats.values())}\")"
+	@$(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n stats = DataManager.get_stats()\n print('  Works:', stats['works'])\n print('  Expressions:', stats['expressions'])\n print('  Manifestations:', stats['manifestations'])\n print('  Items:', stats['items'])\n print('  Total:', sum(stats.values()))\")"
 
 sync-permissions:
 	@echo "Synchronizing permissions (Code & Database)..."
