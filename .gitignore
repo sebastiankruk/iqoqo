@@ -60,6 +60,7 @@ app/static/archive/covers/*
 covers.tar.gz
 app/static/uploads/raw_covers/*
 app/static/uploads/covers/*
+app/static/gallery*
 
 # Backup
 backups/*
