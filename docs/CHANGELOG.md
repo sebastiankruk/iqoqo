@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-06-04
+
+### Fixed
+
+- **Roadmap Database Migrations**: Added missing database migration script to generate `reading_roadmaps` and `roadmap_items` tables, fixing the silent failure when attempting to create a new reading roadmap in the UI.
+- **Item History Visibility**: Restricted the visibility of the item history tab in the frontend based on user permissions to prevent "Failed to load item history" errors for unauthorized or unauthenticated users.
+
 ## [0.7.0] - 2026-05-20
 
 ### Added
