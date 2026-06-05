@@ -33,6 +33,12 @@ from app.core.scheduler import init_scheduler
 from .config import Config
 from .db import db
 
+try:
+    from prometheus_flask_exporter import PrometheusMetrics  # type: ignore[import-untyped]
+    metrics = PrometheusMetrics.for_app_factory()
+except ImportError:
+    metrics = None
+
 # Protect against decompression bombs globally
 Image.MAX_IMAGE_PIXELS = 25_000_000
 
@@ -77,6 +83,9 @@ def create_app(config_class=Config, config_override=None):
 
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    if metrics is not None:
+        metrics.init_app(app)
 
     # Trust the proxy headers (Cloudflare -> Next.js -> Flask)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)

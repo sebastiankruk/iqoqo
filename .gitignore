@@ -44,6 +44,9 @@ data/*.json
 iqoqo_backup*.*
 exports/*
 
+# Federation private keys
+data/keys/
+
 # Virtual Env
 .venv*
 
@@ -74,3 +77,8 @@ scratch/
 .allegro_token.json
 
 frontend/test_output.txt
+
+
+# Mobile apps
+frontend/android/*
+frontend/ios/*
