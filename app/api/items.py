@@ -1056,7 +1056,11 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 
             _fmt_lower = (content_type or "").lower()
             category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
-            status = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))[0]
+            statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
+            if payload.collection_status == "wish_list":
+                status = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+            else:
+                status = statuses[0]
 
         item = Item(
             manifestation_id=man.id,
@@ -1124,7 +1128,11 @@ def add_item_manual() -> Response | tuple[Response, int]:
 
         category = FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
 
-    default_status = CATEGORY_PROGRESS_STATUSES[category][0]
+    statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
+    if payload.collection_status == "wish_list":
+        default_status = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+    else:
+        default_status = statuses[0]
 
     try:
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---

@@ -104,7 +104,6 @@ PROGRESS_STATUSES: tuple[str, ...] = (
 )
 
 CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
-    # "unread" is a valid owned-but-not-started state for text (distinct from "want_to_read" on wishlist)
     "text": ("unread", "want_to_read", "reading", "read", "dnf"),
     "audiobook": ("want_to_listen", "listening", "listened", "dnf"),
     "music": ("want_to_listen", "listened"),

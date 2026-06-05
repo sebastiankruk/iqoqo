@@ -238,6 +238,10 @@
     rdfs:label "reading" ;
     :applicableToCategory :MediaCategoryText .
 
+:StatusUnread a :ProgressStatus ;
+    rdfs:label "unread" ;
+    :applicableToCategory :MediaCategoryText .
+
 :StatusWantToListen a :ProgressStatus ;
     rdfs:label "want_to_listen" ;
     :applicableToCategory :MediaCategoryAudiobook ;

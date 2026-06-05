@@ -222,7 +222,7 @@ export const MEDIA_HIERARCHY = {
 } as const;
 
 export const CATEGORY_STATUS_MAP = {
-  text: ["want_to_read", "reading", "read", "dnf"],
+  text: ["unread", "want_to_read", "reading", "read", "dnf"],
   audiobook: ["want_to_listen", "listening", "listened", "dnf"],
   music: ["want_to_listen", "listened"],
   movie: ["want_to_watch", "watching", "watched", "dnf"],
@@ -305,6 +305,7 @@ export type ProgressStatus =
   | "playing"
   | "read"
   | "reading"
+  | "unread"
   | "want_to_listen"
   | "want_to_play"
   | "want_to_read"

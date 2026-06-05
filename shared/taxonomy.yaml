@@ -172,7 +172,7 @@ collection_statuses:
     label: "Lost"
 
 progress_statuses:
-  text: ["want_to_read", "reading", "read", "dnf"]
+  text: ["unread", "want_to_read", "reading", "read", "dnf"]
   audiobook: ["want_to_listen", "listening", "listened", "dnf"]
   music: ["want_to_listen", "listened"]
   movie: ["want_to_watch", "watching", "watched", "dnf"]

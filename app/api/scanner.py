@@ -576,7 +576,11 @@ def scan_barcode() -> Response | tuple[Response, int]:
     from app.db.core import CATEGORY_PROGRESS_STATUSES
 
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
-    default_progress = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))[0]
+    statuses = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))
+    if collection_status == "wish_list":
+        default_progress = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+    else:
+        default_progress = statuses[0]
 
     if collection_status == "lent":
         if not payload.lent_to_user_id and not (payload.lent_to_name and payload.lent_to_name.strip()):
