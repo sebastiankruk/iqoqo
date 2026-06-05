@@ -35,6 +35,7 @@ from .db import db
 
 try:
     from prometheus_flask_exporter import PrometheusMetrics  # type: ignore[import-untyped]
+
     metrics = PrometheusMetrics.for_app_factory()
 except ImportError:
     metrics = None
