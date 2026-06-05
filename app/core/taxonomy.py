@@ -94,6 +94,7 @@ PROGRESS_STATUSES: tuple[str, ...] = (
     "playing",
     "read",
     "reading",
+    "unread",
     "want_to_listen",
     "want_to_play",
     "want_to_read",
@@ -103,7 +104,8 @@ PROGRESS_STATUSES: tuple[str, ...] = (
 )
 
 CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
-    "text": ("want_to_read", "reading", "read", "dnf"),
+    # "unread" is a valid owned-but-not-started state for text (distinct from "want_to_read" on wishlist)
+    "text": ("unread", "want_to_read", "reading", "read", "dnf"),
     "audiobook": ("want_to_listen", "listening", "listened", "dnf"),
     "music": ("want_to_listen", "listened"),
     "movie": ("want_to_watch", "watching", "watched", "dnf"),
