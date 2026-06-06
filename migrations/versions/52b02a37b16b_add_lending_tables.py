@@ -191,9 +191,17 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # 6. catalog.instance_settings — replace old index with schema-qualified one
     # ------------------------------------------------------------------
-    insp = sa.inspect(conn)
-    id_col = [c for c in insp.get_columns("instance_settings", schema="catalog") if c["name"] == "id"]
-    if id_col and id_col[0].get("identity"):
+    def is_pg_identity(schema, table, column):
+        try:
+            res = conn.execute(sa.text(
+                "SELECT attidentity FROM pg_attribute "
+                f"WHERE attrelid = '{schema}.{table}'::regclass AND attname = '{column}'"
+            )).scalar()
+            return res in ('a', 'd')
+        except Exception:
+            return False
+
+    if is_pg_identity("catalog", "instance_settings", "id"):
         pass
     else:
         with op.batch_alter_table("instance_settings", schema="catalog") as batch_op:
