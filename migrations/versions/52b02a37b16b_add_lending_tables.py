@@ -254,12 +254,13 @@ def upgrade() -> None:
         if _column_exists(conn, "inventory", "items", "progress_status"):
             batch_op.drop_column("progress_status")
 
-    # ------------------------------------------------------------------
-    # 9. inventory.llm_telemetry — remove identity server_default, harden status
-    # ------------------------------------------------------------------
-    with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
-        batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
-        batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
+    if is_pg_identity("inventory", "llm_telemetry", "id"):
+        with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
+            batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
+    else:
+        with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
+            batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
+            batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
 
     # ------------------------------------------------------------------
     # 10. inventory.scan_telemetry — make created_at NOT NULL
