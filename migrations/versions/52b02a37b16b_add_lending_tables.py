@@ -191,8 +191,13 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # 6. catalog.instance_settings — replace old index with schema-qualified one
     # ------------------------------------------------------------------
-    with op.batch_alter_table("instance_settings", schema="catalog") as batch_op:
-        batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
+    insp = sa.inspect(conn)
+    id_col = [c for c in insp.get_columns("instance_settings", schema="catalog") if c["name"] == "id"]
+    if id_col and id_col[0].get("identity"):
+        pass
+    else:
+        with op.batch_alter_table("instance_settings", schema="catalog") as batch_op:
+            batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
         if _index_exists(conn, "ix_instance_settings_key"):
             batch_op.drop_index("ix_instance_settings_key")
     if not _index_exists(conn, "ix_catalog_instance_settings_key"):
