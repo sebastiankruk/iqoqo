@@ -7,7 +7,7 @@
 
 services:
   alloy:
-    image: grafana/alloy:v1.2.0
+    image: grafana/alloy:v1.6.1
     restart: always
     user: "0"  # Run as root to read /var/run/docker.sock and host journal logs safely
     volumes:
