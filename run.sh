@@ -532,6 +532,32 @@ except Exception:
         exit 1
     fi
 
+    # Wait for services to settle
+    echo "⏳ Waiting 10 seconds for services to settle..."
+    sleep 10
+
+    # Get status of all containers
+    SERVICES_STATUS=$($COMPOSE_CMD ps --format "{{.Service}}: {{.State}} ({{.Health}})")
+
+    echo "📊 Service Status:"
+    echo "$SERVICES_STATUS" | sed 's/^/  /'
+
+    # Detect any crashed or unhealthy services
+    BAD_SERVICES=$(echo "$SERVICES_STATUS" | grep -E "exited|dead|unhealthy" || true)
+
+    if [ -n "$BAD_SERVICES" ]; then
+        echo "❌ Error: Some services failed to start or are unhealthy!"
+        echo "$BAD_SERVICES" | cut -d':' -f1 | while read -r service; do
+            if [ -n "$service" ]; then
+                echo "════════════════════════════════════════════════"
+                echo "  Dumping logs for failed service: $service"
+                echo "════════════════════════════════════════════════"
+                $COMPOSE_CMD logs --tail 50 "$service"
+            fi
+        done
+        exit 1
+    fi
+
     echo "✅ Success! Deployment ready."
     [ "$MODE" != "prod" ] && echo "🌐 URL: http://localhost:${NGINX_PORT:-8000}"
 fi

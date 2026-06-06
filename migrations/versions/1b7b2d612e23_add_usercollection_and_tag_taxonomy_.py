@@ -234,8 +234,16 @@ def upgrade():
         with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
             batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
 
+    fkeys = insp.get_foreign_keys("scan_telemetry", schema="inventory")
+    fkey_name = next(
+        (fk["name"] for fk in fkeys if fk["constrained_columns"] == ["manifestation_id"]),
+        None,
+    )
+    if fkey_name:
+        with op.batch_alter_table("scan_telemetry", schema="inventory") as batch_op:
+            batch_op.drop_constraint(fkey_name, type_="foreignkey")
+
     with op.batch_alter_table("scan_telemetry", schema="inventory") as batch_op:
-        batch_op.drop_constraint(batch_op.f("scan_telemetry_manifestation_id_fkey"), type_="foreignkey")
         batch_op.create_foreign_key(None, "manifestations", ["manifestation_id"], ["id"], referent_schema="catalog", ondelete="SET NULL")
 
     with op.batch_alter_table("shared_collections", schema="inventory") as batch_op:
