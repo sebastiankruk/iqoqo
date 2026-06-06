@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.2] - 2026-06-06
 
+### Added
+
+- **Grafana Cloud Monitoring Integration**: Created `deploy/alloy/config.alloy` and `docker-compose.monitoring.yml` to set up Grafana Alloy and cAdvisor monitoring on preview (`pre.iqoqo.cc`) and production hosts, capturing Flask API, Next.js frontend, cAdvisor container, and host metrics/logs (via systemd journald and docker daemon sockets).
+- **Observability Documentation**: Added `docs/MONITORING.md` guide outlining architecture, security zero-trust configurations (Nginx public block on `/metrics`), and deployment methods.
+
 ### Fixed
 
 - **Database Migrations PG Identity Safeguard**: Wrapped `llm_telemetry` `id` column dropping operations behind `is_pg_identity` check in `52b02a37b16b_add_lending_tables.py` migration script, preventing syntax error crashes when running migrations against cloned PostgreSQL databases.

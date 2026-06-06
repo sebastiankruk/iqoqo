@@ -1,0 +1,99 @@
+// Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// 1. Metrics Remote Write Endpoint (Grafana Cloud Prometheus)
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_PROMETHEUS_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_PROMETHEUS_USER")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+}
+
+// 2. Logs Remote Write Endpoint (Grafana Cloud Loki)
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_LOKI_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+}
+
+// 3. Host System Metrics (Unix/Node Exporter)
+// If Alloy runs inside docker, it can scrape host paths mapped to /host/...
+prometheus.exporter.unix "host" {
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+  rootfs_path = "/host/root"
+}
+
+prometheus.scrape "host_metrics" {
+  // Scrapes the unix exporter. If external node-exporter is used, targets can override this.
+  targets = sys.env("NODE_EXPORTER_TARGET") != "" ? [
+    { __address__ = sys.env("NODE_EXPORTER_TARGET") }
+  ] : prometheus.exporter.unix.host.targets
+
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// 4. cAdvisor Container Metrics
+prometheus.scrape "cadvisor" {
+  targets = [{
+    __address__ = sys.env("CADVISOR_TARGET") != "" ? sys.env("CADVISOR_TARGET") : "cadvisor:8080"
+  }]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// 5. Flask Application Metrics (prometheus-flask-exporter)
+prometheus.scrape "flask_app" {
+  targets = [{
+    __address__ = sys.env("FLASK_METRICS_TARGET") != "" ? sys.env("FLASK_METRICS_TARGET") : "web:5000"
+  }]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// 6. Next.js Frontend Metrics (prom-client)
+prometheus.scrape "nextjs_frontend" {
+  targets = [{
+    __address__ = sys.env("NEXTJS_METRICS_TARGET") != "" ? sys.env("NEXTJS_METRICS_TARGET") : "frontend:3000"
+  }]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// 7. Docker Container Logs
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_labels" {
+  targets = discovery.docker.containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+}
+
+loki.source.docker "docker_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_labels.output
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+// 8. Systemd Journal Logs (Host only - optional fallback)
+loki.source.journal "systemd_journal" {
+  path       = "/var/log/journal"
+  forward_to = [loki.write.grafana_cloud.receiver]
+}

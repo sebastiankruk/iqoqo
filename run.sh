@@ -489,6 +489,10 @@ except Exception:
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
+    if [ -f "docker-compose.monitoring.yml" ]; then
+        echo "📊 Found docker-compose.monitoring.yml, starting with monitoring..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+    fi
 
     if [ "$PREBUILT" = true ]; then
         echo "📦 Using pre-built images from ghcr.io..."
