@@ -19,6 +19,7 @@
 import json
 import os
 import shutil
+import subprocess
 import zipfile
 from unittest.mock import MagicMock, patch
 
@@ -199,3 +200,52 @@ def test_fetch_covers_run_batch(app):
         assert mock_pipeline.call_count == 3
         processed_ids = {call.args[0] for call in mock_pipeline.call_args_list}
         assert m2_id in processed_ids
+
+
+def test_clone_script_argument_validation(tmp_path):
+    """Test that scripts/clone.sh validates arguments properly."""
+    # Ensure clone.sh path is correct
+    clone_script = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "scripts", "clone.sh"
+    )
+
+    # Run with no arguments (should fail with usage)
+    res = subprocess.run([clone_script], capture_output=True, text=True, check=False)
+    assert res.returncode != 0
+    assert "Usage:" in res.stdout or "Usage:" in res.stderr
+
+    # Run with correct number of arguments but non-existent dirs
+    res = subprocess.run(
+        [clone_script, "/nonexistent1", "prod", "/nonexistent2", "preview"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode != 0
+    assert "Error: Source directory" in res.stdout or "Error: Source directory" in res.stderr
+
+    # Create temporary source and destination directories but no env files
+    src_dir = tmp_path / "src"
+    dst_dir = tmp_path / "dst"
+    src_dir.mkdir()
+    dst_dir.mkdir()
+
+    res = subprocess.run(
+        [clone_script, str(src_dir), "prod", str(dst_dir), "preview"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode != 0
+    assert "Error: Source env file" in res.stdout or "Error: Source env file" in res.stderr
+
+    # Create source env file but no destination env file
+    (src_dir / ".env.prod").touch()
+    res = subprocess.run(
+        [clone_script, str(src_dir), "prod", str(dst_dir), "preview"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode != 0
+    assert "Error: Destination env file" in res.stdout or "Error: Destination env file" in res.stderr

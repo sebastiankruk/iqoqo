@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.1] - 2026-06-04
 
+### Added
+
+- **Environment Data Cloning**: Added `scripts/clone.sh` bash script to duplicate databases and sync image assets (covers/gallery) between environments.
+- **Dynamic Makefile Targets**: Updated the `Makefile` with dynamic `start` and `stop` targets supporting development, preview, and production modes, along with optional `--prebuilt` flags.
+
 ### Fixed
 
 - **Roadmap Database Migrations**: Added missing database migration script to generate `reading_roadmaps` and `roadmap_items` tables, fixing the silent failure when attempting to create a new reading roadmap in the UI.

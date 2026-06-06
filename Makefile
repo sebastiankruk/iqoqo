@@ -118,48 +118,45 @@ init: .venv/bin/activate
 	@echo "Initializing development environment..."
 	cd frontend && npm install
 
+# Dynamic mode detection from target goals (e.g. make start preview prebuilt)
+MODE ?= dev
+ifeq ($(filter preview,$(MAKECMDGOALS)),preview)
+  MODE = preview
+endif
+ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
+  MODE = prod
+endif
+
+PREBUILT_FLAG =
+ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
+  PREBUILT_FLAG = --prebuilt
+endif
+
+.PHONY: preview prod prebuilt clone
+
+preview:
+	@:
+prod:
+	@:
+prebuilt:
+	@:
+
+clone:
+	@if [ -z "$(src_loc)" ] || [ -z "$(src_name)" ] || [ -z "$(dst_loc)" ] || [ -z "$(dst_name)" ]; then \
+		echo "Usage: make clone src_loc=<source_location> src_name=<source_name> dst_loc=<destination_location> dst_name=<destination_name>"; \
+		echo "Example: make clone src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
+		exit 1; \
+	fi
+	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)"
+
 start:
-	@echo "Starting development environment..."
-	@./run.sh dev
+	@echo "Starting $(MODE) environment..."
+	@./run.sh $(MODE) $(PREBUILT_FLAG)
 
 stop:
-	@echo "Stopping Flask server..."
-	@if [ -f .pids/flask.pid ]; then \
-		FLASK_PID=$$(cat .pids/flask.pid); \
-		if kill -0 $$FLASK_PID 2>/dev/null; then \
-			kill $$FLASK_PID; \
-			echo "Sent SIGTERM to Flask (PID $$FLASK_PID)."; \
-		else \
-			echo "Flask PID $$FLASK_PID is not running."; \
-		fi; \
-		rm -f .pids/flask.pid; \
-	fi
-	@echo "Stopping Celery worker..."
-	@if [ -f .pids/celery.pid ]; then \
-		CELERY_PID=$$(cat .pids/celery.pid); \
-		if kill -0 $$CELERY_PID 2>/dev/null; then \
-			kill $$CELERY_PID; \
-			echo "Sent SIGTERM to Celery (PID $$CELERY_PID)."; \
-		else \
-			echo "Celery PID $$CELERY_PID is not running."; \
-		fi; \
-		rm -f .pids/celery.pid; \
-	fi
-	@echo "Stopping Next.js frontend..."
-	@if [ -f .pids/next.pid ]; then \
-		NEXT_PID=$$(cat .pids/next.pid); \
-		if kill -0 $$NEXT_PID 2>/dev/null; then \
-			kill $$NEXT_PID; \
-			echo "Sent SIGTERM to Next.js (PID $$NEXT_PID)."; \
-		else \
-			echo "Frontend PID $$NEXT_PID is not running."; \
-		fi; \
-		rm -f .pids/next.pid; \
-	fi
-	@echo "Stopping database containers..."
-	@docker compose stop
-	@rm -rf .pids
-	@echo "Development environment stopped."
+	@echo "Stopping $(MODE) environment..."
+	@./run.sh $(MODE) --stop
+
 
 # Linting targets
 lint-python: .venv/bin/activate
