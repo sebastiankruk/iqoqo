@@ -205,9 +205,7 @@ def test_fetch_covers_run_batch(app):
 def test_clone_script_argument_validation(tmp_path):
     """Test that scripts/clone.sh validates arguments properly."""
     # Ensure clone.sh path is correct
-    clone_script = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "scripts", "clone.sh"
-    )
+    clone_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "clone.sh")
 
     # Run with no arguments (should fail with usage)
     res = subprocess.run([clone_script], capture_output=True, text=True, check=False)
