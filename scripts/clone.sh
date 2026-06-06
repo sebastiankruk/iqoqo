@@ -81,7 +81,11 @@ fi
 
 # Find source database container
 echo "🔍 Finding source database container for project '$SRC_PROJECT'..."
-SRC_DB_CONTAINER=$(docker compose -f "${SRC_DIR}/docker-compose.yml" -p "$SRC_PROJECT" ps -q db 2>/dev/null)
+SRC_DB_CONTAINER=$(
+    cd "$SRC_DIR"
+    export ENV_FILE=".env.${SRC_NAME}"
+    docker compose -p "$SRC_PROJECT" --env-file ".env.${SRC_NAME}" ps -q db 2>/dev/null
+)
 
 if [ -z "$SRC_DB_CONTAINER" ]; then
     echo "❌ Error: Source database container is not running. Please make sure '$SRC_NAME' environment is running."
@@ -92,14 +96,19 @@ fi
 echo "🚀 Ensuring destination database container is running for project '$DST_PROJECT'..."
 (
     cd "$DST_DIR"
-    ENV_FILE=".env.${DST_NAME}" COMPOSE_PROJECT_NAME="$DST_PROJECT" docker compose up -d db
+    export ENV_FILE=".env.${DST_NAME}"
+    docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" up -d db
 )
 
 # Wait for destination database to be ready
 echo "⏳ Waiting for destination database to be ready..."
 DST_READY=false
 for i in {1..30}; do
-    DST_DB_CONTAINER=$(docker compose -f "${DST_DIR}/docker-compose.yml" -p "$DST_PROJECT" ps -q db 2>/dev/null)
+    DST_DB_CONTAINER=$(
+        cd "$DST_DIR"
+        export ENV_FILE=".env.${DST_NAME}"
+        docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" ps -q db 2>/dev/null
+    )
     if [ -n "$DST_DB_CONTAINER" ]; then
         if docker exec "$DST_DB_CONTAINER" pg_isready -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB" &>/dev/null; then
             DST_READY=true

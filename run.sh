@@ -489,6 +489,10 @@ except Exception:
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
+    if [ -f "docker-compose.monitoring.yml" ]; then
+        echo "📊 Found docker-compose.monitoring.yml, starting with monitoring..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+    fi
 
     if [ "$PREBUILT" = true ]; then
         echo "📦 Using pre-built images from ghcr.io..."
@@ -529,6 +533,32 @@ except Exception:
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
     if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then
         echo "❌ Error: Failed to start full stack for $COMPOSE_PROJECT_NAME."
+        exit 1
+    fi
+
+    # Wait for services to settle
+    echo "⏳ Waiting 10 seconds for services to settle..."
+    sleep 10
+
+    # Get status of all containers
+    SERVICES_STATUS=$($COMPOSE_CMD ps --format "{{.Service}}: {{.State}} ({{.Health}})")
+
+    echo "📊 Service Status:"
+    echo "$SERVICES_STATUS" | sed 's/^/  /'
+
+    # Detect any crashed or unhealthy services
+    BAD_SERVICES=$(echo "$SERVICES_STATUS" | grep -E "exited|dead|unhealthy" || true)
+
+    if [ -n "$BAD_SERVICES" ]; then
+        echo "❌ Error: Some services failed to start or are unhealthy!"
+        echo "$BAD_SERVICES" | cut -d':' -f1 | while read -r service; do
+            if [ -n "$service" ]; then
+                echo "════════════════════════════════════════════════"
+                echo "  Dumping logs for failed service: $service"
+                echo "════════════════════════════════════════════════"
+                $COMPOSE_CMD logs --tail 50 "$service"
+            fi
+        done
         exit 1
     fi
 

@@ -191,8 +191,21 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # 6. catalog.instance_settings — replace old index with schema-qualified one
     # ------------------------------------------------------------------
-    with op.batch_alter_table("instance_settings", schema="catalog") as batch_op:
-        batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
+    def is_pg_identity(schema, table, column):
+        try:
+            res = conn.execute(sa.text(
+                "SELECT attidentity FROM pg_attribute "
+                f"WHERE attrelid = '{schema}.{table}'::regclass AND attname = '{column}'"
+            )).scalar()
+            return res in ('a', 'd')
+        except Exception:
+            return False
+
+    if is_pg_identity("catalog", "instance_settings", "id"):
+        pass
+    else:
+        with op.batch_alter_table("instance_settings", schema="catalog") as batch_op:
+            batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
         if _index_exists(conn, "ix_instance_settings_key"):
             batch_op.drop_index("ix_instance_settings_key")
     if not _index_exists(conn, "ix_catalog_instance_settings_key"):
@@ -241,12 +254,13 @@ def upgrade() -> None:
         if _column_exists(conn, "inventory", "items", "progress_status"):
             batch_op.drop_column("progress_status")
 
-    # ------------------------------------------------------------------
-    # 9. inventory.llm_telemetry — remove identity server_default, harden status
-    # ------------------------------------------------------------------
-    with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
-        batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
-        batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
+    if is_pg_identity("inventory", "llm_telemetry", "id"):
+        with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
+            batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
+    else:
+        with op.batch_alter_table("llm_telemetry", schema="inventory") as batch_op:
+            batch_op.alter_column("id", existing_type=sa.INTEGER(), server_default=None, existing_nullable=False, autoincrement=True)
+            batch_op.alter_column("status", existing_type=sa.VARCHAR(length=20), nullable=False)
 
     # ------------------------------------------------------------------
     # 10. inventory.scan_telemetry — make created_at NOT NULL
