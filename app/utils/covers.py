@@ -202,12 +202,62 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
 def process_fast_cover(manifestation: Manifestation, identifier: str) -> bool:
     """Runs real-time (fast) lookups. Returns True if a cover was found."""
     result = fetch_external_api_cover(identifier)
+    if not result:
+        # Tier 2.5: Non-ISBN cover providers (MusicBrainz, TMDb)
+        content_type = manifestation.expression.content_type if manifestation.expression else None
+        result = fetch_upc_cover(identifier, content_type=content_type)
     if result:
         local_path, source = result
         manifestation.cover_url = local_path
         manifestation.update_meta(cover_source=source, cover_status="ready")
         return True
     return False
+
+
+def fetch_upc_cover(identifier: str, content_type: str | None = None) -> tuple[str, str] | None:
+    """Attempt cover resolution for non-ISBN identifiers (UPC/EAN barcodes).
+
+    Routes to appropriate provider based on content_type:
+    - music → MusicBrainz Cover Art Archive
+    - movie/video → TMDb poster
+    """
+    if content_type == "music":
+        return _fetch_musicbrainz_cover(identifier)
+    if content_type in ("movie", "video"):
+        return _fetch_tmdb_cover(identifier)
+    return None
+
+
+def _fetch_musicbrainz_cover(barcode: str) -> tuple[str, str] | None:
+    """Query MusicBrainz by barcode, download front cover from Cover Art Archive."""
+    url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "iqoqo/0.7.1 ( dev@kruk.me )"})
+        if resp.status_code != 200:
+            return None
+        releases = resp.json().get("releases", [])
+        if not releases:
+            return None
+        release_id = releases[0].get("id")
+        if not release_id:
+            return None
+        cover_url = f"https://coverartarchive.org/release/{release_id}/front"
+        return download_direct_url(barcode, cover_url, "api_musicbrainz", suffix="mb")
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.error("MusicBrainz cover lookup failed for %s: %s", barcode, e)
+        return None
+
+
+def _fetch_tmdb_cover(barcode: str) -> tuple[str, str] | None:
+    """Resolve UPC to video title via external lookup, then fetch TMDb poster."""
+    try:
+        from app.utils.tmdb import fetch_video_metadata
+    except ImportError:
+        return None
+    meta = fetch_video_metadata(barcode)
+    if not meta or not meta.get("cover_url"):
+        return None
+    return download_direct_url(barcode, meta["cover_url"], "api_tmdb", suffix="tmdb")
 
 
 def process_cover_pipeline(
@@ -280,6 +330,13 @@ def process_cover_pipeline(
             # Fallback to book API fetchers
             if not local_cover_url:
                 result = fetch_external_api_cover(identifier, isbn=manifestation.isbn13)
+                if result:
+                    local_cover_url, source = result
+
+            # Tier 2.5: Non-ISBN cover providers (MusicBrainz, TMDb)
+            if not local_cover_url:
+                content_type = manifestation.expression.content_type if manifestation.expression else None
+                result = fetch_upc_cover(identifier, content_type=content_type)
                 if result:
                     local_cover_url, source = result
 

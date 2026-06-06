@@ -19,6 +19,8 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.api.scanner import _MAX_COVER_SIZE
 
 
@@ -384,3 +386,40 @@ def test_lookup_bgg_id_skips_upc(mock_bgg, mock_resolve, client, normal_user_hea
 
     mock_bgg.assert_called_with("3075")
     mock_resolve.assert_not_called()
+
+
+# --- Phase 5: Bug B7 — FORMAT_ALIAS_TO_CATEGORY identity mappings ---
+
+
+def test_all_categories_resolve_as_format_aliases():
+    """B7: Category names themselves must be valid format_hint values."""
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, MediaCategory
+
+    for cat in MediaCategory.ALL:
+        assert cat in FORMAT_ALIAS_TO_CATEGORY, (
+            f"Category '{cat}' not in FORMAT_ALIAS_TO_CATEGORY — " f"frontend sending format_hint='{cat}' will bypass hint routing"
+        )
+        assert FORMAT_ALIAS_TO_CATEGORY[cat] == cat
+
+
+@pytest.mark.parametrize(
+    "alias,expected_category",
+    [
+        ("music", "music"),
+        ("movie", "movie"),
+        ("text", "text"),
+        ("audiobook", "audiobook"),
+        ("board_game", "board_game"),
+        ("puzzle", "puzzle"),
+        ("vinyl", "music"),
+        ("bluray", "movie"),
+        ("cd", "music"),
+        ("dvd", "movie"),
+        ("book", "text"),
+    ],
+)
+def test_format_alias_resolves_correctly(alias, expected_category):
+    """B7: All known format aliases map to correct category."""
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+    assert FORMAT_ALIAS_TO_CATEGORY.get(alias) == expected_category

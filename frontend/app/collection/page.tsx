@@ -269,7 +269,8 @@ function CollectionContent() {
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    true
   );
 
   const {

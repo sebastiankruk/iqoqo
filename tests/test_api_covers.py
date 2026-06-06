@@ -87,3 +87,50 @@ def test_get_cover_status_polling(client, normal_user_headers):
         response = client.get(f"/api/manifestations/{manif_id}/cover-status?task_id=t2", headers=normal_user_headers)
         assert response.status_code == 200
         assert response.get_json()["data"]["status"] == "ready"
+
+
+# --- Phase 4: Bug B6-deep — UPC/EAN cover resolution ---
+
+
+def test_cover_lookup_musicbrainz_upc(app):
+    """B6-deep: UPC barcode should resolve cover via MusicBrainz Cover Art Archive."""
+    from app.utils.covers import fetch_upc_cover
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"releases": [{"id": "abc-123", "title": "Test Album"}]}
+
+    with patch("app.utils.covers.download_direct_url") as mock_download:
+        mock_download.return_value = ("/static/covers/0602445564354_mb.jpg", "api_musicbrainz")
+        with patch("app.utils.covers.requests.get", return_value=mock_response):
+            result = fetch_upc_cover("0602445564354", content_type="music")
+
+    assert result is not None
+    _filename, source = result
+    assert "musicbrainz" in source
+
+
+def test_cover_lookup_tmdb_upc(app):
+    """B6-deep: UPC barcode for video should resolve cover via TMDb poster."""
+    from app.utils.covers import fetch_upc_cover
+
+    with patch("app.utils.tmdb.fetch_video_metadata") as mock_tmdb:
+        mock_tmdb.return_value = {
+            "title": "Test Movie",
+            "cover_url": "https://image.tmdb.org/t/p/w500/test.jpg",
+        }
+        with patch("app.utils.covers.download_direct_url") as mock_download:
+            mock_download.return_value = ("/static/covers/5051892002196_tmdb.jpg", "api_tmdb")
+            result = fetch_upc_cover("5051892002196", content_type="movie")
+
+    assert result is not None
+    _filename, source = result
+    assert "tmdb" in source
+
+
+def test_cover_lookup_non_isbn_fallback(app):
+    """B6-deep: Non-ISBN with no provider match returns None gracefully."""
+    from app.utils.covers import fetch_upc_cover
+
+    result = fetch_upc_cover("9999999999999", content_type="board_game")
+    assert result is None

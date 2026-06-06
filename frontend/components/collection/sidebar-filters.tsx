@@ -239,7 +239,16 @@ export function SidebarFilters({
   missingId = false,
 }: SidebarFiltersProps) {
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
-  const { data: taxonomies } = useTaxonomies({ scope: isLoggedIn ? "user" : "global" });
+  const activeFormat = activeFilters.find(f => f.type === "format")?.value;
+  const activeGenre = activeFilters.find(f => f.type === "genre")?.value;
+  const { data: taxonomies } = useTaxonomies({
+    scope: isLoggedIn ? "user" : "global",
+    filters: {
+      ...(activeCategory && { category: activeCategory }),
+      ...(activeFormat && { format: activeFormat }),
+      ...(activeGenre && { genre: activeGenre }),
+    },
+  });
 
   const validProgressStatuses = activeCategory
     ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []

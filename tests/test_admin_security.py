@@ -15,6 +15,9 @@
 #
 """QA Security tests for Admin API boundary conditions."""
 
+import pytest
+
+from app.config import Config
 from app.db.models import Role, db
 
 
@@ -41,3 +44,19 @@ def test_get_users_pagination_is_clamped(client, admin_headers):
     assert res.status_code == 200
     # Our security fix ensures limit is clamped to 100
     assert res.json["meta"]["limit"] <= 100
+
+
+# --- Phase 7: SECRET_KEY minimum length validation ---
+
+
+def test_secret_key_minimum_length_enforced():
+    """OWASP A02: SECRET_KEY must be at least 32 bytes in production."""
+    with pytest.raises(RuntimeError, match="SECRET_KEY must be at least 32 bytes"):
+        Config.validate_secret_key("short-key")
+
+
+def test_secret_key_valid_length_accepted():
+    """Valid SECRET_KEY (>=32 bytes) passes validation."""
+    long_key = "a" * 32
+    # Should not raise
+    Config.validate_secret_key(long_key)

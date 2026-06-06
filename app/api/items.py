@@ -106,11 +106,11 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
         intent_query = intent_query.filter(db.or_(Work.title.ilike(pattern), db.cast(Work.meta["authors"], db.String).ilike(pattern)))
 
     if category_filter or format_filter or publishers_list or missing_cover or missing_id:
-        intent_query = intent_query.join(Expression, Expression.work_id == Work.id).join(
+        intent_query = intent_query.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
             Manifestation, Manifestation.expression_id == Expression.id
         )
         if category_filter:
-            intent_query = intent_query.filter(Expression.content_type == category_filter)
+            intent_query = intent_query.filter(db.or_(Expression.content_type == category_filter, Expression.content_type.is_(None)))
         if format_filter:
             intent_query = intent_query.filter(Manifestation.meta["format"].as_string() == format_filter)
         if publishers_list:
@@ -152,6 +152,34 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
                 break
 
         if not manifestation:
+            # Build virtual item from Work-level data only (B8 fix)
+            virtual_items.append(
+                {
+                    "is_virtual": True,
+                    "id": -intent.id,
+                    "owner_id": str(user_id) if user_id else None,
+                    "status": intent.status,
+                    "collection_status": "wish_list",
+                    "lent_to_user_id": None,
+                    "lent_to_name": None,
+                    "manifestation_id": None,
+                    "isbn": None,
+                    "title": work.title,
+                    "cover_url": None,
+                    "cover_status": None,
+                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "content_type": None,
+                    "is_owner": True,
+                    "is_borrowed": False,
+                    "tags": [],
+                    "added_at": intent.created_at.isoformat() if hasattr(intent.created_at, "isoformat") else intent.created_at,
+                    "updated_at": (
+                        (intent.updated_at or intent.created_at).isoformat()
+                        if hasattr((intent.updated_at or intent.created_at), "isoformat")
+                        else (intent.updated_at or intent.created_at)
+                    ),
+                }
+            )
             continue
 
         virtual_items.append(
@@ -1028,7 +1056,11 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 
             _fmt_lower = (content_type or "").lower()
             category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
-            status = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))[0]
+            statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
+            if payload.collection_status == "wish_list":
+                status = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+            else:
+                status = statuses[0]
 
         item = Item(
             manifestation_id=man.id,
@@ -1096,7 +1128,11 @@ def add_item_manual() -> Response | tuple[Response, int]:
 
         category = FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
 
-    default_status = CATEGORY_PROGRESS_STATUSES[category][0]
+    statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
+    if payload.collection_status == "wish_list":
+        default_status = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+    else:
+        default_status = statuses[0]
 
     try:
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---

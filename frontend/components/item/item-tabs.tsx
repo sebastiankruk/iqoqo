@@ -18,7 +18,8 @@
 import { useState } from "react";
 import { FileText, Globe, History, Images, BookOpen, MessageSquare } from "lucide-react";
 import type { Item } from "@/types/frbr";
-import { useAppConfig, useWorkParts } from "@/lib/api/hooks";
+import { useAppConfig, useWorkParts, useProfile } from "@/lib/api/hooks";
+import { PermissionName } from "@/lib/permissions";
 import Link from "next/link";
 import Image from "next/image";
 import { ExtendedMetadata } from "./extended-metadata";
@@ -275,8 +276,21 @@ function ReviewsTab({ item }: { item: Item }) {
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
   const { data: config } = useAppConfig();
+  const { data: profile } = useProfile();
 
-  const visibleTabs = TABS.filter(tab => tab.id !== "federation" || config?.federation_enabled);
+  const permissions = profile?.permissions ?? [];
+  const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
+  const isBorrower = !!item.is_borrowed || (!!profile && item.lent_to_user_id === profile.id);
+  const isAdmin = !!profile?.roles?.includes("admin");
+  const hasUpdatePermission = permissions.includes(PermissionName.UPDATE_ITEM);
+
+  const canViewHistory = isOwner || isBorrower || isAdmin || hasUpdatePermission;
+
+  const visibleTabs = TABS.filter(tab => {
+    if (tab.id === "federation") return !!config?.federation_enabled;
+    if (tab.id === "history") return canViewHistory;
+    return true;
+  });
 
   return (
     <div className="flex flex-col gap-6">

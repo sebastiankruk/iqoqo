@@ -20,8 +20,10 @@ import Image from "next/image";
 import { Check, X, Plus, Disc, BookOpen, Film, Gamepad2, BookmarkPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import type { IsbnMeta, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { queryKeys } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -74,6 +76,7 @@ export function SuccessCard({
   const [adding, setAdding] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState(normalizeFormat(meta.format || meta.Format || "book"));
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
   const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
@@ -174,6 +177,12 @@ export function SuccessCard({
       } else {
         onDismiss();
       }
+
+      // Invalidate cached queries so collection views reflect the new item
+      void queryClient.invalidateQueries({ queryKey: ["items"] });
+      void queryClient.invalidateQueries({ queryKey: ["worksShelf"] });
+      void queryClient.invalidateQueries({ queryKey: ["expressionsShelf"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {

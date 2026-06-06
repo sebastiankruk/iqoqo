@@ -462,3 +462,87 @@ def test_transition_unauthorized(client, test_setup, app):
         headers=other_headers,
     )
     assert response.status_code == 403
+
+
+# --- Phase 2: Bug B8 — Virtual items visible without manifestation ---
+
+
+def test_virtual_items_visible_without_manifestation(client, app):
+    """B8: Works without Manifestation should still appear as virtual items."""
+    with app.app_context():
+        user = User(email="b8_test@iqoqo.local", display_name="B8 Tester")
+        role = Role.query.filter_by(name="user").first()
+        if not role:
+            role = Role(name="user")
+            db.session.add(role)
+            db.session.flush()
+        perm = Permission.query.filter_by(name="write:item").first()
+        if not perm:
+            perm = Permission(name="write:item")
+            db.session.add(perm)
+        if perm not in role.permissions:
+            role.permissions.append(perm)
+        user.roles.append(role)
+        db.session.add(user)
+        db.session.flush()
+
+        # Create Work with NO expressions/manifestations
+        work = Work(title="Orphan Wishlist Book", meta={"authors": []})
+        db.session.add(work)
+        db.session.flush()
+
+        # Create intent
+        intent = UserWorkIntent(work_id=work.id, user_id=user.id, status="want_to_read")
+        db.session.add(intent)
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+        headers = {"Authorization": f"Bearer {token}"}
+
+    resp = client.get("/api/items?statuses=want_to_read", headers=headers)
+    assert resp.status_code == 200
+    items = resp.get_json()["data"]
+    virtual = [i for i in items if i.get("is_virtual") and i["title"] == "Orphan Wishlist Book"]
+    assert len(virtual) == 1
+    assert virtual[0]["id"] < 0
+
+
+def test_virtual_items_with_category_filter_no_manifestation(client, app):
+    """B8: Category filter should not eliminate manifestation-less intents."""
+    with app.app_context():
+        user = User(email="b8_cat_test@iqoqo.local", display_name="B8 Cat Tester")
+        role = Role.query.filter_by(name="user").first()
+        if not role:
+            role = Role(name="user")
+            db.session.add(role)
+            db.session.flush()
+        perm = Permission.query.filter_by(name="write:item").first()
+        if not perm:
+            perm = Permission(name="write:item")
+            db.session.add(perm)
+        if perm not in role.permissions:
+            role.permissions.append(perm)
+        user.roles.append(role)
+        db.session.add(user)
+        db.session.flush()
+
+        # Create Work with NO expressions/manifestations
+        work = Work(title="Filtered Orphan", meta={"authors": []})
+        db.session.add(work)
+        db.session.flush()
+
+        intent = UserWorkIntent(work_id=work.id, user_id=user.id, status="want_to_read")
+        db.session.add(intent)
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+        headers = {"Authorization": f"Bearer {token}"}
+
+    resp = client.get(
+        "/api/items?statuses=want_to_read&category=text",
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    items = resp.get_json()["data"]
+    virtual = [i for i in items if i.get("is_virtual") and i["title"] == "Filtered Orphan"]
+    assert len(virtual) == 1

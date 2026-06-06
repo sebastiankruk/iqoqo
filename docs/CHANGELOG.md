@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-06-04
+
+### Fixed
+
+- **Roadmap Database Migrations**: Added missing database migration script to generate `reading_roadmaps` and `roadmap_items` tables, fixing the silent failure when attempting to create a new reading roadmap in the UI.
+- **Item History Visibility**: Restricted the visibility of the item history tab in the frontend based on user permissions to prevent "Failed to load item history" errors for unauthorized or unauthenticated users.
+- **Collection Grid Scope**: Changed `includePublic` default value to `false` in `useInfiniteItems` to ensure user's private collection grid only contains their own items, resolving incorrect linking to other users' public copies.
+- **Idempotent Migration Cleanup**: Guarded `batch_alter_table` calls inside the stale-table cleanup migration block behind `table_exists` checks to ensure the migration executes safely on partially-migrated databases.
+- **Taxonomies Cross-Faceted Filtering**: Added backend support for `collection_status` filtering in the `/api/taxonomies` endpoint, enabling cross-faceted narrowing based on the item's collection status.
+- **useTaxonomies Hook JSDoc Return Type**: Updated the JSDoc return type of the `useTaxonomies` React hook to correctly return `TaxonomiesResponse` instead of `ApiResponse<TaxonomiesResponse>` to match the query function's actual return value.
+
 ## [0.7.0] - 2026-05-20
 
 ### Added
