@@ -42,6 +42,7 @@ def get_taxonomies() -> Response | tuple[Response, int]:
     category = request.args.get("category")
     format_filter = request.args.get("format")
     genre_filter = request.args.get("genre")
+    collection_status = request.args.get("collection_status")
 
     try:
         # Build base item query for scope + cross-facet filtering
@@ -66,6 +67,8 @@ def get_taxonomies() -> Response | tuple[Response, int]:
                     Work.meta["genre"].as_string().contains(genre_filter),
                 )
             )
+        if collection_status:
+            base_item_q = base_item_q.filter(Item.collection_status == collection_status)
 
         item_ids_subq = base_item_q.subquery()
 

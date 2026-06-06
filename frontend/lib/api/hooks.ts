@@ -950,7 +950,7 @@ import type { TaxonomiesResponse, UserCollection } from "@/types/frbr";
  * @param {object} [options] - Options for fetching taxonomies.
  * @param {"global" | "user"} [options.scope] - The scope of the taxonomies to fetch. Defaults to 'global'.
  * @param {Record<string, string>} [options.filters] - Additional filters to narrow taxonomy values.
- * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<TaxonomiesResponse>>} The query result
+ * @returns {import('@tanstack/react-query').UseQueryResult<TaxonomiesResponse>} The query result
  */
 export function useTaxonomies(options?: { scope?: "global" | "user"; filters?: Record<string, string> }) {
   const scope = options?.scope || "global";

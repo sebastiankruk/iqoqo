@@ -111,110 +111,93 @@ def upgrade():
     if table_exists("users"):
         if table_exists("item_status_logs"):
             op.drop_table("item_status_logs")
-        with op.batch_alter_table("instance_settings", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_instance_settings_key"))
-
         if table_exists("instance_settings"):
+            with op.batch_alter_table("instance_settings", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_instance_settings_key"))
             op.drop_table("instance_settings")
         if table_exists("user_roles"):
             op.drop_table("user_roles")
-        with op.batch_alter_table("works", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_works_fts"), postgresql_using="gin")
-            batch_op.drop_index(batch_op.f("ix_works_search_vector"), postgresql_using="gin")
-
         if table_exists("works"):
+            with op.batch_alter_table("works", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_works_fts"), postgresql_using="gin")
+                batch_op.drop_index(batch_op.f("ix_works_search_vector"), postgresql_using="gin")
             op.drop_table("works")
         if table_exists("shared_collections"):
             op.drop_table("shared_collections")
-        with op.batch_alter_table("work_parts", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_work_parts_container_work_id"))
-            batch_op.drop_index(batch_op.f("ix_work_parts_part_work_id"))
-
         if table_exists("work_parts"):
+            with op.batch_alter_table("work_parts", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_work_parts_container_work_id"))
+                batch_op.drop_index(batch_op.f("ix_work_parts_part_work_id"))
             op.drop_table("work_parts")
         if table_exists("expressions"):
             op.drop_table("expressions")
-        with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_llm_telemetry_provider_user_op_time"))
-
         if table_exists("llm_telemetry"):
+            with op.batch_alter_table("llm_telemetry", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_llm_telemetry_provider_user_op_time"))
             op.drop_table("llm_telemetry")
-        with op.batch_alter_table("manifestation_contributions", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_manifestation_contributions_contributor_id"))
-            batch_op.drop_index(batch_op.f("ix_manifestation_contributions_manifestation_id"))
-
         if table_exists("manifestation_contributions"):
+            with op.batch_alter_table("manifestation_contributions", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_manifestation_contributions_contributor_id"))
+                batch_op.drop_index(batch_op.f("ix_manifestation_contributions_manifestation_id"))
             op.drop_table("manifestation_contributions")
-        with op.batch_alter_table("scan_telemetry", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_scan_telemetry_barcode"))
-
         if table_exists("scan_telemetry"):
+            with op.batch_alter_table("scan_telemetry", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_scan_telemetry_barcode"))
             op.drop_table("scan_telemetry")
         if table_exists("image_scans"):
             op.drop_table("image_scans")
-        with op.batch_alter_table("permissions", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_permissions_name"))
-
         if table_exists("permissions"):
+            with op.batch_alter_table("permissions", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_permissions_name"))
             op.drop_table("permissions")
         if table_exists("role_permissions"):
             op.drop_table("role_permissions")
-        with op.batch_alter_table("manifestations", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_manifestations_ean"))
-            batch_op.drop_index(batch_op.f("ix_manifestations_fts"), postgresql_using="gin")
-            batch_op.drop_index(batch_op.f("ix_manifestations_isbn13"))
-            batch_op.drop_index(batch_op.f("ix_manifestations_upc"))
-
         if table_exists("manifestations"):
+            with op.batch_alter_table("manifestations", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_manifestations_ean"))
+                batch_op.drop_index(batch_op.f("ix_manifestations_fts"), postgresql_using="gin")
+                batch_op.drop_index(batch_op.f("ix_manifestations_isbn13"))
+                batch_op.drop_index(batch_op.f("ix_manifestations_upc"))
             op.drop_table("manifestations")
-        with op.batch_alter_table("user_consents", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_user_consents_consent_type"))
-
         if table_exists("user_consents"):
+            with op.batch_alter_table("user_consents", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_user_consents_consent_type"))
             op.drop_table("user_consents")
-        with op.batch_alter_table("items", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_items_lent_to_user_id"))
-            batch_op.drop_index(batch_op.f("ix_items_owner_id"))
-
         if table_exists("items"):
+            with op.batch_alter_table("items", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_items_lent_to_user_id"))
+                batch_op.drop_index(batch_op.f("ix_items_owner_id"))
             op.drop_table("items")
-        with op.batch_alter_table("expression_contributions", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_expression_contributions_contributor_id"))
-            batch_op.drop_index(batch_op.f("ix_expression_contributions_expression_id"))
-
         if table_exists("expression_contributions"):
+            with op.batch_alter_table("expression_contributions", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_expression_contributions_contributor_id"))
+                batch_op.drop_index(batch_op.f("ix_expression_contributions_expression_id"))
             op.drop_table("expression_contributions")
-        with op.batch_alter_table("work_contributions", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_work_contributions_contributor_id"))
-            batch_op.drop_index(batch_op.f("ix_work_contributions_work_id"))
-
         if table_exists("work_contributions"):
+            with op.batch_alter_table("work_contributions", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_work_contributions_contributor_id"))
+                batch_op.drop_index(batch_op.f("ix_work_contributions_work_id"))
             op.drop_table("work_contributions")
-        with op.batch_alter_table("roles", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_roles_name"))
-
         if table_exists("roles"):
+            with op.batch_alter_table("roles", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_roles_name"))
             op.drop_table("roles")
-        with op.batch_alter_table("token_blocklist", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_token_blocklist_jti"))
-
         if table_exists("token_blocklist"):
+            with op.batch_alter_table("token_blocklist", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_token_blocklist_jti"))
             op.drop_table("token_blocklist")
-        with op.batch_alter_table("container_aggregations", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_container_aggregations_container_work_id"))
-
         if table_exists("container_aggregations"):
+            with op.batch_alter_table("container_aggregations", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_container_aggregations_container_work_id"))
             op.drop_table("container_aggregations")
-        with op.batch_alter_table("contributors", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_contributors_name"))
-
         if table_exists("contributors"):
+            with op.batch_alter_table("contributors", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_contributors_name"))
             op.drop_table("contributors")
-        with op.batch_alter_table("users", schema=None) as batch_op:
-            batch_op.drop_index(batch_op.f("ix_users_email"))
-            batch_op.drop_index(batch_op.f("ix_users_public_username"))
-
         if table_exists("users"):
+            with op.batch_alter_table("users", schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f("ix_users_email"))
+                batch_op.drop_index(batch_op.f("ix_users_public_username"))
             op.drop_table("users")
     with op.batch_alter_table("users", schema="auth") as batch_op:
         batch_op.drop_index(batch_op.f("ix_users_public_visibility"))
