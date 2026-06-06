@@ -36,18 +36,14 @@ prometheus.exporter.unix "host" {
 }
 
 prometheus.scrape "host_metrics" {
-  // Scrapes the unix exporter. If external node-exporter is used, targets can override this.
-  targets = sys.env("NODE_EXPORTER_TARGET") != "" ? [
-    { __address__ = sys.env("NODE_EXPORTER_TARGET") }
-  ] : prometheus.exporter.unix.host.targets
-
+  targets    = prometheus.exporter.unix.host.targets
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
 // 4. cAdvisor Container Metrics
 prometheus.scrape "cadvisor" {
   targets = [{
-    __address__ = sys.env("CADVISOR_TARGET") != "" ? sys.env("CADVISOR_TARGET") : "cadvisor:8080"
+    __address__ = coalesce(sys.env("CADVISOR_TARGET"), "cadvisor:8080")
   }]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
@@ -55,7 +51,7 @@ prometheus.scrape "cadvisor" {
 // 5. Flask Application Metrics (prometheus-flask-exporter)
 prometheus.scrape "flask_app" {
   targets = [{
-    __address__ = sys.env("FLASK_METRICS_TARGET") != "" ? sys.env("FLASK_METRICS_TARGET") : "web:5000"
+    __address__ = coalesce(sys.env("FLASK_METRICS_TARGET"), "web:5000")
   }]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
@@ -63,7 +59,7 @@ prometheus.scrape "flask_app" {
 // 6. Next.js Frontend Metrics (prom-client)
 prometheus.scrape "nextjs_frontend" {
   targets = [{
-    __address__ = sys.env("NEXTJS_METRICS_TARGET") != "" ? sys.env("NEXTJS_METRICS_TARGET") : "frontend:3000"
+    __address__ = coalesce(sys.env("NEXTJS_METRICS_TARGET"), "frontend:3000")
   }]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
