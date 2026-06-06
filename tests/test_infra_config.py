@@ -37,7 +37,7 @@ class TestRunScripts(unittest.TestCase):
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
         self.bin_dir.mkdir()
-        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql"]:
+        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql", "sleep"]:
             (self.bin_dir / cmd).write_text("#!/bin/bash\nexit 0")
             (self.bin_dir / cmd).chmod(0o755)
 
@@ -79,6 +79,13 @@ class TestRunScripts(unittest.TestCase):
             )
             return result
         except subprocess.TimeoutExpired as e:
+            # Python 3.14+ returns bytes for stdout/stderr on TimeoutExpired
+            # even when text=True was passed to subprocess.run. Decode to str
+            # so assertIn(\'string\', result.stdout) works correctly.
+            if isinstance(e.stdout, bytes):
+                e.stdout = e.stdout.decode("utf-8", errors="replace")
+            if isinstance(e.stderr, bytes):
+                e.stderr = e.stderr.decode("utf-8", errors="replace")
             return e
 
     def test_validation_fails_when_vars_missing(self):
