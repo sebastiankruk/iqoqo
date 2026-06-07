@@ -103,6 +103,7 @@ help:
 	@echo "  db-export     - Export database to exports/backup.json (USE_DOCKER=true for Docker)"
 	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics (USE_DOCKER=true for Docker)"
+	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo ""
 	@echo "Version updates:"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
