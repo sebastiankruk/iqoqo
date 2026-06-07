@@ -235,8 +235,6 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         meta = dict(self.meta) if self.meta else {}
 
         if "cover_status" in kwargs and "cover_status_updated_at" not in kwargs:
-            from datetime import UTC, datetime
-
             kwargs["cover_status_updated_at"] = datetime.now(UTC).isoformat()
 
         meta.update(kwargs)

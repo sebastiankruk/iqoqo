@@ -17,7 +17,7 @@ import hashlib
 import io
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -464,10 +464,6 @@ def rebind_orphaned_covers() -> int:
 
 def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
     """Finds manifestations stuck in 'pending' or 'processing' for more than timeout_minutes and resets them to 'failed'."""
-    from datetime import UTC, datetime, timedelta
-
-    from app.db import db
-    from app.db.models import Manifestation
 
     now = datetime.now(UTC)
     cutoff = now - timedelta(minutes=timeout_minutes)
