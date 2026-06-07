@@ -7,9 +7,6 @@
 #
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
-
-import pytest
 
 from app.db.models import Expression, Manifestation, Work, db
 from app.utils.covers import cleanup_stuck_pending_covers
