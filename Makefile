@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -31,10 +31,32 @@ NPM = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npm
 NPX = PATH="$(NODE_DIR):$$PATH" $(NODE_DIR)npx
 endif
 
+# Dynamic mode detection from target goals (e.g. make start preview prebuilt)
+MODE ?= dev
+ifeq ($(filter preview,$(MAKECMDGOALS)),preview)
+  MODE = preview
+endif
+ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
+  MODE = prod
+endif
+
 # Docker compose configuration for production/preview targets
 COMPOSE_FILE     ?= docker-compose.prod.yml
 COMPOSE_PROJECT  ?= iqoqo
 COMPOSE_ENV_FILE ?= .env
+
+ifeq ($(MODE),preview)
+  COMPOSE_ENV_FILE = .env.preview
+  COMPOSE_PROJECT  = iqoqo-preview
+endif
+ifeq ($(MODE),prod)
+  COMPOSE_PROJECT  = iqoqo
+  ifneq ($(wildcard .env.prod),)
+    COMPOSE_ENV_FILE = .env.prod
+  else
+    COMPOSE_ENV_FILE = .env
+  endif
+endif
 
 # When adding a Make target that writes files inside a Docker container, ensure
 # the output directory is mounted as a volume in docker-compose.yml under `web`
@@ -118,14 +140,7 @@ init: .venv/bin/activate
 	@echo "Initializing development environment..."
 	cd frontend && npm install
 
-# Dynamic mode detection from target goals (e.g. make start preview prebuilt)
-MODE ?= dev
-ifeq ($(filter preview,$(MAKECMDGOALS)),preview)
-  MODE = preview
-endif
-ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
-  MODE = prod
-endif
+# Mode detection has been moved to the top of the Makefile
 
 PREBUILT_FLAG =
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
@@ -353,3 +368,16 @@ sync-permissions: .venv/bin/activate
 verify-perms: .venv/bin/activate
 	@echo "Verifying permissions are synchronized"
 	.venv/bin/python scripts/sync_permissions.py --verify
+
+retry-missing-covers: .venv/bin/activate
+	@echo "Retrying missing covers in $(MODE) environment..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
+	else \
+		if [ -f ".env.$(MODE)" ]; then \
+			export $$(grep -v '^#' .env.$(MODE) | grep -v '^$$' | xargs); \
+		elif [ -f ".env" ]; then \
+			export $$(grep -v '^#' .env | grep -v '^$$' | xargs); \
+		fi; \
+		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
+	fi
