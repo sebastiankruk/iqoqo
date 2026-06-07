@@ -45,7 +45,7 @@ def run_batch(batch_limit=None, force=False, app=None):
 
         try:
             for index, man in enumerate(missing_covers):
-                isbn = man.isbn13 or (man.meta.get("isbn") if man.meta else f"item_{man.id}")
+                isbn = man.isbn13 or (man.meta.get("isbn") if man.meta else None) or f"item_{man.id}"
                 work = man.expression.work if (man.expression and man.expression.work) else None
                 title = work.title if work else "Unknown Title"
                 author = (
