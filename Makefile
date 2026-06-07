@@ -376,9 +376,11 @@ retry-missing-covers: .venv/bin/activate
 		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
 	else \
 		if [ -f ".env.$(MODE)" ]; then \
-			export $$(grep -v '^#' .env.$(MODE) | grep -v '^$$' | xargs); \
+			set -a; . ./.env.$(MODE); set +a; \
 		elif [ -f ".env" ]; then \
-			export $$(grep -v '^#' .env | grep -v '^$$' | xargs); \
+			set -a; . ./.env; set +a; \
 		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
 	fi
