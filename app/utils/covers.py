@@ -17,7 +17,7 @@ import hashlib
 import io
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -460,3 +460,65 @@ def rebind_orphaned_covers() -> int:
         db.session.commit()
 
     return orphans_rebound
+
+
+def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
+    """Finds manifestations stuck in 'pending' or 'processing' for more than timeout_minutes and resets them to 'failed'."""
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(minutes=timeout_minutes)
+
+    stuck_count = 0
+    try:
+        # Fetch all manifestations with pending/processing cover_status.
+        stmt = (
+            db.select(Manifestation)
+            .where(
+                db.or_(
+                    Manifestation.meta["cover_status"].as_string() == "pending",
+                    Manifestation.meta["cover_status"].as_string() == "processing",
+                )
+            )
+            .execution_options(yield_per=100)
+        )
+
+        for manifestation in db.session.scalars(stmt):
+            # Check updated_at timestamp
+            updated_at_str = manifestation.meta.get("cover_status_updated_at")
+            should_reset = False
+            if updated_at_str:
+                try:
+                    # Parse isoformat
+                    dt_str = updated_at_str
+                    if dt_str.endswith("Z"):
+                        dt_str = dt_str[:-1] + "+00:00"
+                    updated_at = datetime.fromisoformat(dt_str)
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=UTC)
+
+                    if updated_at < cutoff:
+                        should_reset = True
+                except ValueError:
+                    # If timestamp is invalid/unparseable, reset it anyway to be safe
+                    should_reset = True
+            else:
+                # If there's no updated_at timestamp but status is pending/processing,
+                # we also consider it stuck.
+                should_reset = True
+
+            if should_reset:
+                manifestation.update_meta(
+                    cover_status="failed",
+                    cover_error="Stuck task cleared at startup",
+                )
+                stuck_count += 1
+
+        if stuck_count > 0:
+            db.session.commit()
+            logger.info("Cleared %d stuck cover tasks at startup", stuck_count)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Don't block app startup if tables aren't created yet or other DB issues
+        logger.warning("Failed to check or clear stuck cover tasks at startup: %s", e)
+        db.session.rollback()
+
+    return stuck_count

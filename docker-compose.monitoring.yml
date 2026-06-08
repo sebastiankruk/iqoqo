@@ -9,7 +9,7 @@ services:
   alloy:
     image: grafana/alloy:v1.6.1
     restart: always
-    user: "0"  # Run as root to read /var/run/docker.sock and host journal logs safely
+    user: "0"  # Run as root to access /var/run/docker.sock and host journal logs (Note: mounting docker.sock grants root/host-level privileges)
     volumes:
       - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

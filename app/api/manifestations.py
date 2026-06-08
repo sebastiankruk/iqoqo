@@ -445,10 +445,14 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
 @require_permission(PermissionName.REFETCH_METADATA)
 def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
     manif = db.get_or_404(Manifestation, manifestation_id)
-    if not manif.isbn13:
+    isbn_val = manif.isbn13
+    if not isbn_val and manif.meta:
+        isbn_val = manif.meta.get("isbn") or manif.meta.get("barcode") or manif.meta.get("identifier")
+
+    if not isbn_val:
         return jsonify({"success": False, "data": None, "error": "No ISBN to fetch metadata for"}), 400
 
-    canonical_isbn = isbn_utils.canonicalize_isbn(manif.isbn13)
+    canonical_isbn = isbn_utils.canonicalize_isbn(str(isbn_val))
     if not canonical_isbn:
         return jsonify({"success": False, "data": None, "error": "Invalid ISBN"}), 400
 
@@ -457,6 +461,9 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "No upstream metadata found"}), 404
 
     manif.update_meta(**metadata)
+    if not manif.isbn13:
+        manif.isbn13 = canonical_isbn
+
     if manif.expression and manif.expression.work:
         if "Title" in metadata:
             manif.expression.work.title = metadata["Title"]

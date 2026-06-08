@@ -17,8 +17,8 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_CONNECT_TIMEOUT: int = 10
-_READ_TIMEOUT: int = 30
+_CONNECT_TIMEOUT: int = 3
+_READ_TIMEOUT: int = 7
 _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
 
 

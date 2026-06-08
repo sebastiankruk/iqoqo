@@ -234,6 +234,9 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}
 
+        if "cover_status" in kwargs and "cover_status_updated_at" not in kwargs:
+            kwargs["cover_status_updated_at"] = datetime.now(UTC).isoformat()
+
         meta.update(kwargs)
         self.meta = meta
 

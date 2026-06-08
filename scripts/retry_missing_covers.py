@@ -73,7 +73,7 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
         for index, man in enumerate(missing):
             work = man.expression.work if (man.expression and man.expression.work) else None
             title = work.title if work else (man.meta.get("title") if man.meta else "Unknown")
-            isbn = man.isbn13 or (man.meta.get("isbn") if man.meta else f"item_{man.id}")
+            isbn = man.isbn13 or (man.meta.get("isbn") if man.meta else None) or f"item_{man.id}"
             author = (
                 work.meta.get("authors", ["Unknown"])[0]
                 if (work and work.meta and work.meta.get("authors"))

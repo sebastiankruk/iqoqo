@@ -42,25 +42,19 @@ prometheus.scrape "host_metrics" {
 
 // 4. cAdvisor Container Metrics
 prometheus.scrape "cadvisor" {
-  targets = [{
-    __address__ = coalesce(sys.env("CADVISOR_TARGET"), "cadvisor:8080")
-  }]
+  targets    = [{"__address__" = coalesce(sys.env("CADVISOR_TARGET"), "cadvisor:8080")}]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
 // 5. Flask Application Metrics (prometheus-flask-exporter)
 prometheus.scrape "flask_app" {
-  targets = [{
-    __address__ = coalesce(sys.env("FLASK_METRICS_TARGET"), "web:5000")
-  }]
+  targets    = [{"__address__" = coalesce(sys.env("FLASK_METRICS_TARGET"), "web:5000")}]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
 // 6. Next.js Frontend Metrics (prom-client)
 prometheus.scrape "nextjs_frontend" {
-  targets = [{
-    __address__ = coalesce(sys.env("NEXTJS_METRICS_TARGET"), "frontend:3000")
-  }]
+  targets    = [{"__address__" = coalesce(sys.env("NEXTJS_METRICS_TARGET"), "frontend:3000")}]
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
 

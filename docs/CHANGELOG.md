@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-06-07
+
+### Added
+
+- **Bulk Cover Retry Command**: Added `retry-missing-covers` target in the `Makefile`, allowing bulk processing of missing manifestation covers. Supports target mode parameterization (e.g., `make retry-missing-covers preview` or `make retry-missing-covers prod`) to align with environment-specific configurations.
+
+### Fixed
+
+- **Stuck Cover Tasks Cleanup**: Automatically scans and resets cover tasks stuck in `pending` or `processing` states for more than 30 minutes to `failed` state during app startup.
+- **Dynamic Cover Status Timestamps**: Automatically updates `cover_status_updated_at` in manifestation metadata whenever `cover_status` is updated via `update_meta`.
+
 ## [0.7.2] - 2026-06-06
 
 ### Added

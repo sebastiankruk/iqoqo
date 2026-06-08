@@ -15,7 +15,7 @@
 #
 """Rate limiter configuration."""
 
-from flask import g
+from flask import g, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -33,3 +33,9 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://",  # Default to memory, but app init will override with Redis
 )
+
+
+@limiter.request_filter
+def exempt_metrics():
+    """Exempt prometheus metrics endpoint from rate limiting."""
+    return request.path == "/metrics"
