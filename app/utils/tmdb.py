@@ -25,8 +25,8 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_CONNECT_TIMEOUT: int = 15
-_READ_TIMEOUT: int = 45
+_CONNECT_TIMEOUT: int = 3
+_READ_TIMEOUT: int = 7
 
 
 def clean_video_title(title: str) -> str:

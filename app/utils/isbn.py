@@ -57,14 +57,14 @@ logger = logging.getLogger(__name__)
 # (connect timeout, read timeout) in seconds.
 # Connect: time to establish TCP + TLS with the upstream host.
 # Read: time to receive the full response body after the connection is open.
-_CONNECT_TIMEOUT: int = 15
-_READ_TIMEOUT: int = 45
+_CONNECT_TIMEOUT: int = 3
+_READ_TIMEOUT: int = 7
 
-# Retry policy: 3 attempts with 1.5× back-off on transient errors.
-# Delays after failures: ~2 s, ~4 s, ~8 s.
+# Retry policy: 3 attempts on transient errors.
+# Delays after failures: ~0.5 s, ~1 s, ~2 s.
 _RETRY_POLICY = Retry(
     total=3,
-    backoff_factor=3,
+    backoff_factor=0.5,
     status_forcelist=[429, 500, 502, 503, 504],
     allowed_methods=["GET"],
     raise_on_status=False,

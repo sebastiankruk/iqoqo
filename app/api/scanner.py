@@ -146,7 +146,7 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
-@limiter.limit("10 per minute")
+@limiter.limit("10 per minute", override_defaults=True)
 def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
     format_hint = request.args.get("format")
@@ -518,7 +518,7 @@ def _scan_to_library(
 @api_bp.route("/scan", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
-@limiter.limit("20 per minute")
+@limiter.limit("20 per minute", override_defaults=True)
 def scan_barcode() -> Response | tuple[Response, int]:
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     payload, err = _parse_and_validate_scan(request)

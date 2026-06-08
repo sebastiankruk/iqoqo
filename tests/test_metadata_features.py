@@ -96,3 +96,28 @@ def test_refetch_metadata_endpoint(client, app, admin_headers):
         resp = client.post(f"/api/manifestations/{mid}/refetch-metadata", headers=admin_headers)
         assert resp.status_code == 200
         assert resp.json["success"] is True
+
+
+def test_refetch_metadata_null_isbn_with_meta_fallback(client, app, admin_headers):
+    """Test the refetch-metadata endpoint fallback when isbn13 column is NULL but meta contains it."""
+    with app.app_context():
+        w = Work(title="Old Title", meta={"authors": ["Old Author"]})
+        db.session.add(w)
+        e = Expression(work=w)
+        db.session.add(e)
+        m = Manifestation(expression=e, isbn13=None, meta={"isbn": "9780553380163"})
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+
+    with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+        mock_fetch.return_value = {"Title": "New Title", "Authors": ["New Author"], "Description": "New Desc", "Categories": ["New Cat"]}
+
+        resp = client.post(f"/api/manifestations/{mid}/refetch-metadata", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        # Verify database column was healed (populated with canonical ISBN)
+        with app.app_context():
+            updated_m = db.session.get(Manifestation, mid)
+            assert updated_m.isbn13 == "9780553380163"

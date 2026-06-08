@@ -195,3 +195,12 @@ def test_scan_barcode_dynamic_status(client, normal_user_headers, app):
     response = client.post("/api/scan", json=payload, headers=normal_user_headers)
     # If it fails to resolve, it's 404/400, but we want to make sure it's not a payload error
     assert response.status_code != 400 or "Invalid payload" not in response.json.get("error", "")
+
+
+def test_metrics_rate_limit_exemption(app_with_limiter):
+    client = app_with_limiter.test_client()
+    # Hit /metrics 60 times. Since it is exempt, none should return 429.
+    # The default hourly rate limit is 50, so this would trigger a 429 if not exempt.
+    for _ in range(60):
+        response = client.get("/metrics")
+        assert response.status_code != 429
