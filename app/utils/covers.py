@@ -471,14 +471,18 @@ def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
     stuck_count = 0
     try:
         # Fetch all manifestations with pending/processing cover_status.
-        candidates = Manifestation.query.filter(
-            db.or_(
-                Manifestation.meta["cover_status"].as_string() == "pending",
-                Manifestation.meta["cover_status"].as_string() == "processing",
+        stmt = (
+            db.select(Manifestation)
+            .where(
+                db.or_(
+                    Manifestation.meta["cover_status"].as_string() == "pending",
+                    Manifestation.meta["cover_status"].as_string() == "processing",
+                )
             )
-        ).all()
+            .execution_options(yield_per=100)
+        )
 
-        for manifestation in candidates:
+        for manifestation in db.session.scalars(stmt):
             # Check updated_at timestamp
             updated_at_str = manifestation.meta.get("cover_status_updated_at")
             should_reset = False

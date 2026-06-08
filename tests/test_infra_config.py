@@ -182,6 +182,28 @@ exit 0
         self.assertIn("Cleaning up previous instances", result.stdout)
         self.assertIn("DOCKER_DOWN_TRIGGERED", result.stdout)
 
+    def test_monitoring_config(self):
+        # Create a mock docker-compose.monitoring.yml file in the work_dir
+        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  alloy:\n    image: grafana/alloy")
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
+
+        # Scenario 1: Without Grafana Cloud env vars, it should skip monitoring
+        result = self.run_script(args=["prod"], env_content=env_content)
+        self.assertIn("Skipping monitoring: Grafana Cloud environment variables", result.stdout)
+
+        # Scenario 2: With Grafana Cloud env vars, it should start with monitoring
+        monitoring_vars = (
+            "\nGRAFANA_PROMETHEUS_URL=http://prometheus\n"
+            "GRAFANA_PROMETHEUS_USER=user\n"
+            "GRAFANA_LOKI_URL=http://loki\n"
+            "GRAFANA_LOKI_USER=loki_user\n"
+            "GRAFANA_CLOUD_API_KEY=key\n"
+        )
+        result_with_vars = self.run_script(args=["prod"], env_content=env_content + monitoring_vars)
+        self.assertIn(
+            "Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring...", result_with_vars.stdout
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

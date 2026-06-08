@@ -490,8 +490,12 @@ except Exception:
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
     if [ -f "docker-compose.monitoring.yml" ]; then
-        echo "📊 Found docker-compose.monitoring.yml, starting with monitoring..."
-        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+        if [ -n "$GRAFANA_PROMETHEUS_URL" ] && [ -n "$GRAFANA_PROMETHEUS_USER" ] && [ -n "$GRAFANA_LOKI_URL" ] && [ -n "$GRAFANA_LOKI_USER" ] && [ -n "$GRAFANA_CLOUD_API_KEY" ]; then
+            echo "📊 Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring..."
+            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+        else
+            echo "📊 Skipping monitoring: Grafana Cloud environment variables (GRAFANA_PROMETHEUS_URL, etc.) are not fully configured."
+        fi
     fi
 
     if [ "$PREBUILT" = true ]; then
