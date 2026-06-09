@@ -102,10 +102,13 @@ export function ItemCard({
 
   const progressStatus = isCatalog ? undefined : (item as Item).status;
   const collectionStatus = isCatalog ? undefined : (item as Item).collection_status;
-  const status = collectionStatus && collectionStatus !== "available" ? collectionStatus : progressStatus;
-
-  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
   const isBorrowed = !isCatalog && (item as Item).is_borrowed;
+  const userOwns = isCatalog ? (item as CatalogEntry).user_owns : (item as Item).is_owner;
+  const status = isBorrowed
+    ? progressStatus
+    : collectionStatus && collectionStatus !== "available"
+      ? collectionStatus
+      : progressStatus;
 
   const quantity = (item as (Item | CatalogEntry) & { _quantity?: number })._quantity || 1;
 

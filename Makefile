@@ -303,13 +303,13 @@ _test-e2e-run:
 		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-reset; \
 		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_PASSWORD="$${ADMIN_PASSWORD:-admin}" $(MAKE) init-auth; \
 		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-seed-e2e; \
-		echo "Killing old Flask server on port 5000 (if any) to ensure clean start against test DB..."; \
-		lsof -ti tcp:5000 | xargs kill -9 2>/dev/null || true; \
+		echo "Killing old Flask server on port 5002 (if any) to ensure clean start against test DB..."; \
+		lsof -ti tcp:5002 | xargs kill -9 2>/dev/null || true; \
 	else \
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi
 	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test
+	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium
 
 
 test: test-backend test-frontend test-e2e

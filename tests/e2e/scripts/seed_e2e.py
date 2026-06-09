@@ -66,10 +66,12 @@ def seed_e2e_data():
 
         lender = User.query.filter_by(email=LENDER_EMAIL).first()
         if not lender:
-            lender = User(email=LENDER_EMAIL, display_name="Lender", is_active=True)
+            lender = User(email=LENDER_EMAIL, display_name="Lender", public_username="lender", visibility="public", is_active=True)
             lender.set_password(E2E_SHARED_PASSWORD)
             db.session.add(lender)
         else:
+            lender.public_username = "lender"
+            lender.visibility = "public"
             lender.set_password(E2E_SHARED_PASSWORD)
             lender.is_active = True
 

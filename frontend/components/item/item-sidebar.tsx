@@ -110,10 +110,12 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     label: item.status,
     class: "bg-secondary text-foreground ring-border",
   };
-  const collectionStatusInfo = STATUS_LABELS[item.collection_status] ?? {
-    label: item.collection_status,
-    class: "bg-secondary text-foreground ring-border",
-  };
+  const collectionStatusInfo = item.is_borrowed
+    ? { label: "Borrowed", class: "bg-blue-50 text-blue-700 ring-blue-200" }
+    : (STATUS_LABELS[item.collection_status] ?? {
+        label: item.collection_status,
+        class: "bg-secondary text-foreground ring-border",
+      });
   const router = useRouter();
 
   const handleUploadComplete = () => {
@@ -261,7 +263,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
       {/* Lending info */}
       {(item.collection_status === "lent" || item.is_borrowed) && (
         <div className="flex flex-col items-center gap-1">
-          {item.collection_status === "lent" && item.lent_to_name && (
+          {item.collection_status === "lent" && !item.is_borrowed && item.lent_to_name && (
             <p className="text-center text-[10px] font-bold uppercase tracking-wider text-orange-600">
               Lent to: <span className="text-foreground">{item.lent_to_name}</span>
             </p>
@@ -311,6 +313,70 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             </div>
 
             {/* Progress Select */}
+            <div className="flex flex-col gap-1">
+              <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                {isBook ? "Reading" : isAudio ? "Listening" : isVideo ? "Watching" : isGame ? "Gaming" : "Item"}{" "}
+                Progress
+              </span>
+              <select
+                aria-label="Item status"
+                value={item.status}
+                onChange={handleStatusChange}
+                disabled={updateItem.isPending}
+                className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground outline-none shadow-sm transition-all hover:opacity-90 focus:ring-2 focus:ring-primary/20 disabled:opacity-60 cursor-pointer appearance-none text-center"
+              >
+                {isBook && (
+                  <optgroup label="Reading Progress">
+                    {["unread", "reading", "read", "want_to_read"].map(key => (
+                      <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[key]?.label || key}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {isAudio && (
+                  <optgroup label="Listening Progress">
+                    {["want_to_listen", "listening", "listened"].map(key => (
+                      <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[key]?.label || key}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {isVideo && (
+                  <optgroup label="Watching Progress">
+                    {["want_to_watch", "watching", "watched"].map(key => (
+                      <option key={key} value={key} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[key]?.label || key}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {isGame && (
+                  <optgroup label="Gaming Progress">
+                    {["want_to_play", "playing", "played"].map(s => (
+                      <option key={s} value={s} className="text-foreground bg-card normal-case py-2">
+                        {STATUS_LABELS[s]?.label || s}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          </div>
+        ) : item.is_borrowed ? (
+          <div className="flex flex-col gap-2.5">
+            {/* Collection Status (Read-only for borrower) */}
+            <div className="flex flex-col gap-1">
+              <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                Availability & Condition
+              </span>
+              <div className="w-full rounded-lg bg-secondary/50 px-4 py-2 text-xs font-semibold text-center text-secondary-foreground border border-border/50">
+                {collectionStatusInfo.label || "Unknown"}
+              </div>
+            </div>
+
+            {/* Progress Select (Editable for borrower) */}
             <div className="flex flex-col gap-1">
               <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
                 {isBook ? "Reading" : isAudio ? "Listening" : isVideo ? "Watching" : isGame ? "Gaming" : "Item"}{" "}

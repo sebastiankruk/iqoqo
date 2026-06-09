@@ -740,10 +740,11 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None, user: User | N
 def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
     item = db.session.get(Item, item_id)
     is_owner = (str(item.owner_id) == str(user_id)) if item and user_id else False
+    is_borrower = item is not None and item.lent_to_user_id is not None and str(item.lent_to_user_id) == str(user_id)
     is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
     has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
 
-    if not item or not (is_owner or is_admin or has_update_permission):
+    if not item or not (is_owner or is_borrower or is_admin or has_update_permission):
         error, code = ("Item not found", 404) if not item else ("Forbidden", 403)
         return jsonify({"success": False, "data": None, "error": error}), code
 
@@ -751,6 +752,12 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
     if err:
         return err
     assert payload is not None
+
+    if not (is_owner or is_admin or has_update_permission):
+        # Must be borrower. Borrowers can only update progress status.
+        disallowed = [f for f in payload.model_fields_set if f != "status"]
+        if disallowed:
+            return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     if payload.status and payload.status != item.status:
         old_status = item.status

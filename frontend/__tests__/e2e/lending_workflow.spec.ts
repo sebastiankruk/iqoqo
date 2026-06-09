@@ -204,8 +204,8 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
   test("should execute full request, approval, and timeline logging loop between borrower and lender", async ({
     browser,
   }) => {
-    // Reset any stale lending state from previous browser runs
-    await fetch("http://127.0.0.1:5000/api/lending/test/reset", { method: "POST" });
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    await fetch(`${flaskApiUrl.replace(/\/$/, "")}/lending/test/reset`, { method: "POST" });
 
     // 1. Create isolated context for Owner/Lender (User B)
     const lenderContext = await browser.newContext();
@@ -236,7 +236,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await expect(borrowerPage).toHaveURL(/\/(collection)?$/);
 
     // 3. Borrower finds Lender's copy and requests a loan
-    await borrowerPage.goto("/collection");
+    await borrowerPage.goto("/u/lender");
     const targetItem = borrowerPage.locator('[data-testid="item-card"]', { hasText: "Lendable Book" });
     const itemId = await targetItem.getAttribute("data-item-id");
 
