@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Database Permissions Sync on Startup**: Modified the `web` service startup command in `docker-compose.yml` to automatically execute `scripts/init_auth.py` after database migration upgrades. This ensures that new permissions (such as `write:item`) are automatically populated and assigned to user roles when deploying container updates, resolving 403 Forbidden errors when users attempt to add manifestations to their collections.
 - **Production Deployment Exit Status**: Fixed a bash short-circuit bug in `run.sh` that caused the script to exit with code `1` (triggering `make: *** [Makefile:171: start] Error 1` failures) upon successful production deployment. Replaced the `[ "$MODE" != "prod" ] && echo` line with a proper `if` block.
+- **Collection Grid Scope Resolution**: Fixed a regression where the Collection view was still passing `true` for the `includePublic` parameter to `useInfiniteItems`, causing other users' public items to appear in the user's private collection with a "Request Loan" button instead of the status dropdowns.
 
 ## [0.7.3] - 2026-06-07
 
