@@ -29,7 +29,7 @@ services:
       - CADVISOR_TARGET=cadvisor:8080
     command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
     ports:
-      - "127.0.0.1:12345:12345"  # Expose Alloy UI locally only for security/debugging
+      - "127.0.0.1:${ALLOY_HOST_PORT:-12345}:12345"  # Expose Alloy UI locally only for security/debugging
     depends_on:
       - cadvisor
 
