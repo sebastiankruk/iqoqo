@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 /**
  * Custom 404 page for the Next.js App Router.
  * Returns a clean 404 response when a resource or page is not found.
+ * @returns {JSX.Element}
  */
 export default function NotFound() {
   return (
