@@ -80,10 +80,10 @@ export function resolveApiUrl(path: string, isServer = false): string {
   // Server-side fetch requires an absolute URL.
   // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
   if (isServer) {
-    const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api";
+    const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5002/api";
     let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
     if (!cleanBase.startsWith("http")) {
-      cleanBase = `http://127.0.0.1:5000${cleanBase}`;
+      cleanBase = `http://127.0.0.1:5002${cleanBase}`;
     }
     return `${cleanBase}${cleanPath}`;
   }
