@@ -265,7 +265,10 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await expect(pendingRequestRow.locator('[data-testid="status-cell"]')).toHaveText("Lent");
 
     // 5. Verify Borrower's side automatically synchronizes and updates the FRBR timeline log
-    await borrowerPage.reload();
+    await borrowerPage.goto(`/item/${itemId}`);
+    await expect(borrowerPage).toHaveURL(`/item/${itemId}`);
+    await borrowerPage.waitForLoadState("networkidle");
+    // Ensure borrower sees the "On Loan" badge
     await expect(borrowerPage.locator('[data-testid="loan-status-badge"]')).toHaveText("On Loan");
 
     // Validate Event-Based Timeline Entry
