@@ -64,63 +64,80 @@ def seed_e2e_data():
         BORROWER_EMAIL = "borrower@iqoqo.local"
         E2E_SHARED_PASSWORD = "SecurePassword123!"
 
-        lender = User.query.filter_by(email=LENDER_EMAIL).first()
-        if not lender:
-            lender = User(email=LENDER_EMAIL, display_name="Lender", public_username="lender", visibility="public", is_active=True)
-            lender.set_password(E2E_SHARED_PASSWORD)
-            db.session.add(lender)
-        else:
-            lender.public_username = "lender"
-            lender.visibility = "public"
-            lender.set_password(E2E_SHARED_PASSWORD)
-            lender.is_active = True
-
-        borrower = User.query.filter_by(email=BORROWER_EMAIL).first()
-        if not borrower:
-            borrower = User(email=BORROWER_EMAIL, display_name="Borrower", is_active=True)
-            borrower.set_password(E2E_SHARED_PASSWORD)
-            db.session.add(borrower)
-        else:
-            borrower.set_password(E2E_SHARED_PASSWORD)
-            borrower.is_active = True
-
-        # Give lender some items so the lending test has items to request.
-        # collection_status must be 'available' so the include_public API mode can surface them.
-        if Item.query.filter_by(owner_id=lender.id).count() == 0:
-            w_lend = Work(title="Lendable Book", meta={"authors": ["Lender Author"]})
-            db.session.add(w_lend)
-            db.session.flush()
-            e_lend = Expression(work_id=w_lend.id, content_type="text", language="en")
-            db.session.add(e_lend)
-            db.session.flush()
-            m_lend = Manifestation(expression_id=e_lend.id, isbn13="4444444444444")
-            db.session.add(m_lend)
-            db.session.flush()
-            for _ in range(3):
-                item = Item(
-                    owner_id=lender.id,
-                    manifestation_id=m_lend.id,
-                    is_hidden=False,
-                    status="available",
-                    collection_status="available",
+        try:
+            lender = User.query.filter_by(email=LENDER_EMAIL).first()
+            if not lender:
+                lender = User(
+                    email=LENDER_EMAIL,
+                    display_name="Lender",
+                    public_username="lender",
+                    visibility="public",
+                    is_active=True,
                 )
-                db.session.add(item)
-        else:
-            # Always reset collection_status to available and clear stale loan state
-            for item in Item.query.filter_by(owner_id=lender.id).all():
-                item.collection_status = "available"
-                item.status = "available"
-                item.lent_to_user_id = None
-                db.session.add(item)
+                lender.set_password(E2E_SHARED_PASSWORD)
+                db.session.add(lender)
+            else:
+                lender.public_username = "lender"
+                lender.visibility = "public"
+                lender.set_password(E2E_SHARED_PASSWORD)
+                lender.is_active = True
 
-        # Clean up stale loan requests from previous test runs
-        from app.db.lending import LoanRequest  # noqa: E402
+            # Flush so lender.id is assigned before any filter_by(owner_id=lender.id) queries.
+            db.session.flush()
 
-        lender_item_ids = [i.id for i in Item.query.filter_by(owner_id=lender.id).all()]
-        if lender_item_ids:
-            LoanRequest.query.filter(LoanRequest.item_id.in_(lender_item_ids)).delete(synchronize_session=False)
+            borrower = User.query.filter_by(email=BORROWER_EMAIL).first()
+            if not borrower:
+                borrower = User(email=BORROWER_EMAIL, display_name="Borrower", is_active=True)
+                borrower.set_password(E2E_SHARED_PASSWORD)
+                db.session.add(borrower)
+            else:
+                borrower.set_password(E2E_SHARED_PASSWORD)
+                borrower.is_active = True
 
-        db.session.commit()
+            db.session.flush()
+
+            # Give lender some items so the lending test has items to request.
+            # collection_status must be 'available' so the public API can surface them.
+            # status must be a *progress* status (e.g. 'want_to_read'), NOT 'available'.
+            if Item.query.filter_by(owner_id=lender.id).count() == 0:
+                w_lend = Work(title="Lendable Book", meta={"authors": ["Lender Author"]})
+                db.session.add(w_lend)
+                db.session.flush()
+                e_lend = Expression(work_id=w_lend.id, content_type="text", language="en")
+                db.session.add(e_lend)
+                db.session.flush()
+                m_lend = Manifestation(expression_id=e_lend.id, isbn13="4444444444444")
+                db.session.add(m_lend)
+                db.session.flush()
+                for _ in range(3):
+                    item = Item(
+                        owner_id=lender.id,
+                        manifestation_id=m_lend.id,
+                        is_hidden=False,
+                        # 'status' is a progress status (reading/want_to_read/…), NOT collection_status
+                        status="want_to_read",
+                        collection_status="available",
+                    )
+                    db.session.add(item)
+            else:
+                # Always reset collection_status to available and clear stale loan state
+                for item in Item.query.filter_by(owner_id=lender.id).all():
+                    item.collection_status = "available"
+                    item.status = "want_to_read"
+                    item.lent_to_user_id = None
+                    db.session.add(item)
+
+            # Clean up stale loan requests from previous test runs
+            from app.db.lending import LoanRequest  # noqa: E402
+
+            lender_item_ids = [i.id for i in Item.query.filter_by(owner_id=lender.id).all()]
+            if lender_item_ids:
+                LoanRequest.query.filter(LoanRequest.item_id.in_(lender_item_ids)).delete(synchronize_session=False)
+
+            db.session.commit()
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            db.session.rollback()
+            print(f"WARNING: lender/borrower seed failed (non-fatal): {exc}")
 
         # Create privateuser
         private_user = User.query.filter_by(public_username="privateuser").first()

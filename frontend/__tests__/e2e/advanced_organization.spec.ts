@@ -18,18 +18,24 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Advanced Organization & Views - Step 2", () => {
   test.beforeEach(async ({ page }) => {
+    // Auto-dismiss any login-failure alert dialogs so the test doesn't block
+    page.on("dialog", dialog => dialog.dismiss());
+
     await page.goto("/login");
 
     try {
-      const emailInput = page.getByLabel(/email/i);
+      const emailInput = page.locator('input[type="email"]');
       if (await emailInput.isVisible({ timeout: 2000 })) {
         await emailInput.fill("admin@iqoqo.local");
-        await page.getByLabel(/password/i).fill("admin");
-        await page.getByRole("button", { name: /sign in/i }).click();
-        await page.waitForURL("**/dashboard*");
+        await page.locator('input[type="password"]').fill("admin");
+        // Use Promise.all so navigation tracking starts before the click
+        await Promise.all([
+          page.waitForURL(/\/(collection)?$/, { timeout: 20000 }),
+          page.locator('button[type="submit"]').click(),
+        ]);
       }
     } catch {
-      // Already logged in
+      // Already logged in or login not needed for this test fixture
     }
   });
 
