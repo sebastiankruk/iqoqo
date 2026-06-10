@@ -34,7 +34,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "python scripts/fix_alembic.py && flask db upgrade && gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app"
+      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app"
     env_file:
       - ${ENV_FILE:-.env}
     depends_on:

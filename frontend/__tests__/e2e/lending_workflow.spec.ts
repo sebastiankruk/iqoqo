@@ -204,8 +204,8 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
   test("should execute full request, approval, and timeline logging loop between borrower and lender", async ({
     browser,
   }) => {
-    // Reset any stale lending state from previous browser runs
-    await fetch("http://127.0.0.1:5000/api/lending/test/reset", { method: "POST" });
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    await fetch(`${flaskApiUrl.replace(/\/$/, "")}/lending/test/reset`, { method: "POST" });
 
     // 1. Create isolated context for Owner/Lender (User B)
     const lenderContext = await browser.newContext();
@@ -213,13 +213,14 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await lenderPage.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
+    // Auto-dismiss any login-failure alerts so the test doesn't hang
+    lenderPage.on("dialog", dialog => dialog.dismiss());
 
     await lenderPage.goto("/login");
     await lenderPage.waitForLoadState("networkidle");
     await lenderPage.fill('input[type="email"]', "lender@iqoqo.local");
     await lenderPage.fill('input[type="password"]', "SecurePassword123!");
-    await lenderPage.click('button[type="submit"]');
-    await expect(lenderPage).toHaveURL(/\/(collection)?$/);
+    await Promise.all([expect(lenderPage).toHaveURL(/\/(collection)?$/), lenderPage.click('button[type="submit"]')]);
 
     // 2. Create isolated context for Borrower (User A)
     const borrowerContext = await browser.newContext();
@@ -227,16 +228,20 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await borrowerPage.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
+    // Auto-dismiss any login-failure alerts so the test doesn't hang
+    borrowerPage.on("dialog", dialog => dialog.dismiss());
 
     await borrowerPage.goto("/login");
     await borrowerPage.waitForLoadState("networkidle");
     await borrowerPage.fill('input[type="email"]', "borrower@iqoqo.local");
     await borrowerPage.fill('input[type="password"]', "SecurePassword123!");
-    await borrowerPage.click('button[type="submit"]');
-    await expect(borrowerPage).toHaveURL(/\/(collection)?$/);
+    await Promise.all([
+      expect(borrowerPage).toHaveURL(/\/(collection)?$/),
+      borrowerPage.click('button[type="submit"]'),
+    ]);
 
     // 3. Borrower finds Lender's copy and requests a loan
-    await borrowerPage.goto("/collection");
+    await borrowerPage.goto("/u/lender");
     const targetItem = borrowerPage.locator('[data-testid="item-card"]', { hasText: "Lendable Book" });
     const itemId = await targetItem.getAttribute("data-item-id");
 
@@ -260,7 +265,10 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await expect(pendingRequestRow.locator('[data-testid="status-cell"]')).toHaveText("Lent");
 
     // 5. Verify Borrower's side automatically synchronizes and updates the FRBR timeline log
-    await borrowerPage.reload();
+    await borrowerPage.goto(`/item/${itemId}`);
+    await expect(borrowerPage).toHaveURL(`/item/${itemId}`);
+    await borrowerPage.waitForLoadState("networkidle");
+    // Ensure borrower sees the "On Loan" badge
     await expect(borrowerPage.locator('[data-testid="loan-status-badge"]')).toHaveText("On Loan");
 
     // Validate Event-Based Timeline Entry

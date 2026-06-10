@@ -88,6 +88,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
+            data-testid="check-inventory-input"
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={t("checkPlaceholder")}

@@ -94,14 +94,20 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
  */
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
   const { username } = await params;
-  const t = await getTranslations("Public");
 
+  // Guard first: if the profile is not found (private or non-existent), return 404
+  // immediately BEFORE calling getTranslations(). This prevents TypeScript from
+  // executing subsequent lines (like profileRes.data) on a null profileRes, which
+  // would cause a runtime TypeError → HTTP 500 instead of the expected 404.
   const profileRes = await getProfile(username);
   if (!profileRes || !profileRes.success) {
-    notFound();
+    return notFound();
   }
 
+  const t = await getTranslations("Public");
+
   const user = profileRes.data;
+
   const itemsRes = await getItems(username);
   const items = itemsRes.data.items || [];
 

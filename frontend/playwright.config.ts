@@ -35,7 +35,7 @@ export default defineConfig({
   // Global per-test timeout: 60s in CI, default in dev
   timeout: process.env.CI ? 60000 : 30000,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://localhost:3002",
     trace: "on-first-retry",
     // Navigation timeout: give pages longer to load in CI
     navigationTimeout: 30000,
@@ -73,8 +73,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "NODE_OPTIONS='--no-warnings' npm run dev",
-      url: "http://localhost:3000",
+      command: "NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
+      url: "http://localhost:3002",
       reuseExistingServer: true,
       timeout: 120000,
     },
@@ -87,8 +87,8 @@ export default defineConfig({
         (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
         "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
-        " -m flask run --port 5000",
-      url: "http://127.0.0.1:5000/api/health",
+        " -m flask run --port 5002",
+      url: "http://127.0.0.1:5002/api/health",
       reuseExistingServer: !process.env.DATABASE_URL_TEST,
       timeout: 60000,
       cwd: "..",

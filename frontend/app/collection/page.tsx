@@ -270,7 +270,7 @@ function CollectionContent() {
     collectionFilters,
     genreFilters,
     publisherFilters,
-    true
+    false
   );
 
   const {

@@ -212,7 +212,7 @@ jobs:
         run: cd frontend && npx playwright test --project=chromium
         env:
           CI: true
-          FLASK_API_URL: http://127.0.0.1:5000/api
+          FLASK_API_URL: http://127.0.0.1:5002/api
           ADMIN_PASSWORD: admin
           SECRET_KEY: test-secret-key
 

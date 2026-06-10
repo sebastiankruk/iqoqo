@@ -567,5 +567,7 @@ except Exception:
     fi
 
     echo "✅ Success! Deployment ready."
-    [ "$MODE" != "prod" ] && echo "🌐 URL: http://localhost:${NGINX_PORT:-8000}"
+    if [ "$MODE" != "prod" ]; then
+        echo "🌐 URL: http://localhost:${NGINX_PORT:-8000}"
+    fi
 fi

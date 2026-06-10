@@ -393,6 +393,7 @@ class DataManager:
             "total_items": total,
             "lent_items": status_counts["lent"],
             "borrowed_items": borrowed_count,
+            "items_borrowed": borrowed_count,
             "to_read": status_counts["wish_list"],
             # Per-status counts (items_available, items_lent, …)
             **{f"items_{s}": count for s, count in status_counts.items()},

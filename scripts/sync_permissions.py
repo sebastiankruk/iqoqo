@@ -97,10 +97,10 @@ ts_lines = [
     "export const ItemPermissions = {",
 ]
 for k, v in members:
-    ts_lines.append(f"  {k}: '{v}' as const,")
+    ts_lines.append(f'  {k}: "{v}" as const,')
 
 ts_lines.append("} as const;\n")
-ts_lines.append("export type ItemPermission = typeof ItemPermissions[keyof typeof ItemPermissions];\n")
+ts_lines.append("export type ItemPermission = (typeof ItemPermissions)[keyof typeof ItemPermissions];\n")
 
 # ... (imports and data loading stay the same)
 

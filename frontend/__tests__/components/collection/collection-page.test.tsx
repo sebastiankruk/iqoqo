@@ -478,4 +478,13 @@ describe("CollectionPage – Sorting Behavior", () => {
     const lastCall = calls.at(-1) as Parameters<typeof useInfiniteItems>;
     expect(lastCall[3]).toBe("updated");
   });
+
+  it("defaults to includePublic=false when viewing my items collection", () => {
+    render(<CollectionPage />);
+    const calls = mockUseItems.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastCall = calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    // includePublic is parameter index 14
+    expect(lastCall[14]).toBe(false);
+  });
 });
