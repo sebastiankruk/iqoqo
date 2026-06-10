@@ -46,8 +46,9 @@ services:
       - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers
       - ./app/static/gallery:/usr/src/app/app/static/gallery
+      - ./scripts:/usr/src/app/scripts
     ports:
-      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:${WEB_PORT:-5000}:5000"
 
   frontend:
     build:
