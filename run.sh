@@ -145,13 +145,17 @@ if [ ! -d ".venv" ]; then
     python3 -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
-    opentelemetry-bootstrap -a install
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && command -v opentelemetry-bootstrap &>/dev/null; then
+        opentelemetry-bootstrap -a install
+    fi
     touch .venv/bin/activate
 elif [ "requirements.txt" -nt ".venv/bin/activate" ]; then
     echo "🔧 Syncing virtual environment with requirements.txt..."
     source .venv/bin/activate
     pip install -r requirements.txt
-    opentelemetry-bootstrap -a install
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && command -v opentelemetry-bootstrap &>/dev/null; then
+        opentelemetry-bootstrap -a install
+    fi
     touch .venv/bin/activate
 else
     source .venv/bin/activate
@@ -197,8 +201,7 @@ if [ "$MODE" == "dev" ]; then
 
     # Start DB/Redis in Docker (slim mode)
     echo "🔧 Checking background services (db, redis)..."
-    COMPOSE_ERR=$(docker compose up -d db redis 2>&1)
-    if [ $? -ne 0 ]; then
+    if ! COMPOSE_ERR=$(docker compose up -d db redis 2>&1); then
         if docker info &>/dev/null; then
             echo "❌ Error: Docker is running but 'docker compose up' failed."
             echo "Details:"
