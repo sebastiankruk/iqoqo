@@ -1,0 +1,19 @@
+{
+  "name": "iQoQo AI Sandbox",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "google.antigravity"
+      ]
+    }
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind"
+  ],
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "remoteUser": "root"
+}
