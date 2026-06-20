@@ -16,6 +16,9 @@
 // frontend/instrumentation.ts
 import { registerOTel } from "@vercel/otel";
 
+/**
+ * Registers the OpenTelemetry instrumentation for the frontend.
+ */
 export function register() {
   registerOTel({
     serviceName: "iqoqo-frontend",
