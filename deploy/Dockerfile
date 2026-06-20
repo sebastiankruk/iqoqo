@@ -33,6 +33,18 @@ COPY requirements.txt ./
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Inside deploy/Dockerfile
+RUN pip install opentelemetry-distro \
+    opentelemetry-exporter-otlp \
+    opentelemetry-instrumentation-flask \
+    opentelemetry-instrumentation-celery \
+    opentelemetry-instrumentation-sqlalchemy \
+    opentelemetry-instrumentation-redis \
+    opentelemetry-instrumentation-requests
+
+# Run the bootstrap command to automatically install any missing instrumentation for your stack
+RUN opentelemetry-bootstrap -a install
+
 # Copy the rest of the application's code into the container
 COPY . .
 

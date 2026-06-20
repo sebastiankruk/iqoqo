@@ -139,18 +139,19 @@ else
         export APP_VERSION="${VERSION}"
     fi
 fi
-
 # Activate/Bootstrap Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "🔧 Bootstrapping virtual environment..."
     python3 -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
+    opentelemetry-bootstrap -a install
     touch .venv/bin/activate
 elif [ "requirements.txt" -nt ".venv/bin/activate" ]; then
     echo "🔧 Syncing virtual environment with requirements.txt..."
     source .venv/bin/activate
     pip install -r requirements.txt
+    opentelemetry-bootstrap -a install
     touch .venv/bin/activate
 else
     source .venv/bin/activate
@@ -196,7 +197,15 @@ if [ "$MODE" == "dev" ]; then
 
     # Start DB/Redis in Docker (slim mode)
     echo "🔧 Checking background services (db, redis)..."
-    if ! docker compose up -d db redis &>/dev/null; then
+    COMPOSE_ERR=$(docker compose up -d db redis 2>&1)
+    if [ $? -ne 0 ]; then
+        if docker info &>/dev/null; then
+            echo "❌ Error: Docker is running but 'docker compose up' failed."
+            echo "Details:"
+            echo "$COMPOSE_ERR"
+            exit 1
+        fi
+
         echo "Docker command failed. Checking for Colima..."
         if command -v colima &> /dev/null; then
             if colima status &> /dev/null; then
@@ -230,6 +239,8 @@ if [ "$MODE" == "dev" ]; then
             docker compose up -d db redis || exit 1
         else
             echo "Error: Docker is not running. Please start Docker."
+            echo "Details:"
+            echo "$COMPOSE_ERR"
             exit 1
         fi
     fi
@@ -363,11 +374,21 @@ if [ "$MODE" == "dev" ]; then
     export FLASK_APP=run.py
     export FLASK_DEBUG=1
     WEB_PORT=${WEB_PORT:-5000}
-    flask run --port "$WEB_PORT" &
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
+        echo "📡 Starting Flask API with OpenTelemetry auto-instrumentation..."
+        OTEL_SERVICE_NAME="iqoqo-api" opentelemetry-instrument flask run --port "$WEB_PORT" &
+    else
+        flask run --port "$WEB_PORT" &
+    fi
     echo $! > "$PID_DIR/flask.pid"
 
     # Start Celery
-    .venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
+        echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation..."
+        OTEL_SERVICE_NAME="iqoqo-celery-worker" opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info &
+    else
+        .venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
+    fi
     echo $! > "$PID_DIR/celery.pid"
 
     # Start Next.js
@@ -380,8 +401,11 @@ if [ "$MODE" == "dev" ]; then
          AUTH_URL="${AUTH_URL}" \
          AUTH_TRUST_HOST="${AUTH_TRUST_HOST}" \
          NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" \
+         OTEL_SERVICE_NAME="iqoqo-frontend" \
+         OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}" \
+         OTEL_TRACES_EXPORTER="${OTEL_TRACES_EXPORTER}" \
          npm run dev) &
-        echo $! > "$PID_DIR/next.pid"
+         echo $! > "$PID_DIR/next.pid"
     fi
 
     echo ""

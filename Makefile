@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers
+.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -103,6 +103,8 @@ help:
 	@echo "  db-export     - Export database to exports/backup.json (USE_DOCKER=true for Docker)"
 	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics (USE_DOCKER=true for Docker)"
+	@echo "  db-stamp      - Stamp database migration version to head (USE_DOCKER=true for Docker)"
+	@echo "  db-upgrade    - Upgrade database schema to head (USE_DOCKER=true for Docker)"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
 	@echo ""
@@ -352,6 +354,22 @@ docker-backup:
 db-reset: pg-create-schemas .venv/bin/activate
 	@echo "Resetting database..."
 	.venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset
+
+db-stamp: .venv/bin/activate
+	@echo "Stamping database migration version to head..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web flask db stamp head; \
+	else \
+		PYTHONPATH=. .venv/bin/flask db stamp head; \
+	fi
+
+db-upgrade: .venv/bin/activate
+	@echo "Upgrading database schema to head..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web flask db upgrade; \
+	else \
+		PYTHONPATH=. .venv/bin/flask db upgrade; \
+	fi
 
 init-auth: .venv/bin/activate
 	@echo "Initializing auth (roles, permissions, admin user)..."

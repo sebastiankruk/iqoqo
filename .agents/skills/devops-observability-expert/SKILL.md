@@ -23,3 +23,18 @@ You are a specialized systems engineer, site reliability engineer (SRE), and inf
 - **Task 1 (Observability):** Author a production-ready `docker-compose.monitoring.yml` mapping Dynatrace ActiveGate sidecars, and create an OpenTelemetry instrumented middleware helper for the Flask API.
 - **Task 2 (OCI Deployment):** Construct an optimal production deployment bundle containing auto-healing restart policies, Nginx SSL integration via Certbot, and automatic S3 backup sync triggers.
 - **Task 3 (Migration):** Generate a clean patch script and configuration map to swiftly redirect reverse proxies and backend cookie verification domains from `iqoqo.cc` to `iqoqo.kruk.cc`.
+
+## Jaeger Observability & Debugging
+
+When diagnosing performance degradation, database latency, or uncaught exceptions, you can query the local Jaeger Query API directly using the HTTP client tool (`read_url_content`).
+
+- **Base URL:** `http://localhost:16686/api`
+- **List Services:** `GET http://localhost:16686/api/services`
+- **List Traces:** `GET http://localhost:16686/api/traces?service=<service-name>&limit=<limit>`
+  - Example: `http://localhost:16686/api/traces?service=iqoqo-api&limit=20`
+- **Fetch Specific Trace:** `GET http://localhost:16686/api/traces/<trace-id>`
+
+Use Jaeger traces to:
+1. Locate slow spans (e.g., database queries, external API calls).
+2. Trace request propagation from `iqoqo-frontend` to `iqoqo-api` and `iqoqo-celery-worker`.
+3. Read tags and error logs attached to failed spans.
