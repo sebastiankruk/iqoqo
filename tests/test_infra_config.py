@@ -185,21 +185,21 @@ exit 0
     def test_monitoring_config(self):
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
 
-        # Scenario 1: Local Prometheus/Jaeger stack is present but not running
-        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  prometheus:\n    image: prom/prometheus")
+        # Scenario 1: Local OpenObserve monitoring stack is present but not running
+        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  openobserve:\n    image: openobserve/openobserve")
         result = self.run_script(args=["prod"], env_content=env_content)
         self.assertIn("Found docker-compose.monitoring.yml, starting with local monitoring...", result.stdout)
 
-        # Scenario 2: Local Prometheus/Jaeger stack is already active globally
+        # Scenario 2: Local OpenObserve monitoring stack is already active globally
         docker_mock = self.bin_dir / "docker"
         docker_mock.write_text("""#!/bin/bash
 if [[ "$*" == *"ps"* ]]; then
-    echo "iqoqo-prometheus"
+    echo "iqoqo-openobserve"
 fi
 exit 0
 """)
         result_active = self.run_script(args=["prod"], env_content=env_content)
-        self.assertIn("Prometheus/Jaeger monitoring stack is already active globally.", result_active.stdout)
+        self.assertIn("OpenObserve monitoring stack is already active globally.", result_active.stdout)
 
         # Reset docker mock
         docker_mock.write_text("#!/bin/bash\nexit 0")

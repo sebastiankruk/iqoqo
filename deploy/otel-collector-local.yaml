@@ -1,0 +1,88 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# OpenTelemetry Collector — Unified Local Config (OpenObserve backend)
+#
+# Covers all 8 observability layers:
+#   - Layer 1: Frontend SSR (Next.js)          via OTLP push from app container
+#   - Layer 2: Flask Backend                   via OTLP push from app container
+#   - Layer 3: Celery Workers                  via OTLP push from app container
+#   - Layer 4: Outbound HTTP (requests lib)    via OTLP push from app container
+#   - Layer 5: Browser Web Vitals              via OTLP push from browser (CORS-enabled)
+#   - Layer 6: Nginx Edge Proxy                via gRPC push from ngx_otel_module
+#   - Layer 7: OpenAI LLM                      via OTLP push from app container
+#   - Layer 8: PostgreSQL & Redis Internals    via native receiver scraping
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          # Required to securely accept browser-side OTel traces (Layer 5)
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:${FRONTEND_PORT:-3000}"
+            - "https://dev.iqoqo.cc"
+          allowed_headers:
+            - "*"
+
+  # Layer 8: Container resource metrics (replaces cAdvisor)
+  docker_stats:
+    endpoint: "unix:///var/run/docker.sock"
+    collection_interval: 10s
+    env_vars_to_metric_labels:
+      - COMPOSE_SERVICE
+
+  # Layer 8: PostgreSQL internal engine health (dead tuples, cache hit ratio, index usage)
+  postgresql:
+    endpoint: "db:5432"
+    transport: tcp
+    username: "${POSTGRES_USER:-iqoqo}"
+    password: "${POSTGRES_PASSWORD:-changeme}"
+    databases:
+      - "${POSTGRES_DB:-iqoqo}"
+    collection_interval: 10s
+    tls:
+      insecure: true
+
+  # Layer 8: Redis memory fragmentation & eviction metrics
+  redis:
+    endpoint: "redis:6379"
+    collection_interval: 10s
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+
+exporters:
+  # Export all 3 pillars (traces, metrics, logs) to OpenObserve's native OTLP endpoint.
+  # Authorization header = Basic base64("${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}:${OPENOBSERVE_ROOT_PASSWORD:-supersecret}")
+  # Default value: base64(admin@iqoqo.local:supersecret)
+  otlphttp/openobserve:
+    endpoint: "http://openobserve:5080/api/default/"
+    headers:
+      Authorization: "Basic ${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]
+    metrics:
+      # Layers 1-7 push OTLP metrics; Layers 6+8 come from native receivers
+      receivers: [otlp, docker_stats, postgresql, redis]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]

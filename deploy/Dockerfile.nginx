@@ -1,0 +1,28 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Nginx with native OpenTelemetry C-module for Layer 6 instrumentation.
+# Switches from nginx:1.25-alpine (no OTel module) to nginx:1.25 (Debian-based)
+# which supports the nginx-module-otel package.
+#
+# The existing routing logic in deploy/nginx.conf is preserved unchanged —
+# this Dockerfile only adds the OTel module and overrides the main nginx.conf
+# to load it at startup.
+
+FROM nginx:1.25
+
+# Install the native OpenTelemetry module.
+# nginx-module-otel is available in the official Debian nginx package repos.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx-module-otel \
+    && rm -rf /var/lib/apt/lists/*
+
+# Override core nginx.conf to load the OTel module and configure telemetry.
+# The virtual host routing logic (deploy/nginx.conf) is mounted at runtime via
+# docker-compose.yml into /etc/nginx/conf.d/default.conf and included
+# automatically by the `include /etc/nginx/conf.d/*.conf` directive below.
+COPY deploy/nginx-main.conf /etc/nginx/nginx.conf

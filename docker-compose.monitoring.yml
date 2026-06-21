@@ -4,69 +4,74 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-
-version: '3.8'
+#
+# Default Observability Stack — OpenObserve + OpenTelemetry Collector
+#
+# Usage:
+#   make monitoring-start       # Start this stack
+#   make monitoring-stop        # Stop this stack
+#   docker compose -f docker-compose.monitoring.yml up -d
+#
+# All host ports are bound to 127.0.0.1 only for security.
+# Use env vars to avoid port collisions when running multiple instances on same host:
+#   OPENOBSERVE_HOST_PORT=5081 OTEL_GRPC_HOST_PORT=4319 OTEL_HTTP_HOST_PORT=4320 make monitoring-start
+#
+# Access:  http://localhost:${OPENOBSERVE_HOST_PORT:-5080}
+# Login:   ${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / ${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+# SQL API: POST http://localhost:${OPENOBSERVE_HOST_PORT:-5080}/api/default/_search
 
 services:
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    container_name: iqoqo-prometheus
+  openobserve:
+    image: openobserve/openobserve:v0.14.5
+    container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve
     restart: unless-stopped
+    ports:
+      # Bind to loopback only — prevents telemetry leakage across network interfaces.
+      # Override OPENOBSERVE_HOST_PORT in .env to avoid multi-stack port collision.
+      - "127.0.0.1:${OPENOBSERVE_HOST_PORT:-5080}:5080"
+    environment:
+      - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
+      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+      - ZO_DATA_DIR=/data
     volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - default
-
-  jaeger:
-    image: jaegertracing/jaeger:2.19.0
-    container_name: iqoqo-telemetry-jaeger
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
-      - "127.0.0.1:${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
-      - "127.0.0.1:${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+      - openobserve_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - default
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.95.0
-    container_name: iqoqo-otel-collector-prometheus
+    container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector
     restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
-      - ./deploy/otel-collector-prometheus-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./deploy/otel-collector-local.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # Read-only Docker socket: allows docker_stats receiver to scrape container metrics.
+      # This grants read-only visibility into container metadata only.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     env_file:
-      - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ${ENV_FILE:-.env}
+    ports:
+      # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.
+      # Override OTEL_GRPC_HOST_PORT / OTEL_HTTP_HOST_PORT to avoid multi-stack collision.
+      - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317"  # OTLP gRPC
+      - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318"  # OTLP HTTP
     depends_on:
-      - jaeger
-    networks:
-      - default
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: iqoqo-cadvisor
-    restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+      openobserve:
+        condition: service_healthy
+    extra_hosts:
+      # Allows the collector to reach host-side services (e.g. native dev Flask on port 5000).
+      - "host.docker.internal:host-gateway"
     networks:
       - default
 
 volumes:
-  prometheus_data:
+  openobserve_data:
 
 networks:
   default:

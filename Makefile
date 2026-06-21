@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
+.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -108,7 +108,11 @@ help:
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
 	@echo ""
-	@echo "Version updates:"
+	@echo "Monitoring targets:"
+	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
+	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
+	@echo "  monitoring-legacy-start - Start optional Prometheus + Jaeger stack"
+	@echo "  monitoring-legacy-stop  - Stop optional Prometheus + Jaeger stack"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
@@ -178,14 +182,27 @@ stop:
 
 monitoring-start:
 	@echo "Ensuring docker network iqoqo_default exists..."
-	@docker network create iqoqo_default || true
-	@echo "Starting monitoring stack (Prometheus, Jaeger, OTel Collector, cAdvisor)..."
+	@docker network create iqoqo_default 2>/dev/null || true
+	@echo "Starting default observability stack (OpenObserve + OTel Collector)..."
+	@echo "  UI:    http://localhost:$${OPENOBSERVE_HOST_PORT:-5080}"
+	@echo "  Login: $${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / $${OPENOBSERVE_ROOT_PASSWORD:-supersecret}"
 	@docker compose -f docker-compose.monitoring.yml up -d
 
 monitoring-stop:
-	@echo "Stopping monitoring stack..."
+	@echo "Stopping OpenObserve + OTel Collector stack..."
 	@docker compose -f docker-compose.monitoring.yml down
 
+monitoring-legacy-start:
+	@echo "Ensuring docker network iqoqo_default exists..."
+	@docker network create iqoqo_default 2>/dev/null || true
+	@echo "Starting legacy monitoring stack (Prometheus + Jaeger + cAdvisor)..."
+	@echo "  Prometheus: http://localhost:$${PROMETHEUS_PORT:-9090}"
+	@echo "  Jaeger:     http://localhost:$${JAEGER_UI_PORT:-16686}"
+	@docker compose -f docker-compose.prometheus-jaeger.yml up -d
+
+monitoring-legacy-stop:
+	@echo "Stopping legacy Prometheus + Jaeger stack..."
+	@docker compose -f docker-compose.prometheus-jaeger.yml down
 
 # Linting targets
 lint-python: .venv/bin/activate

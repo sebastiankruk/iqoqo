@@ -254,11 +254,15 @@ if [ "$MODE" == "dev" ]; then
 
     # Start Monitoring Stack if OTel is enabled and compose file exists
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && [ -f "docker-compose.monitoring.yml" ]; then
-        echo "📊 OpenTelemetry tracing is enabled. Ensuring local monitoring stack is running..."
+        echo "📊 OpenTelemetry tracing is enabled. Ensuring local OpenObserve monitoring stack is running..."
         docker network create iqoqo_default 2>/dev/null || true
         # Clean up any conflicting container names to prevent startup failure
-        docker rm -f iqoqo-telemetry-jaeger iqoqo-prometheus iqoqo-otel-collector-prometheus iqoqo-cadvisor 2>/dev/null || true
-        docker compose -f docker-compose.monitoring.yml up -d jaeger otel-collector prometheus || true
+        docker rm -f \
+            ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve \
+            ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector \
+            iqoqo-openobserve \
+            iqoqo-otel-collector 2>/dev/null || true
+        docker compose -f docker-compose.monitoring.yml up -d || true
     fi
 
     # Wait for DB readiness
@@ -391,8 +395,12 @@ if [ "$MODE" == "dev" ]; then
     export FLASK_DEBUG=1
     WEB_PORT=${WEB_PORT:-5000}
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
-        echo "📡 Starting Flask API with OpenTelemetry auto-instrumentation..."
-        OTEL_SERVICE_NAME="iqoqo-api" opentelemetry-instrument flask run --port "$WEB_PORT" &
+        echo "📡 Starting Flask API with OpenTelemetry auto-instrumentation (traces + metrics + logs)..."
+        OTEL_SERVICE_NAME="iqoqo-api" \
+        OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
+        OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
+        OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
+        opentelemetry-instrument flask run --port "$WEB_PORT" &
     else
         flask run --port "$WEB_PORT" &
     fi
@@ -400,8 +408,12 @@ if [ "$MODE" == "dev" ]; then
 
     # Start Celery
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
-        echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation..."
-        OTEL_SERVICE_NAME="iqoqo-celery-worker" opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info &
+        echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation (traces + metrics + logs)..."
+        OTEL_SERVICE_NAME="iqoqo-celery-worker" \
+        OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
+        OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
+        OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
+        opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info &
     else
         .venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
     fi
@@ -533,10 +545,10 @@ except Exception:
         echo "📊 Found docker-compose.grafana.yml and Grafana Cloud env vars, starting with Grafana monitoring..."
         COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.grafana.yml"
     elif [ -f "docker-compose.monitoring.yml" ]; then
-        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^iqoqo-prometheus$"; then
-            echo "📊 Prometheus/Jaeger monitoring stack is already active globally."
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve$\|^iqoqo-openobserve$"; then
+            echo "📊 OpenObserve monitoring stack is already active globally."
         else
-            echo "📊 Found docker-compose.monitoring.yml, starting with local monitoring..."
+            echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
             COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
         fi
     fi

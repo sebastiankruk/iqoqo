@@ -15,7 +15,11 @@
 #
 services:
   nginx:
-    image: nginx:1.25-alpine
+    # Custom build: adds the native nginx-module-otel for Layer 6 OTel instrumentation.
+    # Falls back gracefully if the OTel Collector is not running (otel_trace is non-blocking).
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
     restart: always
     ports:
       - "${NGINX_PORT:-8000}:80"
@@ -41,6 +45,9 @@ services:
       - OTEL_SERVICE_NAME=iqoqo-api
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
+      - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
+      - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -77,6 +84,8 @@ services:
       - OTEL_SERVICE_NAME=iqoqo-frontend
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
+      - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
+      - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
     restart: always
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
@@ -130,6 +139,9 @@ services:
       - OTEL_SERVICE_NAME=iqoqo-celery-worker
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
+      - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
+      - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-false}
     volumes:
       - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers

@@ -32,6 +32,8 @@ opentelemetry-instrumentation-celery
 opentelemetry-instrumentation-sqlalchemy
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-requests
+# Layer 7: LLM telemetry — auto-instruments openai SDK calls with token usage, prompt payloads, latency
+opentelemetry-instrumentation-openai
 
 # Testing
 pytest

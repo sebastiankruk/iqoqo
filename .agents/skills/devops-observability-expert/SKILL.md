@@ -20,21 +20,116 @@ You are a specialized systems engineer, site reliability engineer (SRE), and inf
 4. **Domain Rigidity:** Maintain consistency across CORS configurations when domains migrate or redirect.
 
 ## Step-by-Step Task Execution Protocol
-- **Task 1 (Observability):** Author a production-ready `docker-compose.monitoring.yml` mapping Dynatrace ActiveGate sidecars, and create an OpenTelemetry instrumented middleware helper for the Flask API.
+
+- **Task 1 (Observability):** The default monitoring backend is **OpenObserve** (`docker-compose.monitoring.yml`). Use SQL queries via the OpenObserve REST API to diagnose issues. Author new monitoring configurations targeting OpenObserve when the current setup is insufficient. For Dynatrace migrations, update only the `exporters` block in `deploy/otel-collector-local.yaml`.
 - **Task 2 (OCI Deployment):** Construct an optimal production deployment bundle containing auto-healing restart policies, Nginx SSL integration via Certbot, and automatic S3 backup sync triggers.
 - **Task 3 (Migration):** Generate a clean patch script and configuration map to swiftly redirect reverse proxies and backend cookie verification domains from `iqoqo.cc` to `iqoqo.kruk.cc`.
 
-## Jaeger Observability & Debugging
+## OpenObserve AI-First Observability
 
-When diagnosing performance degradation, database latency, or uncaught exceptions, you can query the local Jaeger Query API directly using the HTTP client tool (`read_url_content`).
+OpenObserve is the default unified telemetry backend. It accepts traces, metrics, and logs
+over OTLP and stores them in Apache Parquet files. **All signals are queried using standard
+ANSI SQL** — no PromQL, no LogQL.
 
-- **Base URL:** `http://localhost:16686/api`
-- **List Services:** `GET http://localhost:16686/api/services`
-- **List Traces:** `GET http://localhost:16686/api/traces?service=<service-name>&limit=<limit>`
-  - Example: `http://localhost:16686/api/traces?service=iqoqo-api&limit=20`
-- **Fetch Specific Trace:** `GET http://localhost:16686/api/traces/<trace-id>`
+### Endpoints
 
-Use Jaeger traces to:
-1. Locate slow spans (e.g., database queries, external API calls).
-2. Trace request propagation from `iqoqo-frontend` to `iqoqo-api` and `iqoqo-celery-worker`.
-3. Read tags and error logs attached to failed spans.
+| Endpoint | Purpose |
+|---|---|
+| `http://localhost:5080` | OpenObserve UI (login: `admin@iqoqo.local` / `supersecret`) |
+| `POST http://localhost:5080/api/default/_search` | SQL search across all signals |
+| `GET http://localhost:5080/api/default/traces` | Trace search |
+| `http://localhost:4318` | OTLP HTTP ingestion (OTel Collector, for AI agent push) |
+
+### Authentication Header
+
+All API calls require:
+
+```
+Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=
+```
+
+(Base64 of `admin@iqoqo.local:supersecret`. Override with `OPENOBSERVE_ROOT_USER`/`OPENOBSERVE_ROOT_PASSWORD`.)
+
+### Diagnostic SQL Query Examples
+
+**Recent Celery worker errors (last 15 min):**
+
+```bash
+curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "sql": "SELECT _timestamp, log FROM default WHERE service_name = '\''iqoqo-celery-worker'\'' AND log LIKE '\''%Traceback%'\'' ORDER BY _timestamp DESC LIMIT 10"
+    }
+  }' | jq '.hits'
+```
+
+**Recent Flask 5xx errors:**
+
+```bash
+curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Content-Type: application/json" \
+  -d '{"query": {"sql": "SELECT _timestamp, http_target, http_status_code, duration_nano / 1000000 AS duration_ms FROM default WHERE http_status_code >= 500 ORDER BY _timestamp DESC LIMIT 20"}}' \
+  | jq '.hits'
+```
+
+**Average container memory (last 15 min):**
+
+```sql
+SELECT container_name, AVG(memory_usage_bytes) / 1024 / 1024 AS avg_memory_mb
+FROM metrics
+WHERE _timestamp > now() - interval 15 minute
+GROUP BY container_name
+ORDER BY avg_memory_mb DESC
+```
+
+**PostgreSQL cache hit ratio:**
+
+```sql
+SELECT blks_hit, blks_read, ROUND(blks_hit * 100.0 / NULLIF(blks_hit + blks_read, 0), 2) AS cache_hit_pct
+FROM metrics
+WHERE __name__ = 'postgresql.bgwriter.buffers.allocated'
+ORDER BY _timestamp DESC LIMIT 1
+```
+
+**Redis eviction count trend:**
+
+```sql
+SELECT DATE_TRUNC('minute', _timestamp) AS minute, SUM(evicted_keys) AS evictions
+FROM metrics
+WHERE __name__ = 'redis.keys.evicted'
+  AND _timestamp > now() - interval 30 minute
+GROUP BY minute
+ORDER BY minute DESC
+```
+
+**Slowest API endpoints (last 1 hour):**
+
+```sql
+SELECT http_target, COUNT(*) AS req_count, AVG(duration_nano / 1000000) AS avg_ms, MAX(duration_nano / 1000000) AS p100_ms
+FROM default
+WHERE service_name = 'iqoqo-api'
+  AND _timestamp > now() - interval 1 hour
+GROUP BY http_target
+ORDER BY avg_ms DESC LIMIT 20
+```
+
+### Trace Investigation
+
+To fetch recent traces for a specific service:
+
+```bash
+curl -s "http://127.0.0.1:5080/api/default/traces?service=iqoqo-api&limit=10" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" | jq '.'
+```
+
+### When to Use the Legacy Jaeger Stack
+
+If a specific trace waterfall visualization is needed (e.g., debugging complex nested span relationships), the legacy Jaeger stack can be started without interfering with OpenObserve:
+
+```bash
+# Must override ports to avoid conflict with OpenObserve OTel Collector:
+JAEGER_OTLP_GRPC_PORT=4319 JAEGER_OTLP_HTTP_PORT=4320 make monitoring-legacy-start
+```
