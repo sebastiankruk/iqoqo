@@ -1,0 +1,42 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+  redis:
+    endpoint: "redis:6379"
+    collection_interval: 10s
+  postgresql:
+    endpoint: "db:5432"
+    username: "${POSTGRES_USER}"
+    password: "${POSTGRES_PASSWORD}"
+    databases:
+      - "${POSTGRES_DB}"
+    collection_interval: 10s
+  docker_stats:
+    endpoint: "unix:///var/run/docker.sock"
+    collection_interval: 10s
+    env_vars_to_metric_labels:
+      - COMPOSE_SERVICE
+
+exporters:
+  otlphttp/dynatrace:
+    endpoint: "${DT_ENDPOINT}"
+    headers:
+      Authorization: "Api-Token ${DT_API_TOKEN}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlphttp/dynatrace]
+    metrics:
+      receivers: [redis, postgresql, docker_stats]
+      exporters: [otlphttp/dynatrace]
