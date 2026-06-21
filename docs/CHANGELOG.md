@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-06-21
+
+### Added
+
+- **OpenTelemetry Distributed Tracing & Dynatrace Integration**: Implemented OpenTelemetry auto-instrumentation across Flask API, Celery background worker, and Next.js frontend services. Added `deploy/otel-collector-config.yaml` to export traces and metrics (Redis, PostgreSQL, and Docker stats) to Dynatrace via the OpenTelemetry Collector. Added tracing configuration parameters to `docker-compose.yml`, `run.sh`, and `.env.example`.
+- **Frontend Telemetry Registration**: Created `frontend/instrumentation.ts` utilizing `@vercel/otel` for frontend trace propagation.
+- **Devcontainer Sandbox Configuration**: Introduced `.devcontainer/Dockerfile` and `.devcontainer/devcontainer.template.json` template setup with Ubuntu 24.04 and workspace bind-mounts to simplify sandbox environment deployment.
+- **Database Migration Make Targets**: Added `db-stamp` and `db-upgrade` targets to the `Makefile` (supporting both docker and local run modes) to simplify schema upgrades and migrations version synchronization.
+
 ## [0.7.5] - 2026-06-10
 
 ### Fixed
