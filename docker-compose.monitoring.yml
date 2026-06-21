@@ -5,37 +5,54 @@
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+version: '3.8'
+
 services:
-  alloy:
-    image: grafana/alloy:v1.6.1
-    restart: always
-    user: "0"  # Run as root to access /var/run/docker.sock and host journal logs (Note: mounting docker.sock grants root/host-level privileges)
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: iqoqo-prometheus
+    restart: unless-stopped
     volumes:
-      - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/log/journal:/var/log/journal:ro
-      - /var/run/log/journal:/var/run/log/journal:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro,rslave
-    environment:
-      - GRAFANA_PROMETHEUS_URL=${GRAFANA_PROMETHEUS_URL}
-      - GRAFANA_PROMETHEUS_USER=${GRAFANA_PROMETHEUS_USER}
-      - GRAFANA_LOKI_URL=${GRAFANA_LOKI_URL}
-      - GRAFANA_LOKI_USER=${GRAFANA_LOKI_USER}
-      - GRAFANA_CLOUD_API_KEY=${GRAFANA_CLOUD_API_KEY}
-      - FLASK_METRICS_TARGET=web:5000
-      - NEXTJS_METRICS_TARGET=frontend:3000
-      - CADVISOR_TARGET=cadvisor:8080
-    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     ports:
-      - "127.0.0.1:${ALLOY_HOST_PORT:-12345}:12345"  # Expose Alloy UI locally only for security/debugging
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+
+  jaeger:
+    image: jaegertracing/jaeger:2.19.0
+    container_name: iqoqo-telemetry-jaeger
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
+      - "127.0.0.1:${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+    networks:
+      - default
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.95.0
+    container_name: iqoqo-otel-collector-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./deploy/otel-collector-prometheus-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - cadvisor
+      - jaeger
+    networks:
+      - default
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
-    restart: always
+    container_name: iqoqo-cadvisor
+    restart: unless-stopped
     privileged: true
     devices:
       - /dev/kmsg
@@ -45,4 +62,13 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
-    # No exposed ports to host for security; scraped internally by Alloy
+    networks:
+      - default
+
+volumes:
+  prometheus_data:
+
+networks:
+  default:
+    name: iqoqo_default
+    external: true
