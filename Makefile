@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
+.PHONY: help start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -175,6 +175,16 @@ start:
 stop:
 	@echo "Stopping $(MODE) environment..."
 	@./run.sh $(MODE) --stop
+
+monitoring-start:
+	@echo "Ensuring docker network iqoqo_default exists..."
+	@docker network create iqoqo_default || true
+	@echo "Starting monitoring stack (Prometheus, Jaeger, OTel Collector, cAdvisor)..."
+	@docker compose -f docker-compose.monitoring.yml up -d
+
+monitoring-stop:
+	@echo "Stopping monitoring stack..."
+	@docker compose -f docker-compose.monitoring.yml down
 
 
 # Linting targets

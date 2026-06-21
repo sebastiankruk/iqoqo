@@ -173,6 +173,10 @@ if [ "$STOP" = true ]; then
         [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
         rm -rf "$PID_DIR"
         docker compose down
+        if [ -f "docker-compose.monitoring.yml" ]; then
+            echo "📊 Stopping local monitoring stack..."
+            docker compose -f docker-compose.monitoring.yml down || true
+        fi
     else
         export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
         [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
@@ -246,6 +250,15 @@ if [ "$MODE" == "dev" ]; then
             echo "$COMPOSE_ERR"
             exit 1
         fi
+    fi
+
+    # Start Monitoring Stack if OTel is enabled and compose file exists
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && [ -f "docker-compose.monitoring.yml" ]; then
+        echo "📊 OpenTelemetry tracing is enabled. Ensuring local monitoring stack is running..."
+        docker network create iqoqo_default 2>/dev/null || true
+        # Clean up any conflicting container names to prevent startup failure
+        docker rm -f iqoqo-telemetry-jaeger iqoqo-prometheus iqoqo-otel-collector-prometheus iqoqo-cadvisor 2>/dev/null || true
+        docker compose -f docker-compose.monitoring.yml up -d jaeger otel-collector prometheus || true
     fi
 
     # Wait for DB readiness
