@@ -516,12 +516,15 @@ except Exception:
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
-    if [ -f "docker-compose.monitoring.yml" ]; then
-        if [ -n "$GRAFANA_PROMETHEUS_URL" ] && [ -n "$GRAFANA_PROMETHEUS_USER" ] && [ -n "$GRAFANA_LOKI_URL" ] && [ -n "$GRAFANA_LOKI_USER" ] && [ -n "$GRAFANA_CLOUD_API_KEY" ]; then
-            echo "📊 Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring..."
-            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+    if [ -f "docker-compose.grafana.yml" ] && [ -n "$GRAFANA_PROMETHEUS_URL" ] && [ -n "$GRAFANA_PROMETHEUS_USER" ] && [ -n "$GRAFANA_LOKI_URL" ] && [ -n "$GRAFANA_LOKI_USER" ] && [ -n "$GRAFANA_CLOUD_API_KEY" ]; then
+        echo "📊 Found docker-compose.grafana.yml and Grafana Cloud env vars, starting with Grafana monitoring..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.grafana.yml"
+    elif [ -f "docker-compose.monitoring.yml" ]; then
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^iqoqo-prometheus$"; then
+            echo "📊 Prometheus/Jaeger monitoring stack is already active globally."
         else
-            echo "📊 Skipping monitoring: Grafana Cloud environment variables (GRAFANA_PROMETHEUS_URL, etc.) are not fully configured."
+            echo "📊 Found docker-compose.monitoring.yml, starting with local monitoring..."
+            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
         fi
     fi
 

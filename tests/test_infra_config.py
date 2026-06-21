@@ -183,26 +183,26 @@ exit 0
         self.assertIn("DOCKER_DOWN_TRIGGERED", result.stdout)
 
     def test_monitoring_config(self):
-        # Create a mock docker-compose.monitoring.yml file in the work_dir
-        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  alloy:\n    image: grafana/alloy")
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
 
-        # Scenario 1: Without Grafana Cloud env vars, it should skip monitoring
+        # Scenario 1: Local Prometheus/Jaeger stack is present but not running
+        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  prometheus:\n    image: prom/prometheus")
         result = self.run_script(args=["prod"], env_content=env_content)
-        self.assertIn("Skipping monitoring: Grafana Cloud environment variables", result.stdout)
+        self.assertIn("Found docker-compose.monitoring.yml, starting with local monitoring...", result.stdout)
 
-        # Scenario 2: With Grafana Cloud env vars, it should start with monitoring
-        monitoring_vars = (
-            "\nGRAFANA_PROMETHEUS_URL=http://prometheus\n"
-            "GRAFANA_PROMETHEUS_USER=user\n"
-            "GRAFANA_LOKI_URL=http://loki\n"
-            "GRAFANA_LOKI_USER=loki_user\n"
-            "GRAFANA_CLOUD_API_KEY=key\n"
-        )
-        result_with_vars = self.run_script(args=["prod"], env_content=env_content + monitoring_vars)
-        self.assertIn(
-            "Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring...", result_with_vars.stdout
-        )
+        # Scenario 2: Local Prometheus/Jaeger stack is already active globally
+        docker_mock = self.bin_dir / "docker"
+        docker_mock.write_text("""#!/bin/bash
+if [[ "$*" == *"ps"* ]]; then
+    echo "iqoqo-prometheus"
+fi
+exit 0
+""")
+        result_active = self.run_script(args=["prod"], env_content=env_content)
+        self.assertIn("Prometheus/Jaeger monitoring stack is already active globally.", result_active.stdout)
+
+        # Reset docker mock
+        docker_mock.write_text("#!/bin/bash\nexit 0")
 
 
 if __name__ == "__main__":
