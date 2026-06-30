@@ -15,6 +15,9 @@
 #
 import logging
 
+# Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -81,8 +84,6 @@ def create_app(config_class=Config, config_override=None):
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         force=True,
     )
-    # Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
-    logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
     app = Flask(__name__)
     app.config.from_object(config_class)

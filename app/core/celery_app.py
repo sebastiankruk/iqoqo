@@ -15,7 +15,11 @@
 #
 """Celery application factory and Flask integration helpers."""
 
+import logging
 import os
+
+# Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 from celery import Celery
 from celery.signals import worker_process_init
