@@ -78,7 +78,7 @@ describe("BrowserTelemetry Component", () => {
     expect((window as any).__OTEL_BROWSER_INITIALIZED__).toBeUndefined();
     render(<BrowserTelemetry />);
     // Wait for microtasks to resolve for dynamic imports
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((window as any).__OTEL_BROWSER_INITIALIZED__).toBe(true);
   });

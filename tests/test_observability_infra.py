@@ -15,7 +15,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -32,8 +32,8 @@ def test_otel_collector_config_yaml_is_valid() -> None:
     config_path: Path = Path(__file__).parent.parent / "deploy" / "otel-collector-local.yaml"
     assert config_path.exists()
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        config: Dict[str, Any] = yaml.safe_load(f)
+    with open(config_path, encoding="utf-8") as f:
+        config: dict[str, Any] = yaml.safe_load(f)
 
     assert "receivers" in config
     assert "processors" in config
@@ -41,25 +41,25 @@ def test_otel_collector_config_yaml_is_valid() -> None:
     assert "service" in config
 
     # Local dev config must only use the OTLP receiver
-    receivers: Dict[str, Any] = config["receivers"]
+    receivers: dict[str, Any] = config["receivers"]
     assert "otlp" in receivers, "otlp receiver must be present in local config"
     assert "docker_stats" not in receivers, "docker_stats must NOT be in local config — it crash-loops without Docker socket"
     assert "postgresql" not in receivers, "postgresql must NOT be in local config — it crash-loops without in-network 'db' hostname"
     assert "redis" not in receivers, "redis must NOT be in local config — it crash-loops without in-network 'redis' hostname"
 
     # All 3 signal pipelines must only reference the otlp receiver
-    pipelines: Dict[str, Any] = config["service"]["pipelines"]
+    pipelines: dict[str, Any] = config["service"]["pipelines"]
     for signal in ("traces", "metrics", "logs"):
         assert signal in pipelines, f"pipeline '{signal}' must be present"
         pipeline_receivers = pipelines[signal]["receivers"]
         assert pipeline_receivers == ["otlp"], f"'{signal}' pipeline must only use [otlp] in local config, got {pipeline_receivers}"
 
     # Check processors
-    processors: Dict[str, Any] = config["processors"]
+    processors: dict[str, Any] = config["processors"]
     assert "batch" in processors
 
     # Check exporters
-    exporters: Dict[str, Any] = config["exporters"]
+    exporters: dict[str, Any] = config["exporters"]
     assert "otlphttp/openobserve" in exporters
 
 
@@ -70,8 +70,8 @@ def test_otel_collector_prod_config_yaml_is_valid() -> None:
     config_path: Path = Path(__file__).parent.parent / "deploy" / "otel-collector-prod.yaml"
     assert config_path.exists(), "otel-collector-prod.yaml must exist for production deployments"
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        config: Dict[str, Any] = yaml.safe_load(f)
+    with open(config_path, encoding="utf-8") as f:
+        config: dict[str, Any] = yaml.safe_load(f)
 
     assert "receivers" in config
     assert "processors" in config
@@ -79,21 +79,21 @@ def test_otel_collector_prod_config_yaml_is_valid() -> None:
     assert "service" in config
 
     # Prod config must have all infrastructure receivers
-    receivers: Dict[str, Any] = config["receivers"]
+    receivers: dict[str, Any] = config["receivers"]
     assert "otlp" in receivers, "otlp receiver must be present"
     assert "docker_stats" in receivers, "docker_stats must be present in prod config"
     assert "postgresql" in receivers, "postgresql must be present in prod config"
     assert "redis" in receivers, "redis must be present in prod config"
 
     # Metrics pipeline must include infrastructure receivers
-    pipelines: Dict[str, Any] = config["service"]["pipelines"]
+    pipelines: dict[str, Any] = config["service"]["pipelines"]
     assert "metrics" in pipelines
     metrics_receivers = pipelines["metrics"]["receivers"]
     for receiver in ("otlp", "postgresql", "redis", "docker_stats"):
         assert receiver in metrics_receivers, f"'{receiver}' must be in prod metrics pipeline, got {metrics_receivers}"
 
     # Check exporters
-    exporters: Dict[str, Any] = config["exporters"]
+    exporters: dict[str, Any] = config["exporters"]
     assert "otlphttp/openobserve" in exporters
 
 
@@ -102,11 +102,11 @@ def test_monitoring_docker_compose_is_valid() -> None:
     compose_path: Path = Path(__file__).parent.parent / "docker-compose.monitoring.yml"
     assert compose_path.exists()
 
-    with open(compose_path, "r", encoding="utf-8") as f:
-        compose: Dict[str, Any] = yaml.safe_load(f)
+    with open(compose_path, encoding="utf-8") as f:
+        compose: dict[str, Any] = yaml.safe_load(f)
 
     assert "services" in compose
-    services: Dict[str, Any] = compose["services"]
+    services: dict[str, Any] = compose["services"]
     assert "openobserve" in services
     assert "otel-collector" in services
 

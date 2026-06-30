@@ -49,13 +49,13 @@ docker compose -f docker-compose.monitoring.yml up -d
 
 ### Access
 
-| Interface | URL |
-|---|---|
+| Interface          | URL                                                   |
+|--------------------|-------------------------------------------------------|
 | **OpenObserve UI** | `http://localhost:5080` (or `$OPENOBSERVE_HOST_PORT`) |
-| **Login** | `admin@iqoqo.local` / `supersecret` |
-| **SQL REST API** | `POST http://localhost:5080/api/default/_search` |
-| **OTLP gRPC** | `localhost:4317` (or `$OTEL_GRPC_HOST_PORT`) |
-| **OTLP HTTP** | `localhost:4318` (or `$OTEL_HTTP_HOST_PORT`) |
+| **Login**          | `admin@iqoqo.local` / `supersecret`                   |
+| **SQL REST API**   | `POST http://localhost:5080/api/default/_search`      |
+| **OTLP gRPC**      | `localhost:4317` (or `$OTEL_GRPC_HOST_PORT`)          |
+| **OTLP HTTP**      | `localhost:4318` (or `$OTEL_HTTP_HOST_PORT`)          |
 
 ### Multi-Stack Port Collision Avoidance
 
@@ -80,16 +80,16 @@ make monitoring-stop
 
 All 8 platform layers are instrumented via **zero-code-change OpenTelemetry auto-instrumentation**:
 
-| # | Layer | Mechanism | Signal |
-|---|---|---|---|
-| 1 | **Frontend SSR (Next.js)** | `@vercel/otel` via `frontend/instrumentation.ts` | Traces, Metrics |
-| 2 | **Flask Backend (Gunicorn)** | `opentelemetry-instrument gunicorn` wrapper | Traces, Metrics, Logs |
-| 3 | **Celery Workers** | `opentelemetry-instrument celery` wrapper | Traces, Metrics, Logs |
-| 4 | **Outbound HTTP (requests)** | `opentelemetry-instrumentation-requests` | Traces |
-| 5 | **Browser Web Vitals** | `BrowserTelemetry` React component + OTel Web SDK | Traces |
-| 6 | **Nginx Edge Proxy** | `ngx_otel_module.so` (via `deploy/Dockerfile.nginx`) | Traces |
-| 7 | **OpenAI LLM** | `opentelemetry-instrumentation-openai` | Traces (token usage, prompts) |
-| 8 | **PostgreSQL & Redis Internals** | OTel Collector `postgresql` + `redis` receivers | Metrics |
+| # | Layer                            | Mechanism                                            | Signal                        |
+|---|----------------------------------|------------------------------------------------------|-------------------------------|
+| 1 | **Frontend SSR (Next.js)**       | `@vercel/otel` via `frontend/instrumentation.ts`     | Traces, Metrics               |
+| 2 | **Flask Backend (Gunicorn)**     | `opentelemetry-instrument gunicorn` wrapper          | Traces, Metrics, Logs         |
+| 3 | **Celery Workers**               | `opentelemetry-instrument celery` wrapper            | Traces, Metrics, Logs         |
+| 4 | **Outbound HTTP (requests)**     | `opentelemetry-instrumentation-requests`             | Traces                        |
+| 5 | **Browser Web Vitals**           | `BrowserTelemetry` React component + OTel Web SDK    | Traces                        |
+| 6 | **Nginx Edge Proxy**             | `ngx_otel_module.so` (via `deploy/Dockerfile.nginx`) | Traces                        |
+| 7 | **OpenAI LLM**                   | `opentelemetry-instrumentation-openai`               | Traces (token usage, prompts) |
+| 8 | **PostgreSQL & Redis Internals** | OTel Collector `postgresql` + `redis` receivers      | Metrics                       |
 
 ---
 
@@ -179,14 +179,14 @@ Requires: `GRAFANA_PROMETHEUS_URL`, `GRAFANA_PROMETHEUS_USER`, `GRAFANA_LOKI_URL
 
 ## Configuration Files
 
-| File | Purpose |
-|---|---|
-| `docker-compose.monitoring.yml` | **Default** OpenObserve + OTel Collector stack |
-| `docker-compose.prometheus-jaeger.yml` | Optional legacy Prometheus + Jaeger + cAdvisor |
-| `docker-compose.grafana.yml` | Optional Grafana Cloud integration |
-| `deploy/otel-collector-local.yaml` | OTel Collector config (OpenObserve backend) |
-| `deploy/otel-collector-prometheus-config.yaml` | OTel Collector config (Prometheus backend) |
-| `deploy/Dockerfile.nginx` | Custom Nginx with `ngx_otel_module` (Layer 6) |
-| `deploy/nginx-main.conf` | Nginx main config loading OTel C-module |
-| `frontend/instrumentation.ts` | Next.js server-side OTel bootstrap (Layer 1) |
-| `frontend/components/browser-telemetry.tsx` | Browser-side OTel bootstrap (Layer 5) |
+| File                                           | Purpose                                        |
+|------------------------------------------------|------------------------------------------------|
+| `docker-compose.monitoring.yml`                | **Default** OpenObserve + OTel Collector stack |
+| `docker-compose.prometheus-jaeger.yml`         | Optional legacy Prometheus + Jaeger + cAdvisor |
+| `docker-compose.grafana.yml`                   | Optional Grafana Cloud integration             |
+| `deploy/otel-collector-local.yaml`             | OTel Collector config (OpenObserve backend)    |
+| `deploy/otel-collector-prometheus-config.yaml` | OTel Collector config (Prometheus backend)     |
+| `deploy/Dockerfile.nginx`                      | Custom Nginx with `ngx_otel_module` (Layer 6)  |
+| `deploy/nginx-main.conf`                       | Nginx main config loading OTel C-module        |
+| `frontend/instrumentation.ts`                  | Next.js server-side OTel bootstrap (Layer 1)   |
+| `frontend/components/browser-telemetry.tsx`    | Browser-side OTel bootstrap (Layer 5)          |

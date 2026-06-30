@@ -73,18 +73,13 @@ export function BrowserTelemetry(): null {
           ]) => {
             // Target the host-exposed OTel Collector port.
             // CORS is whitelisted for localhost:3000 in otel-collector-local.yaml.
-            const collectorUrl =
-              process.env.NEXT_PUBLIC_OTEL_COLLECTOR_URL ?? "http://localhost:4318/v1/traces";
+            const collectorUrl = process.env.NEXT_PUBLIC_OTEL_COLLECTOR_URL ?? "http://localhost:4318/v1/traces";
 
             const provider = new WebTracerProvider({
               resource: new Resource({
                 [SEMRESATTRS_SERVICE_NAME]: "iqoqo-browser-client",
               }),
-              spanProcessors: [
-                new BatchSpanProcessor(
-                  new OTLPTraceExporter({ url: collectorUrl }),
-                ),
-              ],
+              spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter({ url: collectorUrl }))],
             });
 
             provider.register({
@@ -93,17 +88,14 @@ export function BrowserTelemetry(): null {
 
             // Auto-instrument document load (Core Web Vitals) and user interactions.
             registerInstrumentations({
-              instrumentations: [
-                new DocumentLoadInstrumentation(),
-                new UserInteractionInstrumentation(),
-              ],
+              instrumentations: [new DocumentLoadInstrumentation(), new UserInteractionInstrumentation()],
             });
 
             console.log("🏗️ iqoqo Browser OpenTelemetry initialised →", collectorUrl);
-          },
-        ),
+          }
+        )
       )
-      .catch((err) => {
+      .catch(err => {
         // Non-fatal: telemetry failure must never break the application.
         console.warn("⚠️ iqoqo Browser OTel init failed (non-fatal):", err);
       });
