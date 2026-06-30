@@ -35,12 +35,6 @@ services:
       - ZO_DATA_DIR=/data
     volumes:
       - openobserve_data:/data
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:5080/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     networks:
       - default
 
@@ -50,20 +44,29 @@ services:
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
+      # Local dev config: OTLP-only receivers (no docker_stats/postgresql/redis).
+      # Those infrastructure receivers require in-network service hostnames and a Docker
+      # socket that are only available in a full prod Compose stack. Using them in local
+      # dev causes the collector to crash-loop. See deploy/otel-collector-prod.yaml for
+      # the full-receiver production config.
       - ./deploy/otel-collector-local.yaml:/etc/otelcol-contrib/config.yaml:ro
-      # Read-only Docker socket: allows docker_stats receiver to scrape container metrics.
-      # This grants read-only visibility into container metadata only.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    env_file:
-      - ${ENV_FILE:-.env}
+    environment:
+      # Only pass through variables that the collector YAML config actually references.
+      # DO NOT use env_file here — .env contains OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_TRACES_EXPORTER,
+      # etc. meant for the Python SDK. Those env vars override the collector's own YAML config and
+      # cause fatal misconfiguration (e.g. the collector tries to export to itself via localhost).
+      - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_strong_password}
+      - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}
+      - FRONTEND_PORT=${FRONTEND_PORT:-3000}
     ports:
       # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.
       # Override OTEL_GRPC_HOST_PORT / OTEL_HTTP_HOST_PORT to avoid multi-stack collision.
       - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317"  # OTLP gRPC
       - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318"  # OTLP HTTP
     depends_on:
-      openobserve:
-        condition: service_healthy
+      - openobserve
     extra_hosts:
       # Allows the collector to reach host-side services (e.g. native dev Flask on port 5000).
       - "host.docker.internal:host-gateway"

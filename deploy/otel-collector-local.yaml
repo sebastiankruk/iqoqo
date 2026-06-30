@@ -5,17 +5,28 @@
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# OpenTelemetry Collector — Unified Local Config (OpenObserve backend)
+# OpenTelemetry Collector — Local Dev Config (OpenObserve backend)
 #
-# Covers all 8 observability layers:
-#   - Layer 1: Frontend SSR (Next.js)          via OTLP push from app container
-#   - Layer 2: Flask Backend                   via OTLP push from app container
-#   - Layer 3: Celery Workers                  via OTLP push from app container
-#   - Layer 4: Outbound HTTP (requests lib)    via OTLP push from app container
+# PURPOSE: Lightweight local-dev-only config. Only accepts OTLP pushes from
+#          app processes (Flask, Celery, Next.js) and forwards everything to
+#          the local OpenObserve container.
+#
+# NOTE: Infrastructure receivers (docker_stats, postgresql, redis) are intentionally
+#       omitted here. Those receivers require host-level Docker socket access and
+#       in-network service hostnames that are only available in a full Docker Compose
+#       stack. Enabling them in local dev causes the collector to crash-loop, making
+#       port 4318 unavailable for application telemetry.
+#       See deploy/otel-collector-prod.yaml for the full-receiver production config.
+#
+# Observability layers covered (local dev):
+#   - Layer 1: Frontend SSR (Next.js)          via OTLP push from instrumentation.ts
+#   - Layer 2: Flask Backend                   via opentelemetry-instrument
+#   - Layer 3: Celery Workers                  via opentelemetry-instrument
+#   - Layer 4: Outbound HTTP (requests lib)    via opentelemetry-instrumentation-requests
 #   - Layer 5: Browser Web Vitals              via OTLP push from browser (CORS-enabled)
-#   - Layer 6: Nginx Edge Proxy                via gRPC push from ngx_otel_module
-#   - Layer 7: OpenAI LLM                      via OTLP push from app container
-#   - Layer 8: PostgreSQL & Redis Internals    via native receiver scraping
+#   - Layer 7: OpenAI LLM                      via opentelemetry-instrumentation-openai
+#
+# Layers 6 (Nginx), 8 (PostgreSQL/Redis internals) require prod config.
 
 receivers:
   otlp:
@@ -28,34 +39,10 @@ receivers:
           # Required to securely accept browser-side OTel traces (Layer 5)
           allowed_origins:
             - "http://localhost:3000"
-            - "http://localhost:${FRONTEND_PORT:-3000}"
+            - "http://localhost:${FRONTEND_PORT}"
             - "https://dev.iqoqo.cc"
           allowed_headers:
             - "*"
-
-  # Layer 8: Container resource metrics (replaces cAdvisor)
-  docker_stats:
-    endpoint: "unix:///var/run/docker.sock"
-    collection_interval: 10s
-    env_vars_to_metric_labels:
-      - COMPOSE_SERVICE
-
-  # Layer 8: PostgreSQL internal engine health (dead tuples, cache hit ratio, index usage)
-  postgresql:
-    endpoint: "db:5432"
-    transport: tcp
-    username: "${POSTGRES_USER:-iqoqo}"
-    password: "${POSTGRES_PASSWORD:-changeme}"
-    databases:
-      - "${POSTGRES_DB:-iqoqo}"
-    collection_interval: 10s
-    tls:
-      insecure: true
-
-  # Layer 8: Redis memory fragmentation & eviction metrics
-  redis:
-    endpoint: "redis:6379"
-    collection_interval: 10s
 
 processors:
   batch:
@@ -69,7 +56,7 @@ exporters:
   otlphttp/openobserve:
     endpoint: "http://openobserve:5080/api/default/"
     headers:
-      Authorization: "Basic ${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+      Authorization: "Basic ${OPENOBSERVE_BASIC_AUTH}"
 
 service:
   pipelines:
@@ -78,8 +65,7 @@ service:
       processors: [batch]
       exporters: [otlphttp/openobserve]
     metrics:
-      # Layers 1-7 push OTLP metrics; Layers 6+8 come from native receivers
-      receivers: [otlp, docker_stats, postgresql, redis]
+      receivers: [otlp]
       processors: [batch]
       exporters: [otlphttp/openobserve]
     logs:

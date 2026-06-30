@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
+.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -155,11 +155,13 @@ ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
   PREBUILT_FLAG = --prebuilt
 endif
 
-.PHONY: preview prod prebuilt clone
+.PHONY: preview prod dev prebuilt clone
 
 preview:
 	@:
 prod:
+	@:
+dev:
 	@:
 prebuilt:
 	@:

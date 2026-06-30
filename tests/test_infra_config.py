@@ -188,7 +188,7 @@ exit 0
         # Scenario 1: Local OpenObserve monitoring stack is present but not running
         (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  openobserve:\n    image: openobserve/openobserve")
         result = self.run_script(args=["prod"], env_content=env_content)
-        self.assertIn("Found docker-compose.monitoring.yml, starting with local monitoring...", result.stdout)
+        self.assertIn("Found docker-compose.monitoring.yml, starting with OpenObserve monitoring...", result.stdout)
 
         # Scenario 2: Local OpenObserve monitoring stack is already active globally
         docker_mock = self.bin_dir / "docker"

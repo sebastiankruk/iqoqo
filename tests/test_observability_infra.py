@@ -16,11 +16,19 @@
 import os
 from pathlib import Path
 from typing import Any, Dict
+
 import yaml
 
 
 def test_otel_collector_config_yaml_is_valid() -> None:
-    """Verify that deploy/otel-collector-local.yaml exists and is valid YAML."""
+    """Verify that deploy/otel-collector-local.yaml exists, is valid YAML,
+    and only uses the OTLP receiver.
+
+    The local dev config must NOT include infrastructure receivers
+    (docker_stats, postgresql, redis) because those require a full Docker
+    Compose stack and cause the collector to crash-loop in local dev mode.
+    See deploy/otel-collector-prod.yaml for the full-receiver production config.
+    """
     config_path: Path = Path(__file__).parent.parent / "deploy" / "otel-collector-local.yaml"
     assert config_path.exists()
 
@@ -32,16 +40,57 @@ def test_otel_collector_config_yaml_is_valid() -> None:
     assert "exporters" in config
     assert "service" in config
 
-    # Check key receivers
+    # Local dev config must only use the OTLP receiver
     receivers: Dict[str, Any] = config["receivers"]
-    assert "otlp" in receivers
-    assert "docker_stats" in receivers
-    assert "postgresql" in receivers
-    assert "redis" in receivers
+    assert "otlp" in receivers, "otlp receiver must be present in local config"
+    assert "docker_stats" not in receivers, "docker_stats must NOT be in local config — it crash-loops without Docker socket"
+    assert "postgresql" not in receivers, "postgresql must NOT be in local config — it crash-loops without in-network 'db' hostname"
+    assert "redis" not in receivers, "redis must NOT be in local config — it crash-loops without in-network 'redis' hostname"
+
+    # All 3 signal pipelines must only reference the otlp receiver
+    pipelines: Dict[str, Any] = config["service"]["pipelines"]
+    for signal in ("traces", "metrics", "logs"):
+        assert signal in pipelines, f"pipeline '{signal}' must be present"
+        pipeline_receivers = pipelines[signal]["receivers"]
+        assert pipeline_receivers == ["otlp"], f"'{signal}' pipeline must only use [otlp] in local config, got {pipeline_receivers}"
 
     # Check processors
     processors: Dict[str, Any] = config["processors"]
     assert "batch" in processors
+
+    # Check exporters
+    exporters: Dict[str, Any] = config["exporters"]
+    assert "otlphttp/openobserve" in exporters
+
+
+def test_otel_collector_prod_config_yaml_is_valid() -> None:
+    """Verify that deploy/otel-collector-prod.yaml exists, is valid YAML,
+    and contains all infrastructure receivers required for full observability.
+    """
+    config_path: Path = Path(__file__).parent.parent / "deploy" / "otel-collector-prod.yaml"
+    assert config_path.exists(), "otel-collector-prod.yaml must exist for production deployments"
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config: Dict[str, Any] = yaml.safe_load(f)
+
+    assert "receivers" in config
+    assert "processors" in config
+    assert "exporters" in config
+    assert "service" in config
+
+    # Prod config must have all infrastructure receivers
+    receivers: Dict[str, Any] = config["receivers"]
+    assert "otlp" in receivers, "otlp receiver must be present"
+    assert "docker_stats" in receivers, "docker_stats must be present in prod config"
+    assert "postgresql" in receivers, "postgresql must be present in prod config"
+    assert "redis" in receivers, "redis must be present in prod config"
+
+    # Metrics pipeline must include infrastructure receivers
+    pipelines: Dict[str, Any] = config["service"]["pipelines"]
+    assert "metrics" in pipelines
+    metrics_receivers = pipelines["metrics"]["receivers"]
+    for receiver in ("otlp", "postgresql", "redis", "docker_stats"):
+        assert receiver in metrics_receivers, f"'{receiver}' must be in prod metrics pipeline, got {metrics_receivers}"
 
     # Check exporters
     exporters: Dict[str, Any] = config["exporters"]
@@ -64,6 +113,15 @@ def test_monitoring_docker_compose_is_valid() -> None:
     # Verify container names are project name prefixed
     assert services["openobserve"].get("container_name") == "${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve"
     assert services["otel-collector"].get("container_name") == "${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector"
+
+    # CRITICAL: The OTel collector must NOT use env_file. Loading the full .env injects
+    # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 into the container, overriding
+    # the YAML config's exporter and causing the collector to export to itself (fatal loop).
+    assert "env_file" not in services["otel-collector"], (
+        "otel-collector MUST NOT use env_file — .env contains OTEL_EXPORTER_OTLP_ENDPOINT "
+        "and other Python SDK vars that override the collector's own YAML config"
+    )
+    assert "environment" in services["otel-collector"], "otel-collector should use explicit environment vars instead of env_file"
 
 
 def test_nginx_main_otel_config_structure() -> None:
