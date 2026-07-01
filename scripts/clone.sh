@@ -101,12 +101,12 @@ DST_POSTGRES_DB=$(get_env_var "$DST_ENV" "POSTGRES_DB" "iqoqo")
 
 # Determine compose project names
 SRC_PROJECT="iqoqo-${SRC_NAME}"
-if [ "$SRC_NAME" = "prod" ]; then
+if [ "$SRC_NAME" = "prod" ] || [ "$SRC_NAME" = "dev" ]; then
     SRC_PROJECT="iqoqo"
 fi
 
 DST_PROJECT="iqoqo-${DST_NAME}"
-if [ "$DST_NAME" = "prod" ]; then
+if [ "$DST_NAME" = "prod" ] || [ "$DST_NAME" = "dev" ]; then
     DST_PROJECT="iqoqo"
 fi
 
