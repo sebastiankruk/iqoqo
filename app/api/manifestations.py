@@ -268,6 +268,8 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
             else None
         ),
         "isbn13": m.isbn13,
+        "upc": m.upc,
+        "ean": m.ean,
         "publisher": m.publisher,
         "year": resolved_year,
         "meta": m.meta,
@@ -278,6 +280,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "user_owns": user_owns,
         "item_id": item_id,
         "owner_count": owner_count,
+        "content_type": m.expression.content_type if m.expression else None,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

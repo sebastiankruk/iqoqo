@@ -61,6 +61,8 @@ export interface Manifestation {
   work_id?: number | null;
   container_work_id?: number | null;
   isbn13?: string;
+  upc?: string;
+  ean?: string;
   publisher?: string;
   year?: number;
   cover_url?: string | null;
