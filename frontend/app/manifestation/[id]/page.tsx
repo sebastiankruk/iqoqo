@@ -34,6 +34,7 @@ import { ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
+import { ExtendedMetadata } from "@/components/item/extended-metadata";
 
 /**
  * Page displaying a single manifestation with metadata and add-to-collection action.
@@ -118,6 +119,15 @@ export default function ManifestationPage() {
     datePublished: resolved_year,
   };
 
+  const resolvedIsbn =
+    (manifestation.isbn13 || "").trim() ||
+    (manifestation.meta?.isbn as string | undefined) ||
+    (manifestation.meta?.isbn13 as string | undefined);
+  const resolvedEan =
+    (manifestation.ean || "").trim() ||
+    (manifestation.meta?.ean as string | undefined) ||
+    (manifestation.meta?.barcode as string | undefined);
+  const resolvedUpc = (manifestation.upc || "").trim() || (manifestation.meta?.upc as string | undefined);
   const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];
 
   return (
@@ -240,27 +250,28 @@ export default function ManifestationPage() {
             <div className="space-y-3 pt-6 border-t border-border">
               <h2 className="text-lg font-semibold">Publication Details</h2>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                {manifestation.isbn13 && (
+                {resolvedIsbn && (
                   <div>
                     <dt className="text-muted-foreground">ISBN-13</dt>
                     <dd className="font-medium text-foreground" property="schema:isbn">
-                      {String(manifestation.isbn13)}
+                      {String(resolvedIsbn)}
                     </dd>
                   </div>
                 )}
-                {manifestation.work_id && (
+                {resolvedEan && (
                   <div>
-                    <dt className="text-muted-foreground">FRBR Work ID</dt>
-                    <dd className="font-medium text-foreground">
-                      <a
-                        rel="embodimentOf"
-                        href={`/api/public/works/${manifestation.work_id}`}
-                        className="text-primary hover:underline font-mono text-xs"
-                      >
-                        {String(manifestation.work_id)}
-                      </a>
-                    </dd>
+                    <dt className="text-muted-foreground">EAN</dt>
+                    <dd className="font-medium text-foreground">{String(resolvedEan)}</dd>
                   </div>
+                )}
+                {resolvedUpc && (
+                  <div>
+                    <dt className="text-muted-foreground">UPC</dt>
+                    <dd className="font-medium text-foreground">{String(resolvedUpc)}</dd>
+                  </div>
+                )}
+                {manifestation.work_id && (
+                  <a rel="embodimentOf" href={`/api/public/works/${manifestation.work_id}`} className="hidden" />
                 )}
                 {!!(
                   manifestation.meta?.Publisher &&
@@ -289,6 +300,11 @@ export default function ManifestationPage() {
                   </div>
                 )}
               </dl>
+            </div>
+
+            {/* Rich metadata including audio tracklists and descriptions */}
+            <div className="pt-6 border-t border-border">
+              <ExtendedMetadata meta={manifestation.meta ?? {}} owner_count={manifestation.owner_count} />
             </div>
 
             {tags.length > 0 && (

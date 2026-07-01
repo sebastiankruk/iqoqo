@@ -423,3 +423,64 @@ def test_format_alias_resolves_correctly(alias, expected_category):
     from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
     assert FORMAT_ALIAS_TO_CATEGORY.get(alias) == expected_category
+
+
+def test_normalize_preview_meta_helper():
+    """Verify that _normalize_preview_meta correctly flattens authors and cover_url shapes."""
+    from app.api.scanner import _normalize_preview_meta
+
+    # Test case 1: Open Library metadata structure (list of dicts in authors)
+    meta1 = {
+        "Title": "Test Book",
+        "authors": [{"name": "John Doe", "url": "http://ol.org/authors/1"}],
+        "cover": {"large": "http://img.jpg/large", "small": "http://img.jpg/small"},
+    }
+    res1 = _normalize_preview_meta(meta1, format_hint="book")
+    assert res1["title"] == "Test Book"
+    assert res1["Authors"] == ["John Doe"]
+    assert "authors" not in res1
+    assert res1["author"] == "John Doe"
+    assert res1["cover_url"] == "http://img.jpg/large"
+    assert res1["format"] == "book"
+
+    # Test case 2: Discogs style (singular author string, lowercase format)
+    meta2 = {
+        "title": "Some Album",
+        "author": "Awesome Band",
+        "thumb": "http://thumb.jpg",
+    }
+    res2 = _normalize_preview_meta(meta2, format_hint="music")
+    assert res2["title"] == "Some Album"
+    assert res2["author"] == "Awesome Band"
+    assert res2["cover_url"] == "http://thumb.jpg"
+    assert res2["format"] == "cd"
+
+
+@patch("app.api.scanner.IngestService.ingest_from_isbn")
+def test_scan_barcode_wishlist_success(mock_ingest_isbn, client, normal_user_headers, app):
+    """Test scan endpoint correctly adds to wishlist and returns intent_id and null item_id."""
+    mock_work = MagicMock()
+    mock_work.id = 123
+    mock_work.title = "Some Book"
+    mock_work.meta = {"authors": ["Some Author"]}
+
+    mock_expression = MagicMock()
+    mock_expression.content_type = "text"
+    mock_expression.work = mock_work
+
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 555
+    mock_manifestation.title = "Some Book"
+    mock_manifestation.author = "Some Author"
+    mock_manifestation.cover_url = "http://cover.jpg"
+    mock_manifestation.meta = {"title": "Some Book", "authors": ["Some Author"]}
+    mock_manifestation.expression = mock_expression
+    mock_ingest_isbn.return_value = mock_manifestation
+
+    payload = {"barcode": "9780553380163", "format": "book", "collection_status": "wish_list"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["item_id"] is None
+    assert response.json["data"]["intent_id"] is not None
+    assert response.json["data"]["manifestation_id"] == 555

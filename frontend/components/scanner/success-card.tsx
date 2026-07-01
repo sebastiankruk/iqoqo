@@ -80,7 +80,10 @@ export function SuccessCard({
 
   const title = meta.title || meta.Title || meta.format || "Unknown Title";
   const authors = meta.authors || meta.Authors || (meta.author ? [meta.author] : []);
-  const authorDisplay = authors.length > 0 ? authors.join(", ") : "Unknown Artist/Author";
+  const normalizedAuthors = authors.map((a: unknown) =>
+    a && typeof a === "object" && "name" in a ? (a as { name: string }).name : String(a)
+  );
+  const authorDisplay = normalizedAuthors.length > 0 ? normalizedAuthors.join(", ") : "Unknown Artist/Author";
   const rawCover = Array.isArray(meta.cover_url) ? meta.cover_url[0] : meta.cover_url;
   const coverUrl = typeof rawCover === "string" && rawCover ? rawCover : "/file.svg";
 
@@ -141,7 +144,9 @@ export function SuccessCard({
     }
     setAdding(true);
     try {
-      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>("/scan", {
+      const res = await apiClient.post<
+        ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number }>
+      >("/scan", {
         barcode: machineIdentifier,
         manifestation_id: meta.manifestation_id,
         format: format,
@@ -172,17 +177,21 @@ export function SuccessCard({
         toast.success(`"${title}" added to your ${collectionStatus === "wish_list" ? "Wishlist" : "Library"}!`);
       }
 
-      if (data.item_id) {
+      // Invalidate cached queries BEFORE navigating so the UI has fresh statistics
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["items"] }),
+        queryClient.invalidateQueries({ queryKey: ["worksShelf"] }),
+        queryClient.invalidateQueries({ queryKey: ["expressionsShelf"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
+      ]);
+
+      if (collectionStatus === "wish_list" && data.manifestation_id) {
+        router.push(`/manifestation/${data.manifestation_id}`);
+      } else if (data.item_id) {
         router.push(`/item/${data.item_id}`);
       } else {
         onDismiss();
       }
-
-      // Invalidate cached queries so collection views reflect the new item
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
-      void queryClient.invalidateQueries({ queryKey: ["worksShelf"] });
-      void queryClient.invalidateQueries({ queryKey: ["expressionsShelf"] });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     } catch (e) {
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {

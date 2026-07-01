@@ -188,11 +188,26 @@ def test_dynamic_virtual_item_synthesis(client, test_setup, app):
     assert v_item["manifestation_id"] == test_setup["manifestation_id"]
     assert v_item["id"] < 0  # Synthesized negative ID
 
-    # Filter items by wish_list
-    response = client.get("/api/items?status=wish_list", headers=headers)
+    # Filter items by wish_list (collection-level status)
+    response = client.get("/api/items?statuses=wish_list", headers=headers)
     assert response.status_code == 200
-    assert len(response.json["data"]) == 1
-    assert response.json["data"][0]["title"] == "Test Conceptual Work"
+    wish_items = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(wish_items) == 1
+    assert wish_items[0]["title"] == "Test Conceptual Work"
+    assert wish_items[0]["collection_status"] == "wish_list"
+
+    # Filter by specific intent-level status
+    response = client.get("/api/items?statuses=want_to_read", headers=headers)
+    assert response.status_code == 200
+    want_items = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(want_items) == 1
+    assert want_items[0]["status"] == "want_to_read"
+
+    # Non-matching status should NOT include virtual items
+    response = client.get("/api/items?statuses=available", headers=headers)
+    assert response.status_code == 200
+    avail_virtual = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(avail_virtual) == 0
 
 
 def test_scanner_wishlist_ingest(client, test_setup, app):
@@ -209,7 +224,8 @@ def test_scanner_wishlist_ingest(client, test_setup, app):
     assert response.status_code == 201
     data = response.json["data"]
     assert data["manifestation_id"] == manif_id
-    assert data["item_id"] < 0  # returned negative virtual item id
+    assert data["item_id"] is None
+    assert data["intent_id"] > 0
 
     # Verify no physical item was created in DB
     with app.app_context():
@@ -546,3 +562,62 @@ def test_virtual_items_with_category_filter_no_manifestation(client, app):
     items = resp.get_json()["data"]
     virtual = [i for i in items if i.get("is_virtual") and i["title"] == "Filtered Orphan"]
     assert len(virtual) == 1
+
+
+def test_virtual_item_detail_no_manifestation(client, app):
+    """B8: GET /api/items/<negative_id> returns work details even when there's no manifestation."""
+    with app.app_context():
+        user = User(email="b8_detail_test@iqoqo.local", display_name="B8 Detail Tester")
+        role = Role.query.filter_by(name="user").first()
+        if not role:
+            role = Role(name="user")
+            db.session.add(role)
+            db.session.flush()
+        user.roles.append(role)
+        db.session.add(user)
+        db.session.flush()
+
+        work = Work(title="B8 Detail Orphan", meta={"authors": ["Detail Author"]})
+        db.session.add(work)
+        db.session.flush()
+
+        intent = UserWorkIntent(work_id=work.id, user_id=user.id, status="want_to_read")
+        db.session.add(intent)
+        db.session.commit()
+
+        token = generate_internal_jwt(user)
+        headers = {"Authorization": f"Bearer {token}"}
+        intent_id = intent.id
+
+    resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["id"] == -intent_id
+    assert data["manifestation_id"] is None
+    assert data["work"]["title"] == "B8 Detail Orphan"
+    assert data["work"]["authors"] == ["Detail Author"]
+
+
+def test_add_to_wishlist_by_manifestation(client, test_setup, app):
+    """POST /api/manifestations/<id>/add with wish_list collection status creates UserWorkIntent."""
+    headers = get_headers(app, test_setup["user_id"])
+    manif_id = test_setup["manifestation_id"]
+
+    response = client.post(
+        f"/api/manifestations/{manif_id}/add",
+        json={"collection_status": "wish_list"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json["data"]
+    assert data["manifestation_id"] == manif_id
+    assert data["item_id"] is None
+    assert data["intent_id"] > 0
+
+    with app.app_context():
+        items = Item.query.filter_by(manifestation_id=manif_id, owner_id=test_setup["user_id"]).all()
+        assert len(items) == 0
+
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=test_setup["work_id"]).first()
+        assert intent is not None
+        assert intent.status == "want_to_read"

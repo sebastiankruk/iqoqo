@@ -1,0 +1,90 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Legacy Optional Monitoring Stack — Prometheus + Jaeger + cAdvisor
+#
+# This stack is provided as an optional alternative to the default OpenObserve stack.
+# Use it if you prefer PromQL/Jaeger UI over OpenObserve's unified SQL interface.
+#
+# Usage:
+#   make monitoring-legacy-start
+#   make monitoring-legacy-stop
+#   docker compose -f docker-compose.prometheus-jaeger.yml up -d
+#
+# Access:
+#   Prometheus UI: http://localhost:${PROMETHEUS_PORT:-9090}
+#   Jaeger UI:     http://localhost:${JAEGER_UI_PORT:-16686}
+#
+# NOTE: Jaeger ports 4317/4318 conflict with the default OpenObserve OTel Collector
+# ports. Do NOT run both stacks simultaneously unless you adjust JAEGER_OTLP_GRPC_PORT
+# and JAEGER_OTLP_HTTP_PORT in .env.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: iqoqo-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+
+  jaeger:
+    image: jaegertracing/jaeger:2.19.0
+    container_name: iqoqo-telemetry-jaeger
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
+      - "127.0.0.1:${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+    networks:
+      - default
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.95.0
+    container_name: iqoqo-otel-collector-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./deploy/otel-collector-prometheus-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - jaeger
+    networks:
+      - default
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: iqoqo-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - default
+
+volumes:
+  prometheus_data:
+
+networks:
+  default:
+    name: iqoqo_default
+    external: true

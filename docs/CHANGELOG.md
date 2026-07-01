@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Frontend Telemetry Registration**: Created `frontend/instrumentation.ts` utilizing `@vercel/otel` for frontend trace propagation.
 - **Devcontainer Sandbox Configuration**: Introduced `.devcontainer/Dockerfile` and `.devcontainer/devcontainer.template.json` template setup with Ubuntu 24.04 and workspace bind-mounts to simplify sandbox environment deployment.
 - **Database Migration Make Targets**: Added `db-stamp` and `db-upgrade` targets to the `Makefile` (supporting both docker and local run modes) to simplify schema upgrades and migrations version synchronization.
+- **Browser Web Vitals Instrumentation (Layer 5)**: Added `frontend/components/browser-telemetry.tsx`, a null-rendering `'use client'` component that dynamically loads the OpenTelemetry Web SDK post-hydration. Instruments DOM document load events (Core Web Vitals) and user interactions (clicks, submits). Traces are shipped via OTLP HTTP to the OTel Collector with CORS whitelisted for `localhost:3000`.
+- **Nginx Native OTel Module (Layer 6)**: Added `deploy/Dockerfile.nginx` (Debian-based `nginx:1.25` with `nginx-module-otel`) and `deploy/nginx-main.conf` (loads `ngx_otel_module.so`, configures gRPC OTLP export, injects `trace_id`/`span_id` into the access log). The nginx service in `docker-compose.yml` now builds from `deploy/Dockerfile.nginx` instead of pulling `nginx:1.25-alpine`.
+- **OpenAI LLM Telemetry (Layer 7)**: Added `opentelemetry-instrumentation-openai` to `requirements.txt`. Automatically captures token consumption, prompt payloads, model parameters, and generation latency as OTel spans without code changes.
+- **PostgreSQL & Redis Native Metrics (Layer 8)**: Added `postgresql` and `redis` native receivers to `deploy/otel-collector-local.yaml`. The OTel Collector now scrapes engine-internal metrics (dead tuples, cache hit ratio, memory fragmentation, eviction rates) directly from the database and cache containers.
+- **Legacy Prometheus + Jaeger Stack Preserved**: Moved the old `docker-compose.monitoring.yml` contents to a new `docker-compose.prometheus-jaeger.yml` for operators who prefer PromQL/Jaeger UI. New Makefile targets: `make monitoring-legacy-start` / `make monitoring-legacy-stop`.
+
+### Changed
+
+- **Default Observability Backend**: Replaced Prometheus + Jaeger + cAdvisor as the default local monitoring stack with **OpenObserve** (Rust-based unified backend, Apache Parquet storage, standard SQL queries). New `docker-compose.monitoring.yml` defines OpenObserve + OTel Collector. Makefile targets `monitoring-start`/`monitoring-stop` now target OpenObserve. `run.sh` dev-mode monitoring startup updated to use `iqoqo-openobserve` container naming.
+- **OTel Collector Config**: Added new `deploy/otel-collector-local.yaml` targeting OpenObserve. CORS enabled on the OTLP HTTP receiver for browser-side traces. Metrics pipeline now includes `docker_stats`, `postgresql`, and `redis` receivers.
+- **`.env.example` Observability Section**: Replaced legacy Prometheus/Jaeger port variables with new `OPENOBSERVE_HOST_PORT`, `OPENOBSERVE_ROOT_USER`, `OPENOBSERVE_ROOT_PASSWORD`, `OTEL_GRPC_HOST_PORT`, `OTEL_HTTP_HOST_PORT`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`, `OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED`, and `NEXT_PUBLIC_OTEL_COLLECTOR_URL` variables.
+- **Makefile Help Text**: Added monitoring targets section to `make help` output.
+
+### Fixed
+
+- **Wishlist Detail View**: Fixed `_get_virtual_item_detail` in `app/api/items.py` to return work-level details for virtual items when they lack a manifestation, resolving `404 Not Found` and `UnboundLocalError` issues in collection detail navigation.
+- **Wishlist Invalidation Scope**: Extended frontend query invalidation scope in `useAddItem` React Query hook and `AddToCollectionDropdown` component to invalidate `worksShelf` and `expressionsShelf` on wishlist changes, preventing items from disappearing from shelf views after reload.
+- **Add Manifestation to Wishlist**: Configured the `/api/manifestations/<id>/add` endpoint to create a `UserWorkIntent` instead of a physical `Item` when `collection_status == "wish_list"`. Added a corresponding "Add to Wishlist" option to the manifestation detail page's dropdown.
 
 ## [0.7.5] - 2026-06-10
 

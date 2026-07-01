@@ -17,6 +17,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import * as hooks from "@/lib/api/hooks";
+import { useRouter } from "next/navigation";
 import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
@@ -151,5 +152,39 @@ describe("ItemSidebar Component", () => {
 
     render(<ItemSidebar item={mockItem} onEdit={vi.fn()} />);
     expect(screen.getByText(/Edit Metadata/i)).toBeInTheDocument();
+  });
+
+  it("redirects to new positive ID when virtual item is converted to physical item", () => {
+    const replaceMock = vi.fn();
+    vi.mocked(useRouter).mockReturnValue({
+      push: vi.fn(),
+      replace: replaceMock,
+      prefetch: vi.fn(),
+      back: vi.fn(),
+      forward: vi.fn(),
+      refresh: vi.fn(),
+    } as unknown as ReturnType<typeof useRouter>);
+
+    const mutateMock = vi.fn((payload, options) => {
+      options.onSuccess({ success: true, data: { id: 42 } });
+    });
+
+    vi.mocked(hooks.useUpdateItem).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+    const virtualItem = {
+      ...mockItem,
+      id: -4,
+      collection_status: "wish_list",
+    } as unknown as Item;
+
+    render(<ItemSidebar item={virtualItem} />);
+    const select = screen.getByLabelText("Collection status");
+    fireEvent.change(select, { target: { value: "available" } });
+
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+    expect(replaceMock).toHaveBeenCalledWith("/item/42");
   });
 });

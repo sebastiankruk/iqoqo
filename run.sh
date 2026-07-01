@@ -139,6 +139,73 @@ else
         export APP_VERSION="${VERSION}"
     fi
 fi
+# 2b. Helper to terminate process from pidfile
+terminate_from_pidfile() {
+    pidfile="$1"
+    desc="$2"
+
+    if [ ! -f "${pidfile}" ]; then
+        return 0
+    fi
+
+    pid="$(cat "${pidfile}" 2>/dev/null || true)"
+    if [ -z "${pid}" ]; then
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    if ! kill -0 "${pid}" 2>/dev/null; then
+        # Process is already gone; clean up stale pidfile.
+        rm -f "${pidfile}"
+        return 0
+    fi
+
+    echo "🧹 Terminating ${desc} (PID ${pid})..."
+    # First try graceful shutdown (SIGTERM).
+    kill "${pid}" 2>/dev/null || true
+
+    # Wait up to 5 seconds for the process to exit.
+    for _ in 1 2 3 4 5; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    # If still running, escalate to SIGKILL.
+    if kill -0 "${pid}" 2>/dev/null; then
+        echo "⚠️  ${desc} did not exit gracefully; sending SIGKILL..."
+        kill -9 "${pid}" 2>/dev/null || true
+    fi
+
+    rm -f "${pidfile}"
+}
+
+# 3. Stop Command Dispatch
+PID_DIR=".pids"
+
+if [ "$STOP" = true ]; then
+    echo "🛑 Stopping iqoqo in '$MODE' mode..."
+    if [ "$MODE" == "dev" ]; then
+        # Kill local processes if they exist
+        terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
+        terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
+        terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
+        rm -rf "$PID_DIR"
+        docker compose down
+        if [ -f "docker-compose.monitoring.yml" ]; then
+            echo "📊 Stopping local monitoring stack..."
+            docker compose -f docker-compose.monitoring.yml down || true
+        fi
+    else
+        export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
+        [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
+        docker compose down --remove-orphans
+    fi
+    echo "✅ Stopped."
+    exit 0
+fi
+
 # Activate/Bootstrap Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "🔧 Bootstrapping virtual environment..."
@@ -159,27 +226,6 @@ elif [ "requirements.txt" -nt ".venv/bin/activate" ]; then
     touch .venv/bin/activate
 else
     source .venv/bin/activate
-fi
-
-# 3. Execution Dispatch
-PID_DIR=".pids"
-
-if [ "$STOP" = true ]; then
-    echo "🛑 Stopping iqoqo in '$MODE' mode..."
-    if [ "$MODE" == "dev" ]; then
-        # Kill local processes if they exist
-        [ -f "$PID_DIR/flask.pid" ] && kill $(cat "$PID_DIR/flask.pid") 2>/dev/null || true
-        [ -f "$PID_DIR/celery.pid" ] && kill $(cat "$PID_DIR/celery.pid") 2>/dev/null || true
-        [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
-        rm -rf "$PID_DIR"
-        docker compose down
-    else
-        export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
-        [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
-        docker compose down --remove-orphans
-    fi
-    echo "✅ Stopped."
-    exit 0
 fi
 
 if [ "$MODE" == "dev" ]; then
@@ -248,6 +294,19 @@ if [ "$MODE" == "dev" ]; then
         fi
     fi
 
+    # Start Monitoring Stack if OTel is enabled and compose file exists
+    if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && [ -f "docker-compose.monitoring.yml" ]; then
+        echo "📊 OpenTelemetry tracing is enabled. Ensuring local OpenObserve monitoring stack is running..."
+        docker network create iqoqo_default 2>/dev/null || true
+        # Clean up any conflicting container names to prevent startup failure
+        docker rm -f \
+            ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve \
+            ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector \
+            iqoqo-openobserve \
+            iqoqo-otel-collector 2>/dev/null || true
+        docker compose -f docker-compose.monitoring.yml up -d || true
+    fi
+
     # Wait for DB readiness
     for i in {1..15}; do
         if docker compose exec -T db pg_isready -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" &>/dev/null; then
@@ -260,46 +319,7 @@ if [ "$MODE" == "dev" ]; then
     PID_DIR=".pids"
     mkdir -p "$PID_DIR"
 
-    terminate_from_pidfile() {
-        pidfile="$1"
-        desc="$2"
-
-        if [ ! -f "${pidfile}" ]; then
-            return 0
-        fi
-
-        pid="$(cat "${pidfile}" 2>/dev/null || true)"
-        if [ -z "${pid}" ]; then
-            rm -f "${pidfile}"
-            return 0
-        fi
-
-        if ! kill -0 "${pid}" 2>/dev/null; then
-            # Process is already gone; clean up stale pidfile.
-            rm -f "${pidfile}"
-            return 0
-        fi
-
-        echo "🧹 Terminating ${desc} (PID ${pid})..."
-        # First try graceful shutdown (SIGTERM).
-        kill "${pid}" 2>/dev/null || true
-
-        # Wait up to 5 seconds for the process to exit.
-        for _ in 1 2 3 4 5; do
-            if ! kill -0 "${pid}" 2>/dev/null; then
-                break
-            fi
-            sleep 1
-        done
-
-        # If still running, escalate to SIGKILL.
-        if kill -0 "${pid}" 2>/dev/null; then
-            echo "⚠️  ${desc} did not exit gracefully; sending SIGKILL..."
-            kill -9 "${pid}" 2>/dev/null || true
-        fi
-
-        rm -f "${pidfile}"
-    }
+    # terminate_from_pidfile is defined globally above
 
     echo "🧹 Cleaning up previous dev processes..."
     terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
@@ -353,11 +373,10 @@ if [ "$MODE" == "dev" ]; then
     # Termination Helper
     cleanup() {
         echo -e "\n🛑 Stopping servers..."
-        [ -f "$PID_DIR/flask.pid" ] && kill $(cat "$PID_DIR/flask.pid") 2>/dev/null || true
-        [ -f "$PID_DIR/celery.pid" ] && kill $(cat "$PID_DIR/celery.pid") 2>/dev/null || true
-        [ -f "$PID_DIR/next.pid" ] && kill $(cat "$PID_DIR/next.pid") 2>/dev/null || true
+        terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
+        terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
+        terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
         rm -rf "$PID_DIR"
-        sleep 1
         exit 0
     }
     trap cleanup INT TERM
@@ -378,19 +397,32 @@ if [ "$MODE" == "dev" ]; then
     export FLASK_DEBUG=1
     WEB_PORT=${WEB_PORT:-5000}
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
-        echo "📡 Starting Flask API with OpenTelemetry auto-instrumentation..."
-        OTEL_SERVICE_NAME="iqoqo-api" opentelemetry-instrument flask run --port "$WEB_PORT" &
+        echo "📡 Starting Flask API with OpenTelemetry auto-instrumentation (traces + metrics + logs)..."
+        OTEL_SERVICE_NAME="iqoqo-api" \
+        OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
+        OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
+        OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
+        opentelemetry-instrument flask run --port "$WEB_PORT" &
     else
         flask run --port "$WEB_PORT" &
     fi
     echo $! > "$PID_DIR/flask.pid"
 
     # Start Celery
+    CELERY_POOL="prefork"
+    if [ "$(uname)" = "Darwin" ]; then
+        CELERY_POOL="threads"
+    fi
+
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
-        echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation..."
-        OTEL_SERVICE_NAME="iqoqo-celery-worker" opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info &
+        echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation (traces + metrics + logs)..."
+        OTEL_SERVICE_NAME="iqoqo-celery-worker" \
+        OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
+        OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
+        OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
+        opentelemetry-instrument celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
     else
-        .venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
+        .venv/bin/celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
     fi
     echo $! > "$PID_DIR/celery.pid"
 
@@ -516,12 +548,15 @@ except Exception:
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
-    if [ -f "docker-compose.monitoring.yml" ]; then
-        if [ -n "$GRAFANA_PROMETHEUS_URL" ] && [ -n "$GRAFANA_PROMETHEUS_USER" ] && [ -n "$GRAFANA_LOKI_URL" ] && [ -n "$GRAFANA_LOKI_USER" ] && [ -n "$GRAFANA_CLOUD_API_KEY" ]; then
-            echo "📊 Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring..."
-            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
+    if [ -f "docker-compose.grafana.yml" ] && [ -n "$GRAFANA_PROMETHEUS_URL" ] && [ -n "$GRAFANA_PROMETHEUS_USER" ] && [ -n "$GRAFANA_LOKI_URL" ] && [ -n "$GRAFANA_LOKI_USER" ] && [ -n "$GRAFANA_CLOUD_API_KEY" ]; then
+        echo "📊 Found docker-compose.grafana.yml and Grafana Cloud env vars, starting with Grafana monitoring..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.grafana.yml"
+    elif [ -f "docker-compose.monitoring.yml" ]; then
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve$\|^iqoqo-openobserve$"; then
+            echo "📊 OpenObserve monitoring stack is already active globally."
         else
-            echo "📊 Skipping monitoring: Grafana Cloud environment variables (GRAFANA_PROMETHEUS_URL, etc.) are not fully configured."
+            echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
+            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
         fi
     fi
 

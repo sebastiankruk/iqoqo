@@ -4,45 +4,79 @@
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# Default Observability Stack — OpenObserve + OpenTelemetry Collector
+#
+# Usage:
+#   make monitoring-start       # Start this stack
+#   make monitoring-stop        # Stop this stack
+#   docker compose -f docker-compose.monitoring.yml up -d
+#
+# All host ports are bound to 127.0.0.1 only for security.
+# Use env vars to avoid port collisions when running multiple instances on same host:
+#   OPENOBSERVE_HOST_PORT=5081 OTEL_GRPC_HOST_PORT=4319 OTEL_HTTP_HOST_PORT=4320 make monitoring-start
+#
+# Access:  http://localhost:${OPENOBSERVE_HOST_PORT:-5080}
+# Login:   ${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / ${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+# SQL API: POST http://localhost:${OPENOBSERVE_HOST_PORT:-5080}/api/default/_search
 
 services:
-  alloy:
-    image: grafana/alloy:v1.6.1
-    restart: always
-    user: "0"  # Run as root to access /var/run/docker.sock and host journal logs (Note: mounting docker.sock grants root/host-level privileges)
-    volumes:
-      - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/log/journal:/var/log/journal:ro
-      - /var/run/log/journal:/var/run/log/journal:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro,rslave
-    environment:
-      - GRAFANA_PROMETHEUS_URL=${GRAFANA_PROMETHEUS_URL}
-      - GRAFANA_PROMETHEUS_USER=${GRAFANA_PROMETHEUS_USER}
-      - GRAFANA_LOKI_URL=${GRAFANA_LOKI_URL}
-      - GRAFANA_LOKI_USER=${GRAFANA_LOKI_USER}
-      - GRAFANA_CLOUD_API_KEY=${GRAFANA_CLOUD_API_KEY}
-      - FLASK_METRICS_TARGET=web:5000
-      - NEXTJS_METRICS_TARGET=frontend:3000
-      - CADVISOR_TARGET=cadvisor:8080
-    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+  openobserve:
+    image: openobserve/openobserve:v0.14.5
+    container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve
+    restart: unless-stopped
     ports:
-      - "127.0.0.1:${ALLOY_HOST_PORT:-12345}:12345"  # Expose Alloy UI locally only for security/debugging
-    depends_on:
-      - cadvisor
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    restart: always
-    privileged: true
-    devices:
-      - /dev/kmsg
+      # Bind to loopback only — prevents telemetry leakage across network interfaces.
+      # Override OPENOBSERVE_HOST_PORT in .env to avoid multi-stack port collision.
+      - "127.0.0.1:${OPENOBSERVE_HOST_PORT:-5080}:5080"
+    environment:
+      - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
+      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+      - ZO_DATA_DIR=/data
     volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    # No exposed ports to host for security; scraped internally by Alloy
+      - openobserve_data:/data
+    networks:
+      - default
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.95.0
+    container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      # Local dev config: OTLP-only receivers (no docker_stats/postgresql/redis).
+      # Those infrastructure receivers require in-network service hostnames and a Docker
+      # socket that are only available in a full prod Compose stack. Using them in local
+      # dev causes the collector to crash-loop. See deploy/otel-collector-prod.yaml for
+      # the full-receiver production config.
+      - ./deploy/otel-collector-local.yaml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      # Only pass through variables that the collector YAML config actually references.
+      # DO NOT use env_file here — .env contains OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_TRACES_EXPORTER,
+      # etc. meant for the Python SDK. Those env vars override the collector's own YAML config and
+      # cause fatal misconfiguration (e.g. the collector tries to export to itself via localhost).
+      - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_strong_password}
+      - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
+      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}
+      - FRONTEND_PORT=${FRONTEND_PORT:-3000}
+    ports:
+      # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.
+      # Override OTEL_GRPC_HOST_PORT / OTEL_HTTP_HOST_PORT to avoid multi-stack collision.
+      - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317"  # OTLP gRPC
+      - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318"  # OTLP HTTP
+    depends_on:
+      - openobserve
+    extra_hosts:
+      # Allows the collector to reach host-side services (e.g. native dev Flask on port 5000).
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+
+volumes:
+  openobserve_data:
+
+networks:
+  default:
+    name: iqoqo_default
+    external: true

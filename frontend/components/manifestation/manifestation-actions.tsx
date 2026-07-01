@@ -17,7 +17,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RefreshCw, CloudDownload, ImagePlus, Pencil, Image as ImageIcon } from "lucide-react";
+import {
+  Trash2,
+  RefreshCw,
+  CloudDownload,
+  ImagePlus,
+  Pencil,
+  Image as ImageIcon,
+  ChevronDown,
+  ChevronUp,
+  ImageDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
@@ -26,6 +36,7 @@ import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +65,10 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isRefetchingCover, setIsRefetchingCover] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
 
   const isPending = manifestation.meta?.cover_status === "pending";
 
@@ -68,6 +82,8 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
+    } else {
+      setActiveCoverAction(null);
     }
     return () => {
       if (interval !== undefined) {
@@ -79,6 +95,15 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   if (!profile) return null;
 
   const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
+
+  const showAdminActions =
+    hasPermission(PermissionName.REFETCH_METADATA) ||
+    hasPermission(PermissionName.REFETCH_COVER) ||
+    hasPermission(PermissionName.REGENERATE_COVER) ||
+    (hasPermission(PermissionName.READ_METADATA) && !!manifestation.id) ||
+    (hasPermission(PermissionName.EDIT_COVER) && !!manifestation.id) ||
+    hasPermission(PermissionName.UPLOAD_COVER) ||
+    hasPermission(PermissionName.DELETE_MANIFESTATION);
 
   /**
    * Handles the confirmation of manifestation deletion.
@@ -123,6 +148,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     if (!manifestation.id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
+    setActiveCoverAction("regenerate");
     try {
       await regenerateCover.mutateAsync(manifestation.id);
       qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
@@ -160,77 +186,152 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     }
   };
 
+  const handleRefetchCover = async () => {
+    if (!manifestation.id) return;
+    setIsRefetchingCover(true);
+    setActiveCoverAction("refetch");
+    try {
+      await apiClient.post(`/manifestations/${manifestation.id}/refetch-cover`);
+      qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          meta: { ...(prev.meta || {}), cover_status: "pending" },
+        };
+      });
+      toast.success("Cover refetch started");
+    } catch {
+      toast.error("Failed to refetch cover");
+    } finally {
+      setIsRefetchingCover(false);
+    }
+  };
+
   return (
-    <div className="mt-4 border-t border-border pt-4 flex items-center gap-6">
-      {hasPermission(PermissionName.REFETCH_METADATA) && (
-        <button onClick={handleRefetch} disabled={isRefetching} className="btn-action-dashed">
-          <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
-          {isRefetching ? "Fetching..." : "Refetch Metadata"}
-        </button>
-      )}
+    <>
+      {showAdminActions && (
+        <div className="border-t border-border pt-4 w-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+          >
+            {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <span>Admin Actions</span>
+          </Button>
 
-      {hasPermission(PermissionName.REGENERATE_COVER) && (
-        <button onClick={handleRegenerateClick} disabled={isPending || isRequesting} className="btn-action-dashed">
-          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-          {isPending ? "Generating..." : "Regenerate Cover"}
-        </button>
-      )}
+          {isPanelOpen && (
+            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              {hasPermission(PermissionName.REFETCH_METADATA) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetch}
+                  disabled={isRefetching}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
+                  {isRefetching ? "Fetching..." : "Refetch Metadata"}
+                </Button>
+              )}
 
-      {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
-        <button
-          onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${manifestation.id}`)}
-          className="btn-action-dashed"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit FRBR
-        </button>
-      )}
+              {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${manifestation.id}`)}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit FRBR
+                </Button>
+              )}
 
-      {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
-        <button
-          onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${manifestation.id}`)}
-          className="btn-action-dashed"
-        >
-          <ImageIcon className="h-3.5 w-3.5" />
-          Edit Cover Art
-        </button>
-      )}
+              {hasPermission(PermissionName.REFETCH_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetchCover}
+                  disabled={isPending || isRefetchingCover}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageDown
+                    className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
+                  />
+                  {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
+                </Button>
+              )}
 
-      {hasPermission(PermissionName.UPLOAD_COVER) && (
-        <CameraCapture
-          manifestation_id={manifestation.id}
-          onUploadComplete={() => {
-            toast.success("Cover uploaded and processing started!");
-            // Optimistically mark as processing so the polling loop kicks in automatically
-            qc.setQueryData(queryKeys.manifestation(manifestation.id!), (prev: Manifestation | undefined) => {
-              if (!prev) return prev;
-              return { ...prev, meta: { ...(prev.meta || {}), cover_status: "processing" } };
-            });
-          }}
-          label={manifestation.cover_url ? "Replace Cover" : "Contribute Cover"}
-          icon={<ImagePlus className="h-3.5 w-3.5" />}
-          confirmTitle={manifestation.cover_url ? "Replace Existing Cover?" : undefined}
-          confirmMessage={
-            manifestation.cover_url
-              ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
-              : undefined
-          }
-          inline
-          variant="ghost"
-          className="p-0 m-0 w-auto"
-          buttonClassName="btn-action-dashed h-auto"
-        />
-      )}
+              {hasPermission(PermissionName.REGENERATE_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateClick}
+                  disabled={isPending || isRequesting}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
+                  />
+                  {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
+                    ? "Generating..."
+                    : "Regenerate Cover"}
+                </Button>
+              )}
 
-      {hasPermission(PermissionName.DELETE_MANIFESTATION) && (
-        <button
-          onClick={() => setDeleteConfirmOpen(true)}
-          disabled={isDeleting}
-          className="btn-action-dashed-destructive"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete manifestation
-        </button>
+              {hasPermission(PermissionName.UPLOAD_COVER) && (
+                <CameraCapture
+                  manifestation_id={manifestation.id}
+                  onUploadComplete={() => {
+                    toast.success("Cover uploaded and processing started!");
+                    // Optimistically mark as processing so the polling loop kicks in automatically
+                    qc.setQueryData(queryKeys.manifestation(manifestation.id!), (prev: Manifestation | undefined) => {
+                      if (!prev) return prev;
+                      return { ...prev, meta: { ...(prev.meta || {}), cover_status: "processing" } };
+                    });
+                  }}
+                  label={manifestation.cover_url ? "Replace Cover" : "Contribute Cover"}
+                  icon={<ImagePlus className="h-3.5 w-3.5" />}
+                  confirmTitle={manifestation.cover_url ? "Replace Existing Cover?" : undefined}
+                  confirmMessage={
+                    manifestation.cover_url
+                      ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
+                      : undefined
+                  }
+                  inline
+                  variant="outline"
+                  buttonClassName="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 h-8 px-3 text-xs"
+                />
+              )}
+
+              {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${manifestation.id}`)}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Edit Cover Art
+                </Button>
+              )}
+
+              {hasPermission(PermissionName.DELETE_MANIFESTATION) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={isDeleting}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete manifestation
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
@@ -269,6 +370,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

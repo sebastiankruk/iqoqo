@@ -122,6 +122,7 @@ def admin_headers(app):
         perm_names = [
             "regenerate:cover",
             "refetch:metadata",
+            "refetch:cover",
             "delete:item",
             "update:item",
             "read:owners",

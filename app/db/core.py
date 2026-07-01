@@ -230,6 +230,21 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
                 return artist
         return None
 
+    @property
+    def resolved_identifier(self) -> str:
+        """Get the primary/fallback identifier for cover and lookup operations."""
+        meta = self.meta or {}
+        return (
+            self.isbn13
+            or self.ean
+            or self.upc
+            or meta.get("barcode")
+            or meta.get("isbn")
+            or meta.get("identifier")
+            or meta.get("discogs_id")
+            or str(self.id)
+        )
+
     def update_meta(self, **kwargs) -> None:
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}

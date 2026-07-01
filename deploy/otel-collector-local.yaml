@@ -1,0 +1,74 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# OpenTelemetry Collector — Local Dev Config (OpenObserve backend)
+#
+# PURPOSE: Lightweight local-dev-only config. Only accepts OTLP pushes from
+#          app processes (Flask, Celery, Next.js) and forwards everything to
+#          the local OpenObserve container.
+#
+# NOTE: Infrastructure receivers (docker_stats, postgresql, redis) are intentionally
+#       omitted here. Those receivers require host-level Docker socket access and
+#       in-network service hostnames that are only available in a full Docker Compose
+#       stack. Enabling them in local dev causes the collector to crash-loop, making
+#       port 4318 unavailable for application telemetry.
+#       See deploy/otel-collector-prod.yaml for the full-receiver production config.
+#
+# Observability layers covered (local dev):
+#   - Layer 1: Frontend SSR (Next.js)          via OTLP push from instrumentation.ts
+#   - Layer 2: Flask Backend                   via opentelemetry-instrument
+#   - Layer 3: Celery Workers                  via opentelemetry-instrument
+#   - Layer 4: Outbound HTTP (requests lib)    via opentelemetry-instrumentation-requests
+#   - Layer 5: Browser Web Vitals              via OTLP push from browser (CORS-enabled)
+#   - Layer 7: OpenAI LLM                      via opentelemetry-instrumentation-openai
+#
+# Layers 6 (Nginx), 8 (PostgreSQL/Redis internals) require prod config.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          # Required to securely accept browser-side OTel traces (Layer 5)
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:${FRONTEND_PORT}"
+            - "https://dev.iqoqo.cc"
+          allowed_headers:
+            - "*"
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+
+exporters:
+  # Export all 3 pillars (traces, metrics, logs) to OpenObserve's native OTLP endpoint.
+  # Authorization header = Basic base64("${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}:${OPENOBSERVE_ROOT_PASSWORD:-supersecret}")
+  # Default value: base64(admin@iqoqo.local:supersecret)
+  otlphttp/openobserve:
+    endpoint: "http://openobserve:5080/api/default/"
+    headers:
+      Authorization: "Basic ${OPENOBSERVE_BASIC_AUTH}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve]
