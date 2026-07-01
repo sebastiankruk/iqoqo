@@ -642,7 +642,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
-    identifier = manif.isbn13 or manif.ean or manif.upc or str(manif.id)
+    identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
     description = meta.get("Description", "")
@@ -691,7 +691,7 @@ def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
     author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
-    identifier = manif.isbn13 or manif.ean or manif.upc or str(manif.id)
+    identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
     description = meta.get("Description", "")

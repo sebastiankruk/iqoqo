@@ -161,3 +161,26 @@ def test_refetch_cover_returns_task_id(client, admin_headers):
         # Verify LLM permissions are false for refetch
         _, kwargs = mock_start.call_args
         assert kwargs["llm_permissions"] == {"allow_generate_cover": False, "allow_cloud_llm": False}
+
+
+def test_refetch_cover_falls_back_to_meta_identifier(client, admin_headers):
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with client.application.app_context():
+        work = Work(title="Refetch Cover Test", meta={"authors": ["Author Refetch"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, meta={"barcode": "9781444729764"})
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    with patch("app.api.manifestations.start_cover_processing", return_value="fake-refetch-task-id") as mock_start:
+        response = client.post(f"/api/manifestations/{manif_id}/refetch-cover", headers=admin_headers)
+        assert response.status_code == 202
+        mock_start.assert_called_once()
+        args, _ = mock_start.call_args
+        assert args[1] == "9781444729764"
