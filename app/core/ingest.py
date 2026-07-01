@@ -345,10 +345,20 @@ class IngestService:
                     # Merge manifestation info (covers/affiliates from Allegro)
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                 else:
-                    meta = upc_meta
+                    from app.utils.igdb import fetch_game_metadata
+
+                    meta = fetch_game_metadata(upc_meta["title"])
+                    if meta:
+                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                    else:
+                        meta = upc_meta
 
         if not meta:
             meta = fetch_bgg_metadata(query)
+            if not meta:
+                from app.utils.igdb import fetch_game_metadata
+
+                meta = fetch_game_metadata(query)
 
         if not meta:
             raise ValueError("Board game metadata not found in external services.")

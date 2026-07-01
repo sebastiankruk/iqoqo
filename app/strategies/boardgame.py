@@ -39,15 +39,31 @@ class BoardGameLookupStrategy(LookupStrategy):
                         if isinstance(meta, dict):
                             meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                     else:
-                        meta = upc_meta
-                        meta["data_source"] = "upc"
-                        provider = "upc"
+                        from app.utils.igdb import fetch_game_metadata
+
+                        meta = fetch_game_metadata(upc_meta["title"])
+                        if meta:
+                            meta["data_source"] = "igdb"
+                            provider = "igdb"
+                            if isinstance(meta, dict):
+                                meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                        else:
+                            meta = upc_meta
+                            meta["data_source"] = "upc"
+                            provider = "upc"
 
                 if not meta:
                     meta = fetch_bgg_metadata(barcode)
                     if meta:
                         meta["data_source"] = "bgg"
                         provider = "bgg"
+                    else:
+                        from app.utils.igdb import fetch_game_metadata
+
+                        meta = fetch_game_metadata(barcode)
+                        if meta:
+                            meta["data_source"] = "igdb"
+                            provider = "igdb"
         except Exception as exc:  # pylint: disable=broad-exception-caught
             import logging
 

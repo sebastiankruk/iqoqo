@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { BggAttribution } from "@/components/ui/bgg-attribution";
+import { IgdbAttribution } from "@/components/ui/igdb-attribution";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 import { DiscoveryPivot } from "./discovery-pivot";
 
@@ -37,7 +38,16 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
   const mechanics = (meta.mechanics || meta.Mechanics) as string[] | undefined;
   const source = meta.Source as string | undefined;
 
-  if (!minPlayers && !maxPlayers && !playingTime && !mechanics?.length && source !== "BGG" && !coverUrl) return null;
+  if (
+    !minPlayers &&
+    !maxPlayers &&
+    !playingTime &&
+    !mechanics?.length &&
+    source !== "BGG" &&
+    source !== "IGDB" &&
+    !coverUrl
+  )
+    return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
@@ -77,9 +87,14 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
         )}
       </div>
 
-      {source === "BGG" && (
+      {(source === "BGG" || meta.data_source === "bgg") && (
         <div className="mt-4 pt-4 border-t border-border/50">
           <BggAttribution />
+        </div>
+      )}
+      {(source === "IGDB" || meta.data_source === "igdb") && (
+        <div className="mt-4 pt-4 border-t border-border/50">
+          <IgdbAttribution />
         </div>
       )}
     </div>

@@ -56,6 +56,7 @@ def add_source_badge(filepath: str, source: str):
         "api_openlibrary": ("D", "gray"),  # Download
         "api_google_books": ("D", "gray"),
         "api_direct_download": ("C", "teal"),  # CD/Audio direct download
+        "api_igdb": ("I", "purple"),  # IGDB Cover
         "llm_gemini": ("G", "purple"),
         "llm_openai": ("O", "green"),
         "llm_local_stable_diffusion": ("L", "orange"),
@@ -220,11 +221,14 @@ def fetch_upc_cover(identifier: str, content_type: str | None = None) -> tuple[s
     Routes to appropriate provider based on content_type:
     - music → MusicBrainz Cover Art Archive
     - movie/video → TMDb poster
+    - board_game/game/puzzle → IGDB game artwork
     """
     if content_type == "music":
         return _fetch_musicbrainz_cover(identifier)
     if content_type in ("movie", "video"):
         return _fetch_tmdb_cover(identifier)
+    if content_type in ("board_game", "game", "puzzle"):
+        return _fetch_igdb_cover(identifier)
     return None
 
 
@@ -251,13 +255,39 @@ def _fetch_musicbrainz_cover(barcode: str) -> tuple[str, str] | None:
 def _fetch_tmdb_cover(barcode: str) -> tuple[str, str] | None:
     """Resolve UPC to video title via external lookup, then fetch TMDb poster."""
     try:
-        from app.utils.tmdb import fetch_video_metadata
+        from app.utils.tmdb import clean_video_title, fetch_video_metadata
+        from app.utils.upc import resolve_physical_media
     except ImportError:
         return None
-    meta = fetch_video_metadata(barcode)
+
+    title = None
+    upc_meta = resolve_physical_media(barcode)
+    if upc_meta and upc_meta.get("title"):
+        title = clean_video_title(upc_meta["title"])
+
+    meta = fetch_video_metadata(title or barcode)
     if not meta or not meta.get("cover_url"):
         return None
     return download_direct_url(barcode, meta["cover_url"], "api_tmdb", suffix="tmdb")
+
+
+def _fetch_igdb_cover(barcode: str) -> tuple[str, str] | None:
+    """Resolve UPC to game title via external lookup, then fetch IGDB game artwork."""
+    try:
+        from app.utils.igdb import fetch_game_metadata
+        from app.utils.upc import resolve_physical_media
+    except ImportError:
+        return None
+
+    title = None
+    upc_meta = resolve_physical_media(barcode)
+    if upc_meta and upc_meta.get("title"):
+        title = upc_meta["title"]
+
+    meta = fetch_game_metadata(title or barcode)
+    if not meta or not meta.get("cover_url"):
+        return None
+    return download_direct_url(barcode, meta["cover_url"], "api_igdb", suffix="igdb")
 
 
 def process_cover_pipeline(

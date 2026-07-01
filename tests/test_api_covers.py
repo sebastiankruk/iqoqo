@@ -128,11 +128,29 @@ def test_cover_lookup_tmdb_upc(app):
     assert "tmdb" in source
 
 
+def test_cover_lookup_igdb_upc(app):
+    """B6-deep: UPC barcode for game should resolve cover via IGDB poster."""
+    from app.utils.covers import fetch_upc_cover
+
+    with patch("app.utils.igdb.fetch_game_metadata") as mock_igdb:
+        mock_igdb.return_value = {
+            "title": "Test Game",
+            "cover_url": "https://images.igdb.com/igdb/image/upload/t_cover_big/test.jpg",
+        }
+        with patch("app.utils.covers.download_direct_url") as mock_download:
+            mock_download.return_value = ("/static/covers/1234567890_igdb.jpg", "api_igdb")
+            result = fetch_upc_cover("1234567890", content_type="game")
+
+    assert result is not None
+    _filename, source = result
+    assert "igdb" in source
+
+
 def test_cover_lookup_non_isbn_fallback(app):
     """B6-deep: Non-ISBN with no provider match returns None gracefully."""
     from app.utils.covers import fetch_upc_cover
 
-    result = fetch_upc_cover("9999999999999", content_type="board_game")
+    result = fetch_upc_cover("9999999999999", content_type="text")
     assert result is None
 
 

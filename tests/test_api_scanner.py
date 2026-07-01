@@ -17,7 +17,7 @@
 #
 
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -484,3 +484,27 @@ def test_scan_barcode_wishlist_success(mock_ingest_isbn, client, normal_user_hea
     assert response.json["data"]["item_id"] is None
     assert response.json["data"]["intent_id"] is not None
     assert response.json["data"]["manifestation_id"] == 555
+
+
+@patch("app.strategies.boardgame.resolve_physical_media")
+@patch("app.strategies.boardgame.fetch_bgg_metadata")
+@patch("app.utils.igdb.fetch_game_metadata")
+def test_lookup_barcode_game_igdb_fallback(mock_igdb, mock_bgg, mock_resolve, client, normal_user_headers):
+    """Test scanner barcode lookup falls back to IGDB when BGG fails."""
+    mock_resolve.return_value = {"title": "The Witcher 3", "barcode": "5060139302196"}
+    mock_bgg.return_value = None  # BGG miss
+    mock_igdb.return_value = {
+        "Title": "The Witcher 3: Wild Hunt",
+        "title": "The Witcher 3: Wild Hunt",
+        "cover_url": "https://img.jpg",
+        "Source": "IGDB",
+        "Format": "game",
+    }
+
+    response = client.get("/api/lookup/5060139302196?format=game", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    assert response.json["data"]["title"] == "The Witcher 3: Wild Hunt"
+    assert response.json["data"]["data_source"] == "igdb"
+    mock_bgg.assert_called_once()
+    assert mock_igdb.call_args_list[0] == call("The Witcher 3")
