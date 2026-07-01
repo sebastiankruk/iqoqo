@@ -268,4 +268,44 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
       },
     });
   });
+
+  describe("useItem hook", () => {
+    it("calls endpoint for positive IDs", async () => {
+      const { apiClient } = await import("@/lib/api/client");
+      const getSpy = vi.spyOn(apiClient, "get");
+      getSpy.mockClear();
+      getSpy.mockResolvedValueOnce({
+        data: { success: true, data: { id: 42 }, error: null },
+      } as never);
+
+      const { useItem } = await import("@/lib/api/hooks");
+      const { result } = renderHook(() => useItem(42), { wrapper: getWrapper() });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(getSpy).toHaveBeenLastCalledWith("/items/42", { params: undefined });
+    });
+
+    it("calls endpoint for negative IDs (virtual items)", async () => {
+      const { apiClient } = await import("@/lib/api/client");
+      const getSpy = vi.spyOn(apiClient, "get");
+      getSpy.mockClear();
+      getSpy.mockResolvedValueOnce({
+        data: { success: true, data: { id: -7 }, error: null },
+      } as never);
+
+      const { useItem } = await import("@/lib/api/hooks");
+      const { result } = renderHook(() => useItem(-7), { wrapper: getWrapper() });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(getSpy).toHaveBeenLastCalledWith("/items/-7", { params: undefined });
+    });
+
+    it("is disabled when ID is 0", async () => {
+      const { useItem } = await import("@/lib/api/hooks");
+      const { result } = renderHook(() => useItem(0), { wrapper: getWrapper() });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.fetchStatus).toBe("idle");
+    });
+  });
 });

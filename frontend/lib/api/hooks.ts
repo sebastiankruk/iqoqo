@@ -684,7 +684,7 @@ export function useItem(id: number) {
   return useQuery({
     queryKey: queryKeys.item(id),
     queryFn: () => apiFetch<Item>(`/items/${id}`),
-    enabled: id > 0,
+    enabled: id !== 0 && !isNaN(id),
   });
 }
 
