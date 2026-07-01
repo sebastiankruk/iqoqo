@@ -259,7 +259,13 @@ export function ItemActions({ item }: { item: Item }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsHierarchyOpen(!isHierarchyOpen)}
+            onClick={() => {
+              const nextVal = !isHierarchyOpen;
+              setIsHierarchyOpen(nextVal);
+              if (nextVal) {
+                setIsPanelOpen(false);
+              }
+            }}
             className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
           >
             {isHierarchyOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -270,7 +276,13 @@ export function ItemActions({ item }: { item: Item }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              onClick={() => {
+                const nextVal = !isPanelOpen;
+                setIsPanelOpen(nextVal);
+                if (nextVal) {
+                  setIsHierarchyOpen(false);
+                }
+              }}
               className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
             >
               {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
