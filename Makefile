@@ -168,11 +168,12 @@ prebuilt:
 
 clone:
 	@if [ -z "$(src_loc)" ] || [ -z "$(src_name)" ] || [ -z "$(dst_loc)" ] || [ -z "$(dst_name)" ]; then \
-		echo "Usage: make clone src_loc=<source_location> src_name=<source_name> dst_loc=<destination_location> dst_name=<destination_name>"; \
-		echo "Example: make clone src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
+		echo "Usage: make clone [src_host=<source_host>] src_loc=<source_location> src_name=<source_name> dst_loc=<destination_location> dst_name=<destination_name>"; \
+		echo "Example (local): make clone src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
+		echo "Example (remote): make clone src_host=user@remote-ip src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
 		exit 1; \
 	fi
-	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)"
+	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
 start:
 	@echo "Starting $(MODE) environment..."
