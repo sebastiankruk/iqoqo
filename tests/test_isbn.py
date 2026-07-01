@@ -196,6 +196,14 @@ class TestLookupOpenLibrary:
         assert result["Authors"] == ["J.R.R. Tolkien"]
         assert result["Source"] == "Open Library"
 
+    def test_success_does_not_leak_lowercase_authors_or_subjects(self):
+        with patch("app.utils.isbn._make_session", return_value=_mock_session_get(_OPEN_LIBRARY_HIT)):
+            result = _lookup_open_library("9780553380163")
+        assert result is not None
+        assert "authors" not in result
+        assert "subjects" not in result
+        assert result["Authors"] == ["J.R.R. Tolkien"]
+
     def test_empty_response_returns_none(self):
         with patch("app.utils.isbn._make_session", return_value=_mock_session_get({})):
             result = _lookup_open_library("9780553380163")

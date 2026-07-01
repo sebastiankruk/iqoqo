@@ -409,15 +409,20 @@ if [ "$MODE" == "dev" ]; then
     echo $! > "$PID_DIR/flask.pid"
 
     # Start Celery
+    CELERY_POOL="prefork"
+    if [ "$(uname)" = "Darwin" ]; then
+        CELERY_POOL="threads"
+    fi
+
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
         echo "📡 Starting Celery worker with OpenTelemetry auto-instrumentation (traces + metrics + logs)..."
         OTEL_SERVICE_NAME="iqoqo-celery-worker" \
         OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
         OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
         OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
-        opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info &
+        opentelemetry-instrument celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
     else
-        .venv/bin/celery -A app.core.celery_app:celery worker --loglevel=info &
+        .venv/bin/celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
     fi
     echo $! > "$PID_DIR/celery.pid"
 
