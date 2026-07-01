@@ -27,6 +27,10 @@ import {
   Music,
   Video,
   Gamepad2,
+  ChevronDown,
+  ChevronUp,
+  ImagePlus,
+  ImageDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +50,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useQueryClient } from "@tanstack/react-query";
 
 /**
@@ -66,6 +72,9 @@ export function ItemActions({ item }: { item: Item }) {
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [isRefetchingCover, setIsRefetchingCover] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
 
   const isPending = item.cover_status === "pending" || item.meta?.cover_status === "pending";
 
@@ -78,6 +87,8 @@ export function ItemActions({ item }: { item: Item }) {
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
       }, 3000);
+    } else {
+      setActiveCoverAction(null);
     }
     return () => {
       if (interval !== undefined) {
@@ -89,6 +100,15 @@ export function ItemActions({ item }: { item: Item }) {
   if (!profile) return null;
 
   const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
+
+  const showAdminActions =
+    hasPermission(PermissionName.REFETCH_METADATA) ||
+    (hasPermission(PermissionName.READ_METADATA) && !!item.manifestation_id) ||
+    hasPermission(PermissionName.REFETCH_COVER) ||
+    hasPermission(PermissionName.REGENERATE_COVER) ||
+    hasPermission(PermissionName.UPLOAD_COVER) ||
+    (hasPermission(PermissionName.EDIT_COVER) && !!item.manifestation_id) ||
+    hasPermission(PermissionName.DELETE_ITEM);
 
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
@@ -113,6 +133,7 @@ export function ItemActions({ item }: { item: Item }) {
     if (!item.manifestation_id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
+    setActiveCoverAction("regenerate");
     try {
       await regenerateCover.mutateAsync(item.manifestation_id);
       qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
@@ -142,6 +163,27 @@ export function ItemActions({ item }: { item: Item }) {
       toast.error("Failed to refetch metadata");
     } finally {
       setIsRefetching(false);
+    }
+  };
+
+  const handleRefetchCover = async () => {
+    if (!item.manifestation_id) return;
+    setIsRefetchingCover(true);
+    setActiveCoverAction("refetch");
+    try {
+      await apiClient.post(`/manifestations/${item.manifestation_id}/refetch-cover`);
+      qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cover_status: "pending",
+        };
+      });
+      toast.success("Cover refetch started");
+    } catch {
+      toast.error("Failed to refetch cover");
+    } finally {
+      setIsRefetchingCover(false);
     }
   };
 
@@ -210,96 +252,176 @@ export function ItemActions({ item }: { item: Item }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-6 border-t border-border/40 pt-4">
-        {hasPermission(PermissionName.REFETCH_METADATA) && (
-          <button
-            onClick={handleRefetch}
-            disabled={isRefetching}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+      {showAdminActions && (
+        <div className="border-t border-border/40 pt-4 w-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
           >
-            <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
-            {isRefetching ? "Fetching..." : "Refetch Metadata"}
-          </button>
-        )}
+            {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <span>Admin Actions</span>
+          </Button>
 
-        {hasPermission(PermissionName.REGENERATE_COVER) && (
-          <button
-            onClick={handleRegenerateClick}
-            disabled={isPending || isRequesting}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-            {isPending ? "Generating..." : "Regenerate Cover"}
-          </button>
-        )}
+          {isPanelOpen && (
+            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              {hasPermission(PermissionName.REFETCH_METADATA) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetch}
+                  disabled={isRefetching}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
+                  {isRefetching ? "Fetching..." : "Refetch Metadata"}
+                </Button>
+              )}
 
-        {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
-          <button
-            onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit FRBR
-          </button>
-        )}
+              {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit FRBR
+                </Button>
+              )}
 
-        {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-          <button
-            onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <ImageIcon className="h-3.5 w-3.5" />
-            Edit Cover Art
-          </button>
-        )}
+              {hasPermission(PermissionName.REFETCH_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetchCover}
+                  disabled={isPending || isRefetchingCover}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageDown
+                    className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
+                  />
+                  {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
+                </Button>
+              )}
 
-        {hasPermission(PermissionName.DELETE_ITEM) && (
-          <button
-            onClick={() => setDeleteConfirmOpen(true)}
-            disabled={deleteItem.isPending}
-            className="flex items-center gap-2 text-xs font-medium text-destructive/70 transition-colors hover:text-destructive disabled:opacity-50"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Remove from library
-          </button>
-        )}
+              {hasPermission(PermissionName.REGENERATE_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateClick}
+                  disabled={isPending || isRequesting}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
+                  />
+                  {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
+                    ? "Generating..."
+                    : "Regenerate Cover"}
+                </Button>
+              )}
 
-        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remove from library?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently remove this item from your library. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmDelete}
-                disabled={deleteItem.isPending}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {deleteItem.isPending ? "Removing…" : "Remove"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
+                <CameraCapture
+                  manifestation_id={item.manifestation_id}
+                  onUploadComplete={() => {
+                    toast.success("Cover uploaded and processing started!");
+                    qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+                      if (!prev) return prev;
+                      return {
+                        ...prev,
+                        cover_status: "processing",
+                      };
+                    });
+                  }}
+                  label={
+                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                      ? "Replace Cover"
+                      : "Contribute Cover"
+                  }
+                  icon={<ImagePlus className="h-3.5 w-3.5" />}
+                  confirmTitle={
+                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                      ? "Replace Existing Cover?"
+                      : undefined
+                  }
+                  confirmMessage={
+                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                      ? "This item already has a cover. Are you sure you want to replace it with your own image?"
+                      : undefined
+                  }
+                  inline
+                  variant="outline"
+                  buttonClassName="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 h-8 px-3 text-xs"
+                />
+              )}
 
-        <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This item already has a cover image. Regenerating it will overwrite the existing cover.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+              {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Edit Cover Art
+                </Button>
+              )}
+
+              {hasPermission(PermissionName.DELETE_ITEM) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={deleteItem.isPending}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove from library
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this item from your library. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteItem.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteItem.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This item already has a cover image. Regenerating it will overwrite the existing cover.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

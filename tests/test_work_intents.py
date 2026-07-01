@@ -209,7 +209,8 @@ def test_scanner_wishlist_ingest(client, test_setup, app):
     assert response.status_code == 201
     data = response.json["data"]
     assert data["manifestation_id"] == manif_id
-    assert data["item_id"] < 0  # returned negative virtual item id
+    assert data["item_id"] is None
+    assert data["intent_id"] > 0
 
     # Verify no physical item was created in DB
     with app.app_context():

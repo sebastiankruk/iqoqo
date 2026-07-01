@@ -134,3 +134,30 @@ def test_cover_lookup_non_isbn_fallback(app):
 
     result = fetch_upc_cover("9999999999999", content_type="board_game")
     assert result is None
+
+
+def test_refetch_cover_returns_task_id(client, admin_headers):
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with client.application.app_context():
+        work = Work(title="Refetch Cover Test", meta={"authors": ["Author Refetch"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="4444444444444")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    with patch("app.api.manifestations.start_cover_processing", return_value="fake-refetch-task-id") as mock_start:
+        response = client.post(f"/api/manifestations/{manif_id}/refetch-cover", headers=admin_headers)
+        assert response.status_code == 202
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["data"]["task_id"] == "fake-refetch-task-id"
+        mock_start.assert_called_once()
+        # Verify LLM permissions are false for refetch
+        _, kwargs = mock_start.call_args
+        assert kwargs["llm_permissions"] == {"allow_generate_cover": False, "allow_cloud_llm": False}

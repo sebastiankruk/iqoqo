@@ -102,6 +102,7 @@ def run_init_auth(app: Flask | None = None) -> None:
             PermissionName.READ_METADATA.value,
             PermissionName.UPLOAD_COVER.value,
             PermissionName.REGENERATE_COVER.value,
+            PermissionName.REFETCH_COVER.value,
             PermissionName.LLM_GENERATE_METADATA.value,
             PermissionName.LLM_GENERATE_COVER.value,
         }

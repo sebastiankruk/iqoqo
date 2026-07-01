@@ -680,6 +680,57 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
     )
 
 
+@api_bp.route("/manifestations/<int:manifestation_id>/refetch-cover", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.REFETCH_COVER)
+def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
+    manif = db.get_or_404(Manifestation, manifestation_id)
+    manif.update_meta(cover_status="pending")
+    db.session.commit()
+
+    work = manif.expression.work if manif.expression else None
+    title = work.title if work else "Unknown"
+    author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
+    identifier = manif.isbn13 or manif.ean or manif.upc or str(manif.id)
+
+    meta = manif.meta or {}
+    description = meta.get("Description", "")
+    categories = meta.get("Categories", [])
+    genre = ", ".join(categories) if isinstance(categories, list) else str(categories)
+    user_id = getattr(g, "user_id", None)
+    user_id_str = str(user_id) if user_id else "anonymous"
+
+    # Disable LLM options to force fetching from upstream metadata sources only
+    llm_permissions = {
+        "allow_generate_cover": False,
+        "allow_cloud_llm": False,
+    }
+
+    task_id = start_cover_processing(
+        manif.id,
+        identifier,
+        title,
+        author,
+        user_id_str,
+        llm_permissions=llm_permissions,
+        description=description,
+        genre=genre,
+    )
+
+    if task_id is None:
+        manif.update_meta(cover_status="failed")
+        db.session.commit()
+        return (
+            jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}),
+            503,
+        )
+
+    return (
+        jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover refetch scheduled", "status": "pending"}, "error": None}),
+        202,
+    )
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/cover-status", methods=["GET"])
 @require_auth
 def get_cover_status(manifestation_id: int):
