@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Trash2,
   RefreshCw,
@@ -74,6 +75,7 @@ export function ItemActions({ item }: { item: Item }) {
   const [isRefetching, setIsRefetching] = useState(false);
   const [isRefetchingCover, setIsRefetchingCover] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isHierarchyOpen, setIsHierarchyOpen] = useState(false);
   const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
 
   const isPending = item.cover_status === "pending" || item.meta?.cover_status === "pending";
@@ -252,140 +254,185 @@ export function ItemActions({ item }: { item: Item }) {
         )}
       </div>
 
-      {showAdminActions && (
-        <div className="border-t border-border/40 pt-4 w-full">
+      <div className="border-t border-border/40 pt-4 w-full flex flex-col gap-4">
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            onClick={() => setIsHierarchyOpen(!isHierarchyOpen)}
             className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
           >
-            {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            <span>Admin Actions</span>
+            {isHierarchyOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <span>FRBR Hierarchy</span>
           </Button>
 
-          {isPanelOpen && (
-            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              {hasPermission(PermissionName.REFETCH_METADATA) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefetch}
-                  disabled={isRefetching}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
-                  {isRefetching ? "Fetching..." : "Refetch Metadata"}
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit FRBR
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.REFETCH_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefetchCover}
-                  disabled={isPending || isRefetchingCover}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <ImageDown
-                    className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
-                  />
-                  {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.REGENERATE_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRegenerateClick}
-                  disabled={isPending || isRequesting}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
-                  />
-                  {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
-                    ? "Generating..."
-                    : "Regenerate Cover"}
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
-                <CameraCapture
-                  manifestation_id={item.manifestation_id}
-                  onUploadComplete={() => {
-                    toast.success("Cover uploaded and processing started!");
-                    qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
-                      if (!prev) return prev;
-                      return {
-                        ...prev,
-                        cover_status: "processing",
-                      };
-                    });
-                  }}
-                  label={
-                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                      ? "Replace Cover"
-                      : "Contribute Cover"
-                  }
-                  icon={<ImagePlus className="h-3.5 w-3.5" />}
-                  confirmTitle={
-                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                      ? "Replace Existing Cover?"
-                      : undefined
-                  }
-                  confirmMessage={
-                    item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                      ? "This item already has a cover. Are you sure you want to replace it with your own image?"
-                      : undefined
-                  }
-                  inline
-                  variant="outline"
-                  buttonClassName="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 h-8 px-3 text-xs"
-                />
-              )}
-
-              {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  Edit Cover Art
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.DELETE_ITEM) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={deleteItem.isPending}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Remove from library
-                </Button>
-              )}
-            </div>
+          {showAdminActions && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+            >
+              {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              <span>Admin Actions</span>
+            </Button>
           )}
         </div>
-      )}
+
+        {isHierarchyOpen && (
+          <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            {item.work && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
+                <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
+              </div>
+            )}
+            {item.expression && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Expression ID
+                </dt>
+                <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
+              </div>
+            )}
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Manifestation ID
+              </dt>
+              <dd className="text-sm font-mono text-foreground">
+                <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
+                  #{item.manifestation_id}
+                </Link>
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
+              <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
+            </div>
+          </dl>
+        )}
+
+        {showAdminActions && isPanelOpen && (
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {hasPermission(PermissionName.REFETCH_METADATA) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefetch}
+                disabled={isRefetching}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
+                {isRefetching ? "Fetching..." : "Refetch Metadata"}
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit FRBR
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.REFETCH_COVER) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefetchCover}
+                disabled={isPending || isRefetchingCover}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <ImageDown
+                  className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
+                />
+                {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.REGENERATE_COVER) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerateClick}
+                disabled={isPending || isRequesting}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
+                />
+                {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
+                  ? "Generating..."
+                  : "Regenerate Cover"}
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
+              <CameraCapture
+                manifestation_id={item.manifestation_id}
+                onUploadComplete={() => {
+                  toast.success("Cover uploaded and processing started!");
+                  qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      cover_status: "processing",
+                    };
+                  });
+                }}
+                label={
+                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                    ? "Replace Cover"
+                    : "Contribute Cover"
+                }
+                icon={<ImagePlus className="h-3.5 w-3.5" />}
+                confirmTitle={
+                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                    ? "Replace Existing Cover?"
+                    : undefined
+                }
+                confirmMessage={
+                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
+                    ? "This item already has a cover. Are you sure you want to replace it with your own image?"
+                    : undefined
+                }
+                inline
+                variant="outline"
+                buttonClassName="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 h-8 px-3 text-xs"
+              />
+            )}
+
+            {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                Edit Cover Art
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.DELETE_ITEM) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteItem.isPending}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove from library
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
