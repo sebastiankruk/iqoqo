@@ -503,11 +503,37 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
             manifestation = expr.manifestations[0]
             break
 
-    if not manifestation:
-        return jsonify({"success": False, "data": None, "error": "Manifestation not found for work"}), 404
-
     owner = db.session.get(User, intent.user_id)
     owner_name = (owner.display_name or owner.email) if owner else None
+
+    if not manifestation:
+        # Build work-level-only detail (mirrors get_virtual_items list view behavior)
+        item_data = {
+            "id": item_id,
+            "owner_id": str(intent.user_id),
+            "is_owner": True,
+            "is_borrowed": False,
+            "owner_name": owner_name,
+            "owner_count": 0,
+            "status": intent.status,
+            "collection_status": "wish_list",
+            "is_hidden": False,
+            "manifestation_id": None,
+            "tags": [],
+            "meta": {},
+            "isbn": None,
+            "manifestation_meta": None,
+            "cover_url": None,
+            "cover_status": None,
+            "work": {
+                "id": work.id,
+                "title": work.title,
+                "authors": work.meta.get("authors", []) if work.meta else [],
+                "meta": work.meta,
+                "container_work_id": None,
+            },
+        }
+        return jsonify({"success": True, "data": item_data, "error": None})
 
     item_data = {
         "id": item_id,
@@ -974,6 +1000,40 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
 
 
+def _add_wishlist_by_manifestation(user_id: uuid.UUID, manifestation: Manifestation, payload: ItemCreateSchema) -> tuple[Response, int]:
+    """Helper to route wishlist creation to UserWorkIntent."""
+    work = manifestation.expression.work if manifestation.expression and manifestation.expression.work else None
+    if not work:
+        return (
+            jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}),
+            500,
+        )
+
+    from app.db.core import CATEGORY_PROGRESS_STATUSES
+
+    content_type = manifestation.expression.content_type if manifestation.expression else "text"
+    statuses = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))
+    default_progress = payload.status or next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+
+    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
+    if not intent:
+        intent = UserWorkIntent(user_id=user_id, work_id=work.id, status=default_progress)
+        db.session.add(intent)
+        db.session.flush()
+
+    db.session.commit()
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {"item_id": None, "intent_id": intent.id, "manifestation_id": manifestation.id},
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/add", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -988,20 +1048,31 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
     payload_json = request.get_json(silent=True)
+    payload = None
+    error_response = None
     if not isinstance(payload_json, dict):
         if payload_json is None and not request.data:
             payload_json = {}
         else:
-            return invalid_json_payload_response()
+            error_response = invalid_json_payload_response()
 
-    try:
-        payload = ItemCreateSchema(**payload_json)
-    except (ValidationError, TypeError) as e:
-        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+    if not error_response:
+        try:
+            assert isinstance(payload_json, dict)
+            payload = ItemCreateSchema(**payload_json)
+        except (ValidationError, TypeError) as e:
+            error_response = jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    if error_response:
+        return error_response
+    assert payload is not None
 
     if payload.collection_status == "lent":
         if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
+    if payload.collection_status == "wish_list":
+        return _add_wishlist_by_manifestation(user_id, manifestation, payload)
 
     item = Item(
         manifestation_id=manifestation.id,

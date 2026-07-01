@@ -760,6 +760,8 @@ export function useAddItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats });
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["worksShelf"] });
+      qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
     },
   });
 }

@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`.env.example` Observability Section**: Replaced legacy Prometheus/Jaeger port variables with new `OPENOBSERVE_HOST_PORT`, `OPENOBSERVE_ROOT_USER`, `OPENOBSERVE_ROOT_PASSWORD`, `OTEL_GRPC_HOST_PORT`, `OTEL_HTTP_HOST_PORT`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`, `OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED`, and `NEXT_PUBLIC_OTEL_COLLECTOR_URL` variables.
 - **Makefile Help Text**: Added monitoring targets section to `make help` output.
 
+### Fixed
+
+- **Wishlist Detail View (B8)**: Fixed `_get_virtual_item_detail` in `app/api/items.py` to return work-level details for virtual items when they lack a manifestation, resolving `404 Not Found` and `UnboundLocalError` issues in collection detail navigation.
+- **Wishlist Invalidation Scope (B9)**: Extended frontend query invalidation scope in `useAddItem` React Query hook and `AddToCollectionDropdown` component to invalidate `worksShelf` and `expressionsShelf` on wishlist changes, preventing items from disappearing from shelf views after reload.
+- **Add Manifestation to Wishlist**: Configured the `/api/manifestations/<id>/add` endpoint to create a `UserWorkIntent` instead of a physical `Item` when `collection_status == "wish_list"`. Added a corresponding "Add to Wishlist" option to the manifestation detail page's dropdown.
+
 ## [0.7.5] - 2026-06-10
 
 ### Fixed
