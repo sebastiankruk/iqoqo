@@ -94,10 +94,23 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
     if not is_wish_list_requested:
         return []
 
+    # "wish_list" is a collection_status concept, not a UserWorkIntent.status value.
+    # UserWorkIntent.status stores progress values like "want_to_read", "want_to_listen", etc.
+    # When the frontend filters by statuses=wish_list, we must include all non-fulfilled intents
+    # (because every intent IS a wishlist item).  Only narrow by actual intent-level statuses
+    # (want_to_read, want_to_listen, …) when those are explicitly present in the filter.
+    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+
     intent_query = db.session.query(UserWorkIntent).join(Work, UserWorkIntent.work_id == Work.id)
     if statuses_filter:
         statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
-        intent_query = intent_query.filter(UserWorkIntent.status.in_(statuses_list))
+        intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
+        if intent_statuses:
+            # Filter to specific intent progress statuses (e.g. "want_to_read")
+            intent_query = intent_query.filter(UserWorkIntent.status.in_(intent_statuses))
+        else:
+            # "wish_list" (or other non-intent status) → include all non-fulfilled intents
+            intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
     else:
         intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
 

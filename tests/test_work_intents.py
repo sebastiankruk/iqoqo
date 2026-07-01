@@ -188,11 +188,26 @@ def test_dynamic_virtual_item_synthesis(client, test_setup, app):
     assert v_item["manifestation_id"] == test_setup["manifestation_id"]
     assert v_item["id"] < 0  # Synthesized negative ID
 
-    # Filter items by wish_list
-    response = client.get("/api/items?status=wish_list", headers=headers)
+    # Filter items by wish_list (collection-level status)
+    response = client.get("/api/items?statuses=wish_list", headers=headers)
     assert response.status_code == 200
-    assert len(response.json["data"]) == 1
-    assert response.json["data"][0]["title"] == "Test Conceptual Work"
+    wish_items = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(wish_items) == 1
+    assert wish_items[0]["title"] == "Test Conceptual Work"
+    assert wish_items[0]["collection_status"] == "wish_list"
+
+    # Filter by specific intent-level status
+    response = client.get("/api/items?statuses=want_to_read", headers=headers)
+    assert response.status_code == 200
+    want_items = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(want_items) == 1
+    assert want_items[0]["status"] == "want_to_read"
+
+    # Non-matching status should NOT include virtual items
+    response = client.get("/api/items?statuses=available", headers=headers)
+    assert response.status_code == 200
+    avail_virtual = [i for i in response.json["data"] if i.get("is_virtual")]
+    assert len(avail_virtual) == 0
 
 
 def test_scanner_wishlist_ingest(client, test_setup, app):
