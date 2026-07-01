@@ -271,18 +271,7 @@ export default function ManifestationPage() {
                   </div>
                 )}
                 {manifestation.work_id && (
-                  <div>
-                    <dt className="text-muted-foreground">FRBR Work ID</dt>
-                    <dd className="font-medium text-foreground">
-                      <a
-                        rel="embodimentOf"
-                        href={`/api/public/works/${manifestation.work_id}`}
-                        className="text-primary hover:underline font-mono text-xs"
-                      >
-                        {String(manifestation.work_id)}
-                      </a>
-                    </dd>
-                  </div>
+                  <a rel="embodimentOf" href={`/api/public/works/${manifestation.work_id}`} className="hidden" />
                 )}
                 {!!(
                   manifestation.meta?.Publisher &&

@@ -16,7 +16,8 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe, History, Images, BookOpen, MessageSquare } from "lucide-react";
+import { FileText, Globe, History, Images, BookOpen, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Item } from "@/types/frbr";
 import { useAppConfig, useWorkParts, useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
@@ -50,6 +51,7 @@ function DetailsTab({ item }: { item: Item }) {
   const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
   const { data: partsResponse } = useWorkParts(item.work?.container_work_id ?? item.work?.id ?? 0);
   const parts = partsResponse?.data ?? [];
+  const [isHierarchyOpen, setIsHierarchyOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,33 +60,48 @@ function DetailsTab({ item }: { item: Item }) {
 
       {/* FRBR hierarchy info */}
       <div className="border-t pt-6">
-        <h4 className="mb-3 font-serif text-sm font-bold text-foreground">FRBR Hierarchy</h4>
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
-          {item.work && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsHierarchyOpen(!isHierarchyOpen)}
+          className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+        >
+          {isHierarchyOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          <span>FRBR Hierarchy</span>
+        </Button>
+
+        {isHierarchyOpen && (
+          <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4 mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            {item.work && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
+                <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
+              </div>
+            )}
+            {item.expression && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Expression ID
+                </dt>
+                <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
+              </div>
+            )}
             <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
-              <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Manifestation ID
+              </dt>
+              <dd className="text-sm font-mono text-foreground">
+                <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
+                  #{item.manifestation_id}
+                </Link>
+              </dd>
             </div>
-          )}
-          {item.expression && (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Expression ID</dt>
-              <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
+              <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
             </div>
-          )}
-          <div className="flex flex-col gap-0.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manifestation ID</dt>
-            <dd className="text-sm font-mono text-foreground">
-              <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
-                #{item.manifestation_id}
-              </Link>
-            </dd>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
-            <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
-          </div>
-        </dl>
+          </dl>
+        )}
       </div>
 
       {/* Series parts info */}
