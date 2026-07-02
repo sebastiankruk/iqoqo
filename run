@@ -37,7 +37,6 @@ CLEAN=false
 BACKUP=false
 PREBUILT=false
 STOP=false
-ROTATE_FORCE=false
 CUSTOM_VERSION=""
 
 # Robust argument parsing
@@ -52,9 +51,6 @@ while [ $# -gt 0 ]; do
             ;;
         --clean)
             CLEAN=true
-            ;;
-        --rotate)
-            ROTATE_FORCE=true
             ;;
         --backup)
             BACKUP=true
@@ -137,10 +133,7 @@ auto_generate_or_rotate_keys() {
 
     # Rotation check
     if [ "$needs_generation" = false ]; then
-        if [ "$ROTATE_FORCE" = true ]; then
-            echo "🔄 Forced rotation requested. Rotating SECRET_KEY..."
-            needs_rotation=true
-        elif [ -n "$last_rotated" ]; then
+        if [ -n "$last_rotated" ]; then
             local now
             now=$(date +%s)
             local age=$((now - last_rotated))

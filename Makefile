@@ -177,7 +177,7 @@ clone:
 
 start:
 	@echo "Starting $(MODE) environment..."
-	@./run.sh $(MODE) $(PREBUILT_FLAG)
+	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 
 stop:
 	@echo "Stopping $(MODE) environment..."
