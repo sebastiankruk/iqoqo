@@ -40,11 +40,15 @@ export function BrowserOpenObserveRum(): null {
     // Load SDKs dynamically to ensure code splitting and prevent server-side evaluation errors.
     Promise.all([import("@openobserve/browser-rum"), import("@openobserve/browser-logs")])
       .then(([{ openobserveRum }, { openobserveLogs }]) => {
+        const env = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_ENV ?? "development";
+        if (env === "test") {
+          console.log("🚫 OpenObserve RUM & Logs client SDKs disabled in test mode.");
+          return;
+        }
         const clientToken = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN ?? "rumST8CMTyDstlTbPUm";
         const applicationId = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? "web-application-id";
         const site = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SITE ?? "localhost:5080";
         const service = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SERVICE ?? "iqoqo-frontend";
-        const env = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_ENV ?? "development";
         const version = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_VERSION ?? "0.0.1";
         const organizationIdentifier = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID ?? "default";
         const insecureHTTP = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP !== "false";

@@ -29,7 +29,7 @@ if (typeof window !== "undefined") {
     ) {
       return;
     }
-    originalError(...args);
+    originalError.apply(console, args);
   };
 }
 
