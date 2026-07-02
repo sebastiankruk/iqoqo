@@ -46,10 +46,12 @@ export function BrowserOpenObserveRum(): null {
           return;
         }
         const clientToken = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN ?? "rumST8CMTyDstlTbPUm";
-        const applicationId = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? "web-application-id";
+        const applicationId = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? "iqoqo";
         const site = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SITE ?? "localhost:5080";
-        const service = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SERVICE ?? "iqoqo-frontend";
-        const version = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_VERSION ?? "0.0.1";
+        const service =
+          process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SERVICE ??
+          (env === "production" ? "iqoqo-frontend" : `iqoqo-frontend-${env}`);
+        const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.1";
         const organizationIdentifier = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID ?? "default";
         const insecureHTTP = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP !== "false";
         const apiVersion = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION ?? "v1";

@@ -442,6 +442,34 @@ if [ "$MODE" == "dev" ]; then
             iqoqo-openobserve \
             iqoqo-otel-collector 2>/dev/null || true
         docker compose -f docker-compose.monitoring.yml up -d || true
+
+        # Wait for OpenObserve readiness and fetch the dynamic RUM client token
+        echo "📊 Waiting for OpenObserve to be ready..."
+        auth_header="Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ="
+        if [ -n "$OPENOBSERVE_ROOT_USER" ] && [ -n "$OPENOBSERVE_ROOT_PASSWORD" ]; then
+            encoded=$(python3 -c "import base64; print(base64.b64encode(b'${OPENOBSERVE_ROOT_USER}:${OPENOBSERVE_ROOT_PASSWORD}').decode('utf-8'))" 2>/dev/null)
+            if [ -n "$encoded" ]; then
+                auth_header="Basic $encoded"
+            fi
+        fi
+
+        for i in {1..30}; do
+            token_response=$(curl -s -H "Authorization: $auth_header" http://localhost:5080/api/default/rumtoken 2>/dev/null)
+            if echo "$token_response" | grep -q "rum_token"; then
+                fetched_token=$(echo "$token_response" | python3 -c "import sys, json; print(json.load(sys.stdin)['data']['rum_token'])" 2>/dev/null)
+                if [ -n "$fetched_token" ]; then
+                    echo "📊 Successfully fetched active OpenObserve RUM token: $fetched_token"
+                    export OPENOBSERVE_RUM_CLIENT_TOKEN="$fetched_token"
+                    # Keep local configuration files updated
+                    update_env_var ".env" "OPENOBSERVE_RUM_CLIENT_TOKEN" "$fetched_token"
+                    if [ -f ".env.dev" ]; then
+                        update_env_var ".env.dev" "OPENOBSERVE_RUM_CLIENT_TOKEN" "$fetched_token"
+                    fi
+                    break
+                fi
+            fi
+            sleep 1
+        done
     fi
 
     # Wait for DB readiness
@@ -578,11 +606,8 @@ if [ "$MODE" == "dev" ]; then
          OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}" \
          OTEL_TRACES_EXPORTER="${OTEL_TRACES_EXPORTER}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-rumST8CMTyDstlTbPUm}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID="${OPENOBSERVE_RUM_APPLICATION_ID:-web-application-id}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_SITE="${OPENOBSERVE_RUM_SITE:-localhost:5080}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_SERVICE="${OPENOBSERVE_RUM_SERVICE:-iqoqo-frontend}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ENV="${OPENOBSERVE_RUM_ENV:-development}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_VERSION="${OPENOBSERVE_RUM_VERSION:-0.0.1}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID="${OPENOBSERVE_RUM_ORG_ID:-default}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-true}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION="${OPENOBSERVE_RUM_API_VERSION:-v1}" \
