@@ -16,7 +16,7 @@
 #
 # iqoqo Unified Management Script
 #
-# Usage: ./run.sh [mode] [--clean] [--backup] [--tunnel]
+# Usage: ./run.sh [mode] [--clean] [--backup] [--tunnel] [--key-rotate]
 #
 # Modes:
 #   dev      (default) Run Flask, Celery, and Next.js as local processes.
@@ -24,9 +24,10 @@
 #   ANYTHING else uses full Docker Compose (e.g., prod, preview).
 #
 # Options:
-#   --clean  Stop and remove previous instances/containers.
-#   --backup Create a pre-deployment database backup (Docker modes only).
-#   --tunnel Load dev.iqoqo.cc configuration (dev mode only).
+#   --clean       Stop and remove previous instances/containers, and rotate keys.
+#   --key-rotate  Force rotation of all security keys (SECRET_KEY, JWT_SECRET_KEY, AUTH_SECRET).
+#   --backup      Create a pre-deployment database backup (Docker modes only).
+#   --tunnel      Load dev.iqoqo.cc configuration (dev mode only).
 
 # 0. Set Mode and Parameters
 MODE="dev"
@@ -53,7 +54,7 @@ while [ $# -gt 0 ]; do
         --clean)
             CLEAN=true
             ;;
-        --rotate)
+        --rotate|--key-rotate)
             ROTATE_FORCE=true
             ;;
         --backup)
@@ -140,6 +141,9 @@ auto_generate_or_rotate_keys() {
         if [ "$ROTATE_FORCE" = true ]; then
             echo "🔄 Forced rotation requested. Rotating SECRET_KEY..."
             needs_rotation=true
+        elif [ "$CLEAN" = true ]; then
+            echo "🧹 Clean start requested. Rotating SECRET_KEY..."
+            needs_rotation=true
         elif [ -n "$last_rotated" ]; then
             local now
             now=$(date +%s)
@@ -156,6 +160,7 @@ auto_generate_or_rotate_keys() {
         fi
     fi
 
+    # Generate or rotate SECRET_KEY
     if [ "$needs_generation" = true ] || [ "$needs_rotation" = true ]; then
         local new_key=""
         if command -v python3 &>/dev/null; then
@@ -176,7 +181,8 @@ auto_generate_or_rotate_keys() {
         echo "✅ Generated and set new SECRET_KEY in $target_file"
     fi
 
-    if [ "$gen_jwt" = true ]; then
+    # Generate or rotate JWT_SECRET_KEY
+    if [ "$gen_jwt" = true ] || [ "$needs_rotation" = true ]; then
         local new_jwt_key=""
         if command -v python3 &>/dev/null; then
             new_jwt_key=$(python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null)
@@ -192,7 +198,8 @@ auto_generate_or_rotate_keys() {
         echo "✅ Generated and set new JWT_SECRET_KEY in $target_file"
     fi
 
-    if [ "$gen_auth" = true ]; then
+    # Generate or rotate AUTH_SECRET
+    if [ "$gen_auth" = true ] || [ "$needs_rotation" = true ]; then
         local new_auth_secret=""
         if command -v python3 &>/dev/null; then
             new_auth_secret=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null)
@@ -397,7 +404,8 @@ if [ "$MODE" == "dev" ]; then
                 if ! colima start --dns 8.8.8.8; then
                     echo "Error: Failed to start Colima."
                     if [ -t 0 ]; then
-                        read -p "Do you want to reset Colima (delete and restart)? This will delete all Docker data! [y/N] " -n 1 -r
+                        printf "Do you want to reset Colima (delete and restart)? This will delete all Docker data! [y/N] "
+                        read -n 1 -r REPLY
                         echo
                         if [[ $REPLY =~ ^[Yy]$ ]]; then
                             colima delete --force
@@ -477,7 +485,8 @@ if [ "$MODE" == "dev" ]; then
         if [ -f "$LOCK" ]; then
             echo "⚠️  Stale Next.js lock file detected: $LOCK"
             if [ -t 0 ]; then
-                read -p "Do you want to fix this (kill zombie processes and clear cache)? [y/N] " -n 1 -r
+                printf "Do you want to fix this (kill zombie processes and clear cache)? [y/N] "
+                read -n 1 -r REPLY
                 echo
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
                     ZOMBIE_PIDS=$(lsof -t -i :3000 2>/dev/null || true)
@@ -696,7 +705,8 @@ except Exception:
             echo "❌ Error: Failed to pull pre-built images."
             if command -v gh &>/dev/null; then
                 if [ -t 0 ]; then
-                    read -p "🤔 Do you want to attempt automatic login via GitHub CLI (gh)? [y/N] " -n 1 -r
+                    printf "🤔 Do you want to attempt automatic login via GitHub CLI (gh)? [y/N] "
+                    read -n 1 -r REPLY
                     echo
                     if [[ $REPLY =~ ^[Yy]$ ]]; then
                         echo "🔑 Attempting GHCR login..."
