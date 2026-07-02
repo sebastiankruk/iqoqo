@@ -341,7 +341,7 @@ _test-e2e-run:
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi
 	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium
+	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-e2e
