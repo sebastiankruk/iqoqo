@@ -663,7 +663,7 @@ function CollectionContent() {
           </div>
 
           <div className="min-w-0 flex-1">
-            {isLoading ? (
+            {mounted && isLoading ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="overflow-hidden rounded-lg bg-card shadow-sm">
