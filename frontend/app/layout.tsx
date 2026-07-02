@@ -19,6 +19,7 @@ import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CookieConsent } from "@/components/cookie-consent";
 import { BrowserTelemetry } from "@/components/browser-telemetry";
+import { BrowserOpenObserveRum } from "@/components/browser-openobserve-rum";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getMessages, getLocale } from "next-intl/server";
@@ -83,6 +84,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <Providers>
+              <BrowserOpenObserveRum />
               {children}
               <CookieConsent />
             </Providers>
