@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenObserve Browser RUM & Logs Integration**: Integrated `@openobserve/browser-rum` and `@openobserve/browser-logs` client-side SDKs. Created the `BrowserOpenObserveRum` component to load the SDKs dynamically, start session replay recording, and propagate authenticated user context (`useProfile`). Added Playwright E2E tests verifying client-side RUM initialization.
+- **RUM Configuration Propagation**: Updated `.env.example`, `.env`, `.env.dev`, `.env.test`, and `frontend/.env.example` with OpenObserve RUM variables. Updated `run.sh` to forward these configuration options as `NEXT_PUBLIC_` variables to Next.js.
 - **OpenTelemetry Distributed Tracing & Dynatrace Integration**: Implemented OpenTelemetry auto-instrumentation across Flask API, Celery background worker, and Next.js frontend services. Added `deploy/otel-collector-config.yaml` to export traces and metrics (Redis, PostgreSQL, and Docker stats) to Dynatrace via the OpenTelemetry Collector. Added tracing configuration parameters to `docker-compose.yml`, `run.sh`, and `.env.example`.
 - **Frontend Telemetry Registration**: Created `frontend/instrumentation.ts` utilizing `@vercel/otel` for frontend trace propagation.
 - **Devcontainer Sandbox Configuration**: Introduced `.devcontainer/Dockerfile` and `.devcontainer/devcontainer.template.json` template setup with Ubuntu 24.04 and workspace bind-mounts to simplify sandbox environment deployment.
