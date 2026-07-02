@@ -134,3 +134,35 @@ def test_nginx_main_otel_config_structure() -> None:
     assert "otel_exporter" in content
     assert "otel_trace on;" in content
     assert "otel_service_name" in content
+
+
+def test_opentelemetry_packages_in_requirements() -> None:
+    """Verify that all required OpenTelemetry instrumentation packages are listed in requirements.txt."""
+    req_path: Path = Path(__file__).parent.parent / "requirements.txt"
+    assert req_path.exists()
+
+    content: str = req_path.read_text(encoding="utf-8")
+    required_packages: list[str] = [
+        "opentelemetry-distro",
+        "opentelemetry-exporter-otlp",
+        "opentelemetry-instrumentation-flask",
+        "opentelemetry-instrumentation-celery",
+        "opentelemetry-instrumentation-sqlalchemy",
+        "opentelemetry-instrumentation-redis",
+        "opentelemetry-instrumentation-requests",
+        "opentelemetry-instrumentation-openai",
+    ]
+    for package in required_packages:
+        assert package in content, f"Package '{package}' is missing from requirements.txt"
+
+
+def test_run_sh_otel_instrumentation() -> None:
+    """Verify that run.sh wraps runtime processes with OpenTelemetry instrumentation."""
+    run_path: Path = Path(__file__).parent.parent / "run.sh"
+    assert run_path.exists()
+
+    content: str = run_path.read_text(encoding="utf-8")
+    assert "opentelemetry-instrument flask" in content, "Flask API is not wrapped with opentelemetry-instrument in run.sh"
+    assert "opentelemetry-instrument celery" in content, "Celery worker is not wrapped with opentelemetry-instrument in run.sh"
+    assert 'OTEL_SERVICE_NAME="iqoqo-frontend"' in content, "OTEL_SERVICE_NAME is not set for frontend in run.sh"
+    assert 'OTEL_SERVICE_NAME="iqoqo-celery-worker"' in content, "OTEL_SERVICE_NAME is not set for Celery worker in run.sh"
