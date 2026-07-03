@@ -25,6 +25,18 @@ test.describe("Manual Verification Integration E2E", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
+    // 1b. Perform login via UI to get valid session cookies
+    await page.goto("/login");
+    const emailInput = page.locator('input[type="email"]');
+    if (await emailInput.isVisible({ timeout: 5000 })) {
+      await emailInput.fill("e2e-admin@iqoqo.local");
+      await page.locator('input[type="password"]').fill("E2ETestPassword123!");
+      await Promise.all([
+        page.waitForURL(/\/(collection|dashboard|profile|admin)?$/, { timeout: 15000 }),
+        page.locator('button[type="submit"]').click(),
+      ]);
+    }
+
     // 2. Mock default profile endpoint
     await page.route("**/api/profile**", async route => {
       if (route.request().method() === "PUT") {
@@ -125,58 +137,53 @@ test.describe("Manual Verification Integration E2E", () => {
     await saveButton.click();
 
     // Expect conflict error to show up
-    await expect(page.getByText(/Username already taken/i)).toBeVisible();
+    await expect(page.getByText(/Username already taken/i).first()).toBeVisible();
   });
 
   test("Item-Level Privacy (is_hidden toggle)", async ({ page }) => {
-    const itemId = 123;
     let isHiddenState = false;
 
-    // Mock item endpoint
-    await page.route(`**/api/items/${itemId}**`, async route => {
+    let itemState: any = null;
+
+    // Intercept GET and PUT requests to track visibility in memory
+    await page.route(/\/api\/items\/\d+/, async route => {
       if (route.request().method() === "PUT") {
         const body = route.request().postDataJSON();
-        isHiddenState = body.is_hidden;
+        itemState = { ...itemState, ...body };
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true, data: { id: itemId, is_hidden: isHiddenState } }),
+          body: JSON.stringify({ success: true, data: itemState }),
         });
       } else {
+        if (!itemState) {
+          const response = await route.fetch();
+          const json = await response.json();
+          itemState = json.data;
+        }
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            data: {
-              id: itemId,
-              title: "Hidden Treasure Book",
-              status: "unread",
-              collection_status: "available",
-              is_owner: true,
-              is_hidden: isHiddenState,
-              manifestation_id: 111,
-              meta: { format: "book" },
-              manifestation_meta: { format: "book" },
-            },
-          }),
+          body: JSON.stringify({ success: true, data: itemState }),
         });
       }
     });
 
-    await page.goto(`/item/${itemId}`);
+    await page.goto("/collection");
     await page.waitForLoadState("networkidle");
 
-    // Toggle the hidden checkbox/switch (verify aria-label or text)
-    const hiddenCheckbox = page.locator('input[type="checkbox"][aria-label*="hide" i], input[type="checkbox"][id*="hidden" i]');
-    if (await hiddenCheckbox.isVisible()) {
-      await hiddenCheckbox.setChecked(true);
-      await expect(page.getByText(/item visibility updated/i).or(page.getByText(/hidden/i))).toBeVisible();
-    } else {
-      // Fallback: look for visibility selection or toggle button
-      const visibilityToggle = page.getByRole("checkbox", { name: /hide|hidden|private/i }).first();
-      await visibilityToggle.click();
-    }
+    const firstCard = page.locator("[data-testid='item-card']").first();
+    await expect(firstCard).toBeVisible();
+    await firstCard.click();
+
+    // Verify page has loaded
+    await page.waitForURL(/\/item\/\d+$/);
+
+    // Toggle the hidden setting
+    const visibilityBtn = page.getByRole("button", { name: /hide from public|make public/i });
+    await expect(visibilityBtn).toBeVisible();
+    await visibilityBtn.click();
+    await expect(page.getByText(/item is now hidden/i)).toBeVisible();
   });
 
   test("Filtered Collection Sharing & i18n", async ({ page }) => {
@@ -214,7 +221,7 @@ test.describe("Manual Verification Integration E2E", () => {
       });
     });
 
-    await page.goto("/collection?status=want_to_read");
+    await page.goto("/collection?statuses=want_to_read");
     await page.waitForLoadState("networkidle");
 
     // Open share view dialog
@@ -244,41 +251,35 @@ test.describe("Manual Verification Integration E2E", () => {
   });
 
   test("Lent Out Status Lifecycle", async ({ page }) => {
-    const itemId = 555;
-    let collectionStatus = "available";
     let loanDetails: any = null;
 
-    await page.route(`**/api/items/${itemId}**`, async route => {
+    let itemState: any = null;
+
+    // Mock GET and PUT requests to item status updates to track in memory
+    await page.route(/\/api\/items\/\d+/, async route => {
       if (route.request().method() === "PUT") {
         const body = route.request().postDataJSON();
-        collectionStatus = body.collection_status || collectionStatus;
+        itemState = { ...itemState, ...body };
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true, data: { id: itemId, collection_status: collectionStatus } }),
+          body: JSON.stringify({ success: true, data: itemState }),
         });
       } else {
+        if (!itemState) {
+          const response = await route.fetch();
+          const json = await response.json();
+          itemState = json.data;
+        }
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            data: {
-              id: itemId,
-              title: "Lending Book",
-              status: "read",
-              collection_status: collectionStatus,
-              is_owner: true,
-              manifestation_id: 222,
-              meta: { format: "book" },
-              manifestation_meta: { format: "book" },
-            },
-          }),
+          body: JSON.stringify({ success: true, data: itemState }),
         });
       }
     });
 
-    await page.route(`**/api/items/${itemId}/loan-status`, async route => {
+    await page.route(/\/api\/items\/\d+\/loan-status$/, async route => {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON();
         loanDetails = body;
@@ -288,7 +289,7 @@ test.describe("Manual Verification Integration E2E", () => {
           body: JSON.stringify({ success: true, data: body }),
         });
       } else {
-        return route.fulfill({
+        await route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({ success: true, data: loanDetails }),
@@ -307,8 +308,15 @@ test.describe("Manual Verification Integration E2E", () => {
       });
     });
 
-    await page.goto(`/item/${itemId}`);
+    await page.goto("/collection");
     await page.waitForLoadState("networkidle");
+
+    const firstCard = page.locator("[data-testid='item-card']").first();
+    await expect(firstCard).toBeVisible();
+    await firstCard.click();
+
+    // Verify page has loaded
+    await page.waitForURL(/\/item\/\d+$/);
 
     const collectionSelect = page.locator('select[aria-label="Collection status"]');
     await collectionSelect.selectOption("lent");
@@ -338,7 +346,7 @@ test.describe("Manual Verification Integration E2E", () => {
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true }),
+          body: JSON.stringify({ success: true, data: body }),
         });
       } else {
         return route.fulfill({
@@ -348,7 +356,10 @@ test.describe("Manual Verification Integration E2E", () => {
             success: true,
             data: {
               MAINTENANCE_MODE: { value: maintenanceMode, source: "db" },
-              GOOGLE_BOOKS_API_KEY: { value: apiKey.substring(0, 3) === "***" ? apiKey : `***${apiKey.slice(-4)}`, source: "db" },
+              GOOGLE_BOOKS_API_KEY: {
+                value: apiKey.substring(0, 3) === "***" ? apiKey : `***${apiKey.slice(-4)}`,
+                source: "db",
+              },
             },
           }),
         });
@@ -359,7 +370,7 @@ test.describe("Manual Verification Integration E2E", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, value: apiKey }),
+        body: JSON.stringify({ success: true, data: { value: apiKey } }),
       });
     });
 
@@ -376,15 +387,16 @@ test.describe("Manual Verification Integration E2E", () => {
     await expect(page.getByText(/Settings saved successfully/i)).toBeVisible();
 
     // Toggle API keys subtab
-    await page.goto("/admin/settings?tab=external_apis");
+    await page.goto("/admin/settings?tab=apikeys");
     await page.waitForLoadState("networkidle");
 
     // Check API Key input is masked (starts with ***)
-    const apiKeyInput = page.locator("input[type='text']").first();
+    const apiKeyContainer = page.locator("div.bg-card").filter({ hasText: "Google Books API Key" });
+    const apiKeyInput = apiKeyContainer.locator("input").first();
     await expect(apiKeyInput).toHaveValue(/^\*\*\*/);
 
     // Click "eye" icon to reveal
-    const revealBtn = page.locator("button:has(svg.lucide-eye)").first();
+    const revealBtn = apiKeyContainer.locator("button").first();
     await revealBtn.click();
 
     // Check that fully revealed key is visible
@@ -418,12 +430,9 @@ test.describe("Manual Verification Integration E2E", () => {
     await page.goto("/collection?view=manifestations");
     await page.waitForLoadState("networkidle");
 
-    // Select the two manifestations
-    const cards = page.locator("[data-testid='manifestation-card'], [data-testid='item-card']");
-    await expect(cards).toHaveCount(2);
-
-    await cards.nth(0).click();
-    await cards.nth(1).click();
+    // Select the two manifestations by clicking the select overlay buttons
+    await page.getByRole("button", { name: "Select" }).nth(0).click();
+    await page.getByRole("button", { name: "Select" }).nth(1).click();
 
     // Check if floating toolbar is visible
     const floatingToolbar = page.locator("[data-testid='floating-toolbar'], button:has-text('Add to Collection')");
@@ -434,7 +443,7 @@ test.describe("Manual Verification Integration E2E", () => {
     await page.getByText("Want to Read").click();
 
     // Verify success notification
-    await expect(page.getByText(/Items added to collection/i).or(page.getByText(/success/i))).toBeVisible();
+    await expect(page.getByText(/Added 2 items/i)).toBeVisible();
 
     // Test sidebar facet mini-search
     const genreFilterInput = page.getByPlaceholder(/filter genres|search genres/i).first();
@@ -512,25 +521,33 @@ test.describe("Manual Verification Integration E2E", () => {
     }
   });
 
-  test("Backend API Hardening, BOLA & Payload Validation Mocks", async ({ request }) => {
+  test("Backend API Hardening, BOLA & Payload Validation Mocks", async ({ page, request }) => {
     // Hit direct backend endpoints (E2E mode relies on backend running on port 5002)
     const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5002/api";
 
+    // Get cookies from page context to authenticate backend API calls
+    const cookies = await page.context().cookies();
+    const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+
     // 1. Missing Authorization header should return 401
-    const unauthRes = await request.get(`${flaskApiUrl}/admin/users`);
+    const unauthRes = await request.get(`${flaskApiUrl}/v1/admin/users`);
     expect(unauthRes.status()).toBe(401);
 
     // 2. Invalid Payload to POST /api/items/manual should return 400
     // Try sending without a title
     const badManualRes = await request.post(`${flaskApiUrl}/items/manual`, {
-      data: { Format: "book" }
+      headers: { Cookie: cookieHeader },
+      data: { Format: "book" },
     });
     expect(badManualRes.status()).toBe(400);
 
     // Try sending invalid JSON format (invalid JSON string body)
     const badJsonRes = await request.post(`${flaskApiUrl}/items/manual`, {
-      headers: { "Content-Type": "application/json" },
-      data: "{invalid-json"
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookieHeader,
+      },
+      data: "{invalid-json",
     });
     expect(badJsonRes.status()).toBe(400);
   });

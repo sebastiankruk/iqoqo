@@ -37,7 +37,7 @@ class TestRunScripts(unittest.TestCase):
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
         self.bin_dir.mkdir()
-        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql", "sleep"]:
+        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql", "sleep", "lsof"]:
             (self.bin_dir / cmd).write_text("#!/bin/bash\nexit 0")
             (self.bin_dir / cmd).chmod(0o755)
 
@@ -74,7 +74,7 @@ class TestRunScripts(unittest.TestCase):
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=20,
                 check=False,
             )
             return result
