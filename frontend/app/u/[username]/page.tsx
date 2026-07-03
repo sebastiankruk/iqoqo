@@ -38,11 +38,15 @@ interface PublicProfilePageProps {
  * @returns The user profile data or null if not found.
  */
 async function getProfile(username: string) {
-  const res = await fetch(resolveApiUrl(`/public/u/${username}`, true), {
-    next: { revalidate: 60 }, // Cache for 60 seconds
-  });
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const res = await fetch(resolveApiUrl(`/public/u/${username}`, true), {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -51,11 +55,15 @@ async function getProfile(username: string) {
  * @returns The items list.
  */
 async function getItems(username: string) {
-  const res = await fetch(resolveApiUrl(`/public/u/${username}/items`, true), {
-    next: { revalidate: 60 },
-  });
-  if (!res.ok) return { data: { items: [] } };
-  return res.json();
+  try {
+    const res = await fetch(resolveApiUrl(`/public/u/${username}/items`, true), {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return { data: { items: [] } };
+    return res.json();
+  } catch {
+    return { data: { items: [] } };
+  }
 }
 
 /**

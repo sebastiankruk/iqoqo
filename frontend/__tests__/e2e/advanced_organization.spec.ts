@@ -199,7 +199,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
       expect(bulkJson.success).toBe(true);
       expect(bulkJson.data.item_ids.length).toBe(2);
 
-      const badBulkRes = await request.post("/api/items/bulk", {
+      const badBulkRes = await request.post(`${flaskApiUrl}/items/bulk`, {
         headers: { Authorization: `Bearer ${token}` },
         data: { manifestation_ids: [] },
       });
