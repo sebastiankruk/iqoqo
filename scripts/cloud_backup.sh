@@ -21,7 +21,7 @@ RCLONE_REMOTE="${1:-iqoqo-backup}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/tmp/iqoqo_backup_${TIMESTAMP}"
 ARCHIVE="${BACKUP_DIR}.tar.gz"
-COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-iqoqo}"
+
 
 echo "🗄️  Starting iQoQo backup (remote: ${RCLONE_REMOTE})..."
 mkdir -p "${BACKUP_DIR}"

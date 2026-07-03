@@ -83,3 +83,7 @@ frontend/test_output.txt
 # Mobile apps
 frontend/android/*
 frontend/ios/*
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json

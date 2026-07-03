@@ -53,8 +53,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 if [ -f "${ROOT_DIR}/.env" ]; then
-    # shellcheck disable=SC1091
     set -o allexport
+    # shellcheck disable=SC1091
     source "${ROOT_DIR}/.env"
     set +o allexport
 fi
@@ -224,10 +224,9 @@ SQL
 
     docker exec "$CONTAINER" psql -U "$SUPERUSER" -d postgres \
         -v "app_db=${POSTGRES_DB}" \
-        -v "app_user=${POSTGRES_USER}" <<'SQL'
+        -v "app_user=${POSTGRES_USER}" <<'SQL' 2>/dev/null || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
 SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'app_user') \gexec
 SQL
-    2>/dev/null || echo "  (Database '${POSTGRES_DB}' already exists — continuing.)"
 fi
 
 grant_privileges "$CONTAINER" "$SUPERUSER"

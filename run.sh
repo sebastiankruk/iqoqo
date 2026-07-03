@@ -90,7 +90,7 @@ done
 echo "🚀 iqoqo Management: Entering mode '$MODE'..."
 
 # Ensure we are in the project root
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 # Helper function to update or append environment variables in env files
 update_env_var() {
@@ -159,8 +159,10 @@ auto_generate_or_rotate_keys() {
             fi
         else
             # No rotation metadata, set it to current timestamp to start tracking
-            update_env_var "$target_file" "SECRET_KEY_LAST_ROTATED" "$(date +%s)"
-            export SECRET_KEY_LAST_ROTATED="$(date +%s)"
+            local _sc_ts
+            _sc_ts=$(date +%s)
+            update_env_var "$target_file" "SECRET_KEY_LAST_ROTATED" "$_sc_ts"
+            export SECRET_KEY_LAST_ROTATED="$_sc_ts"
         fi
     fi
 
@@ -181,7 +183,9 @@ auto_generate_or_rotate_keys() {
         update_env_var "$target_file" "SECRET_KEY_LAST_ROTATED" "$(date +%s)"
         
         export SECRET_KEY="$new_key"
-        export SECRET_KEY_LAST_ROTATED="$(date +%s)"
+        local _sc_ts
+        _sc_ts=$(date +%s)
+        export SECRET_KEY_LAST_ROTATED="$_sc_ts"
         echo "✅ Generated and set new SECRET_KEY in $target_file"
     fi
 
@@ -223,6 +227,7 @@ auto_generate_or_rotate_keys() {
 # 1. Load Environment Variables
 if [ -f ".env" ]; then
     set -o allexport
+    # shellcheck disable=SC1091
     source .env
     set +o allexport
 fi
@@ -232,6 +237,7 @@ ENV_FILE=".env.$MODE"
 if [ -f "$ENV_FILE" ]; then
     echo "⚡ Loading overrides from $ENV_FILE"
     set -o allexport
+    # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +o allexport
 elif [ "$MODE" != "dev" ] && [ "$MODE" != "prod" ]; then
@@ -350,6 +356,7 @@ fi
 if [ ! -d ".venv" ]; then
     echo "🔧 Bootstrapping virtual environment..."
     python3 -m venv .venv
+    # shellcheck disable=SC1091
     source .venv/bin/activate
     pip install -r requirements.txt
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && command -v opentelemetry-bootstrap &>/dev/null; then
@@ -358,6 +365,7 @@ if [ ! -d ".venv" ]; then
     touch .venv/bin/activate
 elif [ "requirements.txt" -nt ".venv/bin/activate" ]; then
     echo "🔧 Syncing virtual environment with requirements.txt..."
+    # shellcheck disable=SC1091
     source .venv/bin/activate
     pip install -r requirements.txt
     if [ "$OTEL_TRACES_EXPORTER" = "otlp" ] && command -v opentelemetry-bootstrap &>/dev/null; then
@@ -365,6 +373,7 @@ elif [ "requirements.txt" -nt ".venv/bin/activate" ]; then
     fi
     touch .venv/bin/activate
 else
+    # shellcheck disable=SC1091
     source .venv/bin/activate
 fi
 
@@ -375,13 +384,14 @@ if [ "$MODE" == "dev" ]; then
     if [ "$TUNNEL" = true ] && [ -f ".env.dev" ]; then
         echo "⚡ Loading Tunnel Configuration (.env.dev)"
         set -o allexport
+        # shellcheck disable=SC1091
         source .env.dev
         set +o allexport
     elif [ "$TUNNEL" = false ]; then
         export NEXTAUTH_URL="http://localhost:3000"
         export AUTH_TRUST_HOST="false"
         # Ensure URLs point to localhost for host-side processes
-        export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@db:/@localhost:/')
+        export DATABASE_URL="${DATABASE_URL/@db:/@localhost:}"
         export REDIS_URL="redis://localhost:6379/0"
     fi
 
@@ -446,8 +456,8 @@ if [ "$MODE" == "dev" ]; then
         docker network create iqoqo_default 2>/dev/null || true
         # Clean up any conflicting container names to prevent startup failure
         docker rm -f \
-            ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve \
-            ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector \
+            "${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve" \
+            "${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector" \
             iqoqo-openobserve \
             iqoqo-otel-collector 2>/dev/null || true
         docker compose -f docker-compose.monitoring.yml up -d || true
@@ -529,7 +539,7 @@ if [ "$MODE" == "dev" ]; then
                     ZOMBIE_PIDS=$(lsof -t -i :3000 2>/dev/null || true)
                     if [ -n "$ZOMBIE_PIDS" ]; then
                         echo "⚠️  Killing zombie process(es) on port 3000 (PIDs: $ZOMBIE_PIDS)..."
-                        kill -9 $ZOMBIE_PIDS 2>/dev/null || true
+                        kill -9 "$ZOMBIE_PIDS" 2>/dev/null || true
                     fi
                     echo "🧹 Clearing corrupted Next.js cache..."
                     rm -rf "frontend/.next"
@@ -651,8 +661,8 @@ else
     fi
 
     # Ensure URLs point to service names for container-internal networking
-    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@localhost:/@db:/')
-    export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@localhost:/@redis:/')
+    export DATABASE_URL="${DATABASE_URL/@localhost:/@db:}"
+    export REDIS_URL="${REDIS_URL/@localhost:/@redis:}"
 
     if [ "$CLEAN" = true ]; then
         echo "🧹 Cleaning up previous instances for $COMPOSE_PROJECT_NAME..."
@@ -665,6 +675,7 @@ else
     # Wait for DB to be ready
     echo "⏳ Waiting for database..."
     DB_READY=false
+    # shellcheck disable=SC2034
     for i in {1..30}; do
         if docker compose exec -T db pg_isready -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" &>/dev/null; then
             echo "✅ Database is ready"
@@ -684,6 +695,7 @@ else
 
     if [ "$MIGRATION_COUNT" -gt 1 ]; then
         echo "⚠️  WARNING: Multiple Alembic heads detected in the database:"
+        # shellcheck disable=SC2001
         echo "$MIGRATION_ROWS" | sed 's/^/   /'
         CURRENT_MIGRATION=""
     elif [ "$MIGRATION_COUNT" -eq 1 ]; then
@@ -799,6 +811,7 @@ except Exception:
     SERVICES_STATUS=$($COMPOSE_CMD ps --format "{{.Service}}: {{.State}} ({{.Health}})")
 
     echo "📊 Service Status:"
+    # shellcheck disable=SC2001
     echo "$SERVICES_STATUS" | sed 's/^/  /'
 
     # Detect any crashed or unhealthy services

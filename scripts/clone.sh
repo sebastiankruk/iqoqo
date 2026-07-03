@@ -32,6 +32,7 @@ SRC_HOST="${5:-}"
 
 # Validate directories
 if [ -n "$SRC_HOST" ]; then
+    # shellcheck disable=SC2029
     if ! ssh "$SRC_HOST" "[ -d '$SRC_DIR' ]"; then
         echo "❌ Error: Remote source directory '$SRC_DIR' does not exist on host '$SRC_HOST'."
         exit 1
@@ -52,6 +53,7 @@ SRC_ENV="${SRC_DIR}/.env.${SRC_NAME}"
 DST_ENV="${DST_DIR}/.env.${DST_NAME}"
 
 if [ -n "$SRC_HOST" ]; then
+    # shellcheck disable=SC2029
     if ! ssh "$SRC_HOST" "[ -f '$SRC_ENV' ]"; then
         echo "❌ Error: Remote source env file '$SRC_ENV' does not exist on host '$SRC_HOST'."
         exit 1
@@ -84,6 +86,7 @@ get_remote_env_var() {
     local var="$3"
     local default="$4"
     local val
+    # shellcheck disable=SC2029
     val=$(ssh "$host" "grep -E '^${var}=' '$file'" | cut -d'=' -f2- | tr -d '"'\' | tr -d '\r')
     echo "${val:-$default}"
 }
@@ -113,11 +116,13 @@ fi
 # Find source database container
 if [ -n "$SRC_HOST" ]; then
     echo "🔍 Finding remote source database container on host '$SRC_HOST' for project '$SRC_PROJECT'..."
+    # shellcheck disable=SC2029
     SRC_DB_CONTAINER=$(
         ssh "$SRC_HOST" "cd \"$SRC_DIR\" && export ENV_FILE=\".env.${SRC_NAME}\" && docker compose -p \"$SRC_PROJECT\" --env-file \".env.${SRC_NAME}\" ps -q db 2>/dev/null"
     )
 else
     echo "🔍 Finding source database container for project '$SRC_PROJECT'..."
+    # shellcheck disable=SC2030
     SRC_DB_CONTAINER=$(
         cd "$SRC_DIR"
         export ENV_FILE=".env.${SRC_NAME}"
@@ -136,6 +141,7 @@ fi
 
 # Start destination database container
 echo "🚀 Ensuring destination database container is running for project '$DST_PROJECT'..."
+# shellcheck disable=SC2030,SC2031
 (
     cd "$DST_DIR"
     export ENV_FILE=".env.${DST_NAME}"
@@ -145,7 +151,8 @@ echo "🚀 Ensuring destination database container is running for project '$DST_
 # Wait for destination database to be ready
 echo "⏳ Waiting for destination database to be ready..."
 DST_READY=false
-for i in {1..30}; do
+for _ in {1..30}; do
+    # shellcheck disable=SC2031
     DST_DB_CONTAINER=$(
         cd "$DST_DIR"
         export ENV_FILE=".env.${DST_NAME}"
@@ -176,6 +183,7 @@ docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "
 
 echo "📥 Cloning database data..."
 if [ -n "$SRC_HOST" ]; then
+    # shellcheck disable=SC2029
     ssh "$SRC_HOST" "docker exec -i $SRC_DB_CONTAINER pg_dump -U $SRC_POSTGRES_USER --no-owner --no-privileges $SRC_POSTGRES_DB" | \
       docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB"
 else
@@ -191,6 +199,7 @@ for dir in "covers" "gallery"; do
     SRC_STATIC_DIR="${SRC_DIR}/app/static/${dir}"
     DST_STATIC_DIR="${DST_DIR}/app/static/${dir}"
     if [ -n "$SRC_HOST" ]; then
+        # shellcheck disable=SC2029
         if ssh "$SRC_HOST" "[ -d '$SRC_STATIC_DIR' ]"; then
             mkdir -p "$DST_STATIC_DIR"
             echo "🔄 Syncing static/${dir} from remote host '$SRC_HOST'..."
@@ -198,6 +207,7 @@ for dir in "covers" "gallery"; do
                 rsync -avz --delete -e ssh "${SRC_HOST}:${SRC_STATIC_DIR}/" "${DST_STATIC_DIR}/"
             else
                 echo "⚠️ Warning: rsync not found, falling back to tar over ssh..."
+                # shellcheck disable=SC2029
                 ssh "$SRC_HOST" "tar -C '${SRC_STATIC_DIR}' -cf - ." | tar -C "$DST_STATIC_DIR" -xf -
             fi
         else
