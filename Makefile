@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -91,7 +91,8 @@ help:
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
 	@echo "  test           - Run all tests (backend and frontend)"
-	@echo "  test-backend   - Run backend tests (pytest)"
+	@echo "  test-backend   - Run backend tests (pytest, defaults to SQLite)"
+	@echo "  test-backend-pg - Run backend integration tests requiring PostgreSQL"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
 	@echo "  test-e2e       - Run end-to-end tests (Playwright). Loads .env.test automatically."
 	@echo "  build-frontend - Build Next.js production bundle"
@@ -269,6 +270,22 @@ format: format-python format-js
 test-backend: .venv/bin/activate
 	@echo "Running backend tests..."
 	.venv/bin/pytest tests/
+
+test-backend-pg: .venv/bin/activate
+	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
+	@echo "Ensuring test database exists..."
+	@psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
+		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" 2>/dev/null \
+		| grep -q 1 \
+		&& echo "iqoqo_test already exists." \
+		|| (psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
+			-c "CREATE DATABASE iqoqo_test" && echo "Created iqoqo_test.")
+	ENABLE_FTS_TESTS=true \
+	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
+	$(MAKE) pg-create-schemas
+	ENABLE_FTS_TESTS=true \
+	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
+	.venv/bin/pytest tests/integration/db/ -v
 
 test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
