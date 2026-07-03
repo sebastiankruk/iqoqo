@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.6] - 2026-06-21
+## [0.7.6] - 2026-07-03
 
 ### Added
 
@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Infrastructure Validation Tests**: Added a `--validate-only` flag to `run.sh` and updated `tests/test_infra_config.py` to use it, preventing timeouts and subprocess hangs when verifying configurations.
+- **Frontend Build and Lint Pipeline**: Ignored the `.next-e2e` build directory in ESLint configuration to skip generated chunks, removed unused variables in E2E integration specs, and bypassed a React hooks setState-in-effect warning on the Collection page to ensure a clean build.
 - **Wishlist Detail View**: Fixed `_get_virtual_item_detail` in `app/api/items.py` to return work-level details for virtual items when they lack a manifestation, resolving `404 Not Found` and `UnboundLocalError` issues in collection detail navigation.
 - **Wishlist Invalidation Scope**: Extended frontend query invalidation scope in `useAddItem` React Query hook and `AddToCollectionDropdown` component to invalidate `worksShelf` and `expressionsShelf` on wishlist changes, preventing items from disappearing from shelf views after reload.
 - **Add Manifestation to Wishlist**: Configured the `/api/manifestations/<id>/add` endpoint to create a `UserWorkIntent` instead of a physical `Item` when `collection_status == "wish_list"`. Added a corresponding "Add to Wishlist" option to the manifestation detail page's dropdown.

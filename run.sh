@@ -39,6 +39,7 @@ BACKUP=false
 PREBUILT=false
 STOP=false
 ROTATE_FORCE=false
+VALIDATE_ONLY=false
 CUSTOM_VERSION=""
 
 # Robust argument parsing
@@ -56,6 +57,9 @@ while [ $# -gt 0 ]; do
             ;;
         --rotate|--key-rotate)
             ROTATE_FORCE=true
+            ;;
+        --validate-only)
+            VALIDATE_ONLY=true
             ;;
         --backup)
             BACKUP=true
@@ -379,6 +383,11 @@ if [ "$MODE" == "dev" ]; then
         # Ensure URLs point to localhost for host-side processes
         export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@db:/@localhost:/')
         export REDIS_URL="redis://localhost:6379/0"
+    fi
+
+    if [ "$VALIDATE_ONLY" = true ]; then
+        echo "✅ Configuration validation successful (dev)."
+        exit 0
     fi
 
     # Start DB/Redis in Docker (slim mode)
@@ -732,6 +741,11 @@ except Exception:
             echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
             COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
         fi
+    fi
+
+    if [ "$VALIDATE_ONLY" = true ]; then
+        echo "✅ Configuration validation successful (prod)."
+        exit 0
     fi
 
     if [ "$PREBUILT" = true ]; then

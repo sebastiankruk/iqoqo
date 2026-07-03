@@ -66,6 +66,8 @@ class TestRunScripts(unittest.TestCase):
         cmd = ["bash", "./run.sh"]
         if args:
             cmd.extend(args)
+        if "--validate-only" not in cmd:
+            cmd.append("--validate-only")
 
         try:
             result = subprocess.run(

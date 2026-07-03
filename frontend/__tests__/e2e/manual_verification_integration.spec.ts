@@ -141,8 +141,6 @@ test.describe("Manual Verification Integration E2E", () => {
   });
 
   test("Item-Level Privacy (is_hidden toggle)", async ({ page }) => {
-    let isHiddenState = false;
-
     let itemState: any = null;
 
     // Intercept GET and PUT requests to track visibility in memory
