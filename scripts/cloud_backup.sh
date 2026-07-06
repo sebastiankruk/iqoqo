@@ -28,9 +28,20 @@ mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump PostgreSQL
 echo "📦 Dumping PostgreSQL database..."
+DB_DUMP_FILE="${BACKUP_DIR}/db_dump_${TIMESTAMP}.sql"
 docker compose -f docker-compose.yml exec -T db \
     pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" \
-    > "${BACKUP_DIR}/db_dump_${TIMESTAMP}.sql"
+    > "${DB_DUMP_FILE}"
+
+# Guard against a silent partial/empty dump (e.g. auth failure inside the
+# container, or the db service restarting mid-dump) slipping through as a
+# "successful" backup -- pg_dumpall exiting 0 doesn't guarantee non-empty
+# output in every failure mode.
+if [ ! -s "${DB_DUMP_FILE}" ]; then
+    echo "❌ Error: PostgreSQL dump is empty (${DB_DUMP_FILE}). Aborting backup." >&2
+    rm -rf "${BACKUP_DIR}"
+    exit 1
+fi
 
 # 2. Archive uploaded assets (non-fatal if missing)
 # Standard iQoQo asset paths relative to app root/volumes

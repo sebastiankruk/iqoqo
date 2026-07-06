@@ -76,7 +76,7 @@ get_env_var() {
     local var="$2"
     local default="$3"
     local val
-    val=$(grep -E "^${var}=" "$file" | cut -d'=' -f2- | tr -d '"'\' | tr -d '\r')
+    val=$(grep -E "^${var}=" "$file" | cut -d'=' -f2- | tr -d $'"\'\r')
     echo "${val:-$default}"
 }
 
@@ -87,7 +87,7 @@ get_remote_env_var() {
     local default="$4"
     local val
     # shellcheck disable=SC2029
-    val=$(ssh "$host" "grep -E '^${var}=' '$file'" | cut -d'=' -f2- | tr -d '"'\' | tr -d '\r')
+    val=$(ssh "$host" "grep -E '^${var}=' '$file'" | cut -d'=' -f2- | tr -d $'"\'\r')
     echo "${val:-$default}"
 }
 

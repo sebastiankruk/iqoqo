@@ -45,7 +45,14 @@ export function BrowserOpenObserveRum(): null {
           console.log("🚫 OpenObserve RUM & Logs client SDKs disabled in test mode.");
           return;
         }
-        const clientToken = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN ?? "rumST8CMTyDstlTbPUm";
+        const clientToken = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN;
+        if (!clientToken) {
+          // No default: a hardcoded client token here would silently ship every
+          // deployment's RUM data to whichever OpenObserve org that token was
+          // originally provisioned for. Skip RUM entirely rather than guess.
+          console.warn("⚠️ NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN is not set; OpenObserve RUM & Logs disabled.");
+          return;
+        }
         const applicationId = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? "iqoqo";
         const site = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SITE ?? "localhost:5080";
         const service =

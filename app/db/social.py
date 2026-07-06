@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import os
-import uuid
+import secrets
 from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -48,13 +48,24 @@ class SharedCollection(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False)
-    share_token = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
+    # secrets.token_urlsafe(32) => 256 bits of entropy (vs. uuid4's 122 bits).
+    share_token = db.Column(db.String(64), default=lambda: secrets.token_urlsafe(32), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     filters = db.Column(JSONB if _USE_PG else db.JSON, server_default="{}", nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    # Optional TTL: NULL means the link never expires.
+    expires_at = db.Column(db.DateTime, nullable=True)
 
     user = db.relationship("User", backref=db.backref("shared_collections", lazy="dynamic", cascade="all, delete-orphan"))
+
+    @property
+    def is_expired(self) -> bool:
+        """Whether this share link's TTL (if any) has elapsed."""
+        if self.expires_at is None:
+            return False
+        dt: datetime = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=UTC)
+        return datetime.now(UTC) > dt
 
     def to_dict(self) -> dict:
         """Serialize the shared collection."""
@@ -65,6 +76,7 @@ class SharedCollection(db.Model):  # type: ignore[name-defined]
             "description": self.description,
             "filters": self.filters,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
         }
 
 

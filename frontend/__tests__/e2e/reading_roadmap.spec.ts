@@ -22,18 +22,15 @@ test.describe("Reading Roadmap E2E Workflow", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
-    // Auto-dismiss any login-failure alert dialogs so the test doesn't block
-    page.on("dialog", dialog => dialog.dismiss());
-
-    // Enforce user authentication step prior to lifecycle execution
-    await page.goto("/login");
-    await page.waitForLoadState("networkidle");
-    await page.fill('input[type="email"]', "e2e-admin@iqoqo.local");
-    await page.fill('input[type="password"]', "E2ETestPassword123!");
-
-    // Wrap click + waitForURL in Promise.all: navigation tracking must start
-    // before the click so Playwright doesn't miss the URL transition to "/".
-    await Promise.all([page.waitForURL(/\/(collection)?$/, { timeout: 30000 }), page.click('button[type="submit"]')]);
+    // Login via direct Flask API call (avoids Next.js proxy POST body issues)
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = await loginRes.json();
+    await page.goto(`/api/auth-exchange?token=${token}`);
+    await page.waitForURL(/\/(collection)?$/);
   });
 
   test("should allow a user to create, populate, and reorder a reading roadmap pipeline", async ({ page }) => {

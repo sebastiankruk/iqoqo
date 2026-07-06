@@ -75,9 +75,20 @@ receivers:
     collection_interval: 10s
 
 processors:
+  # Must run first in every pipeline: caps collector memory so a burst load
+  # (FTS re-indexing, batch LLM cover generation, a traffic spike) degrades
+  # gracefully (drops/backpressures) instead of OOM-killing the collector
+  # container. Percentages are of the container's memory limit -- set one in
+  # docker-compose.yml (e.g. `mem_limit`) or these become no-ops.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+
   batch:
     send_batch_size: 1024
-    timeout: 1s
+    send_batch_max_size: 2048
+    timeout: 5s
 
 exporters:
   # Export all 3 pillars (traces, metrics, logs) to OpenObserve's native OTLP endpoint.
@@ -87,19 +98,27 @@ exporters:
     endpoint: "http://openobserve:5080/api/default/"
     headers:
       Authorization: "Basic ${OPENOBSERVE_BASIC_AUTH}"
+    sending_queue:
+      enabled: true
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/openobserve]
     metrics:
       # Layers 1-7 push OTLP metrics; Layer 8 comes from native receivers
       receivers: [otlp, postgresql, redis, docker_stats]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/openobserve]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/openobserve]

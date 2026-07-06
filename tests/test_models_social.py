@@ -31,8 +31,51 @@ def test_shared_collection_token_generation(app):
         db.session.add(sc)
         db.session.commit()
 
+        # secrets.token_urlsafe(32) => 256 bits of entropy, 43 url-safe base64 chars
+        # (hardened from uuid4's 122 bits / 36 chars).
         assert sc.share_token is not None
-        assert len(sc.share_token) == 36
+        assert len(sc.share_token) == 43
+        assert sc.expires_at is None
+        assert sc.is_expired is False
+
+
+def test_shared_collection_tokens_are_unique(app):
+    with app.app_context():
+        user = User(email="token_unique@iqoqo.local")
+        db.session.add(user)
+        db.session.commit()
+
+        sc1 = SharedCollection(user_id=user.id, name="Collection 1")
+        sc2 = SharedCollection(user_id=user.id, name="Collection 2")
+        db.session.add_all([sc1, sc2])
+        db.session.commit()
+
+        assert sc1.share_token != sc2.share_token
+
+
+def test_shared_collection_expiry(app):
+    from datetime import UTC, datetime, timedelta
+
+    with app.app_context():
+        user = User(email="expiry@iqoqo.local")
+        db.session.add(user)
+        db.session.commit()
+
+        expired = SharedCollection(
+            user_id=user.id,
+            name="Expired Collection",
+            expires_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        active = SharedCollection(
+            user_id=user.id,
+            name="Active Collection",
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+        db.session.add_all([expired, active])
+        db.session.commit()
+
+        assert expired.is_expired is True
+        assert active.is_expired is False
 
 
 def test_public_username_uniqueness(app):
