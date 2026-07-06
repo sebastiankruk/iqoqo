@@ -220,6 +220,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "lender@iqoqo.local", password: "SecurePassword123!" }),
     });
+    expect(lenderLoginRes.ok).toBe(true);
     const { token: lenderToken } = await lenderLoginRes.json();
     await lenderPage.goto(`/api/auth-exchange?token=${lenderToken}`);
     await lenderPage.waitForURL(/\/(collection)?$/);
@@ -237,6 +238,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "borrower@iqoqo.local", password: "SecurePassword123!" }),
     });
+    expect(borrowerLoginRes.ok).toBe(true);
     const { token: borrowerToken } = await borrowerLoginRes.json();
     await borrowerPage.goto(`/api/auth-exchange?token=${borrowerToken}`);
     await borrowerPage.waitForURL(/\/(collection)?$/);

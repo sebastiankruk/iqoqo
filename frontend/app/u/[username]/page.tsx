@@ -43,7 +43,7 @@ async function getProfile(username: string) {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    return res.json();
+    return await res.json();
   } catch {
     return null;
   }
@@ -60,7 +60,7 @@ async function getItems(username: string) {
       next: { revalidate: 60 },
     });
     if (!res.ok) return { data: { items: [] } };
-    return res.json();
+    return await res.json();
   } catch {
     return { data: { items: [] } };
   }
