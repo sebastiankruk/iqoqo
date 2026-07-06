@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 """Add UserWorkIntent.is_hidden and harden shared_collections tokens (v0.7.6 security pass).
 
-Revision ID: 20260706_harden_intent_visibility
+Revision ID: 20260706_harden_intent_vis
 Revises: 52b02a37b16b
 Create Date: 2026-07-06 12:00:00.000000
 
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260706_harden_intent_visibility"
+revision = "20260706_harden_intent_vis"
 down_revision = "52b02a37b16b"
 branch_labels = None
 depends_on = None
