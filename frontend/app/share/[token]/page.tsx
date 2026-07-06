@@ -35,11 +35,15 @@ interface SharedCollectionPageProps {
  * @returns The shared collection data or null if not found.
  */
 async function getSharedCollection(token: string) {
-  const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
-    next: { revalidate: 60 },
-  });
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 /**

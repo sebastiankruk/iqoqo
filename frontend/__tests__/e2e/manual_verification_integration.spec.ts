@@ -25,17 +25,15 @@ test.describe("Manual Verification Integration E2E", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
-    // 1b. Perform login via UI to get valid session cookies
-    await page.goto("/login");
-    const emailInput = page.locator('input[type="email"]');
-    if (await emailInput.isVisible({ timeout: 5000 })) {
-      await emailInput.fill("e2e-admin@iqoqo.local");
-      await page.locator('input[type="password"]').fill("E2ETestPassword123!");
-      await Promise.all([
-        page.waitForURL(/\/(collection|dashboard|profile|admin)?$/, { timeout: 15000 }),
-        page.locator('button[type="submit"]').click(),
-      ]);
-    }
+    // 1b. Login via direct Flask API call (avoids Next.js proxy POST body issues)
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = await loginRes.json();
+    await page.goto(`/api/auth-exchange?token=${token}`);
+    await page.waitForURL(/\/(collection|dashboard|profile|admin)?$/);
 
     // 2. Mock default profile endpoint
     await page.route("**/api/profile**", async route => {
