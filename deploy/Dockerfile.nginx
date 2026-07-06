@@ -6,18 +6,25 @@
 # (at your option) any later version.
 #
 # Nginx with native OpenTelemetry C-module for Layer 6 instrumentation.
-# Switches from nginx:1.25-alpine (no OTel module) to nginx:1.25 (Debian-based)
-# which supports the nginx-module-otel package.
+# Installs nginx-module-otel from the official nginx.org repository.
 #
 # The existing routing logic in deploy/nginx.conf is preserved unchanged —
 # this Dockerfile only adds the OTel module and overrides the main nginx.conf
 # to load it at startup.
 
-FROM nginx:1.25
+FROM nginx:1.27
 
-# Install the native OpenTelemetry module.
-# nginx-module-otel is available in the official Debian nginx package repos.
+# Install the native OpenTelemetry module from the official nginx.org repo.
+# This also upgrades nginx to the latest version matching the module.
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /etc/apt/keyrings/nginx.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nginx.gpg] https://nginx.org/packages/debian bookworm nginx" \
+        > /etc/apt/sources.list.d/nginx.list \
+    && apt-get update \
     && apt-get install -y --no-install-recommends nginx-module-otel \
     && rm -rf /var/lib/apt/lists/*
 

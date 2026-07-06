@@ -67,7 +67,7 @@ export function BrowserTelemetry(): null {
             { DocumentLoadInstrumentation },
             { UserInteractionInstrumentation },
             { registerInstrumentations },
-            { Resource },
+            { resourceFromAttributes },
             { SEMRESATTRS_SERVICE_NAME },
             { ZoneContextManager },
           ]) => {
@@ -76,7 +76,7 @@ export function BrowserTelemetry(): null {
             const collectorUrl = process.env.NEXT_PUBLIC_OTEL_COLLECTOR_URL ?? "http://localhost:4318/v1/traces";
 
             const provider = new WebTracerProvider({
-              resource: new Resource({
+              resource: resourceFromAttributes({
                 [SEMRESATTRS_SERVICE_NAME]: "iqoqo-browser-client",
               }),
               spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter({ url: collectorUrl }))],

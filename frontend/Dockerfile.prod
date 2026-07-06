@@ -19,7 +19,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Install only production-required dependencies via npm ci for reproducibility
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci --omit=dev
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy lock file + all dev deps so the Next.js compiler is available
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci
 
 COPY . .
