@@ -50,7 +50,8 @@ class IngestService:
         The caller must include at minimum a ``title`` and ``format`` key.
         """
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
-        author_name = meta.get("author") or meta.get("artist") or (meta.get("authors") or meta.get("Authors") or [None])[0]
+        raw_author = meta.get("author") or meta.get("artist") or (meta.get("Authors") or meta.get("authors") or [None])[0]
+        author_name = raw_author.get("name") if isinstance(raw_author, dict) else raw_author
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
         raw_format = (meta.get("format") or meta.get("Format") or "audio").lower()
 
@@ -157,7 +158,8 @@ class IngestService:
 
         # Normalize common fields
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
-        author_name = meta.get("author") or meta.get("authors", [None])[0] or meta.get("Artist")
+        raw_author = meta.get("author") or (meta.get("Authors") or meta.get("authors") or [None])[0] or meta.get("Artist")
+        author_name = raw_author.get("name") if isinstance(raw_author, dict) else raw_author
         cover_url = meta.get("cover_url") or meta.get("cover") or meta.get("thumbnail")
 
         # Create FRBR hierarchy
@@ -343,10 +345,20 @@ class IngestService:
                     # Merge manifestation info (covers/affiliates from Allegro)
                     meta.update({k: v for k, v in upc_meta.items() if k not in meta})
                 else:
-                    meta = upc_meta
+                    from app.utils.igdb import fetch_game_metadata
+
+                    meta = fetch_game_metadata(upc_meta["title"])
+                    if meta:
+                        meta.update({k: v for k, v in upc_meta.items() if k not in meta})
+                    else:
+                        meta = upc_meta
 
         if not meta:
             meta = fetch_bgg_metadata(query)
+            if not meta:
+                from app.utils.igdb import fetch_game_metadata
+
+                meta = fetch_game_metadata(query)
 
         if not meta:
             raise ValueError("Board game metadata not found in external services.")

@@ -213,14 +213,17 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await lenderPage.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
-    // Auto-dismiss any login-failure alerts so the test doesn't hang
-    lenderPage.on("dialog", dialog => dialog.dismiss());
 
-    await lenderPage.goto("/login");
-    await lenderPage.waitForLoadState("networkidle");
-    await lenderPage.fill('input[type="email"]', "lender@iqoqo.local");
-    await lenderPage.fill('input[type="password"]', "SecurePassword123!");
-    await Promise.all([expect(lenderPage).toHaveURL(/\/(collection)?$/), lenderPage.click('button[type="submit"]')]);
+    // Login lender via direct Flask API call (avoids Next.js proxy POST body issues)
+    const lenderLoginRes = await fetch(`${flaskApiUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "lender@iqoqo.local", password: "SecurePassword123!" }),
+    });
+    expect(lenderLoginRes.ok).toBe(true);
+    const { token: lenderToken } = await lenderLoginRes.json();
+    await lenderPage.goto(`/api/auth-exchange?token=${lenderToken}`);
+    await lenderPage.waitForURL(/\/(collection)?$/);
 
     // 2. Create isolated context for Borrower (User A)
     const borrowerContext = await browser.newContext();
@@ -228,17 +231,17 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     await borrowerPage.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
-    // Auto-dismiss any login-failure alerts so the test doesn't hang
-    borrowerPage.on("dialog", dialog => dialog.dismiss());
 
-    await borrowerPage.goto("/login");
-    await borrowerPage.waitForLoadState("networkidle");
-    await borrowerPage.fill('input[type="email"]', "borrower@iqoqo.local");
-    await borrowerPage.fill('input[type="password"]', "SecurePassword123!");
-    await Promise.all([
-      expect(borrowerPage).toHaveURL(/\/(collection)?$/),
-      borrowerPage.click('button[type="submit"]'),
-    ]);
+    // Login borrower via direct Flask API call
+    const borrowerLoginRes = await fetch(`${flaskApiUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "borrower@iqoqo.local", password: "SecurePassword123!" }),
+    });
+    expect(borrowerLoginRes.ok).toBe(true);
+    const { token: borrowerToken } = await borrowerLoginRes.json();
+    await borrowerPage.goto(`/api/auth-exchange?token=${borrowerToken}`);
+    await borrowerPage.waitForURL(/\/(collection)?$/);
 
     // 3. Borrower finds Lender's copy and requests a loan
     await borrowerPage.goto("/u/lender");

@@ -13,9 +13,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+
 "use client";
 
 import * as React from "react";
+import { useEffect } from "react";
 import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 
 /**
@@ -26,5 +28,35 @@ import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "ne
  * @returns {JSX.Element} The component
  */
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+  useEffect(() => {
+    // Suppress React's dev-only warning about rendering a <script> tag, which
+    // we do intentionally for JSON-LD structured data (see
+    // frontend/app/manifestation/[id]/page.tsx). Scoped to a mount effect
+    // (rather than module-load top-level code) with a cleanup that restores
+    // the original console.error, so it doesn't accumulate extra wrapper
+    // layers across Fast Refresh/HMR or React Strict Mode's dev
+    // mount->unmount->remount cycle. Development-only: production builds
+    // don't emit this warning in the first place.
+    if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
+      return undefined;
+    }
+
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      if (
+        args[0] &&
+        typeof args[0] === "string" &&
+        args[0].includes("Encountered a script tag while rendering React component")
+      ) {
+        return;
+      }
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
+
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }

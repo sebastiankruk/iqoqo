@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import logging
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -24,6 +25,8 @@ from flask import Blueprint, current_app, jsonify, redirect, request
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Role, TokenBlocklist, User, db
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 oauth = OAuth()
@@ -56,48 +59,76 @@ def generate_internal_jwt(user: User) -> str:
 @auth_bp.route("/login/google")
 def google_login():
     redirect_uri = request.url_root + "api/auth/callback/google"
+    original_uri = redirect_uri
 
     # Bulletproof Fail-safe: Force HTTPS in production/preview environments
     # just in case Nginx proxy headers strip the secure scheme.
     if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
         redirect_uri = redirect_uri.replace("http://", "https://", 1)
 
-    return oauth.google.authorize_redirect(redirect_uri)
+    logger.info("Google OAuth redirect_uri: %s (original: %s)", redirect_uri, original_uri)
+
+    try:
+        return oauth.google.authorize_redirect(redirect_uri)
+    except Exception as e:
+        logger.error("Google OAuth authorize_redirect failed: %s", e, exc_info=True)
+        return jsonify({"error": f"OAuth init failed: {e}"}), 502
 
 
 @auth_bp.route("/callback/google")
 def google_callback():
-    token = oauth.google.authorize_access_token()
-    user_info = oauth.google.parse_id_token(token, nonce=None)
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception as e:
+        logger.error("Google OAuth token exchange failed: %s", e, exc_info=True)
+        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=token_exchange_failed")
+
+    try:
+        user_info = oauth.google.parse_id_token(token, nonce=None)
+    except Exception as e:
+        logger.error("Google OAuth parse_id_token failed: %s", e, exc_info=True)
+        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=id_token_parse_failed")
+
     email = user_info.get("email")
+    if not email:
+        logger.error("Google OAuth: no email in user_info: %s", user_info)
+        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=no_email")
 
-    user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
     picture = user_info.get("picture")
-
-    if not user:
-        user = User(
-            email=email,
-            display_name=user_info.get("name"),
-            is_active=True,
-            google_id=user_info.get("sub"),
-            avatar_url=picture,
-        )
-        default_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
-        if default_role:
-            user.roles.append(default_role)
-        db.session.add(user)
-    else:
-        # Optionally update avatar if it changed
-        if picture and user.avatar_url != picture:
-            user.avatar_url = picture
-
-    user.last_login = datetime.now(UTC)
-    db.session.commit()
-
-    internal_token = generate_internal_jwt(user)
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
 
-    # Updated redirect path
+    try:
+        user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
+
+        if not user:
+            user = User(
+                email=email,
+                display_name=user_info.get("name"),
+                is_active=True,
+                google_id=user_info.get("sub"),
+                avatar_url=picture,
+            )
+            default_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
+            if default_role:
+                user.roles.append(default_role)
+            db.session.add(user)
+        else:
+            if picture and user.avatar_url != picture:
+                user.avatar_url = picture
+
+        user.last_login = datetime.now(UTC)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Google OAuth user creation/update failed: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=user_setup_failed")
+
+    try:
+        internal_token = generate_internal_jwt(user)
+    except Exception as e:
+        logger.error("Google OAuth JWT generation failed: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=jwt_generation_failed")
+
     return redirect(f"{frontend_url}/api/auth-exchange?token={internal_token}")
 
 

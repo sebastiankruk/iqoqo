@@ -128,9 +128,77 @@ def test_cover_lookup_tmdb_upc(app):
     assert "tmdb" in source
 
 
+def test_cover_lookup_igdb_upc(app):
+    """B6-deep: UPC barcode for game should resolve cover via IGDB poster."""
+    from app.utils.covers import fetch_upc_cover
+
+    with patch("app.utils.igdb.fetch_game_metadata") as mock_igdb:
+        mock_igdb.return_value = {
+            "title": "Test Game",
+            "cover_url": "https://images.igdb.com/igdb/image/upload/t_cover_big/test.jpg",
+        }
+        with patch("app.utils.covers.download_direct_url") as mock_download:
+            mock_download.return_value = ("/static/covers/1234567890_igdb.jpg", "api_igdb")
+            result = fetch_upc_cover("1234567890", content_type="game")
+
+    assert result is not None
+    _filename, source = result
+    assert "igdb" in source
+
+
 def test_cover_lookup_non_isbn_fallback(app):
     """B6-deep: Non-ISBN with no provider match returns None gracefully."""
     from app.utils.covers import fetch_upc_cover
 
-    result = fetch_upc_cover("9999999999999", content_type="board_game")
+    result = fetch_upc_cover("9999999999999", content_type="text")
     assert result is None
+
+
+def test_refetch_cover_returns_task_id(client, admin_headers):
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with client.application.app_context():
+        work = Work(title="Refetch Cover Test", meta={"authors": ["Author Refetch"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="4444444444444")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    with patch("app.api.manifestations.start_cover_processing", return_value="fake-refetch-task-id") as mock_start:
+        response = client.post(f"/api/manifestations/{manif_id}/refetch-cover", headers=admin_headers)
+        assert response.status_code == 202
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["data"]["task_id"] == "fake-refetch-task-id"
+        mock_start.assert_called_once()
+        # Verify LLM permissions are false for refetch
+        _, kwargs = mock_start.call_args
+        assert kwargs["llm_permissions"] == {"allow_generate_cover": False, "allow_cloud_llm": False}
+
+
+def test_refetch_cover_falls_back_to_meta_identifier(client, admin_headers):
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with client.application.app_context():
+        work = Work(title="Refetch Cover Test", meta={"authors": ["Author Refetch"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, meta={"barcode": "9781444729764"})
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    with patch("app.api.manifestations.start_cover_processing", return_value="fake-refetch-task-id") as mock_start:
+        response = client.post(f"/api/manifestations/{manif_id}/refetch-cover", headers=admin_headers)
+        assert response.status_code == 202
+        mock_start.assert_called_once()
+        args, _ = mock_start.call_args
+        assert args[1] == "9781444729764"

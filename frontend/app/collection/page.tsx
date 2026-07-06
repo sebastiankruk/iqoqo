@@ -167,6 +167,14 @@ function CollectionContent() {
   const isLoggedIn = !!profile;
   const isCurator = isLoggedIn && !!profile?.permissions?.includes(PermissionName.WRITE_METADATA);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+  const showClientContent = mounted && isLoggedIn;
+  const showCuratorContent = mounted && isCurator;
+
   // Track profile state to adjust viewMode dynamically
   const [prevIsLoggedIn, setPrevIsLoggedIn] = useState<boolean | null>(null);
   if (!isProfileLoading && isLoggedIn !== prevIsLoggedIn) {
@@ -498,7 +506,7 @@ function CollectionContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            {isLoggedIn && (
+            {showClientContent && (
               <div className="flex flex-wrap items-center gap-4">
                 <div role="tablist" className="flex rounded-lg border border-border bg-card p-1 shadow-sm">
                   <button
@@ -617,7 +625,7 @@ function CollectionContent() {
               )}
             </button>
 
-            {isLoggedIn && (activeFilters.length > 0 || appliedQuery) && (
+            {showClientContent && (activeFilters.length > 0 || appliedQuery) && (
               <ShareCollectionDialog activeFilters={activeFilters} appliedQuery={appliedQuery} />
             )}
           </div>
@@ -645,8 +653,8 @@ function CollectionContent() {
                 categoryCounts={categoryCounts}
                 disableStatus={viewMode === "manifestations"}
                 viewMode={viewMode}
-                isLoggedIn={isLoggedIn}
-                isCurator={isCurator}
+                isLoggedIn={showClientContent}
+                isCurator={showCuratorContent}
                 missingCover={missingCoverOnly}
                 onChangeMissingCover={setMissingCoverOnly}
                 missingId={missingIdOnly}
@@ -656,7 +664,7 @@ function CollectionContent() {
           </div>
 
           <div className="min-w-0 flex-1">
-            {isLoading ? (
+            {mounted && isLoading ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="overflow-hidden rounded-lg bg-card shadow-sm">
@@ -935,7 +943,7 @@ function CollectionContent() {
       </div>
       <Footer />
       {/* Bulk-add toolbar – floats above footer when manifestations are selected */}
-      {isLoggedIn && viewMode === "manifestations" && (
+      {showClientContent && viewMode === "manifestations" && (
         <BulkAddToolbar
           selectedItems={Array.from(selectedManifestations.values())}
           onClearSelection={clearManifestationSelection}
@@ -952,8 +960,8 @@ function CollectionContent() {
         categoryCounts={categoryCounts}
         disableStatus={viewMode === "manifestations"}
         viewMode={viewMode}
-        isLoggedIn={isLoggedIn}
-        isCurator={isCurator}
+        isLoggedIn={showClientContent}
+        isCurator={showCuratorContent}
         missingCover={missingCoverOnly}
         onChangeMissingCover={setMissingCoverOnly}
         missingId={missingIdOnly}

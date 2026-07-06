@@ -15,6 +15,7 @@
 
 """API routes for social feedback (ratings and comments) on FRBR levels."""
 
+import re
 from datetime import UTC, datetime
 
 from flask import Response, g, jsonify, request
@@ -26,6 +27,19 @@ from app.api.decorators import require_auth
 from app.db.models import Expression, Item, Manifestation, SocialFeedback, SocialNote, Work, db
 
 VALID_LEVELS = {"work", "expression", "manifestation", "item"}
+
+# Defense-in-depth ceiling for free-text social content. Notes/comments are
+# rendered as plain text on the frontend (no dangerouslySetInnerHTML), but we
+# still cap length (storage/DoS hardening) and strip markup at ingress in case
+# a future rendering path relaxes that assumption.
+MAX_SOCIAL_TEXT_LENGTH = 2048
+
+_TAG_RE = re.compile(r"<[^>]*>")
+
+
+def _sanitize_text(value: str) -> str:
+    """Strip HTML-like markup from free-text user input (defense in depth)."""
+    return _TAG_RE.sub("", value).strip()
 
 
 def _verify_target_exists(level: str, target_id: int) -> bool:
@@ -118,7 +132,9 @@ def _validate_feedback_data(data: dict | None) -> tuple[int | None, str | None, 
             return None, None, "Rating must be a valid integer between 1 and 5"
 
     if comment is not None:
-        comment = str(comment).strip()
+        comment = _sanitize_text(str(comment))
+        if len(comment) > MAX_SOCIAL_TEXT_LENGTH:
+            return None, None, f"Comment must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
 
     return rating, comment, None
 
@@ -235,9 +251,11 @@ def create_social_note(level: str, target_id: int) -> Response | tuple[Response,
     if not data or "note" not in data:
         return jsonify({"error": "Missing note content", "code": 400}), 400
 
-    note_text = str(data["note"]).strip()
+    note_text = _sanitize_text(str(data["note"]))
     if not note_text:
         return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
+    if len(note_text) > MAX_SOCIAL_TEXT_LENGTH:
+        return jsonify({"error": f"Note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
 
     column_name = f"{level}_id"
     kwargs = {"user_id": user_id, "note": note_text, column_name: target_id}
@@ -270,9 +288,11 @@ def update_social_note(note_id: int) -> Response | tuple[Response, int]:
     if not data or "note" not in data:
         return jsonify({"error": "Missing note content", "code": 400}), 400
 
-    note_text = str(data["note"]).strip()
+    note_text = _sanitize_text(str(data["note"]))
     if not note_text:
         return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
+    if len(note_text) > MAX_SOCIAL_TEXT_LENGTH:
+        return jsonify({"error": f"Note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
 
     note.note = note_text
     note.updated_at = datetime.now(UTC)

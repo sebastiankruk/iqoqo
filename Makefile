@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade
+.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -91,7 +91,8 @@ help:
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
 	@echo "  test           - Run all tests (backend and frontend)"
-	@echo "  test-backend   - Run backend tests (pytest)"
+	@echo "  test-backend   - Run backend tests (pytest, defaults to SQLite)"
+	@echo "  test-backend-pg - Run backend integration tests requiring PostgreSQL"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
 	@echo "  test-e2e       - Run end-to-end tests (Playwright). Loads .env.test automatically."
 	@echo "  build-frontend - Build Next.js production bundle"
@@ -108,7 +109,11 @@ help:
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
 	@echo ""
-	@echo "Version updates:"
+	@echo "Monitoring targets:"
+	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
+	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
+	@echo "  monitoring-legacy-start - Start optional Prometheus + Jaeger stack"
+	@echo "  monitoring-legacy-stop  - Stop optional Prometheus + Jaeger stack"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
@@ -151,31 +156,57 @@ ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
   PREBUILT_FLAG = --prebuilt
 endif
 
-.PHONY: preview prod prebuilt clone
+.PHONY: preview prod dev prebuilt clone
 
 preview:
 	@:
 prod:
+	@:
+dev:
 	@:
 prebuilt:
 	@:
 
 clone:
 	@if [ -z "$(src_loc)" ] || [ -z "$(src_name)" ] || [ -z "$(dst_loc)" ] || [ -z "$(dst_name)" ]; then \
-		echo "Usage: make clone src_loc=<source_location> src_name=<source_name> dst_loc=<destination_location> dst_name=<destination_name>"; \
-		echo "Example: make clone src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
+		echo "Usage: make clone [src_host=<source_host>] src_loc=<source_location> src_name=<source_name> dst_loc=<destination_location> dst_name=<destination_name>"; \
+		echo "Example (local): make clone src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
+		echo "Example (remote): make clone src_host=user@remote-ip src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
 		exit 1; \
 	fi
-	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)"
+	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
 start:
 	@echo "Starting $(MODE) environment..."
-	@./run.sh $(MODE) $(PREBUILT_FLAG)
+	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 
 stop:
 	@echo "Stopping $(MODE) environment..."
 	@./run.sh $(MODE) --stop
 
+monitoring-start:
+	@echo "Ensuring docker network iqoqo_default exists..."
+	@docker network create iqoqo_default 2>/dev/null || true
+	@echo "Starting default observability stack (OpenObserve + OTel Collector)..."
+	@echo "  UI:    http://localhost:$${OPENOBSERVE_HOST_PORT:-5080}"
+	@echo "  Login: $${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / $${OPENOBSERVE_ROOT_PASSWORD:-supersecret}"
+	@docker compose -f docker-compose.monitoring.yml up -d
+
+monitoring-stop:
+	@echo "Stopping OpenObserve + OTel Collector stack..."
+	@docker compose -f docker-compose.monitoring.yml down
+
+monitoring-legacy-start:
+	@echo "Ensuring docker network iqoqo_default exists..."
+	@docker network create iqoqo_default 2>/dev/null || true
+	@echo "Starting legacy monitoring stack (Prometheus + Jaeger + cAdvisor)..."
+	@echo "  Prometheus: http://localhost:$${PROMETHEUS_PORT:-9090}"
+	@echo "  Jaeger:     http://localhost:$${JAEGER_UI_PORT:-16686}"
+	@docker compose -f docker-compose.prometheus-jaeger.yml up -d
+
+monitoring-legacy-stop:
+	@echo "Stopping legacy Prometheus + Jaeger stack..."
+	@docker compose -f docker-compose.prometheus-jaeger.yml down
 
 # Linting targets
 lint-python: .venv/bin/activate
@@ -239,6 +270,22 @@ format: format-python format-js
 test-backend: .venv/bin/activate
 	@echo "Running backend tests..."
 	.venv/bin/pytest tests/
+
+test-backend-pg: .venv/bin/activate
+	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
+	@echo "Ensuring test database exists..."
+	@psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
+		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" 2>/dev/null \
+		| grep -q 1 \
+		&& echo "iqoqo_test already exists." \
+		|| (psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
+			-c "CREATE DATABASE iqoqo_test" && echo "Created iqoqo_test.")
+	ENABLE_FTS_TESTS=true \
+	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
+	$(MAKE) pg-create-schemas
+	ENABLE_FTS_TESTS=true \
+	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
+	.venv/bin/pytest tests/integration/db/ -v
 
 test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
@@ -311,7 +358,7 @@ _test-e2e-run:
 		echo "Skipping database reset (NO_RESET is set)..."; \
 	fi
 	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium
+	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-e2e

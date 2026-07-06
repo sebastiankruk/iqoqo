@@ -27,7 +27,21 @@ Used for fetching board game metadata, designers, and mechanics.
 BGG_USERNAME=optional_username
 ```
 
-## 3. Restarting the Application
+## 3. IGDB (Internet Game Database)
+
+Used for fetching video game metadata, covers, release dates, and summaries.
+
+1. Register for a Twitch Developer account at [Twitch Developer Console](https://dev.twitch.tv/console).
+2. Register a new Application. Set the category to "Website" or similar, and redirect URI to `http://localhost` (not strictly used by client credentials flow, but required).
+3. Generate a Client Secret.
+4. Add the Client ID and Client Secret to your `.env` file:
+
+```env
+IGDB_CLIENT_ID=your_twitch_client_id_here
+IGDB_CLIENT_SECRET=your_twitch_client_secret_here
+```
+
+## 4. Restarting the Application
 
 Once your `.env` file is updated, restart your Docker containers to apply the keys:
 

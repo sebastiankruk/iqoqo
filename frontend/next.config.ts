@@ -26,6 +26,8 @@ const require = createRequire(import.meta.url);
 const { version: APP_VERSION } = require("./package.json") as { version: string };
 
 const nextConfig: NextConfig = {
+  // Use a custom build directory for E2E testing to avoid process locks with the active dev server
+  distDir: process.env.IS_E2E ? ".next-e2e" : undefined,
   // Expose the canonical version to client-side code via lib/version.ts
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,

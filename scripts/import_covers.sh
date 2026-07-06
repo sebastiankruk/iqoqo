@@ -46,6 +46,6 @@ echo "4/4: Cleaning up temporary files inside container..."
 sudo docker exec "$CONTAINER_NAME" rm /tmp/covers.tar.gz
 
 echo "🗑️  (Optional) Removing local archive on host server..."
-read -p "Delete $ARCHIVE_PATH on this server? (y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] && rm "$ARCHIVE_PATH" || echo "Archive kept on host."
+read -r -p "Delete $ARCHIVE_PATH on this server? (y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] && rm "$ARCHIVE_PATH" || echo "Archive kept on host."
 
 echo "✅ Import complete!"

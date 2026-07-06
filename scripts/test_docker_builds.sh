@@ -30,7 +30,7 @@ echo ""
 # Build Backend
 echo "🐳 Building iqoqo-backend:v$VERSION..."
 docker build \
-  -t iqoqo-backend:v$VERSION \
+  -t "iqoqo-backend:v$VERSION" \
   -t iqoqo-backend:latest \
   -f deploy/Dockerfile .
 echo "✅ Backend build successful!"
@@ -39,7 +39,7 @@ echo ""
 # Build Frontend
 echo "🐳 Building iqoqo-frontend:v$VERSION..."
 docker build \
-  -t iqoqo-frontend:v$VERSION \
+  -t "iqoqo-frontend:v$VERSION" \
   -t iqoqo-frontend:latest \
   -f frontend/Dockerfile.prod ./frontend
 echo "✅ Frontend build successful!"

@@ -44,6 +44,8 @@ permissions:
     description: "View the list of registered users."
   - name: "refetch:metadata"
     description: "Pull fresh metadata for an existing manifestation from external sources."
+  - name: "refetch:cover"
+    description: "Refetch cover art from external metadata sources without AI generation."
   - name: "regenerate:cover"
     description: "Trigger regeneration of manifestation covers."
   - name: "update:item"

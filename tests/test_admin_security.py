@@ -60,3 +60,17 @@ def test_secret_key_valid_length_accepted():
     long_key = "a" * 32
     # Should not raise
     Config.validate_secret_key(long_key)
+
+
+def test_secret_key_insecure_value_rejected():
+    """Ensure copy-pasted .env.example or placeholder values are rejected."""
+    insecure_values = [
+        "changeme_generate_strong_key_for_production",
+        "your_super_secret_jwt_key",
+        "your_super_secret_auth_key",
+        "some_changeme_key",
+        "placeholder_key_here",
+    ]
+    for val in insecure_values:
+        with pytest.raises(RuntimeError, match="must not be a default or placeholder value"):
+            Config.validate_secret_key(val)

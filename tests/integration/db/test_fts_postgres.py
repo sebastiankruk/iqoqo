@@ -33,6 +33,13 @@ def postgres_db():
     if not db_url.startswith("postgresql"):
         pytest.skip("PostgreSQL DATABASE_URL not available – skipping PostgreSQL integration tests.")
 
+    db_name = db_url.strip("/").split("/")[-1]
+    if "test" not in db_name:
+        pytest.fail(
+            f"DATABASE_URL must point to a test database (name must contain 'test'), "
+            f"got: {db_name}. This prevents accidental loss of dev data via db.drop_all()."
+        )
+
     os.environ["DATABASE_URL"] = db_url
     os.environ["ENABLE_FTS_TESTS"] = "true"
 
@@ -41,21 +48,21 @@ def postgres_db():
         db.drop_all()
         db.create_all()
 
-        db.session.execute(text("ALTER TABLE works DROP COLUMN IF EXISTS fts_simple CASCADE"))
+        db.session.execute(text("ALTER TABLE catalog.works DROP COLUMN IF EXISTS fts_simple CASCADE"))
         db.session.execute(
             text(
-                "ALTER TABLE works ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))) STORED"
+                "ALTER TABLE catalog.works ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))) STORED"
             )
         )
-        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_works_fts ON works USING gin(fts_simple)"))
+        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_works_fts ON catalog.works USING gin(fts_simple)"))
 
-        db.session.execute(text("ALTER TABLE manifestations DROP COLUMN IF EXISTS fts_simple CASCADE"))
+        db.session.execute(text("ALTER TABLE catalog.manifestations DROP COLUMN IF EXISTS fts_simple CASCADE"))
         db.session.execute(
             text(
-                "ALTER TABLE manifestations ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))) STORED"
+                "ALTER TABLE catalog.manifestations ADD COLUMN fts_simple TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text)) || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))) STORED"
             )
         )
-        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON manifestations USING gin(fts_simple)"))
+        db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON catalog.manifestations USING gin(fts_simple)"))
         db.session.commit()
 
         yield app
@@ -72,7 +79,7 @@ def test_fts_works_computation(postgres_db):
         db.session.commit()
 
         # 2. Query fts_simple directly using raw SQL to be sure
-        result = db.session.execute(text("SELECT fts_simple FROM works WHERE id = :id"), {"id": work.id}).fetchone()
+        result = db.session.execute(text("SELECT fts_simple FROM catalog.works WHERE id = :id"), {"id": work.id}).fetchone()
 
         assert result is not None
         fts_val = result[0]

@@ -1,0 +1,101 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+version: "1.0"
+
+
+project:
+  name: "iQoQo Distributed Semantic Library"
+  description: "Self-hosted media cataloging platform driven by FRBRoo, Strategy Patterns, and decentralized ActivityPub logic"
+
+# Comprehensive list of directories to scan across the entire technology stack
+scan:
+  paths:
+    - "./app" # Core Flask backend, routing API, SQLAlchemy models, and scanner strategies
+    - "./frontend" # Next.js UI source code (TypeScript, React, Tailwind CSS, Capacitor wrappers)
+    - "./shared" # Single Source of Truth (SSoT) definitions - e.g., taxonomy.yaml
+    - "./migrations" # Alembic database migration scripts (tracking DDL schema evolution)
+    - "./deploy" # Infrastructure configurations (Docker Compose, Nginx proxies, OTel Collector, Alloy)
+    - "./scripts" # Operational scripts, automated S3 cloud backups, and SRE utilities
+    - "./tests" # Complete automated test pyramid (pytest backend, Vitest UI, Playwright E2E)
+    - "./docs" # Architectural documentation, TTL ontology files, and release plans
+    - "./.agents" # AI agent skill definitions, workspace rules, and Antigravity workflows
+    - "./.context" # Obsidian knowledge vault and historical AI session memory logs (ai-memory)
+  include_extensions:
+    - ".py"
+    - ".ts"
+    - ".tsx"
+    - ".yaml"
+    - ".yml"
+    - ".ttl"
+    - ".md"
+    - ".conf"
+    - ".alloy"
+
+# Domain ontology definitions forcing the MemPalace parser to prioritize strict semantic concepts
+ontology:
+  strict_mode: true
+  custom_types:
+    - name: "FRBR_LAYER"
+      keywords:
+        ["Work", "F1", "Expression", "F2", "Manifestation", "F3", "Item", "F4", "WorkPart", "F15", "UserWorkIntent"]
+      description: "Functional Requirements for Bibliographic Records hierarchy and ephemeral wishlist intents"
+
+    - name: "MEDIA_STRATEGY"
+      keywords:
+        [
+          "LookupStrategy",
+          "BookLookupStrategy",
+          "AudioLookupStrategy",
+          "VideoLookupStrategy",
+          "GameLookupStrategy",
+          "Discogs",
+          "TMDB",
+          "BoardGameGeek",
+        ]
+      description: "Strategy pattern implementations decoupled for external barcode lookups and API parsing"
+
+    - name: "PERMISSION_FABRIC"
+      keywords: ["@require_permission", "admin_required", "g.user_id", "RBAC", "BOLA", "IDOR", "verify_item_ownership"]
+      description: "Security decorators and ownership validation boundaries preventing BOLA and IDOR exploits"
+
+    - name: "ACTIVITY_PUB_EVENT"
+      keywords: ["ActivityPub", "Actor", "Inbox", "Outbox", "Federation", "SharedCollection", "PublicLink"]
+      description: "Decentralized social syndication layer and open federated library discovery streams"
+
+    - name: "OWNERSHIP_STATE"
+      keywords: ["wish_list", "ordered", "available", "borrowed", "lent", "damaged", "lost", "want_to_read"]
+      description: "Lifecycle status enumerations governing item possession and reading roadmap queues"
+
+    - name: "OBSERVABILITY_FABRIC"
+      keywords: ["OpenTelemetry", "Grafana Alloy", "Jaeger", "Prometheus", "Loki", "OpenObserve", "spanmetrics"]
+      description: "Telemetry ingestion pipelines, distributed traces, and SRE monitoring definitions"
+
+# LLM and Vector Embedding settings for generating the ChromaDB semantic index
+llm:
+  provider: "ollama"
+  model: "gemma4:e4b"
+  embedding:
+    model: "mxbai-embed-large"
+    dimension: 1024
+
+# Model Context Protocol (MCP) configuration for external AI IDE integrations
+mcp:
+  enabled: true
+  port: 8585
+  allowed_tools:
+    - "search_catalog_ontology"
+    - "get_frbr_relationship"
+    - "trace_state_mutation"

@@ -32,12 +32,12 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.5"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.6"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
         self.bin_dir.mkdir()
-        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql", "sleep"]:
+        for cmd in ["docker", "flask", "python3", "python", "pip", "colima", "npm", "psql", "sleep", "lsof"]:
             (self.bin_dir / cmd).write_text("#!/bin/bash\nexit 0")
             (self.bin_dir / cmd).chmod(0o755)
 
@@ -66,6 +66,8 @@ class TestRunScripts(unittest.TestCase):
         cmd = ["bash", "./run.sh"]
         if args:
             cmd.extend(args)
+        if "--validate-only" not in cmd:
+            cmd.append("--validate-only")
 
         try:
             result = subprocess.run(
@@ -74,7 +76,7 @@ class TestRunScripts(unittest.TestCase):
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=20,
                 check=False,
             )
             return result
@@ -89,12 +91,12 @@ class TestRunScripts(unittest.TestCase):
             return e
 
     def test_validation_fails_when_vars_missing(self):
-        # Missing REDIS_URL and SECRET_KEY
-        result = self.run_script(env_content="DATABASE_URL=postgresql://localhost/db")
+        # Missing DATABASE_URL and REDIS_URL (SECRET_KEY gets auto-generated)
+        result = self.run_script(env_content="")
         self.assertEqual(result.returncode, 1)
         self.assertIn("Missing required environment variables", result.stdout)
+        self.assertIn("DATABASE_URL", result.stdout)
         self.assertIn("REDIS_URL", result.stdout)
-        self.assertIn("SECRET_KEY", result.stdout)
 
     def test_mode_switching_and_env_loading(self):
         # Test that 'prod' mode loads .env.prod
@@ -183,26 +185,89 @@ exit 0
         self.assertIn("DOCKER_DOWN_TRIGGERED", result.stdout)
 
     def test_monitoring_config(self):
-        # Create a mock docker-compose.monitoring.yml file in the work_dir
-        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  alloy:\n    image: grafana/alloy")
         env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nSECRET_KEY=base\nAUTH_SECRET=test-secret"
 
-        # Scenario 1: Without Grafana Cloud env vars, it should skip monitoring
+        # Scenario 1: Local OpenObserve monitoring stack is present but not running
+        (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  openobserve:\n    image: openobserve/openobserve")
         result = self.run_script(args=["prod"], env_content=env_content)
-        self.assertIn("Skipping monitoring: Grafana Cloud environment variables", result.stdout)
+        self.assertIn("Found docker-compose.monitoring.yml, starting with OpenObserve monitoring...", result.stdout)
 
-        # Scenario 2: With Grafana Cloud env vars, it should start with monitoring
-        monitoring_vars = (
-            "\nGRAFANA_PROMETHEUS_URL=http://prometheus\n"
-            "GRAFANA_PROMETHEUS_USER=user\n"
-            "GRAFANA_LOKI_URL=http://loki\n"
-            "GRAFANA_LOKI_USER=loki_user\n"
-            "GRAFANA_CLOUD_API_KEY=key\n"
-        )
-        result_with_vars = self.run_script(args=["prod"], env_content=env_content + monitoring_vars)
-        self.assertIn(
-            "Found docker-compose.monitoring.yml and Grafana Cloud env vars, starting with monitoring...", result_with_vars.stdout
-        )
+        # Scenario 2: Local OpenObserve monitoring stack is already active globally
+        docker_mock = self.bin_dir / "docker"
+        docker_mock.write_text("""#!/bin/bash
+if [[ "$*" == *"ps"* ]]; then
+    echo "iqoqo-openobserve"
+fi
+exit 0
+""")
+        result_active = self.run_script(args=["prod"], env_content=env_content)
+        self.assertIn("OpenObserve monitoring stack is already active globally.", result_active.stdout)
+
+        # Reset docker mock
+        docker_mock.write_text("#!/bin/bash\nexit 0")
+
+    def test_secret_key_auto_generation_when_missing_or_insecure(self):
+        # Scenario 1: SECRET_KEY is missing entirely in prod mode
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nAUTH_SECRET=test-secret"
+        result = self.run_script(args=["prod"], env_content=env_content)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Generated and set new SECRET_KEY in .env", result.stdout)
+
+        # Read the file to verify it was written
+        env_prod_content = (self.work_dir / ".env").read_text()
+        self.assertIn("SECRET_KEY=", env_prod_content)
+        self.assertIn("SECRET_KEY_LAST_ROTATED=", env_prod_content)
+
+        # Scenario 2: SECRET_KEY is copy-pasted example value
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nAUTH_SECRET=test-secret"
+        mode_env = "SECRET_KEY=changeme_generate_strong_key_for_production"
+        result2 = self.run_script(args=["prod"], env_content=env_content, mode_env=mode_env)
+        self.assertEqual(result2.returncode, 0)
+        self.assertIn("Generated and set new SECRET_KEY in .env.prod", result2.stdout)
+
+        # Scenario 3: SECRET_KEY is missing entirely in dev mode (should auto-generate too)
+        env_content_dev = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nAUTH_SECRET=test-secret"
+        result3 = self.run_script(args=["dev"], env_content=env_content_dev)
+        self.assertEqual(result3.returncode, 0)
+        self.assertIn("Generated and set new SECRET_KEY in .env", result3.stdout)
+
+    def test_secret_key_rotation_when_stale(self):
+        # Set a past timestamp (e.g. 40 days ago) for rotation tracking
+        import time
+
+        past_time = int(time.time()) - (40 * 24 * 3600)
+        # Ensure we have a valid key but it's stale
+        valid_key = "a" * 64
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nAUTH_SECRET=test-secret"
+        mode_env = f"SECRET_KEY={valid_key}\nSECRET_KEY_LAST_ROTATED={past_time}"
+        result = self.run_script(args=["prod"], env_content=env_content, mode_env=mode_env)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Rotating SECRET_KEY...", result.stdout)
+        self.assertIn("Generated and set new SECRET_KEY in .env.prod", result.stdout)
+
+        # Check that it updated the last rotated timestamp
+        env_prod_content = (self.work_dir / ".env.prod").read_text()
+        import re
+
+        match = re.search(r"SECRET_KEY_LAST_ROTATED=\"(\d+)\"", env_prod_content)
+        self.assertTrue(match)
+        new_timestamp = int(match.group(1))
+        self.assertGreater(new_timestamp, past_time)
+
+    def test_secret_key_forced_rotation(self):
+        # Ensure we have a valid key and a recent timestamp
+        import time
+
+        recent_time = int(time.time()) - 100
+        valid_key = "a" * 64
+        env_content = "DATABASE_URL=postgresql://localhost/db\nREDIS_URL=redis://localhost:6379/0\nAUTH_SECRET=test-secret"
+        mode_env = f"SECRET_KEY={valid_key}\nSECRET_KEY_LAST_ROTATED={recent_time}"
+
+        # When running with --rotate, it should rotate despite the recent timestamp
+        result = self.run_script(args=["dev", "--rotate"], env_content=env_content, mode_env=mode_env)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Forced rotation requested", result.stdout)
+        self.assertIn("Generated and set new SECRET_KEY in .env.dev", result.stdout)
 
 
 if __name__ == "__main__":

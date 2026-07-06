@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 import * as hooks from "@/lib/api/hooks";
@@ -119,5 +119,29 @@ describe("ManifestationActions Component", () => {
     });
     // Should remain at 1 call since polling stopped
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders permitted buttons inside Admin Actions panel when expanded", () => {
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: {
+        id: "test-id",
+        email: "test@example.com",
+        permissions: ["refetch:metadata", "regenerate:cover", "upload:cover", "delete:manifestation"],
+      },
+    } as unknown as ReturnType<typeof hooks.useProfile>);
+
+    render(<ManifestationActions manifestation={mockManifestation} />);
+
+    // Collapsed by default
+    expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();
+
+    // Click Admin Actions to expand
+    fireEvent.click(screen.getByText(/Admin Actions/i));
+
+    expect(screen.getByText(/Refetch Metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/Regenerate Cover/i)).toBeInTheDocument();
+    expect(screen.getByTestId("camera-capture")).toBeInTheDocument();
+    expect(screen.getByText(/Delete manifestation/i)).toBeInTheDocument();
   });
 });

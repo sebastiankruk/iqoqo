@@ -151,7 +151,7 @@ describe("SuccessCard", () => {
         collection_status: "wish_list",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
-      expect(mockPush).toHaveBeenCalledWith("/item/101");
+      expect(mockPush).toHaveBeenCalledWith("/manifestation/102");
     });
   });
 

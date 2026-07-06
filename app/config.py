@@ -35,22 +35,31 @@ class Config:
 
     SECRET_KEY = os.environ.get("SECRET_KEY", _default_secret)
 
-    if not SECRET_KEY and os.environ.get("FLASK_ENV") == "production":
-        raise RuntimeError("SECRET_KEY environment variable is missing. This is required in production! Please set it in your .env file.")
+    if not SECRET_KEY:
+        raise RuntimeError("SECRET_KEY environment variable is missing. This is required! Please set it in your .env file.")
 
     @staticmethod
     def validate_secret_key(key: str) -> None:
         """Enforce minimum SECRET_KEY length in production (OWASP A02)."""
+        insecure_keys = {
+            "changeme_generate_strong_key_for_production",
+            "your_super_secret_jwt_key",
+            "your_super_secret_auth_key",
+        }
+        if key in insecure_keys or "changeme" in key.lower() or "placeholder" in key.lower():
+            raise RuntimeError("SECRET_KEY must not be a default or placeholder value.")
         if len(key.encode()) < 32:
             raise RuntimeError(
                 "SECRET_KEY must be at least 32 bytes (OWASP A02). "
                 'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
 
-    if os.environ.get("FLASK_ENV") == "production" and SECRET_KEY:
-        validate_secret_key(SECRET_KEY)
-
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+
+    if SECRET_KEY:
+        validate_secret_key(SECRET_KEY)
+    if JWT_SECRET_KEY:
+        validate_secret_key(JWT_SECRET_KEY)
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
     @staticmethod

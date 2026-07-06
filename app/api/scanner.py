@@ -20,6 +20,7 @@ import hashlib
 import io
 import re
 import uuid
+from typing import Any
 
 from flask import Response, current_app, g, jsonify, request
 from PIL import Image
@@ -238,45 +239,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
-    # Ensure frontend gets normalized keys for preview regardless of source API schema
-    if "title" not in meta:
-        meta["title"] = meta.get("Title") or "Unknown Title"
-    if "cover_url" not in meta:
-        cover_val = meta.get("thumb") or meta.get("cover")
-        if isinstance(cover_val, dict):
-            meta["cover_url"] = cover_val.get("large") or cover_val.get("medium") or cover_val.get("small")
-        elif isinstance(cover_val, list) and len(cover_val) > 0:
-            meta["cover_url"] = cover_val[0]
-        else:
-            meta["cover_url"] = cover_val
-    if "author" not in meta:
-        meta["author"] = (
-            meta.get("artist") or meta.get("Artist") or meta.get("manufacturer") or meta.get("brand") or meta.get("authors", [None])[0]
-        )
-
-    if "format" not in meta and format_hint:
-        from app.core.taxonomy import FORMAT_TO_CATEGORY
-        from app.db.core import MediaFormat
-
-        # Use canonical mapping from taxonomy
-        meta["format"] = format_hint if format_hint in FORMAT_TO_CATEGORY else format_hint.upper()
-
-        # Map generic hints to default formats
-        hint_to_format = {
-            "audio": MediaFormat.CD,
-            "music": MediaFormat.CD,
-            "video": MediaFormat.DVD,
-            "movie": MediaFormat.DVD,
-            "game": MediaFormat.BOARD_GAME,
-            "boardgame": MediaFormat.BOARD_GAME,
-            "book": MediaFormat.BOOK,
-            "text": MediaFormat.BOOK,
-            "puzzle": MediaFormat.JIGSAW_PUZZLE,
-            "jigsaw": MediaFormat.JIGSAW_PUZZLE,
-            "audiobook": MediaFormat.AUDIOBOOK_CD,
-        }
-        if format_hint in hint_to_format:
-            meta["format"] = hint_to_format[format_hint]
+    meta = _normalize_preview_meta(meta, format_hint)
 
     # Add identifier to meta
     meta["identifier"] = query
@@ -312,6 +275,100 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     _record_scan_telemetry(barcode, format_hint, provider=provider or "external", status="success", manifestation_id=manifestation_id)
 
     return jsonify({"success": True, "data": meta, "error": None}), 200
+
+
+def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None) -> dict[str, Any]:
+    """Normalize metadata from external providers for the frontend preview."""
+    # 1. Title
+    if "title" not in meta:
+        meta["title"] = meta.get("Title") or meta.get("title") or "Unknown Title"
+
+    # 2. Authors list
+    raw_authors = meta.get("Authors") or meta.get("authors")
+    normalized_authors: list[str] = []
+    if isinstance(raw_authors, list):
+        for a in raw_authors:
+            if isinstance(a, dict):
+                name = a.get("name")
+                if name:
+                    normalized_authors.append(str(name))
+            elif a:
+                normalized_authors.append(str(a))
+    elif isinstance(raw_authors, str) and raw_authors:
+        normalized_authors.append(raw_authors)
+    elif isinstance(raw_authors, dict):
+        name = raw_authors.get("name")
+        if name:
+            normalized_authors.append(str(name))
+
+    if normalized_authors:
+        meta["Authors"] = normalized_authors
+    else:
+        meta.pop("Authors", None)
+    meta.pop("authors", None)
+
+    # 3. Resolve single "author" string
+    if "author" not in meta or not meta["author"]:
+        potential_author = (
+            meta.get("artist")
+            or meta.get("Artist")
+            or meta.get("director")
+            or meta.get("Director")
+            or meta.get("designer")
+            or meta.get("Designer")
+            or meta.get("manufacturer")
+            or meta.get("brand")
+        )
+        if not potential_author and normalized_authors:
+            potential_author = normalized_authors[0]
+
+        if isinstance(potential_author, dict):
+            meta["author"] = potential_author.get("name")
+        elif potential_author:
+            meta["author"] = str(potential_author)
+        else:
+            meta["author"] = None
+    elif isinstance(meta["author"], dict):
+        meta["author"] = meta["author"].get("name")
+    else:
+        meta["author"] = str(meta["author"])
+
+    # 4. Cover URL
+    if "cover_url" not in meta or not meta["cover_url"]:
+        cover_val = meta.get("cover_url") or meta.get("thumb") or meta.get("cover") or meta.get("thumbnail")
+        if isinstance(cover_val, dict):
+            meta["cover_url"] = cover_val.get("large") or cover_val.get("medium") or cover_val.get("small")
+        elif isinstance(cover_val, list) and len(cover_val) > 0:
+            meta["cover_url"] = cover_val[0]
+        else:
+            meta["cover_url"] = cover_val
+
+    # 5. Format
+    if "format" not in meta or not meta["format"]:
+        if format_hint:
+            from app.core.taxonomy import FORMAT_TO_CATEGORY
+            from app.db.core import MediaFormat
+
+            canonical_format = format_hint if format_hint in FORMAT_TO_CATEGORY else format_hint.upper()
+
+            hint_to_format = {
+                "audio": MediaFormat.CD,
+                "music": MediaFormat.CD,
+                "video": MediaFormat.DVD,
+                "movie": MediaFormat.DVD,
+                "game": MediaFormat.BOARD_GAME,
+                "boardgame": MediaFormat.BOARD_GAME,
+                "book": MediaFormat.BOOK,
+                "text": MediaFormat.BOOK,
+                "puzzle": MediaFormat.JIGSAW_PUZZLE,
+                "jigsaw": MediaFormat.JIGSAW_PUZZLE,
+                "audiobook": MediaFormat.AUDIOBOOK_CD,
+            }
+            meta["format"] = hint_to_format.get(format_hint, canonical_format)
+        else:
+            meta["format"] = "BOOK"
+
+    return meta
 
 
 def _validate_scan_request(payload: ScanBarcodeSchema) -> str | None:
@@ -369,6 +426,29 @@ def _parse_and_validate_scan(req) -> tuple[ScanBarcodeSchema | None, Response | 
     return payload, None
 
 
+def _get_manifestation_author(manifestation: Manifestation) -> str | None:
+    """Helper to safely extract the author string from a manifestation's metadata or direct property."""
+    if not manifestation.meta:
+        return manifestation.author
+
+    author = manifestation.meta.get("author")
+    if author:
+        if isinstance(author, dict):
+            val = author.get("name")
+            return str(val) if val is not None else None
+        return str(author)
+
+    authors = manifestation.meta.get("Authors") or manifestation.meta.get("authors")
+    if authors and isinstance(authors, list):
+        first = authors[0]
+        if isinstance(first, dict):
+            val = first.get("name")
+            return str(val) if val is not None else None
+        return str(first) if first is not None else None
+
+    return None
+
+
 def _scan_to_wishlist(
     barcode: str | None,
     manifestation: Manifestation,
@@ -421,16 +501,13 @@ def _scan_to_wishlist(
                     "message": "Item successfully added to your collection",
                     "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
                     "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
-                    "item_id": -intent.id,
+                    "item_id": None,
+                    "intent_id": intent.id,
                     "manifestation_id": manifestation.id,
                     "title": (
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
-                    "author": (
-                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
-                        if manifestation.meta
-                        else manifestation.author
-                    ),
+                    "author": _get_manifestation_author(manifestation),
                     "cover_url": (
                         manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
                         if manifestation.meta
@@ -496,11 +573,7 @@ def _scan_to_library(
                     "title": (
                         manifestation.meta.get("title") or manifestation.meta.get("Title") if manifestation.meta else manifestation.title
                     ),
-                    "author": (
-                        manifestation.meta.get("author") or (manifestation.meta.get("authors") or [None])[0]
-                        if manifestation.meta
-                        else manifestation.author
-                    ),
+                    "author": _get_manifestation_author(manifestation),
                     "cover_url": (
                         manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
                         if manifestation.meta

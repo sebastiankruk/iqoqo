@@ -1,0 +1,72 @@
+# Shipped dependencies and virtualenvs
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build and distribution matrices
+dist/
+build/
+.next/
+out/
+.expo/
+.capacitor/
+
+# IDE and AI Sandbox transient files
+.idea/
+.vscode/
+.devcontainer/
+.antigravity/cache/
+.opencode/cache/
+
+# Multi-tenant state and volume mounts
+*_data/
+postgres_data/
+redis_data/
+minio_data/
+loki_data/
+prometheus_data/
+
+# Environment configurations and keys (contain credentials)
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Test matrices and output reports
+.pytest_cache/
+.htmlcov/
+coverage/
+frontend/tests/fixtures/
+.playwright/
+
+# Application static binary assets (Covers, temporary file streams)
+app/static/covers/
+app/static/uploads/
+app/static/gallery/
+app/static/archive/
+*.tar
+*.tar.gz
+*.zip
+*.log
+
+# Tool cache directories
+.mypy_cache/
+.ruff_cache/
+iqoqo.egg-info/
+
+# Runtime SQLite databases (auto-generated)
+*.db
+
+# Obsidian metadata and workplace caches
+.obsidian/
+.space/
+.trash/
+
+# Use knowledge base
+!.context/
+.contex/ai-memory

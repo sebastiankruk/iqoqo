@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { ItemActions } from "@/components/item/item-actions";
 import * as hooks from "@/lib/api/hooks";
@@ -70,6 +70,9 @@ describe("ItemActions Component", () => {
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
     render(<ItemActions item={mockItem} />);
+
+    // First click to open Admin Actions panel
+    fireEvent.click(screen.getByText(/Admin Actions/i));
 
     expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();

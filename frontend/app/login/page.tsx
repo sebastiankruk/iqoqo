@@ -15,11 +15,21 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  token_exchange_failed: "Google sign-in could not be completed. Please try again.",
+  id_token_parse_failed: "Failed to verify your Google identity. Please try again.",
+  no_email: "Google account has no email address associated with it.",
+  user_setup_failed: "Failed to create your account. Please try again or contact support.",
+  jwt_generation_failed: "Session creation failed. Please try again.",
+  MissingToken: "Authentication token was missing. Please try signing in again.",
+};
 
 /**
  * Login page component.
@@ -27,8 +37,19 @@ import { Footer } from "@/components/dashboard/footer";
  * @returns {JSX.Element} The page component
  */
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const searchParams = useSearchParams();
+  const errorCode = searchParams.get("error");
+  const errorMessage = errorCode ? (ERROR_MESSAGES[errorCode] ?? `Error: ${errorCode}`) : null;
 
   /**
    * Handles the local login process.
@@ -59,6 +80,9 @@ export default function LoginPage() {
       <main className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
           <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
+          {errorMessage && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{errorMessage}</div>
+          )}
           <Button
             className="w-full"
             variant="outline"

@@ -230,6 +230,21 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
                 return artist
         return None
 
+    @property
+    def resolved_identifier(self) -> str:
+        """Get the primary/fallback identifier for cover and lookup operations."""
+        meta = self.meta or {}
+        return (
+            self.isbn13
+            or self.ean
+            or self.upc
+            or meta.get("barcode")
+            or meta.get("isbn")
+            or meta.get("identifier")
+            or meta.get("discogs_id")
+            or str(self.id)
+        )
+
     def update_meta(self, **kwargs) -> None:
         """Safely merge keyword arguments into the ``meta`` JSON field."""
         meta = dict(self.meta) if self.meta else {}
@@ -315,6 +330,10 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
     status = db.Column(db.String(50), default="want_to_read", nullable=False)
+    # Mirrors Item.is_hidden: lets a user share their wishlist (e.g. as gift ideas
+    # for friends/family) with other authenticated users by default, while still
+    # allowing individual entries to be opted out of that sharing.
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 

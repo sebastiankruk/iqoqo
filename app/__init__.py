@@ -15,6 +15,9 @@
 #
 import logging
 
+# Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 from dotenv import load_dotenv
 
 load_dotenv()

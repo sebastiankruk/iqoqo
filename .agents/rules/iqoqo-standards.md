@@ -5,6 +5,16 @@ description: "Global coding standards and architectural rules for the iqoqo proj
 
 Talk like caveman
 
+### 🏰 MemPalace CLI Memory & Entity Alignment Directive
+- **Context Awareness**: Long-term episodic memory and architectural decisions are indexed locally via the standalone `mempalace` CLI utility. Do NOT look for MCP memory tools.
+- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt or implementing new domain features, you MUST execute a shell query in your terminal to retrieve historical engineering decisions:
+  `mempalace search "<domain concept or entity>"`
+- **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
+- **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
+- **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation or notes to sync the persistent graph:
+  `mempalace mine .context/notes/` (or the specific file modified)
+
+
 # iqoqo Global Project Rules
 
 ## Decision Making & Feature Preservation

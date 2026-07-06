@@ -56,37 +56,6 @@ function DetailsTab({ item }: { item: Item }) {
       {/* Rich metadata including audio tracklists */}
       <ExtendedMetadata meta={meta} owner_name={item.owner_name} owner_count={item.owner_count} />
 
-      {/* FRBR hierarchy info */}
-      <div className="border-t pt-6">
-        <h4 className="mb-3 font-serif text-sm font-bold text-foreground">FRBR Hierarchy</h4>
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
-          {item.work && (
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
-              <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
-            </div>
-          )}
-          {item.expression && (
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Expression ID</dt>
-              <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
-            </div>
-          )}
-          <div className="flex flex-col gap-0.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Manifestation ID</dt>
-            <dd className="text-sm font-mono text-foreground">
-              <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
-                #{item.manifestation_id}
-              </Link>
-            </dd>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
-            <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
-          </div>
-        </dl>
-      </div>
-
       {/* Series parts info */}
       {item.work && parts.length > 0 && (
         <div className="border-t pt-6">

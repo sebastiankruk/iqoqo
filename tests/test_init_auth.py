@@ -63,6 +63,7 @@ def test_init_auth_roles_permissions(app):
             "delete:item",
             "read:metadata",
             "upload:cover",
+            "refetch:cover",
             "regenerate:cover",
             "llm_generate:metadata",
             "llm_generate:cover",

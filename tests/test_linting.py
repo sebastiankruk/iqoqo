@@ -100,3 +100,27 @@ def test_no_todo_fixme_in_critical_files():
         print("\nTODO/FIXME found in critical files:", file=sys.stderr)
         for v in violations:
             print(f"  {v}", file=sys.stderr)
+
+
+def test_shellcheck():
+    """Verify that all bash scripts pass shellcheck if installed."""
+    import shutil
+
+    shellcheck_bin = shutil.which("shellcheck")
+    if not shellcheck_bin:
+        pytest.skip("shellcheck is not installed on this system")
+
+    # Find all .sh files in scripts/ and project root
+    sh_files = list(pathlib.Path("scripts").rglob("*.sh"))
+    # Also check if there are other shell files
+    sh_files.extend(pathlib.Path(".").glob("*.sh"))
+
+    assert len(sh_files) > 0, "No shell script files found to check!"
+
+    errors = []
+    for sh_file in sh_files:
+        res = subprocess.run([shellcheck_bin, str(sh_file)], capture_output=True, text=True, check=False)
+        if res.returncode != 0:
+            errors.append(f"shellcheck violations in {sh_file}:\n{res.stdout or res.stderr}")
+
+    assert not errors, "\n\n".join(errors)

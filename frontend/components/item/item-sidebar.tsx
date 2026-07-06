@@ -177,7 +177,12 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     }
 
     updateItem.mutate(updatePayload, {
-      onSuccess: () => toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`),
+      onSuccess: res => {
+        toast.success(`Collection status updated to ${STATUS_LABELS[newStatus]?.label || newStatus}`);
+        if (res?.data?.id && res.data.id !== item.id) {
+          router.replace(`/item/${res.data.id}`);
+        }
+      },
       onError: e => toast.error((e as Error).message),
     });
   };
@@ -195,9 +200,12 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         lent_to_user_id: borrowerId || null,
       },
       {
-        onSuccess: () => {
+        onSuccess: res => {
           toast.success(`Item marked as lent to ${borrowerName}`);
           setIsLentDialogOpen(false);
+          if (res?.data?.id && res.data.id !== item.id) {
+            router.replace(`/item/${res.data.id}`);
+          }
         },
         onError: e => toast.error((e as Error).message),
       }

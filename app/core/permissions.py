@@ -33,6 +33,7 @@ class PermissionName(StrEnum):
     READ_ROLES = "read:roles"
     READ_USERS = "read:users"
     REFETCH_METADATA = "refetch:metadata"
+    REFETCH_COVER = "refetch:cover"
     REGENERATE_COVER = "regenerate:cover"
     UPDATE_ITEM = "update:item"
     UPLOAD_COVER = "upload:cover"

@@ -237,9 +237,23 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
 
     categories = [s.get("name", "") for s in book.get("subjects", []) if s.get("name")]
 
-    # Clone raw data and add standard keys
+    # Clone raw data and add standard keys.
+    # The raw OL response contains ``authors`` and ``subjects`` as lists of
+    # *dicts* (e.g. ``[{"name": "…", "url": "…"}]``).  These must NOT leak
+    # downstream — we delete the raw keys and replace them with the canonical
+    # capitalized ``Authors`` and ``Categories`` which hold plain strings.
     metadata = dict(book)
-    metadata.update({"Title": title, "Authors": authors, "Description": description, "Categories": categories, "Source": "Open Library"})
+    metadata.pop("authors", None)
+    metadata.pop("subjects", None)
+    metadata.update(
+        {
+            "Title": title,
+            "Authors": authors,
+            "Description": description,
+            "Categories": categories,
+            "Source": "Open Library",
+        }
+    )
     return metadata
 
 

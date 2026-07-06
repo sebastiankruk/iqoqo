@@ -73,7 +73,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
+      command: "IS_E2E=true NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
       url: "http://localhost:3002",
       reuseExistingServer: true,
       timeout: 120000,

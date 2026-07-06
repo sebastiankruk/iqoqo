@@ -212,7 +212,17 @@ def test_clone_script_argument_validation(tmp_path):
     assert res.returncode != 0
     assert "Usage:" in res.stdout or "Usage:" in res.stderr
 
-    # Run with correct number of arguments but non-existent dirs
+    # Run with too many arguments (should fail with usage)
+    res = subprocess.run(
+        [clone_script, "/nonexistent1", "prod", "/nonexistent2", "preview", "host", "extra"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode != 0
+    assert "Usage:" in res.stdout or "Usage:" in res.stderr
+
+    # Run with correct number of arguments but non-existent dirs (local)
     res = subprocess.run(
         [clone_script, "/nonexistent1", "prod", "/nonexistent2", "preview"],
         capture_output=True,
@@ -222,7 +232,17 @@ def test_clone_script_argument_validation(tmp_path):
     assert res.returncode != 0
     assert "Error: Source directory" in res.stdout or "Error: Source directory" in res.stderr
 
-    # Create temporary source and destination directories but no env files
+    # Run with remote host and non-existent/unreachable host (should fail)
+    res = subprocess.run(
+        [clone_script, "/nonexistent1", "prod", "/nonexistent2", "preview", "nonexistent-host-xyz"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode != 0
+    assert "Error: Remote source directory" in res.stdout or "Error: Remote source directory" in res.stderr
+
+    # Create temporary source and destination directories but no env files (local)
     src_dir = tmp_path / "src"
     dst_dir = tmp_path / "dst"
     src_dir.mkdir()
@@ -237,7 +257,7 @@ def test_clone_script_argument_validation(tmp_path):
     assert res.returncode != 0
     assert "Error: Source env file" in res.stdout or "Error: Source env file" in res.stderr
 
-    # Create source env file but no destination env file
+    # Create source env file but no destination env file (local)
     (src_dir / ".env.prod").touch()
     res = subprocess.run(
         [clone_script, str(src_dir), "prod", str(dst_dir), "preview"],
