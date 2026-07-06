@@ -213,3 +213,44 @@ def test_cascading_deletes_notes(social_notes_setup, app):
         # Note should be deleted automatically by cascade constraint
         note = db.session.get(SocialNote, n1_id)
         assert note is None
+
+
+def test_note_html_stripping(client, social_notes_setup, app):
+    """POST note strips HTML tags from note content (only tags removed, text preserved)."""
+    headers = get_headers(app, social_notes_setup["u1_id"])
+    work_id = social_notes_setup["work_id"]
+
+    response = client.post(
+        f"/api/notes/work/{work_id}",
+        json={"note": "Hello <script>alert('xss')</script> world"},
+        headers=headers,
+    )
+    assert response.status_code == 201
+    data = response.json["data"]
+    assert "<script>" not in data["note"]
+    assert "Hello" in data["note"]
+    assert "world" in data["note"]
+
+
+def test_note_max_length(client, social_notes_setup, app):
+    """POST note rejects content exceeding 2048 characters."""
+    headers = get_headers(app, social_notes_setup["u1_id"])
+    work_id = social_notes_setup["work_id"]
+
+    # Exactly 2048 chars should succeed
+    short_note = "x" * 2048
+    response = client.post(
+        f"/api/notes/work/{work_id}",
+        json={"note": short_note},
+        headers=headers,
+    )
+    assert response.status_code == 201
+
+    # 2049 chars should fail
+    long_note = "x" * 2049
+    response = client.post(
+        f"/api/notes/work/{work_id}",
+        json={"note": long_note},
+        headers=headers,
+    )
+    assert response.status_code == 400

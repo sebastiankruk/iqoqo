@@ -25,10 +25,10 @@ TEST_DIR=$(mktemp -d)
 BIN_DIR="${TEST_DIR}/bin"
 mkdir -p "${BIN_DIR}"
 
-# Mock docker
+# Mock docker (cloud_backup.sh invokes `docker compose ... exec -T db pg_dumpall ...`)
 cat <<EOF > "${BIN_DIR}/docker"
 #!/bin/bash
-if [ "\$1" == "exec" ]; then
+if [ "\$1" == "compose" ] || [ "\$1" == "exec" ]; then
     echo "DUMMY SQL DATA"
 fi
 EOF
@@ -48,7 +48,7 @@ fi
 EOF
 chmod +x "${BIN_DIR}/rclone"
 
-export PATH="${BIN_DIR}:\$PATH"
+export PATH="${BIN_DIR}:${PATH}"
 export COMPOSE_PROJECT_NAME="iqoqo-test"
 export POSTGRES_USER="testuser"
 

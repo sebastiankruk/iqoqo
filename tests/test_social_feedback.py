@@ -263,3 +263,44 @@ def test_cascading_deletes_reviews(social_setup, app):
         # Feedback should be deleted automatically by cascade constraint
         feedback = db.session.get(SocialFeedback, f1_id)
         assert feedback is None
+
+
+def test_feedback_comment_html_stripping(client, social_setup, app):
+    """POST feedback strips HTML tags from comment."""
+    headers = get_headers(app, social_setup["u1_id"])
+    work_id = social_setup["work_id"]
+
+    response = client.post(
+        f"/api/feedback/work/{work_id}",
+        json={"rating": 5, "comment": "Great <script>alert(1)</script> book"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json["data"]
+    assert "<script>" not in data["comment"]
+    assert "Great" in data["comment"]
+    assert "book" in data["comment"]
+
+
+def test_feedback_comment_max_length(client, social_setup, app):
+    """POST feedback rejects comments exceeding 2048 characters."""
+    headers = get_headers(app, social_setup["u1_id"])
+    work_id = social_setup["work_id"]
+
+    # Exactly 2048 chars should succeed
+    short_comment = "x" * 2048
+    response = client.post(
+        f"/api/feedback/work/{work_id}",
+        json={"rating": 5, "comment": short_comment},
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    # 2049 chars should fail
+    long_comment = "x" * 2049
+    response = client.post(
+        f"/api/feedback/work/{work_id}",
+        json={"rating": 5, "comment": long_comment},
+        headers=headers,
+    )
+    assert response.status_code == 400

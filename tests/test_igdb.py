@@ -21,7 +21,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
 
 from app.utils.igdb import fetch_game_metadata, get_igdb_token
 

@@ -27,6 +27,7 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.permissions import PermissionName
 from app.db.models import (
     Expression,
@@ -184,6 +185,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
                     "content_type": None,
                     "is_owner": True,
                     "is_borrowed": False,
+                    "is_hidden": intent.is_hidden,
                     "tags": [],
                     "added_at": intent.created_at.isoformat() if hasattr(intent.created_at, "isoformat") else intent.created_at,
                     "updated_at": (
@@ -213,6 +215,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
                 "content_type": manifestation.expression.content_type if manifestation.expression else None,
                 "is_owner": True,
                 "is_borrowed": False,
+                "is_hidden": intent.is_hidden,
                 "tags": [],
                 "added_at": intent.created_at.isoformat() if hasattr(intent.created_at, "isoformat") else intent.created_at,
                 "updated_at": (
@@ -504,10 +507,21 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if not intent:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
+    # Wishlist entries are shareable with other authenticated users by default
+    # (e.g. gift ideas for friends/family) unless the owner hides them --
+    # mirrors Item.is_hidden. Anonymous callers never see wishlist items,
+    # regardless of is_hidden (BOLA: 404, not 401, to avoid confirming the id
+    # exists to an unauthenticated caller).
     user_id = getattr(g, "user_id", None)
-    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-    if not is_owner:
-        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+    if user_id is None:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+    is_owner = str(intent.user_id) == str(user_id)
+    user = db.session.get(User, user_id)
+    is_admin = bool(user) and any(role.name == "admin" for role in getattr(user, "roles", []))
+
+    if not (is_owner or is_admin) and intent.is_hidden:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     work = intent.work
     manifestation = None
@@ -524,13 +538,13 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
         item_data = {
             "id": item_id,
             "owner_id": str(intent.user_id),
-            "is_owner": True,
+            "is_owner": is_owner,
             "is_borrowed": False,
             "owner_name": owner_name,
             "owner_count": 0,
             "status": intent.status,
             "collection_status": "wish_list",
-            "is_hidden": False,
+            "is_hidden": intent.is_hidden,
             "manifestation_id": None,
             "tags": [],
             "meta": {},
@@ -551,13 +565,13 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
     item_data = {
         "id": item_id,
         "owner_id": str(intent.user_id),
-        "is_owner": True,
+        "is_owner": is_owner,
         "is_borrowed": False,
         "owner_name": owner_name,
         "owner_count": 0,
         "status": intent.status,
         "collection_status": "wish_list",
-        "is_hidden": False,
+        "is_hidden": intent.is_hidden,
         "manifestation_id": manifestation.id,
         "tags": [],
         "meta": {},
@@ -688,7 +702,7 @@ def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tupl
         return None, (jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400)
 
 
-def _update_virtual_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
+def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
     intent_id = -item_id
     returned_id = None
 
@@ -700,15 +714,16 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None, user: User | N
             if not intent:
                 return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-            is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-            is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
-            if not (is_owner or is_admin):
+            if not user_id or not verify_item_ownership(item_id, user_id):
                 return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
             payload, err = _parse_update_payload(request)
             if err:
                 return err
             assert payload is not None
+
+            if payload.is_hidden is not None:
+                intent.is_hidden = payload.is_hidden
 
             # If transitioning away from wishlist status, convert to physical item
             if payload.collection_status and payload.collection_status != "wish_list":
@@ -868,18 +883,17 @@ def update_item(item_id: int):
     user = db.session.get(User, user_id) if user_id else None
 
     if item_id < 0:
-        return _update_virtual_item(item_id, user_id, user)
+        return _update_virtual_item(item_id, user_id)
     return _update_physical_item(item_id, user_id, user)
 
 
-def _delete_virtual_item(item_id: int, user_id: uuid.UUID | None, is_admin: bool) -> tuple[Response, int] | Response:
+def _delete_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
     intent_id = -item_id
     intent = db.session.get(UserWorkIntent, intent_id)
     if not intent:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    is_owner = (str(intent.user_id) == str(user_id)) if user_id else False
-    if not (is_owner or is_admin):
+    if not user_id or not verify_item_ownership(item_id, user_id):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     db.session.delete(intent)
@@ -887,13 +901,12 @@ def _delete_virtual_item(item_id: int, user_id: uuid.UUID | None, is_admin: bool
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
-def _delete_physical_item(item_id: int, user_id: uuid.UUID | None, is_admin: bool) -> tuple[Response, int] | Response:
+def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    is_owner = (str(item.owner_id) == str(user_id)) if user_id else False
-    if not (is_owner or is_admin):
+    if not user_id or not verify_item_ownership(item_id, user_id):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
     db.session.delete(item)
@@ -904,17 +917,13 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None, is_admin: boo
 @api_bp.route("/items/<int(signed=True):item_id>", methods=["DELETE"])
 @require_auth
 @require_permission(PermissionName.DELETE_ITEM)
+@require_item_access()
 def delete_item(item_id: int):
     user_id = getattr(g, "user_id", None)
-    is_admin = False
-    user = db.session.get(User, user_id)
-    if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
-        is_admin = True
-
     try:
         if item_id < 0:
-            return _delete_virtual_item(item_id, user_id, is_admin)
-        return _delete_physical_item(item_id, user_id, is_admin)
+            return _delete_virtual_item(item_id, user_id)
+        return _delete_physical_item(item_id, user_id)
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
@@ -1360,18 +1369,11 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
 @require_auth
 def toggle_item_visibility(item_id: int):
     """
-    Toggles the is_hidden flag for a specific item.
-    Hidden items do not appear on the user's public profile or shared collections.
+    Toggles the is_hidden flag for a specific item or wishlist entry.
+    Hidden items/entries do not appear to other authenticated users (e.g. on a
+    shared wishlist or public profile).
     """
-    if item_id < 0:
-        return jsonify({"success": True, "data": {"id": item_id, "is_hidden": False}})
-
-    item = db.session.get(Item, item_id)
     user_id = getattr(g, "user_id", None)
-
-    if not item or str(item.owner_id) != str(user_id):
-        # Return 404 even if forbidden to prevent data leakage (BOLA protection)
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     data = request.get_json() or {}
     if "is_hidden" not in data:
@@ -1380,6 +1382,29 @@ def toggle_item_visibility(item_id: int):
     new_val = data["is_hidden"]
     if not isinstance(new_val, bool):
         return jsonify({"error": "Field 'is_hidden' must be a boolean.", "code": 400}), 400
+
+    if item_id < 0:
+        intent = db.session.get(UserWorkIntent, -item_id)
+        if not intent or str(intent.user_id) != str(user_id):
+            # Return 404 even if forbidden to prevent data leakage (BOLA protection)
+            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
+
+        intent.is_hidden = new_val
+        db.session.commit()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Item visibility updated to {'hidden' if intent.is_hidden else 'public'}.",
+                "is_hidden": intent.is_hidden,
+            }
+        )
+
+    item = db.session.get(Item, item_id)
+
+    if not item or str(item.owner_id) != str(user_id):
+        # Return 404 even if forbidden to prevent data leakage (BOLA protection)
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     item.is_hidden = new_val
     db.session.commit()
@@ -1395,6 +1420,7 @@ def toggle_item_visibility(item_id: int):
 
 @api_bp.route("/qrcode/<int(signed=True):item_id>", methods=["GET"])
 @require_auth
+@require_item_access(bola=True)
 def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     """
     Generates a QR code image for a specific item to allow physical copy tracking.
@@ -1408,23 +1434,11 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     from flask import send_file
 
     if item_id < 0:
+        # Wishlist entries have no physical copy to tag.
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     item = db.session.get(Item, item_id)
     if not item:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    user_id = getattr(g, "user_id", None)
-    is_owner = str(item.owner_id) == str(user_id) if user_id else False
-    is_admin = False
-
-    if user_id:
-        user = db.session.get(User, user_id)
-        if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
-            is_admin = True
-
-    if not (is_owner or is_admin):
-        # Return 404 to protect privacy (BOLA)
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")

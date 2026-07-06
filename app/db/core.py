@@ -330,6 +330,10 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
     status = db.Column(db.String(50), default="want_to_read", nullable=False)
+    # Mirrors Item.is_hidden: lets a user share their wishlist (e.g. as gift ideas
+    # for friends/family) with other authenticated users by default, while still
+    # allowing individual entries to be opted out of that sharing.
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 

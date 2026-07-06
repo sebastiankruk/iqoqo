@@ -198,6 +198,8 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
         return []
+    if collection.is_expired:
+        return []
     user = db.session.get(User, collection.user_id)
     if not user:
         return []
@@ -396,6 +398,8 @@ def get_shared_collection(token: str):
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
+        return jsonify({"error": "Collection not found"}), 404
+    if collection.is_expired:
         return jsonify({"error": "Collection not found"}), 404
 
     user = db.session.get(User, collection.user_id)
