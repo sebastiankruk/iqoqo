@@ -20,9 +20,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
+from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
+from authlib.jose.errors import JoseError
 from flask import Blueprint, current_app, jsonify, redirect, request
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.db.models import Role, TokenBlocklist, User, db
 
@@ -70,7 +72,7 @@ def google_login():
 
     try:
         return oauth.google.authorize_redirect(redirect_uri)
-    except Exception as e:
+    except OAuthError as e:
         logger.error("Google OAuth authorize_redirect failed: %s", e, exc_info=True)
         return jsonify({"error": f"OAuth init failed: {e}"}), 502
 
@@ -79,13 +81,13 @@ def google_login():
 def google_callback():
     try:
         token = oauth.google.authorize_access_token()
-    except Exception as e:
+    except OAuthError as e:
         logger.error("Google OAuth token exchange failed: %s", e, exc_info=True)
         return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=token_exchange_failed")
 
     try:
         user_info = oauth.google.parse_id_token(token, nonce=None)
-    except Exception as e:
+    except JoseError as e:
         logger.error("Google OAuth parse_id_token failed: %s", e, exc_info=True)
         return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=id_token_parse_failed")
 
@@ -118,14 +120,14 @@ def google_callback():
 
         user.last_login = datetime.now(UTC)
         db.session.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.session.rollback()
         logger.error("Google OAuth user creation/update failed: %s", e, exc_info=True)
         return redirect(f"{frontend_url}/login?error=user_setup_failed")
 
     try:
         internal_token = generate_internal_jwt(user)
-    except Exception as e:
+    except pyjwt.PyJWTError as e:
         logger.error("Google OAuth JWT generation failed: %s", e, exc_info=True)
         return redirect(f"{frontend_url}/login?error=jwt_generation_failed")
 

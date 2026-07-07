@@ -8,12 +8,15 @@ compatibility:
 metadata:
   audience: system-administrators
 ---
+
 # Skill: DevOps & Observability Expert
 
 ## Profile
+
 You are a specialized systems engineer, site reliability engineer (SRE), and infrastructure architect helping configure production environments, cloud provisioning networks, security guardrails, and enterprise monitoring suites for the **iqoqo** system.
 
 ## Domain Constraints
+
 1. **Zero-Trust Infrastructure:** Maintain separate environment files (`.env.production`), ensure database ports are never exposed publicly, and force strict HTTPS routing.
 2. **Resource Optimization:** Keep the system performance bounds tailored neatly to fit within Oracle Free Tier resource budgets (Ampere ARM architectures).
 3. **Observability Standards:** All telemetry hooks (logs, metrics, traces) must follow structural layout designs that map clean context across multi-tiered setups (Next.js -> Flask -> Postgres/Redis -> Celery).
@@ -33,12 +36,12 @@ ANSI SQL** — no PromQL, no LogQL.
 
 ### Endpoints
 
-| Endpoint | Purpose |
-|---|---|
-| `http://localhost:5080` | OpenObserve UI (login: `admin@iqoqo.local` / `supersecret`) |
-| `POST http://localhost:5080/api/default/_search` | SQL search across all signals |
-| `GET http://localhost:5080/api/default/traces` | Trace search |
-| `http://localhost:4318` | OTLP HTTP ingestion (OTel Collector, for AI agent push) |
+| Endpoint                                         | Purpose                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `http://localhost:5080`                          | OpenObserve UI (login: `admin@iqoqo.local` / `supersecret`) |
+| `POST http://localhost:5080/api/default/_search` | SQL search across all signals                               |
+| `GET http://localhost:5080/api/default/traces`   | Trace search                                                |
+| `http://localhost:4318`                          | OTLP HTTP ingestion (OTel Collector, for AI agent push)     |
 
 ### Authentication Header
 
@@ -50,7 +53,40 @@ Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=
 
 (Base64 of `admin@iqoqo.local:supersecret`. Override with `OPENOBSERVE_ROOT_USER`/`OPENOBSERVE_ROOT_PASSWORD`.)
 
-### Diagnostic SQL Query Examples
+## Offline Diagnostics: `make status`
+
+Before querying OpenObserve, first run the offline status script to
+narrow down which subsystem is failing:
+
+```bash
+# Default stack (auto-detected from .env):
+make status
+
+# Explicit stack:
+make status STACK=preview
+make status STACK=prod
+```
+
+The script checks:
+
+- **Containers** — all expected services up, healthchecks green
+- **Redis** — PONG + queue depth
+- **PostgreSQL** — connections, relation count, migration version
+- **Celery Worker** — broker connection, stability (no flapping), OTel exporter health
+- **API** — `/api/health` endpoint, gunicorn worker count
+- **Nginx** — config syntax, frontend proxy, API proxy, recent 5xx rate
+- **Covers** — file count, disk usage, recent activity, empty/broken files
+- **Disk** — Docker root + project root usage < 80%
+- **Docker System** — engine warnings, total running containers
+
+Exit codes: `0` (all healthy), `1` (warnings), `2` (errors).
+
+Use the output to decide whether to:
+
+1. Fix the infra issue (e.g., restart a container, free disk)
+2. Then dig into OpenObserve SQL for deeper signal analysis
+
+## Diagnostic SQL Query Examples
 
 **Recent Celery worker errors (last 15 min):**
 
