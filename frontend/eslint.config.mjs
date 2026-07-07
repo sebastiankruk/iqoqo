@@ -28,7 +28,6 @@ const eslintConfig = defineConfig([
       'jsdoc/check-param-names': 'error',
       'jsdoc/require-param-type': 'off', // TypeScript already handles types
       'jsdoc/require-returns-type': 'off', // TypeScript already handles return types
-      'react-hooks/set-state-in-effect': 'off',
     },
   },
   // Allow `any` in test files for mock return values

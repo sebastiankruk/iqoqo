@@ -42,6 +42,18 @@ def _sanitize_text(value: str) -> str:
     return _TAG_RE.sub("", value).strip()
 
 
+def _validate_note_input(data: dict | None) -> tuple[str | None, str | None]:
+    """Validate note content in request data, returning (note_text, error_message)."""
+    if not data or "note" not in data:
+        return None, "Missing note content"
+    note_text = _sanitize_text(str(data["note"]))
+    if not note_text:
+        return None, "Note content cannot be empty"
+    if len(note_text) > MAX_SOCIAL_TEXT_LENGTH:
+        return None, f"Note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
+    return note_text, None
+
+
 def _verify_target_exists(level: str, target_id: int) -> bool:
     """Helper to verify that the target FRBR resource exists in the database."""
     if level == "work":
@@ -248,19 +260,13 @@ def create_social_note(level: str, target_id: int) -> Response | tuple[Response,
         return jsonify({"error": f"{level.capitalize()} not found", "code": 404}), 404
 
     data = request.get_json(silent=True)
-    if not data or "note" not in data:
-        return jsonify({"error": "Missing note content", "code": 400}), 400
-
-    note_text = _sanitize_text(str(data["note"]))
-    if not note_text:
-        return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
-    if len(note_text) > MAX_SOCIAL_TEXT_LENGTH:
-        return jsonify({"error": f"Note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
+    note_text, error_msg = _validate_note_input(data)
+    if error_msg:
+        return jsonify({"error": error_msg, "code": 400}), 400
 
     column_name = f"{level}_id"
     kwargs = {"user_id": user_id, "note": note_text, column_name: target_id}
     new_note = SocialNote(**kwargs)
-
     db.session.add(new_note)
     db.session.commit()
 
@@ -285,14 +291,9 @@ def update_social_note(note_id: int) -> Response | tuple[Response, int]:
         return jsonify({"error": "Forbidden", "code": 403}), 403
 
     data = request.get_json(silent=True)
-    if not data or "note" not in data:
-        return jsonify({"error": "Missing note content", "code": 400}), 400
-
-    note_text = _sanitize_text(str(data["note"]))
-    if not note_text:
-        return jsonify({"error": "Note content cannot be empty", "code": 400}), 400
-    if len(note_text) > MAX_SOCIAL_TEXT_LENGTH:
-        return jsonify({"error": f"Note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
+    note_text, error_msg = _validate_note_input(data)
+    if error_msg:
+        return jsonify({"error": error_msg, "code": 400}), 400
 
     note.note = note_text
     note.updated_at = datetime.now(UTC)
