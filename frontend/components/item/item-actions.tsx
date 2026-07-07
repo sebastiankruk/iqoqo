@@ -90,6 +90,7 @@ export function ItemActions({ item }: { item: Item }) {
         qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
       }, 3000);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveCoverAction(null);
     }
     return () => {

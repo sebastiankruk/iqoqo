@@ -83,6 +83,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveCoverAction(null);
     }
     return () => {

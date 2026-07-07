@@ -127,6 +127,7 @@ function SettingsContent(): React.JSX.Element {
   // Initialize local state when profile loads
   useEffect(() => {
     if (profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayName(profile.display_name || "");
       setPublicUsername(profile.public_username || "");
       setBio(profile.bio || "");

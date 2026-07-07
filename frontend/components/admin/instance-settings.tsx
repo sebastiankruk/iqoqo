@@ -139,6 +139,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
 
   useEffect(() => {
     if (showApiKeys && category !== "external_apis") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

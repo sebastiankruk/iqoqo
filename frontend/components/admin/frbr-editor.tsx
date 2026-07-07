@@ -312,12 +312,14 @@ function WorkPartsManager({ workId }: WorkPartsManagerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
   const [selectedWork, setSelectedWork] = useState<FrbrSearchResult | null>(null);
-  const [sequence, setSequence] = useState<number>(1);
+  const defaultSequence = parts.length + 1;
+  const [sequenceInput, setSequenceInput] = useState(defaultSequence);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    setSequence(parts.length + 1);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSequenceInput(parts.length + 1);
   }, [parts.length]);
 
   const handleSearch = async (val: string) => {
@@ -343,7 +345,7 @@ function WorkPartsManager({ workId }: WorkPartsManagerProps) {
     try {
       await apiClient.post(`/works/${workId}/parts`, {
         part_work_id: selectedWork.id,
-        sequence: sequence,
+        sequence: sequenceInput,
       });
       toast.success(`Added "${selectedWork.title}" as part of this series`);
       setSelectedWork(null);
@@ -464,8 +466,8 @@ function WorkPartsManager({ workId }: WorkPartsManagerProps) {
             <input
               type="number"
               min="1"
-              value={sequence}
-              onChange={e => setSequence(parseInt(e.target.value, 10) || 1)}
+              value={sequenceInput}
+              onChange={e => setSequenceInput(parseInt(e.target.value, 10) || 1)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </div>
@@ -793,6 +795,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
   }, [manifestationId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTree();
   }, [fetchTree]);
 
