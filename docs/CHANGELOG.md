@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-07-07
+
+### Added
+
+- **Offline Diagnostics — `make status`**: Introduced `scripts/iqoqo-status.sh`, a comprehensive 436-line bash health check script that inspects all deployment layers: container states (healthchecks, uptime), Redis connectivity and queue depth, PostgreSQL connections and migration version, Celery worker stability and OTel exporter health, API `/api/health` endpoint and gunicorn workers, Nginx config syntax and 5xx rates, cover file count and disk usage, and Docker system health. New `status` target in the `Makefile` with `--stack preview|prod` support. Exit codes: `0` (healthy), `1` (warnings), `2` (errors).
+- **Product Manager Skill**: Added `.agents/skills/product-manager/SKILL.md` — structured agent skill for feature scoping, vertical slicing, UX advocacy, and roadmap planning aligned with FRBR ontology and iqoqo's testing triangle philosophy.
+- **DevOps Skill Documentation**: Enhanced `.agents/skills/devops-observability-expert/SKILL.md` with offline diagnostics workflow (`make status` before querying OpenObserve).
+- **API Client Timeout**: Added 15-second timeout to the axios-based frontend API client to prevent hung requests.
+
+### Changed
+
+- **Exception Hardening in OAuth Flow**: Narrowed broad `except Exception` clauses in `app/api/auth.py` to specific exception types (`OAuthError` for OAuth init/authorize, `JoseError` for ID token parsing, `SQLAlchemyError` for user persistence, `pyjwt.PyJWTError` for JWT generation), improving error diagnostics and preventing silent catch-all masking.
+
+### Fixed
+
+- **Infrastructure Test Compatibility**: Updated `tests/test_infra_config.py` to align with the new status script environment detection.
+
 ## [0.7.6] - 2026-07-06
 
 ### Added
