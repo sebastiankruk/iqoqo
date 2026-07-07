@@ -76,11 +76,6 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
   const [roleToDelete, setRoleToDelete] = useState<RoleData | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Load roles and permissions on mount
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -103,6 +98,11 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
       setLoading(false);
     }
   };
+
+  // Load roles and permissions on mount
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Load role permissions when a role is expanded
   const handleExpand = async (roleId: number) => {

@@ -18,7 +18,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ThemeProvider } from "@/components/theme-provider";
 
 describe("ThemeProvider", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
   let originalConsoleError: typeof console.error;
 
   beforeEach(() => {
@@ -27,7 +26,7 @@ describe("ThemeProvider", () => {
 
   afterEach(() => {
     console.error = originalConsoleError;
-    process.env.NODE_ENV = originalNodeEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -41,7 +40,7 @@ describe("ThemeProvider", () => {
   });
 
   it("suppresses the known 'script tag' React warning in development", () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const spy = vi.fn();
     console.error = spy;
 
@@ -58,7 +57,7 @@ describe("ThemeProvider", () => {
   });
 
   it("does not suppress unrelated console.error messages", () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const spy = vi.fn();
     console.error = spy;
 
@@ -73,7 +72,7 @@ describe("ThemeProvider", () => {
   });
 
   it("restores the original console.error on unmount", () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const spy = vi.fn();
     console.error = spy;
 
@@ -93,7 +92,7 @@ describe("ThemeProvider", () => {
   });
 
   it("does not touch console.error in production", () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     const spy = vi.fn();
     console.error = spy;
 

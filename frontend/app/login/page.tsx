@@ -44,6 +44,11 @@ export default function LoginPage() {
   );
 }
 
+/**
+ * LoginPageContent component.
+ *
+ * @returns {JSX.Element} The login page content component.
+ */
 function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

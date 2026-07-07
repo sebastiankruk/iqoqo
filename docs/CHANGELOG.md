@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Release Workflow Cache and Actions Deprecation**: Upgraded `docker/build-push-action` to `v6` and `softprops/action-gh-release` to `v2` to target modern Node.js versions. Configured buildx to use `ignore-error=true` for cache saving to prevent pipeline failures from transient cache reservation issues.
 - **Infrastructure Validation Tests**: Added a `--validate-only` flag to `run.sh` and updated `tests/test_infra_config.py` to use it, preventing timeouts and subprocess hangs when verifying configurations.
 - **Frontend Build and Lint Pipeline**: Ignored the `.next-e2e` build directory in ESLint configuration to skip generated chunks, removed unused variables in E2E integration specs, and bypassed a React hooks setState-in-effect warning on the Collection page to ensure a clean build.
 - **Wishlist Detail View**: Fixed `_get_virtual_item_detail` in `app/api/items.py` to return work-level details for virtual items when they lack a manifestation, resolving `404 Not Found` and `UnboundLocalError` issues in collection detail navigation.

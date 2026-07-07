@@ -90,6 +90,7 @@
     "postcss": "^8.5.10",
     "@swc/helpers": "0.5.15",
     "@babel/core": "^7.29.6",
-    "esbuild": ">=0.28.1"
+    "esbuild": ">=0.28.1",
+    "uuid": "^13.0.1"
   }
 }
