@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help status start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -112,6 +112,7 @@ help:
 	@echo "Monitoring targets:"
 	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
 	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
+	@echo "  status          - Show health status of all services (--stack preview|prod)"
 	@echo "  monitoring-legacy-start - Start optional Prometheus + Jaeger stack"
 	@echo "  monitoring-legacy-stop  - Stop optional Prometheus + Jaeger stack"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
@@ -207,6 +208,9 @@ monitoring-legacy-start:
 monitoring-legacy-stop:
 	@echo "Stopping legacy Prometheus + Jaeger stack..."
 	@docker compose -f docker-compose.prometheus-jaeger.yml down
+
+status: ## Show health status of all iQoQo services
+	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),)
 
 # Linting targets
 lint-python: .venv/bin/activate
