@@ -160,12 +160,3 @@ To fetch recent traces for a specific service:
 curl -s "http://127.0.0.1:5080/api/default/traces?service=iqoqo-api&limit=10" \
   -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" | jq '.'
 ```
-
-### When to Use the Legacy Jaeger Stack
-
-If a specific trace waterfall visualization is needed (e.g., debugging complex nested span relationships), the legacy Jaeger stack can be started without interfering with OpenObserve:
-
-```bash
-# Must override ports to avoid conflict with OpenObserve OTel Collector:
-JAEGER_OTLP_GRPC_PORT=4319 JAEGER_OTLP_HTTP_PORT=4320 make monitoring-legacy-start
-```

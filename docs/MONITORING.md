@@ -142,50 +142,12 @@ ORDER BY _timestamp DESC LIMIT 1
 
 ---
 
-## Optional: Legacy Prometheus + Jaeger
-
-If you prefer PromQL and the Jaeger trace waterfall UI:
-
-```bash
-make monitoring-legacy-start
-# Prometheus: http://localhost:9090
-# Jaeger:     http://localhost:16686
-```
-
-> [!IMPORTANT]
-> Jaeger uses ports `4317`/`4318` by default. These conflict with the OTel Collector ports
-> used by the default OpenObserve stack. Do **not** run both stacks simultaneously unless
-> you override `JAEGER_OTLP_GRPC_PORT` and `JAEGER_OTLP_HTTP_PORT` in `.env`.
-
-```bash
-make monitoring-legacy-stop
-```
-
----
-
-## Optional: Grafana Cloud
-
-For cloud-hosted dashboards (preview / production environments):
-
-```bash
-# Add Grafana Cloud credentials to .env (see .env.example)
-docker compose -f docker-compose.grafana.yml up -d
-```
-
-Requires: `GRAFANA_PROMETHEUS_URL`, `GRAFANA_PROMETHEUS_USER`, `GRAFANA_LOKI_URL`,
-`GRAFANA_LOKI_USER`, and `GRAFANA_CLOUD_API_KEY`.
-
----
-
 ## Configuration Files
 
 | File                                           | Purpose                                        |
 |------------------------------------------------|------------------------------------------------|
 | `docker-compose.monitoring.yml`                | **Default** OpenObserve + OTel Collector stack |
-| `docker-compose.prometheus-jaeger.yml`         | Optional legacy Prometheus + Jaeger + cAdvisor |
-| `docker-compose.grafana.yml`                   | Optional Grafana Cloud integration             |
 | `deploy/otel-collector-local.yaml`             | OTel Collector config (OpenObserve backend)    |
-| `deploy/otel-collector-prometheus-config.yaml` | OTel Collector config (Prometheus backend)     |
 | `deploy/Dockerfile.nginx`                      | Custom Nginx with `ngx_otel_module` (Layer 6)  |
 | `deploy/nginx-main.conf`                       | Nginx main config loading OTel C-module        |
 | `frontend/instrumentation.ts`                  | Next.js server-side OTel bootstrap (Layer 1)   |

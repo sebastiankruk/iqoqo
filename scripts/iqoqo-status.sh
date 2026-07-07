@@ -163,8 +163,8 @@ for svc in "${SERVICES[@]}"; do
     fi
 done
 
-# Check optional containers (monitoring, alloy, cadvisor)
-for opt in "openobserve" "otel-collector" "alloy" "cadvisor"; do
+# Check optional containers (monitoring)
+for opt in "openobserve" "otel-collector"; do
     cname="${PREFIX}-${opt}-1"
     cname2="${opt}-1"
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq "^(${cname}|${cname2})$"; then
