@@ -61,7 +61,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Backend Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deploy/Dockerfile
@@ -70,10 +70,10 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/iqoqo-backend:latest
             ghcr.io/${{ github.repository_owner }}/iqoqo-backend:${{ env.VERSION }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Build and push Frontend Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
@@ -82,10 +82,10 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:latest
             ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:${{ env.VERSION }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Create GitHub Release and Tag
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
