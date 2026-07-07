@@ -79,6 +79,7 @@ export function ManualEntryForm({
 
   // Sync state with props if they change (e.g. from a new scan or extraction)
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFormData(prev => ({
       ...prev,
       title: initialTitle,

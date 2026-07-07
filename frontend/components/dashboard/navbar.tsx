@@ -50,12 +50,14 @@ export function Navbar() {
   const [manageCollOpen, setManageCollOpen] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   const isMaintenanceMode = config?.maintenance_mode === true;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchQuery(searchParams?.get("q") || searchParams?.get("search") || "");
   }, [searchParams]);
 

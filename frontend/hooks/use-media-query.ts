@@ -21,23 +21,16 @@ import * as React from "react";
  * @returns {boolean} Whether the query matches.
  */
 export function useMediaQuery(query: string) {
-  const [value, setValue] = React.useState(false);
+  const subscribe = React.useCallback(
+    (callback: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", callback);
+      return () => mql.removeEventListener("change", callback);
+    },
+    [query]
+  );
 
-  React.useEffect(() => {
-    /**
-     * Handler for media query changes.
-     * @param {MediaQueryListEvent} event - The change event.
-     */
-    function onChange(event: MediaQueryListEvent) {
-      setValue(event.matches);
-    }
+  const getSnapshot = React.useCallback(() => window.matchMedia(query).matches, [query]);
 
-    const result = window.matchMedia(query);
-    result.addEventListener("change", onChange);
-    setValue(result.matches);
-
-    return () => result.removeEventListener("change", onChange);
-  }, [query]);
-
-  return value;
+  return React.useSyncExternalStore(subscribe, getSnapshot);
 }

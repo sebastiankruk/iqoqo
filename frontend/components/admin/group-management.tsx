@@ -101,6 +101,7 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
 
   // Load roles and permissions on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, []);
 

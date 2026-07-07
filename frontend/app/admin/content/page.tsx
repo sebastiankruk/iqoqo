@@ -328,6 +328,7 @@ function ContentEditorWrapper({
 
   useEffect(() => {
     if (searchResults.length === 1 && !selectedManifestationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedManifestationId(searchResults[0].id);
     }
   }, [searchResults, selectedManifestationId]);

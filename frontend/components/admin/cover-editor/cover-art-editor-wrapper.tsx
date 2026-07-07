@@ -72,6 +72,7 @@ export function CoverArtEditorWrapper({ preselectedManifestationId }: CoverArtEd
         (entityData.meta?.["cover_url"] as string | undefined);
 
       if (url && url !== imageSrc) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setImageSrc(url);
         // Reset editor state for new image
         setRotation(0);
