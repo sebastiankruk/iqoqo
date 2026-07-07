@@ -80,12 +80,10 @@ fi
 
 if [[ "$STACK" == "preview" ]]; then
     PREFIX="iqoqo-preview"
-    COMPOSE_PROJECT="iqoqo-preview"
     ENV_FILE="$IQOQO_ROOT/.env.preview"
     DOMAIN="pre.iqoqo.cc"
 else
     PREFIX="iqoqo"
-    COMPOSE_PROJECT="iqoqo"
     ENV_FILE="$IQOQO_ROOT/.env"
     DOMAIN="iqoqo.cc"
 fi
@@ -121,29 +119,28 @@ else
     REDIS_PORT="${REDIS_PORT:-6379}"
 fi
 
-now_epoch=$(date +%s)
 
 header() {
     local h="$1"
-    printf "\n${BOLD}%s${NC}\n" "$h"
+    printf '\n%s%s%s\n' "$BOLD" "$h" "$NC"
     local i=0; while [ "$i" -lt "${#h}" ]; do printf "─"; i=$((i+1)); done; echo
 }
 
 check() {
     local label="$1" status="$2" detail="$3"
     case "$status" in
-        pass) printf "  ${PASS} %s  %s\n" "$label" "$detail" ;;
-        warn) printf "  ${WARN} %s  %s\n" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
-        fail) printf "  ${FAIL} %s  %s\n" "$label" "$detail"; ERRORS=$((ERRORS + 1)) ;;
-        info) printf "  ${INFO} %s  %s\n" "$label" "$detail" ;;
+        pass) printf '  %s %s  %s\n' "$PASS" "$label" "$detail" ;;
+        warn) printf '  %s %s  %s\n' "$WARN" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
+        fail) printf '  %s %s  %s\n' "$FAIL" "$label" "$detail"; ERRORS=$((ERRORS + 1)) ;;
+        info) printf '  %s %s  %s\n' "$INFO" "$label" "$detail" ;;
     esac
 }
 
 printf "\n"
 printf "╔══════════════════════════════════════════════════════╗\n"
-printf "║            ${BOLD}iQoQo Service Status${NC}              ║\n"
-printf "║           $(date '+%Y-%m-%d %H:%M UTC')           ║\n"
-printf "║           Stack: ${BOLD}${STACK}${NC} (${DOMAIN})             ║\n"
+printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
+printf '║           %s           ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
+printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
 printf "╚══════════════════════════════════════════════════════╝\n"
 
 header "Containers"
@@ -152,7 +149,6 @@ for svc in "${SERVICES[@]}"; do
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname"; then
         status_line=$(docker ps --filter "name=${cname}$" --format '{{.Status}}' 2>/dev/null)
         health=$(docker inspect "$cname" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' 2>/dev/null)
-        created=$(docker inspect "$cname" --format '{{.Created}}' 2>/dev/null)
         detail="$status_line"
         if [[ "$health" != "no-healthcheck" && "$health" != "" ]]; then
             if [[ "$health" == "healthy" ]]; then
@@ -290,7 +286,7 @@ except Exception as e:
             check "Health endpoint" fail "status=${health_status}"
         fi
     else
-        health_err=$(echo "$health_json" | sed 's/^ERROR://')
+        health_err="${health_json#ERROR:}"
         check "Health endpoint" fail "${health_err}"
     fi
     # Check gunicorn worker count via /proc (containers may not have pgrep/ps)
@@ -423,15 +419,15 @@ check "Containers" info "${total_containers} total running"
 # ─── Summary ────────────────────────────────────────────────────
 printf "\n┌──────────────────────────────────────────────────────────┐\n"
 if [[ "$ERRORS" -gt 0 ]]; then
-    printf "│ ${FAIL}  ${BOLD}STATUS: ${RED}${ERRORS} error(s)${NC}"
-    [[ "$WARNINGS" -gt 0 ]] && printf ", ${YELLOW}${WARNINGS} warning(s)${NC}"
+    printf '│ %s  %sSTATUS: %s%s error(s)%s' "$FAIL" "$BOLD" "$RED" "$ERRORS" "$NC"
+    [[ "$WARNINGS" -gt 0 ]] && printf ', %s%s warning(s)%s' "$YELLOW" "$WARNINGS" "$NC"
     printf " found                        │\n"
     exit_code=2
 elif [[ "$WARNINGS" -gt 0 ]]; then
-    printf "│ ${WARN}  ${BOLD}STATUS: ${YELLOW}${WARNINGS} warning(s)${NC}, no errors                    │\n"
+    printf '│ %s  %sSTATUS: %s%s warning(s)%s, no errors                    │\n' "$WARN" "$BOLD" "$YELLOW" "$WARNINGS" "$NC"
     exit_code=1
 else
-    printf "│ ${PASS}  ${BOLD}STATUS: ${GREEN}All services healthy${NC}                         │\n"
+    printf '│ %s  %sSTATUS: %sAll services healthy%s                         │\n' "$PASS" "$BOLD" "$GREEN" "$NC"
     exit_code=0
 fi
 printf "└──────────────────────────────────────────────────────────┘\n"
