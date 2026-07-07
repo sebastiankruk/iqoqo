@@ -81,8 +81,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:latest
             ghcr.io/${{ github.repository_owner }}/iqoqo-frontend:${{ env.VERSION }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-frontend-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-frontend-buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-frontend-buildcache:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-frontend-buildcache:cache,mode=max,ignore-error=true
 
       - name: Create GitHub Release and Tag
         uses: softprops/action-gh-release@v2
