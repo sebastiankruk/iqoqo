@@ -44,11 +44,7 @@ def die(*msgs: str) -> None:
 
 
 def get_version_from_branch() -> str:
-    ref = (
-        Path(REPO_ROOT / ".git" / "HEAD").read_text().strip()
-        if (REPO_ROOT / ".git" / "HEAD").exists()
-        else ""
-    )
+    ref = Path(REPO_ROOT / ".git" / "HEAD").read_text(encoding="utf-8").strip() if (REPO_ROOT / ".git" / "HEAD").exists() else ""
     match = re.search(r"release/(\d+\.\d+\.\d+)", ref)
     if not match:
         die("Cannot extract version from branch name (expected refs/heads/release/X.Y.Z)")
