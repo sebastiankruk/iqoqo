@@ -346,7 +346,8 @@ if [ "$STOP" = true ]; then
     else
         export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
         [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
-        docker compose down --remove-orphans
+        COMPOSE_DOWN_CMD="docker compose -f docker-compose.yml"
+        $COMPOSE_DOWN_CMD down --remove-orphans
     fi
     echo "✅ Stopped."
     exit 0
@@ -670,14 +671,15 @@ else
     fi
 
     echo "🔧 Checking service readiness..."
-    docker compose up -d db redis
+    COMPOSE_BASE="docker compose -f docker-compose.yml"
+    $COMPOSE_BASE up -d db redis
 
     # Wait for DB to be ready
     echo "⏳ Waiting for database..."
     DB_READY=false
     # shellcheck disable=SC2034
     for i in {1..30}; do
-        if docker compose exec -T db pg_isready -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" &>/dev/null; then
+        if $COMPOSE_BASE exec -T db pg_isready -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" &>/dev/null; then
             echo "✅ Database is ready"
             DB_READY=true
             break
@@ -690,7 +692,7 @@ else
     fi
 
     # Pre-flight migration checks
-    MIGRATION_ROWS=$(docker compose exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -At -c "SELECT version_num FROM alembic_version;" 2>/dev/null || echo "")
+    MIGRATION_ROWS=$($COMPOSE_BASE exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -At -c "SELECT version_num FROM alembic_version;" 2>/dev/null || echo "")
     MIGRATION_COUNT=$(echo "$MIGRATION_ROWS" | grep -c '[^[:space:]]' || true)
 
     if [ "$MIGRATION_COUNT" -gt 1 ]; then
@@ -739,7 +741,7 @@ except Exception:
         BACKUP_FILE="exports/backup_${MODE}_$(date +%Y%m%d_%H%M%S).sql"
         echo "📦 Creating backup: $BACKUP_FILE"
         mkdir -p exports
-        docker compose exec -T db pg_dump -U "${POSTGRES_USER:-iqoqo}" "${POSTGRES_DB:-iqoqo}" > "$BACKUP_FILE" || echo "⚠️  Backup failed!"
+        $COMPOSE_BASE exec -T db pg_dump -U "${POSTGRES_USER:-iqoqo}" "${POSTGRES_DB:-iqoqo}" > "$BACKUP_FILE" || echo "⚠️  Backup failed!"
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
@@ -747,12 +749,8 @@ except Exception:
         echo "📊 Found docker-compose.grafana.yml and Grafana Cloud env vars, starting with Grafana monitoring..."
         COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.grafana.yml"
     elif [ -f "docker-compose.monitoring.yml" ]; then
-        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve$\|^iqoqo-openobserve$"; then
-            echo "📊 OpenObserve monitoring stack is already active globally."
-        else
-            echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
-            COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
-        fi
+        echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
+        COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
     fi
 
     if [ "$VALIDATE_ONLY" = true ]; then

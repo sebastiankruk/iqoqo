@@ -29,10 +29,6 @@ services:
     depends_on:
       - web
       - frontend
-    networks:
-      - default
-      - iqoqo_default
-
   web:
     build:
       context: .
@@ -41,16 +37,18 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && opentelemetry-instrument gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app"
+      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && env PYTHONPATH=. python scripts/init_auth.py && opentelemetry-instrument gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app"
     env_file:
       - ${ENV_FILE:-.env}
     environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - OTEL_SERVICE_NAME=iqoqo-api
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
       - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
       - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
-      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -65,10 +63,6 @@ services:
       - "127.0.0.1:${WEB_PORT:-5000}:5000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - default
-      - iqoqo_default
-
   frontend:
     build:
       context: ./frontend
@@ -82,11 +76,9 @@ services:
       - ${ENV_FILE:-.env}
     environment:
       - NEXT_PUBLIC_APP_VERSION=${APP_VERSION:-prod}
-      # Explicitly force these variables into the Node runtime
-      # so Next.js never falls back to 0.0.0.0
-      - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
-      - APP_URL=${NEXT_PUBLIC_APP_URL}
+      - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.cc}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
+      - APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
       - OTEL_SERVICE_NAME=iqoqo-frontend
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
@@ -99,9 +91,6 @@ services:
       - web
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - default
-      - iqoqo_default
 
   db:
     image: postgres:16-alpine
@@ -145,6 +134,9 @@ services:
     env_file:
       - ${ENV_FILE:-.env}
     environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - OTEL_SERVICE_NAME=iqoqo-celery-worker
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
@@ -162,13 +154,5 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - default
-      - iqoqo_default
-
 volumes:
   postgres_data:
-
-networks:
-  iqoqo_default:
-    external: true

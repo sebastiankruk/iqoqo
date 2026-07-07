@@ -63,8 +63,8 @@ services:
     ports:
       # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.
       # Override OTEL_GRPC_HOST_PORT / OTEL_HTTP_HOST_PORT to avoid multi-stack collision.
-      - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317"  # OTLP gRPC
-      - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318"  # OTLP HTTP
+      - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317" # OTLP gRPC
+      - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318" # OTLP HTTP
     depends_on:
       - openobserve
     extra_hosts:
@@ -75,8 +75,3 @@ services:
 
 volumes:
   openobserve_data:
-
-networks:
-  default:
-    name: iqoqo_default
-    external: true
