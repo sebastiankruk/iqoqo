@@ -21,12 +21,12 @@ set -euo pipefail
 
 IQOQO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
 
 PASS="${GREEN}✅${NC}"
 WARN="${YELLOW}⚠️${NC}"
@@ -96,7 +96,7 @@ fi
 
 load_env() {
     local key="$1"
-    grep -oP "^\s*${key}=\K.*" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'"
+    grep -oP "^\s*${key}=\K.*" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
 }
 
 FRONTEND_URL=$(load_env "NEXT_PUBLIC_FRONTEND_URL")
