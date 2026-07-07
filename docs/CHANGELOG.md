@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-07-07
+
+### Removed
+
+- **Legacy Observability Stacks Decommissioned**: Removed Grafana Cloud (`docker-compose.grafana.yml`, `deploy/alloy/config.alloy`) and legacy Prometheus + Jaeger (`docker-compose.prometheus-jaeger.yml`, `deploy/otel-collector-prometheus-config.yaml`, `deploy/prometheus.yml`) configurations and targets.
+- **`prometheus-flask-exporter` Dependency**: Cleaned up the unused Prometheus Python exporter package and `/metrics` rate limiter exemption checks, relying fully on the OpenTelemetry/OpenObserve stack.
+
+### Changed
+
+- **DevOps Skill Documentation**: Updated `.agents/skills/devops-observability-expert/SKILL.md` to remove legacy Jaeger reference and align with the consolidated OpenObserve-only architecture.
+- **Monitoring Documentation**: Refactored `docs/MONITORING.md` to clean up decommissioned stacks, keeping only the unified OpenTelemetry + OpenObserve architecture.
+
+### Fixed
+
+- **Infrastructure Test Compatibilities**: Cleaned up `tests/test_infra_config.py` and `tests/test_payload_validation.py` to match the simplified `run.sh` configuration flow and metrics removal.
+
 ## [0.7.7] - 2026-07-07
 
 ### Added
