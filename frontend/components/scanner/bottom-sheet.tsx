@@ -272,9 +272,10 @@ export function BottomSheet({
   }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange, onTorchCapabilityFound]);
 
   useEffect(() => {
-    if (activeTab === "manual")
+    if (activeTab === "manual") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       stopScanner();
+    }
   }, [activeTab, stopScanner]);
 
   /* Cleanup on unmount */

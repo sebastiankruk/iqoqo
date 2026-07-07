@@ -30,6 +30,7 @@ When run without arguments, extracts version from the branch name
 
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -44,7 +45,18 @@ def die(*msgs: str) -> None:
 
 
 def get_version_from_branch() -> str:
-    ref = Path(REPO_ROOT / ".git" / "HEAD").read_text(encoding="utf-8").strip() if (REPO_ROOT / ".git" / "HEAD").exists() else ""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=REPO_ROOT,
+        )
+        ref = result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        ref = ""
+
     match = re.search(r"release/(\d+\.\d+\.\d+)", ref)
     if not match:
         die("Cannot extract version from branch name (expected refs/heads/release/X.Y.Z)")

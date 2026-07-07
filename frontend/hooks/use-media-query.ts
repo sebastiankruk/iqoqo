@@ -23,6 +23,9 @@ import * as React from "react";
 export function useMediaQuery(query: string) {
   const subscribe = React.useCallback(
     (callback: () => void) => {
+      if (typeof window === "undefined") {
+        return () => {};
+      }
       const mql = window.matchMedia(query);
       mql.addEventListener("change", callback);
       return () => mql.removeEventListener("change", callback);
@@ -30,7 +33,14 @@ export function useMediaQuery(query: string) {
     [query]
   );
 
-  const getSnapshot = React.useCallback(() => window.matchMedia(query).matches, [query]);
+  const getSnapshot = React.useCallback(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.matchMedia(query).matches;
+  }, [query]);
 
-  return React.useSyncExternalStore(subscribe, getSnapshot);
+  const getServerSnapshot = React.useCallback(() => false, []);
+
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
