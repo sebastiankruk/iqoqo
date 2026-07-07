@@ -69,8 +69,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/iqoqo-backend:latest
             ghcr.io/${{ github.repository_owner }}/iqoqo-backend:${{ env.VERSION }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-backend-buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-backend-buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-backend-buildcache:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/iqoqo-backend-buildcache:cache,mode=max,ignore-error=true
 
       - name: Build and push Frontend Image
         uses: docker/build-push-action@v6
