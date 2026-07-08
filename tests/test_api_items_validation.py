@@ -23,7 +23,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.api.schemas import ItemBulkCreateSchema, ItemManualCreateSchema, ScanBarcodeSchema
+from app.api.schemas import ItemBulkCreateSchema, ItemLendSchema, ItemManualCreateSchema, ScanBarcodeSchema
 
 
 def test_add_item_missing_required_fields(client, normal_user_headers):
@@ -132,3 +132,58 @@ class TestVirtualItemGuardrails:
         with pytest.raises(ValidationError) as exc:
             ItemBulkCreateSchema(manifestation_ids=[])
         assert "List should have at least 1 item" in str(exc.value)
+
+    def test_put_zero_id_returns_400(self, client, normal_user_headers):
+        """Assert PUT /api/items/0 returns 400 with the FRBR ontology boundary error.
+
+        The signed int router allows id=0 through, but the controller must reject it explicitly
+        since 0 is not a valid FRBR entity ID at any level (Work, Expression, Manifestation, Item).
+        """
+        response = client.put(
+            "/api/items/0",
+            json={"status": "read"},
+            headers=normal_user_headers,
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "error" in response.json
+        assert "Cannot mutate virtual items" in response.json["error"]
+
+    def test_get_logs_virtual_item_returns_empty_array(self, client, normal_user_headers):
+        """Assert GET /api/items/-1/logs returns 200 with an empty data array.
+
+        The backend must gracefully handle log requests for virtual wishlist items by
+        returning an empty array rather than a 404 or 500, so that the frontend timeline
+        component can render its empty state without error.
+        """
+        response = client.get("/api/items/-1/logs", headers=normal_user_headers)
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["data"] == []
+
+    def test_qrcode_virtual_item_returns_404(self, client, normal_user_headers):
+        """Assert GET /api/qrcode/-1 returns 404.
+
+        Virtual wishlist items have no physical copy to tag — generating a QR code for one
+        would be semantically meaningless and must be explicitly rejected.
+        """
+        response = client.get("/api/qrcode/-1", headers=normal_user_headers)
+        assert response.status_code == 404
+        assert "error" in response.json
+
+    def test_lend_schema_rejects_zero_and_negative_ids(self):
+        """Assert ItemLendSchema raises ValidationError for id=0 and id=-5.
+
+        This is a fast schema-layer tripwire that catches any regression where the
+        lending schema allows virtual IDs through to the physical loan workflow.
+        """
+        with pytest.raises(ValidationError):
+            ItemLendSchema(item_id=0)
+
+        with pytest.raises(ValidationError):
+            ItemLendSchema(item_id=-5)
+
+    def test_lend_schema_accepts_positive_id(self):
+        """Assert ItemLendSchema accepts id=1 as a valid physical item ID."""
+        schema = ItemLendSchema(item_id=1)
+        assert schema.item_id == 1

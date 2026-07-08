@@ -93,6 +93,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
   const isAdmin = !!profile?.roles?.includes("admin");
   const canModifyItem = isOwner || isAdmin;
+  // FRBR ontology boundary: virtual wishlist entries have id < 0 (mapped from UserWorkIntent.id).
+  // They have no physical copy on a shelf, so QR code generation is not applicable.
+  const isVirtual = item.id < 0;
   // Media type detection
   const format =
     (item.manifestation_meta?.["format"] as string | undefined) ??
@@ -548,9 +551,10 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
           </button>
         )}
-        {/* Print QR Code */}
-        {canModifyItem && (
+        {/* Print QR Code — hidden for virtual wishlist items (id < 0): they have no physical copy to tag. */}
+        {canModifyItem && !isVirtual && (
           <button
+            data-testid="qrcode-btn"
             onClick={() => setIsQrOpen(true)}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
           >
