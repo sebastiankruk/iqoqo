@@ -86,7 +86,7 @@ def add_source_badge(filepath: str, source: str):
         logger.error(f"Failed to apply badge overlay: {e}")
 
 
-def generate_fallback_cover(identifier: str, title: str, author: str) -> str | None:
+def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[str, str] | None:
     """Tier 5: Generate a deterministic cover using Pillow."""
     filename = f"{identifier}_generated.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
@@ -108,7 +108,7 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> str | N
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format="JPEG")
         optimize_and_save_image(img_byte_arr.getvalue(), filepath)
-        return f"{Config.COVERS_BASE_URL}/{filename}"
+        return f"{Config.COVERS_BASE_URL}/{filename}", "fallback_pil"
     except (OSError, ValueError) as e:
         logger.error(f"Fallback generation failed: {e}")
         return None
@@ -386,6 +386,12 @@ def process_cover_pipeline(
                 format_type=format_type,
                 allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
             )
+            if result:
+                local_cover_url, source = result
+
+        # Tier 5: PIL Fallback
+        if not local_cover_url:
+            result = generate_fallback_cover(identifier, title, author)
             if result:
                 local_cover_url, source = result
 

@@ -41,6 +41,8 @@ celery.conf.update(
     enable_utc=True,
     result_expires=3600,  # 1-hour TTL matching old _TASK_TTL_SECONDS
     broker_connection_retry_on_startup=True,
+    task_time_limit=600,  # hard kill after 10 min (covers slowest LLM tier at 300s)
+    task_soft_time_limit=540,  # SoftTimeLimitExceeded after 9 min for graceful cleanup
 )
 
 

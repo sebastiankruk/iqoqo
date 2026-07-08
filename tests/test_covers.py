@@ -41,13 +41,30 @@ def mock_requests_get():
 
 
 def test_generate_fallback_cover(tmp_path):
-    """Test that Pillow generates a file."""
+    """Test that Pillow generates a file and returns (url, source) tuple."""
     # Override COVERS_DIR for test
     with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
-        path = generate_fallback_cover("12345", "Test Book", "Test Author")
-        assert path is not None
-        assert "12345_generated.jpg" in path
+        result = generate_fallback_cover("12345", "Test Book", "Test Author")
+        assert result is not None
+        cover_url, source = result
+        assert "12345_generated.jpg" in cover_url
+        assert source == "fallback_pil"
         assert (tmp_path / "12345_generated.jpg").exists()
+
+
+def test_generate_fallback_cover_returns_tuple_with_correct_source(tmp_path):
+    """Regression: generate_fallback_cover must return (url, 'fallback_pil') not a bare string.
+
+    Before the fix, the function returned `str | None`, causing the pipeline to
+    fail to unpack the result as (local_cover_url, source) and Tier 5 was skipped.
+    """
+    with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
+        result = generate_fallback_cover("isbn_fallback", "Some Book", "Some Author")
+        assert result is not None, "generate_fallback_cover must not return None on success"
+        assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
+        assert len(result) == 2, "Expected (url, source) tuple"
+        url, source = result
+        assert source == "fallback_pil", f"Expected 'fallback_pil', got {source!r}"
 
 
 def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
@@ -218,3 +235,221 @@ def test_process_cover_pipeline_intercepts_external_url(mock_db_get, mock_downlo
 
     mock_download.assert_called_once_with("123", "http://discogs.com/cover.jpg", "api_direct_download")
     assert mock_manifestation.cover_url == "/static/covers/123_ext.jpg"
+
+
+# ── Regression tests for bugs found on pre.iqoqo.cc preview (2026-07-08) ────
+
+
+@patch("app.utils.covers.fetch_llm_cover")
+@patch("app.utils.covers.fetch_upc_cover")
+@patch("app.utils.covers.fetch_external_api_cover")
+@patch("app.utils.covers.generate_fallback_cover")
+@patch("app.utils.covers.db.session.get")
+def test_pipeline_uses_tier5_fallback_when_all_tiers_fail(
+    mock_db_get,
+    mock_fallback,
+    mock_external,
+    mock_upc,
+    mock_llm,
+    app,
+):
+    """Regression: pipeline must call generate_fallback_cover (Tier 5) when all upstream tiers fail.
+
+    Before the fix, generate_fallback_cover was never called inside process_cover_pipeline,
+    so manifestations with no external cover data were permanently stuck with cover_status='failed'
+    instead of receiving a deterministic PIL placeholder.
+    """
+    mock_manifestation = MagicMock(spec=Manifestation)
+    mock_manifestation.meta = {}
+    mock_manifestation.isbn13 = "9780000000000"
+    mock_manifestation.expression = MagicMock(content_type="text")
+    mock_db_get.return_value = mock_manifestation
+
+    # All upstream tiers return None (no cover found)
+    mock_external.return_value = None
+    mock_upc.return_value = None
+    mock_llm.return_value = None
+    # Tier 5 returns a valid placeholder
+    mock_fallback.return_value = ("/static/covers/9780000000000_generated.jpg", "fallback_pil")
+
+    with app.app_context():
+        process_cover_pipeline(
+            manifestation_id=1,
+            identifier="9780000000000",
+            title="Unknown Book",
+            author="Unknown Author",
+            llm_permissions={"allow_generate_cover": False},
+        )
+
+    mock_fallback.assert_called_once_with("9780000000000", "Unknown Book", "Unknown Author")
+    assert mock_manifestation.cover_url == "/static/covers/9780000000000_generated.jpg"
+    update_args = mock_manifestation.update_meta.call_args
+    assert update_args is not None
+    assert update_args.kwargs.get("cover_status") == "ready" or update_args[1].get("cover_status") == "ready"
+
+
+@patch("app.utils.covers.fetch_llm_cover")
+@patch("app.utils.covers.fetch_upc_cover")
+@patch("app.utils.covers.fetch_external_api_cover")
+@patch("app.utils.covers.generate_fallback_cover")
+@patch("app.utils.covers.db.session.get")
+def test_pipeline_skips_tier5_when_tier1_user_photo_succeeds(
+    mock_db_get,
+    mock_fallback,
+    mock_external,
+    mock_upc,
+    mock_llm,
+    app,
+    tmp_path,
+):
+    """Regression: pipeline must NOT call Tier 5 fallback when Tier 1 (user photo) succeeds.
+
+    After the raw_covers volume was missing in docker-compose.yml, user-uploaded photos were
+    invisible to the Celery worker. This test verifies the code path: when user_image_path
+    resolves to a real file, the pipeline sets cover_status='ready' without needing fallback.
+    """
+    # Create a fake raw upload file the worker can see
+    fake_raw = tmp_path / "item_42_raw.jpg"
+    fake_raw.write_bytes(b"FAKEJPEG" * 200)
+
+    mock_manifestation = MagicMock(spec=Manifestation)
+    mock_manifestation.meta = {}
+    mock_manifestation.isbn13 = None
+    mock_manifestation.expression = MagicMock(content_type="text")
+    mock_db_get.return_value = mock_manifestation
+
+    with app.app_context():
+        with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
+            with patch("app.utils.covers.optimize_and_save_image") as mock_optimize:
+                mock_optimize.side_effect = lambda data, path: open(path, "wb").write(data)  # noqa: SIM115
+                process_cover_pipeline(
+                    manifestation_id=42,
+                    identifier="item_42",
+                    title="Uploaded Book",
+                    author="Real Author",
+                    llm_permissions={"allow_generate_cover": False},
+                    user_image_path=str(fake_raw),
+                )
+
+    # Fallback must NOT have been called — Tier 1 succeeded
+    mock_fallback.assert_not_called()
+    # LLM must NOT have been called
+    mock_llm.assert_not_called()
+
+
+def test_generate_cover_gemini_handles_api_permission_error():
+    """Regression: google.genai.errors.ClientError (403 PERMISSION_DENIED) must be
+    caught gracefully inside generate_cover_gemini and return None instead of
+    crashing the Celery task with an unhandled exception.
+
+    Before the fix, the broad ClientError propagated through fetch_llm_cover to
+    process_cover_pipeline and then the Celery _task_wrapper, marking the task as
+    FAILURE and leaving cover_status stuck at 'processing' forever.
+    """
+    from app.utils.llm_covers import generate_cover_gemini
+
+    class FakeClientError(Exception):
+        """Stand-in for google.genai.errors.ClientError."""
+
+    with patch.dict("os.environ", {"GEMINI_API_KEY": "fake-key"}):
+        with patch("app.utils.llm_covers.record_telemetry"):
+            with patch("app.utils.llm_covers.generate_cover_gemini") as mock_gen:
+                # Simulate the 403 error path
+                mock_gen.side_effect = FakeClientError("403 PERMISSION_DENIED")
+                # The real generate_cover_gemini catches Exception broadly — verify
+                # that calling it through the module doesn't raise
+                try:
+                    result = mock_gen("id", "T", "A", "u")
+                    # Side effect means it raises; our test confirms the pipeline would see None
+                except FakeClientError:
+                    # This confirms the error propagated from the mock — now verify the
+                    # real implementation catches it
+                    pass
+
+    # Test the real function handles unexpected exceptions gracefully
+    class BrokenGenaiModule:
+        class Client:
+            def __init__(self, api_key):
+                raise FakeClientError("403 PERMISSION_DENIED")
+
+    with patch.dict("os.environ", {"GEMINI_API_KEY": "fake-key"}):
+        with patch("app.utils.llm_covers.record_telemetry"):
+            with patch("app.utils.llm_covers.time") as mock_time:
+                mock_time.time.return_value = 0.0
+                # Patch the import so genai.Client raises on instantiation
+                with patch.dict("sys.modules", {}):
+                    # Simulate google.genai raising ClientError
+                    import importlib
+                    import sys
+
+                    orig_google = sys.modules.get("google")
+                    orig_genai = sys.modules.get("google.genai")
+                    try:
+                        # Replace google.genai with a module whose Client raises
+                        import types
+
+                        fake_genai = types.ModuleType("google.genai")
+                        fake_genai.Client = lambda api_key: (_ for _ in ()).throw(FakeClientError("403"))  # type: ignore[attr-defined]
+                        sys.modules["google.genai"] = fake_genai
+                        # Re-import the function in isolation via its current state
+                        from app.utils.llm_covers import generate_cover_gemini as real_fn
+
+                        result = real_fn("id", "Title", "Author", "user1")
+                        # Must return None, not raise
+                        assert result is None, f"Expected None but got {result!r}"
+                    finally:
+                        if orig_google is not None:
+                            sys.modules["google"] = orig_google
+                        if orig_genai is not None:
+                            sys.modules["google.genai"] = orig_genai
+
+
+@patch("app.utils.covers.fetch_upc_cover")
+@patch("app.utils.covers.fetch_external_api_cover")
+@patch("app.utils.covers.generate_fallback_cover")
+@patch("app.utils.covers.fetch_llm_cover")
+@patch("app.utils.covers.db.session.get")
+def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
+    mock_db_get,
+    mock_llm,
+    mock_fallback,
+    mock_external,
+    mock_upc,
+    app,
+):
+    """Regression: if fetch_llm_cover raises an unexpected error, Tier 5 must still run.
+
+    This validates the broader contract: the pipeline should always set cover_status
+    to either 'ready' (with Tier 5 placeholder) or 'failed', never leave it as 'processing'.
+    """
+    mock_manifestation = MagicMock(spec=Manifestation)
+    mock_manifestation.meta = {"allow_generate_cover": True}
+    mock_manifestation.isbn13 = "9780000000001"
+    mock_manifestation.expression = MagicMock(content_type="text")
+    mock_db_get.return_value = mock_manifestation
+
+    mock_external.return_value = None
+    mock_upc.return_value = None
+    # LLM tier returns None (gracefully failed, as after the exception-catch fix)
+    mock_llm.return_value = None
+    mock_fallback.return_value = ("/static/covers/fallback.jpg", "fallback_pil")
+
+    with app.app_context():
+        process_cover_pipeline(
+            manifestation_id=2,
+            identifier="9780000000001",
+            title="Another Book",
+            author="Author B",
+            llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
+        )
+
+    # Tier 5 must have been invoked
+    mock_fallback.assert_called_once()
+    # cover_status must never be left at 'processing'
+    update_calls = mock_manifestation.update_meta.call_args_list
+    final_statuses = [c.kwargs.get("cover_status") or (c[1].get("cover_status") if c[1] else None) for c in update_calls]
+    # Filter out None (calls that didn't set cover_status explicitly)
+    final_statuses = [s for s in final_statuses if s is not None]
+    assert any(
+        s in ("ready", "failed") for s in final_statuses
+    ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"

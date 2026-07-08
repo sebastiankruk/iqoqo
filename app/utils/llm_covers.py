@@ -227,6 +227,9 @@ def generate_cover_gemini(
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Gemini Gen failed: {e}")
         record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message=str(e))
+    except Exception as e:
+        logger.error(f"Gemini Gen unexpected error: {e}")
+        record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message=str(e))
 
     return None
 
