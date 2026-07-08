@@ -126,10 +126,6 @@ class TestVirtualItemGuardrails:
         """Assert integer payload schemas explicitly catch and isolate id == 0 validation errors.
         Tests the schema layer directly since item creation routes do not accept an explicit 'id' field.
         """
-        from pydantic import ValidationError
-
-        from app.api.schemas import ItemBulkCreateSchema
-
         # ItemBulkCreateSchema uses manifestation_ids which must be positive integers.
         # A list containing 0 is valid per schema, but an empty list is not.
         # The key guardrail: bulk create with no manifestation_ids must be rejected.
