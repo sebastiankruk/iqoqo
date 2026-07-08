@@ -42,10 +42,12 @@ def test_lookup_barcode_preview_records_failure_telemetry(client, admin_headers)
     """Test that failed barcode lookup records failure telemetry in DB."""
     barcode = "9780000000002"  # Correct check digit but unknown
 
-    with patch("app.strategies.book.fetch_isbn_metadata") as mock_fetch, \
-         patch("app.strategies.book.fetch_allegro_metadata") as mock_allegro, \
-         patch("app.strategies.book.fetch_discogs_metadata") as mock_discogs, \
-         patch("app.strategies.book.fetch_audio_metadata") as mock_audio:
+    with (
+        patch("app.strategies.book.fetch_isbn_metadata") as mock_fetch,
+        patch("app.strategies.book.fetch_allegro_metadata") as mock_allegro,
+        patch("app.strategies.book.fetch_discogs_metadata") as mock_discogs,
+        patch("app.strategies.book.fetch_audio_metadata") as mock_audio,
+    ):
         mock_fetch.return_value = None
         mock_allegro.return_value = None
         mock_discogs.return_value = None
