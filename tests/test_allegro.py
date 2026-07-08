@@ -118,3 +118,31 @@ def test_fetch_allegro_metadata_listing_fallback(mock_isfile, mock_get, mock_tok
     assert result is not None
     assert result["title"] == "Listing Item"
     assert result["source"] == "Allegro Listing"
+
+
+@patch("app.utils.allegro.get_allegro_token")
+@patch("app.utils.allegro.requests.get")
+@patch("os.path.isfile")
+def test_fetch_allegro_metadata_catalog_with_client_credentials_only(mock_isfile, mock_get, mock_token):
+    """Verify Catalog search works natively when token file is missing (Client Credentials flow)."""
+    mock_token.return_value = "client_credentials_token"
+    mock_isfile.return_value = False  # Token file is explicitly missing!
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = {
+        "products": [
+            {
+                "name": "Hardened Fallback Media",
+                "images": [{"url": "http://allegro.img/fallback.jpg"}],
+                "description": "Seamless client credential catalog fetch",
+                "publication": {"publisher": "Fallback Publisher"},
+            }
+        ]
+    }
+
+    result = fetch_allegro_metadata("9788301000003")
+
+    assert result is not None
+    assert result["title"] == "Hardened Fallback Media"
+    assert result["source"] == "Allegro Catalog"
+    # Step 2 (Listing API) must not be triggered if file token is absent
+    assert mock_get.call_count == 1
