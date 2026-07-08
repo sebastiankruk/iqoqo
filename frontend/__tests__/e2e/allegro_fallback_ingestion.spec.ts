@@ -18,12 +18,20 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Phase 1 Ingestion Hardening - Allegro Strategy Cascade", () => {
   test.beforeEach(async ({ page }) => {
-    // Perform authentication setup or session restoration if required by the instance
-    await page.goto("/login");
-    await page.fill('input[name="email"]', "user@iqoqo.local");
-    await page.fill('input[name="password"]', "password123");
-    await page.click('button[type="submit"]');
-    await page.waitForURL("/collection");
+    // Consent to cookies
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    // Login via direct Flask API call (avoids Next.js proxy POST body issues)
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = await loginRes.json();
+    await page.goto(`/api/auth-exchange?token=${token}`);
+    await page.waitForURL(/\/(collection)?$/);
   });
 
   test("should successfully ingest an item via Allegro fallback when standard ISBN search yields no results", async ({
