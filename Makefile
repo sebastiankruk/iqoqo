@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -98,11 +98,16 @@ help:
 	@echo "  build-frontend - Build Next.js production bundle"
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
+	@echo "Backup targets:"
+	@echo "  backup-run       - Run cloud backup immediately (remote=<name>)"
+	@echo "  backup-install   - Install daily 03:00 backup cron (remote=<name>)"
+	@echo "  backup-uninstall - Remove installed backup cron job"
+	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
+	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
 	@echo "  db-seed       - Load seed data into existing database"
 	@echo "  db-export     - Export database to exports/backup.json (USE_DOCKER=true for Docker)"
-	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics (USE_DOCKER=true for Docker)"
 	@echo "  db-stamp      - Stamp database migration version to head (USE_DOCKER=true for Docker)"
 	@echo "  db-upgrade    - Upgrade database schema to head (USE_DOCKER=true for Docker)"
@@ -384,10 +389,22 @@ db-export: .venv/bin/activate
 	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
 
-docker-backup:
-	@echo "Creating full backup in Docker (Project: $(COMPOSE_PROJECT), Env: $(COMPOSE_ENV_FILE))..."
-	@ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python scripts/backup.py
-	@echo "Backup complete! Check the ./exports folder on your host."
+backup-run:
+	@if [ -z "$(remote)" ]; then \
+		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
+		echo "  Example: make backup-run remote=iqoqo-backup"; \
+		exit 1; \
+	fi
+	@cd $(CURDIR) && bash scripts/cloud_backup.sh $(remote)
+
+backup-install: backup-run
+	@bash scripts/cloud_backup_cron.sh install $(remote)
+
+backup-uninstall:
+	@bash scripts/cloud_backup_cron.sh uninstall
+
+backup-check:
+	@bash scripts/cloud_backup_check.sh $(remote)
 
 db-reset: pg-create-schemas .venv/bin/activate
 	@echo "Resetting database..."
