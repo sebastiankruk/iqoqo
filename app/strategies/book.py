@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from app.strategies.base import LookupStrategy
+from app.utils.allegro import fetch_allegro_metadata
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
@@ -29,6 +30,12 @@ class BookLookupStrategy(LookupStrategy):
                 if meta:
                     meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
                     provider = "isbn"
+
+            if not meta:
+                meta = fetch_allegro_metadata(barcode)
+                if meta:
+                    meta["data_source"] = "allegro"
+                    provider = "allegro"
 
             if not meta:
                 meta = fetch_discogs_metadata(barcode)
