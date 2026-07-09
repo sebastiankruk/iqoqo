@@ -86,8 +86,8 @@ def run_sync_permissions(app: Flask | None = None) -> None:
 
         # Admin gets all permissions
         for p in all_perms:
-            if p not in admin_role.permissions:
-                admin_role.permissions.append(p)
+            if p not in admin_role.permissions:  # type: ignore[attr-defined]
+                admin_role.permissions.append(p)  # type: ignore[attr-defined]
 
         # Contributor gets metadata, llm_generate, delete item, and edit:cover
         for p in all_perms:
@@ -97,8 +97,8 @@ def run_sync_permissions(app: Flask | None = None) -> None:
                 or p.name.startswith("llm_generate:")
                 or p.name == PermissionName.DELETE_ITEM.value
             )
-            if is_contrib_perm and p not in contributor_role.permissions:
-                contributor_role.permissions.append(p)
+            if is_contrib_perm and p not in contributor_role.permissions:  # type: ignore[attr-defined]
+                contributor_role.permissions.append(p)  # type: ignore[attr-defined]
 
         # Standard User gets permissions to interact with items and basic tasks
         user_perm_names = {
@@ -112,8 +112,8 @@ def run_sync_permissions(app: Flask | None = None) -> None:
             PermissionName.LLM_GENERATE_COVER.value,
         }
         for p in all_perms:
-            if p.name in user_perm_names and p not in user_role.permissions:
-                user_role.permissions.append(p)
+            if p.name in user_perm_names and p not in user_role.permissions:  # type: ignore[attr-defined]
+                user_role.permissions.append(p)  # type: ignore[attr-defined]
 
         db.session.commit()
         print("Permissions and roles synced successfully.")

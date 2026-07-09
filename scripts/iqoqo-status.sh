@@ -379,6 +379,34 @@ if [[ -d "$covers_dir" ]]; then
     if [[ "$empty_covers" -gt 0 ]]; then
         check "Empty files" warn "${empty_covers} files < 1KB (possibly broken)"
     fi
+    # Check database cover pipeline status
+    db_cname="${PREFIX}-db-1"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$db_cname"; then
+        db_user=$(load_env "POSTGRES_USER")
+        db_name=$(load_env "POSTGRES_DB")
+        db_user="${db_user:-iqoqo}"
+        db_name="${db_name:-iqoqo}"
+        cover_status_data=$(docker exec "$db_cname" psql -U "$db_user" -d "$db_name" -tAc \
+            "SELECT COALESCE(meta->>'cover_status', 'not_started'), count(*) FROM manifestations GROUP BY 1;" 2>/dev/null || echo "")
+        if [[ -n "$cover_status_data" ]]; then
+            ready_cnt=$(echo "$cover_status_data" | grep "^ready" | cut -f2 -d'|' || echo "0")
+            pending_cnt=$(echo "$cover_status_data" | grep "^pending" | cut -f2 -d'|' || echo "0")
+            processing_cnt=$(echo "$cover_status_data" | grep "^processing" | cut -f2 -d'|' || echo "0")
+            failed_cnt=$(echo "$cover_status_data" | grep "^failed" | cut -f2 -d'|' || echo "0")
+
+            ready_cnt="${ready_cnt:-0}"
+            pending_cnt="${pending_cnt:-0}"
+            processing_cnt="${processing_cnt:-0}"
+            failed_cnt="${failed_cnt:-0}"
+
+            check "Database pipeline" pass "ready: ${ready_cnt}, pending: ${pending_cnt}, processing: ${processing_cnt}, failed: ${failed_cnt}"
+
+            stuck=$((pending_cnt + processing_cnt))
+            if [[ "$stuck" -gt 0 ]]; then
+                check "Stuck tasks" warn "${stuck} cover task(s) in flight/stuck"
+            fi
+        fi
+    fi
 else
     check "Directory" fail "NOT FOUND at ${covers_dir}"
 fi

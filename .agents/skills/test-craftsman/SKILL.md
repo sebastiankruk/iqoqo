@@ -14,7 +14,7 @@ metadata:
 
 The iqoqo platform requires near 100% test coverage across a heterogeneous multi-layered architecture. To write valid tests, you must understand the exact responsibilities of each testing layer, respect data privacy boundaries, and validate complex FRBR ontology linkages without breaking or duplicating code.
 
-### The Three Invariant Testing Tiers
+### The Four Invariant Testing Tiers
 
 1. **Backend Layer (`pytest` via `.venv/bin/pytest` or `make test-backend`)**
    - Validates FRBR mapping integrity, JSONB full-text search operators (`tsvector`), PostgreSQL schema isolation, and RDF/JSON-LD content negotiation endpoints.
@@ -22,6 +22,8 @@ The iqoqo platform requires near 100% test coverage across a heterogeneous multi
    - Focuses on user-event interactions, state management hooks, mobile layouts, and proper error boundaries.
 3. **End-to-End Workflow Layer (`Playwright` via `npx playwright test` under `frontend/`)**
    - Executes cross-layer scenarios (e.g., direct URL hydration tracking, user taxonomy role boundaries, multi-step acquisition or lending timelines).
+4. **Script & Operations Layer (`bats` for shell scripts + `pytest` for operational Python scripts)**
+   - Ensures administrative, deployment, database, and cloud backup utility scripts run correctly, validate arguments, fail gracefully, and preserve expected exit codes. Use stubs/mocks to avoid mutating real hosts or container states.
 
 ---
 

@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -287,6 +287,21 @@ test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
+test-scripts-bash:
+	@echo "Running BATS script tests..."
+	@if command -v bats >/dev/null 2>&1; then \
+		bats tests/bash/; \
+	elif [ -f node_modules/.bin/bats ]; then \
+		$(NPX) bats tests/bash/; \
+	else \
+		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+		exit 1; \
+	fi
+
+test-scripts-python: .venv/bin/activate
+	@echo "Running Python script logic tests..."
+	.venv/bin/pytest tests/test_scripts.py tests/test_script_utilities.py
+
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
@@ -357,7 +372,7 @@ _test-e2e-run:
 	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium $(args)
 
 
-test: test-backend test-frontend test-e2e
+test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e
 	@echo "All tests completed!"
 
 # Clean
