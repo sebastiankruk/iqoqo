@@ -34,11 +34,12 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import NoReturn
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def die(*msgs: str) -> None:
+def die(*msgs: str) -> NoReturn:
     for m in msgs:
         print(f"FAIL: {m}", file=sys.stderr)
     sys.exit(1)
@@ -66,12 +67,12 @@ def get_version_from_branch() -> str:
 def read_pyproject_version() -> str:
     with open(REPO_ROOT / "pyproject.toml", "rb") as fh:
         data = tomllib.load(fh)
-    return data["project"]["version"]
+    return str(data["project"]["version"])
 
 
 def read_package_json_version(path: Path) -> str:
     data = json.loads(path.read_text(encoding="utf-8"))
-    return data["version"]
+    return str(data["version"])
 
 
 def check_changelog_entry(version: str) -> None:
