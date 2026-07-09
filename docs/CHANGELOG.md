@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-07-07
+
+### Removed
+
+- **Legacy Observability Stacks Decommissioned**: Removed Grafana Cloud (`docker-compose.grafana.yml`, `deploy/alloy/config.alloy`) and legacy Prometheus + Jaeger (`docker-compose.prometheus-jaeger.yml`, `deploy/otel-collector-prometheus-config.yaml`, `deploy/prometheus.yml`) configurations and targets.
+- **`prometheus-flask-exporter` Dependency**: Cleaned up the unused Prometheus Python exporter package and `/metrics` rate limiter exemption checks, relying fully on the OpenTelemetry/OpenObserve stack.
+
+### Changed
+
+- **DevOps Skill Documentation**: Updated `.agents/skills/devops-observability-expert/SKILL.md` to remove legacy Jaeger reference and align with the consolidated OpenObserve-only architecture.
+- **Monitoring Documentation**: Refactored `docs/MONITORING.md` to clean up decommissioned stacks, keeping only the unified OpenTelemetry + OpenObserve architecture.
+
+### Fixed
+
+- **Infrastructure Test Compatibilities**: Cleaned up `tests/test_infra_config.py` and `tests/test_payload_validation.py` to match the simplified `run.sh` configuration flow and metrics removal.
+- **IDOR & BOLA Protection**: Restructured virtual and physical item update API endpoints (`_update_virtual_item` and `_update_physical_item` in `app/api/items.py`) to return `404 Not Found` instead of `403 Forbidden` for unauthorized requests to prevent information disclosure.
+- **FRBR Ontology Boundary Guards**: Blocked physical state mutations (e.g., barcode, condition, lending status, borrower information) on virtual wishlist-level items.
+- **Schema Validation Hardening**: Hardened `ItemCreateSchema` and `ItemUpdateSchema` in `app/api/schemas.py` to reject `id: 0`.
+- **Database Ingest Service Fix**: Fixed a runtime `AttributeError` in `app/core/ingest.py` by replacing invalid `db.text` usage with SQLAlchemy `text()` executed via session, guarded by a Postgres dialect check.
+- **Frontend Item Component Hardening**: Hidden the "History" tab and borrower/lending actions on virtual wishlist items in `item-sidebar.tsx` and `item-tabs.tsx`.
+- **DevOps and Script Cleanup**: Modified `scripts/backup.py` to fail fast if `SECRET_KEY` is missing in non-dev/test environments, fixed base64url padding bugs in `tests/test_backup_crypto.py`, and updated `scripts/sync_permissions.py` to strip block comments.
+- **Mypy Relationship Typing**: Typed the `Role.permissions` and `User.roles` relationships in `app/db/auth.py` with `Mapped` and `relationship()` to avoid type ignores.
+- **Testing Coverage Expansion**: Added pytest backend suite `tests/test_api_items_078.py`, Vitest component suite `item-card-078.test.tsx`, and E2E Playwright test assertions in `wishlist_workflow.spec.ts`.
+
 ## [0.7.7] - 2026-07-07
 
 ### Added

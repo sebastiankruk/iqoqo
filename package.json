@@ -1,6 +1,6 @@
 {
   "name": "iqoqo",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {
@@ -8,6 +8,7 @@
     "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'"
   },
   "devDependencies": {
+    "bats": "^1.13.0",
     "eslint": "^9.39.4",
     "markdownlint-cli2": "^0.23.0",
     "prettier": "^3.2.4",

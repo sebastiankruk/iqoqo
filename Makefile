@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop monitoring-legacy-start monitoring-legacy-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export docker-backup db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -98,11 +98,16 @@ help:
 	@echo "  build-frontend - Build Next.js production bundle"
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
+	@echo "Backup targets:"
+	@echo "  backup-run       - Run cloud backup immediately (remote=<name>)"
+	@echo "  backup-install   - Install daily 03:00 backup cron (remote=<name>)"
+	@echo "  backup-uninstall - Remove installed backup cron job"
+	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
+	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
 	@echo "  db-seed       - Load seed data into existing database"
 	@echo "  db-export     - Export database to exports/backup.json (USE_DOCKER=true for Docker)"
-	@echo "  docker-backup - Create full ZIP backup in ./exports (via Docker)"
 	@echo "  db-stats      - Show database statistics (USE_DOCKER=true for Docker)"
 	@echo "  db-stamp      - Stamp database migration version to head (USE_DOCKER=true for Docker)"
 	@echo "  db-upgrade    - Upgrade database schema to head (USE_DOCKER=true for Docker)"
@@ -113,8 +118,6 @@ help:
 	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
 	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
 	@echo "  status          - Show health status of all services (--stack preview|prod)"
-	@echo "  monitoring-legacy-start - Start optional Prometheus + Jaeger stack"
-	@echo "  monitoring-legacy-stop  - Stop optional Prometheus + Jaeger stack"
 	@echo "  bump-version  - Bump version (v=major|minor|patch) and sync files"
 	@echo "  sync-version  - Sync version from pyproject.toml to package.json files"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
@@ -197,17 +200,6 @@ monitoring-stop:
 	@echo "Stopping OpenObserve + OTel Collector stack..."
 	@docker compose -f docker-compose.monitoring.yml down
 
-monitoring-legacy-start:
-	@echo "Ensuring docker network iqoqo_default exists..."
-	@docker network create iqoqo_default 2>/dev/null || true
-	@echo "Starting legacy monitoring stack (Prometheus + Jaeger + cAdvisor)..."
-	@echo "  Prometheus: http://localhost:$${PROMETHEUS_PORT:-9090}"
-	@echo "  Jaeger:     http://localhost:$${JAEGER_UI_PORT:-16686}"
-	@docker compose -f docker-compose.prometheus-jaeger.yml up -d
-
-monitoring-legacy-stop:
-	@echo "Stopping legacy Prometheus + Jaeger stack..."
-	@docker compose -f docker-compose.prometheus-jaeger.yml down
 
 status: ## Show health status of all iQoQo services
 	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),)
@@ -295,6 +287,21 @@ test-frontend:
 	@echo "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
+test-scripts-bash:
+	@echo "Running BATS script tests..."
+	@if command -v bats >/dev/null 2>&1; then \
+		bats tests/bash/; \
+	elif [ -f node_modules/.bin/bats ]; then \
+		$(NPX) bats tests/bash/; \
+	else \
+		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+		exit 1; \
+	fi
+
+test-scripts-python: .venv/bin/activate
+	@echo "Running Python script logic tests..."
+	.venv/bin/pytest tests/test_scripts.py tests/test_script_utilities.py
+
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
@@ -365,7 +372,7 @@ _test-e2e-run:
 	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium $(args)
 
 
-test: test-backend test-frontend test-e2e
+test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e
 	@echo "All tests completed!"
 
 # Clean
@@ -397,10 +404,22 @@ db-export: .venv/bin/activate
 	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
 
-docker-backup:
-	@echo "Creating full backup in Docker (Project: $(COMPOSE_PROJECT), Env: $(COMPOSE_ENV_FILE))..."
-	@ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python scripts/backup.py
-	@echo "Backup complete! Check the ./exports folder on your host."
+backup-run:
+	@if [ -z "$(remote)" ]; then \
+		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
+		echo "  Example: make backup-run remote=iqoqo-backup"; \
+		exit 1; \
+	fi
+	@cd $(CURDIR) && bash scripts/cloud_backup.sh $(remote)
+
+backup-install: backup-run
+	@bash scripts/cloud_backup_cron.sh install $(remote)
+
+backup-uninstall:
+	@bash scripts/cloud_backup_cron.sh uninstall
+
+backup-check:
+	@bash scripts/cloud_backup_check.sh $(remote)
 
 db-reset: pg-create-schemas .venv/bin/activate
 	@echo "Resetting database..."

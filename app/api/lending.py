@@ -48,6 +48,19 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"error": "Authentication required", "code": 401}), 401
 
+    # FRBR ontology boundary: virtual wishlist entries (id <= 0) cannot participate
+    # in physical loan workflows. Only concrete, localized Items with positive IDs may be lent.
+    if item_id <= 0:
+        return (
+            jsonify(
+                {
+                    "error": "Virtual items (id <= 0) cannot be lent. Only physical items with a positive ID are eligible for loan workflows.",
+                    "code": 400,
+                }
+            ),
+            400,
+        )
+
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"error": "Item not found", "code": 404}), 404

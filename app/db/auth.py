@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 if TYPE_CHECKING:
@@ -44,6 +45,7 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 
 user_roles = db.Table(
     "user_roles",
+    db.metadata,
     db.Column("user_id", UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), primary_key=True),
     db.Column("role_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}roles.id", ondelete="CASCADE"), primary_key=True),
     schema=_AUTH,
@@ -51,6 +53,7 @@ user_roles = db.Table(
 
 role_permissions = db.Table(
     "role_permissions",
+    db.metadata,
     db.Column("role_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}roles.id", ondelete="CASCADE"), primary_key=True),
     db.Column("permission_id", db.Integer, db.ForeignKey(f"{_AUTH_PFX}permissions.id", ondelete="CASCADE"), primary_key=True),
     schema=_AUTH,
@@ -97,7 +100,7 @@ class Role(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    permissions = db.relationship("Permission", secondary=role_permissions, lazy="selectin")
+    permissions: Mapped[list[Permission]] = relationship("Permission", secondary=role_permissions, lazy="selectin")
 
 
 class User(db.Model):  # type: ignore[name-defined]
@@ -121,7 +124,7 @@ class User(db.Model):  # type: ignore[name-defined]
     last_login = db.Column(db.DateTime, nullable=True)
     visibility = db.Column(db.String(20), default="private")
 
-    roles = db.relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
+    roles: Mapped[list[Role]] = relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
     items = db.relationship("Item", foreign_keys="Item.owner_id", backref="owner", lazy="dynamic", cascade="all, delete-orphan")
     lent_items = db.relationship("Item", foreign_keys="Item.lent_to_user_id", backref="borrower", lazy="dynamic")
     consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")

@@ -206,7 +206,29 @@ export function ItemProvenanceTimeline({ itemId }: { itemId: number }) {
       if (!res.data?.success) throw new Error(res.data?.error ?? "Failed to load history");
       return res.data.data;
     },
+    // FRBR ontology boundary: virtual wishlist items (id < 0) have no physical provenance.
+    // The backend returns an empty array, but we skip the call entirely to avoid noise in logs.
+    enabled: itemId > 0,
   });
+
+  // Virtual wishlist items (UserWorkIntent adapters, id < 0) have no physical timeline.
+  // Render a concise empty state instead of showing a loading spinner for a no-op query.
+  if (itemId < 0) {
+    return (
+      <div
+        data-testid="virtual-item-timeline-empty"
+        className="flex flex-col items-center justify-center py-12 text-center"
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted border border-border/80 shadow-inner">
+          <History className="h-6.5 w-6.5 text-muted-foreground" />
+        </div>
+        <h3 className="mt-4 font-serif text-sm font-bold text-foreground">No physical history</h3>
+        <p className="mt-1 text-xs text-muted-foreground max-w-[240px]">
+          Wishlist intents do not have a physical timeline, loan history, or condition logs.
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -31,7 +31,7 @@ NC=$'\033[0m'
 PASS="${GREEN}✅${NC}"
 WARN="${YELLOW}⚠️${NC}"
 FAIL="${RED}❌${NC}"
-INFO="${CYAN}ℹ️${NC}"
+INFO="${CYAN}ℹ️ ${NC}"
 
 ERRORS=0
 WARNINGS=0
@@ -137,11 +137,11 @@ check() {
 }
 
 printf "\n"
-printf "╔══════════════════════════════════════════════════════╗\n"
+printf "╔══════════════════════════════════════════════╗\n"
 printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
-printf '║           %s           ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
+printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
 printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
-printf "╚══════════════════════════════════════════════════════╝\n"
+printf "╚══════════════════════════════════════════════╝\n"
 
 header "Containers"
 for svc in "${SERVICES[@]}"; do
@@ -163,8 +163,8 @@ for svc in "${SERVICES[@]}"; do
     fi
 done
 
-# Check optional containers (monitoring, alloy, cadvisor)
-for opt in "openobserve" "otel-collector" "alloy" "cadvisor"; do
+# Check optional containers (monitoring)
+for opt in "openobserve" "otel-collector"; do
     cname="${PREFIX}-${opt}-1"
     cname2="${opt}-1"
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq "^(${cname}|${cname2})$"; then
@@ -229,7 +229,11 @@ header "Celery Worker"
 worker_cname="${PREFIX}-worker-1"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$worker_cname"; then
     # Check if worker reported "Connected to redis"
-    if docker logs "$worker_cname" 2>&1 | grep -q "Connected to redis"; then
+    if docker exec "$worker_cname" python3 -c "
+import os, redis
+r = redis.Redis.from_url(os.environ['REDIS_URL'])
+r.ping()
+" 2>/dev/null; then
         check "Broker" pass "connected to Redis"
         # Check for recent reconnections (last 5 min)
         recent_reconn=$(docker logs "$worker_cname" --since 5m 2>&1 | grep -c "Connected to redis" || true)
@@ -374,6 +378,34 @@ if [[ -d "$covers_dir" ]]; then
     empty_covers=$(find "$covers_dir" -maxdepth 1 -type f -size -1k 2>/dev/null | wc -l)
     if [[ "$empty_covers" -gt 0 ]]; then
         check "Empty files" warn "${empty_covers} files < 1KB (possibly broken)"
+    fi
+    # Check database cover pipeline status
+    db_cname="${PREFIX}-db-1"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$db_cname"; then
+        db_user=$(load_env "POSTGRES_USER")
+        db_name=$(load_env "POSTGRES_DB")
+        db_user="${db_user:-iqoqo}"
+        db_name="${db_name:-iqoqo}"
+        cover_status_data=$(docker exec "$db_cname" psql -U "$db_user" -d "$db_name" -tAc \
+            "SELECT COALESCE(meta->>'cover_status', 'not_started'), count(*) FROM manifestations GROUP BY 1;" 2>/dev/null || echo "")
+        if [[ -n "$cover_status_data" ]]; then
+            ready_cnt=$(echo "$cover_status_data" | grep "^ready" | cut -f2 -d'|' || echo "0")
+            pending_cnt=$(echo "$cover_status_data" | grep "^pending" | cut -f2 -d'|' || echo "0")
+            processing_cnt=$(echo "$cover_status_data" | grep "^processing" | cut -f2 -d'|' || echo "0")
+            failed_cnt=$(echo "$cover_status_data" | grep "^failed" | cut -f2 -d'|' || echo "0")
+
+            ready_cnt="${ready_cnt:-0}"
+            pending_cnt="${pending_cnt:-0}"
+            processing_cnt="${processing_cnt:-0}"
+            failed_cnt="${failed_cnt:-0}"
+
+            check "Database pipeline" pass "ready: ${ready_cnt}, pending: ${pending_cnt}, processing: ${processing_cnt}, failed: ${failed_cnt}"
+
+            stuck=$((pending_cnt + processing_cnt))
+            if [[ "$stuck" -gt 0 ]]; then
+                check "Stuck tasks" warn "${stuck} cover task(s) in flight/stuck"
+            fi
+        fi
     fi
 else
     check "Directory" fail "NOT FOUND at ${covers_dir}"

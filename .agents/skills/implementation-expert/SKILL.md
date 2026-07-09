@@ -19,7 +19,7 @@ This skill governs codebase changes. It handles provided code OR generates requi
 5. **Copyright**: Every new file (.py, .ts, .tsx) MUST have the standard iqoqo AGPL header.
 6. **FRBR Hierarchy**: Respect Work -> Expression -> Manifestation -> Item ontology.
 7. **Context**: Discover via wikilinks in frontmatter
-8. **Tests**: All new code or code changes needs to be covered with tests: backend, frontend, or e2e - depending on their nature.
+8. **Tests**: All new code or code changes needs to be covered with tests: backend, frontend, e2e, or script tests (BATS for shell scripts, pytest for Python scripts) - depending on their nature. Any modification to operational scripts in `scripts/` MUST be accompanied by corresponding tests in `tests/bash/` or `tests/test_scripts.py`.
 9. **Refactors**: Prefer small refactors over large ones. If a large refactor is needed, it should be documented in a separate plan file and approved before implementation.
 10. **Don't Mute Returns**: Do not suppress return-value warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`. Handle or propagate return values properly.
 11. **Preserve Docs**: When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip or replace them.

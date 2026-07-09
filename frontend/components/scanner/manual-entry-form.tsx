@@ -21,8 +21,10 @@
 "use client";
 
 import React from "react";
-import { Save, X, ImagePlus } from "lucide-react";
+import { Save, X, ImagePlus, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { apiFetch } from "@/lib/api/client";
 
 import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
 import { MEDIA_REGISTRY } from "@/lib/media";
@@ -76,6 +78,8 @@ export function ManualEntryForm({
     coverFile: null,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  /** Phase 4 UX Polish: tracks in-flight metadata lookup to prevent double-click */
+  const [isLookingUp, setIsLookingUp] = React.useState(false);
 
   // Sync state with props if they change (e.g. from a new scan or extraction)
   React.useEffect(() => {
@@ -96,6 +100,42 @@ export function ManualEntryForm({
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * Phase 4 UX Polish: Perform an inline metadata lookup for the current
+   * identifier/ISBN so users can pre-populate form fields without re-scanning.
+   *
+   * The button is disabled and a spinner is shown while the request is in-flight
+   * to prevent redundant requests and communicate that work is happening.
+   */
+  const handleLookup = async () => {
+    if (!formData.identifier) return;
+    setIsLookingUp(true);
+    try {
+      const res = await apiFetch<{
+        title?: string;
+        authors?: string;
+        publisher?: string;
+        year?: string;
+      }>(`/lookup/${encodeURIComponent(formData.identifier)}`);
+      if (res && res.title) {
+        setFormData(prev => ({
+          ...prev,
+          title: res.title || prev.title,
+          authors: res.authors || prev.authors,
+          publisher: res.publisher || prev.publisher,
+          year: res.year || prev.year,
+        }));
+        toast.success("Metadata found and populated.");
+      } else {
+        toast.error("No metadata found for this identifier.");
+      }
+    } catch {
+      toast.error("Lookup failed. Please enter details manually.");
+    } finally {
+      setIsLookingUp(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,15 +224,30 @@ export function ManualEntryForm({
           <label htmlFor="manual-identifier" className="text-sm font-medium text-foreground">
             Identifier (ISBN/UPC)
           </label>
-          <input
-            id="manual-identifier"
-            type="text"
-            name="identifier"
-            value={formData.identifier}
-            onChange={handleChange}
-            placeholder="e.g. 9780261102385"
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+          {/* Phase 4: inline Lookup button + spinner for UX feedback */}
+          <div className="flex gap-2">
+            <input
+              id="manual-identifier"
+              type="text"
+              name="identifier"
+              value={formData.identifier}
+              onChange={handleChange}
+              disabled={isSubmitting || isLookingUp}
+              placeholder="e.g. 9780261102385"
+              className="h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            />
+            <Button
+              id="lookup-identifier-button"
+              type="button"
+              variant="secondary"
+              onClick={handleLookup}
+              disabled={!formData.identifier || isLookingUp || isSubmitting}
+              aria-label="Look up metadata for identifier"
+            >
+              {isLookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              <span className="ml-2">{isLookingUp ? "Searching..." : "Lookup"}</span>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -250,7 +305,7 @@ export function ManualEntryForm({
           </div>
         </div>
 
-        <Button type="submit" disabled={isSubmitting || !formData.title} className="mt-4 w-full">
+        <Button type="submit" disabled={isSubmitting || isLookingUp || !formData.title} className="mt-4 w-full">
           {isSubmitting ? (
             <>
               <Save className="mr-2 h-5 w-5 animate-pulse" />

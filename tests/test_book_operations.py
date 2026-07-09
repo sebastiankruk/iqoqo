@@ -191,6 +191,32 @@ class TestISBNScanning:
         assert response.status_code == 404
         assert response.json.get("error", None) == "Metadata not found for ISBN = 9780000000002"
 
+    @patch("app.strategies.book.fetch_allegro_metadata")
+    @patch("app.strategies.book.fetch_isbn_metadata", return_value=None)
+    @patch("app.strategies.book.canonicalize_isbn", return_value="9780060850524")
+    def test_book_strategy_fallback_to_allegro(self, mock_canon, mock_isbn, mock_allegro):
+        """Test that BookLookupStrategy cascades to Allegro when standard bibliographic lookups yield no data."""
+        from app.strategies.book import BookLookupStrategy
+
+        mock_allegro.return_value = {
+            "title": "Cascaded Book Title",
+            "barcode": "9780060850524",
+            "cover_url": "http://img.url/cover.jpg",
+            "description": "Recovered via downstream pipeline fallback",
+            "publisher": "Scientific Publishers",
+            "source": "Allegro Catalog",
+        }
+
+        strategy = BookLookupStrategy()
+        meta, provider = strategy.lookup("9780060850524")
+
+        assert meta is not None
+        assert meta["title"] == "Cascaded Book Title"
+        assert meta["data_source"] == "allegro"
+        assert provider == "allegro"
+        mock_isbn.assert_called_once_with("9780060850524")
+        mock_allegro.assert_called_once_with("9780060850524")
+
     def test_scan_invalid_isbn(self, client):
         """Test scanning with invalid ISBN format."""
         response = client.get("/api/isbn/invalid-isbn")

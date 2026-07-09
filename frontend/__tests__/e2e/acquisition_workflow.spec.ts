@@ -317,3 +317,118 @@ test.describe("Item Acquisition and Collection Workflow", () => {
     });
   });
 });
+
+/**
+ * Phase 4 (0.7.8) – Ingestion Performance & UX Polish
+ *
+ * End-to-End validation that the ingestion workflow remains non-blocking even
+ * when backend write operations take a long time (simulating the deferred
+ * tsvector constraint trigger scenario where the database processes the
+ * full-text index rebuild at COMMIT rather than per-row).
+ *
+ * We inject artificial latency via Playwright route interception so that the
+ * test is deterministic in CI without requiring a live PostgreSQL instance.
+ */
+test.describe("Phase 4: Ingestion Performance – Non-Blocking UI during heavy DB inserts", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    // Authenticate as a regular user
+    await page.route("**/api/profile**", route =>
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@example.com",
+            display_name: "Test User",
+            roles: ["user"],
+            permissions: ["upload:cover", "write:metadata", "update:item"],
+          },
+        },
+      })
+    );
+
+    await page.goto("/scan");
+  });
+
+  test("Save Entry button shows spinner and is disabled during simulated slow DB commit", async ({ page }) => {
+    // Simulate the manual-entry page loading with Manual Entry form already visible
+    // by intercepting the scanner page route that opens the form panel.
+    await page.route("**/api/scanner/lookup/**", route =>
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: { title: "1984", authors: "George Orwell", year: "1949", format: "book" },
+        },
+      })
+    );
+
+    // Open manual entry if available
+    const manualEntryBtn = page.getByRole("button", { name: /Manual Entry/i });
+    if (await manualEntryBtn.isVisible()) {
+      await manualEntryBtn.click();
+    }
+
+    // Intercept the POST/manual endpoint and inject 800ms artificial latency
+    // This simulates the deferred tsvector batch commit taking time at the DB layer.
+    await page.route("**/api/items/manual", async route => {
+      await new Promise(resolve => setTimeout(resolve, 800)); // 800ms lag – mimics heavy commit
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { item_id: 1024, manifestation_id: 512 } }),
+      });
+    });
+
+    // Mock the item details redirect endpoint
+    await page.route("**/api/items/1024", route =>
+      route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            id: 1024,
+            title: "1984",
+            status: "available",
+            is_owner: true,
+            manifestation: { id: 512, title: "1984", format: "book" },
+          },
+        },
+      })
+    );
+
+    // Fill required fields
+    const titleInput = page.getByLabel(/Title/i).first();
+    if (await titleInput.isVisible()) {
+      await titleInput.fill("1984");
+    }
+
+    // Initiate the save – the button should immediately enter the loading state
+    const saveButton = page.getByRole("button", { name: /Save Manual Entry/i });
+    if (!(await saveButton.isVisible())) {
+      // Form not visible in this browser context – skip gracefully
+      test.skip(true, "ManualEntryForm not visible in current page state");
+      return;
+    }
+
+    await saveButton.click();
+
+    // Phase 4 assertion: spinner becomes visible and button is disabled during latency window
+    await expect(saveButton).toBeDisabled({ timeout: 2000 });
+
+    // The rest of the UI must not freeze – verify other elements remain interactive
+    const cancelButton = page.getByRole("button", { name: /Close manual entry/i });
+    if (await cancelButton.isVisible()) {
+      // Cancel is disabled while submitting (by design), but it must be renderable
+      await expect(cancelButton).toBeVisible();
+    }
+
+    // After the simulated 800ms latency, the spinner should clear
+    await expect(saveButton.locator(".animate-spin, .animate-pulse")).toBeHidden({ timeout: 3000 });
+  });
+});

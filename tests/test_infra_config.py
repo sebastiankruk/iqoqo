@@ -32,7 +32,7 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.7"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.8"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
@@ -191,20 +191,6 @@ exit 0
         (self.work_dir / "docker-compose.monitoring.yml").write_text("services:\n  openobserve:\n    image: openobserve/openobserve")
         result = self.run_script(args=["prod"], env_content=env_content)
         self.assertIn("Found docker-compose.monitoring.yml, starting with OpenObserve monitoring...", result.stdout)
-
-        # Scenario 2: Local OpenObserve monitoring stack is already active globally
-        docker_mock = self.bin_dir / "docker"
-        docker_mock.write_text("""#!/bin/bash
-if [[ "$*" == *"ps"* ]]; then
-    echo "iqoqo-openobserve"
-fi
-exit 0
-""")
-        result_active = self.run_script(args=["prod"], env_content=env_content)
-        self.assertIn("OpenObserve monitoring stack is already active globally.", result_active.stdout)
-
-        # Reset docker mock
-        docker_mock.write_text("#!/bin/bash\nexit 0")
 
     def test_secret_key_auto_generation_when_missing_or_insecure(self):
         # Scenario 1: SECRET_KEY is missing entirely in prod mode

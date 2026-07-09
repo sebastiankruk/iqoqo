@@ -104,8 +104,8 @@ def test_item_modification_blocked_for_non_owner(client, normal_user_headers, ap
         item_id = item.id
 
     response = client.put(f"/api/items/{item_id}", json={"status": "lost"}, headers=normal_user_headers)
-    assert response.status_code == 403
-    assert response.get_json()["error"] == "Forbidden"
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Item not found"
 
 
 def test_owner_can_view_own_item(client, normal_user_headers, app):

@@ -80,7 +80,7 @@ ontology:
       description: "Lifecycle status enumerations governing item possession and reading roadmap queues"
 
     - name: "OBSERVABILITY_FABRIC"
-      keywords: ["OpenTelemetry", "Grafana Alloy", "Jaeger", "Prometheus", "Loki", "OpenObserve", "spanmetrics"]
+      keywords: ["OpenTelemetry", "OpenObserve"]
       description: "Telemetry ingestion pipelines, distributed traces, and SRE monitoring definitions"
 
 # LLM and Vector Embedding settings for generating the ChromaDB semantic index

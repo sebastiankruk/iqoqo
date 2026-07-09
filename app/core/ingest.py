@@ -42,6 +42,48 @@ def _extract_genres(meta: dict) -> list[str]:
 
 class IngestService:
     @staticmethod
+    def batch_ingest_manifestations(manifestations_data: list[dict]) -> list[Manifestation]:
+        """Batch-ingest a list of pre-fetched metadata dicts with deferred tsvector updates.
+
+        Phase 4 (0.7.8): Issues ``SET CONSTRAINTS ALL DEFERRED`` before the
+        bulk inserts so that the ``DEFERRABLE INITIALLY DEFERRED`` constraint
+        triggers (added by the 20260709_defer_tsvector_triggers migration) fire
+        *after* the final COMMIT rather than synchronously on every row.  This
+        eliminates the write-latency spike that previously occurred when adding
+        many items in quick succession.
+
+        Each dict in ``manifestations_data`` is passed directly to
+        :meth:`ingest_from_meta`, which handles FRBR hierarchy creation.
+        A single :py:meth:`db.session.commit` is issued at the end so that all
+        tsvector indexes are rebuilt in one batch.
+
+        Parameters
+        ----------
+        manifestations_data:
+            List of metadata dicts; see :meth:`ingest_from_meta` for the
+            required keys (``title``, ``format`` at minimum).
+
+        Returns
+        -------
+        list[Manifestation]
+            The newly created :class:`~app.db.models.Manifestation` objects.
+        """
+        # Force all deferred constraint triggers to wait until the final COMMIT
+        if db.engine.dialect.name == "postgresql":
+            from sqlalchemy import text
+
+            db.session.execute(text("SET CONSTRAINTS ALL DEFERRED;"))
+
+        ingested: list[Manifestation] = []
+        for meta in manifestations_data:
+            manifestation = IngestService.ingest_from_meta(meta)
+            ingested.append(manifestation)
+
+        # Single commit – tsvector indexes are rebuilt post-transaction
+        db.session.commit()
+        return ingested
+
+    @staticmethod
     def ingest_from_meta(meta: dict) -> Manifestation:
         """Save a manifestation from pre-fetched metadata without calling any external API.
 

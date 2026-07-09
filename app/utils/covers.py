@@ -86,30 +86,83 @@ def add_source_badge(filepath: str, source: str):
         logger.error(f"Failed to apply badge overlay: {e}")
 
 
-def generate_fallback_cover(identifier: str, title: str, author: str) -> str | None:
-    """Tier 5: Generate a deterministic cover using Pillow."""
+def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[str, str] | None:
+    """Tier 5: Generate a deterministic, beautiful cover using Pillow.
+
+    Phase 4 (0.7.8): Upgraded from a flat solid-colour background to a
+    procedural vertical gradient whose colours are derived from a MD5 hash of
+    the ``identifier`` and ``title``.  This guarantees that the same book always
+    gets the same colour palette, while different books look visually distinct.
+    Long titles are word-wrapped and rendered with a drop-shadow for contrast.
+    """
+    import textwrap  # stdlib – import locally to avoid circular-import risks
+
     filename = f"{identifier}_generated.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
 
-    # Deterministic background color based on identifier hash
-    hash_obj = hashlib.md5(identifier.encode())
-    bg_color = f"#{hash_obj.hexdigest()[:6]}"
-
     try:
-        img = Image.new("RGB", (400, 600), color=bg_color)
-        d = ImageDraw.Draw(img)
+        # 1. Deterministic procedural gradient derived from title + identifier
+        hash_str = f"{identifier}_{title}"
+        hash_val = int(hashlib.md5(hash_str.encode("utf-8")).hexdigest(), 16)
 
-        font = ImageFont.load_default()
+        # Keep colours slightly muted/darker for sufficient contrast with white text
+        color1 = (hash_val % 200, (hash_val // 256) % 200, (hash_val // 65536) % 200)
+        color2 = (
+            (hash_val // 16_777_216) % 150,
+            (hash_val // 4_294_967_296) % 150,
+            100,
+        )
 
-        # Simple text wrapping logic could be added here
-        d.text((20, 50), title[:100], fill=(255, 255, 255), font=font)
-        d.text((20, 550), author[:50], fill=(220, 220, 220), font=font)
+        width, height = 600, 900
+        img = Image.new("RGB", (width, height))
+        draw = ImageDraw.Draw(img)
+
+        # Draw smooth vertical gradient scanline-by-scanline
+        for y in range(height):
+            r = int(color1[0] + (color2[0] - color1[0]) * y / height)
+            g = int(color1[1] + (color2[1] - color1[1]) * y / height)
+            b = int(color1[2] + (color2[2] - color1[2]) * y / height)
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+        # 2. Configure typography – prefer a TTF font, fall back to default
+        try:
+            font_title: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48
+            )
+            font_author: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36
+            )
+        except OSError:
+            font_title = ImageFont.load_default()
+            font_author = ImageFont.load_default()
+
+        # 3. Word-wrap the title so it stays within the image margins
+        margin = 40
+        offset_y = 80
+        wrapped_title = textwrap.fill(title, width=18)
+
+        # 4. Render each wrapped line with a drop-shadow for readability
+        for line in wrapped_title.split("\n"):
+            # Drop shadow
+            draw.text((margin + 3, offset_y + 3), line, font=font_title, fill="black")
+            # Foreground text
+            draw.text((margin, offset_y), line, font=font_title, fill="white")
+
+            # Advance Y by the actual glyph height, or fall back to a safe default
+            bbox = font_title.getbbox(line) if hasattr(font_title, "getbbox") else (0, 0, 0, 50)
+            offset_y += int(bbox[3] - bbox[1] + 15) if bbox else 65
+
+        # 5. Render author near the bottom of the image
+        if author:
+            author_y = height - 120
+            draw.text((margin + 2, author_y + 2), author, font=font_author, fill="black")
+            draw.text((margin, author_y), author, font=font_author, fill="#E2E8F0")
 
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format="JPEG")
+        img.save(img_byte_arr, format="JPEG", quality=85)
         optimize_and_save_image(img_byte_arr.getvalue(), filepath)
-        return f"{Config.COVERS_BASE_URL}/{filename}"
-    except (OSError, ValueError) as e:
+        return f"{Config.COVERS_BASE_URL}/{filename}", "fallback_pil"
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(f"Fallback generation failed: {e}")
         return None
 
@@ -386,6 +439,12 @@ def process_cover_pipeline(
                 format_type=format_type,
                 allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
             )
+            if result:
+                local_cover_url, source = result
+
+        # Tier 5: PIL Fallback
+        if not local_cover_url:
+            result = generate_fallback_cover(identifier, title, author)
             if result:
                 local_cover_url, source = result
 

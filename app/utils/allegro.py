@@ -94,38 +94,37 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
         if is_numeric_barcode:
             catalog_params["mode"] = "GTIN"
 
-        if os.path.isfile(_TOKEN_FILE):
-            try:
-                catalog_url = "https://api.allegro.pl/sale/products"
-                cat_resp = requests.get(catalog_url, headers=headers, params=catalog_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
-                if cat_resp.status_code == 200:
-                    cat_data = cat_resp.json()
-                    products = cat_data.get("products", [])
-                    if products:
-                        item = products[0]
-                        desc_obj = item.get("description")
-                        desc_text = None
-                        if isinstance(desc_obj, dict) and "sections" in desc_obj:
-                            texts = []
-                            for section in desc_obj.get("sections", []):
-                                for section_item in section.get("items", []):
-                                    if section_item.get("type") == "TEXT" and section_item.get("content"):
-                                        texts.append(section_item.get("content"))
-                            desc_text = "\n".join(texts) if texts else None
-                        elif isinstance(desc_obj, str):
-                            desc_text = desc_obj
+        try:
+            catalog_url = "https://api.allegro.pl/sale/products"
+            cat_resp = requests.get(catalog_url, headers=headers, params=catalog_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+            if cat_resp.status_code == 200:
+                cat_data = cat_resp.json()
+                products = cat_data.get("products", [])
+                if products:
+                    item = products[0]
+                    desc_obj = item.get("description")
+                    desc_text = None
+                    if isinstance(desc_obj, dict) and "sections" in desc_obj:
+                        texts = []
+                        for section in desc_obj.get("sections", []):
+                            for section_item in section.get("items", []):
+                                if section_item.get("type") == "TEXT" and section_item.get("content"):
+                                    texts.append(section_item.get("content"))
+                        desc_text = "\n".join(texts) if texts else None
+                    elif isinstance(desc_obj, str):
+                        desc_text = desc_obj
 
-                        return {
-                            "title": item.get("name", "Unknown Media"),
-                            "barcode": barcode,
-                            "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
-                            "description": desc_text,
-                            "publisher": item.get("publication") and item.get("publication").get("publisher"),
-                            "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
-                            "source": "Allegro Catalog",
-                        }
-            except requests.exceptions.RequestException:
-                pass  # Fall back to Listing if Catalog fails
+                    return {
+                        "title": item.get("name", "Unknown Media"),
+                        "barcode": barcode,
+                        "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
+                        "description": desc_text,
+                        "publisher": item.get("publication") and item.get("publication").get("publisher"),
+                        "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
+                        "source": "Allegro Catalog",
+                    }
+        except requests.exceptions.RequestException:
+            pass  # Fall back to Listing if Catalog fails
 
         # Step 2: Use Listing API (Public Marketplace Search)
         # ONLY if catalog found nothing and we are NOT getting 403s
