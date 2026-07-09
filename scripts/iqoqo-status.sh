@@ -31,7 +31,7 @@ NC=$'\033[0m'
 PASS="${GREEN}✅${NC}"
 WARN="${YELLOW}⚠️${NC}"
 FAIL="${RED}❌${NC}"
-INFO="${CYAN}ℹ️${NC}"
+INFO="${CYAN}ℹ️ ${NC}"
 
 ERRORS=0
 WARNINGS=0
@@ -137,11 +137,11 @@ check() {
 }
 
 printf "\n"
-printf "╔══════════════════════════════════════════════════════╗\n"
+printf "╔══════════════════════════════════════════════╗\n"
 printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
-printf '║           %s           ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
+printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
 printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
-printf "╚══════════════════════════════════════════════════════╝\n"
+printf "╚══════════════════════════════════════════════╝\n"
 
 header "Containers"
 for svc in "${SERVICES[@]}"; do
@@ -229,7 +229,11 @@ header "Celery Worker"
 worker_cname="${PREFIX}-worker-1"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$worker_cname"; then
     # Check if worker reported "Connected to redis"
-    if docker logs "$worker_cname" 2>&1 | grep -q "Connected to redis"; then
+    if docker exec "$worker_cname" python3 -c "
+import os, redis
+r = redis.Redis.from_url(os.environ['REDIS_URL'])
+r.ping()
+" 2>/dev/null; then
         check "Broker" pass "connected to Redis"
         # Check for recent reconnections (last 5 min)
         recent_reconn=$(docker logs "$worker_cname" --since 5m 2>&1 | grep -c "Connected to redis" || true)
