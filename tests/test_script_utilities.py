@@ -207,8 +207,8 @@ permissions:
 
     # Should write to PY_OUT and TS_OUT
     assert mock_write.call_count == 2
-    py_written = mock_write.call_args_list[0][0][0]
-    ts_written = mock_write.call_args_list[1][0][0]
+    py_written = str(mock_write.call_args_list[0][0][0])
+    ts_written = str(mock_write.call_args_list[1][0][0])
     assert "class PermissionName(StrEnum):" in py_written
     assert "export enum PermissionName {" in ts_written
 
