@@ -479,7 +479,7 @@ def test_transition_unauthorized(client, test_setup, app):
         json={"collection_status": "available", "status": "read"},
         headers=other_headers,
     )
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 # --- Phase 2: Bug B8 — Virtual items visible without manifestation ---
@@ -804,7 +804,7 @@ def test_virtual_item_update_uses_verify_item_ownership(client, test_setup, app)
         json={"status": "reading"},
         headers=other_headers,
     )
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_virtual_item_delete_uses_verify_item_ownership(client, test_setup, app):

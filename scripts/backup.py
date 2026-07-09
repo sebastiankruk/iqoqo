@@ -99,8 +99,16 @@ def create_export(app=None):
         with open(os.path.join(export_dir, "metadata.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        # 2. Generate signed manifest JWT (joserfc HS256) for archive authenticity
-        secret_key = app.config.get("SECRET_KEY") or os.environ.get("IQOQO_SECRET_KEY", "default-iqoqo-dev-secret")
+        secret_key = app.config.get("SECRET_KEY") or os.environ.get("IQOQO_SECRET_KEY")
+        if not secret_key:
+            is_dev_or_test = (
+                app.config.get("TESTING") or os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG") == "1"
+            )
+            if is_dev_or_test:
+                print("WARNING: SECRET_KEY/IQOQO_SECRET_KEY is not set. Falling back to default-iqoqo-dev-secret for dev/testing.")
+                secret_key = "default-iqoqo-dev-secret"
+            else:
+                raise ValueError("CRITICAL SECURITY ERROR: SECRET_KEY or IQOQO_SECRET_KEY must be set to sign backup manifests.")
         manifest_payload = {
             "iss": "iqoqo-backup",
             "timestamp": timestamp,

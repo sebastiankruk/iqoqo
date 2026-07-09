@@ -307,11 +307,13 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 className="w-full rounded-lg bg-secondary/80 px-3 py-2 text-sm font-medium text-foreground outline-none ring-1 ring-border transition-all hover:bg-secondary focus:ring-primary/50 disabled:opacity-60 cursor-pointer appearance-none"
               >
                 <optgroup label="Availability & Condition">
-                  {["available", "lent", "damaged", "lost"].map(key => (
-                    <option key={key} value={key} className="bg-card py-2">
-                      {STATUS_LABELS[key]?.label || key}
-                    </option>
-                  ))}
+                  {["available", "lent", "damaged", "lost"]
+                    .filter(key => !isVirtual || key === "available")
+                    .map(key => (
+                      <option key={key} value={key} className="bg-card py-2">
+                        {STATUS_LABELS[key]?.label || key}
+                      </option>
+                    ))}
                 </optgroup>
                 <optgroup label="Acquisition">
                   {["wish_list", "ordered"].map(key => (
@@ -475,7 +477,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             </div>
 
             {/* Lending Actions for borrower/public user */}
-            {!isOwner && (
+            {!isOwner && !isVirtual && (
               <div className="mt-4 border-t border-border/40 pt-4 flex flex-col gap-2">
                 {item.collection_status === "lent" && item.lent_to_user_id === profile?.id ? (
                   <span

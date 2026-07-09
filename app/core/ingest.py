@@ -69,7 +69,10 @@ class IngestService:
             The newly created :class:`~app.db.models.Manifestation` objects.
         """
         # Force all deferred constraint triggers to wait until the final COMMIT
-        db.session.execute(db.text("SET CONSTRAINTS ALL DEFERRED;"))
+        if db.engine.dialect.name == "postgresql":
+            from sqlalchemy import text
+
+            db.session.execute(text("SET CONSTRAINTS ALL DEFERRED;"))
 
         ingested: list[Manifestation] = []
         for meta in manifestations_data:

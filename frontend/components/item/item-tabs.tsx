@@ -257,7 +257,7 @@ export function ItemTabs({ item }: { item: Item }) {
 
   const visibleTabs = TABS.filter(tab => {
     if (tab.id === "federation") return !!config?.federation_enabled;
-    if (tab.id === "history") return canViewHistory;
+    if (tab.id === "history") return canViewHistory && item.id > 0;
     return true;
   });
 

@@ -18,7 +18,7 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.taxonomy import COLLECTION_STATUSES, PROGRESS_STATUSES
 
@@ -43,6 +43,15 @@ class ItemCreateSchema(BaseModel):
     collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
     lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_id_not_zero(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for key in ("id", "item_id"):
+                if key in data and data[key] == 0:
+                    raise ValueError("Item identifier cannot be zero.")
+        return data
 
     @field_validator("lent_to_user_id")
     @classmethod
@@ -97,6 +106,15 @@ class ItemUpdateSchema(BaseModel):
     is_hidden: bool | None = None
     tags: list[str] | None = None
     meta: dict[str, Any] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_id_not_zero(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for key in ("id", "item_id"):
+                if key in data and data[key] == 0:
+                    raise ValueError("Item identifier cannot be zero.")
+        return data
 
     @field_validator("lent_to_user_id")
     @classmethod

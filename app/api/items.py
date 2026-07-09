@@ -705,28 +705,50 @@ def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tupl
 def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
     intent_id = -item_id
     returned_id = None
+    err = None
 
     try:
         with db.session.begin_nested():
-            # 1. Fetch intent with a row-level pessimistic write lock to block race conditions
             intent = UserWorkIntent.query.filter_by(id=intent_id).with_for_update().first()
 
-            if not intent:
+            if not intent or not user_id or not verify_item_ownership(item_id, user_id):
                 return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-            if not user_id or not verify_item_ownership(item_id, user_id):
-                return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
-
-            payload, err = _parse_update_payload(request)
-            if err:
-                return err
+            payload, parse_err = _parse_update_payload(request)
+            if parse_err:
+                return parse_err
             assert payload is not None
 
-            if payload.is_hidden is not None:
+            # Enforce FRBR Ontology Boundary Rules:
+            # If not transitioning away from wishlist status, reject physical traits
+            is_transitioning = payload.collection_status and payload.collection_status != "wish_list"
+            if not is_transitioning:
+                data = request.get_json(silent=True) or {}
+                physical_fields = {
+                    "barcode",
+                    "condition",
+                    "physical_condition",
+                    "lent_to",
+                    "lent_to_user_id",
+                    "lent_to_name",
+                    "loan_status",
+                }
+                if any(field in data for field in physical_fields) or (payload.lent_to_user_id or payload.lent_to_name):
+                    err = (
+                        jsonify(
+                            {
+                                "success": False,
+                                "error": "FRBR Ontology Violation: Wishlist placeholder items (ID < 0) cannot accept physical state mutations.",
+                            }
+                        ),
+                        400,
+                    )
+
+            if not err and payload.is_hidden is not None:
                 intent.is_hidden = payload.is_hidden
 
             # If transitioning away from wishlist status, convert to physical item
-            if payload.collection_status and payload.collection_status != "wish_list":
+            if not err and is_transitioning:
                 data = request.get_json(silent=True) or {}
                 manifestation_id = data.get("manifestation_id")
                 manifestation = None
@@ -734,7 +756,7 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
                 if manifestation_id:
                     manifestation = db.session.get(Manifestation, manifestation_id)
                     if not manifestation:
-                        return jsonify({"success": False, "data": None, "error": "Invalid manifestation_id"}), 400
+                        err = jsonify({"success": False, "data": None, "error": "Invalid manifestation_id"}), 400
                 else:
                     work = intent.work
                     for expr in work.expressions:
@@ -752,33 +774,39 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
                         db.session.add(manifestation)
                         db.session.flush()
 
-                # Assign dynamically passed collection_status (Library vs Wishlist)
-                item_meta = dict(payload.meta) if payload.meta else {}
-                item_meta["intent_id"] = intent.id
-                item_meta["origin"] = "wishlist_transition"
+                if not err:
+                    assert manifestation is not None
+                    # Assign dynamically passed collection_status (Library vs Wishlist)
+                    item_meta = dict(payload.meta) if payload.meta else {}
+                    item_meta["intent_id"] = intent.id
+                    item_meta["origin"] = "wishlist_transition"
 
-                new_item = Item(
-                    manifestation_id=manifestation.id,
-                    owner_id=intent.user_id,
-                    status=payload.status or intent.status,
-                    collection_status=payload.collection_status,
-                    is_hidden=payload.is_hidden or False,
-                    lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
-                    lent_to_name=payload.lent_to_name,
-                    meta=item_meta,
-                )
-                db.session.add(new_item)
+                    new_item = Item(
+                        manifestation_id=manifestation.id,
+                        owner_id=intent.user_id,
+                        status=payload.status or intent.status,
+                        collection_status=payload.collection_status,
+                        is_hidden=payload.is_hidden or False,
+                        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+                        lent_to_name=payload.lent_to_name,
+                        meta=item_meta,
+                    )
+                    db.session.add(new_item)
 
-                # Implement state machine: do not delete intent, set status to fulfilled
-                intent.status = "fulfilled"
-                db.session.add(intent)
-                db.session.flush()
-                returned_id = new_item.id
-            else:
+                    # Implement state machine: do not delete intent, set status to fulfilled
+                    intent.status = "fulfilled"
+                    db.session.add(intent)
+                    db.session.flush()
+                    returned_id = new_item.id
+            elif not err:
                 if payload.status:
                     intent.status = payload.status
                     db.session.add(intent)
                 returned_id = item_id
+
+        if err:
+            db.session.rollback()
+            return err
 
         db.session.commit()
         return jsonify({"success": True, "data": {"id": returned_id}})
@@ -799,8 +827,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
     has_update_permission = user.has_permission(PermissionName.UPDATE_ITEM) if user else False
 
     if not item or not (is_owner or is_borrower or is_admin or has_update_permission):
-        error, code = ("Item not found", 404) if not item else ("Forbidden", 403)
-        return jsonify({"success": False, "data": None, "error": error}), code
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     payload, err = _parse_update_payload(request)
     if err:
@@ -811,7 +838,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         # Must be borrower. Borrowers can only update progress status.
         disallowed = [f for f in payload.model_fields_set if f != "status"]
         if disallowed:
-            return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
+            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     if payload.status and payload.status != item.status:
         old_status = item.status

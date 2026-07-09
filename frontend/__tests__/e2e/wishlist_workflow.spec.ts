@@ -292,4 +292,44 @@ test.describe("FRBR Virtual Item Boundary", () => {
     const qrCodeButtonByText = page.locator("button", { hasText: "Print QR Code" });
     await expect(qrCodeButtonByText).toHaveCount(0);
   });
+
+  test("should hide/disable borrow and lend actions when viewing a virtual wishlist item (id < 0)", async ({
+    page,
+  }) => {
+    // Mock the backend to return a virtual wishlist item payload where user is NOT the owner
+    await page.route("**/api/items/-10**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: -10,
+            title: "Virtual Wishlist Book",
+            status: "want_to_read",
+            collection_status: "wish_list",
+            manifestation_id: null,
+            is_owner: false,
+            owner_id: "other-user-id",
+            meta: { format: "book" },
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/items/-10/logs**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [] }),
+      });
+    });
+
+    await page.goto("/item/-10");
+    await page.waitForLoadState("networkidle");
+
+    // Borrow action ("Request Loan" button) should be absent
+    const requestLoanButton = page.locator("button", { hasText: "Request Loan" });
+    await expect(requestLoanButton).toHaveCount(0);
+  });
 });

@@ -58,7 +58,7 @@ def test_b64url_encode_produces_valid_base64url():
     assert "+" not in result
     assert "/" not in result
     # Must be decodable back to original
-    padded = result + "=" * (4 - len(result) % 4)
+    padded = result + "=" * ((4 - len(result) % 4) % 4)
     decoded = base64.urlsafe_b64decode(padded).decode("utf-8")
     assert decoded == "hello"
 
@@ -89,7 +89,7 @@ def test_backup_manifest_token_header_uses_hs256():
     token = generate_backup_manifest_token(payload, SECRET)
     header_part = token.split(".")[0]
     # Pad and decode
-    padded = header_part + "=" * (4 - len(header_part) % 4)
+    padded = header_part + "=" * ((4 - len(header_part) % 4) % 4)
     header = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
     assert header.get("alg") == "HS256"
 

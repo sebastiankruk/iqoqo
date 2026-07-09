@@ -33,7 +33,7 @@ TS_OUT = ROOT / "frontend" / "lib" / "permissions.ts"
 
 def get_functional_content(text: str) -> str:
     """Helper to strip comments for comparison."""
-    return "\n".join(line for line in text.splitlines() if line.strip() and not line.strip().startswith(("#", "//")))
+    return "\n".join(line for line in text.splitlines() if line.strip() and not line.strip().startswith(("#", "//", "/*", "*/", "*")))
 
 
 def main() -> None:
