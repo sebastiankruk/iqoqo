@@ -197,3 +197,34 @@ class UserCollectionUpdateSchema(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     parent_id: int | None = Field(default=None, gt=0, description="Optional ID of the parent collection")
+
+
+class ItemLendSchema(BaseModel):
+    """
+    Schema for validating item lending payload.
+
+    Enforces the FRBR ontology boundary: virtual items (id <= 0, i.e. UserWorkIntent
+    wishlist placeholders) cannot participate in physical loan workflows. Only concrete,
+    localized Items with a strictly positive database ID may be lent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: int = Field(
+        ge=1,
+        description="The ID of the physical item to lend. Must be strictly greater than 0.",
+    )
+    borrower_id: str | None = Field(
+        default=None,
+        description="The UUID of the borrower user, if known.",
+    )
+    borrower_name: str | None = Field(
+        default=None,
+        description="The display name of the borrower.",
+    )
+    notes: str | None = Field(default=None, description="Optional notes for the loan request.")
+
+    @field_validator("borrower_id")
+    @classmethod
+    def validate_borrower_id(cls, v: str | None) -> str | None:
+        return _validate_uuid_str(v)

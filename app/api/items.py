@@ -882,6 +882,12 @@ def update_item(item_id: int):
     user_id = getattr(g, "user_id", None)
     user = db.session.get(User, user_id) if user_id else None
 
+    # FRBR ontology boundary: physical item IDs must be strictly positive.
+    # Negative IDs are virtual wishlist intents handled by _update_virtual_item.
+    # ID 0 is not a valid entity at any FRBR level and must be rejected immediately.
+    if item_id == 0:
+        return jsonify({"error": "Cannot mutate virtual items (id <= 0). Physical item IDs must be strictly positive.", "code": 400}), 400
+
     if item_id < 0:
         return _update_virtual_item(item_id, user_id)
     return _update_physical_item(item_id, user_id, user)

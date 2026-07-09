@@ -189,4 +189,16 @@ describe("ItemCard", () => {
     render(<ItemCard item={makeItem({ owner_id: "Unavailable" })} />);
     expect(screen.queryByText("In Collection")).not.toBeInTheDocument();
   });
+
+  it("renders gracefully when manifestation_id is null (virtual wishlist item)", () => {
+    // Virtual wishlist items (UserWorkIntent adapters) have manifestation_id null/undefined.
+    // The ItemCard must never crash when this field is missing.
+    const virtualItem = makeItem({ id: -5, manifestation_id: undefined, title: "Virtual Book" });
+    // Should render without throwing
+    render(<ItemCard item={virtualItem} />);
+    // Title still rendered
+    expect(screen.getAllByText("Virtual Book").length).toBeGreaterThan(0);
+    // Link still points to item page (not manifestation page)
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/item/-5");
+  });
 });

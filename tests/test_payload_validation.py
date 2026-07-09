@@ -195,3 +195,54 @@ def test_scan_barcode_dynamic_status(client, normal_user_headers, app):
     response = client.post("/api/scan", json=payload, headers=normal_user_headers)
     # If it fails to resolve, it's 404/400, but we want to make sure it's not a payload error
     assert response.status_code != 400 or "Invalid payload" not in response.json.get("error", "")
+
+
+class TestItemLendSchemaFrbrBoundary:
+    """Schema-level unit tests for ItemLendSchema enforcing the FRBR physical item boundary."""
+
+    def test_lend_schema_rejects_zero_id(self):
+        """Assert ItemLendSchema raises ValidationError when item_id is 0.
+
+        item_id == 0 is not a valid entity in the FRBR hierarchy and must never
+        reach the physical loan workflow.
+        """
+        from pydantic import ValidationError as PydanticValidationError
+
+        from app.api.schemas import ItemLendSchema
+
+        with pytest.raises(PydanticValidationError) as exc:
+            ItemLendSchema(item_id=0)
+        assert "greater than or equal to 1" in str(exc.value).lower()
+
+    def test_lend_schema_rejects_negative_id(self):
+        """Assert ItemLendSchema raises ValidationError when item_id is negative.
+
+        Negative IDs are virtual UserWorkIntent adapters (wishlist placeholders).
+        They must not be accepted by any physical loan schema.
+        """
+        from pydantic import ValidationError as PydanticValidationError
+
+        from app.api.schemas import ItemLendSchema
+
+        with pytest.raises(PydanticValidationError) as exc:
+            ItemLendSchema(item_id=-10)
+        assert "greater than or equal to 1" in str(exc.value).lower()
+
+    def test_lend_schema_accepts_positive_id_with_optional_fields(self):
+        """Assert ItemLendSchema accepts a valid physical item ID with optional fields."""
+        from app.api.schemas import ItemLendSchema
+
+        schema = ItemLendSchema(item_id=42, borrower_name="Alice")
+        assert schema.item_id == 42
+        assert schema.borrower_name == "Alice"
+        assert schema.borrower_id is None
+
+    def test_lend_schema_rejects_extra_fields(self):
+        """Assert ItemLendSchema rejects extra fields (forbid extra mode)."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        from app.api.schemas import ItemLendSchema
+
+        with pytest.raises(PydanticValidationError) as exc:
+            ItemLendSchema(item_id=1, injected_role="admin")
+        assert "Extra inputs are not permitted" in str(exc.value)

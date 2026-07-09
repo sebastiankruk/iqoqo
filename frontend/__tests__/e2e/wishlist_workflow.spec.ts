@@ -215,3 +215,81 @@ test.describe("v0.7.0 Token-Based Wishlist Sharing & Isolation", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 });
+
+test.describe("FRBR Virtual Item Boundary", () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock the user profile to simulate an authenticated item owner
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "owner-user-id",
+            email: "owner@iqoqo.local",
+            permissions: ["update:item", "write:metadata", "upload:cover"],
+            roles: [],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: packageJson.version },
+        }),
+      });
+    });
+  });
+
+  test("should hide the QR Code button when viewing a virtual wishlist item (id < 0)", async ({ page }) => {
+    // Mock the backend to return a virtual wishlist item payload.
+    // Virtual items are UserWorkIntent adapters with negative IDs (id = -intent_id).
+    // They have no physical copy on a shelf, so the QR Code button must be absent.
+    await page.route("**/api/items/-10**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: -10,
+            title: "Virtual Wishlist Book",
+            status: "want_to_read",
+            collection_status: "wish_list",
+            manifestation_id: null,
+            is_owner: true,
+            owner_id: "owner-user-id",
+            meta: { format: "book" },
+          },
+        }),
+      });
+    });
+
+    // Mock the item logs endpoint — virtual items return an empty array
+    await page.route("**/api/items/-10/logs**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [] }),
+      });
+    });
+
+    await page.goto("/item/-10");
+    await page.waitForLoadState("networkidle");
+
+    // Assert the QR Code button is strictly absent for virtual items.
+    // This is the FRBR boundary tripwire: virtual items have no physical copy to tag.
+    const qrCodeButton = page.getByTestId("qrcode-btn");
+    await expect(qrCodeButton).toHaveCount(0);
+
+    // Also assert by text content
+    const qrCodeButtonByText = page.locator("button", { hasText: "Print QR Code" });
+    await expect(qrCodeButtonByText).toHaveCount(0);
+  });
+});
