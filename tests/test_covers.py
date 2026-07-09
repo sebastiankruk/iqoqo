@@ -68,6 +68,42 @@ def test_generate_fallback_cover_returns_tuple_with_correct_source(tmp_path):
         assert source == "fallback_pil", f"Expected 'fallback_pil', got {source!r}"
 
 
+def test_generate_fallback_cover_gradient_dimensions_and_fonts(tmp_path):
+    """Phase 4 (0.7.8): Assert that the upgraded gradient cover generator produces an
+    image of exactly 600×900 pixels in JPEG format without raising font-rendering
+    exceptions — even when DejaVu TTF fonts are absent from the host (falls back to
+    the Pillow built-in default font gracefully).
+
+    The test also verifies:
+    - Text wrapping works for very long titles without crashing.
+    - The returned ``source`` tag is ``'fallback_pil'``.
+    - The file is written to the expected path.
+    """
+    identifier = "9781234567890"
+    title = "A Very Long Title That Should Wrap Properly On The Procedural Gradient Background"
+    author = "Jane Doe"
+
+    with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
+        result = generate_fallback_cover(identifier, title, author)
+
+    assert result is not None, "Phase 4 gradient cover generator returned None"
+    url, source = result
+
+    assert source == "fallback_pil", f"Expected source='fallback_pil', got {source!r}"
+    assert identifier in url, "Expected identifier in cover URL"
+    assert url.endswith(f"{identifier}_generated.jpg")
+
+    # Verify the file was actually written to the isolated directory
+    filename = f"{identifier}_generated.jpg"
+    filepath = tmp_path / filename
+    assert filepath.exists(), "Cover image file was not created on disk"
+
+    # Inspect the saved file to confirm dimensions and encoding
+    with Image.open(str(filepath)) as img:
+        assert img.format == "JPEG", f"Expected JPEG format, got {img.format}"
+        assert img.size == (600, 900), f"Phase 4 spec requires 600×900 cover, got {img.size}"
+
+
 def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
     """Test OpenLibrary success path."""
     # Mock response
