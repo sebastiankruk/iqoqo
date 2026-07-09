@@ -64,6 +64,7 @@ def test_generate_fallback_cover_returns_tuple_with_correct_source(tmp_path):
         assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
         assert len(result) == 2, "Expected (url, source) tuple"
         url, source = result
+        assert url.endswith("isbn_fallback_generated.jpg")
         assert source == "fallback_pil", f"Expected 'fallback_pil', got {source!r}"
 
 
@@ -321,7 +322,12 @@ def test_pipeline_skips_tier5_when_tier1_user_photo_succeeds(
     with app.app_context():
         with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
             with patch("app.utils.covers.optimize_and_save_image") as mock_optimize:
-                mock_optimize.side_effect = lambda data, path: open(path, "wb").write(data)  # noqa: SIM115
+
+                def fake_save(data, path):
+                    with open(path, "wb") as f:
+                        f.write(data)
+
+                mock_optimize.side_effect = fake_save
                 process_cover_pipeline(
                     manifestation_id=42,
                     identifier="item_42",
@@ -366,12 +372,6 @@ def test_generate_cover_gemini_handles_api_permission_error():
                     # real implementation catches it
                     pass
 
-    # Test the real function handles unexpected exceptions gracefully
-    class BrokenGenaiModule:
-        class Client:
-            def __init__(self, api_key):
-                raise FakeClientError("403 PERMISSION_DENIED")
-
     with patch.dict("os.environ", {"GEMINI_API_KEY": "fake-key"}):
         with patch("app.utils.llm_covers.record_telemetry"):
             with patch("app.utils.llm_covers.time") as mock_time:
@@ -392,7 +392,7 @@ def test_generate_cover_gemini_handles_api_permission_error():
                         fake_genai.Client = lambda api_key: (_ for _ in ()).throw(FakeClientError("403"))  # type: ignore[attr-defined]
                         sys.modules["google.genai"] = fake_genai
                         # Re-import the function in isolation via its current state
-                        from app.utils.llm_covers import generate_cover_gemini as real_fn
+                        from app.utils.llm_covers import generate_cover_gemini as real_fn  # pylint: disable=reimported
 
                         result = real_fn("id", "Title", "Author", "user1")
                         # Must return None, not raise

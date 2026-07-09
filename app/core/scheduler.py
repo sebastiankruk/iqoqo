@@ -37,7 +37,7 @@ def run_scheduled_cover_cleanup():
         stuck = cleanup_stuck_pending_covers(timeout_minutes=15)
         if stuck > 0:
             logger.info("Cover cleanup: cleared %d stuck tasks", stuck)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 # pylint: disable=broad-exception-caught
         logger.exception("Cover cleanup job failed")
 
 
