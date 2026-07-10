@@ -323,7 +323,7 @@ vi.mock("next-intl", () => ({
       },
       Collection: {
         loading: "Loading collection...",
-        searchResults: "Search results for \"{query}\"",
+        searchResults: 'Search results for "{query}"',
         title: "Collection",
         browseAuthor: "Browse all items by {author}",
         foundOne: "Found 1 item",
@@ -336,7 +336,7 @@ vi.mock("next-intl", () => ({
         tabRoadmaps: "Roadmaps",
         searchPlaceholder: "Search title, author, or ISBN...",
         filters: "Filters",
-        noWorksMatching: "No works matching \"{query}\"",
+        noWorksMatching: 'No works matching "{query}"',
         noWorksInCollection: "No works in collection",
         tryAdjusting: "Try adjusting your search or filters.",
         itemsCountOne: "1 item",
@@ -345,8 +345,8 @@ vi.mock("next-intl", () => ({
         viewMyItem: "View my item",
         edition: "Edition",
         myItem: "My Item",
-        noExpressionsMatching: "No expressions matching \"{query}\"",
-        noExpressionsInCollection: "No expressions in collection"
+        noExpressionsMatching: 'No expressions matching "{query}"',
+        noExpressionsInCollection: "No expressions in collection",
       },
       CollectionFilters: {
         title: "Filters",
@@ -359,7 +359,7 @@ vi.mock("next-intl", () => ({
         secCollectionStatus: "Collection Status",
         secProgress: "Progress",
         secCuration: "Curation",
-        statusHelp: "Status filters apply to physical items only. Switch to \"My Items\" view to filter by status.",
+        statusHelp: 'Status filters apply to physical items only. Switch to "My Items" view to filter by status.',
         notApplicable: "Not applicable here.",
         noCover: "No Cover",
         noId: "No ID",
@@ -370,7 +370,9 @@ vi.mock("next-intl", () => ({
         filterDrawer: "Filter drawer",
         closeFilters: "Close filters",
         showResults: "Show Results",
+        noMatches: "No matches.",
         cat_text: "Text",
+        cat_audiobook: "Audiobook",
         cat_music: "Music",
         cat_movie: "Movie",
         cat_board_game: "Board Game",
@@ -400,8 +402,8 @@ vi.mock("next-intl", () => ({
         fmt_dvd: "DVD",
         fmt_bluray: "Blu-ray",
         fmt_audiobook_cd: "Audiobook CD",
-        fmt_cassette: "Cassette"
-      }
+        fmt_cassette: "Cassette",
+      },
     };
 
     const dictionary = dictionaries[namespace] || {};

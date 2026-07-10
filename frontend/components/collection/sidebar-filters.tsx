@@ -152,6 +152,7 @@ interface SearchableFacetProps {
  * @returns {JSX.Element} The component
  */
 export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
+  const t = useTranslations("CollectionFilters");
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredOptions = useMemo(() => {
@@ -177,7 +178,7 @@ export function SearchableFacet({ options, activeFilters, type, onToggle, placeh
 
       <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
         {filteredOptions.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground italic py-1 px-2">No matches.</p>
+          <p className="text-[10px] text-muted-foreground italic py-1 px-2">{t("noMatches")}</p>
         ) : (
           filteredOptions.map(option => {
             const active = isActive(activeFilters, type, option);
@@ -368,9 +369,7 @@ export function SidebarFilters({
 
       <AccordionSection title={t("secCollectionStatus")}>
         {isHierarchyView ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            {t("statusHelp")}
-          </p>
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
         ) : disableStatus ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
         ) : (

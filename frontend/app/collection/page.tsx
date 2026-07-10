@@ -503,11 +503,7 @@ function CollectionContent() {
               {appliedQuery ? t("searchResults", { query: appliedQuery }) : t("title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {appliedQuery
-                ? total === 1
-                  ? t("foundOne")
-                  : t("foundMultiple", { count: total })
-                : t("browseManage")}
+              {appliedQuery ? (total === 1 ? t("foundOne") : t("foundMultiple", { count: total })) : t("browseManage")}
             </p>
           </div>
 
@@ -806,7 +802,9 @@ function CollectionContent() {
                       <Type className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
-                      {appliedQuery ? t("noExpressionsMatching", { query: appliedQuery }) : t("noExpressionsInCollection")}
+                      {appliedQuery
+                        ? t("noExpressionsMatching", { query: appliedQuery })
+                        : t("noExpressionsInCollection")}
                     </h3>
                     <p className="mt-1 max-w-xs text-sm text-muted-foreground">{t("tryAdjusting")}</p>
                   </div>

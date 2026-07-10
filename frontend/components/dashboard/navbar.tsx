@@ -16,7 +16,21 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle, Folder, Home, Check, SunMoon, Globe } from "lucide-react";
+import {
+  Search,
+  ScanLine,
+  Library,
+  Loader2,
+  Settings,
+  User,
+  LogOut,
+  AlertTriangle,
+  Folder,
+  Home,
+  Check,
+  SunMoon,
+  Globe,
+} from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -242,11 +256,17 @@ export function Navbar() {
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("en")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>English</span>
                             {locale === "en" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setLanguage("pl")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("pl")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Polski</span>
                             {locale === "pl" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
@@ -261,15 +281,24 @@ export function Navbar() {
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("light")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Light / Jasny</span>
                             {theme === "light" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("dark")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Dark / Ciemny</span>
                             {theme === "dark" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("system")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>System</span>
                             {theme === "system" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
@@ -320,11 +349,17 @@ export function Navbar() {
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("en")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>English</span>
                             {locale === "en" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setLanguage("pl")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("pl")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Polski</span>
                             {locale === "pl" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
@@ -339,15 +374,24 @@ export function Navbar() {
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("light")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Light / Jasny</span>
                             {theme === "light" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("dark")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>Dark / Ciemny</span>
                             {theme === "dark" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer flex items-center justify-between gap-2">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("system")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
                             <span>System</span>
                             {theme === "system" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
