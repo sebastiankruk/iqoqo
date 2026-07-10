@@ -3,9 +3,13 @@
   "instructions": [
     "../.agents/rules/iqoqo-standards.md"
   ],
+  "plugin": [
+    "opencode-ignore"
+  ],
   "permission": {
     "external_directory": {},
     "edit": {},
+
     "bash": {
       "cat *.env*": "deny",
       "printenv*": "deny",
