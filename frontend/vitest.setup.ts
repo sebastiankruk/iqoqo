@@ -162,27 +162,137 @@ vi.mock("axios", async importOriginal => {
 });
 
 /* ── next-intl mock ──────────────────────────────────────────────────────── */
+/* ── next-intl mock ──────────────────────────────────────────────────────── */
 vi.mock("next-intl", () => ({
   useTranslations: (namespace: string) => {
-    if (namespace === "Navbar") {
-      return (key: string) => {
-        const translations: Record<string, string> = {
-          maintenanceMode: "Maintenance Mode Active – Some features may be limited",
-          searchPlaceholder: "Search your collection...",
-          collection: "Collection",
-          scan: "Scan",
-          signIn: "Sign In",
-          publicProfile: "Public Profile",
-          profileSettings: "Profile Settings",
-          manageCollections: "Manage Collections",
-          adminConfiguration: "Admin Configuration",
-          logOut: "Log out",
-          home: "Home",
-          profile: "Profile",
-        };
-        return translations[key] || key;
-      };
-    }
-    return (key: string) => key;
+    const dictionaries: Record<string, Record<string, string>> = {
+      Navbar: {
+        maintenanceMode: "Maintenance Mode Active – Some features may be limited",
+        searchPlaceholder: "Search your collection...",
+        collection: "Collection",
+        scan: "Scan",
+        signIn: "Sign In",
+        publicProfile: "Public Profile",
+        profileSettings: "Profile Settings",
+        manageCollections: "Manage Collections",
+        adminConfiguration: "Admin Configuration",
+        logOut: "Log out",
+        home: "Home",
+        profile: "Profile",
+      },
+      Dashboard: {
+        welcomeBack: "Welcome back, {name}",
+        collectionGrowing: "Your collection is growing nicely. Here is what is happening.",
+      },
+      Hero: {
+        title: "The Library of Everything",
+        description:
+          "iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games. Built on the open Semantic Web, designed for a distributed future.",
+        startCatalog: "Start Your Catalog",
+        browseInstance: "Browse Instance",
+        github: "GitHub",
+      },
+      GlobalStats: {
+        works: "Works",
+        manifestations: "Manifestations",
+        itemsTracked: "Items Tracked",
+        curators: "Curators",
+      },
+      StatsCards: {
+        items: "Items",
+        itemsDesc: "Total in collection",
+        reading: "Reading",
+        readingDesc: "Currently active reads",
+        wishList: "On Wish List",
+        wishListDesc: "On your list",
+        lentOut: "Lent Out",
+        lentOutDesc: "Currently with friends",
+        borrowed: "Borrowed",
+        borrowedDesc: "Borrowed from others",
+        ariaLabel: "Collection statistics",
+      },
+      CurrentContext: {
+        ariaLabelActive: "Currently active items",
+        titleBoth: "Currently Reading and Wish List",
+        emptyState: "Your “Currently Reading and Wish List” is empty. ",
+        browseCollection: "Browse your collection",
+        toAddItems: " to add items.",
+        ariaLabelReading: "Currently reading items",
+        titleReading: "Currently Reading",
+        active: "active",
+        ariaLabelWishList: "Wish list items",
+        titleWishList: "Wish List",
+      },
+      FreshArrivals: {
+        ariaLabel: "Recently added items",
+        title: "Fresh Arrivals",
+        errorLoad: "Could not load items — the API may be unavailable.",
+        latest: "Latest",
+        rssTitle: "Subscribe to Fresh Arrivals RSS feed",
+        viewGlobal: "View global library",
+        generating: "Generating...",
+        processing: "Processing...",
+        untitled: "Untitled",
+        unknown: "Unknown",
+      },
+      Footer: {
+        libraryOfEverything: "The Library of Everything",
+        githubSponsors: "GitHub Sponsors",
+        buyMeACoffee: "Buy Me a Coffee",
+        rules: "Your library, your rules.",
+      },
+      Login: {
+        title: "Sign in to iqoqo",
+        googleSignIn: "Sign in with Google",
+        or: "Or",
+        emailPlaceholder: "Email",
+        passwordPlaceholder: "Password",
+        signInButton: "Sign In",
+        noAccount: "Don't have an account? ",
+        signUp: "Sign up",
+        loginFailed: "Login failed",
+      },
+      Register: {
+        title: "Create an account",
+        subtitle: "Join the distributed library",
+        googleSignUp: "Sign up with Google",
+        orEmail: "Or continue with email",
+        displayNamePlaceholder: "Display Name (Optional)",
+        emailPlaceholder: "Email",
+        passwordPlaceholder: "Password",
+        agreeTerms: "I agree to the ",
+        termsOfService: "Terms of Service",
+        and: " and ",
+        privacyPolicy: "Privacy Policy",
+        signUpButton: "Sign Up",
+        alreadyAccount: "Already have an account? ",
+        signIn: "Sign in",
+        mustAcceptTerms: "You must accept the Terms of Service and Privacy Policy.",
+        registrationFailed: "Registration failed. Please try again.",
+      },
+      NotFound: {
+        title: "404 - Page Not Found",
+        description: "The page you are looking for does not exist, has been removed, or has been made private.",
+        goBackHome: "Go back home",
+      },
+      CookieConsent: {
+        haikuLine1: "Small crumbs of data,",
+        haikuLine2: "Guide your journey through the books,",
+        haikuLine3: "Accept and read on.",
+        privacyPolicy: "Privacy Policy",
+        gotIt: "Got it",
+      },
+    };
+
+    const dictionary = dictionaries[namespace] || {};
+    return (key: string, values?: Record<string, string>) => {
+      let translation = dictionary[key] || key;
+      if (values) {
+        Object.entries(values).forEach(([k, v]) => {
+          translation = translation.replace(`{${k}}`, v);
+        });
+      }
+      return translation;
+    };
   },
 }));

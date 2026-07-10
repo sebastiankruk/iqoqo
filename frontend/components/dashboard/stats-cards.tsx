@@ -18,6 +18,7 @@
 import { BookMarked, BookOpen, HandHelping, Target } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 /**
  * Three top-row stat cards pulled from the Flask /api/stats endpoint.
@@ -25,63 +26,64 @@ import Link from "next/link";
  * @returns {JSX.Element} The component
  */
 export function StatsCards() {
+  const t = useTranslations("StatsCards");
   const { data: stats, isLoading, isError } = useStats();
 
   const cards = [
     {
-      label: "Items",
+      label: t("items"),
       value: stats?.total_items ?? 0,
       icon: BookOpen,
       borderColor: "border-l-primary",
       iconBg: "bg-primary/8",
       iconColor: "text-primary",
-      description: "Total in collection",
+      description: t("itemsDesc"),
       href: "/collection",
     },
     {
-      label: "Reading",
+      label: t("reading"),
       value: stats?.items_reading ?? 0,
       icon: BookMarked,
       borderColor: "border-l-green-500",
       iconBg: "bg-green-500/10",
       iconColor: "text-green-600",
-      description: "Currently active reads",
+      description: t("readingDesc"),
       href: "/collection?statuses=reading",
     },
     {
-      label: "On Wish List",
+      label: t("wishList"),
       value: stats?.to_read ?? 0,
       icon: Target,
       borderColor: "border-l-chart-3",
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
-      description: "On your list",
+      description: t("wishListDesc"),
       href: "/collection?statuses=wish_list",
     },
     {
-      label: "Lent Out",
+      label: t("lentOut"),
       value: stats?.lent_items ?? 0,
       icon: HandHelping,
       borderColor: "border-l-accent",
       iconBg: "bg-accent/10",
       iconColor: "text-accent",
-      description: "Currently with friends",
+      description: t("lentOutDesc"),
       href: "/collection?statuses=lent",
     },
     {
-      label: "Borrowed",
+      label: t("borrowed"),
       value: stats?.borrowed_items ?? 0,
       icon: BookMarked,
       borderColor: "border-l-teal-500",
       iconBg: "bg-teal-500/10",
       iconColor: "text-teal-600",
-      description: "Borrowed from others",
+      description: t("borrowedDesc"),
       href: "/collection?statuses=borrowed",
     },
   ];
 
   return (
-    <section aria-label="Collection statistics">
+    <section aria-label={t("ariaLabel")}>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map(stat => (
           <Link

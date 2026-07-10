@@ -12,5 +12,112 @@
     "logOut": "Wyloguj się",
     "home": "Główna",
     "profile": "Profil"
+  },
+  "Dashboard": {
+    "welcomeBack": "Witaj ponownie, {name}",
+    "collectionGrowing": "Twoja kolekcja ładnie rośnie. Oto co się dzieje."
+  },
+  "Hero": {
+    "title": "Biblioteka wszystkiego",
+    "description": "iqoqo pozwala Ci tworzyć, udostępniać i odkrywać osobiste katalogi książek, muzyki, filmów i gier planszowych. Zbudowane na otwartej sieci semantycznej, zaprojektowane z myślą o rozproszonej przyszłości.",
+    "startCatalog": "Rozpocznij swój katalog",
+    "browseInstance": "Przeglądaj instancję",
+    "github": "GitHub"
+  },
+  "GlobalStats": {
+    "works": "Dzieła",
+    "manifestations": "Manifestacje",
+    "itemsTracked": "Śledzone egzemplarze",
+    "curators": "Kustosze"
+  },
+  "StatsCards": {
+    "items": "Egzemplarze",
+    "itemsDesc": "Razem w kolekcji",
+    "reading": "Czytane",
+    "readingDesc": "Obecnie czytane",
+    "wishList": "Na liście życzeń",
+    "wishListDesc": "Na Twojej liście",
+    "lentOut": "Pożyczone komuś",
+    "lentOutDesc": "Obecnie u znajomych",
+    "borrowed": "Pożyczone od kogoś",
+    "borrowedDesc": "Pożyczone od innych",
+    "ariaLabel": "Statystyki kolekcji"
+  },
+  "CurrentContext": {
+    "ariaLabelActive": "Obecnie aktywne egzemplarze",
+    "titleBoth": "Obecnie czytane i lista życzeń",
+    "emptyState": "Twoja lista „Obecnie czytane i lista życzeń” jest pusta. ",
+    "browseCollection": "Przeglądaj swoją kolekcję",
+    "toAddItems": ", aby dodać pozycje.",
+    "ariaLabelReading": "Obecnie czytane egzemplarze",
+    "titleReading": "Obecnie czytane",
+    "active": "aktywne",
+    "ariaLabelWishList": "Egzemplarze na liście życzeń",
+    "titleWishList": "Lista życzeń"
+  },
+  "FreshArrivals": {
+    "ariaLabel": "Ostatnio dodane pozycje",
+    "title": "Świeże nabytki",
+    "errorLoad": "Nie można załadować pozycji — API może być niedostępne.",
+    "latest": "Najnowsze",
+    "rssTitle": "Subskrybuj kanał RSS świeżych nabytków",
+    "viewGlobal": "Zobacz globalną bibliotekę",
+    "generating": "Generowanie...",
+    "processing": "Przetwarzanie...",
+    "untitled": "Bez tytułu",
+    "unknown": "Nieznany"
+  },
+  "Footer": {
+    "libraryOfEverything": "Biblioteka wszystkiego",
+    "githubSponsors": "Sponsorzy GitHub",
+    "buyMeACoffee": "Kup mi kawę",
+    "rules": "Twoja biblioteka, Twoje zasady."
+  },
+  "Login": {
+    "title": "Zaloguj się do iqoqo",
+    "googleSignIn": "Zaloguj się przez Google",
+    "or": "Lub",
+    "emailPlaceholder": "E-mail",
+    "passwordPlaceholder": "Hasło",
+    "signInButton": "Zaloguj się",
+    "noAccount": "Nie masz konta? ",
+    "signUp": "Zarejestruj się",
+    "loginFailed": "Logowanie nie powiodło się",
+    "token_exchange_failed": "Logowanie przez Google nie mogło zostać ukończone. Spróbuj ponownie.",
+    "id_token_parse_failed": "Nie udało się zweryfikować Twojej tożsamości w Google. Spróbuj ponownie.",
+    "no_email": "Konto Google nie ma przypisanego adresu e-mail.",
+    "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
+    "jwt_generation_failed": "Tworzenie sesji nie powiodło się. Spróbuj ponownie.",
+    "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie."
+  },
+  "Register": {
+    "title": "Utwórz konto",
+    "subtitle": "Dołącz do rozproszonej biblioteki",
+    "googleSignUp": "Zarejestruj się przez Google",
+    "orEmail": "Lub kontynuuj z adresem e-mail",
+    "displayNamePlaceholder": "Nazwa wyświetlana (opcjonalnie)",
+    "emailPlaceholder": "E-mail",
+    "passwordPlaceholder": "Hasło",
+    "agreeTerms": "Zgadzam się na ",
+    "termsOfService": "warunki korzystania z usługi",
+    "and": " oraz ",
+    "privacyPolicy": "politykę prywatności",
+    "signUpButton": "Zarejestruj się",
+    "alreadyAccount": "Masz już konto? ",
+    "signIn": "Zaloguj się",
+    "mustAcceptTerms": "Musisz zaakceptować warunki korzystania z usługi i politykę prywatności.",
+    "registrationFailed": "Rejestracja nie powiodła się. Spróbuj ponownie."
+  },
+  "NotFound": {
+    "title": "404 - Strona nie znaleziona",
+    "description": "Strona, której szukasz, nie istnieje, została usunięta lub jest prywatna.",
+    "goBackHome": "Wróć do strony głównej"
+  },
+  "CookieConsent": {
+    "haikuLine1": "Małe okruszki danych,",
+    "haikuLine2": "prowadzą Cię przez książki,",
+    "haikuLine3": "zaakceptuj i czytaj dalej.",
+    "privacyPolicy": "Polityka prywatności",
+    "gotIt": "Rozumiem"
   }
 }

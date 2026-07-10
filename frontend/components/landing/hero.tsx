@@ -19,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Github } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 /**
  * Hero section component.
@@ -26,6 +27,8 @@ import { Github } from "lucide-react";
  * @returns {JSX.Element} The component
  */
 export function Hero() {
+  const t = useTranslations("Hero");
+
   return (
     <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl mb-12">
       <div className="absolute inset-0 z-0">
@@ -40,26 +43,23 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 text-center px-4 max-w-3xl">
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">The Library of Everything</h1>
-        <p className="text-xl text-muted-foreground mb-8">
-          iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games.
-          Built on the open Semantic Web, designed for a distributed future.
-        </p>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">{t("title")}</h1>
+        <p className="text-xl text-muted-foreground mb-8">{t("description")}</p>
         <div className="flex gap-4 justify-center flex-wrap">
           <Button
             asChild
             size="sm"
             className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md"
           >
-            <Link href="/register">Start Your Catalog</Link>
+            <Link href="/register">{t("startCatalog")}</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link href="/collection">Browse Instance</Link>
+            <Link href="/collection">{t("browseInstance")}</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link href="https://github.com/sebastiankruk/iqoqo" target="_blank" rel="noopener noreferrer">
               <Github className="w-4 h-4 mr-2" />
-              GitHub
+              {t("github")}
             </Link>
           </Button>
         </div>

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Frontend Internationalization (i18n)**: Implemented base `next-intl` internationalization routing layer on Next.js, added localized English (`frontend/messages/en.json`) and Polish (`frontend/messages/pl.json`) translation strings for the navbar, and deployed the interactive `LanguageToggle` selector.
+- **Frontend Internationalization (i18n)**: Implemented base `next-intl` internationalization routing layer on Next.js, added localized English (`frontend/messages/en.json`) and Polish (`frontend/messages/pl.json`) translation strings for all user-visible components and pages (Navbar, DashboardPage, Hero, GlobalStats, StatsCards, CurrentContext, FreshArrivals, Footer, LoginPage, RegisterPage, NotFound, and CookieConsent banner), deployed the interactive `LanguageToggle` selector, and updated frontend unit test mocks. Polish translations strictly use sentence casing.
 - **Backend OpenAPI Integration**: Deployed OpenAPI/Swagger spec generation endpoint under `/api/docs/openapi.json` using `apispec` and `apispec-webframeworks`.
 - **Testing Coverage**: Added unit tests for OpenAPI spec generation (`tests/test_openapi.py`), updated frontend navbar unit tests (`navbar.test.tsx`), and created a Playwright E2E test (`i18n_localization.spec.ts`) for localization switches.
 

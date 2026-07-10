@@ -21,15 +21,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-
-const ERROR_MESSAGES: Record<string, string> = {
-  token_exchange_failed: "Google sign-in could not be completed. Please try again.",
-  id_token_parse_failed: "Failed to verify your Google identity. Please try again.",
-  no_email: "Google account has no email address associated with it.",
-  user_setup_failed: "Failed to create your account. Please try again or contact support.",
-  jwt_generation_failed: "Session creation failed. Please try again.",
-  MissingToken: "Authentication token was missing. Please try signing in again.",
-};
+import { useTranslations } from "next-intl";
 
 /**
  * Login page component.
@@ -50,11 +42,12 @@ export default function LoginPage() {
  * @returns {JSX.Element} The login page content component.
  */
 function LoginPageContent() {
+  const t = useTranslations("Login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error");
-  const errorMessage = errorCode ? (ERROR_MESSAGES[errorCode] ?? `Error: ${errorCode}`) : null;
+  const errorMessage = errorCode ? t(errorCode) || `Error: ${errorCode}` : null;
 
   /**
    * Handles the local login process.
@@ -75,7 +68,7 @@ function LoginPageContent() {
       // that sets the httpOnly session cookie then redirects to /.
       window.location.href = `/api/auth-exchange?token=${data.token}`;
     } else {
-      alert("Login failed");
+      alert(t("loginFailed"));
     }
   };
 
@@ -84,7 +77,7 @@ function LoginPageContent() {
       <Navbar />
       <main className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
-          <h1 className="text-2xl font-bold">Sign in to iqoqo</h1>
+          <h1 className="text-2xl font-bold">{t("title")}</h1>
           {errorMessage && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{errorMessage}</div>
           )}
@@ -93,17 +86,17 @@ function LoginPageContent() {
             variant="outline"
             onClick={() => (window.location.href = `/api/auth/login/google`)}
           >
-            Sign in with Google
+            {t("googleSignIn")}
           </Button>
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-            <span className="relative z-10 px-2 text-muted-foreground">Or</span>
+            <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
           </div>
           <form onSubmit={handleLocalLogin} className="space-y-4">
             <input
               type="email"
               name="email"
               autoComplete="email"
-              placeholder="Email"
+              placeholder={t("emailPlaceholder")}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -112,19 +105,19 @@ function LoginPageContent() {
               type="password"
               name="password"
               autoComplete="current-password"
-              placeholder="Password"
+              placeholder={t("passwordPlaceholder")}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={password}
               onChange={e => setPassword(e.target.value)}
             />
             <Button type="submit" className="w-full" variant="ghost">
-              Sign In
+              {t("signInButton")}
             </Button>
 
             <div className="text-center text-sm pt-4">
-              Don&apos;t have an account?{" "}
+              {t("noAccount")}
               <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-                Sign up
+                {t("signUp")}
               </Link>
             </div>
           </form>
