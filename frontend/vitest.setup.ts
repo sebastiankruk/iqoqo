@@ -184,7 +184,7 @@ vi.mock("next-intl", () => ({
         themeSubmenu: "Theme",
         themeLight: "Light",
         themeDark: "Dark",
-        themeSystem: "System"
+        themeSystem: "System",
       },
       Dashboard: {
         welcomeBack: "Welcome back, {name}",
