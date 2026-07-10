@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Backend OpenAPI Integration**: Deployed OpenAPI/Swagger spec generation endpoint under `/api/docs/openapi.json` using `apispec` and `apispec-webframeworks`.
 - **Testing Coverage**: Added unit tests for OpenAPI spec generation (`tests/test_openapi.py`), updated frontend navbar unit tests (`navbar.test.tsx`), and created a Playwright E2E test (`i18n_localization.spec.ts`) for localization switches.
 
+### Fixed
+
+- **Allegro User-Agent Header Correction**: Configured a dynamic `User-Agent` header (`iqoqo/{Config.VERSION} (+https://iqoqo.cc)`) based on the application version to avoid `403 EDGE_REQUEST_REJECTED` and `SERVICE_ERROR` blockages by the Allegro API. Applied the headers to OAuth token request, refresh request, and catalog/listing fetchers.
+- **Allegro Tests Hardening**: Extended `tests/test_allegro.py` with mock assertions validating that the formatted `User-Agent` is correctly set in request headers.
+
 ## [0.7.8] - 2026-07-07
 
 ### Removed

@@ -15,11 +15,17 @@ from typing import Any
 
 import requests
 
+from app.config import Config
+
 logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT: int = 3
 _READ_TIMEOUT: int = 7
 _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
+
+# Allegro requires a specific User-Agent format to avoid 403 EDGE_REQUEST_REJECTED errors:
+# ApplicationName/Version (+DocumentationURL)
+_USER_AGENT: str = f"iqoqo/{Config.VERSION} (+https://iqoqo.cc)"
 
 
 def get_allegro_token() -> str | None:
@@ -29,6 +35,8 @@ def get_allegro_token() -> str | None:
 
     if not client_id or not client_secret:
         return None
+
+    auth_headers = {"User-Agent": _USER_AGENT}
 
     # Check for User Context token from Authorization Code flow first
     if os.path.isfile(_TOKEN_FILE):
@@ -44,7 +52,13 @@ def get_allegro_token() -> str | None:
             if time.time() - file_mtime > 11 * 3600:
                 auth_url = "https://allegro.pl/auth/oauth/token"
                 data = {"grant_type": "refresh_token", "refresh_token": tokens.get("refresh_token")}
-                response = requests.post(auth_url, auth=(client_id, client_secret), data=data, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+                response = requests.post(
+                    auth_url,
+                    auth=(client_id, client_secret),
+                    data=data,
+                    headers=auth_headers,
+                    timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+                )
                 response.raise_for_status()
                 new_tokens = response.json()
                 with open(_TOKEN_FILE, "w", encoding="utf-8") as wf:
@@ -64,6 +78,7 @@ def get_allegro_token() -> str | None:
             auth_url,
             auth=(client_id, client_secret),
             data={"grant_type": "client_credentials"},
+            headers=auth_headers,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         response.raise_for_status()
@@ -84,6 +99,7 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.allegro.public.v1+json",
+        "User-Agent": _USER_AGENT,
     }
 
     try:
