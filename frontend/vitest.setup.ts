@@ -160,3 +160,29 @@ vi.mock("axios", async importOriginal => {
     },
   };
 });
+
+/* ── next-intl mock ──────────────────────────────────────────────────────── */
+vi.mock("next-intl", () => ({
+  useTranslations: (namespace: string) => {
+    if (namespace === "Navbar") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          maintenanceMode: "Maintenance Mode Active – Some features may be limited",
+          searchPlaceholder: "Search your collection...",
+          collection: "Collection",
+          scan: "Scan",
+          signIn: "Sign In",
+          publicProfile: "Public Profile",
+          profileSettings: "Profile Settings",
+          manageCollections: "Manage Collections",
+          adminConfiguration: "Admin Configuration",
+          logOut: "Log out",
+          home: "Home",
+          profile: "Profile",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));

@@ -29,7 +29,38 @@ vi.mock("@/components/collection/manage-collections-modal", () => ({
   ManageCollectionsModal: () => null,
 }));
 
-// Mock the hook
+// Mock the language toggle to isolate Navbar routing tests
+vi.mock("@/components/language-toggle", () => ({
+  LanguageToggle: () => <button data-testid="language-toggle">EN</button>,
+}));
+
+// Mock next-intl to inject our base english translations directly
+vi.mock("next-intl", () => ({
+  useTranslations: (namespace: string) => {
+    if (namespace === "Navbar") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          maintenanceMode: "Maintenance Mode Active – Some features may be limited",
+          searchPlaceholder: "Search your collection...",
+          collection: "Collection",
+          scan: "Scan",
+          signIn: "Sign In",
+          publicProfile: "Public Profile",
+          profileSettings: "Profile Settings",
+          manageCollections: "Manage Collections",
+          adminConfiguration: "Admin Configuration",
+          logOut: "Log out",
+          home: "Home",
+          profile: "Profile",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));
+
+// Mock the API hooks
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useManifestations: vi.fn(),
@@ -48,7 +79,7 @@ describe("Navbar", () => {
     expect(screen.getByText("iqoqo")).toBeInTheDocument();
   });
 
-  it("renders a search input", () => {
+  it("renders a search input with translated placeholder", () => {
     render(<Navbar />);
     expect(screen.getByPlaceholderText("Search your collection...")).toBeInTheDocument();
   });
@@ -74,6 +105,11 @@ describe("Navbar", () => {
     render(<Navbar />);
     const homeLink = screen.getByRole("link", { name: /iqoqo/i });
     expect(homeLink).toHaveAttribute("href", "/");
+  });
+
+  it("renders the language toggle component", () => {
+    render(<Navbar />);
+    expect(screen.getByTestId("language-toggle")).toBeInTheDocument();
   });
 });
 

@@ -1,25 +1,16 @@
 {
-  "Common": {
-    "loading": "Ładowanie...",
-    "error": "Wystąpił błąd",
-    "noItems": "Nie znaleziono przedmiotów",
-    "back": "Powrót",
-    "save": "Zapisz",
-    "cancel": "Anuluj",
-    "delete": "Usuń",
-    "share": "Udostępnij",
-    "copied": "Skopiowano!",
-    "copySuccess": "Link skopiowany do schowka!",
-    "copyError": "Nie udało się skopiować linku"
-  },
-  "Public": {
-    "profileTitle": "Kolekcja użytkownika {name}",
-    "checkInventory": "Sprawdź czy to mam",
-    "checkPlaceholder": "Szukaj po tytule, ISBN lub UPC...",
-    "foundItem": "Mam to!",
-    "foundManifestation": "To jest w katalogu, ale nie mam tego w kolekcji.",
-    "notFound": "Nie mam jeszcze tego przedmiotu.",
-    "sharedCollection": "Udostępniona kolekcja",
-    "hiddenItemNote": "Uwaga: Niektóre przedmioty mogą być ukryte ze względu na prywatność."
+  "Navbar": {
+    "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
+    "searchPlaceholder": "Szukaj w swojej kolekcji...",
+    "collection": "Kolekcja",
+    "scan": "Skanuj",
+    "signIn": "Zaloguj się",
+    "publicProfile": "Profil publiczny",
+    "profileSettings": "Ustawienia profilu",
+    "manageCollections": "Zarządzaj kolekcjami",
+    "adminConfiguration": "Konfiguracja administratora",
+    "logOut": "Wyloguj się",
+    "home": "Główna",
+    "profile": "Profil"
   }
 }

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.9] - 2026-07-10
+
+### Added
+
+- **Frontend Internationalization (i18n)**: Implemented base `next-intl` internationalization routing layer on Next.js, added localized English (`frontend/messages/en.json`) and Polish (`frontend/messages/pl.json`) translation strings for the navbar, and deployed the interactive `LanguageToggle` selector.
+- **Backend OpenAPI Integration**: Deployed OpenAPI/Swagger spec generation endpoint under `/api/docs/openapi.json` using `apispec` and `apispec-webframeworks`.
+- **Testing Coverage**: Added unit tests for OpenAPI spec generation (`tests/test_openapi.py`), updated frontend navbar unit tests (`navbar.test.tsx`), and created a Playwright E2E test (`i18n_localization.spec.ts`) for localization switches.
+
 ## [0.7.8] - 2026-07-07
 
 ### Removed
