@@ -202,7 +202,7 @@ monitoring-stop:
 
 
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),)
+	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))
 
 # Linting targets
 lint-python: .venv/bin/activate
