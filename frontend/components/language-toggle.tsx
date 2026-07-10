@@ -22,7 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Globe } from "lucide-react";
+import { Globe, Check } from "lucide-react";
+import { useLocale } from "next-intl";
 
 /**
  * Component to switch between languages (English and Polish).
@@ -31,6 +32,7 @@ import { Globe } from "lucide-react";
  */
 export function LanguageToggle() {
   const router = useRouter();
+  const locale = useLocale();
 
   const setLanguage = (locale: string) => {
     document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; SameSite=Lax`;
@@ -46,11 +48,19 @@ export function LanguageToggle() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="dark:bg-[#0a0c10] dark:border-white/10">
-        <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-          English
+        <DropdownMenuItem
+          onClick={() => setLanguage("en")}
+          className="cursor-pointer flex items-center justify-between gap-2"
+        >
+          <span>English</span>
+          {locale === "en" && <Check className="h-4 w-4" />}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setLanguage("pl")} className="cursor-pointer">
-          Polski
+        <DropdownMenuItem
+          onClick={() => setLanguage("pl")}
+          className="cursor-pointer flex items-center justify-between gap-2"
+        >
+          <span>Polski</span>
+          {locale === "pl" && <Check className="h-4 w-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -19,6 +19,7 @@ import { useEffect } from "react";
 import { X, SlidersHorizontal } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { SidebarFilters } from "./sidebar-filters";
+import { useTranslations } from "next-intl";
 
 /** Props for MobileFilterDrawer component */
 interface MobileFilterDrawerProps {
@@ -76,6 +77,7 @@ export function MobileFilterDrawer({
   onChangeMissingId,
   missingId = false,
 }: MobileFilterDrawerProps) {
+  const t = useTranslations("CollectionFilters");
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
@@ -101,18 +103,18 @@ export function MobileFilterDrawer({
         }`}
         role="dialog"
         aria-modal="true"
-        aria-label="Filter drawer"
+        aria-label={t("filterDrawer")}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-              <span className="font-serif text-sm font-bold text-foreground">Filters</span>
+              <span className="font-serif text-sm font-bold text-foreground">{t("title")}</span>
             </div>
             <button
               onClick={onClose}
               className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Close filters"
+              aria-label={t("closeFilters")}
             >
               <X className="h-5 w-5" />
             </button>
@@ -141,7 +143,7 @@ export function MobileFilterDrawer({
               onClick={onClose}
               className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
             >
-              Show Results
+              {t("showResults")}
             </button>
           </div>
         </div>

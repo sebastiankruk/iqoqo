@@ -36,6 +36,7 @@ vi.mock("@/components/language-toggle", () => ({
 
 // Mock next-intl to inject our base english translations directly
 vi.mock("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: (namespace: string) => {
     if (namespace === "Navbar") {
       return (key: string) => {
