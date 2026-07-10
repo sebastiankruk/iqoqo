@@ -252,7 +252,7 @@ export function Navbar() {
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <Globe className="mr-2 h-4 w-4" />
-                        <span>Language / Język</span>
+                        <span>{t("languageSubmenu")}</span>
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
@@ -277,7 +277,7 @@ export function Navbar() {
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <SunMoon className="mr-2 h-4 w-4" />
-                        <span>Theme / Motyw</span>
+                        <span>{t("themeSubmenu")}</span>
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
@@ -285,21 +285,21 @@ export function Navbar() {
                             onClick={() => setTheme("light")}
                             className="cursor-pointer flex items-center justify-between gap-2"
                           >
-                            <span>Light / Jasny</span>
+                            <span>{t("themeLight")}</span>
                             {theme === "light" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setTheme("dark")}
                             className="cursor-pointer flex items-center justify-between gap-2"
                           >
-                            <span>Dark / Ciemny</span>
+                            <span>{t("themeDark")}</span>
                             {theme === "dark" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setTheme("system")}
                             className="cursor-pointer flex items-center justify-between gap-2"
                           >
-                            <span>System</span>
+                            <span>{t("themeSystem")}</span>
                             {theme === "system" && <Check className="h-4 w-4" />}
                           </DropdownMenuItem>
                         </DropdownMenuSubContent>
@@ -319,87 +319,9 @@ export function Navbar() {
               </DropdownMenu>
             ) : (
               <div className="flex items-center gap-2">
-                <Link href="/login" className="text-sm font-medium hover:underline hidden sm:inline">
+                <Link href="/login" className="text-sm font-medium hover:underline">
                   {t("signIn")}
                 </Link>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-transparent text-primary-foreground/80 transition-colors hover:border-primary-foreground/40 hover:text-primary-foreground dark:text-white/90 dark:hover:text-white outline-none md:hidden"
-                      aria-label="Settings menu"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-56 p-2 dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl"
-                  >
-                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm sm:hidden">
-                      <Link href="/login">
-                        <User className="mr-2 h-4 w-4" /> {t("signIn")}
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="dark:bg-white/10 sm:hidden" />
-
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <Globe className="mr-2 h-4 w-4" />
-                        <span>Language / Język</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem
-                            onClick={() => setLanguage("en")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>English</span>
-                            {locale === "en" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setLanguage("pl")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>Polski</span>
-                            {locale === "pl" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <SunMoon className="mr-2 h-4 w-4" />
-                        <span>Theme / Motyw</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem
-                            onClick={() => setTheme("light")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>Light / Jasny</span>
-                            {theme === "light" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setTheme("dark")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>Dark / Ciemny</span>
-                            {theme === "dark" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setTheme("system")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>System</span>
-                            {theme === "system" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             )}
           </div>

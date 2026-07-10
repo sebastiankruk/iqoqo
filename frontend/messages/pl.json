@@ -11,7 +11,12 @@
     "adminConfiguration": "Konfiguracja administratora",
     "logOut": "Wyloguj się",
     "home": "Główna",
-    "profile": "Profil"
+    "profile": "Profil",
+    "languageSubmenu": "Język",
+    "themeSubmenu": "Motyw",
+    "themeLight": "Jasny",
+    "themeDark": "Ciemny",
+    "themeSystem": "System"
   },
   "Dashboard": {
     "welcomeBack": "Witaj ponownie, {name}",

@@ -11,7 +11,12 @@
     "adminConfiguration": "Admin Configuration",
     "logOut": "Log out",
     "home": "Home",
-    "profile": "Profile"
+    "profile": "Profile",
+    "languageSubmenu": "Language",
+    "themeSubmenu": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System"
   },
   "Dashboard": {
     "welcomeBack": "Welcome back, {name}",

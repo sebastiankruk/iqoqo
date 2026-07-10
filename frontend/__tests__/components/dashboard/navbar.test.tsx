@@ -53,6 +53,11 @@ vi.mock("next-intl", () => ({
           logOut: "Log out",
           home: "Home",
           profile: "Profile",
+          languageSubmenu: "Language",
+          themeSubmenu: "Theme",
+          themeLight: "Light",
+          themeDark: "Dark",
+          themeSystem: "System"
         };
         return translations[key] || key;
       };
