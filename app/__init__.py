@@ -25,6 +25,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 from PIL import Image
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import blueprints
@@ -170,7 +171,7 @@ def create_app(config_class=Config, config_override=None):
             from app.utils.covers import cleanup_stuck_pending_covers
 
             cleanup_stuck_pending_covers(timeout_minutes=30)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
             app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
 
     return app

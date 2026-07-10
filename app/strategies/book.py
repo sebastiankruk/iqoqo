@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import requests
+
 from app.strategies.base import LookupStrategy
 from app.utils.allegro import fetch_allegro_metadata
 from app.utils.discogs import fetch_discogs_metadata
@@ -48,7 +50,17 @@ class BookLookupStrategy(LookupStrategy):
                 if meta:
                     meta["data_source"] = "musicbrainz"
                     provider = "musicbrainz"
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            IndexError,
+            AttributeError,
+            TypeError,
+            OSError,
+            RuntimeError,
+            Exception,
+        ) as exc:
             import logging
 
             logging.getLogger(__name__).error(f"Strategy lookup failed: {exc}")

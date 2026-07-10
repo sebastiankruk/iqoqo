@@ -313,6 +313,7 @@ def get_items():
                     "title": row["title"],
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
+                    "manifestation_meta": row.get("manifestation_meta"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
                     "content_type": row.get("content_type"),
                     "is_owner": str(row["owner_id"]) == str(g.user_id) if hasattr(g, "user_id") else False,
@@ -446,6 +447,7 @@ def get_items():
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
+                    "manifestation_meta": manifestation.meta if manifestation else None,
                     "authors": authors,
                     "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                     "is_owner": is_owner,
@@ -1548,7 +1550,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
                         transform=f"translate({offset_x},{offset_y}) scale({scale})",
                     )
                     root.append(path_el)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ET.ParseError, OSError, AttributeError, ValueError, KeyError) as e:
             current_app.logger.error("Failed to embed logo in SVG QR code: %s", e)
 
         img_io = io.BytesIO()
@@ -1688,7 +1690,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
                         # Alternate colors for cutouts vs solid fills
                         color = "white" if p_idx in (1, 5, 7) else "#d15500"
                         draw.polygon(scaled_poly, fill=color)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ET.ParseError, OSError, AttributeError, ValueError, KeyError) as e:
         current_app.logger.error("Failed to embed logo in PNG QR code: %s", e)
 
     img_io = io.BytesIO()

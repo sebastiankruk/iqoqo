@@ -20,7 +20,8 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
 from app.core.tasks import submit_task
@@ -28,13 +29,15 @@ from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.isbn import canonicalize_isbn
-from app.utils.llm_covers import fetch_llm_cover
+from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logger = logging.getLogger(__name__)
 
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers")
 GALLERY_DIR = os.path.join(Config.BASE_DIR, "app", "static", "gallery")
+
+WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo-logo.png")
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
@@ -163,7 +166,7 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
         img.save(img_byte_arr, format="JPEG", quality=85)
         optimize_and_save_image(img_byte_arr.getvalue(), filepath)
         return f"{Config.COVERS_BASE_URL}/{filename}", "fallback_pil"
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
         logger.error(f"Fallback generation failed: {e}")
         return None
 
@@ -469,6 +472,17 @@ def process_cover_pipeline(
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
             add_source_badge(abs_path, source or "")
+
+            # Apply watermark based on cover source
+            if WATERMARK_ASSET_PATH and os.path.exists(WATERMARK_ASSET_PATH) and source:
+                wm_output = abs_path.replace(".jpg", "_wm.jpg")
+                if source == "fallback_pil":
+                    add_center_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                elif source.startswith("llm_"):
+                    apply_corner_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+
             manifestation.cover_url = local_cover_url
             updates["cover_source"] = source
             updates["cover_status"] = "ready"
@@ -618,9 +632,66 @@ def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
         if stuck_count > 0:
             db.session.commit()
             logger.info("Cleared %d stuck cover tasks at startup", stuck_count)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
         # Don't block app startup if tables aren't created yet or other DB issues
         logger.warning("Failed to check or clear stuck cover tasks at startup: %s", e)
         db.session.rollback()
 
     return stuck_count
+
+
+def add_center_watermark(base_image_path: str, watermark_path: str, output_path: str, opacity: float = 0.25) -> str:
+    """
+    Overlays a low-transparency center branding watermark (iqoqo logo)
+    onto base placeholder media assets.
+
+    Args:
+        base_image_path (str): Path to the base placeholder image.
+        watermark_path (str): Path to the watermark image (e.g., iqoqo-logo.png).
+        output_path (str): Destination path for the watermarked image.
+        opacity (float): Transparency level of the watermark (0.0 to 1.0).
+
+    Returns:
+        str: The path to the watermarked image.
+    """
+    try:
+        with Image.open(base_image_path) as base_file:
+            base_img = base_file.convert("RGBA")
+
+            with Image.open(watermark_path) as wm_file:
+                watermark = wm_file.convert("RGBA")
+
+                # Scale the watermark to be 50% of the smallest base image dimension
+                base_width, base_height = base_img.size
+                wm_width, wm_height = watermark.size
+                scale = min(base_width / wm_width, base_height / wm_height) * 0.5
+                new_size = (int(wm_width * scale), int(wm_height * scale))
+
+                # Resize and preserve quality
+                watermark = watermark.resize(new_size, Image.Resampling.LANCZOS)
+
+                # Adjust transparency of the watermark
+                alpha = watermark.split()[3]
+                alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+                watermark.putalpha(alpha)
+
+                # Calculate center coordinates
+                x = (base_width - new_size[0]) // 2
+                y = (base_height - new_size[1]) // 2
+
+                # Create a transparent layer and apply the watermark
+                transparent_layer = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
+                transparent_layer.paste(watermark, (x, y), watermark)
+
+                # Composite the images
+                watermarked_img = Image.alpha_composite(base_img, transparent_layer)
+
+                # Ensure the output directory exists
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                watermarked_img.convert("RGB").save(output_path, "JPEG", quality=90)
+
+        return output_path
+
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
+        logger.error("Failed to apply center watermark to %s: %s", base_image_path, e)
+        return base_image_path

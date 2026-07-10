@@ -96,7 +96,7 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
                     },
                 )
                 processed += 1
-            except Exception as e:  # pylint: disable=broad-exception-caught
+            except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, RuntimeError) as e:
                 print(f"  -> Error: {str(e)[:100]}")
                 failed += 1
 

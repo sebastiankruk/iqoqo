@@ -59,7 +59,7 @@ def request_hook(span: Any, environ: dict) -> None:
             return
         if environ.get("HTTP_AUTHORIZATION"):
             span.set_attribute("http.request.header.authorization", "[REDACTED]")  # type: ignore[union-attr]
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError):
         # Telemetry hooks must never surface exceptions to application code.
         logger.debug("request_hook: failed to redact Authorization header", exc_info=True)
 

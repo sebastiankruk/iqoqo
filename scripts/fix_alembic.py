@@ -65,7 +65,7 @@ def fix_alembic_version():
 
         cur.close()
         conn.close()
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (psycopg2.Error, OSError, ValueError, RuntimeError) as e:
         print(f"❌ Error applying fix: {e}")
         # We don't exit with error here because if the DB is not reachable,
         # the main startup script will fail anyway with a better error message.

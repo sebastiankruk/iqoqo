@@ -175,6 +175,6 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
             logger.warning("Allegro lookup HTTP error %s for barcode %s", e.response.status_code, barcode)
     except requests.exceptions.RequestException as e:
         logger.warning("Allegro lookup network error for barcode %s: %s", barcode, e)
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError):
         logger.exception("Allegro lookup unexpected error for barcode %s", barcode)
     return None

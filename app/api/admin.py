@@ -13,12 +13,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# pylint: disable=broad-exception-caught, inconsistent-return-statements
+# pylint: disable=inconsistent-return-statements
 
 import os
 from datetime import date
 
 from flask import Blueprint, Response, g, jsonify, request
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import admin_required, require_auth
 from app.core import frbr_service
@@ -707,7 +708,7 @@ def upload_cover():
         from app.utils.images import save_upload_image
 
         public_url = save_upload_image(file, subfolder="covers", filename=filename)
-    except Exception as e:
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
         return jsonify({"success": False, "error": f"Image processing failed: {str(e)}"}), 500
 
     saved_filepath = None
@@ -729,7 +730,7 @@ def upload_cover():
 
         db.session.commit()
         return jsonify({"success": True, "data": {"cover_url": public_url}})
-    except Exception as e:
+    except (SQLAlchemyError, OSError, ValueError, KeyError, AttributeError, RuntimeError) as e:
         db.session.rollback()
         if saved_filepath:
             try:
