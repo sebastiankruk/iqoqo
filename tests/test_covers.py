@@ -489,3 +489,44 @@ def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
     assert any(
         s in ("ready", "failed") for s in final_statuses
     ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
+
+
+@patch("app.utils.covers.download_direct_url")
+@patch("app.utils.allegro.fetch_allegro_metadata")
+def test_fetch_external_api_cover_allegro_success(mock_fetch_allegro, mock_download):
+    """Test that fetch_external_api_cover falls back to Allegro when OL/GB fail."""
+    mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/some-image.jpg", "source": "Allegro Catalog"}
+
+    # OL and GB calls return None, only Allegro call succeeds
+    def mock_download_side_effect(identifier, url, source, suffix=None):
+        if source == "api_allegro":
+            return ("/static/covers/9780553380163_allegro.jpg", "api_allegro")
+        return None
+
+    mock_download.side_effect = mock_download_side_effect
+
+    result = fetch_external_api_cover("9780553380163")
+
+    assert result is not None
+    path, source = result
+    assert path == "/static/covers/9780553380163_allegro.jpg"
+    assert source == "api_allegro"
+    mock_fetch_allegro.assert_called_once_with("9780553380163")
+    mock_download.assert_any_call("9780553380163", "https://allegro.pl/some-image.jpg", "api_allegro", suffix="allegro")
+
+
+@patch("app.utils.covers.download_direct_url")
+@patch("app.utils.allegro.fetch_allegro_metadata")
+def test_fetch_external_api_cover_allegro_non_isbn(mock_fetch_allegro, mock_download):
+    """Test that fetch_external_api_cover queries Allegro directly for non-ISBN identifiers."""
+    mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/ean-image.jpg", "source": "Allegro Catalog"}
+    mock_download.return_value = ("/static/covers/5900012345678_allegro.jpg", "api_allegro")
+
+    result = fetch_external_api_cover("5900012345678")
+
+    assert result is not None
+    path, source = result
+    assert path == "/static/covers/5900012345678_allegro.jpg"
+    assert source == "api_allegro"
+    mock_fetch_allegro.assert_called_once_with("5900012345678")
+    mock_download.assert_called_once_with("5900012345678", "https://allegro.pl/ean-image.jpg", "api_allegro", suffix="allegro")

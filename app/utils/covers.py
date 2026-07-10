@@ -55,6 +55,7 @@ def add_source_badge(filepath: str, source: str):
         "user_photo": ("U", "blue"),
         "api_openlibrary": ("D", "gray"),  # Download
         "api_google_books": ("D", "gray"),
+        "api_allegro": ("A", "orange"),
         "api_direct_download": ("C", "teal"),  # CD/Audio direct download
         "api_igdb": ("I", "purple"),  # IGDB Cover
         "llm_gemini": ("G", "purple"),
@@ -212,43 +213,55 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
 
 
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
-    """Tier 2 fallback: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
-    # Only perform lookup if we have a valid ISBN (EAN/UPC barcodes fail on these APIs)
+    """Tier 2 fallback: Try OpenLibrary, Google Books, then Allegro. Returns (path, source) tuple on success."""
     isbn_for_lookup = canonicalize_isbn(isbn or identifier)
-    if not isbn_for_lookup:
-        logger.debug("Skipping External API lookup (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
-        return None
-
     res = None
-    # 1. Open Library - try original (full resolution) first, then fall back to L
-    ol_url_original = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}.jpg"
-    res = download_direct_url(identifier, ol_url_original, "api_openlibrary", suffix="ol_orig")
+
+    if isbn_for_lookup:
+        # 1. Open Library - try original (full resolution) first, then fall back to L
+        ol_url_original = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}.jpg"
+        res = download_direct_url(identifier, ol_url_original, "api_openlibrary", suffix="ol_orig")
+
+        if not res:
+            ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
+            res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+
+        if not res:
+            # 2. Google Books (Search -> Thumbnail)
+            gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
+            try:
+                with requests.get(gb_search, timeout=5) as gb_res:
+                    if gb_res.status_code == 200:
+                        gb_data = gb_res.json()
+                        if "items" in gb_data:
+                            thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+                            if thumb:
+                                thumb = thumb.replace("http:", "https:")
+
+                                # Try high-res first (zoom=0)
+                                thumb_high_res = thumb.replace("zoom=1", "zoom=0")
+                                res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
+
+                                # Fallback to original (zoom=1) if high-res failed validation
+                                if not res and thumb_high_res != thumb:
+                                    res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
+            except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
+                pass
+    else:
+        logger.debug("Skipping External Bibliographic APIs (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
 
     if not res:
-        ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
-        res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+        # 3. Allegro API
+        from app.utils.allegro import fetch_allegro_metadata
 
-    if not res:
-        # 2. Google Books (Search -> Thumbnail)
-        gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
-        try:
-            with requests.get(gb_search, timeout=5) as gb_res:
-                if gb_res.status_code == 200:
-                    gb_data = gb_res.json()
-                    if "items" in gb_data:
-                        thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
-                        if thumb:
-                            thumb = thumb.replace("http:", "https:")
-
-                            # Try high-res first (zoom=0)
-                            thumb_high_res = thumb.replace("zoom=1", "zoom=0")
-                            res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
-
-                            # Fallback to original (zoom=1) if high-res failed validation
-                            if not res and thumb_high_res != thumb:
-                                res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
-        except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
-            pass
+        barcode_to_query = isbn_for_lookup or identifier
+        if barcode_to_query:
+            try:
+                allegro_meta = fetch_allegro_metadata(barcode_to_query)
+                if allegro_meta and allegro_meta.get("cover_url"):
+                    res = download_direct_url(identifier, allegro_meta["cover_url"], "api_allegro", suffix="allegro")
+            except (requests.RequestException, ValueError, KeyError, OSError, TypeError) as e:
+                logger.warning("Failed to fetch cover from Allegro: %s", e)
 
     return res
 

@@ -12,11 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Frontend Internationalization (i18n)**: Implemented base `next-intl` internationalization routing layer on Next.js, added localized English (`frontend/messages/en.json`) and Polish (`frontend/messages/pl.json`) translation strings for all user-visible components and pages (Navbar, DashboardPage, Hero, GlobalStats, StatsCards, CurrentContext, FreshArrivals, Footer, LoginPage, RegisterPage, NotFound, and CookieConsent banner), deployed the interactive `LanguageToggle` selector, and updated frontend unit test mocks. Polish translations strictly use sentence casing.
 - **Backend OpenAPI Integration**: Deployed OpenAPI/Swagger spec generation endpoint under `/api/docs/openapi.json` using `apispec` and `apispec-webframeworks`.
 - **Testing Coverage**: Added unit tests for OpenAPI spec generation (`tests/test_openapi.py`), updated frontend navbar unit tests (`navbar.test.tsx`), and created a Playwright E2E test (`i18n_localization.spec.ts`) for localization switches.
+- **Allegro Auth Handshake CLI**: Deployed `make allegro-auth` target wrapping the interactive `scripts/allegro_auth.py` script for local and Docker setups.
+- **Allegro Status Checks**: Integrated Allegro API activation checks into `make status` / `scripts/iqoqo-status.sh` to report configured, active (token present), or pending handshake states.
+- **Allegro Cover Refetch Fallback**: Integrated Allegro API cover retrieval into the background cover refetch pipeline (`fetch_external_api_cover` in `app/utils/covers.py`), adding support for both ISBN and non-ISBN identifiers.
 
 ### Fixed
 
 - **Allegro User-Agent Header Correction**: Configured a dynamic `User-Agent` header (`iqoqo/{Config.VERSION} (+https://iqoqo.cc)`) based on the application version to avoid `403 EDGE_REQUEST_REJECTED` and `SERVICE_ERROR` blockages by the Allegro API. Applied the headers to OAuth token request, refresh request, and catalog/listing fetchers.
 - **Allegro Tests Hardening**: Extended `tests/test_allegro.py` with mock assertions validating that the formatted `User-Agent` is correctly set in request headers.
+- **Authlib Deprecation Warning**: Replaced deprecated `authlib.jose.errors` import with `joserfc.errors` in `app/api/auth.py` to prevent startup and runtime warnings.
 
 ## [0.7.8] - 2026-07-07
 
