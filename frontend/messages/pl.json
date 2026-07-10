@@ -245,5 +245,20 @@
     "fmt_bluray": "Blu-ray",
     "fmt_audiobook_cd": "Książka mówiona CD",
     "fmt_cassette": "Kaseta magnetofonowa"
+  },
+  "Common": {
+    "copySuccess": "Link skopiowany do schowka!",
+    "copyError": "Nie udało się skopiować linku.",
+    "copied": "Skopiowano!",
+    "share": "Udostępnij"
+  },
+  "Public": {
+    "checkPlaceholder": "Szukaj w tej kolekcji...",
+    "checkInventory": "Sprawdź kolekcję",
+    "foundItem": "Znaleziony egzemplarz",
+    "foundManifestation": "Znalezione wydanie",
+    "notFound": "Brak pozycji w tej kolekcji.",
+    "profileTitle": "Kolekcja użytkownika {name}",
+    "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności."
   }
 }

@@ -245,5 +245,20 @@
     "fmt_bluray": "Blu-ray",
     "fmt_audiobook_cd": "Audiobook CD",
     "fmt_cassette": "Cassette"
+  },
+  "Common": {
+    "copySuccess": "Link copied to clipboard!",
+    "copyError": "Failed to copy link.",
+    "copied": "Copied!",
+    "share": "Share"
+  },
+  "Public": {
+    "checkPlaceholder": "Search this collection...",
+    "checkInventory": "Check inventory",
+    "foundItem": "Found item",
+    "foundManifestation": "Found edition",
+    "notFound": "Item not found in this collection.",
+    "profileTitle": "{name}'s Collection",
+    "hiddenItemNote": "Some items may be hidden due to privacy settings."
   }
 }
