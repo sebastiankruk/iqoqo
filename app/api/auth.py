@@ -22,8 +22,8 @@ from datetime import UTC, datetime, timedelta
 import jwt as pyjwt
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
-from authlib.jose.errors import JoseError
 from flask import Blueprint, current_app, jsonify, redirect, request
+from joserfc.errors import JoseError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.db.models import Role, TokenBlocklist, User, db
