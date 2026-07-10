@@ -2,6 +2,11 @@ Flask==3.1.3
 Flask-CORS==6.0.*
 Flask-APScheduler==1.13.1
 gunicorn==22.0.*
+
+# API Documentation
+apispec==6.6.*
+apispec-webframeworks==1.2.*
+
 celery[redis]==5.4.*
 redis==5.*
 psycopg2-binary==2.9.*
