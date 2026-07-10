@@ -288,10 +288,7 @@ def test_extract_waterfall_all_exception_returns_none(mock_tesseract, mock_ollam
 def test_extract_waterfall_gemini_api_error_falls_to_ollama(mock_tesseract, mock_ollama, mock_gemini):
     """Verify that a 3rd party API exception in Gemini correctly triggers Ollama."""
 
-    class FakeAPIError(Exception):
-        pass
-
-    mock_gemini.side_effect = FakeAPIError("Gemini API Error")
+    mock_gemini.side_effect = RuntimeError("Gemini API Error")
     mock_ollama.return_value = {"Title": "Ollama Result", "Authors": ["Ollama Author"]}
 
     result = extract_metadata_from_cover(b"test image", user_id="00000000-0000-0000-0000-000000000000")

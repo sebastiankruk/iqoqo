@@ -50,16 +50,7 @@ class BookLookupStrategy(LookupStrategy):
                 if meta:
                     meta["data_source"] = "musicbrainz"
                     provider = "musicbrainz"
-        except (
-            requests.RequestException,
-            ValueError,
-            KeyError,
-            IndexError,
-            AttributeError,
-            TypeError,
-            OSError,
-            RuntimeError,
-        ) as exc:
+        except (requests.RequestException, ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as exc:
             import logging
 
             logging.getLogger(__name__).error(f"Strategy lookup failed: {exc}")

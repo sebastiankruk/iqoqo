@@ -20,6 +20,7 @@ Tests for the refactored Scanner Strategy Pattern mapping to FRBR models.
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from app.strategies.boardgame import BoardGameLookupStrategy
 
@@ -43,7 +44,7 @@ def test_book_lookup_strategy_success():
 def test_book_lookup_strategy_provider_failure():
     """Ensure strategy handles provider timeouts and enforces standard API error format."""
     strategy = BookLookupStrategy()
-    with patch("app.strategies.book.fetch_isbn_metadata", side_effect=Exception("API Timeout")):
+    with patch("app.strategies.book.fetch_isbn_metadata", side_effect=requests.RequestException("API Timeout")):
         with patch("app.strategies.book.fetch_discogs_metadata", return_value=None):
             with patch("app.strategies.book.fetch_audio_metadata", return_value=None):
                 result, _ = strategy.lookup("9780441172719")
