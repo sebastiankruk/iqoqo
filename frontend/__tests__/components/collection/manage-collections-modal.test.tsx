@@ -27,6 +27,7 @@ vi.mock("@/lib/api/client", () => ({
     get: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -100,6 +101,49 @@ describe("ManageCollectionsModal", () => {
     await waitFor(() => {
       expect(global.confirm).toHaveBeenCalled();
       expect(apiClient.delete).toHaveBeenCalledWith("/collections/1");
+    });
+  });
+
+  it("creates a new collection via the form", async () => {
+    renderComponent();
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { success: true, collection: { id: 3, name: "History" } },
+    });
+
+    const input = screen.getByPlaceholderText("New collection name");
+    fireEvent.change(input, { target: { value: "History" } });
+
+    const addButton = screen.getByText("Add");
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith("/collections", {
+        name: "History",
+      });
+    });
+  });
+
+  it("does not create a collection with empty name", () => {
+    renderComponent();
+
+    const addButton = screen.getByText("Add");
+    expect(addButton).toBeDisabled();
+  });
+
+  it("clears input after successful creation", async () => {
+    renderComponent();
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { success: true, collection: { id: 4, name: "Poetry" } },
+    });
+
+    const input = screen.getByPlaceholderText("New collection name");
+    fireEvent.change(input, { target: { value: "Poetry" } });
+    fireEvent.click(screen.getByText("Add"));
+
+    await waitFor(() => {
+      expect(input).toHaveValue("");
     });
   });
 });

@@ -18,9 +18,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check } from "lucide-react";
+import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check, HeartOff } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp, classifyCoverType } from "@/lib/utils";
+import { apiClient } from "@/lib/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const statusDotColor: Record<string, string> = {
   available: "bg-chart-3",
@@ -72,11 +75,14 @@ interface ItemCardProps {
   isSelected?: boolean;
   /** Callback to toggle selection of this card (enables selection mode). */
   onToggleSelect?: (id: number) => void;
+  /** Callback invoked when the user removes an item from their wishlist. */
+  onWishlistRemove?: (itemId: number) => void;
 }
 
 /**
  * ItemCard displays an item card with cover art, titles, creators, status dots,
  * and quantity indicators. Supports vertical and horizontal layout variants.
+ * Wishlist items show a hover-revealed removal button for instant subtraction.
  *
  * @param props - Component properties.
  * @param props.item - The Item or CatalogEntry to display.
@@ -84,6 +90,7 @@ interface ItemCardProps {
  * @param props.isManifestationView - Flag indicating if this is grouped manifestation view.
  * @param props.isSelected - Whether this card is currently selected.
  * @param props.onToggleSelect - Callback to toggle selection of this card.
+ * @param props.onWishlistRemove - Callback invoked when user removes item from wishlist.
  * @returns An interactive card component linked to detail pages.
  */
 export function ItemCard({
@@ -92,8 +99,10 @@ export function ItemCard({
   isManifestationView = false,
   isSelected = false,
   onToggleSelect,
+  onWishlistRemove,
 }: ItemCardProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isCatalog = isManifestationView;
 
   const itemId = isCatalog ? (item as CatalogEntry).id : (item as Item).id;
@@ -177,10 +186,40 @@ export function ItemCard({
     );
   };
 
+  const isWishlist = !isCatalog && collectionStatus === "wish_list";
+
   const quantityBadge = quantity > 1 && (
-    <div className="absolute top-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-md ring-2 ring-background">
+    <div
+      className={`absolute top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-md ring-2 ring-background ${isWishlist ? "right-10" : "right-2"}`}
+    >
       x{quantity}
     </div>
+  );
+
+  const handleWishlistRemove = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await apiClient.delete(`/items/${itemId}`);
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      toast.success("Removed from wishlist");
+      onWishlistRemove?.(itemId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove from wishlist");
+    }
+  };
+
+  // Wishlist removal button visible on hover for wishlist items.
+  const wishlistRemoveBtn = isWishlist && (
+    <button
+      type="button"
+      aria-label="Remove from wishlist"
+      onClick={handleWishlistRemove}
+      className="absolute top-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shadow-sm ring-1 ring-border hover:bg-destructive hover:text-destructive-foreground"
+    >
+      <HeartOff className="h-3.5 w-3.5" />
+    </button>
   );
 
   // Checkbox overlay shown in Global Library (manifestation) view when selection mode is active.
@@ -217,6 +256,7 @@ export function ItemCard({
             className={`relative shrink-0 w-16 sm:w-20 overflow-hidden rounded-md shadow-sm bg-secondary ${aspectClass}`}
           >
             {quantityBadge}
+            {wishlistRemoveBtn}
             {(isProcessing || coverStatus === "pending") && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -304,6 +344,7 @@ export function ItemCard({
       <div className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-all hover:shadow-md hover:ring-border">
         <div className={`relative w-full overflow-hidden bg-secondary ${aspectClass}`}>
           {quantityBadge}
+          {wishlistRemoveBtn}
           {selectionOverlay}
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">

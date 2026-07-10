@@ -275,23 +275,26 @@ export function SidebarFilters({
         <div className="flex flex-col gap-1">
           {Object.entries(MEDIA_HIERARCHY).map(([id]) => {
             const active = isActive(activeFilters, "category", id);
+            const count = categoryCounts[id] ?? 0;
+            const disabled = !active && count === 0;
             return (
               <label
                 key={id}
-                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/10 text-foreground ring-1 ring-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/10 text-foreground ring-1 ring-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
               >
                 <input
                   type="radio"
                   name="category"
                   checked={active}
                   onChange={() => onToggleFilter({ type: "category", value: id })}
+                  disabled={disabled}
                   className="sr-only"
                 />
                 <span className={active ? "text-primary" : "text-muted-foreground"}>
                   {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}
                 </span>
                 <span className="flex-1 font-medium">{t(`cat_${id}`)}</span>
-                <span className="text-xs tabular-nums text-muted-foreground mr-1">{categoryCounts[id] ?? 0}</span>
+                <span className="text-xs tabular-nums text-muted-foreground mr-1">{count}</span>
                 {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </label>
             );
@@ -346,20 +349,23 @@ export function SidebarFilters({
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
               const active = isActive(activeFilters, "format", fmt.id);
+              const count = formatCounts[fmt.id] ?? 0;
+              const disabled = !active && count === 0;
               return (
                 <label
                   key={fmt.id}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-accent/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-accent/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                 >
                   <input
                     type="radio"
                     name="format_filter"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
+                    disabled={disabled}
                     className="h-4 w-4 shrink-0 rounded-full border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <span className="flex-1">{t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{formatCounts[fmt.id] ?? 0}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
                 </label>
               );
             })}
@@ -376,20 +382,23 @@ export function SidebarFilters({
           <div className="flex flex-col gap-1">
             {collectionStatuses.map(({ value, label, dot }) => {
               const active = isActive(activeFilters, "status", value);
+              const count = statusCounts[value] ?? 0;
+              const disabled = !active && count === 0;
               return (
                 <label
                   key={value}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                 >
                   <input
                     type="checkbox"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "status", value })}
+                    disabled={disabled}
                     className="h-3.5 w-3.5 rounded border-border accent-primary"
                   />
                   <span className={`h-2 w-2 rounded-full ${dot}`} />
                   <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[value] ?? 0}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
                 </label>
               );
             })}
@@ -403,20 +412,23 @@ export function SidebarFilters({
             {validProgressStatuses.map(status => {
               const info = progressLabels[status] || { label: status, dot: "bg-muted" };
               const active = isActive(activeFilters, "status", status);
+              const count = statusCounts[status] ?? 0;
+              const disabled = !active && count === 0;
               return (
                 <label
                   key={status}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                 >
                   <input
                     type="checkbox"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "status", value: status })}
+                    disabled={disabled}
                     className="h-3.5 w-3.5 rounded border-border accent-primary"
                   />
                   <span className={`h-2 w-2 rounded-full ${info.dot}`} />
                   <span className="flex-1">{t(`progress_${status}`, { defaultValue: info.label })}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[status] ?? 0}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
                 </label>
               );
             })}
