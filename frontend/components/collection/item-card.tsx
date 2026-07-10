@@ -20,7 +20,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
-import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp, classifyCoverType } from "@/lib/utils";
 
 const statusDotColor: Record<string, string> = {
   available: "bg-chart-3",
@@ -132,6 +132,7 @@ export function ItemCard({
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])
     : Boolean((item as Item).manifestation_meta?.["cover_url"]) || Boolean((item as Item).meta?.["cover_url"]);
 
+  const coverType = classifyCoverType(tMeta);
   const isProcessing = coverStatus === "processing";
   const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
 
@@ -228,10 +229,11 @@ export function ItemCard({
                 fill
                 sizes="80px"
                 unoptimized
+                data-cover-type={coverType || undefined}
                 className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+              <div className="absolute inset-0 flex items-center justify-center bg-muted" data-cover-type="placeholder">
                 <MediaIcon className="h-6 w-6 text-muted-foreground/30" />
               </div>
             )}
@@ -318,10 +320,14 @@ export function ItemCard({
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               unoptimized
+              data-cover-type={coverType || undefined}
               className={`object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerated ? "sepia-[.15]" : ""}`}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center">
+            <div
+              className="flex h-full flex-col items-center justify-center bg-muted p-4 text-center"
+              data-cover-type="placeholder"
+            >
               <span className="mb-2 font-serif text-sm font-bold text-muted-foreground line-clamp-3">{title}</span>
               <MediaIcon className="mt-4 h-6 w-6 text-muted-foreground/30" />
             </div>

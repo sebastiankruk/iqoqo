@@ -29,13 +29,15 @@ from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.isbn import canonicalize_isbn
-from app.utils.llm_covers import fetch_llm_cover
+from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logger = logging.getLogger(__name__)
 
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers")
 GALLERY_DIR = os.path.join(Config.BASE_DIR, "app", "static", "gallery")
+
+WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo-logo.png")
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
@@ -470,6 +472,17 @@ def process_cover_pipeline(
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
             add_source_badge(abs_path, source or "")
+
+            # Apply watermark based on cover source
+            if WATERMARK_ASSET_PATH and os.path.exists(WATERMARK_ASSET_PATH) and source:
+                wm_output = abs_path.replace(".jpg", "_wm.jpg")
+                if source == "fallback_pil":
+                    add_center_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                elif source.startswith("llm_"):
+                    apply_corner_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+
             manifestation.cover_url = local_cover_url
             updates["cover_source"] = source
             updates["cover_status"] = "ready"

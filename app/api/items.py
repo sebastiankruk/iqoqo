@@ -313,6 +313,7 @@ def get_items():
                     "title": row["title"],
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
+                    "manifestation_meta": row.get("manifestation_meta"),
                     "authors": (row.get("work_meta") or {}).get("authors", []),
                     "content_type": row.get("content_type"),
                     "is_owner": str(row["owner_id"]) == str(g.user_id) if hasattr(g, "user_id") else False,
@@ -446,6 +447,7 @@ def get_items():
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
+                    "manifestation_meta": manifestation.meta if manifestation else None,
                     "authors": authors,
                     "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
                     "is_owner": is_owner,

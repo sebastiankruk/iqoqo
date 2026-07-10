@@ -9,22 +9,19 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Watermark Verification Workflow", () => {
   test.beforeEach(async ({ page }) => {
-    // Log in as administrator
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@iqoqo.cc");
-    await page.fill('input[name="password"]', "password123");
+    await page.fill('input[name="email"]', "e2e-admin@iqoqo.local");
+    await page.fill('input[name="password"]', "E2ETestPassword123!");
     await page.click('button[type="submit"]');
-    await page.waitForURL("/dashboard");
+    await page.waitForURL(/\/(collection)?$/);
   });
 
   test("verifies corner watermark presence on GenAI covers", async ({ page }) => {
-    await page.goto("/admin/content");
+    await page.goto("/collection");
 
-    // Locate generated cover
     const genAiCover = page.locator('img[data-cover-type="llm_gen"]').first();
     await expect(genAiCover).toBeVisible();
 
-    // Verify presence of suffix after background processing
     const src = await genAiCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
@@ -33,17 +30,14 @@ test.describe("Watermark Verification Workflow", () => {
   });
 
   test("verifies center watermark presence on placeholders", async ({ page }) => {
-    await page.goto("/admin/content");
+    await page.goto("/collection");
 
-    // Locate placeholder cover
     const placeholderCover = page.locator('img[data-cover-type="placeholder"]').first();
     await expect(placeholderCover).toBeVisible();
 
-    // Verify presence of suffix after background processing
     const src = await placeholderCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
-    // Visual verification (requires pre-generated baseline screenshots)
-    // await expect(placeholderCover).toHaveScreenshot('placeholder_center_wm.png', { maxDiffPixels: 100 });
+    await expect(placeholderCover).toHaveScreenshot("placeholder_center_wm.png", { maxDiffPixels: 100 });
   });
 });

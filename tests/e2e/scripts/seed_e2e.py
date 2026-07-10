@@ -23,12 +23,17 @@ from dotenv import load_dotenv
 # are correctly evaluated based on the DATABASE_URL.
 load_dotenv()
 
+import os  # noqa: E402
+
+from PIL import Image, ImageDraw  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.exc import SQLAlchemyError  # noqa: E402
 
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
 from app.db.models import Expression, Item, Manifestation, Role, SharedCollection, User, Work  # noqa: E402
+from app.utils.covers import COVERS_DIR, add_center_watermark  # noqa: E402
+from app.utils.llm_covers import apply_corner_watermark  # noqa: E402
 
 
 def seed_e2e_data():
@@ -302,6 +307,86 @@ def seed_e2e_data():
             dist_sys_manif = Manifestation(expression_id=dist_sys_expr.id, isbn13="9780132392273")
             db.session.add(dist_sys_manif)
             db.session.flush()
+
+        # ── Watermark E2E test covers ────────────────────────────────────────────
+        watermark_asset = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo-logo.png")
+        if os.path.exists(watermark_asset):
+            PH_ISBN = "6000000000001"
+            LLM_ISBN = "6000000000002"
+
+            # Placeholder cover manifestation
+            placeholder_manif = Manifestation.query.filter_by(isbn13=PH_ISBN).first()
+            if not placeholder_manif:
+                w_ph = Work(title="Watermark Placeholder Cover", meta={"authors": ["E2E System"]})
+                db.session.add(w_ph)
+                db.session.flush()
+                e_ph = Expression(work_id=w_ph.id, content_type="text", language="en")
+                db.session.add(e_ph)
+                db.session.flush()
+                placeholder_manif = Manifestation(expression_id=e_ph.id, isbn13=PH_ISBN, publisher="E2E Test")
+                db.session.add(placeholder_manif)
+                db.session.flush()
+
+            # Generate 600x900 solid gray placeholder image
+            ph_path = os.path.join(COVERS_DIR, "e2e_placeholder.jpg")
+            Image.new("RGB", (600, 900), color=(200, 200, 200)).save(ph_path, "JPEG", quality=85)
+
+            # Apply center watermark
+            wm_ph = os.path.join(COVERS_DIR, "e2e_placeholder_wm.jpg")
+            add_center_watermark(ph_path, watermark_asset, wm_ph)
+
+            placeholder_manif.cover_url = "/static/covers/e2e_placeholder_wm.jpg"
+            placeholder_manif.update_meta(cover_source="fallback_pil", cover_status="ready", cover_status_updated_at="2026-01-01T00:00:00Z")
+
+            # Ensure an item exists for e2e-admin so it shows on /collection
+            ph_item = Item.query.filter_by(manifestation_id=placeholder_manif.id, owner_id=e2e_admin.id).first()
+            if not ph_item:
+                ph_item = Item(
+                    owner_id=e2e_admin.id,
+                    manifestation_id=placeholder_manif.id,
+                    is_hidden=False,
+                    status="want_to_read",
+                    collection_status="available",
+                )
+                db.session.add(ph_item)
+
+            # LLM cover manifestation
+            llm_manif = Manifestation.query.filter_by(isbn13=LLM_ISBN).first()
+            if not llm_manif:
+                w_llm = Work(title="Watermark LLM Cover", meta={"authors": ["E2E System"]})
+                db.session.add(w_llm)
+                db.session.flush()
+                e_llm = Expression(work_id=w_llm.id, content_type="text", language="en")
+                db.session.add(e_llm)
+                db.session.flush()
+                llm_manif = Manifestation(expression_id=e_llm.id, isbn13=LLM_ISBN, publisher="E2E Test")
+                db.session.add(llm_manif)
+                db.session.flush()
+
+            # Generate 600x900 warm-toned image
+            llm_path = os.path.join(COVERS_DIR, "e2e_llm_gen.jpg")
+            Image.new("RGB", (600, 900), color=(180, 160, 220)).save(llm_path, "JPEG", quality=85)
+
+            # Apply corner watermark
+            wm_llm = os.path.join(COVERS_DIR, "e2e_llm_gen_wm.jpg")
+            apply_corner_watermark(llm_path, watermark_asset, wm_llm)
+
+            llm_manif.cover_url = "/static/covers/e2e_llm_gen_wm.jpg"
+            llm_manif.update_meta(cover_source="llm_gemini", cover_status="ready", cover_status_updated_at="2026-01-01T00:00:00Z")
+
+            # Ensure an item exists for e2e-admin
+            llm_item = Item.query.filter_by(manifestation_id=llm_manif.id, owner_id=e2e_admin.id).first()
+            if not llm_item:
+                llm_item = Item(
+                    owner_id=e2e_admin.id,
+                    manifestation_id=llm_manif.id,
+                    is_hidden=False,
+                    status="want_to_read",
+                    collection_status="available",
+                )
+                db.session.add(llm_item)
+        else:
+            print(f"WARNING: Watermark asset not found at {watermark_asset}. Skipping watermark cover seeding.")
 
         db.session.commit()
         print("E2E seed data created successfully")
