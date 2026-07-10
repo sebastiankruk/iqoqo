@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
+import { useTranslations } from "next-intl";
 
 /** Props for SidebarFilters component */
 interface SidebarFiltersProps {
@@ -151,6 +152,7 @@ interface SearchableFacetProps {
  * @returns {JSX.Element} The component
  */
 export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
+  const t = useTranslations("CollectionFilters");
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredOptions = useMemo(() => {
@@ -176,7 +178,7 @@ export function SearchableFacet({ options, activeFilters, type, onToggle, placeh
 
       <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
         {filteredOptions.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground italic py-1 px-2">No matches.</p>
+          <p className="text-[10px] text-muted-foreground italic py-1 px-2">{t("noMatches")}</p>
         ) : (
           filteredOptions.map(option => {
             const active = isActive(activeFilters, type, option);
@@ -238,6 +240,7 @@ export function SidebarFilters({
   onChangeMissingId,
   missingId = false,
 }: SidebarFiltersProps) {
+  const t = useTranslations("CollectionFilters");
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
   const activeFormat = activeFilters.find(f => f.type === "format")?.value;
   const activeGenre = activeFilters.find(f => f.type === "genre")?.value;
@@ -265,12 +268,12 @@ export function SidebarFilters({
     <aside className="w-full h-full overflow-y-auto pr-2 pb-20 custom-scrollbar">
       <div className="mb-4 flex items-center gap-2">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-        <h2 className="font-serif text-sm font-bold text-foreground">Filters</h2>
+        <h2 className="font-serif text-sm font-bold text-foreground">{t("title")}</h2>
       </div>
 
-      <AccordionSection title="Media Category">
+      <AccordionSection title={t("secMediaCategory")}>
         <div className="flex flex-col gap-1">
-          {Object.entries(MEDIA_HIERARCHY).map(([id, info]) => {
+          {Object.entries(MEDIA_HIERARCHY).map(([id]) => {
             const active = isActive(activeFilters, "category", id);
             return (
               <label
@@ -287,7 +290,7 @@ export function SidebarFilters({
                 <span className={active ? "text-primary" : "text-muted-foreground"}>
                   {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}
                 </span>
-                <span className="flex-1 font-medium">{info.label}</span>
+                <span className="flex-1 font-medium">{t(`cat_${id}`)}</span>
                 <span className="text-xs tabular-nums text-muted-foreground mr-1">{categoryCounts[id] ?? 0}</span>
                 {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </label>
@@ -297,49 +300,49 @@ export function SidebarFilters({
       </AccordionSection>
 
       {taxonomies?.collections && taxonomies.collections.length > 0 && (
-        <AccordionSection title="My Collections">
+        <AccordionSection title={t("secMyCollections")}>
           <SearchableFacet
             options={taxonomies.collections}
             activeFilters={activeFilters}
             type="collection"
             onToggle={value => onToggleFilter({ type: "collection", value })}
-            placeholder="Find collection..."
+            placeholder={t("findCollection")}
           />
         </AccordionSection>
       )}
 
-      <AccordionSection title="Tags" defaultOpen={false}>
+      <AccordionSection title={t("secTags")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.tags ?? []}
           activeFilters={activeFilters}
           type="tag"
           onToggle={value => onToggleFilter({ type: "tag", value })}
-          placeholder="Find tag..."
+          placeholder={t("findTag")}
         />
       </AccordionSection>
 
-      <AccordionSection title="Genres" defaultOpen={false}>
+      <AccordionSection title={t("secGenres")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.genres ?? []}
           activeFilters={activeFilters}
           type="genre"
           onToggle={value => onToggleFilter({ type: "genre", value })}
-          placeholder="Find genre..."
+          placeholder={t("findGenre")}
         />
       </AccordionSection>
 
-      <AccordionSection title="Publishers" defaultOpen={false}>
+      <AccordionSection title={t("secPublishers")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.publishers ?? []}
           activeFilters={activeFilters}
           type="publisher"
           onToggle={value => onToggleFilter({ type: "publisher", value })}
-          placeholder="Find publisher..."
+          placeholder={t("findPublisher")}
         />
       </AccordionSection>
 
       {!isHierarchyView && validFormats.length > 0 && (
-        <AccordionSection title="Physical Kind">
+        <AccordionSection title={t("secPhysicalKind")}>
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
               const active = isActive(activeFilters, "format", fmt.id);
@@ -355,7 +358,7 @@ export function SidebarFilters({
                     onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
                     className="h-4 w-4 shrink-0 rounded-full border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  <span className="flex-1">{fmt.label}</span>
+                  <span className="flex-1">{t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{formatCounts[fmt.id] ?? 0}</span>
                 </label>
               );
@@ -364,13 +367,11 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      <AccordionSection title="Collection Status">
+      <AccordionSection title={t("secCollectionStatus")}>
         {isHierarchyView ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            Status filters apply to physical items only. Switch to &ldquo;My Items&rdquo; view to filter by status.
-          </p>
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
         ) : disableStatus ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">Not applicable here.</p>
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
         ) : (
           <div className="flex flex-col gap-1">
             {collectionStatuses.map(({ value, label, dot }) => {
@@ -387,7 +388,7 @@ export function SidebarFilters({
                     className="h-3.5 w-3.5 rounded border-border accent-primary"
                   />
                   <span className={`h-2 w-2 rounded-full ${dot}`} />
-                  <span className="flex-1">{label}</span>
+                  <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[value] ?? 0}</span>
                 </label>
               );
@@ -397,7 +398,7 @@ export function SidebarFilters({
       </AccordionSection>
 
       {!isHierarchyView && activeCategory && validProgressStatuses.length > 0 && (
-        <AccordionSection title="Progress">
+        <AccordionSection title={t("secProgress")}>
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {
               const info = progressLabels[status] || { label: status, dot: "bg-muted" };
@@ -414,7 +415,7 @@ export function SidebarFilters({
                     className="h-3.5 w-3.5 rounded border-border accent-primary"
                   />
                   <span className={`h-2 w-2 rounded-full ${info.dot}`} />
-                  <span className="flex-1">{info.label}</span>
+                  <span className="flex-1">{t(`progress_${status}`, { defaultValue: info.label })}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{statusCounts[status] ?? 0}</span>
                 </label>
               );
@@ -424,7 +425,7 @@ export function SidebarFilters({
       )}
 
       {isCurator && (
-        <AccordionSection title="Curation" defaultOpen={false}>
+        <AccordionSection title={t("secCuration")} defaultOpen={false}>
           <div className="flex flex-col gap-1">
             <label
               className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${missingCover ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
@@ -435,7 +436,7 @@ export function SidebarFilters({
                 onChange={e => onChangeMissingCover?.(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-border accent-primary"
               />
-              <span className="flex-1">No Cover</span>
+              <span className="flex-1">{t("noCover")}</span>
             </label>
             <label
               className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${missingId ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
@@ -446,7 +447,7 @@ export function SidebarFilters({
                 onChange={e => onChangeMissingId?.(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-border accent-primary"
               />
-              <span className="flex-1">No ID</span>
+              <span className="flex-1">{t("noId")}</span>
             </label>
           </div>
         </AccordionSection>

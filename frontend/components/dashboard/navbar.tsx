@@ -16,14 +16,29 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle, Folder, Home } from "lucide-react";
+import {
+  Search,
+  ScanLine,
+  Library,
+  Loader2,
+  Settings,
+  User,
+  LogOut,
+  AlertTriangle,
+  Folder,
+  Home,
+  Check,
+  SunMoon,
+  Globe,
+} from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +46,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
@@ -51,6 +70,14 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false);
   const queryClient = useQueryClient();
   const [manageCollOpen, setManageCollOpen] = useState(false);
+
+  const { setTheme, theme } = useTheme();
+  const locale = useLocale();
+
+  const setLanguage = (newLocale: string) => {
+    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -123,8 +150,8 @@ export function Navbar() {
             <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
           </Link>
 
-          {/* Search – hidden on xs, visible from sm upward */}
-          <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-md sm:flex">
+          {/* Search – visible on all screens with max-width on mobile */}
+          <form onSubmit={handleSearch} className="relative mx-auto flex w-full max-w-[140px] sm:max-w-md flex-1">
             <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
               <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
             </div>
@@ -160,7 +187,7 @@ export function Navbar() {
               <span />
             )}
 
-            <div className="flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1">
               <LanguageToggle />
               <ModeToggle />
             </div>
@@ -219,6 +246,65 @@ export function Navbar() {
                         </Link>
                       </DropdownMenuItem>
                     )}
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator className="dark:bg-white/10 md:hidden" />
+                  <DropdownMenuGroup className="md:hidden">
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <Globe className="mr-2 h-4 w-4" />
+                        <span>{t("languageSubmenu")}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("en")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>English</span>
+                            {locale === "en" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("pl")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>Polski</span>
+                            {locale === "pl" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <SunMoon className="mr-2 h-4 w-4" />
+                        <span>{t("themeSubmenu")}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("light")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeLight")}</span>
+                            {theme === "light" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setTheme("dark")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeDark")}</span>
+                            {theme === "dark" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setTheme("system")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeSystem")}</span>
+                            {theme === "system" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="dark:bg-white/10" />
                   <DropdownMenuItem

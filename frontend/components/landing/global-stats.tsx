@@ -18,6 +18,7 @@
 import { useGlobalStats } from "@/lib/api/hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Layers, Library, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 /**
  * Global stats section component.
@@ -25,15 +26,16 @@ import { BookOpen, Layers, Library, Users } from "lucide-react";
  * @returns {JSX.Element | null} The component
  */
 export function GlobalStats() {
+  const t = useTranslations("GlobalStats");
   const { data: stats, isLoading } = useGlobalStats();
 
   if (isLoading || !stats) return null;
 
   const statItems = [
-    { title: "Works", value: stats.works, icon: BookOpen },
-    { title: "Manifestations", value: stats.manifestations, icon: Layers },
-    { title: "Items Tracked", value: stats.items, icon: Library },
-    { title: "Curators", value: stats.users, icon: Users },
+    { title: t("works"), value: stats.works, icon: BookOpen },
+    { title: t("manifestations"), value: stats.manifestations, icon: Layers },
+    { title: t("itemsTracked"), value: stats.items, icon: Library },
+    { title: t("curators"), value: stats.users, icon: Users },
   ];
 
   return (

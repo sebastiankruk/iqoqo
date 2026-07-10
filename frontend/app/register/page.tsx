@@ -20,6 +20,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
+import { useTranslations } from "next-intl";
 
 /**
  * Register page component.
@@ -27,6 +28,7 @@ import { Footer } from "@/components/dashboard/footer";
  * @returns {JSX.Element} The page component
  */
 export default function RegisterPage() {
+  const t = useTranslations("Register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -36,7 +38,7 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!acceptedTerms) {
-      setError("You must accept the Terms of Service and Privacy Policy.");
+      setError(t("mustAcceptTerms"));
       return;
     }
     setError("");
@@ -53,7 +55,7 @@ export default function RegisterPage() {
       window.location.href = `/api/auth-exchange?token=${data.token}`;
     } else {
       const errData = await res.json();
-      setError(errData.error || "Registration failed. Please try again.");
+      setError(errData.error || t("registrationFailed"));
     }
   };
 
@@ -63,8 +65,8 @@ export default function RegisterPage() {
       <main className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-6 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
           <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold">Create an account</h1>
-            <p className="text-sm text-muted-foreground">Join the distributed library</p>
+            <h1 className="text-2xl font-bold">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
 
           <Button
@@ -72,11 +74,11 @@ export default function RegisterPage() {
             variant="outline"
             onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`)}
           >
-            Sign up with Google
+            {t("googleSignUp")}
           </Button>
 
           <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-            <span className="relative z-10 px-2 text-muted-foreground">Or continue with email</span>
+            <span className="relative z-10 px-2 text-muted-foreground">{t("orEmail")}</span>
           </div>
 
           {error && <div className="text-sm text-red-500 text-center">{error}</div>}
@@ -85,7 +87,7 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Display Name (Optional)"
+                placeholder={t("displayNamePlaceholder")}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
@@ -94,7 +96,7 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <input
                 type="email"
-                placeholder="Email"
+                placeholder={t("emailPlaceholder")}
                 required
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={email}
@@ -104,7 +106,7 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <input
                 type="password"
-                placeholder="Password"
+                placeholder={t("passwordPlaceholder")}
                 required
                 minLength={6}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -122,27 +124,27 @@ export default function RegisterPage() {
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
               <label htmlFor="terms" className="text-xs text-muted-foreground leading-snug">
-                I agree to the{" "}
+                {t("agreeTerms")}
                 <Link href="/legal/terms" target="_blank" className="underline hover:text-primary">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
+                  {t("termsOfService")}
+                </Link>
+                {t("and")}
                 <Link href="/legal/privacy" target="_blank" className="underline hover:text-primary">
-                  Privacy Policy
+                  {t("privacyPolicy")}
                 </Link>
                 .
               </label>
             </div>
 
             <Button type="submit" className="w-full" disabled={!acceptedTerms} variant="ghost">
-              Sign Up
+              {t("signUpButton")}
             </Button>
           </form>
 
           <div className="text-center text-sm">
-            Already have an account?{" "}
+            {t("alreadyAccount")}
             <Link href="/login" className="underline underline-offset-4 hover:text-primary">
-              Sign in
+              {t("signIn")}
             </Link>
           </div>
         </div>

@@ -24,6 +24,7 @@ import { Hero } from "@/components/landing/hero";
 import { GlobalStats } from "@/components/landing/global-stats";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 /**
  * Dashboard page component.
@@ -31,6 +32,7 @@ import { Loader2 } from "lucide-react";
  * @returns {JSX.Element} The page component
  */
 export default function DashboardPage() {
+  const t = useTranslations("Dashboard");
   const { data: user, isLoading } = useProfile();
 
   if (isLoading) {
@@ -49,10 +51,10 @@ export default function DashboardPage() {
         {user ? (
           // Authenticated Dashboard
           <div className="space-y-8">
-            <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.display_name ?? user.email}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Your collection is growing nicely. Here is what is happening.
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t("welcomeBack", { name: user.display_name ?? user.email })}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("collectionGrowing")}</p>
             <StatsCards />
             <CurrentContext />
             <section>

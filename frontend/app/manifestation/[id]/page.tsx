@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
+import { useTranslations } from "next-intl";
 
 /**
  * Page displaying a single manifestation with metadata and add-to-collection action.
@@ -42,6 +43,7 @@ import { ExtendedMetadata } from "@/components/item/extended-metadata";
  * @returns {JSX.Element}
  */
 export default function ManifestationPage() {
+  const t = useTranslations("Manifestation");
   const params = useParams();
   const manifestationId = Number(params?.id);
 
@@ -68,7 +70,7 @@ export default function ManifestationPage() {
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground">Manifestation not found.</p>
+          <p className="text-muted-foreground">{t("notFound")}</p>
         </div>
         <Footer />
       </div>
@@ -95,12 +97,12 @@ export default function ManifestationPage() {
 
   // Resolve special series label
   const contentType = manifestation.content_type ?? "text";
-  let baseLabel = "Book";
-  if (contentType === "movie") baseLabel = "Movie";
-  else if (contentType === "music") baseLabel = "Music";
-  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
+  let baseLabel = t("book");
+  if (contentType === "movie") baseLabel = t("movie");
+  else if (contentType === "music") baseLabel = t("music");
+  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = t("game");
 
-  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
+  const badgeLabel = isSeries ? t("seriesSuffix", { label: baseLabel }) : isAudio ? t("cdAudio") : t("book");
 
   const isBoardGame = manifestation.content_type === "board_game";
   const schemaType = isBoardGame ? "Game" : "Book";
@@ -194,10 +196,10 @@ export default function ManifestationPage() {
                   manifestation_id={manifestation.id}
                   format={(manifestation.meta?.format as "book" | "cd" | "vinyl") || "book"}
                   onUploadComplete={() => {
-                    toast.success("Cover contributed! Processing started.");
+                    toast.success(t("coverContributed"));
                     router.refresh();
                   }}
-                  label="Contribute Cover"
+                  label={t("contributeCover")}
                   icon={<ImagePlus className="mr-2 h-4 w-4" />}
                   className="[&>button]:w-full [&>button]:rounded-xl [&>button]:py-6"
                 />
@@ -234,7 +236,7 @@ export default function ManifestationPage() {
                         onClick={() => router.push(`/collection?q=${encodeURIComponent(author)}`)}
                         onKeyDown={e => e.key === "Enter" && router.push(`/collection?q=${encodeURIComponent(author)}`)}
                         className="hover:text-primary hover:underline cursor-pointer transition-colors"
-                        title={`Browse all works by ${author}`}
+                        title={t("browseAuthor", { author })}
                       >
                         {author}
                       </span>
@@ -242,17 +244,17 @@ export default function ManifestationPage() {
                     </span>
                   ))
                 ) : (
-                  <span>Unknown Author</span>
+                  <span>{t("unknownAuthor")}</span>
                 )}
               </div>
             </div>
 
             <div className="space-y-3 pt-6 border-t border-border">
-              <h2 className="text-lg font-semibold">Publication Details</h2>
+              <h2 className="text-lg font-semibold">{t("pubDetails")}</h2>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 {resolvedIsbn && (
                   <div>
-                    <dt className="text-muted-foreground">ISBN-13</dt>
+                    <dt className="text-muted-foreground">{t("isbn13")}</dt>
                     <dd className="font-medium text-foreground" property="schema:isbn">
                       {String(resolvedIsbn)}
                     </dd>
@@ -260,13 +262,13 @@ export default function ManifestationPage() {
                 )}
                 {resolvedEan && (
                   <div>
-                    <dt className="text-muted-foreground">EAN</dt>
+                    <dt className="text-muted-foreground">{t("ean")}</dt>
                     <dd className="font-medium text-foreground">{String(resolvedEan)}</dd>
                   </div>
                 )}
                 {resolvedUpc && (
                   <div>
-                    <dt className="text-muted-foreground">UPC</dt>
+                    <dt className="text-muted-foreground">{t("upc")}</dt>
                     <dd className="font-medium text-foreground">{String(resolvedUpc)}</dd>
                   </div>
                 )}
@@ -279,13 +281,13 @@ export default function ManifestationPage() {
                   manifestation.meta.Publisher !== "N/A"
                 ) && (
                   <div>
-                    <dt className="text-muted-foreground">Publisher</dt>
+                    <dt className="text-muted-foreground">{t("publisher")}</dt>
                     <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
                   </div>
                 )}
                 {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
                   <div>
-                    <dt className="text-muted-foreground">Year</dt>
+                    <dt className="text-muted-foreground">{t("year")}</dt>
                     <dd className="font-medium text-foreground">{String(resolved_year)}</dd>
                   </div>
                 )}
@@ -295,7 +297,7 @@ export default function ManifestationPage() {
                   manifestation.meta.Language !== "N/A"
                 ) && (
                   <div>
-                    <dt className="text-muted-foreground">Language</dt>
+                    <dt className="text-muted-foreground">{t("language")}</dt>
                     <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
                   </div>
                 )}
@@ -309,7 +311,7 @@ export default function ManifestationPage() {
 
             {tags.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
-                <h2 className="text-lg font-semibold">Indexed Tags</h2>
+                <h2 className="text-lg font-semibold">{t("indexedTags")}</h2>
                 <div className="flex flex-wrap gap-2">
                   {tags.map((tag: string) => (
                     <span
@@ -327,7 +329,7 @@ export default function ManifestationPage() {
 
             {(manifestation.container_work_id || parts.length > 0) && parts.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
-                <h2 className="text-lg font-semibold">Series / Complex Work Parts</h2>
+                <h2 className="text-lg font-semibold">{t("seriesComplexParts")}</h2>
                 <div className="border border-border/60 rounded-xl divide-y bg-muted/5 overflow-hidden">
                   {parts.map(part => {
                     const isCurrent = part.part_work_id === manifestation.work_id;
@@ -388,12 +390,12 @@ export default function ManifestationPage() {
                         <div className="flex items-center gap-2">
                           {part.item_id && (
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full bg-green-500/10">
-                              In Collection
+                              {t("inCollection")}
                             </span>
                           )}
                           {isCurrent && (
                             <span className="text-xs font-semibold uppercase tracking-wider text-primary px-2 py-0.5 rounded-full bg-primary/10">
-                              Current Edition
+                              {t("currentEdition")}
                             </span>
                           )}
                         </div>
@@ -413,7 +415,7 @@ export default function ManifestationPage() {
                         {manifestation.item_id && (
                           <Button onClick={() => router.push(`/item/${manifestation.item_id}`)} size="sm">
                             <BookOpen className="mr-2 h-4 w-4" />
-                            View My Item
+                            {t("viewMyItem")}
                           </Button>
                         )}
                         <Button
@@ -427,7 +429,7 @@ export default function ManifestationPage() {
                           variant="secondary"
                           size="sm"
                         >
-                          View in Collection
+                          {t("viewInCollection")}
                         </Button>
                       </div>
                     ) : (
@@ -436,8 +438,15 @@ export default function ManifestationPage() {
                   </div>
                   {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (
                     <span className="text-xs text-muted-foreground">
-                      Owned by <strong className="text-foreground">{manifestation.owner_count}</strong>{" "}
-                      {manifestation.owner_count === 1 ? "person" : "people"}
+                      {manifestation.owner_count === 1
+                        ? t.rich("ownedByOne", {
+                            count: manifestation.owner_count,
+                            bold: chunks => <strong className="text-foreground">{chunks}</strong>,
+                          })
+                        : t.rich("ownedByMultiple", {
+                            count: manifestation.owner_count,
+                            bold: chunks => <strong className="text-foreground">{chunks}</strong>,
+                          })}
                     </span>
                   )}
                 </div>
@@ -465,22 +474,23 @@ export default function ManifestationPage() {
  * @returns The rendered manifestation reviews tab.
  */
 function ManifestationReviews({ manifestation }: { manifestation: CatalogEntry }) {
+  const t = useTranslations("Manifestation");
   const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation">("work");
 
   const subtabs = [
-    { id: "work", label: "Conceptual Work", targetId: manifestation.work_id, description: "Story / artistic creation" },
+    { id: "work", label: t("tabWork"), targetId: manifestation.work_id, description: t("descWork") },
     {
       id: "expression",
-      label: "Expression",
+      label: t("tabExpression"),
       targetId: manifestation.expression_id,
-      description: "Realization (Language/Format)",
+      description: t("descExpression"),
     },
-    { id: "manifestation", label: "Edition", targetId: manifestation.id, description: "Printed publication (ISBN)" },
+    { id: "manifestation", label: t("tabEdition"), targetId: manifestation.id, description: t("descEdition") },
   ] as const;
 
   return (
     <div className="mt-12 border-t pt-10 space-y-6">
-      <h3 className="font-serif text-2xl font-bold text-foreground">Reviews & Feedback</h3>
+      <h3 className="font-serif text-2xl font-bold text-foreground">{t("reviewsFeedback")}</h3>
       <div className="overflow-hidden rounded-xl bg-card border p-6 shadow-sm">
         <div className="flex flex-wrap gap-2 border-b pb-4 mb-6">
           {subtabs.map(({ id, label, targetId, description }) => {
@@ -505,13 +515,17 @@ function ManifestationReviews({ manifestation }: { manifestation: CatalogEntry }
 
         <div>
           {activeLevel === "work" && manifestation.work_id && (
-            <FRBRFeedback level="work" targetId={manifestation.work_id} title="Conceptual Work" />
+            <FRBRFeedback level="work" targetId={manifestation.work_id} title={t("feedbackTitleWork")} />
           )}
           {activeLevel === "expression" && manifestation.expression_id && (
-            <FRBRFeedback level="expression" targetId={manifestation.expression_id} title="Expression" />
+            <FRBRFeedback
+              level="expression"
+              targetId={manifestation.expression_id}
+              title={t("feedbackTitleExpression")}
+            />
           )}
           {activeLevel === "manifestation" && (
-            <FRBRFeedback level="manifestation" targetId={manifestation.id} title="Manifestation Edition" />
+            <FRBRFeedback level="manifestation" targetId={manifestation.id} title={t("feedbackTitleManifestation")} />
           )}
         </div>
       </div>

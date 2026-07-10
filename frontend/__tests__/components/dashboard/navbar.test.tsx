@@ -36,6 +36,7 @@ vi.mock("@/components/language-toggle", () => ({
 
 // Mock next-intl to inject our base english translations directly
 vi.mock("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: (namespace: string) => {
     if (namespace === "Navbar") {
       return (key: string) => {
@@ -52,6 +53,11 @@ vi.mock("next-intl", () => ({
           logOut: "Log out",
           home: "Home",
           profile: "Profile",
+          languageSubmenu: "Language",
+          themeSubmenu: "Theme",
+          themeLight: "Light",
+          themeDark: "Dark",
+          themeSystem: "System",
         };
         return translations[key] || key;
       };
@@ -114,11 +120,14 @@ describe("Navbar", () => {
 });
 
 describe("Navbar Auth State", () => {
-  it("shows Sign In when not authenticated", () => {
+  it("shows Sign In when not authenticated and no settings dropdown", () => {
     (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
 
-    expect(screen.getAllByText("Sign In")[0]).toBeInTheDocument();
+    const signInLinks = screen.getAllByRole("link", { name: "Sign In" });
+    expect(signInLinks.length).toBe(2);
+    expect(screen.queryByLabelText("Settings menu")).toBeNull();
+    expect(screen.queryByLabelText("User menu")).toBeNull();
   });
 
   it("shows user initials and opens dropdown when authenticated (non-admin)", async () => {
@@ -135,6 +144,8 @@ describe("Navbar Auth State", () => {
 
     // Use findByText to await the asynchronous opening of the Radix dropdown
     expect(await screen.findByText("Profile Settings")).toBeInTheDocument();
+    expect(screen.getByText("Language")).toBeInTheDocument();
+    expect(screen.getByText("Theme")).toBeInTheDocument();
     expect(screen.queryByText("Admin Configuration")).toBeNull();
   });
 

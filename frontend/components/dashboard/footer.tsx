@@ -16,6 +16,7 @@
 "use client";
 
 import { APP_VERSION } from "@/lib/version";
+import { useTranslations } from "next-intl";
 
 /**
  * Site footer displaying the iqoqo brand name, open-source sponsorship links,
@@ -24,13 +25,14 @@ import { APP_VERSION } from "@/lib/version";
  * @returns {JSX.Element} The footer component
  */
 export function Footer() {
+  const t = useTranslations("Footer");
   const uiVersion = APP_VERSION;
 
   return (
     <footer className="border-t border-border bg-card">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <p className="text-xs text-muted-foreground">
-          <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; The Library of Everything{" "}
+          <span className="font-serif font-bold text-foreground">iqoqo</span> &middot; {t("libraryOfEverything")}{" "}
           &middot; {uiVersion} &middot;{" "}
           <a
             href="https://github.com/sponsors/sebastiankruk"
@@ -38,7 +40,7 @@ export function Footer() {
             rel="noopener noreferrer"
             className="underline hover:text-foreground transition-colors"
           >
-            GitHub Sponsors
+            {t("githubSponsors")}
           </a>{" "}
           &middot;{" "}
           <a
@@ -47,10 +49,10 @@ export function Footer() {
             rel="noopener noreferrer"
             className="underline hover:text-foreground transition-colors"
           >
-            Buy Me a Coffee
+            {t("buyMeACoffee")}
           </a>
         </p>
-        <p className="text-xs text-muted-foreground">Your library, your rules.</p>
+        <p className="text-xs text-muted-foreground">{t("rules")}</p>
       </div>
     </footer>
   );
