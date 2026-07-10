@@ -79,7 +79,7 @@ describe("ItemActions Component", () => {
     expect(screen.getByText(/Remove from library/i)).toBeInTheDocument();
   });
 
-  it("starts polling invalidateQueries every 3s when cover_status is pending", () => {
+  it("starts polling invalidateQueries every 10s when cover_status is pending", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
@@ -90,13 +90,13 @@ describe("ItemActions Component", () => {
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["item", pendingItem.id] });
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
   });
@@ -109,7 +109,7 @@ describe("ItemActions Component", () => {
     render(<ItemActions item={mockItem} />);
 
     act(() => {
-      vi.advanceTimersByTime(9000);
+      vi.advanceTimersByTime(30000);
     });
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
@@ -123,7 +123,7 @@ describe("ItemActions Component", () => {
     const { rerender } = render(<ItemActions item={pendingItem} />);
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
 
@@ -131,7 +131,7 @@ describe("ItemActions Component", () => {
     rerender(<ItemActions item={mockItem} />);
 
     act(() => {
-      vi.advanceTimersByTime(6000);
+      vi.advanceTimersByTime(20000);
     });
     // Should remain at 1 call since polling stopped
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);

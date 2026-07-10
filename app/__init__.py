@@ -145,9 +145,7 @@ def create_app(config_class=Config, config_override=None):
 
     redis_url = app.config.get("REDIS_URL")
     if redis_url:
-        limiter.storage_uri = redis_url
-    # If Redis is mandatory, we could check here, but the plan says it must be configured in .env.
-    # Flask-Limiter will use storage_uri.
+        app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
     limiter.init_app(app)
 
     from app.api.docs import docs_bp

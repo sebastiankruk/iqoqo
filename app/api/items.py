@@ -28,6 +28,7 @@ from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.item_access import require_item_access, verify_item_ownership
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.models import (
     Expression,
@@ -685,6 +686,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
 
 @api_bp.route("/items/<int(signed=True):item_id>", methods=["GET"])
+@limiter.limit("300 per hour", override_defaults=True)
 @optional_auth
 def get_item_detail(item_id: int):
     if item_id < 0:

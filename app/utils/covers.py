@@ -445,18 +445,21 @@ def process_cover_pipeline(
             # Extract format for media-aware prompts
             format_type = manifestation.meta.get("format") if manifestation.meta else None
 
-            result = fetch_llm_cover(
-                identifier,
-                title,
-                author,
-                user_id,
-                description,
-                genre,
-                format_type=format_type,
-                allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
-            )
-            if result:
-                local_cover_url, source = result
+            try:
+                result = fetch_llm_cover(
+                    identifier,
+                    title,
+                    author,
+                    user_id,
+                    description,
+                    genre,
+                    format_type=format_type,
+                    allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
+                )
+                if result:
+                    local_cover_url, source = result
+            except (RuntimeError, ValueError, KeyError, AttributeError, TypeError, OSError) as e:
+                logger.exception("LLM cover generation failed for %s: %s", identifier, e)
 
         # Tier 5: PIL Fallback
         if not local_cover_url:

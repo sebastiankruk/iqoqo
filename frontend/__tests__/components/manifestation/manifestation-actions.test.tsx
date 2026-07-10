@@ -68,7 +68,7 @@ describe("ManifestationActions Component", () => {
     expect(screen.queryByText(/Delete manifestation/i)).not.toBeInTheDocument();
   });
 
-  it("starts polling invalidateQueries every 3s when cover_status is pending", () => {
+  it("starts polling invalidateQueries every 10s when cover_status is pending", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
@@ -82,7 +82,7 @@ describe("ManifestationActions Component", () => {
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
@@ -90,7 +90,7 @@ describe("ManifestationActions Component", () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
   });
@@ -107,7 +107,7 @@ describe("ManifestationActions Component", () => {
     const { rerender } = render(<ManifestationActions manifestation={pendingManifestation} />);
 
     act(() => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
 
@@ -115,7 +115,7 @@ describe("ManifestationActions Component", () => {
     rerender(<ManifestationActions manifestation={mockManifestation} />);
 
     act(() => {
-      vi.advanceTimersByTime(6000);
+      vi.advanceTimersByTime(20000);
     });
     // Should remain at 1 call since polling stopped
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);

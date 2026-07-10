@@ -59,7 +59,6 @@ class BookLookupStrategy(LookupStrategy):
             TypeError,
             OSError,
             RuntimeError,
-            Exception,
         ) as exc:
             import logging
 

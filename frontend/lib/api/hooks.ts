@@ -777,7 +777,7 @@ export function useManifestationWithPolling(initialData: Item) {
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 3000 : false),
+    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 10000 : false),
   });
   return { item };
 }

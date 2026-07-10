@@ -24,7 +24,7 @@ test.describe("UX/UI Audit Workflow", () => {
     try {
       await page.goto("https://dev.iqoqo.cc", { timeout: 8000 });
       await page.waitForLoadState("networkidle");
-    } catch (err) {
+    } catch {
       console.warn("⚠️ dev.iqoqo.cc is not reachable. Falling back to local landing page.");
       await page.goto("/", { timeout: 15000 });
       await page.waitForLoadState("networkidle");
