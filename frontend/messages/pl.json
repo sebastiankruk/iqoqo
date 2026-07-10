@@ -1,14 +1,14 @@
 {
   "Navbar": {
-    "maintenanceMode": "Tryb Konserwacji Aktywny – Niektóre funkcje mogą być ograniczone",
+    "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
     "searchPlaceholder": "Szukaj w swojej kolekcji...",
     "collection": "Kolekcja",
     "scan": "Skanuj",
     "signIn": "Zaloguj się",
-    "publicProfile": "Profil Publiczny",
-    "profileSettings": "Ustawienia Profilu",
-    "manageCollections": "Zarządzaj Kolekcjami",
-    "adminConfiguration": "Konfiguracja Administratora",
+    "publicProfile": "Profil publiczny",
+    "profileSettings": "Ustawienia profilu",
+    "manageCollections": "Zarządzaj kolekcjami",
+    "adminConfiguration": "Konfiguracja administratora",
     "logOut": "Wyloguj się",
     "home": "Główna",
     "profile": "Profil"

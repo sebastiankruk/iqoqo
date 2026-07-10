@@ -25,6 +25,7 @@ User provides an implementation plan (with code or diffs) and requests implement
 - Apply the provided `implementation_plan` exactly as specified using the appropriate file replacement tools.
 - **Strict Constraint**: Apply changes without "extra creativity". Do not refactor, clean up, or hallucinate improvements outside of the provided plan.
 - **Preserve Integrity**: Do not mute return-value warnings with silencing comments (`# type: ignore`, `# noqa`, `# pylint: disable`). Preserve all existing docstrings and function descriptions.
+- **Non-English UI Casing**: Always use sentence case (not Title Case) for Polish / non-English UI strings (e.g., in translation JSON files). Only capitalize the first word and proper nouns.
 
 ### 2. Initial Quality Assurance
 
@@ -35,6 +36,7 @@ User provides an implementation plan (with code or diffs) and requests implement
 
 ### 3. Version Control & PR Creation
 
+- **CHANGELOG**: Document the changes in `docs/CHANGELOG.md` under the appropriate release heading using the current version.
 - Stage all modified files (`git add .`).
 - Commit the changes using conventional commit formats describing the implemented feature/fix.
 - Push the current branch to the remote repository (`git push -u origin $(git branch --show-current)`).

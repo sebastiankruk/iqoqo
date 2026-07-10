@@ -48,6 +48,10 @@ The skill accepts product improvement descriptions from:
    - Snippets wrapped in code fences with language tags
    - Brief description of what the code does
 
+5. **Changelog Update**: Always include a step in the plan to document the release changes in `docs/CHANGELOG.md`.
+
+6. **Non-English UI Casing**: Specify in translation plans that non-English localizations (like Polish in `frontend/messages/pl.json`) must use sentence case (only capitalize the first word and proper nouns).
+
 ## Planning Workflow
 
 1. **Parse Input**: Read the product improvement description from the source document.
