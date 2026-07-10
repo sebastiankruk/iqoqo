@@ -5,6 +5,11 @@
   ],
   "permission": {
     "external_directory": {},
-    "edit": {}
+    "edit": {},
+    "bash": {
+      "cat *.env*": "deny",
+      "printenv*": "deny",
+      "env": "deny"
+    }
   }
 }
