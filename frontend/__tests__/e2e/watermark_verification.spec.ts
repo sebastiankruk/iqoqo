@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Watermark Verification Workflow", () => {
   test.beforeEach(async ({ page }) => {
-    // Logowanie jako administrator
+    // Log in as administrator
     await page.goto("/login");
     await page.fill('input[name="email"]', "admin@iqoqo.cc");
     await page.fill('input[name="password"]', "password123");
@@ -20,30 +20,30 @@ test.describe("Watermark Verification Workflow", () => {
   test("verifies corner watermark presence on GenAI covers", async ({ page }) => {
     await page.goto("/admin/content");
 
-    // Lokalizacja wygenerowanej okładki
+    // Locate generated cover
     const genAiCover = page.locator('img[data-cover-type="llm_gen"]').first();
     await expect(genAiCover).toBeVisible();
 
-    // Weryfikacja obecności sufiksu po przetworzeniu w tle
+    // Verify presence of suffix after background processing
     const src = await genAiCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
-    // Weryfikacja wizualna (wymaga wcześniejszego wygenerowania wzorców)
+    // Visual verification (requires pre-generated baseline screenshots)
     // await expect(genAiCover).toHaveScreenshot('llm_gen_corner_wm.png', { maxDiffPixels: 100 });
   });
 
   test("verifies center watermark presence on placeholders", async ({ page }) => {
     await page.goto("/admin/content");
 
-    // Lokalizacja okładki zastępczej (placeholder)
+    // Locate placeholder cover
     const placeholderCover = page.locator('img[data-cover-type="placeholder"]').first();
     await expect(placeholderCover).toBeVisible();
 
-    // Weryfikacja obecności sufiksu po przetworzeniu w tle
+    // Verify presence of suffix after background processing
     const src = await placeholderCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
-    // Weryfikacja wizualna (wymaga wcześniejszego wygenerowania wzorców)
+    // Visual verification (requires pre-generated baseline screenshots)
     // await expect(placeholderCover).toHaveScreenshot('placeholder_center_wm.png', { maxDiffPixels: 100 });
   });
 });
