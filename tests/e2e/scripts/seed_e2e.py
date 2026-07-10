@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlalchemy import select  # noqa: E402
+from sqlalchemy.exc import SQLAlchemyError  # noqa: E402
 
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
@@ -135,7 +136,7 @@ def seed_e2e_data():
                 LoanRequest.query.filter(LoanRequest.item_id.in_(lender_item_ids)).delete(synchronize_session=False)
 
             db.session.commit()
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as exc:
             db.session.rollback()
             print(f"WARNING: lender/borrower seed failed (non-fatal): {exc}")
 

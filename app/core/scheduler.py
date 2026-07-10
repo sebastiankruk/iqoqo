@@ -10,6 +10,7 @@
 import logging
 
 from flask_apscheduler import APScheduler
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 scheduler = APScheduler()
@@ -25,7 +26,7 @@ def run_scheduled_backup():
 
         create_export(current_app)
         logger.info("Scheduled backup job completed successfully.")
-    except Exception:  # pylint: disable=broad-exception-caught # noqa: BLE001
+    except (SQLAlchemyError, OSError, ValueError, AttributeError, KeyError, RuntimeError):
         logger.exception("Scheduled backup job failed.")
 
 
@@ -37,7 +38,7 @@ def run_scheduled_cover_cleanup():
         stuck = cleanup_stuck_pending_covers(timeout_minutes=15)
         if stuck > 0:
             logger.info("Cover cleanup: cleared %d stuck tasks", stuck)
-    except Exception:  # noqa: BLE001 # pylint: disable=broad-exception-caught
+    except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
         logger.exception("Cover cleanup job failed")
 
 
@@ -82,7 +83,7 @@ def init_scheduler(app):
             app.config.get("BACKUP_CRON_HOUR", "3"),
             app.config.get("BACKUP_CRON_MINUTE", "0"),
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
+    except (SQLAlchemyError, ValueError, AttributeError, RuntimeError) as e:
         # Handle cases where scheduler might have started between the check and start()
         if "already running" in str(e).lower():
             logger.debug("APScheduler reported already running during start.")

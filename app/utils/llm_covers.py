@@ -21,6 +21,7 @@ import time
 
 import requests
 from openai import OpenAI
+from PIL import Image, ImageEnhance
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
@@ -227,7 +228,7 @@ def generate_cover_gemini(
     except (requests.RequestException, ValueError, TypeError, KeyError, IndexError, OSError, binascii.Error) as e:
         logger.error(f"Gemini Gen failed: {e}")
         record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message=str(e))
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (RuntimeError, AttributeError, ImportError, NameError) as e:
         logger.error(f"Gemini Gen unexpected error: {e}")
         record_telemetry("gemini", user_id, time.time() - start_time, status="failed", error_message=str(e))
 
@@ -334,3 +335,58 @@ def fetch_llm_cover(
         return generate_cover_cloud(identifier, title, author, user_id, description, genre, format_type)
 
     return None
+
+
+def apply_corner_watermark(gen_image_path: str, watermark_path: str, output_path: str, opacity: float = 0.45) -> str:
+    """
+    Appends a distinct corner branding watermark to newly generated
+    visual media layouts from the GenAI cover pipelines.
+
+    Args:
+        gen_image_path (str): Path to the LLM generated media layout.
+        watermark_path (str): Path to the watermark image.
+        output_path (str): Destination path for the watermarked layout.
+        opacity (float): Transparency level of the watermark (0.0 to 1.0).
+
+    Returns:
+        str: The path to the newly watermarked layout.
+    """
+    try:
+        with Image.open(gen_image_path) as base_file:
+            base_img = base_file.convert("RGBA")
+
+            with Image.open(watermark_path) as wm_file:
+                watermark = wm_file.convert("RGBA")
+
+                # Resize watermark to 15% of the base image width for a subtle corner fit
+                base_width, base_height = base_img.size
+                wm_width, wm_height = watermark.size
+                scale = (base_width * 0.15) / wm_width
+                new_size = (max(int(wm_width * scale), 1), max(int(wm_height * scale), 1))
+
+                watermark = watermark.resize(new_size, Image.Resampling.LANCZOS)
+
+                # Apply opacity modifier
+                alpha = watermark.split()[3]
+                alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+                watermark.putalpha(alpha)
+
+                # Position in the bottom-right corner with 15px padding
+                padding = 15
+                x = base_width - new_size[0] - padding
+                y = base_height - new_size[1] - padding
+
+                transparent_layer = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
+                transparent_layer.paste(watermark, (x, y), watermark)
+
+                watermarked_img = Image.alpha_composite(base_img, transparent_layer)
+
+                # Validate output path
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                watermarked_img.convert("RGB").save(output_path, "JPEG", quality=95)
+
+        return output_path
+
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
+        logger.error("Failed to apply corner watermark to GenAI layout %s: %s", gen_image_path, e)
+        return gen_image_path

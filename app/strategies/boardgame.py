@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import requests
+
 from app.strategies.base import LookupStrategy
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.upc import resolve_physical_media
@@ -64,7 +66,7 @@ class BoardGameLookupStrategy(LookupStrategy):
                         if meta:
                             meta["data_source"] = "igdb"
                             provider = "igdb"
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (requests.RequestException, ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as exc:
             import logging
 
             logging.getLogger(__name__).error(f"BoardGame Strategy lookup failed: {exc}")

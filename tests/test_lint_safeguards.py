@@ -53,3 +53,37 @@ def test_no_too_many_return_statements_disables():
         error_msg = f"Forbidden pylint suppression found in {len(violations)} locations:\n"
         error_msg += "\n".join(violations)
         pytest.fail(error_msg)
+
+
+def test_no_broad_exception_caught_disables():
+    """
+    Ensure that 'broad-exception-caught' is not disabled in the app/, scripts/, and tests/ directories.
+    """
+    import pytest
+
+    forbidden_pattern = "broad-exception-caught"
+    search_dirs = ["app", "scripts", "tests"]
+    violations = []
+
+    for search_dir in search_dirs:
+        if not os.path.exists(search_dir):
+            continue
+
+        for root, _, files in os.walk(search_dir):
+            for file in files:
+                if not file.endswith(".py") or file == "test_lint_safeguards.py":
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, encoding="utf-8") as f:
+                        for line_num, line in enumerate(f, 1):
+                            if forbidden_pattern in line:
+                                violations.append(f"{file_path}:{line_num}: {line.strip()}")
+                except (OSError, UnicodeDecodeError) as e:
+                    violations.append(f"ERROR: Could not read {file_path}: {e}")
+
+    if violations:
+        error_msg = f"Forbidden pylint suppression of 'broad-exception-caught' found in {len(violations)} locations:\n"
+        error_msg += "\n".join(violations)
+        pytest.fail(error_msg)

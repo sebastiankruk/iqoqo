@@ -65,5 +65,5 @@ def _dispose_db_connections(**kwargs) -> None:
 
         if db.engine:
             db.engine.dispose()
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (AttributeError, ValueError, RuntimeError):
         pass  # Worker context or DB might not be fully ready yet

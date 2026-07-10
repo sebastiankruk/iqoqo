@@ -1548,7 +1548,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
                         transform=f"translate({offset_x},{offset_y}) scale({scale})",
                     )
                     root.append(path_el)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ET.ParseError, OSError, AttributeError, ValueError, KeyError) as e:
             current_app.logger.error("Failed to embed logo in SVG QR code: %s", e)
 
         img_io = io.BytesIO()
@@ -1688,7 +1688,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
                         # Alternate colors for cutouts vs solid fills
                         color = "white" if p_idx in (1, 5, 7) else "#d15500"
                         draw.polygon(scaled_poly, fill=color)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ET.ParseError, OSError, AttributeError, ValueError, KeyError) as e:
         current_app.logger.error("Failed to embed logo in PNG QR code: %s", e)
 
     img_io = io.BytesIO()
