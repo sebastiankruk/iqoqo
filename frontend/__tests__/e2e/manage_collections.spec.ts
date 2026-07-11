@@ -129,7 +129,7 @@ test.describe("Manage Collections Modal Workflow", () => {
     // Open Modal via "Manage Collections" menuitem in the user dropdown
     await page.getByLabel("User menu").click();
     await page.getByRole("menuitem", { name: "Manage Collections" }).click();
-    await expect(page.getByText("Manage Collections")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Manage Collections" })).toBeVisible();
 
     // Verify existing collections are listed
     await expect(page.getByText("Fantasy")).toBeVisible();
