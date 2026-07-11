@@ -59,12 +59,10 @@ vi.mock("@opentelemetry/context-zone", () => ({
 describe("BrowserTelemetry Component", () => {
   beforeEach(() => {
     // Clear global state before each test
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).__OTEL_BROWSER_INITIALIZED__;
   });
 
   afterEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).__OTEL_BROWSER_INITIALIZED__;
   });
 
@@ -74,12 +72,10 @@ describe("BrowserTelemetry Component", () => {
   });
 
   it("sets the initialization flag on window", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((window as any).__OTEL_BROWSER_INITIALIZED__).toBeUndefined();
     render(<BrowserTelemetry />);
     // Wait for microtasks to resolve for dynamic imports
     await new Promise(resolve => setTimeout(resolve, 0));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((window as any).__OTEL_BROWSER_INITIALIZED__).toBe(true);
   });
 });

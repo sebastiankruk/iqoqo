@@ -16,12 +16,29 @@
 "use client";
 
 import Link from "next/link";
-import { Search, ScanLine, Library, Loader2, Settings, User, LogOut, AlertTriangle, Folder, Home } from "lucide-react";
+import {
+  Search,
+  ScanLine,
+  Library,
+  Loader2,
+  Settings,
+  User,
+  LogOut,
+  AlertTriangle,
+  Folder,
+  Home,
+  Check,
+  SunMoon,
+  Globe,
+} from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations, useLocale } from "next-intl";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +46,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
@@ -39,6 +60,7 @@ import { ManageCollectionsModal } from "@/components/collection/manage-collectio
  * @returns {JSX.Element} The component
  */
 export function Navbar() {
+  const t = useTranslations("Navbar");
   const { data: profile, isLoading } = useProfile();
   const pathname = usePathname();
   const { data: config } = useAppConfig();
@@ -48,6 +70,14 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false);
   const queryClient = useQueryClient();
   const [manageCollOpen, setManageCollOpen] = useState(false);
+
+  const { setTheme, theme } = useTheme();
+  const locale = useLocale();
+
+  const setLanguage = (newLocale: string) => {
+    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -103,7 +133,7 @@ export function Navbar() {
         {isMaintenanceMode && (
           <div className="bg-amber-500 py-2 px-4 text-center text-xs font-bold uppercase tracking-wider text-black flex items-center justify-center gap-2 border-b border-amber-600/20">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Maintenance Mode Active – Some features may be limited
+            {t("maintenanceMode")}
           </div>
         )}
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
@@ -120,8 +150,8 @@ export function Navbar() {
             <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
           </Link>
 
-          {/* Search – hidden on xs, visible from sm upward */}
-          <form onSubmit={handleSearch} className="relative mx-auto hidden w-full max-w-md sm:flex">
+          {/* Search – visible on all screens with max-width on mobile */}
+          <form onSubmit={handleSearch} className="relative mx-auto flex w-full max-w-[140px] sm:max-w-md flex-1">
             <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
               <Search className="h-4 w-4 text-primary-foreground/50 dark:text-white/50" />
             </div>
@@ -129,7 +159,7 @@ export function Navbar() {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search your collection..."
+              placeholder={t("searchPlaceholder")}
               className="h-9 w-full rounded-full border border-primary-foreground/15 bg-primary-foreground/10 pl-10 pr-4 text-sm text-primary-foreground placeholder-primary-foreground/40 outline-none transition-colors focus:border-accent focus:bg-primary-foreground/15 dark:border-white/10 dark:bg-white/10 dark:text-white dark:placeholder-white/60"
             />
           </form>
@@ -141,7 +171,7 @@ export function Navbar() {
               className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 px-3.5 py-1.5 text-xs font-medium text-primary-foreground/80 transition-colors hover:border-primary-foreground/40 hover:text-primary-foreground sm:flex dark:border-white/20 dark:text-white/90 dark:hover:text-white dark:hover:bg-transparent"
             >
               <Library className="h-3.5 w-3.5" />
-              Collection
+              {t("collection")}
             </Link>
             {mounted && profile ? (
               <div className="flex items-center gap-2">
@@ -150,14 +180,17 @@ export function Navbar() {
                   className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
                 >
                   <ScanLine className="h-4 w-4" />
-                  <span className="hidden sm:inline">Scan</span>
+                  <span className="hidden sm:inline">{t("scan")}</span>
                 </Link>
               </div>
             ) : (
               <span />
             )}
 
-            <ModeToggle />
+            <div className="hidden md:flex items-center gap-1">
+              <LanguageToggle />
+              <ModeToggle />
+            </div>
 
             {/* Auth State Rendering */}
             {!mounted || isLoading ? (
@@ -191,28 +224,87 @@ export function Navbar() {
                     {profile.public_username && (
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <Link href={`/u/${profile.public_username}`}>
-                          <User className="mr-2 h-4 w-4" /> Public Profile
+                          <User className="mr-2 h-4 w-4" /> {t("publicProfile")}
                         </Link>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                       <Link href="/admin/settings">
-                        <Settings className="mr-2 h-4 w-4" /> Profile Settings
+                        <Settings className="mr-2 h-4 w-4" /> {t("profileSettings")}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setManageCollOpen(true)}
                       className="cursor-pointer rounded-md py-2 px-3 text-sm"
                     >
-                      <Folder className="mr-2 h-4 w-4" /> Manage Collections
+                      <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
                     </DropdownMenuItem>
                     {profile.roles?.includes("admin") && (
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <Link href="/admin/settings?tab=instance">
-                          <Settings className="mr-2 h-4 w-4" /> Admin Configuration
+                          <Settings className="mr-2 h-4 w-4" /> {t("adminConfiguration")}
                         </Link>
                       </DropdownMenuItem>
                     )}
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator className="dark:bg-white/10 md:hidden" />
+                  <DropdownMenuGroup className="md:hidden">
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <Globe className="mr-2 h-4 w-4" />
+                        <span>{t("languageSubmenu")}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("en")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>English</span>
+                            {locale === "en" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setLanguage("pl")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>Polski</span>
+                            {locale === "pl" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <SunMoon className="mr-2 h-4 w-4" />
+                        <span>{t("themeSubmenu")}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                          <DropdownMenuItem
+                            onClick={() => setTheme("light")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeLight")}</span>
+                            {theme === "light" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setTheme("dark")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeDark")}</span>
+                            {theme === "dark" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setTheme("system")}
+                            className="cursor-pointer flex items-center justify-between gap-2"
+                          >
+                            <span>{t("themeSystem")}</span>
+                            {theme === "system" && <Check className="h-4 w-4" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="dark:bg-white/10" />
                   <DropdownMenuItem
@@ -220,7 +312,7 @@ export function Navbar() {
                     className="cursor-pointer rounded-md py-2 px-3 text-sm text-red-500 focus:text-red-500 focus:bg-red-500/10"
                   >
                     <button onClick={handleLogout} className="w-full flex items-center">
-                      <LogOut className="mr-2 h-4 w-4" /> Log out
+                      <LogOut className="mr-2 h-4 w-4" /> {t("logOut")}
                     </button>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -228,7 +320,7 @@ export function Navbar() {
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/login" className="text-sm font-medium hover:underline">
-                  Sign In
+                  {t("signIn")}
                 </Link>
               </div>
             )}
@@ -246,7 +338,7 @@ export function Navbar() {
           }`}
         >
           <Home className="h-5 w-5" />
-          <span className="text-[10px] mt-1">Home</span>
+          <span className="text-[10px] mt-1">{t("home")}</span>
         </Link>
 
         <Link
@@ -256,7 +348,7 @@ export function Navbar() {
           }`}
         >
           <Library className="h-5 w-5" />
-          <span className="text-[10px] mt-1">Collection</span>
+          <span className="text-[10px] mt-1">{t("collection")}</span>
         </Link>
 
         {!mounted ? (
@@ -272,7 +364,7 @@ export function Navbar() {
               }`}
             >
               <ScanLine className="h-5 w-5" />
-              <span className="text-[10px] mt-1">Scan</span>
+              <span className="text-[10px] mt-1">{t("scan")}</span>
             </Link>
 
             <Link
@@ -284,7 +376,7 @@ export function Navbar() {
               }`}
             >
               <User className="h-5 w-5" />
-              <span className="text-[10px] mt-1">Profile</span>
+              <span className="text-[10px] mt-1">{t("profile")}</span>
             </Link>
           </>
         ) : (
@@ -295,7 +387,7 @@ export function Navbar() {
             }`}
           >
             <User className="h-5 w-5" />
-            <span className="text-[10px] mt-1">Sign In</span>
+            <span className="text-[10px] mt-1">{t("signIn")}</span>
           </Link>
         )}
       </div>

@@ -632,7 +632,7 @@ def scan_barcode() -> Response | tuple[Response, int]:
                     manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
                 is_new_manifestation = True
 
-            except (ValueError, ConnectionError, Exception) as e:  # pylint: disable=broad-exception-caught
+            except (ValueError, ConnectionError, KeyError, AttributeError, TypeError, OSError, RuntimeError) as e:
                 _record_scan_telemetry(barcode, format_hint, provider=format_hint or "ingest", status="failed")
                 err_msg = str(e)
                 code = 404

@@ -46,8 +46,8 @@ EOF
   cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/date"
 #!/bin/bash
 if [[ "$*" == *"-d"* ]]; then
-  # Return a static epoch representing a few hours ago
-  echo 1783584000
+  # Return a dynamic epoch representing 4 hours ago
+  echo $(($(/bin/date +%s) - 14400))
   exit 0
 fi
 # Fallback to system date

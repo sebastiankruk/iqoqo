@@ -246,3 +246,11 @@ class ItemLendSchema(BaseModel):
     @classmethod
     def validate_borrower_id(cls, v: str | None) -> str | None:
         return _validate_uuid_str(v)
+
+
+class ItemCollectionLinkSchema(BaseModel):
+    """Schema for linking an item to a named collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    collection_id: int = Field(..., gt=0, description="ID of the collection to link the item to")

@@ -29,6 +29,11 @@ def test_get_allegro_token_client_credentials(mock_post, mock_isfile):
     with patch.dict("os.environ", {"ALLEGRO_CLIENT_ID": "test_id", "ALLEGRO_CLIENT_SECRET": "test_secret"}):
         token = get_allegro_token()
         assert token == "mock_client_token"
+        mock_post.assert_called_once()
+        called_headers = mock_post.call_args[1].get("headers")
+        assert called_headers is not None
+        assert "User-Agent" in called_headers
+        assert called_headers["User-Agent"].startswith("iqoqo/")
 
 
 @patch("os.path.isfile")
@@ -66,6 +71,10 @@ def test_get_allegro_token_refresh(mock_post, mock_mtime, mock_isfile):
                 token = get_allegro_token()
                 assert token == "new_token"
                 mock_post.assert_called_once()
+                called_headers = mock_post.call_args[1].get("headers")
+                assert called_headers is not None
+                assert "User-Agent" in called_headers
+                assert called_headers["User-Agent"].startswith("iqoqo/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -92,6 +101,11 @@ def test_fetch_allegro_metadata_catalog_success(mock_isfile, mock_get, mock_toke
     assert result is not None
     assert result["title"] == "The Matrix [Blu-ray]"
     assert result["source"] == "Allegro Catalog"
+    mock_get.assert_called_once()
+    called_headers = mock_get.call_args[1].get("headers")
+    assert called_headers is not None
+    assert "User-Agent" in called_headers
+    assert called_headers["User-Agent"].startswith("iqoqo/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -118,6 +132,12 @@ def test_fetch_allegro_metadata_listing_fallback(mock_isfile, mock_get, mock_tok
     assert result is not None
     assert result["title"] == "Listing Item"
     assert result["source"] == "Allegro Listing"
+    assert mock_get.call_count == 2
+    for call in mock_get.call_args_list:
+        called_headers = call[1].get("headers")
+        assert called_headers is not None
+        assert "User-Agent" in called_headers
+        assert called_headers["User-Agent"].startswith("iqoqo/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -146,3 +166,7 @@ def test_fetch_allegro_metadata_catalog_with_client_credentials_only(mock_isfile
     assert result["source"] == "Allegro Catalog"
     # Step 2 (Listing API) must not be triggered if file token is absent
     assert mock_get.call_count == 1
+    called_headers = mock_get.call_args[1].get("headers")
+    assert called_headers is not None
+    assert "User-Agent" in called_headers
+    assert called_headers["User-Agent"].startswith("iqoqo/")

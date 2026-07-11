@@ -89,7 +89,7 @@ describe("FreshArrivals", () => {
   it("renders a 'View global library' link pointing to /collection?viewMode=manifestations", () => {
     render(<FreshArrivals />);
     const link = screen.getByRole("link", { name: /view global library/i });
-    expect(link).toHaveAttribute("href", "/collection?viewMode=manifestations");
+    expect(link).toHaveAttribute("href", "/collection?view=manifestations");
   });
 
   it("does not show item titles while loading", () => {

@@ -25,13 +25,14 @@ from app.db.models import Manifestation
 from app.utils.covers import (
     MAX_COVER_FILE_SIZE,
     MIN_COVER_FILE_SIZE,
+    add_center_watermark,
     download_direct_url,
     fetch_external_api_cover,
     generate_fallback_cover,
     process_cover_pipeline,
 )
 from app.utils.images import is_valid_cover, optimize_and_save_image
-from app.utils.llm_covers import generate_cover_cloud
+from app.utils.llm_covers import apply_corner_watermark, generate_cover_cloud
 
 
 @pytest.fixture
@@ -319,6 +320,8 @@ def test_pipeline_uses_tier5_fallback_when_all_tiers_fail(
         )
 
     mock_fallback.assert_called_once_with("9780000000000", "Unknown Book", "Unknown Author")
+    # Watermark asset does not exist in test context, so the URL stays as the
+    # original _generated.jpg (the _wm rewrite is skipped when watermarking fails).
     assert mock_manifestation.cover_url == "/static/covers/9780000000000_generated.jpg"
     update_args = mock_manifestation.update_meta.call_args
     assert update_args is not None
@@ -489,3 +492,92 @@ def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
     assert any(
         s in ("ready", "failed") for s in final_statuses
     ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
+
+
+@patch("app.utils.covers.download_direct_url")
+@patch("app.utils.allegro.fetch_allegro_metadata")
+def test_fetch_external_api_cover_allegro_success(mock_fetch_allegro, mock_download):
+    """Test that fetch_external_api_cover falls back to Allegro when OL/GB fail."""
+    mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/some-image.jpg", "source": "Allegro Catalog"}
+
+    # OL and GB calls return None, only Allegro call succeeds
+    def mock_download_side_effect(identifier, url, source, suffix=None):
+        if source == "api_allegro":
+            return ("/static/covers/9780553380163_allegro.jpg", "api_allegro")
+        return None
+
+    mock_download.side_effect = mock_download_side_effect
+
+    result = fetch_external_api_cover("9780553380163")
+
+    assert result is not None
+    path, source = result
+    assert path == "/static/covers/9780553380163_allegro.jpg"
+    assert source == "api_allegro"
+    mock_fetch_allegro.assert_called_once_with("9780553380163")
+    mock_download.assert_any_call("9780553380163", "https://allegro.pl/some-image.jpg", "api_allegro", suffix="allegro")
+
+
+@patch("app.utils.covers.download_direct_url")
+@patch("app.utils.allegro.fetch_allegro_metadata")
+def test_fetch_external_api_cover_allegro_non_isbn(mock_fetch_allegro, mock_download):
+    """Test that fetch_external_api_cover queries Allegro directly for non-ISBN identifiers."""
+    mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/ean-image.jpg", "source": "Allegro Catalog"}
+    mock_download.return_value = ("/static/covers/5900012345678_allegro.jpg", "api_allegro")
+
+    result = fetch_external_api_cover("5900012345678")
+
+    assert result is not None
+    path, source = result
+    assert path == "/static/covers/5900012345678_allegro.jpg"
+    assert source == "api_allegro"
+    mock_fetch_allegro.assert_called_once_with("5900012345678")
+    mock_download.assert_called_once_with("5900012345678", "https://allegro.pl/ean-image.jpg", "api_allegro", suffix="allegro")
+
+
+@pytest.fixture
+def mock_image_assets(tmp_path):
+    """Generates localized dummy assets for watermark testing."""
+    base = tmp_path / "test_base.jpg"
+    wm = tmp_path / "wm.png"
+    Image.new("RGB", (600, 800), "white").save(base, "JPEG")
+    Image.new("RGBA", (200, 200), (0, 0, 0, 150)).save(wm, "PNG")
+    return str(base), str(wm), tmp_path
+
+
+def test_watermark_byte_comparison(mock_image_assets):
+    """Verifies watermarking correctly mutates the byte signature."""
+    base, wm, tmp = mock_image_assets
+    out_center = str(tmp / "out_center.jpg")
+    out_corner = str(tmp / "out_corner.jpg")
+
+    add_center_watermark(base, wm, out_center)
+    apply_corner_watermark(base, wm, out_corner)
+    with open(base, "rb") as f:
+        base_bytes = f.read()
+    with open(out_center, "rb") as f:
+        out_center_bytes = f.read()
+    with open(out_corner, "rb") as f:
+        out_corner_bytes = f.read()
+    assert out_center_bytes != base_bytes
+    assert out_corner_bytes != base_bytes
+
+
+def test_watermark_missing_files(tmp_path):
+    """Verifies graceful fallback when assets are missing."""
+    out = str(tmp_path / "out.jpg")
+    assert add_center_watermark("fake.jpg", "fake_wm.png", out) == "fake.jpg"
+    assert apply_corner_watermark("fake.jpg", "fake_wm.png", out) == "fake.jpg"
+
+
+def test_watermark_preserves_dimensions_and_format(mock_image_assets):
+    """Verifies output remains RGB JPEG and retains base dimensions."""
+    base, wm, tmp = mock_image_assets
+    out = str(tmp / "out_dim.jpg")
+
+    add_center_watermark(base, wm, out)
+
+    with Image.open(out) as img:
+        assert img.size == (600, 800)
+        assert img.format == "JPEG"
+        assert img.mode == "RGB"

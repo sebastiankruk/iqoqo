@@ -18,7 +18,8 @@ import pytest
 
 from app.api.auth import generate_internal_jwt
 from app.db.auth import User
-from app.db.core import UserCollection, db
+from app.db.core import UserCollection, UserCollectionItem, db
+from app.db.models import Expression, Item, Manifestation, Permission, Role, Work
 
 
 @pytest.fixture
@@ -118,3 +119,140 @@ def test_delete_collection_with_children(client, auth_headers, test_user, app):
     client.delete(f"/api/collections/{child_id}", headers=auth_headers)
     response2 = client.delete(f"/api/collections/{parent_id}", headers=auth_headers)
     assert response2.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Item-collection linking tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def item_linking_setup(app, test_user):
+    """Set up an item, collection, and write:item permission for collection linking tests."""
+    with app.app_context():
+        write_item_perm = Permission.query.filter_by(name="write:item").first()
+        if not write_item_perm:
+            write_item_perm = Permission(name="write:item")
+            db.session.add(write_item_perm)
+            db.session.flush()
+
+        user_role = Role.query.filter_by(name="user").first()
+        if not user_role:
+            user_role = Role(name="user")
+            db.session.add(user_role)
+            db.session.flush()
+
+        if write_item_perm not in user_role.permissions:
+            user_role.permissions.append(write_item_perm)
+
+        test_user_local = User.query.filter_by(id=test_user.id).first()
+        if test_user_local and user_role not in test_user_local.roles:
+            test_user_local.roles.append(user_role)
+        db.session.flush()
+
+        work = Work(title="Linking Test Book", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        man = Manifestation(expression_id=expr.id, meta={"format": "book"})
+        db.session.add(man)
+        db.session.flush()
+        item = Item(manifestation_id=man.id, owner_id=test_user.id, status="available", collection_status="available")
+        db.session.add(item)
+
+        col = UserCollection(owner_id=test_user.id, name="My Shelf")
+        db.session.add(col)
+
+        db.session.commit()
+        return {"item_id": item.id, "collection_id": col.id}
+
+
+def test_get_item_collections_empty(client, auth_headers, item_linking_setup):
+    """GET /items/<id>/collections returns empty when item has no collections."""
+    item_id = item_linking_setup["item_id"]
+    response = client.get(f"/api/items/{item_id}/collections", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["success"] is True
+    assert data["data"]["collections"] == []
+
+
+def test_add_item_to_collection(client, auth_headers, item_linking_setup):
+    """POST /items/<id>/collections links an item to a named collection."""
+    item_id = item_linking_setup["item_id"]
+    collection_id = item_linking_setup["collection_id"]
+
+    response = client.post(
+        f"/api/items/{item_id}/collections",
+        json={"collection_id": collection_id},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+    # Verify via GET
+    response = client.get(f"/api/items/{item_id}/collections", headers=auth_headers)
+    collections = response.get_json()["data"]["collections"]
+    assert len(collections) == 1
+    assert collections[0]["name"] == "My Shelf"
+
+
+def test_add_item_to_collection_duplicate(client, auth_headers, item_linking_setup):
+    """POST /items/<id>/collections returns 409 for duplicate links."""
+    item_id = item_linking_setup["item_id"]
+    collection_id = item_linking_setup["collection_id"]
+
+    # Add once
+    client.post(f"/api/items/{item_id}/collections", json={"collection_id": collection_id}, headers=auth_headers)
+
+    # Add again — should fail
+    response = client.post(f"/api/items/{item_id}/collections", json={"collection_id": collection_id}, headers=auth_headers)
+    assert response.status_code == 409
+
+
+def test_remove_item_from_collection(client, auth_headers, item_linking_setup):
+    """DELETE /items/<id>/collections/<cid> unlinks an item from a collection."""
+    item_id = item_linking_setup["item_id"]
+    collection_id = item_linking_setup["collection_id"]
+
+    # Add first
+    client.post(f"/api/items/{item_id}/collections", json={"collection_id": collection_id}, headers=auth_headers)
+
+    # Remove
+    response = client.delete(f"/api/items/{item_id}/collections/{collection_id}", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+    # Verify empty
+    response = client.get(f"/api/items/{item_id}/collections", headers=auth_headers)
+    assert response.get_json()["data"]["collections"] == []
+
+
+def test_remove_item_from_collection_not_found(client, auth_headers, item_linking_setup):
+    """DELETE /items/<id>/collections/<cid> returns 404 for non-existent link."""
+    item_id = item_linking_setup["item_id"]
+    response = client.delete(f"/api/items/{item_id}/collections/99999", headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_add_item_to_collection_invalid_collection(client, auth_headers, item_linking_setup):
+    """POST /items/<id>/collections returns 404 for non-existent collection."""
+    item_id = item_linking_setup["item_id"]
+    response = client.post(f"/api/items/{item_id}/collections", json={"collection_id": 99999}, headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_item_collections_forbidden_for_non_owner(client, app, auth_headers, item_linking_setup):
+    """Non-owner cannot access another user's item collections."""
+    with app.app_context():
+        other_user = User(email="other_user@iqoqo.local", display_name="Other")
+        db.session.add(other_user)
+        db.session.flush()
+        other_token = generate_internal_jwt(other_user)
+
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    item_id = item_linking_setup["item_id"]
+    response = client.get(f"/api/items/{item_id}/collections", headers=other_headers)
+    assert response.status_code == 403

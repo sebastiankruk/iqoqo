@@ -269,3 +269,125 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
     await expect(page.getByText("Global Fiction Novel")).not.toBeVisible();
   });
 });
+
+test.describe("Dynamic Facet Cross-Filtering", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "e2e-admin-id",
+            email: "e2e-admin@iqoqo.local",
+            permissions: ["upload:cover", "write:metadata", "update:item"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "1.0.0" },
+        }),
+      });
+    });
+
+    await page.route("**/api/taxonomies**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { genres: [], publishers: [], tags: [], collections: [] },
+        }),
+      });
+    });
+
+    await page.route("**/api/manifestations**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [], meta: { total: 0 } }),
+      });
+    });
+
+    await page.route("**/api/items**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
+          meta: { page: 1, pages: 1, total: 0, limit: 20 },
+        }),
+      });
+    });
+
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 0,
+            format_text: 0,
+            items_wish_list: 0,
+            items_available: 0,
+            items_ordered: 0,
+            items_lent: 0,
+            items_lost: 0,
+          },
+        }),
+      });
+    });
+  });
+
+  test("mutes status options with zero count when not selected", async ({ page }) => {
+    // Mock stats with some statuses having zero count
+    // NOTE: the frontend extracts status counts from keys prefixed with "items_"
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 5,
+            items_wish_list: 0,
+            items_available: 5,
+            items_ordered: 0,
+            items_lent: 0,
+            items_lost: 0,
+          },
+        }),
+      });
+    });
+
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // "On Shelf" (available) has count 5 — should be fully visible (no opacity-50)
+    // Use .first() to avoid strict mode violation from the mobile filter drawer duplicate
+    const onShelfLabel = page.locator("label").filter({ hasText: "On Shelf" }).first();
+    await expect(onShelfLabel).toBeVisible();
+    await expect(onShelfLabel).not.toHaveClass(/opacity-50/);
+
+    // "On Wish List" has count 0 — should be muted (opacity-50) since not selected
+    const onWishListLabel = page.locator("label").filter({ hasText: "On Wish List" }).first();
+    await expect(onWishListLabel).toBeVisible();
+    await expect(onWishListLabel).toHaveClass(/opacity-50/);
+  });
+});

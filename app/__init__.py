@@ -25,6 +25,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 from PIL import Image
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Import blueprints
@@ -144,11 +145,10 @@ def create_app(config_class=Config, config_override=None):
 
     redis_url = app.config.get("REDIS_URL")
     if redis_url:
-        limiter.storage_uri = redis_url
-    # If Redis is mandatory, we could check here, but the plan says it must be configured in .env.
-    # Flask-Limiter will use storage_uri.
+        app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
     limiter.init_app(app)
 
+    from app.api.docs import docs_bp
     from app.api.lending import lending_bp
     from app.api.roadmap import roadmap_bp
 
@@ -157,6 +157,7 @@ def create_app(config_class=Config, config_override=None):
     app.register_blueprint(profile_bp)
     app.register_blueprint(roadmap_bp)
     app.register_blueprint(lending_bp)
+    app.register_blueprint(docs_bp, url_prefix="/api/docs")
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):  # pylint: disable=unused-argument
@@ -168,7 +169,7 @@ def create_app(config_class=Config, config_override=None):
             from app.utils.covers import cleanup_stuck_pending_covers
 
             cleanup_stuck_pending_covers(timeout_minutes=30)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
             app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
 
     return app

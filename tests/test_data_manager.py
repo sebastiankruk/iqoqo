@@ -389,3 +389,136 @@ def test_get_stats_owner_shared_manifestation(app):
         assert stats_a["manifestations"] == 1, f"Expected 1 distinct manifestation, got {stats_a['manifestations']}"
         assert stats_a["expressions"] == 1
         assert stats_a["works"] == 1
+
+
+# ---------------------------------------------------------------------------
+# DataManager.get_faceted_stats() tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def app_with_faceted_data(app):
+    """Seed DB with items across categories, formats, tags, collections for faceted stats testing."""
+    with app.app_context():
+        user = User(email="facet_test@iqoqo.local", display_name="Facet Tester")
+        db.session.add(user)
+        db.session.flush()
+
+        # Text book — available
+        w1 = Work(title="Test Book", meta={"genres": ["Fantasy", "Science Fiction"]})
+        db.session.add(w1)
+        db.session.flush()
+        e1 = Expression(work_id=w1.id, content_type="text")
+        db.session.add(e1)
+        db.session.flush()
+        m1 = Manifestation(expression_id=e1.id, meta={"format": "book"}, publisher="Penguin")
+        db.session.add(m1)
+        db.session.flush()
+        i1 = Item(manifestation_id=m1.id, owner_id=user.id, status="unread", collection_status="available")
+        db.session.add(i1)
+        db.session.flush()
+
+        # Text book — lent
+        i2 = Item(manifestation_id=m1.id, owner_id=user.id, status="read", collection_status="lent")
+        db.session.add(i2)
+        db.session.flush()
+
+        # Music CD
+        w2 = Work(title="Test Album", meta={"genres": ["Rock"]})
+        db.session.add(w2)
+        db.session.flush()
+        e2 = Expression(work_id=w2.id, content_type="music")
+        db.session.add(e2)
+        db.session.flush()
+        m2 = Manifestation(expression_id=e2.id, meta={"format": "cd"}, publisher="Columbia")
+        db.session.add(m2)
+        db.session.flush()
+        i3 = Item(manifestation_id=m2.id, owner_id=user.id, status="want_to_listen", collection_status="available")
+        db.session.add(i3)
+        db.session.flush()
+
+        # Tags
+        from app.db.models import ItemTag, Tag
+
+        tag = Tag(name="english")
+        db.session.add(tag)
+        db.session.flush()
+        db.session.add(ItemTag(item_id=i1.id, tag_id=tag.id, added_by_id=user.id))
+
+        # Collection
+        from app.db.models import UserCollection, UserCollectionItem
+
+        col = UserCollection(owner_id=user.id, name="Favorites")
+        db.session.add(col)
+        db.session.flush()
+        db.session.add(UserCollectionItem(collection_id=col.id, item_id=i1.id))
+
+        db.session.commit()
+        return user.id
+
+
+def test_get_faceted_stats_unfiltered(app_with_faceted_data, app):
+    """get_faceted_stats without filters returns all counts."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data)
+
+    assert stats["category_counts"].get("text") == 2
+    assert stats["category_counts"].get("music") == 1
+    assert stats["format_counts"].get("book") == 2
+    assert stats["format_counts"].get("cd") == 1
+    assert stats["status_counts"].get("available") == 2
+    assert stats["status_counts"].get("lent") == 1
+    assert stats["tag_counts"].get("english") == 1
+    assert stats["genre_counts"].get("Fantasy") == 1
+    assert stats["genre_counts"].get("Rock") == 1
+    assert stats["collection_counts"].get("Favorites") == 1
+    assert stats["publisher_counts"].get("Penguin") == 2
+
+
+def test_get_faceted_stats_filtered_by_category(app_with_faceted_data, app):
+    """get_faceted_stats with category filter narrows all facet counts."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, category="text")
+
+    assert stats["category_counts"].get("text") == 2
+    assert stats["category_counts"].get("music", 0) == 0
+    assert stats["format_counts"].get("book") == 2
+    assert stats["format_counts"].get("cd", 0) == 0
+    assert stats["genre_counts"].get("Fantasy") == 1
+    assert stats["genre_counts"].get("Rock", 0) == 0
+
+
+def test_get_faceted_stats_filtered_by_genre(app_with_faceted_data, app):
+    """get_faceted_stats with genre filter narrows category/format counts."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, genres=["Rock"])
+
+    assert stats["category_counts"].get("music") == 1
+    assert stats["category_counts"].get("text", 0) == 0
+    assert stats["format_counts"].get("cd") == 1
+    assert stats["format_counts"].get("book", 0) == 0
+
+
+def test_get_faceted_stats_filtered_by_tag(app_with_faceted_data, app):
+    """get_faceted_stats with tag filter narrows all counts."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, tags=["english"])
+
+    assert stats["category_counts"].get("text") == 1
+    assert stats["category_counts"].get("music", 0) == 0
+    assert stats["tag_counts"].get("english") == 1
+
+
+def test_get_faceted_stats_empty_filters(app):
+    """get_faceted_stats with valid user_id but no items returns zeros/empty."""
+    with app.app_context():
+        user = User(email="empty_test@iqoqo.local", display_name="Empty")
+        db.session.add(user)
+        db.session.flush()
+        stats = DataManager.get_faceted_stats(owner_id=user.id)
+
+    assert stats["category_counts"] == {}
+    assert stats["format_counts"] == {}
+    assert all(v == 0 for v in stats["status_counts"].values())
+    assert stats["tag_counts"] == {}
+    assert stats["genre_counts"] == {}

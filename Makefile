@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev allegro-auth
 
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
@@ -202,7 +202,7 @@ monitoring-stop:
 
 
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),)
+	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))
 
 # Linting targets
 lint-python: .venv/bin/activate
@@ -488,3 +488,19 @@ fetch-covers: .venv/bin/activate
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/fetch_covers.py $(if $(limit),--limit $(limit),) $(if $(force),--force,); \
 	fi
+
+allegro-auth: .venv/bin/activate
+	@echo "Starting Allegro API OAuth handshake..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		set -eo pipefail; \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec web env PYTHONPATH=. python scripts/allegro_auth.py; \
+	else \
+		set -eo pipefail; \
+		if [ -f ".env.$(MODE)" ]; then \
+			set -a; . ./.env.$(MODE); set +a; \
+		elif [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		.venv/bin/python scripts/allegro_auth.py; \
+	fi
+

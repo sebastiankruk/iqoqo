@@ -118,3 +118,16 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
   }
   return url;
 }
+
+/**
+ * Classifies the cover type based on cover_source metadata.
+ *
+ * @param meta - The metadata object containing cover_source
+ * @returns The cover type: "placeholder" for PIL fallbacks, "llm_gen" for LLM-generated, undefined otherwise
+ */
+export function classifyCoverType(meta?: Record<string, unknown> | null): "placeholder" | "llm_gen" | undefined {
+  const source = meta?.["cover_source"];
+  if (source === "fallback_pil") return "placeholder";
+  if (typeof source === "string" && source.startsWith("llm_")) return "llm_gen";
+  return undefined;
+}

@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import argparse
+import logging
 import os
 import sys
 import time
@@ -24,7 +25,13 @@ from sqlalchemy import String, and_, cast, or_
 
 from app import create_app
 from app.db.models import Manifestation
-from app.utils.covers import process_cover_pipeline
+from app.utils.covers import add_center_watermark, process_cover_pipeline
+from app.utils.llm_covers import apply_corner_watermark
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo-logo.png")
 
 
 def run_batch(batch_limit=None, force=False, app=None):
@@ -78,10 +85,45 @@ def run_batch(batch_limit=None, force=False, app=None):
             sys.exit(0)
 
 
+def process_cover_synchronization(asset_dir: str) -> None:
+    """
+    Executes background asset synchronization, scanning directories and applying
+    strict watermarking rules based on asset classification (GenAI vs Placeholder).
+    """
+    logger.info("Starting background cover sync & watermark verification in %s", asset_dir)
+
+    if not os.path.exists(WATERMARK_ASSET_PATH):
+        logger.warning("Watermark asset missing at %s. Sync proceeding without watermarking.", WATERMARK_ASSET_PATH)
+        return
+
+    for root, _, files in os.walk(asset_dir):
+        for file in files:
+            if file.lower().endswith((".png", ".jpg", ".jpeg")):
+                file_path = os.path.join(root, file)
+
+                # Prevent double-watermarking by tracking a metadata flag or filename convention
+                if "_wm" in file.lower():
+                    continue
+
+                output_path = os.path.join(root, f"{os.path.splitext(file)[0]}_wm.jpg")
+
+                # Strategy dispatch based on filename heuristic conventions
+                if "placeholder" in file_path.lower():
+                    logger.info("Applying center watermark to placeholder: %s", file)
+                    add_center_watermark(file_path, WATERMARK_ASSET_PATH, output_path)
+                elif "llm_gen" in file_path.lower():
+                    logger.info("Applying corner watermark to GenAI layout: %s", file)
+                    apply_corner_watermark(file_path, WATERMARK_ASSET_PATH, output_path)
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch missing covers.")
+    parser = argparse.ArgumentParser(description="Background task to fetch and watermark covers.")
     parser.add_argument("--limit", type=int, help="Maximum number of covers to process in this run", default=None)
     parser.add_argument("--force", action="store_true", help="Force reprocessing of covers even if previously failed")
+    parser.add_argument("--dir", type=str, default=None, help="Target directory for cover sync.")
     args = parser.parse_args()
 
-    run_batch(batch_limit=args.limit, force=args.force)
+    if args.dir:
+        process_cover_synchronization(args.dir)
+    else:
+        run_batch(batch_limit=args.limit, force=args.force)

@@ -28,6 +28,10 @@ vi.mock("@/lib/api/hooks", () => ({
       permissions: ["update:item"],
     },
   })),
+  useItemCollections: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useAddItemToCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useRemoveItemFromCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useUserCollections: vi.fn().mockReturnValue({ data: [], isLoading: false }),
 }));
 
 vi.mock("sonner", () => ({

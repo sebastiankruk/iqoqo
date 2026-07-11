@@ -109,7 +109,7 @@ describe("ItemActions Component", () => {
     render(<ItemActions item={mockItem} />);
 
     act(() => {
-      vi.advanceTimersByTime(9000);
+      vi.advanceTimersByTime(30000);
     });
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });

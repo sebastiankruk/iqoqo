@@ -15,12 +15,16 @@
 #
 import hashlib
 import io
+import ipaddress
 import logging
 import os
+import socket
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
 from app.core.tasks import submit_task
@@ -28,13 +32,17 @@ from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.isbn import canonicalize_isbn
-from app.utils.llm_covers import fetch_llm_cover
+from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logger = logging.getLogger(__name__)
 
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers")
 GALLERY_DIR = os.path.join(Config.BASE_DIR, "app", "static", "gallery")
+
+# Convert to an absolute path resilient to worker context (Celery/Cron) execution
+_DEFAULT_WATERMARK = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "resources", "images", "iqoqo-logo.png"))
+WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", _DEFAULT_WATERMARK)
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
@@ -43,6 +51,34 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
+
+
+def is_safe_url(url: str) -> bool:
+    """Validates that a given URL is safe for server-side downloading to prevent SSRF.
+
+    Blocks URLs pointing to private, loopback, or link-local IP addresses.
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Resolve the hostname to an IP to check against private/loopback blocks
+        ip_info = socket.getaddrinfo(hostname, None)
+        for result in ip_info:
+            ip_str = result[4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+                logger.warning("SSRF Attempt Blocked: Hostname %s resolved to restricted IP %s.", hostname, ip_str)
+                return False
+        return True
+    except (OSError, ValueError, socket.gaierror) as e:
+        logger.error("URL validation failed for %s: %s", url, e)
+        return False
 
 
 def add_source_badge(filepath: str, source: str):
@@ -55,6 +91,7 @@ def add_source_badge(filepath: str, source: str):
         "user_photo": ("U", "blue"),
         "api_openlibrary": ("D", "gray"),  # Download
         "api_google_books": ("D", "gray"),
+        "api_allegro": ("A", "orange"),
         "api_direct_download": ("C", "teal"),  # CD/Audio direct download
         "api_igdb": ("I", "purple"),  # IGDB Cover
         "llm_gemini": ("G", "purple"),
@@ -162,7 +199,7 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
         img.save(img_byte_arr, format="JPEG", quality=85)
         optimize_and_save_image(img_byte_arr.getvalue(), filepath)
         return f"{Config.COVERS_BASE_URL}/{filename}", "fallback_pil"
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
         logger.error(f"Fallback generation failed: {e}")
         return None
 
@@ -212,43 +249,59 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
 
 
 def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[str, str] | None:
-    """Tier 2 fallback: Try OpenLibrary then Google Books. Returns (path, source) tuple on success."""
-    # Only perform lookup if we have a valid ISBN (EAN/UPC barcodes fail on these APIs)
+    """Tier 2 fallback: Try OpenLibrary, Google Books, then Allegro. Returns (path, source) tuple on success."""
     isbn_for_lookup = canonicalize_isbn(isbn or identifier)
-    if not isbn_for_lookup:
-        logger.debug("Skipping External API lookup (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
-        return None
-
     res = None
-    # 1. Open Library - try original (full resolution) first, then fall back to L
-    ol_url_original = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}.jpg"
-    res = download_direct_url(identifier, ol_url_original, "api_openlibrary", suffix="ol_orig")
+
+    if isbn_for_lookup:
+        # 1. Open Library - try original (full resolution) first, then fall back to L
+        ol_url_original = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}.jpg"
+        res = download_direct_url(identifier, ol_url_original, "api_openlibrary", suffix="ol_orig")
+
+        if not res:
+            ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
+            res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+
+        if not res:
+            # 2. Google Books (Search -> Thumbnail)
+            gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
+            try:
+                with requests.get(gb_search, timeout=5) as gb_res:
+                    if gb_res.status_code == 200:
+                        gb_data = gb_res.json()
+                        if "items" in gb_data:
+                            thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
+                            if thumb:
+                                thumb = thumb.replace("http:", "https:")
+
+                                # Try high-res first (zoom=0)
+                                thumb_high_res = thumb.replace("zoom=1", "zoom=0")
+                                res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
+
+                                # Fallback to original (zoom=1) if high-res failed validation
+                                if not res and thumb_high_res != thumb:
+                                    res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
+            except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
+                pass
+    else:
+        logger.debug("Skipping External Bibliographic APIs (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
 
     if not res:
-        ol_url = f"https://covers.openlibrary.org/b/isbn/{isbn_for_lookup}-L.jpg"
-        res = download_direct_url(identifier, ol_url, "api_openlibrary", suffix="ol")
+        # 3. Allegro API
+        from app.utils.allegro import fetch_allegro_metadata
 
-    if not res:
-        # 2. Google Books (Search -> Thumbnail)
-        gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
-        try:
-            with requests.get(gb_search, timeout=5) as gb_res:
-                if gb_res.status_code == 200:
-                    gb_data = gb_res.json()
-                    if "items" in gb_data:
-                        thumb = gb_data["items"][0]["volumeInfo"].get("imageLinks", {}).get("thumbnail")
-                        if thumb:
-                            thumb = thumb.replace("http:", "https:")
-
-                            # Try high-res first (zoom=0)
-                            thumb_high_res = thumb.replace("zoom=1", "zoom=0")
-                            res = download_direct_url(identifier, thumb_high_res, "api_google_books", suffix="gb")
-
-                            # Fallback to original (zoom=1) if high-res failed validation
-                            if not res and thumb_high_res != thumb:
-                                res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
-        except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
-            pass
+        barcode_to_query = isbn_for_lookup or identifier
+        if barcode_to_query:
+            try:
+                allegro_meta = fetch_allegro_metadata(barcode_to_query)
+                if allegro_meta and allegro_meta.get("cover_url"):
+                    target_url = allegro_meta["cover_url"]
+                    if is_safe_url(target_url):
+                        res = download_direct_url(identifier, target_url, "api_allegro", suffix="allegro")
+                    else:
+                        logger.warning("Blocked unsafe Allegro cover URL: %s", target_url)
+            except (requests.RequestException, ValueError, KeyError, OSError, TypeError) as e:
+                logger.warning("Failed to fetch cover from Allegro: %s", e)
 
     return res
 
@@ -429,18 +482,21 @@ def process_cover_pipeline(
             # Extract format for media-aware prompts
             format_type = manifestation.meta.get("format") if manifestation.meta else None
 
-            result = fetch_llm_cover(
-                identifier,
-                title,
-                author,
-                user_id,
-                description,
-                genre,
-                format_type=format_type,
-                allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
-            )
-            if result:
-                local_cover_url, source = result
+            try:
+                result = fetch_llm_cover(
+                    identifier,
+                    title,
+                    author,
+                    user_id,
+                    description,
+                    genre,
+                    format_type=format_type,
+                    allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
+                )
+                if result:
+                    local_cover_url, source = result
+            except (RuntimeError, ValueError, KeyError, AttributeError, TypeError, OSError) as e:
+                logger.exception("LLM cover generation failed for %s: %s", identifier, e)
 
         # Tier 5: PIL Fallback
         if not local_cover_url:
@@ -456,6 +512,25 @@ def process_cover_pipeline(
         if local_cover_url:
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
             add_source_badge(abs_path, source or "")
+
+            # Apply watermark based on cover source.
+            # Both helpers return the original path on failure, so we must
+            # check that the watermarked output exists before rewriting the URL.
+            if WATERMARK_ASSET_PATH and os.path.exists(WATERMARK_ASSET_PATH) and source:
+                wm_output = abs_path.replace(".jpg", "_wm.jpg")
+                if source == "fallback_pil":
+                    result_path = add_center_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    if result_path != abs_path and os.path.exists(wm_output):
+                        local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    else:
+                        logger.warning("Center watermark failed for %s — keeping original URL", identifier)
+                elif source.startswith("llm_"):
+                    result_path = apply_corner_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    if result_path != abs_path and os.path.exists(wm_output):
+                        local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    else:
+                        logger.warning("Corner watermark failed for %s — keeping original URL", identifier)
+
             manifestation.cover_url = local_cover_url
             updates["cover_source"] = source
             updates["cover_status"] = "ready"
@@ -605,9 +680,66 @@ def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
         if stuck_count > 0:
             db.session.commit()
             logger.info("Cleared %d stuck cover tasks at startup", stuck_count)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
         # Don't block app startup if tables aren't created yet or other DB issues
         logger.warning("Failed to check or clear stuck cover tasks at startup: %s", e)
         db.session.rollback()
 
     return stuck_count
+
+
+def add_center_watermark(base_image_path: str, watermark_path: str, output_path: str, opacity: float = 0.25) -> str:
+    """
+    Overlays a low-transparency center branding watermark (iqoqo logo)
+    onto base placeholder media assets.
+
+    Args:
+        base_image_path (str): Path to the base placeholder image.
+        watermark_path (str): Path to the watermark image (e.g., iqoqo-logo.png).
+        output_path (str): Destination path for the watermarked image.
+        opacity (float): Transparency level of the watermark (0.0 to 1.0).
+
+    Returns:
+        str: The path to the watermarked image.
+    """
+    try:
+        with Image.open(base_image_path) as base_file:
+            base_img = base_file.convert("RGBA")
+
+            with Image.open(watermark_path) as wm_file:
+                watermark = wm_file.convert("RGBA")
+
+                # Scale the watermark to be 50% of the smallest base image dimension
+                base_width, base_height = base_img.size
+                wm_width, wm_height = watermark.size
+                scale = min(base_width / wm_width, base_height / wm_height) * 0.5
+                new_size = (int(wm_width * scale), int(wm_height * scale))
+
+                # Resize and preserve quality
+                watermark = watermark.resize(new_size, Image.Resampling.LANCZOS)
+
+                # Adjust transparency of the watermark
+                alpha = watermark.split()[3]
+                alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+                watermark.putalpha(alpha)
+
+                # Calculate center coordinates
+                x = (base_width - new_size[0]) // 2
+                y = (base_height - new_size[1]) // 2
+
+                # Create a transparent layer and apply the watermark
+                transparent_layer = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
+                transparent_layer.paste(watermark, (x, y), watermark)
+
+                # Composite the images
+                watermarked_img = Image.alpha_composite(base_img, transparent_layer)
+
+                # Ensure the output directory exists
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                watermarked_img.convert("RGB").save(output_path, "JPEG", quality=90)
+
+        return output_path
+
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
+        logger.error("Failed to apply center watermark to %s: %s", base_image_path, e)
+        return base_image_path

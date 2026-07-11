@@ -32,13 +32,13 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: [["html", { open: "never" }]],
-  // Global per-test timeout: 60s in CI, default in dev
-  timeout: process.env.CI ? 60000 : 30000,
+  // Global per-test timeout: 60s
+  timeout: 60000,
   use: {
     baseURL: "http://localhost:3002",
     trace: "on-first-retry",
-    // Navigation timeout: give pages longer to load in CI
-    navigationTimeout: 30000,
+    // Navigation timeout: give pages longer to load (e.g. Next.js JIT compilation)
+    navigationTimeout: 60000,
     actionTimeout: process.env.CI ? 15000 : 5000,
   },
   projects: [

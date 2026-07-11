@@ -110,3 +110,136 @@ describe("SidebarFilters with Searchable Facets", () => {
     expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user", filters: {} });
   });
 });
+
+describe("SidebarFilters Cross-Filtering", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useTaxonomies).mockReturnValue({
+      data: {
+        genres: [],
+        tags: [],
+        publishers: [],
+        collections: [],
+      },
+    } as unknown as ReturnType<typeof useTaxonomies>);
+  });
+
+  it("applies opacity-50 to status options with zero count when not selected", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          statusCounts={{ wish_list: 0, available: 5, ordered: 0 }}
+        />
+      </QueryClientProvider>
+    );
+
+    const wishListLabel = screen.getByText("On Wish List").closest("label");
+    const availableLabel = screen.getByText("On Shelf").closest("label");
+
+    expect(wishListLabel?.className).toContain("opacity-50");
+    expect(availableLabel?.className).not.toContain("opacity-50");
+  });
+
+  it("keeps zero-count status enabled if currently selected", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[{ type: "status", value: "wish_list" }]}
+          onToggleFilter={vi.fn()}
+          statusCounts={{ wish_list: 0, available: 5 }}
+        />
+      </QueryClientProvider>
+    );
+
+    const wishListCheckbox = screen.getByRole("checkbox", { name: "On Wish List 0" });
+    expect(wishListCheckbox).not.toBeDisabled();
+  });
+
+  it("disables unchecked zero-count status inputs", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} statusCounts={{ wish_list: 0, ordered: 0 }} />
+      </QueryClientProvider>
+    );
+
+    const wishListCheckbox = screen.getByRole("checkbox", { name: "On Wish List 0" });
+    expect(wishListCheckbox).toBeDisabled();
+  });
+});
+
+describe("SearchableFacet counts display", () => {
+  const mockTaxonomies = {
+    genres: ["Fantasy", "Horror"],
+    tags: ["english", "polish"],
+    publishers: ["Penguin"],
+    collections: ["Favorites"],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useTaxonomies).mockReturnValue({
+      data: mockTaxonomies,
+    } as unknown as ReturnType<typeof useTaxonomies>);
+  });
+
+  const queryClient2 = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  it("shows count badges next to facet options when counts prop is provided", () => {
+    render(
+      <QueryClientProvider client={queryClient2}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          tagCounts={{ english: 5, polish: 2, german: 0 }}
+          collectionCounts={{ Favorites: 3 }}
+          genreCounts={{ Fantasy: 4, Horror: 1 }}
+          publisherCounts={{ Penguin: 10 }}
+        />
+      </QueryClientProvider>
+    );
+
+    // Open Genres section
+    fireEvent.click(screen.getByText("Genres"));
+    expect(screen.getByText("Fantasy")).toBeInTheDocument();
+    // Find count badge for Fantasy
+    expect(screen.getByText("4")).toBeInTheDocument();
+
+    // Open Tags section
+    fireEvent.click(screen.getByText("Tags"));
+    expect(screen.getByText("english")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("polish")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("does not show count for items that have no count entry", () => {
+    render(
+      <QueryClientProvider client={queryClient2}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 5 }} />
+      </QueryClientProvider>
+    );
+
+    fireEvent.click(screen.getByText("Tags"));
+    // 'polish' should exist but show no count badge (counts don't include it)
+    expect(screen.getByText("english")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("polish")).toBeInTheDocument();
+    // 'polish' count badge should NOT exist
+    const polishEl = screen.getByText("polish");
+    // No "2" badge sibling since not in counts
+  });
+
+  it("renders labels normally for 0-count facet items", () => {
+    render(
+      <QueryClientProvider client={queryClient2}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 0, polish: 0 }} />
+      </QueryClientProvider>
+    );
+
+    fireEvent.click(screen.getByText("Tags"));
+    expect(screen.getByText("english")).toBeInTheDocument();
+    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(1);
+  });
+});

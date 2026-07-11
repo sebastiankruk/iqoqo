@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.9] - 2026-07-10
+
+### Added
+
+- **Aesthetic Cover Watermarking (Phase 2)**: Added utility functions `add_center_watermark` and `apply_corner_watermark` (in `app/utils/covers.py` and `app/utils/llm_covers.py`) for low-transparency center watermarking of placeholders and corner watermarking of GenAI cover layouts. Integrated watermarking logic into background cron routines (`scripts/fetch_covers.py`) and the core cover pipeline (`process_cover_pipeline` in `app/utils/covers.py`). Generated `resources/images/iqoqo-logo.png` from the SVG source. Added `classifyCoverType` utility and `data-cover-type` attribute to `item-card.tsx` to expose cover type to E2E tests. Wrote comprehensive byte-comparison tests (`tests/test_covers.py` / `tests/test_fetch_covers.py`) and a Next.js E2E Playwright test (`frontend/__tests__/e2e/watermark_verification.spec.ts`) with baseline screenshot generation. Updated E2E seed (`tests/e2e/scripts/seed_e2e.py`) to create watermarked placeholder and LLM cover images for test data.
+- **Frontend Internationalization (i18n)**: Implemented base `next-intl` internationalization routing layer on Next.js, added localized English (`frontend/messages/en.json`) and Polish (`frontend/messages/pl.json`) translation strings for all user-visible components and pages (Navbar, DashboardPage, Hero, GlobalStats, StatsCards, CurrentContext, FreshArrivals, Footer, LoginPage, RegisterPage, NotFound, and CookieConsent banner), deployed the interactive `LanguageToggle` selector, and updated frontend unit test mocks. Polish translations strictly use sentence casing.
+- **Backend OpenAPI Integration**: Deployed OpenAPI/Swagger spec generation endpoint under `/api/docs/openapi.json` using `apispec` and `apispec-webframeworks`.
+- **Testing Coverage**: Added unit tests for OpenAPI spec generation (`tests/test_openapi.py`), updated frontend navbar unit tests (`navbar.test.tsx`), and created a Playwright E2E test (`i18n_localization.spec.ts`) for localization switches.
+- **Allegro Auth Handshake CLI**: Deployed `make allegro-auth` target wrapping the interactive `scripts/allegro_auth.py` script for local and Docker setups.
+- **Allegro Status Checks**: Integrated Allegro API activation checks into `make status` / `scripts/iqoqo-status.sh` to report configured, active (token present), or pending handshake states.
+- **Allegro Cover Refetch Fallback**: Integrated Allegro API cover retrieval into the background cover refetch pipeline (`fetch_external_api_cover` in `app/utils/covers.py`), adding support for both ISBN and non-ISBN identifiers.
+- **Collection Management UX (Phase 3)**: Added full Create, Update, and Remove collection operations to `ManageCollectionsModal` with inline form, toast notifications, and mutation invalidation. Refactored `ItemCard` to include instant wishlist subtraction via hover-revealed `HeartOff` button, calling `DELETE /items/:id` directly. Implemented dynamic cross-filtering visual treatment in `SidebarFilters` - facets with zero result count are now disabled and visually muted unless currently selected.
+- **E2E Coverage (Phase 3)**: Created `manage_collections.spec.ts` Playwright test for full CRUD modal workflow. Added instant wishlist subtraction E2E test to `wishlist_workflow.spec.ts` and dynamic facet cross-filtering E2E test to `faceted_catalog_sync.spec.ts`.
+- **Unit Test Expansion**: Added unit tests for wishlist removal button rendering and callback behavior in `item-card.test.tsx`, collection creation via form in `manage-collections-modal.test.tsx`, and cross-filtering disabled/opacity-50 treatment in `sidebar-filters.test.tsx`.
+
+### Fixed
+
+- **Allegro User-Agent Header Correction**: Configured a dynamic `User-Agent` header (`iqoqo/{Config.VERSION} (+https://iqoqo.cc)`) based on the application version to avoid `403 EDGE_REQUEST_REJECTED` and `SERVICE_ERROR` blockages by the Allegro API. Applied the headers to OAuth token request, refresh request, and catalog/listing fetchers.
+- **Allegro Tests Hardening**: Extended `tests/test_allegro.py` with mock assertions validating that the formatted `User-Agent` is correctly set in request headers.
+- **Authlib Deprecation Warning**: Replaced deprecated `authlib.jose.errors` import with `joserfc.errors` in `app/api/auth.py` to prevent startup and runtime warnings.
+
 ## [0.7.8] - 2026-07-07
 
 ### Removed

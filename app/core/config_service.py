@@ -15,11 +15,11 @@
 #
 """Unified configuration service prioritizing DB overrides over environment variables."""
 
-# pylint: disable=broad-exception-caught
-
 import json
 import os
 from typing import Any
+
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class ConfigService:
@@ -51,7 +51,7 @@ class ConfigService:
                 setting = InstanceSettings.query.filter_by(key=key).first()
                 if setting is not None and setting.value is not None:
                     return setting.value
-        except Exception:
+        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
             pass  # DB context might not be fully initialized
 
         try:
@@ -59,7 +59,7 @@ class ConfigService:
 
             if current_app and key in current_app.config:
                 return current_app.config[key]
-        except Exception:
+        except (ValueError, AttributeError, KeyError, RuntimeError):
             pass
 
         return os.environ.get(key, default)

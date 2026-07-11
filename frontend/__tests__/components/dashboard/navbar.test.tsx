@@ -29,7 +29,44 @@ vi.mock("@/components/collection/manage-collections-modal", () => ({
   ManageCollectionsModal: () => null,
 }));
 
-// Mock the hook
+// Mock the language toggle to isolate Navbar routing tests
+vi.mock("@/components/language-toggle", () => ({
+  LanguageToggle: () => <button data-testid="language-toggle">EN</button>,
+}));
+
+// Mock next-intl to inject our base english translations directly
+vi.mock("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: (namespace: string) => {
+    if (namespace === "Navbar") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          maintenanceMode: "Maintenance Mode Active – Some features may be limited",
+          searchPlaceholder: "Search your collection...",
+          collection: "Collection",
+          scan: "Scan",
+          signIn: "Sign In",
+          publicProfile: "Public Profile",
+          profileSettings: "Profile Settings",
+          manageCollections: "Manage Collections",
+          adminConfiguration: "Admin Configuration",
+          logOut: "Log out",
+          home: "Home",
+          profile: "Profile",
+          languageSubmenu: "Language",
+          themeSubmenu: "Theme",
+          themeLight: "Light",
+          themeDark: "Dark",
+          themeSystem: "System",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));
+
+// Mock the API hooks
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
   useManifestations: vi.fn(),
@@ -48,7 +85,7 @@ describe("Navbar", () => {
     expect(screen.getByText("iqoqo")).toBeInTheDocument();
   });
 
-  it("renders a search input", () => {
+  it("renders a search input with translated placeholder", () => {
     render(<Navbar />);
     expect(screen.getByPlaceholderText("Search your collection...")).toBeInTheDocument();
   });
@@ -75,14 +112,22 @@ describe("Navbar", () => {
     const homeLink = screen.getByRole("link", { name: /iqoqo/i });
     expect(homeLink).toHaveAttribute("href", "/");
   });
+
+  it("renders the language toggle component", () => {
+    render(<Navbar />);
+    expect(screen.getByTestId("language-toggle")).toBeInTheDocument();
+  });
 });
 
 describe("Navbar Auth State", () => {
-  it("shows Sign In when not authenticated", () => {
+  it("shows Sign In when not authenticated and no settings dropdown", () => {
     (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
 
-    expect(screen.getAllByText("Sign In")[0]).toBeInTheDocument();
+    const signInLinks = screen.getAllByRole("link", { name: "Sign In" });
+    expect(signInLinks.length).toBe(2);
+    expect(screen.queryByLabelText("Settings menu")).toBeNull();
+    expect(screen.queryByLabelText("User menu")).toBeNull();
   });
 
   it("shows user initials and opens dropdown when authenticated (non-admin)", async () => {
@@ -99,6 +144,8 @@ describe("Navbar Auth State", () => {
 
     // Use findByText to await the asynchronous opening of the Radix dropdown
     expect(await screen.findByText("Profile Settings")).toBeInTheDocument();
+    expect(screen.getByText("Language")).toBeInTheDocument();
+    expect(screen.getByText("Theme")).toBeInTheDocument();
     expect(screen.queryByText("Admin Configuration")).toBeNull();
   });
 

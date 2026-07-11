@@ -411,6 +411,18 @@ else
     check "Directory" fail "NOT FOUND at ${covers_dir}"
 fi
 
+# ─── Allegro API ───────────────────────────────────────────────
+header "Allegro API"
+client_id=$(load_env "ALLEGRO_CLIENT_ID")
+client_secret=$(load_env "ALLEGRO_CLIENT_SECRET")
+if [[ -z "$client_id" || -z "$client_secret" ]]; then
+    check "Status" info "not configured (missing credentials in .env)"
+elif [[ ! -f "$IQOQO_ROOT/.allegro_token.json" ]]; then
+    check "Status" warn "configured but not active (OAuth handshake pending)"
+else
+    check "Status" pass "active"
+fi
+
 # ─── Disk Usage ─────────────────────────────────────────────────
 header "Disk"
 docker_root=$(docker info 2>/dev/null | grep "Docker Root Dir" | awk -F: '{print $2}' | tr -d ' ' || echo "/var/lib/docker")

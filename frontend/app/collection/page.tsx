@@ -42,11 +42,13 @@ import {
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
+  useFacetStats,
 } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 import { RoadmapView } from "@/components/collection/roadmap-view";
+import { useTranslations } from "next-intl";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -94,6 +96,7 @@ function LoadMoreTrigger({
  * @returns {JSX.Element} The collection page component
  */
 function CollectionContent() {
+  const t = useTranslations("Collection");
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -336,6 +339,47 @@ function CollectionContent() {
 
   const { data: statsData } = useStats();
 
+  const hasActiveFilters =
+    categoryFilters.length > 0 ||
+    formatFilters.length > 0 ||
+    tagFilters.length > 0 ||
+    collectionFilters.length > 0 ||
+    genreFilters.length > 0 ||
+    publisherFilters.length > 0 ||
+    statusFilters.length > 0 ||
+    isBorrowedFilterActive ||
+    !!appliedQuery ||
+    missingCoverOnly ||
+    missingIdOnly;
+
+  const filtersForFacets = useMemo(() => {
+    const f: Record<string, string> = {};
+    if (categoryFilters.length > 0) f.category = categoryFilters[0];
+    if (formatFilters.length > 0) f.format = formatFilters[0];
+    if (tagFilters.length > 0) f.tags = tagFilters.join(",");
+    if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
+    if (genreFilters.length > 0) f.genres = genreFilters.join(",");
+    if (publisherFilters.length > 0) f.publishers = publisherFilters.join(",");
+    if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
+    if (isBorrowedFilterActive) f.borrowed = "true";
+    if (missingCoverOnly) f.missing_cover = "true";
+    if (missingIdOnly) f.missing_id = "true";
+    return f;
+  }, [
+    categoryFilters,
+    formatFilters,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters,
+    statusFilters,
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly,
+  ]);
+
+  const { data: facetStatsData } = useFacetStats(filtersForFacets, hasActiveFilters);
+
   const isLoading =
     viewMode === "roadmap"
       ? false
@@ -423,6 +467,7 @@ function CollectionContent() {
   }, []);
 
   const formatCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.format_counts) return facetStatsData.format_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -431,9 +476,10 @@ function CollectionContent() {
       }
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const categoryCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.category_counts) return facetStatsData.category_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -442,9 +488,10 @@ function CollectionContent() {
       }
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const statusCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.status_counts) return facetStatsData.status_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -452,12 +499,11 @@ function CollectionContent() {
         counts[key.replace("items_", "")] = value as number;
       }
     }
-    // Also add to_read alias if want_to_read is missing
     if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
       counts.want_to_read = statsData.to_read;
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const filteredItems = useMemo(() => {
     const items = [...allItems];
@@ -498,10 +544,10 @@ function CollectionContent() {
         <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-foreground">
-              {appliedQuery ? `Search results for "${appliedQuery}"` : "Collection"}
+              {appliedQuery ? t("searchResults", { query: appliedQuery }) : t("title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {appliedQuery ? `Found ${total} ${total === 1 ? "item" : "items"}` : "Browse and manage your library"}
+              {appliedQuery ? (total === 1 ? t("foundOne") : t("foundMultiple", { count: total })) : t("browseManage")}
             </p>
           </div>
 
@@ -512,7 +558,7 @@ function CollectionContent() {
                   <button
                     role="tab"
                     aria-selected={viewMode === "items"}
-                    aria-label="My Items"
+                    aria-label={t("tabMyItems")}
                     onClick={() => {
                       setViewMode("items");
                     }}
@@ -523,12 +569,12 @@ function CollectionContent() {
                     }`}
                   >
                     <BookOpen className="h-4 w-4" />
-                    <span className="hidden sm:inline">My Items</span>
+                    <span className="hidden sm:inline">{t("tabMyItems")}</span>
                   </button>
                   <button
                     role="tab"
                     aria-selected={viewMode === "manifestations"}
-                    aria-label="Global Library"
+                    aria-label={t("tabGlobalLibrary")}
                     onClick={() => {
                       setViewMode("manifestations");
                     }}
@@ -539,12 +585,12 @@ function CollectionContent() {
                     }`}
                   >
                     <LibraryIcon className="h-4 w-4" />
-                    <span className="hidden sm:inline">Global Library</span>
+                    <span className="hidden sm:inline">{t("tabGlobalLibrary")}</span>
                   </button>
                   <button
                     role="tab"
                     aria-selected={viewMode === "expressions"}
-                    aria-label="Expressions"
+                    aria-label={t("tabExpressions")}
                     onClick={() => {
                       setViewMode("expressions");
                     }}
@@ -555,12 +601,12 @@ function CollectionContent() {
                     }`}
                   >
                     <Type className="h-4 w-4" />
-                    <span className="hidden sm:inline">Expressions</span>
+                    <span className="hidden sm:inline">{t("tabExpressions")}</span>
                   </button>
                   <button
                     role="tab"
                     aria-selected={viewMode === "works"}
-                    aria-label="Works"
+                    aria-label={t("tabWorks")}
                     onClick={() => {
                       setViewMode("works");
                     }}
@@ -571,12 +617,12 @@ function CollectionContent() {
                     }`}
                   >
                     <Layers className="h-4 w-4" />
-                    <span className="hidden sm:inline">Works</span>
+                    <span className="hidden sm:inline">{t("tabWorks")}</span>
                   </button>
                   <button
                     role="tab"
                     aria-selected={viewMode === "roadmap"}
-                    aria-label="Roadmaps"
+                    aria-label={t("tabRoadmaps")}
                     onClick={() => {
                       setViewMode("roadmap");
                     }}
@@ -587,7 +633,7 @@ function CollectionContent() {
                     }`}
                   >
                     <SlidersHorizontal className="h-4 w-4" />
-                    <span className="hidden sm:inline">Roadmaps</span>
+                    <span className="hidden sm:inline">{t("tabRoadmaps")}</span>
                   </button>
                 </div>
 
@@ -607,7 +653,7 @@ function CollectionContent() {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search title, author, or ISBN..."
+                placeholder={t("searchPlaceholder")}
                 className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </form>
@@ -617,7 +663,7 @@ function CollectionContent() {
               className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary lg:hidden"
             >
               <SlidersHorizontal className="h-4 w-4" />
-              Filters
+              {t("filters")}
               {activeFilters.length > 0 && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
                   {activeFilters.length}
@@ -659,6 +705,10 @@ function CollectionContent() {
                 onChangeMissingCover={setMissingCoverOnly}
                 missingId={missingIdOnly}
                 onChangeMissingId={setMissingIdOnly}
+                tagCounts={facetStatsData?.tag_counts}
+                collectionCounts={facetStatsData?.collection_counts}
+                genreCounts={facetStatsData?.genre_counts}
+                publisherCounts={facetStatsData?.publisher_counts}
               />
             </div>
           </div>
@@ -684,9 +734,9 @@ function CollectionContent() {
                       <Layers className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
-                      {appliedQuery ? `No works matching "${appliedQuery}"` : "No works in collection"}
+                      {appliedQuery ? t("noWorksMatching", { query: appliedQuery }) : t("noWorksInCollection")}
                     </h3>
-                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">{t("tryAdjusting")}</p>
                   </div>
                 ) : (
                   allWorks.map(work => (
@@ -739,7 +789,7 @@ function CollectionContent() {
                                   setViewMode("items");
                                 }}
                                 className="text-xs text-primary hover:underline font-medium"
-                                title={`Browse all items by ${c}`}
+                                title={t("browseAuthor", { author: c })}
                               >
                                 {c}
                               </button>
@@ -750,7 +800,9 @@ function CollectionContent() {
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Users className="h-3 w-3" />
                             <span>
-                              {work.total_items} {work.total_items === 1 ? "item" : "items"}
+                              {work.total_items === 1
+                                ? t("itemsCountOne")
+                                : t("itemsCountMultiple", { count: work.total_items })}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
@@ -760,20 +812,20 @@ function CollectionContent() {
                                   type="button"
                                   onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                  title="View manifestation"
+                                  title={t("viewManifestation")}
                                 >
                                   <Layers className="h-3 w-3" />
-                                  Edition
+                                  {t("edition")}
                                 </button>
                                 {m.item_id && (
                                   <button
                                     type="button"
                                     onClick={() => router.push(`/item/${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                                    title="View my item"
+                                    title={t("viewMyItem")}
                                   >
                                     <BookOpen className="h-3 w-3" />
-                                    My Item
+                                    {t("myItem")}
                                   </button>
                                 )}
                               </Fragment>
@@ -798,9 +850,11 @@ function CollectionContent() {
                       <Type className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <h3 className="mt-4 font-serif text-lg font-bold text-foreground">
-                      {appliedQuery ? `No expressions matching "${appliedQuery}"` : "No expressions in collection"}
+                      {appliedQuery
+                        ? t("noExpressionsMatching", { query: appliedQuery })
+                        : t("noExpressionsInCollection")}
                     </h3>
-                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your search or filters.</p>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">{t("tryAdjusting")}</p>
                   </div>
                 ) : (
                   allExprs.map(expr => (
@@ -853,7 +907,7 @@ function CollectionContent() {
                                   setViewMode("items");
                                 }}
                                 className="text-xs text-primary hover:underline font-medium"
-                                title={`Browse all items by ${c}`}
+                                title={t("browseAuthor", { author: c })}
                               >
                                 {c}
                               </button>
@@ -874,7 +928,9 @@ function CollectionContent() {
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Users className="h-3 w-3" />
                             <span>
-                              {expr.total_items} {expr.total_items === 1 ? "item" : "items"}
+                              {expr.total_items === 1
+                                ? t("itemsCountOne")
+                                : t("itemsCountMultiple", { count: expr.total_items })}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
@@ -884,20 +940,20 @@ function CollectionContent() {
                                   type="button"
                                   onClick={() => router.push(`/manifestation/${m.manifestation_id}`)}
                                   className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                  title="View manifestation"
+                                  title={t("viewManifestation")}
                                 >
                                   <Layers className="h-3 w-3" />
-                                  Edition
+                                  {t("edition")}
                                 </button>
                                 {m.item_id && (
                                   <button
                                     type="button"
                                     onClick={() => router.push(`/item/${m.item_id}`)}
                                     className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                                    title="View my item"
+                                    title={t("viewMyItem")}
                                   >
                                     <BookOpen className="h-3 w-3" />
-                                    My Item
+                                    {t("myItem")}
                                   </button>
                                 )}
                               </Fragment>
@@ -966,6 +1022,10 @@ function CollectionContent() {
         onChangeMissingCover={setMissingCoverOnly}
         missingId={missingIdOnly}
         onChangeMissingId={setMissingIdOnly}
+        tagCounts={facetStatsData?.tag_counts}
+        collectionCounts={facetStatsData?.collection_counts}
+        genreCounts={facetStatsData?.genre_counts}
+        publisherCounts={facetStatsData?.publisher_counts}
       />
     </div>
   );
@@ -977,11 +1037,12 @@ function CollectionContent() {
  * @returns {JSX.Element} The collection page component
  */
 export default function CollectionPage() {
+  const t = useTranslations("Collection");
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-background flex items-center justify-center">
-          <p className="text-muted-foreground">Loading collection...</p>
+          <p className="text-muted-foreground">{t("loading")}</p>
         </div>
       }
     >

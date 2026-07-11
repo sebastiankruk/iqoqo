@@ -14,8 +14,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
 
 /**
  * Custom 404 page for the Next.js App Router.
@@ -23,14 +26,13 @@ import { Button } from "@/components/ui/button";
  * @returns {JSX.Element}
  */
 export default function NotFound() {
+  const t = useTranslations("NotFound");
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-      <h1 className="text-4xl font-serif font-bold mb-4">404 - Page Not Found</h1>
-      <p className="text-muted-foreground mb-8 max-w-md">
-        The page you are looking for does not exist, has been removed, or has been made private.
-      </p>
+      <h1 className="text-4xl font-serif font-bold mb-4">{t("title")}</h1>
+      <p className="text-muted-foreground mb-8 max-w-md">{t("description")}</p>
       <Button asChild>
-        <Link href="/">Go back home</Link>
+        <Link href="/">{t("goBackHome")}</Link>
       </Button>
     </div>
   );
