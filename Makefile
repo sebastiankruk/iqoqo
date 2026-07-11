@@ -492,8 +492,10 @@ fetch-covers: .venv/bin/activate
 allegro-auth: .venv/bin/activate
 	@echo "Starting Allegro API OAuth handshake..."
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		set -eo pipefail; \
 		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec web env PYTHONPATH=. python scripts/allegro_auth.py; \
 	else \
+		set -eo pipefail; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
 		elif [ -f ".env" ]; then \

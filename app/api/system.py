@@ -113,6 +113,7 @@ def get_dashboard_stats():
 
 @api_bp.route("/stats/facets", methods=["GET"])
 @require_auth
+@limiter.limit("60 per minute")
 def get_faceted_stats():
     """Return cross-filtered per-facet counts for the faceted navigation sidebar.
 

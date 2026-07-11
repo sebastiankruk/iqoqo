@@ -15,9 +15,12 @@
 #
 import hashlib
 import io
+import ipaddress
 import logging
 import os
+import socket
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
@@ -37,7 +40,9 @@ COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
 RAW_DIR = os.path.join(Config.BASE_DIR, "app", "static", "uploads", "raw_covers")
 GALLERY_DIR = os.path.join(Config.BASE_DIR, "app", "static", "gallery")
 
-WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo-logo.png")
+# Convert to an absolute path resilient to worker context (Celery/Cron) execution
+_DEFAULT_WATERMARK = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "resources", "images", "iqoqo-logo.png"))
+WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", _DEFAULT_WATERMARK)
 
 os.makedirs(COVERS_DIR, exist_ok=True)
 os.makedirs(RAW_DIR, exist_ok=True)
@@ -46,6 +51,34 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
+
+
+def is_safe_url(url: str) -> bool:
+    """Validates that a given URL is safe for server-side downloading to prevent SSRF.
+
+    Blocks URLs pointing to private, loopback, or link-local IP addresses.
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Resolve the hostname to an IP to check against private/loopback blocks
+        ip_info = socket.getaddrinfo(hostname, None)
+        for result in ip_info:
+            ip_str = result[4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+                logger.warning("SSRF Attempt Blocked: Hostname %s resolved to restricted IP %s.", hostname, ip_str)
+                return False
+        return True
+    except (OSError, ValueError, socket.gaierror) as e:
+        logger.error("URL validation failed for %s: %s", url, e)
+        return False
 
 
 def add_source_badge(filepath: str, source: str):
@@ -262,7 +295,11 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
             try:
                 allegro_meta = fetch_allegro_metadata(barcode_to_query)
                 if allegro_meta and allegro_meta.get("cover_url"):
-                    res = download_direct_url(identifier, allegro_meta["cover_url"], "api_allegro", suffix="allegro")
+                    target_url = allegro_meta["cover_url"]
+                    if is_safe_url(target_url):
+                        res = download_direct_url(identifier, target_url, "api_allegro", suffix="allegro")
+                    else:
+                        logger.warning("Blocked unsafe Allegro cover URL: %s", target_url)
             except (requests.RequestException, ValueError, KeyError, OSError, TypeError) as e:
                 logger.warning("Failed to fetch cover from Allegro: %s", e)
 
@@ -476,15 +513,23 @@ def process_cover_pipeline(
             abs_path = os.path.join(COVERS_DIR, os.path.basename(local_cover_url))
             add_source_badge(abs_path, source or "")
 
-            # Apply watermark based on cover source
+            # Apply watermark based on cover source.
+            # Both helpers return the original path on failure, so we must
+            # check that the watermarked output exists before rewriting the URL.
             if WATERMARK_ASSET_PATH and os.path.exists(WATERMARK_ASSET_PATH) and source:
                 wm_output = abs_path.replace(".jpg", "_wm.jpg")
                 if source == "fallback_pil":
-                    add_center_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
-                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    result_path = add_center_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    if result_path != abs_path and os.path.exists(wm_output):
+                        local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    else:
+                        logger.warning("Center watermark failed for %s — keeping original URL", identifier)
                 elif source.startswith("llm_"):
-                    apply_corner_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
-                    local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    result_path = apply_corner_watermark(abs_path, WATERMARK_ASSET_PATH, wm_output)
+                    if result_path != abs_path and os.path.exists(wm_output):
+                        local_cover_url = local_cover_url.replace(".jpg", "_wm.jpg")
+                    else:
+                        logger.warning("Corner watermark failed for %s — keeping original URL", identifier)
 
             manifestation.cover_url = local_cover_url
             updates["cover_source"] = source

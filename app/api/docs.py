@@ -14,9 +14,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import logging
+
 from apispec import APISpec
 from apispec_webframeworks.flask import FlaskPlugin
 from flask import Blueprint, current_app, jsonify
+
+from app.core.limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 docs_bp = Blueprint("docs", __name__)
 
@@ -33,6 +39,7 @@ def create_spec() -> APISpec:
 
 
 @docs_bp.route("/openapi.json", methods=["GET"])
+@limiter.limit("20 per minute")
 def openapi_spec():
     """
     Generate and return the OpenAPI specification.
@@ -48,6 +55,17 @@ def openapi_spec():
 
     # Register explicitly evaluated operations inside application context
     with current_app.test_request_context():
+        # Register the self-documenting route
         spec.path(view=openapi_spec)
+
+        # Iterate over all application routes and append to spec
+        for rule in current_app.url_map.iter_rules():
+            if rule.endpoint != "static":
+                view_func = current_app.view_functions.get(rule.endpoint)
+                if view_func:
+                    try:
+                        spec.path(view=view_func)
+                    except (ValueError, TypeError, AttributeError, RuntimeError):
+                        logger.debug("Could not auto-document endpoint %s", rule.endpoint)
 
     return jsonify(spec.to_dict())

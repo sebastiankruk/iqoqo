@@ -47,7 +47,17 @@ function LoginPageContent() {
   const [password, setPassword] = useState("");
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error");
-  const errorMessage = errorCode ? t(errorCode) || `Error: ${errorCode}` : null;
+  let errorMessage: string | null = null;
+  if (errorCode) {
+    try {
+      const translated = t(errorCode);
+      // next-intl may return the key itself (truthy) when no translation exists;
+      // compare against the key to detect a missing translation reliably.
+      errorMessage = translated !== errorCode ? translated : `Error: ${errorCode}`;
+    } catch {
+      errorMessage = `Error: ${errorCode}`;
+    }
+  }
 
   /**
    * Handles the local login process.

@@ -213,15 +213,11 @@ describe("SearchableFacet counts display", () => {
     expect(screen.getByText("polish")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
   });
-  
+
   it("does not show count for items that have no count entry", () => {
     render(
       <QueryClientProvider client={queryClient2}>
-        <SidebarFilters
-          activeFilters={[]}
-          onToggleFilter={vi.fn()}
-          tagCounts={{ english: 5 }}
-        />
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 5 }} />
       </QueryClientProvider>
     );
 
@@ -238,11 +234,7 @@ describe("SearchableFacet counts display", () => {
   it("renders labels normally for 0-count facet items", () => {
     render(
       <QueryClientProvider client={queryClient2}>
-        <SidebarFilters
-          activeFilters={[]}
-          onToggleFilter={vi.fn()}
-          tagCounts={{ english: 0, polish: 0 }}
-        />
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 0, polish: 0 }} />
       </QueryClientProvider>
     );
 

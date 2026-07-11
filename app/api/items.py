@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import logging
 import uuid
 
 from flask import Response, current_app, g, jsonify, request
@@ -44,6 +45,8 @@ from app.db.models import (
     Work,
     db,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def sync_tags(item_id: int, user_id, tags: list[str] | None):
@@ -989,6 +992,7 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
 
 
 @api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
+@limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 @require_item_access()
@@ -1044,10 +1048,12 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": payload.collection_id}})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error("Database error linking item %s to collection %s: %s", item_id, payload.collection_id, str(e))
+        return jsonify({"success": False, "error": "An internal database error occurred while processing the request."}), 500
 
 
 @api_bp.route("/items/<int(signed=True):item_id>/collections/<int:collection_id>", methods=["DELETE"])
+@limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 @require_item_access()
@@ -1083,7 +1089,8 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
         return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": collection_id}})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error("Database error unlinking item %s from collection %s: %s", item_id, collection_id, str(e))
+        return jsonify({"success": False, "error": "An internal database error occurred while processing the request."}), 500
 
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
