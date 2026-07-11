@@ -126,8 +126,9 @@ test.describe("Manage Collections Modal Workflow", () => {
   });
 
   test("allows full CRUD operations on collections", async ({ page }) => {
-    // Open Modal via "Manage Collections" button
-    await page.getByRole("button", { name: "Manage Collections" }).click();
+    // Open Modal via "Manage Collections" menuitem in the user dropdown
+    await page.getByLabel("User menu").click();
+    await page.getByRole("menuitem", { name: "Manage Collections" }).click();
     await expect(page.getByText("Manage Collections")).toBeVisible();
 
     // Verify existing collections are listed
