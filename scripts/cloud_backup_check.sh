@@ -51,9 +51,13 @@ else
 fi
 
 # 2. Rclone remote
-if rclone listremotes 2>/dev/null | grep -q "^${REMOTE}:"; then
+RCLONE_CMD="rclone"
+if [ -n "${RCLONE_CONFIG:-}" ]; then
+  RCLONE_CMD="rclone --config=${RCLONE_CONFIG}"
+fi
+if ${RCLONE_CMD} listremotes 2>/dev/null | grep -q "^${REMOTE}:"; then
   check ok "Rclone remote '${REMOTE}': configured"
-  if rclone about "${REMOTE}:" 2>/dev/null >/dev/null; then
+  if ${RCLONE_CMD} about "${REMOTE}:" 2>/dev/null >/dev/null; then
     check ok "Rclone remote '${REMOTE}': reachable"
   else
     check warn "Rclone remote '${REMOTE}': configured but unreachable"
@@ -63,7 +67,7 @@ else
 fi
 
 # 3. Last backup freshness
-LAST_ENTRY=$(rclone lsl "${REMOTE}:iqoqo_backups" 2>/dev/null | sort -k2,3 | tail -1)
+LAST_ENTRY=$(${RCLONE_CMD} lsl "${REMOTE}:iqoqo_backups" 2>/dev/null | sort -k2,3 | tail -1)
 if [ -n "${LAST_ENTRY}" ]; then
   LAST_TS=$(echo "${LAST_ENTRY}" | awk '{print $2, $3}')
   LAST_EPOCH=$(date -d "${LAST_TS}" +%s 2>/dev/null)

@@ -23,7 +23,7 @@ case "${CMD}" in
     fi
     echo "Installing daily 03:00 cron job for remote '${REMOTE}'..."
     PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-    echo "0 3 * * * root cd ${PROJECT_DIR} && ./scripts/cloud_backup.sh ${REMOTE} >> /var/log/iqoqo_backup.log 2>&1" | \
+    echo "0 3 * * * root cd ${PROJECT_DIR} && RCLONE_CONFIG=${HOME}/.config/rclone/rclone.conf ./scripts/cloud_backup.sh ${REMOTE} >> /var/log/iqoqo_backup.log 2>&1" | \
       docker run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'cat > /etc/cron.d/iqoqo-backup'
     echo "Done. Next run: tonight at 03:00."
     ;;
