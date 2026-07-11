@@ -59,10 +59,15 @@ tar -czf "${ARCHIVE}" -C /tmp "iqoqo_backup_${TIMESTAMP}"
 
 # 4. Sync to cloud
 echo "☁️  Syncing to ${RCLONE_REMOTE}..."
-rclone copy "${ARCHIVE}" "${RCLONE_REMOTE}:iqoqo_backups"
+if rclone copy "${ARCHIVE}" "${RCLONE_REMOTE}:iqoqo_backups"; then
+    echo "✅ Backup synced → ${RCLONE_REMOTE}:iqoqo_backups"
+else
+    echo "❌ Cloud sync failed! Archive preserved at: ${ARCHIVE}" >&2
+    exit 1
+fi
 
-# 5. Cleanup
+# 5. Cleanup only on successful sync
 echo "🧹 Cleaning up local temp files..."
 rm -rf "${BACKUP_DIR}" "${ARCHIVE}"
 
-echo "✅ Backup completed successfully → ${RCLONE_REMOTE}:iqoqo_backups"
+echo "✅ Backup completed successfully"
