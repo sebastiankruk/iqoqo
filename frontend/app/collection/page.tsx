@@ -42,6 +42,7 @@ import {
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
+  useFacetStats,
 } from "@/lib/api/hooks";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
@@ -338,6 +339,47 @@ function CollectionContent() {
 
   const { data: statsData } = useStats();
 
+  const hasActiveFilters =
+    categoryFilters.length > 0 ||
+    formatFilters.length > 0 ||
+    tagFilters.length > 0 ||
+    collectionFilters.length > 0 ||
+    genreFilters.length > 0 ||
+    publisherFilters.length > 0 ||
+    statusFilters.length > 0 ||
+    isBorrowedFilterActive ||
+    !!appliedQuery ||
+    missingCoverOnly ||
+    missingIdOnly;
+
+  const filtersForFacets = useMemo(() => {
+    const f: Record<string, string> = {};
+    if (categoryFilters.length > 0) f.category = categoryFilters[0];
+    if (formatFilters.length > 0) f.format = formatFilters[0];
+    if (tagFilters.length > 0) f.tags = tagFilters.join(",");
+    if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
+    if (genreFilters.length > 0) f.genres = genreFilters.join(",");
+    if (publisherFilters.length > 0) f.publishers = publisherFilters.join(",");
+    if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
+    if (isBorrowedFilterActive) f.borrowed = "true";
+    if (missingCoverOnly) f.missing_cover = "true";
+    if (missingIdOnly) f.missing_id = "true";
+    return f;
+  }, [
+    categoryFilters,
+    formatFilters,
+    tagFilters,
+    collectionFilters,
+    genreFilters,
+    publisherFilters,
+    statusFilters,
+    isBorrowedFilterActive,
+    missingCoverOnly,
+    missingIdOnly,
+  ]);
+
+  const { data: facetStatsData } = useFacetStats(filtersForFacets, hasActiveFilters);
+
   const isLoading =
     viewMode === "roadmap"
       ? false
@@ -425,6 +467,7 @@ function CollectionContent() {
   }, []);
 
   const formatCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.format_counts) return facetStatsData.format_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -433,9 +476,10 @@ function CollectionContent() {
       }
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const categoryCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.category_counts) return facetStatsData.category_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -444,9 +488,10 @@ function CollectionContent() {
       }
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const statusCounts = useMemo<Record<string, number>>(() => {
+    if (facetStatsData?.status_counts) return facetStatsData.status_counts;
     if (!statsData) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const [key, value] of Object.entries(statsData)) {
@@ -454,12 +499,11 @@ function CollectionContent() {
         counts[key.replace("items_", "")] = value as number;
       }
     }
-    // Also add to_read alias if want_to_read is missing
     if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
       counts.want_to_read = statsData.to_read;
     }
     return counts;
-  }, [statsData]);
+  }, [statsData, facetStatsData]);
 
   const filteredItems = useMemo(() => {
     const items = [...allItems];
@@ -661,6 +705,10 @@ function CollectionContent() {
                 onChangeMissingCover={setMissingCoverOnly}
                 missingId={missingIdOnly}
                 onChangeMissingId={setMissingIdOnly}
+                tagCounts={facetStatsData?.tag_counts}
+                collectionCounts={facetStatsData?.collection_counts}
+                genreCounts={facetStatsData?.genre_counts}
+                publisherCounts={facetStatsData?.publisher_counts}
               />
             </div>
           </div>
@@ -974,6 +1022,10 @@ function CollectionContent() {
         onChangeMissingCover={setMissingCoverOnly}
         missingId={missingIdOnly}
         onChangeMissingId={setMissingIdOnly}
+        tagCounts={facetStatsData?.tag_counts}
+        collectionCounts={facetStatsData?.collection_counts}
+        genreCounts={facetStatsData?.genre_counts}
+        publisherCounts={facetStatsData?.publisher_counts}
       />
     </div>
   );

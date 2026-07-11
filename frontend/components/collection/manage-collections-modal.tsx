@@ -175,7 +175,7 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
                     >
                       <input
                         autoFocus
-                        className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:ring-1 focus-visible:ring-ring outline-none"
+                        className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:ring-1 focus-visible:ring-ring outline-none"
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
                       />
@@ -198,7 +198,7 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
                     <>
                       <div className="flex items-center gap-3 overflow-hidden">
                         <Folder className="h-4 w-4 text-primary shrink-0" />
-                        <span className="font-medium text-sm truncate">{col.name}</span>
+                        <span className="font-medium text-sm truncate text-foreground">{col.name}</span>
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">

@@ -944,7 +944,7 @@ export function useRecentManifestations(limit = 10) {
   });
 }
 
-import type { TaxonomiesResponse, UserCollection } from "@/types/frbr";
+import type { FacetStatsResponse, TaxonomiesResponse, UserCollection } from "@/types/frbr";
 
 /**
  * Custom hook to fetch all global taxonomies.
@@ -986,6 +986,87 @@ export function useUserCollections() {
       return res.data.collections;
     },
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Custom hook to fetch cross-filtered facet counts for the sidebar.
+ *
+ * @param filters - Filter params to narrow counts
+ * @param enabled - Whether the query is enabled
+ * @returns React Query result with per-facet counts
+ */
+export function useFacetStats(filters?: Record<string, string>, enabled = false) {
+  return useQuery({
+    queryKey: ["facetStats", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([k, v]) => {
+          if (v) params.set(k, v);
+        });
+      }
+      const res = await apiClient.get<ApiResponse<FacetStatsResponse>>(`/stats/facets?${params.toString()}`);
+      return res.data.data ?? ({} as FacetStatsResponse);
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+/**
+ * Custom hook to fetch which named collections an item belongs to.
+ *
+ * @param itemId - The item ID
+ * @returns React Query result with collection list
+ */
+export function useItemCollections(itemId: number | null) {
+  return useQuery({
+    queryKey: ["itemCollections", itemId],
+    queryFn: async () => {
+      const res = await apiClient.get<
+        ApiResponse<{ collections: { id: number; name: string; parent_id: number | null }[] }>
+      >(`/items/${itemId}/collections`);
+      return res.data.data?.collections ?? [];
+    },
+    enabled: !!itemId && itemId > 0,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Custom hook to add an item to a named collection.
+ *
+ * @returns React Query mutation
+ */
+export function useAddItemToCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, collectionId }: { itemId: number; collectionId: number }) => {
+      return apiClient.post(`/items/${itemId}/collections`, { collection_id: collectionId });
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["itemCollections", variables.itemId] });
+      qc.invalidateQueries({ queryKey: ["taxonomies"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to remove an item from a named collection.
+ *
+ * @returns React Query mutation
+ */
+export function useRemoveItemFromCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, collectionId }: { itemId: number; collectionId: number }) => {
+      return apiClient.delete(`/items/${itemId}/collections/${collectionId}`);
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["itemCollections", variables.itemId] });
+      qc.invalidateQueries({ queryKey: ["taxonomies"] });
+    },
   });
 }
 

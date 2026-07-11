@@ -92,6 +92,7 @@ vi.mock("@/lib/api/hooks", () => ({
     },
     isLoading: false,
   })),
+  useFacetStats: vi.fn().mockReturnValue({ data: null }),
 }));
 
 // ── Stub heavy / irrelevant sub-components ─────────────────────────────────

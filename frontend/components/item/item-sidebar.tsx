@@ -17,10 +17,34 @@
 
 import * as React from "react";
 import { ChangeEvent } from "react";
-import { Pencil, QrCode, BookOpen, Disc, ImagePlus, Film, Gamepad2, Eye, EyeOff } from "lucide-react";
+import {
+  Pencil,
+  QrCode,
+  BookOpen,
+  Disc,
+  ImagePlus,
+  Film,
+  Gamepad2,
+  Eye,
+  EyeOff,
+  Folder,
+  X,
+  Plus,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { useUpdateItem, useProfile, useUserSearch, useLoanStatus, useRequestLoan } from "@/lib/api/hooks";
+import {
+  useUpdateItem,
+  useProfile,
+  useUserSearch,
+  useLoanStatus,
+  useRequestLoan,
+  useItemCollections,
+  useAddItemToCollection,
+  useRemoveItemFromCollection,
+  useUserCollections,
+} from "@/lib/api/hooks";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
@@ -138,6 +162,50 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
 
   const { data: loanStatus } = useLoanStatus(isOwner ? null : item.id);
   const requestLoan = useRequestLoan();
+
+  const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(
+    canModifyItem && !isVirtual ? item.id : null
+  );
+  const addToCollection = useAddItemToCollection();
+  const removeFromCollection = useRemoveItemFromCollection();
+  const { data: userCollections } = useUserCollections();
+  const [showCollectionDropdown, setShowCollectionDropdown] = React.useState(false);
+  const collectionDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (collectionDropdownRef.current && !collectionDropdownRef.current.contains(event.target as Node)) {
+        setShowCollectionDropdown(false);
+      }
+    }
+    if (showCollectionDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showCollectionDropdown]);
+
+  const handleAddToCollection = (collectionId: number) => {
+    addToCollection.mutate(
+      { itemId: item.id, collectionId },
+      {
+        onSuccess: () => {
+          toast.success("Added to collection");
+          setShowCollectionDropdown(false);
+        },
+        onError: e => toast.error((e as Error).message),
+      }
+    );
+  };
+
+  const handleRemoveFromCollection = (collectionId: number) => {
+    removeFromCollection.mutate(
+      { itemId: item.id, collectionId },
+      {
+        onSuccess: () => toast.success("Removed from collection"),
+        onError: e => toast.error((e as Error).message),
+      }
+    );
+  };
 
   const handleRequestLoan = () => {
     requestLoan.mutate(
@@ -589,6 +657,70 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             currentItemFormat={format}
             onUploadComplete={handleUploadComplete}
           />
+        )}
+
+        {canModifyItem && !isVirtual && (
+          <div className="flex flex-col gap-2">
+            <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+              Named Collections
+            </span>
+            {(itemCollections ?? []).length === 0 && !collectionsLoading ? (
+              <p className="text-[10px] text-muted-foreground italic px-1">Not in any named collections yet.</p>
+            ) : collectionsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mx-auto" />
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {(itemCollections ?? []).map(col => (
+                  <span
+                    key={col.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-500 px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-green-200 dark:ring-green-500/20"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    {col.name}
+                    <button
+                      onClick={() => handleRemoveFromCollection(col.id)}
+                      disabled={removeFromCollection.isPending}
+                      className="ml-0.5 p-0.5 rounded-full hover:bg-green-200 dark:hover:bg-green-500/20 transition-colors"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="relative" ref={collectionDropdownRef}>
+              <button
+                onClick={() => setShowCollectionDropdown(prev => !prev)}
+                disabled={addToCollection.isPending}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+              >
+                <Plus className="h-3 w-3" />
+                Add to named collection
+              </button>
+              {showCollectionDropdown && (userCollections?.length ?? 0) > 0 && (
+                <div className="absolute left-0 top-full mt-1 w-full rounded-md border border-border bg-card shadow-lg overflow-hidden z-50 max-h-40 overflow-y-auto">
+                  {userCollections!
+                    .filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id))
+                    .map(uc => (
+                      <button
+                        key={uc.id}
+                        onClick={() => handleAddToCollection(uc.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-secondary transition-colors"
+                      >
+                        <Folder className="h-3 w-3 text-primary" />
+                        <span className="truncate">{uc.name}</span>
+                      </button>
+                    ))}
+                  {(userCollections ?? []).filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id)).length ===
+                    0 && (
+                    <p className="px-3 py-2 text-[10px] text-muted-foreground italic">
+                      Already in all your named collections.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {canModifyItem && <TaxonomyEditor item={item} />}

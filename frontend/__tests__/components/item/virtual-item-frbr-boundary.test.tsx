@@ -43,6 +43,10 @@ vi.mock("@/lib/api/hooks", () => ({
   useUserSearch: vi.fn(() => ({ data: [], isLoading: false })),
   useLoanStatus: vi.fn(() => ({ data: null })),
   useRequestLoan: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useItemCollections: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useAddItemToCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useRemoveItemFromCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useUserCollections: vi.fn().mockReturnValue({ data: [], isLoading: false }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({

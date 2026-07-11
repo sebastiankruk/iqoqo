@@ -38,6 +38,10 @@ interface MobileFilterDrawerProps {
   onChangeMissingCover?: (checked: boolean) => void;
   missingId?: boolean;
   onChangeMissingId?: (checked: boolean) => void;
+  tagCounts?: Record<string, number>;
+  collectionCounts?: Record<string, number>;
+  genreCounts?: Record<string, number>;
+  publisherCounts?: Record<string, number>;
 }
 
 /**
@@ -76,6 +80,10 @@ export function MobileFilterDrawer({
   onChangeMissingCover,
   onChangeMissingId,
   missingId = false,
+  tagCounts = {},
+  collectionCounts: collCounts = {},
+  genreCounts = {},
+  publisherCounts = {},
 }: MobileFilterDrawerProps) {
   const t = useTranslations("CollectionFilters");
   useEffect(() => {
@@ -135,6 +143,10 @@ export function MobileFilterDrawer({
               onChangeMissingCover={onChangeMissingCover}
               missingId={missingId}
               onChangeMissingId={onChangeMissingId}
+              tagCounts={tagCounts}
+              collectionCounts={collCounts}
+              genreCounts={genreCounts}
+              publisherCounts={publisherCounts}
             />
           </div>
 
