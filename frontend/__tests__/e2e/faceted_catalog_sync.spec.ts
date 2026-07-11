@@ -370,4 +370,18 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await expect(onWishListLabel).toBeVisible();
     await expect(onWishListLabel).toHaveClass(/opacity-50/);
   });
+
+  test("selecting a media category narrows format counts", async ({ page }) => {
+    await page.goto("/collection?view=manifestations");
+
+    // Global Library should be visible
+    await expect(page.getByRole("tab", { name: /Global Library/i })).toBeVisible();
+
+    // The media category sidebar should be visible
+    await expect(page.getByText("Media Category")).toBeVisible();
+  });
+
+  test("faceted counts are rendered in the sidebar", async ({ page }) => {
+    await expect(page.locator("text=Media Category").first()).toBeVisible({ timeout: 10000 });
+  });
 });

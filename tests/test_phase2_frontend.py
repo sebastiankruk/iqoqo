@@ -329,3 +329,49 @@ class TestHealthEndpoint:
         """Response must report status=ok."""
         payload = client.get("/api/health").get_json()
         assert payload.get("status") == "ok"
+
+
+# ===========================================================================
+# GET /api/stats/facets endpoint
+# ===========================================================================
+
+
+class TestFacetedStatsEndpoint:
+    """Integration tests for the GET /api/stats/facets endpoint."""
+
+    def test_returns_200(self, client, auth_headers):
+        """Endpoint must respond with HTTP 200."""
+        response = client.get("/api/stats/facets", headers=auth_headers)
+        assert response.status_code == 200
+
+    def test_returns_success_envelope(self, client, auth_headers):
+        """Response must use the standard {success, data, error} envelope."""
+        response = client.get("/api/stats/facets", headers=auth_headers)
+        payload = response.get_json()
+        assert payload["success"] is True
+        assert payload["error"] is None
+        assert isinstance(payload["data"], dict)
+
+    def test_data_contains_facet_keys(self, client, auth_headers):
+        """data block must contain all expected facet count maps."""
+        response = client.get("/api/stats/facets", headers=auth_headers)
+        data = response.get_json()["data"]
+        for key in (
+            "category_counts",
+            "format_counts",
+            "status_counts",
+            "tag_counts",
+            "genre_counts",
+            "collection_counts",
+            "publisher_counts",
+        ):
+            assert key in data, f"Missing key: {key}"
+            assert isinstance(data[key], dict), f"{key} is not a dict"
+
+    def test_counts_reflect_seeded_data(self, client, populated_library, auth_headers):
+        """Facet counts must reflect the three seeded items (status + collection_status both counted)."""
+        response = client.get("/api/stats/facets", headers=auth_headers)
+        data = response.get_json()["data"]
+        assert data["category_counts"].get("text") == 3
+        # status_counts merges Item.status and Item.collection_status: 3 items × 2 counts = 6 total
+        assert sum(data["status_counts"].values()) == 6

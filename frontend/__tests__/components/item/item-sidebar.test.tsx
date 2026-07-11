@@ -191,4 +191,60 @@ describe("ItemSidebar Component", () => {
     expect(mutateMock).toHaveBeenCalledTimes(1);
     expect(replaceMock).toHaveBeenCalledWith("/item/42");
   });
+
+  describe("Named Collections section", () => {
+    it("renders the named collections section when user owns the item", () => {
+      vi.mocked(hooks.useItemCollections).mockReturnValue({
+        data: [{ id: 1, name: "Favorites", parent_id: null }],
+        isLoading: false,
+      } as unknown as ReturnType<typeof hooks.useItemCollections>);
+      vi.mocked(hooks.useUserCollections).mockReturnValue({
+        data: [{ id: 2, name: "To Read", parent_id: null }],
+        isLoading: false,
+      } as unknown as ReturnType<typeof hooks.useUserCollections>);
+
+      vi.mocked(hooks.useUpdateItem).mockReturnValue({
+        mutate: vi.fn(),
+        isPending: false,
+      } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+      render(<ItemSidebar item={mockItem} />);
+
+      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      expect(screen.getByText("Favorites")).toBeInTheDocument();
+      expect(screen.getByText("Add to named collection")).toBeInTheDocument();
+    });
+
+    it("shows empty state when item has no named collections", () => {
+      vi.mocked(hooks.useItemCollections).mockReturnValue({
+        data: [],
+        isLoading: false,
+      } as unknown as ReturnType<typeof hooks.useItemCollections>);
+      vi.mocked(hooks.useUserCollections).mockReturnValue({
+        data: [],
+        isLoading: false,
+      } as unknown as ReturnType<typeof hooks.useUserCollections>);
+      vi.mocked(hooks.useUpdateItem).mockReturnValue({
+        mutate: vi.fn(),
+        isPending: false,
+      } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+      render(<ItemSidebar item={mockItem} />);
+
+      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      expect(screen.getByText(/Not in any named collections yet/i)).toBeInTheDocument();
+    });
+
+    it("hides named collections section for virtual items (id < 0)", () => {
+      const virtualItem = { ...mockItem, id: -1 };
+      vi.mocked(hooks.useUpdateItem).mockReturnValue({
+        mutate: vi.fn(),
+        isPending: false,
+      } as unknown as ReturnType<typeof hooks.useUpdateItem>);
+
+      render(<ItemSidebar item={virtualItem} />);
+
+      expect(screen.queryByText("Named Collections")).not.toBeInTheDocument();
+    });
+  });
 });
