@@ -332,6 +332,26 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
         }),
       });
     });
+
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 0,
+            format_text: 0,
+            items_wish_list: 0,
+            items_available: 0,
+            items_ordered: 0,
+            items_lent: 0,
+            items_lost: 0,
+          },
+        }),
+      });
+    });
   });
 
   test("mutes status options with zero count when not selected", async ({ page }) => {

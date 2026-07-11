@@ -84,10 +84,14 @@ function chipColor(filter: ActiveFilter): string {
   if (filter.type === "status") return "bg-accent/10 text-accent border-accent/20";
   if (filter.type === "category") return "bg-primary/10 text-primary border-primary/20";
   if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
-  if (filter.type === "tag") return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-  if (filter.type === "collection") return "bg-green-500/10 text-green-500 border-green-500/20";
-  if (filter.type === "genre") return "bg-purple-500/10 text-purple-500 border-purple-500/20";
-  if (filter.type === "publisher") return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+  if (filter.type === "tag")
+    return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20";
+  if (filter.type === "collection")
+    return "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-500 dark:border-green-500/20";
+  if (filter.type === "genre")
+    return "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-500 dark:border-purple-500/20";
+  if (filter.type === "publisher")
+    return "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-500 dark:border-orange-500/20";
   return "bg-secondary text-secondary-foreground border-border";
 }
 

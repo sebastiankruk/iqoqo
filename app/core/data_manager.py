@@ -27,7 +27,19 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db import db
-from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, UserWorkIntent, Work
+from app.db.models import (
+    ITEM_STATUSES,
+    Expression,
+    Item,
+    ItemTag,
+    Manifestation,
+    Tag,
+    User,
+    UserCollection,
+    UserCollectionItem,
+    UserWorkIntent,
+    Work,
+)
 
 
 class DataManager:
@@ -399,4 +411,218 @@ class DataManager:
             **{f"items_{s}": count for s, count in status_counts.items()},
             # Per-format counts
             **{f"format_{f}": count for f, count in format_rows},
+        }
+
+    @staticmethod
+    def get_faceted_stats(
+        owner_id: uuid.UUID | None = None,
+        category: str | None = None,
+        fmt: str | None = None,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
+    ) -> dict[str, Any]:
+        """Return cross-filtered per-facet counts for sidebar faceted navigation.
+
+        When no filters are passed, returns global/unfiltered counts.
+        When filters are active, all facet counts are narrowed to the
+        matching item subset.
+
+        Returns a dict with keys:
+          category_counts, format_counts, status_counts,
+          collection_counts, tag_counts, genre_counts, publisher_counts
+        """
+        from sqlalchemy import func, or_, select
+
+        base_query = (
+            select(Item.id)
+            .select_from(Item)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .join(Work, Expression.work_id == Work.id)
+        )
+
+        if owner_id:
+            base_query = base_query.where(Item.owner_id == owner_id)
+
+        if borrowed_only and owner_id:
+            base_query = base_query.where(Item.lent_to_user_id == owner_id)
+
+        if category:
+            base_query = base_query.where(Expression.content_type == category)
+        if fmt:
+            base_query = base_query.where(Manifestation.meta["format"].as_string() == fmt)
+        if missing_cover:
+            base_query = base_query.where(
+                or_(
+                    Manifestation.cover_url.is_(None),
+                    Manifestation.cover_url == "",
+                )
+            )
+        if missing_id:
+            base_query = base_query.where(
+                or_(
+                    Manifestation.isbn13.is_(None),
+                    Manifestation.isbn13 == "",
+                )
+            )
+
+        if tags:
+            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+            tag_conds = [Tag.name.ilike(t.strip()) for t in tags]
+            base_query = base_query.where(or_(*tag_conds))
+
+        if collections:
+            base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
+            coll_conds = [UserCollection.name.ilike(c.strip()) for c in collections]
+            base_query = base_query.where(or_(*coll_conds))
+            if owner_id:
+                base_query = base_query.where(UserCollection.owner_id == owner_id)
+
+        if genres:
+            from app.api.filters import apply_genre_filter as _apply_genre_filter
+
+            genre_query = (
+                select(Item.id)
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+            )
+            genre_query = _apply_genre_filter(genre_query, genres)
+            genre_item_ids = genre_query.subquery()
+            base_query = base_query.where(Item.id.in_(select(genre_item_ids.c.id)))
+
+        if publishers:
+            pub_conds = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            base_query = base_query.where(or_(*pub_conds))
+
+        if statuses:
+            status_conds = [Item.status.in_(statuses), Item.collection_status.in_(statuses)]
+            base_query = base_query.where(or_(*status_conds))
+
+        item_ids_subq = base_query.subquery()
+        item_id_col = item_ids_subq.c.id
+
+        # Category counts (grouped by Expression.content_type)
+        cat_rows = db.session.execute(
+            select(Expression.content_type, func.count(Item.id).label("cnt"))
+            .select_from(Item)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .where(Item.id.in_(select(item_id_col)))
+            .group_by(Expression.content_type)
+        ).all()
+        category_counts: dict[str, int] = {}
+        for ct, cnt in cat_rows:
+            if ct:
+                category_counts[ct] = cnt
+
+        # Format counts (grouped by Manifestation.meta->'format')
+        fmt_rows = db.session.execute(
+            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))
+            .select_from(Item)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .where(Item.id.in_(select(item_id_col)))
+            .group_by(Manifestation.meta["format"].as_string())
+        ).all()
+        format_counts: dict[str, int] = {}
+        for f_val, cnt in fmt_rows:
+            if f_val:
+                format_counts[f_val] = cnt
+
+        # Status counts (grouped by Item.collection_status + Item.status)
+        db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
+        status_rows = db.session.execute(
+            select(Item.status, func.count(Item.id).label("cnt")).where(Item.id.in_(select(item_id_col))).group_by(Item.status)
+        ).all()
+        for s, cnt in status_rows:
+            if s in db_statuses:
+                db_statuses[s] += cnt
+        coll_status_rows = db.session.execute(
+            select(Item.collection_status, func.count(Item.id).label("cnt"))
+            .where(Item.id.in_(select(item_id_col)))
+            .group_by(Item.collection_status)
+        ).all()
+        for cs, cnt in coll_status_rows:
+            if cs in db_statuses:
+                db_statuses[cs] += cnt
+
+        # Collection counts
+        coll_rows = db.session.execute(
+            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))
+            .select_from(UserCollectionItem)
+            .join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
+            .where(UserCollectionItem.item_id.in_(select(item_id_col)))
+            .group_by(UserCollection.name)
+        ).all()
+        collection_counts: dict[str, int] = {c: cnt for c, cnt in coll_rows if c}
+
+        # Tag counts
+        tag_rows = db.session.execute(
+            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))
+            .select_from(ItemTag)
+            .join(Tag, ItemTag.tag_id == Tag.id)
+            .where(ItemTag.item_id.in_(select(item_id_col)))
+            .group_by(Tag.name)
+        ).all()
+        tag_counts: dict[str, int] = {t: cnt for t, cnt in tag_rows if t}
+
+        # Genre counts
+        genre_counts: dict[str, int] = {}
+        w_ids_query = db.session.execute(
+            select(Work.id)
+            .join(Expression, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .where(Item.id.in_(select(item_id_col)))
+            .distinct()
+        ).all()
+        w_ids = [r[0] for r in w_ids_query]
+        if w_ids:
+            works_meta = db.session.query(Work.meta).filter(Work.id.in_(w_ids)).all()
+            from collections import Counter
+
+            genre_counter: Counter[str] = Counter()
+            for row in works_meta:
+                meta = row[0]
+                if meta:
+                    raw = meta.get("genres") or meta.get("genre")
+                    if isinstance(raw, list):
+                        for g_val in raw:
+                            if isinstance(g_val, str) and g_val.strip():
+                                genre_counter[g_val.strip()] += 1
+                    elif isinstance(raw, str) and raw.strip():
+                        genre_counter[raw.strip()] += 1
+            genre_counts = dict(genre_counter.most_common())
+
+        # Publisher counts
+        pub_rows = db.session.execute(
+            select(Manifestation.publisher, func.count(Item.id).label("cnt"))
+            .select_from(Item)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .where(
+                Item.id.in_(select(item_id_col)),
+                Manifestation.publisher.isnot(None),
+                Manifestation.publisher != "",
+            )
+            .group_by(Manifestation.publisher)
+        ).all()
+        publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
+
+        return {
+            "category_counts": category_counts,
+            "format_counts": format_counts,
+            "status_counts": db_statuses,
+            "collection_counts": collection_counts,
+            "tag_counts": tag_counts,
+            "genre_counts": genre_counts,
+            "publisher_counts": publisher_counts,
         }

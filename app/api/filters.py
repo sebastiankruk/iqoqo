@@ -21,8 +21,7 @@ from app.db.models import Work
 
 def apply_genre_filter(query, genres_list):
     """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively."""
-    bind = query.session.bind
-    is_postgres = bind.dialect.name == "postgresql" if bind else False
+    is_postgres = db.engine.dialect.name == "postgresql"
 
     conditions = []
     for gen in genres_list:

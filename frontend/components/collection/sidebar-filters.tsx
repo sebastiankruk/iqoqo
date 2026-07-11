@@ -47,6 +47,10 @@ interface SidebarFiltersProps {
   onChangeMissingCover?: (checked: boolean) => void;
   missingId?: boolean;
   onChangeMissingId?: (checked: boolean) => void;
+  tagCounts?: Record<string, number>;
+  collectionCounts?: Record<string, number>;
+  genreCounts?: Record<string, number>;
+  publisherCounts?: Record<string, number>;
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -138,6 +142,7 @@ interface SearchableFacetProps {
   type: string;
   onToggle: (option: string) => void;
   placeholder?: string;
+  counts?: Record<string, number>;
 }
 
 /**
@@ -151,7 +156,7 @@ interface SearchableFacetProps {
  * @param root0.placeholder - Search placeholder
  * @returns {JSX.Element} The component
  */
-export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder }: SearchableFacetProps) {
+export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder, counts }: SearchableFacetProps) {
   const t = useTranslations("CollectionFilters");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -194,6 +199,9 @@ export function SearchableFacet({ options, activeFilters, type, onToggle, placeh
                   className="h-3.5 w-3.5 rounded border-border accent-primary"
                 />
                 <span className="flex-1 truncate">{option}</span>
+                {counts && counts[option] !== undefined && (
+                  <span className="text-[10px] tabular-nums text-muted-foreground">{counts[option]}</span>
+                )}
                 {active && <Check className="h-3 w-3 text-primary" />}
               </label>
             );
@@ -239,6 +247,10 @@ export function SidebarFilters({
   onChangeMissingCover,
   onChangeMissingId,
   missingId = false,
+  tagCounts = {},
+  collectionCounts: collCountsFromProps = {},
+  genreCounts = {},
+  publisherCounts = {},
 }: SidebarFiltersProps) {
   const t = useTranslations("CollectionFilters");
   const activeCategory = activeFilters.find(f => f.type === "category")?.value;
@@ -310,6 +322,7 @@ export function SidebarFilters({
             type="collection"
             onToggle={value => onToggleFilter({ type: "collection", value })}
             placeholder={t("findCollection")}
+            counts={collCountsFromProps}
           />
         </AccordionSection>
       )}
@@ -321,6 +334,7 @@ export function SidebarFilters({
           type="tag"
           onToggle={value => onToggleFilter({ type: "tag", value })}
           placeholder={t("findTag")}
+          counts={tagCounts}
         />
       </AccordionSection>
 
@@ -331,6 +345,7 @@ export function SidebarFilters({
           type="genre"
           onToggle={value => onToggleFilter({ type: "genre", value })}
           placeholder={t("findGenre")}
+          counts={genreCounts}
         />
       </AccordionSection>
 
@@ -341,6 +356,7 @@ export function SidebarFilters({
           type="publisher"
           onToggle={value => onToggleFilter({ type: "publisher", value })}
           placeholder={t("findPublisher")}
+          counts={publisherCounts}
         />
       </AccordionSection>
 

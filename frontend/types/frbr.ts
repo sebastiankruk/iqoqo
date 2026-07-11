@@ -298,3 +298,13 @@ export type TaxonomiesResponse = {
   collections: string[];
   publishers: string[];
 };
+
+export type FacetStatsResponse = {
+  category_counts: Record<string, number>;
+  format_counts: Record<string, number>;
+  status_counts: Record<string, number>;
+  collection_counts: Record<string, number>;
+  tag_counts: Record<string, number>;
+  genre_counts: Record<string, number>;
+  publisher_counts: Record<string, number>;
+};

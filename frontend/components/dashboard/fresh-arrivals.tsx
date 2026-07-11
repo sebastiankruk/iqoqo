@@ -64,7 +64,7 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
         </div>
         {!publicMode && (
           <Link
-            href="/collection?viewMode=manifestations"
+            href="/collection?view=manifestations"
             className="flex items-center gap-1 text-sm font-medium text-accent transition-colors hover:text-accent/80"
           >
             {t("viewGlobal")}

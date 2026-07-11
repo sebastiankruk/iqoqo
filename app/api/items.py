@@ -26,7 +26,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
-from app.api.schemas import ItemBulkCreateSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -964,6 +964,126 @@ def delete_item(item_id: int):
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
+
+
+@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["GET"])
+@require_auth
+@require_item_access()
+def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
+    """List the named collections an item belongs to."""
+    user_id = getattr(g, "user_id", None)
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "error": "Item not found"}), 404
+    if not user_id or not verify_item_ownership(item_id, user_id):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    links = (
+        db.session.query(UserCollection)
+        .join(UserCollectionItem, UserCollectionItem.collection_id == UserCollection.id)
+        .filter(UserCollectionItem.item_id == item_id)
+        .all()
+    )
+    collections_data = [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in links]
+    return jsonify({"success": True, "data": {"collections": collections_data}, "error": None})
+
+
+@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+@require_item_access()
+def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
+    """Link an owned item to a named collection.
+
+    Creates a UserCollectionItem association. The item must belong to the
+    authenticated user. Virtual wishlist items (item_id < 0) are rejected
+    because they have no physical copy to shelve.
+    """
+    user_id = getattr(g, "user_id", None)
+    if item_id < 0:
+        return jsonify({"success": False, "error": "Virtual wishlist items cannot be added to collections"}), 400
+
+    payload_json = request.get_json(silent=True)
+    try:
+        payload = ItemCollectionLinkSchema(**(payload_json or {}))
+    except ValidationError as e:
+        return jsonify({"success": False, "error": e.errors()}), 400
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "error": "Item not found"}), 404
+    if not user_id or not verify_item_ownership(item_id, user_id):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    collection = (
+        db.session.query(UserCollection)
+        .filter(
+            UserCollection.id == payload.collection_id,
+            UserCollection.owner_id == item.owner_id,
+        )
+        .first()
+    )
+    if not collection:
+        return jsonify({"success": False, "error": "Collection not found"}), 404
+
+    existing = (
+        db.session.query(UserCollectionItem)
+        .filter(
+            UserCollectionItem.collection_id == payload.collection_id,
+            UserCollectionItem.item_id == item_id,
+        )
+        .first()
+    )
+    if existing:
+        return jsonify({"success": False, "error": "Item is already in this collection"}), 409
+
+    try:
+        link = UserCollectionItem(collection_id=payload.collection_id, item_id=item_id)
+        db.session.add(link)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": payload.collection_id}})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/items/<int(signed=True):item_id>/collections/<int:collection_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+@require_item_access()
+def remove_item_from_collection(item_id: int, collection_id: int) -> Response | tuple[Response, int]:
+    """Unlink an owned item from a named collection.
+
+    Removes the UserCollectionItem association without deleting the Item itself.
+    """
+    user_id = getattr(g, "user_id", None)
+    if item_id < 0:
+        return jsonify({"success": False, "error": "Virtual wishlist items cannot be removed from collections"}), 400
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"success": False, "error": "Item not found"}), 404
+    if not user_id or not verify_item_ownership(item_id, user_id):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    link = (
+        db.session.query(UserCollectionItem)
+        .filter(
+            UserCollectionItem.collection_id == collection_id,
+            UserCollectionItem.item_id == item_id,
+        )
+        .first()
+    )
+    if not link:
+        return jsonify({"success": False, "error": "Item is not in this collection"}), 404
+
+    try:
+        db.session.delete(link)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": collection_id}})
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
