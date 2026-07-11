@@ -44,44 +44,54 @@ test.describe("Manage Collections Modal Workflow", () => {
       });
     });
 
-    // Mock existing collections
+    // Mock existing collections — stateful to reflect CRUD mutations
+    const mockCollections = [
+      { id: 1, name: "Fantasy", parent_id: null },
+      { id: 2, name: "Sci-Fi", parent_id: null },
+    ];
+    let nextId = 3;
+
     await page.route("**/api/collections**", async route => {
+      const url = new URL(route.request().url());
+      const idMatch = url.pathname.match(/\/collections\/(\d+)$/);
+      const colId = idMatch ? parseInt(idMatch[1]) : null;
+
       if (route.request().method() === "GET") {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            collections: [
-              { id: 1, name: "Fantasy", parent_id: null },
-              { id: 2, name: "Sci-Fi", parent_id: null },
-            ],
-          }),
+          body: JSON.stringify({ success: true, collections: mockCollections }),
         });
       } else if (route.request().method() === "POST") {
         const body = route.request().postDataJSON();
+        const newCol = { id: nextId++, name: body.name, parent_id: null };
+        mockCollections.push(newCol);
         await route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            collection: { id: 3, name: body.name, parent_id: null },
-          }),
+          body: JSON.stringify({ success: true, collection: newCol }),
         });
-      } else if (route.request().method() === "PUT") {
+      } else if (route.request().method() === "PUT" && colId) {
+        const body = route.request().postDataJSON();
+        const idx = mockCollections.findIndex(c => c.id === colId);
+        if (idx >= 0) mockCollections[idx] = { ...mockCollections[idx], ...body };
         await route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({ success: true }),
         });
-      } else if (route.request().method() === "DELETE") {
+      } else if (route.request().method() === "DELETE" && colId) {
+        const idx = mockCollections.findIndex(c => c.id === colId);
+        if (idx >= 0) mockCollections.splice(idx, 1);
         await route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({ success: true }),
         });
-      } else {
+      } else if (route.request().method() !== "OPTIONS") {
         await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+      } else {
+        await route.fulfill({ status: 204 });
       }
     });
 
