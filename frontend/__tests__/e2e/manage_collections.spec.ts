@@ -129,32 +129,36 @@ test.describe("Manage Collections Modal Workflow", () => {
     // Open Modal via "Manage Collections" menuitem in the user dropdown
     await page.getByLabel("User menu").click();
     await page.getByRole("menuitem", { name: "Manage Collections" }).click();
-    await expect(page.getByRole("heading", { name: "Manage Collections" })).toBeVisible();
+    const heading = page.getByRole("heading", { name: "Manage Collections" });
+    await expect(heading).toBeVisible();
+
+    // Scope to the modal dialog to avoid matching sidebar filter elements
+    const modal = page.locator(".fixed.inset-0.z-50").filter({ has: heading });
 
     // Verify existing collections are listed
-    await expect(page.getByText("Fantasy")).toBeVisible();
-    await expect(page.getByText("Sci-Fi")).toBeVisible();
+    await expect(modal.getByText("Fantasy")).toBeVisible();
+    await expect(modal.getByText("Sci-Fi")).toBeVisible();
 
     // Create a new collection
-    await page.getByPlaceholder("New collection name").fill("Cyberpunk");
-    await page.getByRole("button", { name: "Add" }).click();
+    await modal.getByPlaceholder("New collection name").fill("Cyberpunk");
+    await modal.getByRole("button", { name: "Add" }).click();
 
     // After creation, the input should be cleared and "Collection created" toast shown
-    await expect(page.getByPlaceholder("New collection name")).toHaveValue("");
+    await expect(modal.getByPlaceholder("New collection name")).toHaveValue("");
     await expect(page.getByText("Collection created")).toBeVisible();
 
     // Update a collection name
-    const fantasyRow = page.locator(".flex.items-center.justify-between").filter({ hasText: "Fantasy" });
+    const fantasyRow = modal.locator(".flex.items-center.justify-between").filter({ hasText: "Fantasy" });
     await fantasyRow.getByTitle("Edit Name").click();
-    await page.locator('input[value="Fantasy"]').fill("High Fantasy");
-    await page.getByText("Save").click();
+    await modal.locator('input[value="Fantasy"]').fill("High Fantasy");
+    await modal.getByText("Save").click();
 
     // Verify the rename is reflected
-    await expect(page.getByText("High Fantasy")).toBeVisible();
+    await expect(modal.getByText("High Fantasy")).toBeVisible();
 
     // Delete a collection
-    page.on("dialog", dialog => dialog.accept());
-    const sciFiRow = page.locator(".flex.items-center.justify-between").filter({ hasText: "Sci-Fi" });
+    page.on("dialog", d => d.accept());
+    const sciFiRow = modal.locator(".flex.items-center.justify-between").filter({ hasText: "Sci-Fi" });
     await sciFiRow.getByTitle("Delete Collection").click();
 
     await expect(page.getByText("Collection removed")).toBeVisible();
