@@ -1015,17 +1015,25 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
     if not user_id or not verify_item_ownership(item_id, user_id):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    collection = db.session.query(UserCollection).filter(
-        UserCollection.id == payload.collection_id,
-        UserCollection.owner_id == item.owner_id,
-    ).first()
+    collection = (
+        db.session.query(UserCollection)
+        .filter(
+            UserCollection.id == payload.collection_id,
+            UserCollection.owner_id == item.owner_id,
+        )
+        .first()
+    )
     if not collection:
         return jsonify({"success": False, "error": "Collection not found"}), 404
 
-    existing = db.session.query(UserCollectionItem).filter(
-        UserCollectionItem.collection_id == payload.collection_id,
-        UserCollectionItem.item_id == item_id,
-    ).first()
+    existing = (
+        db.session.query(UserCollectionItem)
+        .filter(
+            UserCollectionItem.collection_id == payload.collection_id,
+            UserCollectionItem.item_id == item_id,
+        )
+        .first()
+    )
     if existing:
         return jsonify({"success": False, "error": "Item is already in this collection"}), 409
 
@@ -1058,10 +1066,14 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
     if not user_id or not verify_item_ownership(item_id, user_id):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    link = db.session.query(UserCollectionItem).filter(
-        UserCollectionItem.collection_id == collection_id,
-        UserCollectionItem.item_id == item_id,
-    ).first()
+    link = (
+        db.session.query(UserCollectionItem)
+        .filter(
+            UserCollectionItem.collection_id == collection_id,
+            UserCollectionItem.item_id == item_id,
+        )
+        .first()
+    )
     if not link:
         return jsonify({"success": False, "error": "Item is not in this collection"}), 404
 

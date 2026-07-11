@@ -132,16 +132,10 @@ def get_faceted_stats():
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
     tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
-    collections_list = (
-        [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
-    )
+    collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
     genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None
-    publishers_list = (
-        [p.strip() for p in publishers_str.split(",") if p.strip()] if publishers_str else None
-    )
-    statuses_list = (
-        [s.strip() for s in statuses_str.split(",") if s.strip()] if statuses_str else None
-    )
+    publishers_list = [p.strip() for p in publishers_str.split(",") if p.strip()] if publishers_str else None
+    statuses_list = [s.strip() for s in statuses_str.split(",") if s.strip()] if statuses_str else None
 
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,

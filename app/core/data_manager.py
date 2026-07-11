@@ -473,16 +473,14 @@ class DataManager:
             )
 
         if tags:
-            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(
-                Tag, ItemTag.tag_id == Tag.id
-            )
+            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
             tag_conds = [Tag.name.ilike(t.strip()) for t in tags]
             base_query = base_query.where(or_(*tag_conds))
 
         if collections:
-            base_query = base_query.join(
-                UserCollectionItem, Item.id == UserCollectionItem.item_id
-            ).join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
+            base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
             coll_conds = [UserCollection.name.ilike(c.strip()) for c in collections]
             base_query = base_query.where(or_(*coll_conds))
             if owner_id:
@@ -543,9 +541,7 @@ class DataManager:
         # Status counts (grouped by Item.collection_status + Item.status)
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         status_rows = db.session.execute(
-            select(Item.status, func.count(Item.id).label("cnt"))
-            .where(Item.id.in_(select(item_id_col)))
-            .group_by(Item.status)
+            select(Item.status, func.count(Item.id).label("cnt")).where(Item.id.in_(select(item_id_col))).group_by(Item.status)
         ).all()
         for s, cnt in status_rows:
             if s in db_statuses:

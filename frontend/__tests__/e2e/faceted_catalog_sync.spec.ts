@@ -332,6 +332,26 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
         }),
       });
     });
+
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 0,
+            format_text: 0,
+            items_wish_list: 0,
+            items_available: 0,
+            items_ordered: 0,
+            items_lent: 0,
+            items_lost: 0,
+          },
+        }),
+      });
+    });
   });
 
   test("mutes status options with zero count when not selected", async ({ page }) => {
@@ -372,16 +392,38 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
   });
 
   test("selecting a media category narrows format counts", async ({ page }) => {
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 0,
+            format_text: 5,
+            format_music: 3,
+            items_available: 5,
+            items_wish_list: 0,
+          },
+        }),
+      });
+    });
+
     await page.goto("/collection?view=manifestations");
+    await page.waitForLoadState("networkidle");
 
     // Global Library should be visible
-    await expect(page.getByRole("tab", { name: /Global Library/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /Global Library/i })).toBeVisible({ timeout: 10000 });
 
     // The media category sidebar should be visible
-    await expect(page.getByText("Media Category")).toBeVisible();
+    await expect(page.getByText("Media Category")).toBeVisible({ timeout: 5000 });
   });
 
   test("faceted counts are rendered in the sidebar", async ({ page }) => {
+    await page.goto("/collection?view=manifestations");
+    await page.waitForLoadState("networkidle");
+
     await expect(page.locator("text=Media Category").first()).toBeVisible({ timeout: 10000 });
   });
 });

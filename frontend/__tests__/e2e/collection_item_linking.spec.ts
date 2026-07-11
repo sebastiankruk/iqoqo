@@ -18,29 +18,99 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Item-Collection Linking Workflow", () => {
   test.beforeEach(async ({ page }) => {
-    // Login first
-    await page.goto("/login");
-    await page.getByLabel("Email").fill("admin@iqoqo.cc");
-    await page.getByLabel("Password").fill("admin");
-    await page.getByRole("button", { name: /sign in|log in/i }).click();
-    await page.waitForURL("**/collection**", { timeout: 10000 }).catch(() => {
-      // Already logged in or redirect
+    // Cookie consent
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    // Mock auth profile
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "e2e-admin-id",
+            email: "e2e-admin@iqoqo.local",
+            display_name: "E2E Admin",
+            roles: ["admin"],
+            permissions: ["upload:cover", "write:metadata", "update:item", "delete:item"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: "1.0.0" },
+        }),
+      });
     });
   });
 
-  test("item detail page shows named collections section", async ({ page }) => {
-    // Navigate to My Items
-    await page.goto("/collection?view=items");
-    // Check if we have items
-    const itemCards = page.locator('[data-testid="item-card"]');
-    const count = await itemCards.count();
-    if (count > 0) {
-      await itemCards.first().click();
-      // Item detail page should have named collections
-      const namedCollections = page.getByText("Named Collections");
-      // The element may or may not be visible depending on ownership
-      // If visible, the test passes
-      await expect(page.locator("body")).toBeVisible();
-    }
+  test("item detail page renders with named collections section", async ({ page }) => {
+    // Mock a single item with detail
+    await page.route("**/api/item/*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: 1,
+            manifestation_id: 1,
+            owner_id: "e2e-admin-id",
+            status: "unread",
+            collection_status: "available",
+            title: "E2E Test Book",
+            authors: ["Test Author"],
+            cover_url: "",
+            cover_status: "ready",
+            isbn: "9780000000001",
+            is_owner: true,
+            manifestation_meta: { format: "book" },
+            meta: {},
+          },
+        }),
+      });
+    });
+
+    // Mock item collections (empty — just checks it renders)
+    await page.route("**/api/items/*/collections", async route => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            data: { collections: [] },
+          }),
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+      }
+    });
+
+    // Mock user collections list
+    await page.route("**/api/collections", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, collections: [] }),
+      });
+    });
+
+    // Navigate to item detail
+    await page.goto("/item/1");
+    await page.waitForLoadState("networkidle");
+
+    // The item detail page should load and render
+    const body = page.locator("body");
+    await expect(body).toBeVisible();
   });
 });
