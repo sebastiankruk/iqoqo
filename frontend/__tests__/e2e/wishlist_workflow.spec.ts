@@ -333,3 +333,141 @@ test.describe("FRBR Virtual Item Boundary", () => {
     await expect(requestLoanButton).toHaveCount(0);
   });
 });
+
+test.describe("Instant Wishlist Subtraction from Item Card", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["update:item", "write:metadata"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: packageJson.version },
+        }),
+      });
+    });
+  });
+
+  test("allows instantaneous subtraction of an item from wishlist directly from the item card", async ({ page }) => {
+    // Mock items endpoint returning a wishlist item
+    await page.route("**/api/items**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [
+            {
+              id: -10,
+              title: "Test Wishlist Item",
+              authors: ["Test Author"],
+              status: "want_to_read",
+              collection_status: "wish_list",
+              manifestation_id: null,
+              is_owner: true,
+              owner_id: "test-user-id",
+              meta: {},
+            },
+          ],
+          meta: { page: 1, pages: 1, total: 1, limit: 20 },
+        }),
+      });
+    });
+
+    // Mock DELETE endpoint for wishlist removal
+    let deleteCalled = false;
+    await page.route("**/api/items/-10**", async route => {
+      if (route.request().method() === "DELETE") {
+        deleteCalled = true;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: { id: -10 } }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            data: {
+              id: -10,
+              title: "Test Wishlist Item",
+              collection_status: "wish_list",
+              is_owner: true,
+              meta: {},
+            },
+          }),
+        });
+      }
+    });
+
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { works: 0, items: 1 },
+        }),
+      });
+    });
+
+    await page.route("**/api/taxonomies**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { genres: [], tags: [], publishers: [], collections: [] },
+        }),
+      });
+    });
+
+    // Mock categories endpoint (for grid view)
+    await page.route("**/api/manifestations**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [], meta: { total: 0 } }),
+      });
+    });
+
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // The item card should be visible
+    const itemCard = page.locator('[data-testid="item-card"]').first();
+    await expect(itemCard).toBeVisible();
+
+    // Hover over the item card to reveal the wishlist remove button
+    await itemCard.hover();
+
+    const removeBtn = itemCard.locator('[aria-label="Remove from wishlist"]');
+    await expect(removeBtn).toBeVisible();
+
+    // Click to remove from wishlist
+    await removeBtn.click();
+
+    // Verify the toast appears
+    await expect(page.getByText("Removed from wishlist")).toBeVisible();
+
+    // Verify the deletion was actually sent
+    expect(deleteCalled).toBe(true);
+  });
+});

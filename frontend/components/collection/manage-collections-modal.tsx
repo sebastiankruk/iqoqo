@@ -17,9 +17,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, Trash2, Edit2, Loader2, AlertCircle, X } from "lucide-react";
+import { Folder, Trash2, Edit2, Loader2, AlertCircle, X, Plus } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 interface UserCollection {
   id: number;
@@ -34,7 +35,8 @@ export interface ManageCollectionsModalProps {
 }
 
 /**
- * A dedicated modal to manage (rename, delete, list) the user's hierarchy of custom collections.
+ * A dedicated modal to fully manage (create, rename, delete, list) the user's
+ * hierarchy of custom collections.
  *
  * @param root0 - Component props
  * @param root0.isOpen - Whether the modal is open
@@ -75,10 +77,28 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-collections"] });
       queryClient.invalidateQueries({ queryKey: ["taxonomies"] });
+      toast.success("Collection removed");
     },
     onError: (err: Error) => {
-      // In a real app, use a toast notification
-      alert(err.message);
+      toast.error(err.message);
+    },
+  });
+
+  const [createName, setCreateName] = useState("");
+
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiClient.post("/collections", { name });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-collections"] });
+      queryClient.invalidateQueries({ queryKey: ["taxonomies"] });
+      setCreateName("");
+      toast.success("Collection created");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
     },
   });
 
@@ -100,6 +120,34 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
 
         {/* Content */}
         <div className="p-4 flex flex-col gap-3 min-h-[300px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+          {/* Create new collection */}
+          <form
+            className="flex items-center gap-2"
+            onSubmit={e => {
+              e.preventDefault();
+              if (createName.trim()) {
+                createMutation.mutate(createName.trim());
+              }
+            }}
+          >
+            <input
+              type="text"
+              placeholder="New collection name"
+              value={createName}
+              onChange={e => setCreateName(e.target.value)}
+              className="flex h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              disabled={createMutation.isPending}
+            />
+            <button
+              type="submit"
+              disabled={!createName.trim() || createMutation.isPending}
+              className="flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Add
+            </button>
+          </form>
+
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

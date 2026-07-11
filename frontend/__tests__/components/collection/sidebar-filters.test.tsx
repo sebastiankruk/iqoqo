@@ -110,3 +110,61 @@ describe("SidebarFilters with Searchable Facets", () => {
     expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user", filters: {} });
   });
 });
+
+describe("SidebarFilters Cross-Filtering", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useTaxonomies).mockReturnValue({
+      data: {
+        genres: [],
+        tags: [],
+        publishers: [],
+        collections: [],
+      },
+    } as unknown as ReturnType<typeof useTaxonomies>);
+  });
+
+  it("applies opacity-50 to status options with zero count when not selected", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          statusCounts={{ wish_list: 0, available: 5, ordered: 0 }}
+        />
+      </QueryClientProvider>
+    );
+
+    const wishListLabel = screen.getByText("On Wish List").closest("label");
+    const availableLabel = screen.getByText("On Shelf").closest("label");
+
+    expect(wishListLabel?.className).toContain("opacity-50");
+    expect(availableLabel?.className).not.toContain("opacity-50");
+  });
+
+  it("keeps zero-count status enabled if currently selected", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[{ type: "status", value: "wish_list" }]}
+          onToggleFilter={vi.fn()}
+          statusCounts={{ wish_list: 0, available: 5 }}
+        />
+      </QueryClientProvider>
+    );
+
+    const wishListCheckbox = screen.getByRole("checkbox", { name: "On Wish List 0" });
+    expect(wishListCheckbox).not.toBeDisabled();
+  });
+
+  it("disables unchecked zero-count status inputs", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} statusCounts={{ wish_list: 0, ordered: 0 }} />
+      </QueryClientProvider>
+    );
+
+    const wishListCheckbox = screen.getByRole("checkbox", { name: "On Wish List 0" });
+    expect(wishListCheckbox).toBeDisabled();
+  });
+});

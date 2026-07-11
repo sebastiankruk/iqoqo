@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Allegro Auth Handshake CLI**: Deployed `make allegro-auth` target wrapping the interactive `scripts/allegro_auth.py` script for local and Docker setups.
 - **Allegro Status Checks**: Integrated Allegro API activation checks into `make status` / `scripts/iqoqo-status.sh` to report configured, active (token present), or pending handshake states.
 - **Allegro Cover Refetch Fallback**: Integrated Allegro API cover retrieval into the background cover refetch pipeline (`fetch_external_api_cover` in `app/utils/covers.py`), adding support for both ISBN and non-ISBN identifiers.
+- **Collection Management UX (Phase 3)**: Added full Create, Update, and Remove collection operations to `ManageCollectionsModal` with inline form, toast notifications, and mutation invalidation. Refactored `ItemCard` to include instant wishlist subtraction via hover-revealed `HeartOff` button, calling `DELETE /items/:id` directly. Implemented dynamic cross-filtering visual treatment in `SidebarFilters` - facets with zero result count are now disabled and visually muted unless currently selected.
+- **E2E Coverage (Phase 3)**: Created `manage_collections.spec.ts` Playwright test for full CRUD modal workflow. Added instant wishlist subtraction E2E test to `wishlist_workflow.spec.ts` and dynamic facet cross-filtering E2E test to `faceted_catalog_sync.spec.ts`.
+- **Unit Test Expansion**: Added unit tests for wishlist removal button rendering and callback behavior in `item-card.test.tsx`, collection creation via form in `manage-collections-modal.test.tsx`, and cross-filtering disabled/opacity-50 treatment in `sidebar-filters.test.tsx`.
 
 ### Fixed
 
