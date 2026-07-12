@@ -411,6 +411,7 @@ iqoqo uses a cloud-first backup strategy via `scripts/cloud_backup.sh`, triggere
 
 **Backup:**
 The cloud backup script performs a full disaster-recovery dump:
+
 1. `pg_dumpall` of the PostgreSQL database (raw SQL)
 2. Archives of asset directories: `covers/`, `gallery/`, `uploads/raw_covers/`
 3. Compression into a single `.tar.gz`

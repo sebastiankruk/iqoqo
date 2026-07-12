@@ -58,6 +58,10 @@ else
     COMPOSE_PROJECT="iqoqo"
 fi
 
+echo "Starting Allegro API OAuth handshake..."
+echo "  Stack:    ${STACK:-dev}"
+echo "  Env file: ${ENV_FILE}"
+
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "Error: Environment file $ENV_FILE not found" >&2
     exit 1
@@ -69,10 +73,6 @@ extract_env() {
     grep "^${key}=" "$env_file" 2>/dev/null | head -1 | cut -d'=' -f2- | sed 's/^[[:space:]]*"//;s/"[[:space:]]*$//;s/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-echo "Starting Allegro API OAuth handshake..."
-echo "  Stack:    ${STACK:-dev}"
-echo "  Env file: ${ENV_FILE}"
-
 ALLEGRO_ID=$(extract_env "ALLEGRO_CLIENT_ID" "$ENV_FILE")
 ALLEGRO_SECRET=$(extract_env "ALLEGRO_CLIENT_SECRET" "$ENV_FILE")
 
@@ -82,21 +82,16 @@ if [[ -z "$ALLEGRO_ID" ]] || [[ -z "$ALLEGRO_SECRET" ]]; then
 fi
 
 if [[ "$USE_DOCKER" == "true" ]]; then
-    if [[ "$STACK" == "preview" ]]; then
-        COMPOSE_FILE_ARGS="-f docker-compose.yml"
-    else
-        if [[ -f "$PROJECT_ROOT/docker-compose.prebuilt.yml" ]]; then
-            COMPOSE_FILE_ARGS="-f docker-compose.yml -f docker-compose.prebuilt.yml"
-        else
-            COMPOSE_FILE_ARGS="-f docker-compose.yml"
-        fi
+    COMPOSE_FILE_ARGS=(-f docker-compose.yml)
+    if [[ "$STACK" != "preview" ]] && [[ -f "$PROJECT_ROOT/docker-compose.prebuilt.yml" ]]; then
+        COMPOSE_FILE_ARGS=(-f docker-compose.yml -f docker-compose.prebuilt.yml)
     fi
-    docker compose -p "$COMPOSE_PROJECT" $COMPOSE_FILE_ARGS exec -T web \
+    docker compose -p "$COMPOSE_PROJECT" "${COMPOSE_FILE_ARGS[@]}" exec -T web \
         env PYTHONPATH=. \
         ALLEGRO_CLIENT_ID="$ALLEGRO_ID" \
         ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET" \
         python scripts/allegro_auth.py \
-    && docker compose -p "$COMPOSE_PROJECT" $COMPOSE_FILE_ARGS restart web worker
+    && docker compose -p "$COMPOSE_PROJECT" "${COMPOSE_FILE_ARGS[@]}" restart web worker
 else
     export ALLEGRO_CLIENT_ID="$ALLEGRO_ID"
     export ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET"
