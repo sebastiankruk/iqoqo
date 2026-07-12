@@ -15,6 +15,8 @@
 #
 .PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev allegro-auth
 
+SHELL := /bin/bash
+
 # Detect node/npm/npx - works even when make is invoked from a non-interactive
 # shell that hasn't sourced nvm (e.g. IDE terminals, CI). We find the node
 # binary's directory and prepend it to PATH so that '#!/usr/bin/env node'
@@ -491,16 +493,24 @@ fetch-covers: .venv/bin/activate
 
 allegro-auth: .venv/bin/activate
 	@echo "Starting Allegro API OAuth handshake..."
-	@if [ "$(USE_DOCKER)" = "true" ]; then \
-		set -eo pipefail; \
-		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec web env PYTHONPATH=. python scripts/allegro_auth.py; \
-	else \
-		set -eo pipefail; \
-		if [ -f ".env.$(MODE)" ]; then \
-			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
+	@ENV_FILE="$(COMPOSE_ENV_FILE)"; \
+	if ! grep -q '^ALLEGRO_CLIENT_ID=' "$$ENV_FILE" 2>/dev/null; then \
+		if [ -f ".env.prod" ] && grep -q '^ALLEGRO_CLIENT_ID=' ".env.prod" 2>/dev/null; then \
+			echo "Credentials not found in $$ENV_FILE, using .env.prod"; \
+			ENV_FILE=".env.prod"; \
 		fi; \
+	fi; \
+	set -eo pipefail; \
+	ALLEGRO_ID=$$(awk -F= '/^ALLEGRO_CLIENT_ID[[:space:]]*=/{sub(/^[[:space:]]*"/,"",$$2); sub(/"[[:space:]]*$$/,"",$$2); sub(/"[[:space:]]*#.*/,"",$$2); gsub(/[[:space:]]/,"",$$2); print $$2}' "$$ENV_FILE"); \
+	ALLEGRO_SECRET=$$(awk -F= '/^ALLEGRO_CLIENT_SECRET[[:space:]]*=/{sub(/^[[:space:]]*"/,"",$$2); sub(/"[[:space:]]*$$/,"",$$2); sub(/"[[:space:]]*#.*/,"",$$2); gsub(/[[:space:]]/,"",$$2); print $$2}' "$$ENV_FILE"); \
+	if [ -z "$$ALLEGRO_ID" ] || [ -z "$$ALLEGRO_SECRET" ]; then \
+		echo "Błąd: Brak ALLEGRO_CLIENT_ID lub ALLEGRO_CLIENT_SECRET w pliku $$ENV_FILE"; \
+		exit 1; \
+	fi; \
+	if [ "$(USE_DOCKER)" = "true" ]; then \
+		docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) exec -T web env PYTHONPATH=. ALLEGRO_CLIENT_ID="$$ALLEGRO_ID" ALLEGRO_CLIENT_SECRET="$$ALLEGRO_SECRET" python scripts/allegro_auth.py; \
+	else \
+		export ALLEGRO_CLIENT_ID="$$ALLEGRO_ID" ALLEGRO_CLIENT_SECRET="$$ALLEGRO_SECRET"; \
 		.venv/bin/python scripts/allegro_auth.py; \
 	fi
 
