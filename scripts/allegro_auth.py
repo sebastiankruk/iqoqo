@@ -90,7 +90,7 @@ def device_code_flow():
             print(f"\nSerwer zada wolniejszego odpytywania, zwiekszam interwal do {interval}s...")
             continue
         elif err == "expired_token":
-            print(f"\nKod urzadzenia wygasl. Sprobuj ponownie.", file=sys.stderr)
+            print("\nKod urzadzenia wygasl. Sprobuj ponownie.", file=sys.stderr)
             sys.exit(1)
         else:
             print(f"\nBlad wymiany tokena (HTTP {token_response.status_code}): {token_response.text}", file=sys.stderr)
