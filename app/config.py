@@ -120,10 +120,7 @@ class Config:
     # Max words to display on the generated cover overlay (0 = no limit)
     LLM_TITLE_MAX_WORDS = _get_int_env("LLM_TITLE_MAX_WORDS", 12)
 
-    # Scheduled Backups Configuration
-    BACKUP_CRON_HOUR = os.environ.get("BACKUP_CRON_HOUR", "3")
-    BACKUP_CRON_MINUTE = os.environ.get("BACKUP_CRON_MINUTE", "0")
-    BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE_DIR, "exports"))
+    # Background scheduler (cover cleanup watchdog)
     SCHEDULER_AUTOSTART = os.environ.get("SCHEDULER_AUTOSTART", "false").lower() in {"true", "1", "yes"}
     RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "true").lower() in {"true", "1", "yes"}
 

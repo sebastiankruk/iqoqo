@@ -16,20 +16,6 @@ logger = logging.getLogger(__name__)
 scheduler = APScheduler()
 
 
-def run_scheduled_backup():
-    """Wrapper to run the backup job within the application context."""
-    logger.info("Executing scheduled backup job...")
-    try:
-        from flask import current_app
-
-        from scripts.backup import create_export
-
-        create_export(current_app)
-        logger.info("Scheduled backup job completed successfully.")
-    except (SQLAlchemyError, OSError, ValueError, AttributeError, KeyError, RuntimeError):
-        logger.exception("Scheduled backup job failed.")
-
-
 def run_scheduled_cover_cleanup():
     """Periodic watchdog that resets cover tasks stuck in pending/processing."""
     try:
@@ -58,16 +44,6 @@ def init_scheduler(app):
     try:
         scheduler.init_app(app)
 
-        # Add the daily backup job based on environment variables
-        scheduler.add_job(
-            id="daily_backup",
-            func=run_scheduled_backup,
-            trigger="cron",
-            hour=app.config.get("BACKUP_CRON_HOUR", "3"),
-            minute=app.config.get("BACKUP_CRON_MINUTE", "0"),
-            replace_existing=True,
-        )
-
         # Runtime watchdog: clear stuck cover tasks every 5 minutes
         scheduler.add_job(
             id="cover_cleanup_watchdog",
@@ -78,11 +54,7 @@ def init_scheduler(app):
         )
 
         scheduler.start()
-        logger.info(
-            "APScheduler initialized and started. Backup scheduled at %s:%s.",
-            app.config.get("BACKUP_CRON_HOUR", "3"),
-            app.config.get("BACKUP_CRON_MINUTE", "0"),
-        )
+        logger.info("APScheduler initialized and started.")
     except (SQLAlchemyError, ValueError, AttributeError, RuntimeError) as e:
         # Handle cases where scheduler might have started between the check and start()
         if "already running" in str(e).lower():

@@ -20,7 +20,7 @@ def dummy_task(x, y):
 
 
 def test_scheduler_initialized(app):
-    """Verify that APScheduler is running and daily_backup is registered."""
+    """Verify that APScheduler is running and cover_cleanup_watchdog is registered."""
     # Ensure scheduler is initialized for this test despite being in TESTING mode
     from app.core.scheduler import init_scheduler
 
@@ -29,7 +29,7 @@ def test_scheduler_initialized(app):
         init_scheduler(app)
 
         assert scheduler.running is True
-        job = scheduler.get_job("daily_backup")
+        job = scheduler.get_job("cover_cleanup_watchdog")
         assert job is not None
         assert job.trigger is not None
     finally:

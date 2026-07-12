@@ -420,7 +420,102 @@ if [[ -z "$client_id" || -z "$client_secret" ]]; then
 elif [[ ! -f "$IQOQO_ROOT/.allegro_token.json" ]]; then
     check "Status" warn "configured but not active (OAuth handshake pending)"
 else
-    check "Status" pass "active"
+    token_age_hours=0
+    if command -v python3 &>/dev/null; then
+        token_age_sec=$(python3 -c "
+import json, os, time
+try:
+    with open('$IQOQO_ROOT/.allegro_token.json') as f:
+        t = json.load(f)
+    age = time.time() - os.path.getmtime('$IQOQO_ROOT/.allegro_token.json')
+    print(int(age))
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+        token_age_hours=$((token_age_sec / 3600))
+    fi
+    if [[ "$token_age_hours" -gt 12 ]]; then
+        check "Status" warn "token expired (${token_age_hours}h old, re-run: make allegro-auth <stack> USE_DOCKER=true)"
+    else
+        check "Status" pass "active (token age: ${token_age_hours}h)"
+    fi
+fi
+
+# ─── Environment Configuration ──────────────────────────────────
+header "Environment Configuration"
+
+# Read expected keys from .env.example
+EXAMPLE_FILE="$IQOQO_ROOT/.env.example"
+if [[ -f "$EXAMPLE_FILE" ]]; then
+    expected_keys=()
+    declare -A example_defaults
+    while IFS='=' read -r key val; do
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        val=$(echo "$val" | sed 's/[[:space:]]*#.*$//;s/^[[:space:]]*"//;s/"[[:space:]]*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')
+        expected_keys+=("$key")
+        if [[ -z "$val" ]]; then
+            example_defaults["$key"]="empty"
+        else
+            example_defaults["$key"]="set"
+        fi
+    done < "$EXAMPLE_FILE"
+else
+    check "Template" warn ".env.example not found"
+    expected_keys=()
+    declare -A example_defaults
+fi
+
+total_expected=${#expected_keys[@]}
+missing_warn=0
+missing_info=0
+empty_count=0
+active_count=0
+missing_warn_vars=()
+missing_info_vars=()
+empty_vars=()
+
+for key in "${expected_keys[@]}"; do
+    val=$(load_env "$key")
+    if [[ -n "$val" ]]; then
+        active_count=$((active_count + 1))
+    elif [[ "$val" == "" ]] && grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        empty_count=$((empty_count + 1))
+        empty_vars+=("$key")
+    else
+        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
+            missing_info=$((missing_info + 1))
+            missing_info_vars+=("$key")
+        else
+            missing_warn=$((missing_warn + 1))
+            missing_warn_vars+=("$key")
+        fi
+    fi
+done
+
+check "Configured" pass "${active_count} of ${total_expected} variables present"
+
+if [[ "$missing_warn" -gt 0 ]]; then
+    check "Missing" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
+fi
+
+if [[ "$missing_info" -gt 0 ]]; then
+    check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
+fi
+
+if [[ "$empty_count" -gt 0 ]]; then
+    check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+fi
+
+# Danger zone: values that silently disable features
+otel_traces=$(load_env "OTEL_TRACES_EXPORTER")
+otel_logs=$(load_env "OTEL_LOGS_EXPORTER")
+otel_metrics=$(load_env "OTEL_METRICS_EXPORTER")
+otel_disabled=()
+[[ "$otel_traces" == "none" || -z "$otel_traces" ]] && otel_disabled+=("traces")
+[[ "$otel_logs"   == "none" || -z "$otel_logs"   ]] && otel_disabled+=("logs")
+[[ "$otel_metrics" == "none" || -z "$otel_metrics" ]] && otel_disabled+=("metrics")
+if [[ ${#otel_disabled[@]} -gt 0 ]]; then
+    check "Observability" warn "OTel exporters set to 'none' for: ${otel_disabled[*]}"
 fi
 
 # ─── Disk Usage ─────────────────────────────────────────────────

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Allegro Tests Hardening**: Extended `tests/test_allegro.py` with mock assertions validating that the formatted `User-Agent` is correctly set in request headers.
 - **Authlib Deprecation Warning**: Replaced deprecated `authlib.jose.errors` import with `joserfc.errors` in `app/api/auth.py` to prevent startup and runtime warnings.
 
+### Removed
+
+- **In-App Backup Script**: Removed `scripts/backup.py` and its APScheduler daily job (`scheduler.py`), consolidating all backup responsibilities into `scripts/cloud_backup.sh` (rclone-based, system cron). Removed `BACKUP_CRON_HOUR`, `BACKUP_CRON_MINUTE`, `BACKUP_DIR` config entries. The `make backup-run` / `backup-install` targets are now the sole backup mechanism. Tests `test_backup_crypto.py` and `test_backup_creation` removed.
+
 ## [0.7.8] - 2026-07-07
 
 ### Removed

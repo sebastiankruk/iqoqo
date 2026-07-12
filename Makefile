@@ -204,7 +204,7 @@ monitoring-stop:
 
 
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))
+	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))))
 
 # Linting targets
 lint-python: .venv/bin/activate
@@ -491,26 +491,6 @@ fetch-covers: .venv/bin/activate
 		$(PYTHON_CMD) scripts/fetch_covers.py $(if $(limit),--limit $(limit),) $(if $(force),--force,); \
 	fi
 
-allegro-auth: .venv/bin/activate
-	@echo "Starting Allegro API OAuth handshake..."
-	@ENV_FILE="$(COMPOSE_ENV_FILE)"; \
-	if ! grep -q '^ALLEGRO_CLIENT_ID=' "$$ENV_FILE" 2>/dev/null; then \
-		if [ -f ".env.prod" ] && grep -q '^ALLEGRO_CLIENT_ID=' ".env.prod" 2>/dev/null; then \
-			echo "Credentials not found in $$ENV_FILE, using .env.prod"; \
-			ENV_FILE=".env.prod"; \
-		fi; \
-	fi; \
-	set -eo pipefail; \
-	ALLEGRO_ID=$$(awk -F= '/^ALLEGRO_CLIENT_ID[[:space:]]*=/{sub(/^[[:space:]]*"/,"",$$2); sub(/"[[:space:]]*$$/,"",$$2); sub(/"[[:space:]]*#.*/,"",$$2); gsub(/[[:space:]]/,"",$$2); print $$2}' "$$ENV_FILE"); \
-	ALLEGRO_SECRET=$$(awk -F= '/^ALLEGRO_CLIENT_SECRET[[:space:]]*=/{sub(/^[[:space:]]*"/,"",$$2); sub(/"[[:space:]]*$$/,"",$$2); sub(/"[[:space:]]*#.*/,"",$$2); gsub(/[[:space:]]/,"",$$2); print $$2}' "$$ENV_FILE"); \
-	if [ -z "$$ALLEGRO_ID" ] || [ -z "$$ALLEGRO_SECRET" ]; then \
-		echo "Błąd: Brak ALLEGRO_CLIENT_ID lub ALLEGRO_CLIENT_SECRET w pliku $$ENV_FILE"; \
-		exit 1; \
-	fi; \
-	if [ "$(USE_DOCKER)" = "true" ]; then \
-		docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) exec -T web env PYTHONPATH=. ALLEGRO_CLIENT_ID="$$ALLEGRO_ID" ALLEGRO_CLIENT_SECRET="$$ALLEGRO_SECRET" python scripts/allegro_auth.py; \
-	else \
-		export ALLEGRO_CLIENT_ID="$$ALLEGRO_ID" ALLEGRO_CLIENT_SECRET="$$ALLEGRO_SECRET"; \
-		.venv/bin/python scripts/allegro_auth.py; \
-	fi
+allegro-auth:
+	@bash scripts/allegro_auth.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod)) $(if $(USE_DOCKER),--docker)
 
