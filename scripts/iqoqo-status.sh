@@ -448,19 +448,30 @@ header "Environment Configuration"
 EXAMPLE_FILE="$IQOQO_ROOT/.env.example"
 if [[ -f "$EXAMPLE_FILE" ]]; then
     expected_keys=()
-    while IFS='=' read -r key _; do
-        [[ -n "$key" && "$key" != \#* ]] && expected_keys+=("$key")
+    declare -A example_defaults
+    while IFS='=' read -r key val; do
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        val=$(echo "$val" | sed 's/^[[:space:]]*"//;s/"[[:space:]]*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')
+        expected_keys+=("$key")
+        if [[ -z "$val" ]]; then
+            example_defaults["$key"]="empty"
+        else
+            example_defaults["$key"]="set"
+        fi
     done < "$EXAMPLE_FILE"
 else
     check "Template" warn ".env.example not found"
     expected_keys=()
+    declare -A example_defaults
 fi
 
 total_expected=${#expected_keys[@]}
-missing_count=0
+missing_warn=0
+missing_info=0
 empty_count=0
 active_count=0
-missing_vars=()
+missing_warn_vars=()
+missing_info_vars=()
 empty_vars=()
 
 for key in "${expected_keys[@]}"; do
@@ -471,15 +482,24 @@ for key in "${expected_keys[@]}"; do
         empty_count=$((empty_count + 1))
         empty_vars+=("$key")
     else
-        missing_count=$((missing_count + 1))
-        missing_vars+=("$key")
+        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
+            missing_info=$((missing_info + 1))
+            missing_info_vars+=("$key")
+        else
+            missing_warn=$((missing_warn + 1))
+            missing_warn_vars+=("$key")
+        fi
     fi
 done
 
 check "Configured" pass "${active_count} of ${total_expected} variables present"
 
-if [[ "$missing_count" -gt 0 ]]; then
-    check "Missing" warn "${missing_count} variable(s): ${missing_vars[*]}"
+if [[ "$missing_warn" -gt 0 ]]; then
+    check "Missing" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
+fi
+
+if [[ "$missing_info" -gt 0 ]]; then
+    check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
 fi
 
 if [[ "$empty_count" -gt 0 ]]; then
