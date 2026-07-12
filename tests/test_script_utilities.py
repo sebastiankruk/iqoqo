@@ -41,7 +41,6 @@ All notable changes to this project will be documented in this file.
 
 ## [0.7.8] - 2026-07-09
 ### Added
-- Signed backup manifest using joserfc
 - BATS integration tests
 
 ## [0.7.7] - 2026-07-07
@@ -106,7 +105,7 @@ def test_extract_changelog_success(mock_changelog: Path) -> None:
 
     output = captured_output.getvalue().strip()
     assert "### Added" in output
-    assert "Signed backup manifest using joserfc" in output
+    assert "BATS integration tests" in output
     assert "0.7.7" not in output
 
 

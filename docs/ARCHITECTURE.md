@@ -407,25 +407,25 @@ Iqoqo uses a hybrid authentication approach suitable for distributed deployments
 
 ### Backup & Restore
 
-iqoqo includes scripts to manage data portability and disaster recovery.
+iqoqo uses a cloud-first backup strategy via `scripts/cloud_backup.sh`, triggered by system cron.
 
 **Backup:**
-Run `python scripts/backup.py` to create a ZIP archive containing the database dump (`metadata.json`) and the `covers/` directory.
+The cloud backup script performs a full disaster-recovery dump:
+1. `pg_dumpall` of the PostgreSQL database (raw SQL)
+2. Archives of asset directories: `covers/`, `gallery/`, `uploads/raw_covers/`
+3. Compression into a single `.tar.gz`
+4. Sync to an rclone cloud remote (S3, Google Drive, etc.)
 
-- **Configuration:** Set `BACKUP_DIR` env var to customize the output location (default: `exports/`).
+- **Manual run:** `make backup-run remote=<rclone_remote_name>`
+- **Install cron:** `make backup-install remote=<name>` — schedules daily at 03:00
+- **Health check:** `make backup-check remote=<name>` — verifies cron, rclone, disk, freshness
 
-#### Scheduled Backups
+**Ad-hoc JSON export (data portability):**
+Run `make db-export` to export the database as JSON to `exports/backup.json`. This is useful for instance-to-instance data migration, not disaster recovery.
 
-iqoqo automatically manages daily backups using its background scheduler (APScheduler).
+#### Background Scheduler
 
-- **Implementation:** The scheduler is initialized in `app/core/scheduler.py` and triggers the `scripts/backup.py` logic.
-- **Configuration (via `.env`):**
-  - `SCHEDULER_AUTOSTART`: Set to `true` to enable daily background backups (default: `false`).
-  - `BACKUP_CRON_HOUR`: The hour (0-23) to run the backup (default: `3` for 3:00 AM).
-  - `BACKUP_CRON_MINUTE`: The minute (0-59) to run the backup (default: `0`).
-  - `BACKUP_DIR`: Directory where ZIP archives are stored.
-
-Each background backup creates a timestamped archive like `iqoqo_backup_20260408_030000.zip`.
+The in-app APScheduler (`app/core/scheduler.py`) runs a cover cleanup watchdog every 5 minutes to reset stuck cover tasks. Enable via `SCHEDULER_AUTOSTART=true`.
 
 **Restore:**
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.

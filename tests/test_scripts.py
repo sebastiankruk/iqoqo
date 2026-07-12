@@ -1,4 +1,4 @@
-"""Tests for operational scripts (backup, restore, archive)."""
+"""Tests for operational scripts (restore, archive)."""
 
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
@@ -31,7 +31,6 @@ from app.db.models import Expression, Manifestation, Work
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
 from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
-from scripts.backup import create_export
 from scripts.fetch_covers import run_batch
 from scripts.restore_covers import restore_covers
 
@@ -110,30 +109,6 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
             "Some Author",
             llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
         )
-
-
-def test_backup_creation(app, tmp_path):
-    """Test that backup creates a zip file with metadata and covers."""
-    # Create dummy covers dir in temp path
-    covers_dir = tmp_path / "app" / "static" / "covers"
-    covers_dir.mkdir(parents=True, exist_ok=True)
-
-    with (
-        patch.dict(os.environ, {"BACKUP_DIR": str(tmp_path)}),
-        patch("app.config.Config.BASE_DIR", str(tmp_path)),
-        patch("app.core.data_manager.DataManager.export_all") as mock_export,
-    ):
-        mock_export.return_value = {"test": "data"}
-        app.config["BACKUP_DIR"] = str(tmp_path)
-
-        create_export(app=app)
-
-        # Check if zip exists
-        zips = list(tmp_path.glob("*.zip"))
-        assert len(zips) == 1
-
-        with zipfile.ZipFile(zips[0], "r") as z:
-            assert "metadata.json" in z.namelist()
 
 
 def test_restore_covers(app, tmp_path):
