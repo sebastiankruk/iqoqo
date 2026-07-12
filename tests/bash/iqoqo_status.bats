@@ -34,3 +34,9 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Unknown option:" ]]
 }
+
+@test "iqoqo-status.sh shows environment configuration audit" {
+  run bash scripts/iqoqo-status.sh
+  [[ "$output" =~ "Environment Configuration" ]]
+  [[ "$output" =~ "Configured" ]]
+}

@@ -22,9 +22,6 @@ bats_require_minimum_version 1.5.0
 
 ALLEGRO_AUTH="./scripts/allegro_auth.sh"
 
-# Use --docker without compose running to get a fast failure instead of a real API call
-FAST_STUB="--docker"
-
 # ── CLI interface tests ────────────────────────────────────────
 
 @test "allegro_auth.sh --help exits 1 and prints usage" {
@@ -45,21 +42,29 @@ FAST_STUB="--docker"
   [[ "$output" =~ "Unknown option:" ]]
 }
 
-# ── Stack resolution tests ─────────────────────────────────────
+# ── Stack resolution tests (kill before API call) ──────────────
 
 @test "allegro_auth.sh without --stack uses default .env" {
-  run ! bash "$ALLEGRO_AUTH" $FAST_STUB
+  run ! timeout 3 bash "$ALLEGRO_AUTH"
   [[ "$output" =~ "Env file:" ]]
   [[ "$output" =~ ".env" ]]
 }
 
 @test "allegro_auth.sh --stack preview targets preview config" {
-  run ! bash "$ALLEGRO_AUTH" $FAST_STUB --stack preview
+  run ! timeout 3 bash "$ALLEGRO_AUTH" --stack preview
   [[ "$output" =~ "Stack:    preview" ]]
   [[ "$output" =~ ".env.preview" ]]
 }
 
 @test "allegro_auth.sh --stack prod targets prod config" {
-  run ! bash "$ALLEGRO_AUTH" $FAST_STUB --stack prod
+  run ! timeout 3 bash "$ALLEGRO_AUTH" --stack prod
   [[ "$output" =~ "Stack:    prod" ]]
+}
+
+# ── Container restart after auth ────────────────────────────────
+
+@test "allegro_auth.sh docker path includes restart after auth" {
+  run grep -c 'restart web worker' "$ALLEGRO_AUTH"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
 }

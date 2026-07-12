@@ -92,10 +92,11 @@ if [[ "$USE_DOCKER" == "true" ]]; then
         fi
     fi
     docker compose -p "$COMPOSE_PROJECT" $COMPOSE_FILE_ARGS exec -T web \
-        -e PYTHONPATH=. \
-        -e ALLEGRO_CLIENT_ID="$ALLEGRO_ID" \
-        -e ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET" \
-        python scripts/allegro_auth.py
+        env PYTHONPATH=. \
+        ALLEGRO_CLIENT_ID="$ALLEGRO_ID" \
+        ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET" \
+        python scripts/allegro_auth.py \
+    && docker compose -p "$COMPOSE_PROJECT" $COMPOSE_FILE_ARGS restart web worker
 else
     export ALLEGRO_CLIENT_ID="$ALLEGRO_ID"
     export ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET"

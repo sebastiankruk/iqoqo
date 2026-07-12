@@ -441,6 +441,63 @@ except Exception:
     fi
 fi
 
+# ─── Environment Configuration ──────────────────────────────────
+header "Environment Configuration"
+
+# Read expected keys from .env.example
+EXAMPLE_FILE="$IQOQO_ROOT/.env.example"
+if [[ -f "$EXAMPLE_FILE" ]]; then
+    expected_keys=()
+    while IFS='=' read -r key _; do
+        [[ -n "$key" && "$key" != \#* ]] && expected_keys+=("$key")
+    done < "$EXAMPLE_FILE"
+else
+    check "Template" warn ".env.example not found"
+    expected_keys=()
+fi
+
+total_expected=${#expected_keys[@]}
+missing_count=0
+empty_count=0
+active_count=0
+missing_vars=()
+empty_vars=()
+
+for key in "${expected_keys[@]}"; do
+    val=$(load_env "$key")
+    if [[ -n "$val" ]]; then
+        active_count=$((active_count + 1))
+    elif [[ "$val" == "" ]] && grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        empty_count=$((empty_count + 1))
+        empty_vars+=("$key")
+    else
+        missing_count=$((missing_count + 1))
+        missing_vars+=("$key")
+    fi
+done
+
+check "Configured" pass "${active_count} of ${total_expected} variables present"
+
+if [[ "$missing_count" -gt 0 ]]; then
+    check "Missing" warn "${missing_count} variable(s): ${missing_vars[*]}"
+fi
+
+if [[ "$empty_count" -gt 0 ]]; then
+    check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+fi
+
+# Danger zone: values that silently disable features
+otel_traces=$(load_env "OTEL_TRACES_EXPORTER")
+otel_logs=$(load_env "OTEL_LOGS_EXPORTER")
+otel_metrics=$(load_env "OTEL_METRICS_EXPORTER")
+otel_disabled=()
+[[ "$otel_traces" == "none" || -z "$otel_traces" ]] && otel_disabled+=("traces")
+[[ "$otel_logs"   == "none" || -z "$otel_logs"   ]] && otel_disabled+=("logs")
+[[ "$otel_metrics" == "none" || -z "$otel_metrics" ]] && otel_disabled+=("metrics")
+if [[ ${#otel_disabled[@]} -gt 0 ]]; then
+    check "Observability" warn "OTel exporters set to 'none' for: ${otel_disabled[*]}"
+fi
+
 # ─── Disk Usage ─────────────────────────────────────────────────
 header "Disk"
 docker_root=$(docker info 2>/dev/null | grep "Docker Root Dir" | awk -F: '{print $2}' | tr -d ' ' || echo "/var/lib/docker")
