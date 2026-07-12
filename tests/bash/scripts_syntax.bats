@@ -62,3 +62,8 @@
   run bash -n scripts/test_docker_builds.sh
   [ "$status" -eq 0 ]
 }
+
+@test "scripts/allegro_auth.sh syntax check" {
+  run bash -n scripts/allegro_auth.sh
+  [ "$status" -eq 0 ]
+}
