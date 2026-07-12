@@ -451,7 +451,7 @@ if [[ -f "$EXAMPLE_FILE" ]]; then
     declare -A example_defaults
     while IFS='=' read -r key val; do
         [[ -z "$key" || "$key" == \#* ]] && continue
-        val=$(echo "$val" | sed 's/^[[:space:]]*"//;s/"[[:space:]]*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')
+        val=$(echo "$val" | sed 's/[[:space:]]*#.*$//;s/^[[:space:]]*"//;s/"[[:space:]]*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')
         expected_keys+=("$key")
         if [[ -z "$val" ]]; then
             example_defaults["$key"]="empty"
