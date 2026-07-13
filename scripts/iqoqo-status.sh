@@ -421,20 +421,29 @@ elif [[ ! -f "$IQOQO_ROOT/.allegro_token.json" ]]; then
     check "Status" warn "configured but not active (OAuth handshake pending)"
 else
     token_age_hours=0
+    token_valid=false
     if command -v python3 &>/dev/null; then
-        token_age_sec=$(python3 -c "
+        token_result=$(python3 -c "
 import json, os, time
 try:
     with open('$IQOQO_ROOT/.allegro_token.json') as f:
         t = json.load(f)
-    age = time.time() - os.path.getmtime('$IQOQO_ROOT/.allegro_token.json')
-    print(int(age))
+    if not t.get('access_token'):
+        print('EMPTY')
+    else:
+        age = time.time() - os.path.getmtime('$IQOQO_ROOT/.allegro_token.json')
+        print(int(age))
 except Exception:
-    print(0)
-" 2>/dev/null || echo 0)
-        token_age_hours=$((token_age_sec / 3600))
+    print('ERROR')
+" 2>/dev/null || echo 'ERROR')
+        if [[ "$token_result" =~ ^[0-9]+$ ]]; then
+            token_valid=true
+            token_age_hours=$((token_result / 3600))
+        fi
     fi
-    if [[ "$token_age_hours" -gt 12 ]]; then
+    if [[ "$token_valid" != true ]]; then
+        check "Status" warn "not active (placeholder or missing token, re-run: make allegro-auth <stack> USE_DOCKER=true)"
+    elif [[ "$token_age_hours" -gt 12 ]]; then
         check "Status" warn "token expired (${token_age_hours}h old, re-run: make allegro-auth <stack> USE_DOCKER=true)"
     else
         check "Status" pass "active (token age: ${token_age_hours}h)"

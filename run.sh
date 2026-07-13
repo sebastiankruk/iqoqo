@@ -792,6 +792,14 @@ except Exception:
         BUILD_FLAG="--build"
     fi
 
+    # Ensure .allegro_token.json is a regular file.
+    # Docker creates missing bind-mount source paths as directories,
+    # which breaks container restarts for file-target mounts.
+    if [ ! -f ".allegro_token.json" ]; then
+        rm -rf ".allegro_token.json"
+        printf '{}\n' > ".allegro_token.json"
+    fi
+
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
     if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then
         echo "❌ Error: Failed to start full stack for $COMPOSE_PROJECT_NAME."

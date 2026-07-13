@@ -37,7 +37,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && env PYTHONPATH=. python scripts/init_auth.py && opentelemetry-instrument gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app"
+      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && env PYTHONPATH=. python scripts/init_auth.py && if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app; else exec gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --log-level info run:app; fi"
     env_file:
       - ${ENV_FILE:-.env}
     environment:
@@ -132,7 +132,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}"
+      sh -c "if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; else exec celery -A app.core.celery_app:celery worker --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; fi"
     env_file:
       - ${ENV_FILE:-.env}
     environment:

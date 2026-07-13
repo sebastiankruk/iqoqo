@@ -83,15 +83,22 @@ fi
 
 if [[ "$USE_DOCKER" == "true" ]]; then
     COMPOSE_FILE_ARGS=(-f docker-compose.yml)
-    if [[ "$STACK" != "preview" ]] && [[ -f "$PROJECT_ROOT/docker-compose.prebuilt.yml" ]]; then
-        COMPOSE_FILE_ARGS=(-f docker-compose.yml -f docker-compose.prebuilt.yml)
+
+    # Detect if running web container uses a prebuilt (ghcr.io) image
+    WEB_CONTAINER=$(docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml ps -q web 2>/dev/null | head -1)
+    if [[ -n "$WEB_CONTAINER" ]] && [[ -f "$PROJECT_ROOT/docker-compose.prebuilt.yml" ]]; then
+        IMAGE=$(docker inspect "$WEB_CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || true)
+        if [[ "$IMAGE" == ghcr.io/* ]]; then
+            COMPOSE_FILE_ARGS+=(-f docker-compose.prebuilt.yml)
+        fi
     fi
+
     docker compose -p "$COMPOSE_PROJECT" "${COMPOSE_FILE_ARGS[@]}" exec -T web \
         env PYTHONPATH=. \
         ALLEGRO_CLIENT_ID="$ALLEGRO_ID" \
         ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET" \
         python scripts/allegro_auth.py \
-    && docker compose -p "$COMPOSE_PROJECT" "${COMPOSE_FILE_ARGS[@]}" restart web worker
+    && docker compose -p "$COMPOSE_PROJECT" "${COMPOSE_FILE_ARGS[@]}" up -d --force-recreate web worker
 else
     export ALLEGRO_CLIENT_ID="$ALLEGRO_ID"
     export ALLEGRO_CLIENT_SECRET="$ALLEGRO_SECRET"
