@@ -58,9 +58,9 @@ def get_version_from_branch() -> str:
     except (subprocess.SubprocessError, FileNotFoundError):
         ref = ""
 
-    match = re.search(r"release/(\d+\.\d+\.\d+)", ref)
+    match = re.search(r"(?:release|hotfix)/(\d+\.\d+\.\d+)", ref)
     if not match:
-        die("Cannot extract version from branch name (expected refs/heads/release/X.Y.Z)")
+        die("Cannot extract version from branch name (expected release/X.Y.Z or hotfix/X.Y.Z)")
     return match.group(1)
 
 

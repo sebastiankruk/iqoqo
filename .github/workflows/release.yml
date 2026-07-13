@@ -25,8 +25,8 @@ on:
 
 jobs:
   release:
-    # Only run if the PR was merged (not just closed) AND the branch started with 'release/'
-    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
+    # Only run if the PR was merged (not just closed) AND the branch started with 'release/' or 'hotfix/'
+    if: github.event.pull_request.merged == true && (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
