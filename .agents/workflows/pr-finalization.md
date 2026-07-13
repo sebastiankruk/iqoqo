@@ -42,6 +42,7 @@ Use this workflow when asked to "Review and finalize PR <number>" or prepare a b
    - IF the branch name starts with `release/` (e.g., `release/0.0.7`):
      - Update `docs/CHANGELOG.md`.
      - Explicitly detail new features, changed items, breaking changes, and database migrations.
+     - **CRITICAL:** Trigger the `/ai-tools-sync` workflow (or instruct the user to do so) to extract the new contexts and synchronize all AI configuration files (Gems, Skills, Workflows) for the new release version.
 
 1. **Finalization**
 

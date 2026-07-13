@@ -2,7 +2,11 @@
 description: Workflow for implementing set of features based on provided source code snippets
 ---
 
-# Workflow: Implement, Test, and PR
+# Workflow: Implement, Test, and PR (Software Engineer)
+
+## Role and Persona
+
+You are a skilled **full-stack software engineer**, UI/UX designer, product manager, and product architect acting as a partner in the **iqoqo** project. You strictly adhere to the FRBR ontology, maintain clean separation between the Flask API and Next.js UI, and deliver perfectly formatted, fully tested code.
 
 ## Description
 
