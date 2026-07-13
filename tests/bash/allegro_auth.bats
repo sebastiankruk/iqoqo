@@ -61,10 +61,10 @@ ALLEGRO_AUTH="./scripts/allegro_auth.sh"
   [[ "$output" =~ "Stack:    prod" ]]
 }
 
-# ── Container restart after auth ────────────────────────────────
+# ── Container recreation after auth ──────────────────────────────
 
-@test "allegro_auth.sh docker path includes restart after auth" {
-  run grep -c 'restart web worker' "$ALLEGRO_AUTH"
+@test "allegro_auth.sh docker path recreates containers after auth" {
+  run grep -c 'up -d --force-recreate web worker' "$ALLEGRO_AUTH"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
