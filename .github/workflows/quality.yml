@@ -129,7 +129,7 @@ jobs:
         run: pytest tests/ -v
 
   validate-release:
-    if: startsWith(github.head_ref, 'release/') || startsWith(github.ref_name, 'release/')
+    if: startsWith(github.head_ref, 'release/') || startsWith(github.ref_name, 'release/') || startsWith(github.head_ref, 'hotfix/') || startsWith(github.ref_name, 'hotfix/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -142,7 +142,13 @@ jobs:
       - name: Validate version consistency
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
-          VERSION="${BRANCH#release/}"
+          if [[ $BRANCH == release/* ]]; then
+            VERSION="${BRANCH#release/}"
+          elif [[ $BRANCH == hotfix/* ]]; then
+            VERSION=$(echo "$BRANCH" | sed -E 's|^hotfix/([^/]+).*|\1|')
+          else
+            VERSION="$BRANCH"
+          fi
           python scripts/validate_release.py "$VERSION"
 
   test-frontend:
