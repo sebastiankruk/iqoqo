@@ -21,7 +21,7 @@
 
 **iqoqo** is a distributed, semantic, and federated library system designed to catalog physical and digital collections—spanning books, vinyl, board games, and beyond.
 
-Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements for Bibliographic Records)](https://www.ifla.org/publications/functional-requirements-for-bibliographic-records/)** ontology, allowing for a deep understanding of the relationship between a *Work* (e.g., "The Hobbit"), its *Expression* (the English text), its *Manifestation* (the 1937 hardcover), and your specific *Item* (the copy on your shelf).
+Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements for Bibliographic Records)](https://www.ifla.org/publications/functional-requirements-for-bibliographic-records/)** ontology, allowing for a deep understanding of the relationship between a _Work_ (e.g., "The Hobbit"), its _Expression_ (the English text), its _Manifestation_ (the 1937 hardcover), and your specific _Item_ (the copy on your shelf).
 
 ## 🚀 Key Features
 
@@ -110,27 +110,27 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 
 Meet the crew ke the **iqoqo** fires burning:
 
-| Character             | Role         | Tribal Duty                                                      |
-|:----------------------|:-------------|:-----------------------------------------------------------------|
-| **Sebastian**         | The Inventor | The mastermind raven guiding the flock.                          |
-| **Sam Semantic**      | Ontologist   | Ensuring absolute FRBR-compliant database purity.                |
-| **Growth Gabe**       | Marketing    | Spreading the word of data ownership to the masses.              |
-| **Red-Team Ricky**    | QA           | Smashin' pesky crawler bugs before they reach prod.              |
-| **Density Denise**    | UX/UI        | Aligning the pixel grids so the interface feels like home.       |
-| **Batch-One Penny**   | Product      | Keeping the sprints on schedule and batches rolling.             |
-| **White-Hat Wally**   | Security     | Outsmarting SSRF and locking out unauthenticated crawlers.       |
-| **SRE Stan**          | DevOps       | Tuning the PostgreSQL connection pools and Celery queues.        |
-| **Sidekick Silas**    | Coding       | Spinning coffee and prompt tokens into clean Next.js/Flask code. |
-| **Doc Architect Dan** | TechComm     | Documenting the tribal laws, API specs, and schemas.             |
+| Character             |     Role     | G                                                     | A                                                | Tribal Duty                                                      |
+|-----------------------|:------------:|-------------------------------------------------------|--------------------------------------------------|------------------------------------------------------------------|
+| **Sebastian**         | The Inventor |                                                       |                                                  | The mastermind raven guiding the flock.                          |
+| **Batch-One Penny**   |   Product    | [G](.gemini/gems/product-manager.md)                  |                                                  | Keeping the sprints on schedule and batches rolling.             |
+| **Sidekick Silas**    |    Coding    | [G](.gemini/gems/software-engineer.md)                | [A](.agents/workflows/implementator.md)          | Spinning coffee and prompt tokens into clean Next.js/Flask code. |
+| **Red-Team Ricky**    |      QA      | [G](.gemini/gems/quality-assurance.md)                | [A](.agents/workflows/test-automation-wizard.md) | Smashin' pesky crawler bugs before they reach prod.              |
+| **Sam Semantic**      |  Ontologist  | [G](.gemini/gems/information-architect-ontologist.md) | [A](.agents/workflows/ontologist.md)             | Ensuring absolute FRBR-compliant database purity.                |
+| **Density Denise**    |    UX/UI     | [G](.gemini/gems/ux-expert.md)                        | [A](.agents/workflows/ux-audit.md)               | Aligning the pixel grids so the interface feels like home.       |
+| **White-Hat Wally**   |   Security   | [G](.gemini/gems/security-and-stability.md)           | [A](.agents/workflows/security-auditor.md)       | Outsmarting SSRF and locking out unauthenticated crawlers.       |
+| **SRE Stan**          |    DevOps    | [G](.gemini/gems/site-reliability-engineering.md)     | [A](.agents/workflows/sre-expert.md)             | Tuning the PostgreSQL connection pools and Celery queues.        |
+| **Doc Architect Dan** |   TechComm   | [G](.gemini/gems/technical-communications.md)         | [A](.agents/workflows/tech-comm.md)              | Documenting the tribal laws, API specs, and schemas.             |
+| **Growth Gabe**       |  Marketing   | [G](.gemini/gems/launch-and-growth.md)                | [A](.agents/workflows/growth-strategist.md)      | Spreading the word of data ownership to the masses.              |
 
 ---
 
 ### Tribal Lore & Capabilities
 
-> *"We don't build flat libraries. We map the conceptual soul of media."*
+> _"We don't build flat libraries. We map the conceptual soul of media."_
 
 - **Local-First Sovereignty:** This tribe rejects corporate clouds. Your data stays in your self-hosted Kraal (`docker-compose`).
-- **Semantic Precision:** Guided by the **FRBR** star, we separate the abstract *Work* from the physical *Item*.
+- **Semantic Precision:** Guided by the **FRBR** star, we separate the abstract _Work_ from the physical _Item_.
 - **The Hunt for Metadata:** Armed with cascading API strategies, our scanners track down missing records across the digital wilderness.
 
 ## 🙏 Acknowledgments
