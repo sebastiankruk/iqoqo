@@ -102,6 +102,37 @@ Your support directly covers operational toll fees to keep target deployment cha
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE) for full details.
 
+## 🤠 The iqoqo Gathering: Silicon & Soul
+
+<img src="resources/images/iqoqo-team.gif" alt="the iqoqo gathering" width="700" class="iqoqo-git">
+
+> Deep in the heart of the digital savannah at dusk—amidst the glow of retro-neon oranges, purples, and deep blues—lives a tribe of retro digital hunter-gatherers. Under the shade of blocky, LED-lit Baobab trees and circular thatched-roof "Database" kraals, this team works tirelessly to organize and protect the world's cultural metadata.
+
+Meet the crew ke the **iqoqo** fires burning:
+
+| Character             | Role         | Tribal Duty                                                      |
+|:----------------------|:-------------|:-----------------------------------------------------------------|
+| **Sebastian**         | The Inventor | The mastermind raven guiding the flock.                          |
+| **Sam Semantic**      | Ontologist   | Ensuring absolute FRBR-compliant database purity.                |
+| **Growth Gabe**       | Marketing    | Spreading the word of data ownership to the masses.              |
+| **Red-Team Ricky**    | QA           | Smashin' pesky crawler bugs before they reach prod.              |
+| **Density Denise**    | UX/UI        | Aligning the pixel grids so the interface feels like home.       |
+| **Batch-One Penny**   | Product      | Keeping the sprints on schedule and batches rolling.             |
+| **White-Hat Wally**   | Security     | Outsmarting SSRF and locking out unauthenticated crawlers.       |
+| **SRE Stan**          | DevOps       | Tuning the PostgreSQL connection pools and Celery queues.        |
+| **Sidekick Silas**    | Coding       | Spinning coffee and prompt tokens into clean Next.js/Flask code. |
+| **Doc Architect Dan** | TechComm     | Documenting the tribal laws, API specs, and schemas.             |
+
+---
+
+### Tribal Lore & Capabilities
+
+> *"We don't build flat libraries. We map the conceptual soul of media."*
+
+- **Local-First Sovereignty:** This tribe rejects corporate clouds. Your data stays in your self-hosted Kraal (`docker-compose`).
+- **Semantic Precision:** Guided by the **FRBR** star, we separate the abstract *Work* from the physical *Item*.
+- **The Hunt for Metadata:** Armed with cascading API strategies, our scanners track down missing records across the digital wilderness.
+
 ## 🙏 Acknowledgments
 
 Built on the shoulders of giants: FRBR, Linked Data, and the Semantic Web community.
