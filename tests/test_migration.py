@@ -285,3 +285,102 @@ def test_full_migration_integration(app):
         assert item.manifestation.expression is not None
         assert item.manifestation.expression.work is not None
         assert item.manifestation.expression.work.title == "1984"
+
+
+# ---------------------------------------------------------------------------
+# GIN index migration: idx_work_meta_genres_gin (revision 3177c5e97570)
+# ---------------------------------------------------------------------------
+
+
+def _is_postgresql(app) -> bool:  # type: ignore[no-untyped-def]  # noqa: ANN001
+    """Return True when the test database engine is PostgreSQL."""
+    from app.db import db
+
+    with app.app_context():
+        return db.engine.dialect.name == "postgresql"
+
+
+def _index_exists(connection) -> bool:  # type: ignore[no-untyped-def]  # noqa: ANN001
+    """Return True when idx_work_meta_genres_gin is present in pg_indexes.
+
+    Only valid on a PostgreSQL connection.
+    """
+    import sqlalchemy as sa
+
+    result = connection.execute(sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' LIMIT 1"))
+    return result.fetchone() is not None
+
+
+def test_gin_index_migration_upgrade(app) -> None:
+    """upgrade() creates idx_work_meta_genres_gin on inventory.work.
+
+    Skipped when the test suite runs against SQLite (CI default);
+    requires a live PostgreSQL database.
+    """
+    if not _is_postgresql(app):
+        pytest.skip("GIN index migration tests require PostgreSQL")
+
+    from importlib import import_module
+
+    import sqlalchemy as sa
+
+    migration = import_module("migrations.versions.3177c5e97570_add_idx_work_meta_genres_gin")
+
+    with app.app_context():
+        from app.db import db
+
+        engine = db.engine
+        with engine.connect() as conn:
+            # Ensure the index does not exist before the upgrade
+            conn.execute(sa.text("DROP INDEX IF EXISTS catalog.idx_work_meta_genres_gin"))
+            conn.commit()
+
+            assert not _index_exists(conn), "Index should not exist before upgrade"
+
+            # Run upgrade
+            migration.upgrade()
+            conn.commit()
+
+            assert _index_exists(conn), "Index should exist after upgrade"
+
+            # Cleanup: drop so the live DB isn't permanently modified by the test
+            conn.execute(sa.text("DROP INDEX IF EXISTS catalog.idx_work_meta_genres_gin"))
+            conn.commit()
+
+
+def test_gin_index_migration_downgrade(app) -> None:
+    """downgrade() drops idx_work_meta_genres_gin from inventory.work.
+
+    Skipped when the test suite runs against SQLite (CI default);
+    requires a live PostgreSQL database.
+    """
+    if not _is_postgresql(app):
+        pytest.skip("GIN index migration tests require PostgreSQL")
+
+    from importlib import import_module
+
+    import sqlalchemy as sa
+
+    migration = import_module("migrations.versions.3177c5e97570_add_idx_work_meta_genres_gin")
+
+    with app.app_context():
+        from app.db import db
+
+        engine = db.engine
+        with engine.connect() as conn:
+            # Ensure the index exists before the downgrade
+            conn.execute(
+                sa.text(
+                    "CREATE INDEX IF NOT EXISTS idx_work_meta_genres_gin "
+                    "ON catalog.works USING gin ((meta::jsonb->'genres') jsonb_path_ops)"
+                )
+            )
+            conn.commit()
+
+            assert _index_exists(conn), "Index should exist before downgrade"
+
+            # Run downgrade
+            migration.downgrade()
+            conn.commit()
+
+            assert not _index_exists(conn), "Index should not exist after downgrade"

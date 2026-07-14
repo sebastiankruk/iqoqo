@@ -16,6 +16,7 @@
 """Tests to ensure no forbidden pylint suppressions exist in the codebase."""
 
 import os
+import re
 import subprocess
 
 
@@ -23,10 +24,16 @@ def test_no_too_many_return_statements_disables():
     """
     Ensure that 'too-many-return-statements' is not disabled in the app/ directory.
     This enforces clean refactoring into Strategy patterns.
+
+    Uses anchored regex so the check only triggers on actual pylint directive comments
+    (optionally preceded by code), not on occurrences inside docstrings or string literals.
     """
     import pytest
 
-    forbidden_pattern = "pylint: disable=too-many-return-statements"
+    # Anchored regex: captures only true suppression comments on a line.
+    # The leading ``[^#\n]*`` allows code before the ``#`` without matching
+    # a ``#`` character that is inside a string literal.
+    _DIRECTIVE_RE = re.compile(r"^[^#\n]*#\s*pylint:\s*disable=too-many-return-statements")
     search_dir = "app"
 
     if not os.path.exists(search_dir):
@@ -43,7 +50,7 @@ def test_no_too_many_return_statements_disables():
             try:
                 with open(file_path, encoding="utf-8") as f:
                     for line_num, line in enumerate(f, 1):
-                        if forbidden_pattern in line:
+                        if _DIRECTIVE_RE.search(line):
                             violations.append(f"{file_path}:{line_num}: {line.strip()}")
             except (OSError, UnicodeDecodeError) as e:
                 # Optionally handle or fail on unreadable files
@@ -58,10 +65,16 @@ def test_no_too_many_return_statements_disables():
 def test_no_broad_exception_caught_disables():
     """
     Ensure that 'broad-exception-caught' is not disabled in the app/, scripts/, and tests/ directories.
+
+    Uses anchored regex so the check only triggers on actual pylint directive comments
+    (optionally preceded by code), not on occurrences inside docstrings or string literals.
     """
     import pytest
 
-    forbidden_pattern = "broad-exception-caught"
+    # Anchored regex: captures only true suppression comments on a line.
+    # The leading ``[^#\n]*`` allows code before the ``#`` without matching
+    # a ``#`` character that is inside a string literal.
+    _DIRECTIVE_RE = re.compile(r"^[^#\n]*#\s*pylint:\s*disable=broad-exception-caught")
     search_dirs = ["app", "scripts", "tests"]
     violations = []
 
@@ -78,7 +91,7 @@ def test_no_broad_exception_caught_disables():
                 try:
                     with open(file_path, encoding="utf-8") as f:
                         for line_num, line in enumerate(f, 1):
-                            if forbidden_pattern in line:
+                            if _DIRECTIVE_RE.search(line):
                                 violations.append(f"{file_path}:{line_num}: {line.strip()}")
                 except (OSError, UnicodeDecodeError) as e:
                     violations.append(f"ERROR: Could not read {file_path}: {e}")

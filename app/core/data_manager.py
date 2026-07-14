@@ -437,7 +437,7 @@ class DataManager:
           category_counts, format_counts, status_counts,
           collection_counts, tag_counts, genre_counts, publisher_counts
         """
-        from sqlalchemy import func, or_, select
+        from sqlalchemy import func, or_, select, text
 
         base_query = (
             select(Item.id)
@@ -513,7 +513,7 @@ class DataManager:
 
         # Category counts (grouped by Expression.content_type)
         cat_rows = db.session.execute(
-            select(Expression.content_type, func.count(Item.id).label("cnt"))
+            select(Expression.content_type, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
@@ -527,7 +527,7 @@ class DataManager:
 
         # Format counts (grouped by Manifestation.meta->'format')
         fmt_rows = db.session.execute(
-            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))
+            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .where(Item.id.in_(select(item_id_col)))
@@ -541,13 +541,15 @@ class DataManager:
         # Status counts (grouped by Item.collection_status + Item.status)
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         status_rows = db.session.execute(
-            select(Item.status, func.count(Item.id).label("cnt")).where(Item.id.in_(select(item_id_col))).group_by(Item.status)
+            select(Item.status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+            .where(Item.id.in_(select(item_id_col)))
+            .group_by(Item.status)
         ).all()
         for s, cnt in status_rows:
             if s in db_statuses:
                 db_statuses[s] += cnt
         coll_status_rows = db.session.execute(
-            select(Item.collection_status, func.count(Item.id).label("cnt"))
+            select(Item.collection_status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .where(Item.id.in_(select(item_id_col)))
             .group_by(Item.collection_status)
         ).all()
@@ -557,7 +559,7 @@ class DataManager:
 
         # Collection counts
         coll_rows = db.session.execute(
-            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))
+            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(UserCollectionItem)
             .join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
             .where(UserCollectionItem.item_id.in_(select(item_id_col)))
@@ -567,7 +569,7 @@ class DataManager:
 
         # Tag counts
         tag_rows = db.session.execute(
-            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))
+            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(ItemTag)
             .join(Tag, ItemTag.tag_id == Tag.id)
             .where(ItemTag.item_id.in_(select(item_id_col)))
@@ -575,37 +577,63 @@ class DataManager:
         ).all()
         tag_counts: dict[str, int] = {t: cnt for t, cnt in tag_rows if t}
 
-        # Genre counts
+        # Genre counts — dialect-aware implementation.
+        # On PostgreSQL: push aggregation to the database via jsonb_array_elements_text,
+        # leveraging the idx_work_meta_genres_gin GIN index to avoid loading all
+        # Work.meta rows into application memory.
+        # On SQLite (test environment): fall back to the Python Counter approach since
+        # jsonb_array_elements_text and the ::jsonb cast are PostgreSQL-only.
         genre_counts: dict[str, int] = {}
-        w_ids_query = db.session.execute(
-            select(Work.id)
-            .join(Expression, Expression.work_id == Work.id)
-            .join(Manifestation, Manifestation.expression_id == Expression.id)
-            .join(Item, Item.manifestation_id == Manifestation.id)
-            .where(Item.id.in_(select(item_id_col)))
-            .distinct()
-        ).all()
-        w_ids = [r[0] for r in w_ids_query]
-        if w_ids:
-            works_meta = db.session.query(Work.meta).filter(Work.id.in_(w_ids)).all()
+        _is_pg = db.engine.dialect.name == "postgresql"
+
+        if _is_pg:
+            genre_rows = db.session.execute(
+                select(
+                    func.jsonb_array_elements_text(text("works.meta::jsonb->'genres'")).label("genre"),  # pylint: disable=not-callable
+                    func.count(Item.id).label("cnt"),  # pylint: disable=not-callable
+                )
+                .select_from(Item)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(
+                    Item.id.in_(select(item_id_col)),
+                    Work.meta.isnot(None),
+                )
+                .group_by(text("genre"))
+                .order_by(func.count(Item.id).desc())  # pylint: disable=not-callable
+            ).all()
+            genre_counts = {g.strip(): cnt for g, cnt in genre_rows if g and g.strip()}
+        else:
+            # SQLite fallback: in-memory Counter aggregation.
             from collections import Counter
 
-            genre_counter: Counter[str] = Counter()
-            for row in works_meta:
-                meta = row[0]
-                if meta:
-                    raw = meta.get("genres") or meta.get("genre")
-                    if isinstance(raw, list):
-                        for g_val in raw:
-                            if isinstance(g_val, str) and g_val.strip():
-                                genre_counter[g_val.strip()] += 1
-                    elif isinstance(raw, str) and raw.strip():
-                        genre_counter[raw.strip()] += 1
-            genre_counts = dict(genre_counter.most_common())
+            w_ids_query = db.session.execute(
+                select(Work.id)
+                .join(Expression, Expression.work_id == Work.id)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .where(Item.id.in_(select(item_id_col)))
+                .distinct()
+            ).all()
+            w_ids = [r[0] for r in w_ids_query]
+            if w_ids:
+                works_meta = db.session.execute(select(Work.meta).where(Work.id.in_(w_ids))).all()
+                genre_counter: Counter[str] = Counter()
+                for (meta,) in works_meta:
+                    if meta:
+                        raw = meta.get("genres") or meta.get("genre")
+                        if isinstance(raw, list):
+                            for g_val in raw:
+                                if isinstance(g_val, str) and g_val.strip():
+                                    genre_counter[g_val.strip()] += 1
+                        elif isinstance(raw, str) and raw.strip():
+                            genre_counter[raw.strip()] += 1
+                genre_counts = dict(genre_counter.most_common())
 
         # Publisher counts
         pub_rows = db.session.execute(
-            select(Manifestation.publisher, func.count(Item.id).label("cnt"))
+            select(Manifestation.publisher, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .where(
