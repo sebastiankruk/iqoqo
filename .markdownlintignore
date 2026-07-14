@@ -9,3 +9,7 @@ migrations/
 __pycache__/
 frontend/playwright-report/
 frontend/test-results/
+.agent
+.gemini
+!.gemini/gems
+!.gemini/commands

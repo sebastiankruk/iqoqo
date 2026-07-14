@@ -12,7 +12,8 @@
     "**/.github/**",
     "**/.context/**",
     "**/.git/**",
-    ".agents/**",
+    ".agent/**",
+    ".gemini/skills/**",
     ".opencode/**"
   ],
 }

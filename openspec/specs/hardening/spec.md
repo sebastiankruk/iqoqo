@@ -11,4 +11,3 @@ This change focuses on technical debt, performance optimizations, and QA polish.
 
 - **WHEN** the system is updated
 - **THEN** it performs identically to the previous version but with optimized database queries and fixed testing setups.
-
