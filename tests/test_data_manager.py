@@ -517,8 +517,8 @@ def test_get_faceted_stats_empty_filters(app):
         db.session.flush()
         stats = DataManager.get_faceted_stats(owner_id=user.id)
 
-    assert stats["category_counts"] == {}
-    assert stats["format_counts"] == {}
+    assert not stats["category_counts"]
+    assert not stats["format_counts"]
     assert all(v == 0 for v in stats["status_counts"].values())
-    assert stats["tag_counts"] == {}
-    assert stats["genre_counts"] == {}
+    assert not stats["tag_counts"]
+    assert not stats["genre_counts"]

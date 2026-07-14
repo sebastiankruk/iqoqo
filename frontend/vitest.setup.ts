@@ -162,7 +162,6 @@ vi.mock("axios", async importOriginal => {
 });
 
 /* ── next-intl mock ──────────────────────────────────────────────────────── */
-/* ── next-intl mock ──────────────────────────────────────────────────────── */
 vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: (namespace: string) => {
