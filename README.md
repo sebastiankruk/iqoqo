@@ -113,7 +113,7 @@ Meet the crew ke the **iqoqo** fires burning:
 | Character             |     Role     | G                                                     | A                                                | Tribal Duty                                                      |
 |-----------------------|:------------:|-------------------------------------------------------|--------------------------------------------------|------------------------------------------------------------------|
 | **Sebastian**         | The Inventor |                                                       |                                                  | The mastermind raven guiding the flock.                          |
-| **Batch-One Penny**   |   Product    | [G](.gemini/gems/product-manager.md)                  |                                                  | Keeping the sprints on schedule and batches rolling.             |
+| **Batch-One Penny**   |   Product    | [G](.gemini/gems/product-manager.md)                  | [A](.agents/workflows/opsx-propose.md)           | Keeping the sprints on schedule and batches rolling.             |
 | **Sidekick Silas**    |    Coding    | [G](.gemini/gems/software-engineer.md)                | [A](.agents/workflows/implementator.md)          | Spinning coffee and prompt tokens into clean Next.js/Flask code. |
 | **Red-Team Ricky**    |      QA      | [G](.gemini/gems/quality-assurance.md)                | [A](.agents/workflows/test-automation-wizard.md) | Smashin' pesky crawler bugs before they reach prod.              |
 | **Sam Semantic**      |  Ontologist  | [G](.gemini/gems/information-architect-ontologist.md) | [A](.agents/workflows/ontologist.md)             | Ensuring absolute FRBR-compliant database purity.                |
