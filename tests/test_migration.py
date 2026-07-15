@@ -307,7 +307,9 @@ def _index_exists(connection) -> bool:  # type: ignore[no-untyped-def]  # noqa: 
     """
     import sqlalchemy as sa
 
-    result = connection.execute(sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' AND schemaname = 'catalog' LIMIT 1"))
+    result = connection.execute(
+        sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' AND schemaname = 'catalog' LIMIT 1")
+    )
     return result.fetchone() is not None
 
 
@@ -339,7 +341,7 @@ def test_gin_index_migration_upgrade(app) -> None:
 
             from alembic.migration import MigrationContext
             from alembic.operations import Operations
-            
+
             ctx = MigrationContext.configure(conn)
             migration.op = Operations(ctx)
 
@@ -387,7 +389,7 @@ def test_gin_index_migration_downgrade(app) -> None:
 
             from alembic.migration import MigrationContext
             from alembic.operations import Operations
-            
+
             ctx = MigrationContext.configure(conn)
             migration.op = Operations(ctx)
 
