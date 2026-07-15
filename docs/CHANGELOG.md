@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`DataManager.get_faceted_stats` — SQL aggregation**: Replaced the Python-memory `Counter` genre aggregation with a dialect-aware database-side query using `jsonb_array_elements_text`, `COUNT()`, and `GROUP BY` on PostgreSQL (with automatic SQLite fallback for the test suite). Reduces memory footprint and I/O for faceted navigation at scale.
 - **`app/api/items.py` — FRBR boundary refactor**: Removed inline `if item_id <= 0:` guards from `add_item_to_collection`, `remove_item_from_collection`, and `get_item_collections` route handlers. Applied `@require_physical_item` decorator to centralise the boundary check. Refactored `update_item` docstring to document the intentional virtual-item routing.
 - **`tests/test_lint_safeguards.py` — anchored regex**: Replaced naive `str.contains()` matching with anchored regular expressions (`^[^#\n]*#\s*pylint:\s*disable=`) so safeguard tests only catch actual directive comments and no longer produce false positives from occurrences in docstrings or string literals.
-- **`frontend/vitest.setup.ts`**: Removed duplicate `/* ── next-intl mock ──...` section header comment at line 165.
+- **frontend/vitest.setup.ts**: Removed duplicate `/* ── next-intl mock ──...` section header comment at line 165.
+
+### Fixed
+
+- **PR #157 Review Fixes**: Hardened `DataManager.get_faceted_stats` to prevent SQL errors when `genres` is not an array, tightened linter regexes to avoid false positives inside strings, fixed context binding in Alembic migration tests, and corrected E2E API mock routes for physical item interceptors.
 
 ## [0.7.9] - 2026-07-10
 

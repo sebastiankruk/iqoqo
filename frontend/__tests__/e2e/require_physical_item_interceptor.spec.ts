@@ -77,7 +77,14 @@ test.describe("@require_physical_item interceptor — UI response validation", (
       });
     });
 
-    await page.route("**/api/items**", async route => {
+    await page.route("**/api/items", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: [], meta: { total: 0, page: 1, limit: 20, pages: 0 } }),
+      });
+    });
+    await page.route("**/api/items?*", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -153,11 +160,10 @@ test.describe("@require_physical_item interceptor — UI response validation", (
       }
     });
 
-    await page.goto("/");
-
-    // The page must load without a JavaScript crash
     const pageErrors: string[] = [];
     page.on("pageerror", error => pageErrors.push(error.message));
+
+    await page.goto("/");
 
     // Wait for the page to stabilise
     await page.waitForLoadState("domcontentloaded");
@@ -250,10 +256,10 @@ test.describe("@require_physical_item interceptor — UI response validation", (
       });
     });
 
-    await page.goto("/");
-
     const pageErrors: string[] = [];
     page.on("pageerror", error => pageErrors.push(error.message));
+
+    await page.goto("/");
 
     await page.waitForLoadState("domcontentloaded");
 

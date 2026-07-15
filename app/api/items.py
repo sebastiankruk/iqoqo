@@ -926,7 +926,7 @@ def update_item(item_id: int):
     user = db.session.get(User, user_id) if user_id else None
 
     # Route virtual wishlist items to their dedicated handler.
-    # ID == 0 falls through to _update_physical_item which will 404 cleanly.
+    # ID == 0 explicitly returns a 400 Bad Request to enforce strictly positive IDs.
     if item_id < 0:
         return _update_virtual_item(item_id, user_id)
     if item_id == 0:

@@ -108,7 +108,7 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 
 > Deep in the heart of the digital savannah at dusk—amidst the glow of retro-neon oranges, purples, and deep blues—lives a tribe of retro digital hunter-gatherers. Under the shade of blocky, LED-lit Baobab trees and circular thatched-roof "Database" kraals, this team works tirelessly to organize and protect the world's cultural metadata.
 
-Meet the crew ke the **iqoqo** fires burning:
+Meet the crew keeping the **iqoqo** fires burning:
 
 | Character             |     Role     | G                                                     | A                                                | Tribal Duty                                                      |
 |-----------------------|:------------:|-------------------------------------------------------|--------------------------------------------------|------------------------------------------------------------------|

@@ -32,8 +32,8 @@ def test_no_too_many_return_statements_disables():
 
     # Anchored regex: captures only true suppression comments on a line.
     # The leading ``[^#\n]*`` allows code before the ``#`` without matching
-    # a ``#`` character that is inside a string literal.
-    _DIRECTIVE_RE = re.compile(r"^[^#\n]*#\s*pylint:\s*disable=too-many-return-statements")
+    # The leading ``^\s*`` avoids matching `# pylint:` inside a string literal.
+    _DIRECTIVE_RE = re.compile(r"^\s*#\s*pylint:\s*disable=too-many-return-statements")
     search_dir = "app"
 
     if not os.path.exists(search_dir):
@@ -73,8 +73,8 @@ def test_no_broad_exception_caught_disables():
 
     # Anchored regex: captures only true suppression comments on a line.
     # The leading ``[^#\n]*`` allows code before the ``#`` without matching
-    # a ``#`` character that is inside a string literal.
-    _DIRECTIVE_RE = re.compile(r"^[^#\n]*#\s*pylint:\s*disable=broad-exception-caught")
+    # The leading ``^\s*`` avoids matching `# pylint:` inside a string literal.
+    _DIRECTIVE_RE = re.compile(r"^\s*#\s*pylint:\s*disable=broad-exception-caught")
     search_dirs = ["app", "scripts", "tests"]
     violations = []
 

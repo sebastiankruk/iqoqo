@@ -34,4 +34,4 @@ graph TD
 
 ## 3. Database & API Validation Guards
 
-- The backend decorator `@require_physical_item` must screen incoming payloads to ensure mutating endpoints (such as lending or editing physical item properties) are only called for actual physical items (where `id >= 0` and entity is an Item).
+- The backend decorator `@require_physical_item` must screen incoming payloads to ensure mutating endpoints (such as lending or editing physical item properties) are only called for actual physical items (where `id > 0` and entity is an Item).

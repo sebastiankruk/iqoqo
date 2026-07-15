@@ -599,6 +599,7 @@ class DataManager:
                 .where(
                     Item.id.in_(select(item_id_col)),
                     Work.meta.isnot(None),
+                    text("jsonb_typeof(works.meta::jsonb->'genres') = 'array'"),
                 )
                 .group_by(text("genre"))
                 .order_by(func.count(Item.id).desc())  # pylint: disable=not-callable

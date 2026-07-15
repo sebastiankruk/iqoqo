@@ -307,12 +307,12 @@ def _index_exists(connection) -> bool:  # type: ignore[no-untyped-def]  # noqa: 
     """
     import sqlalchemy as sa
 
-    result = connection.execute(sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' LIMIT 1"))
+    result = connection.execute(sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' AND schemaname = 'catalog' LIMIT 1"))
     return result.fetchone() is not None
 
 
 def test_gin_index_migration_upgrade(app) -> None:
-    """upgrade() creates idx_work_meta_genres_gin on inventory.work.
+    """upgrade() creates idx_work_meta_genres_gin on catalog.works.
 
     Skipped when the test suite runs against SQLite (CI default);
     requires a live PostgreSQL database.
@@ -337,6 +337,12 @@ def test_gin_index_migration_upgrade(app) -> None:
 
             assert not _index_exists(conn), "Index should not exist before upgrade"
 
+            from alembic.migration import MigrationContext
+            from alembic.operations import Operations
+            
+            ctx = MigrationContext.configure(conn)
+            migration.op = Operations(ctx)
+
             # Run upgrade
             migration.upgrade()
             conn.commit()
@@ -349,7 +355,7 @@ def test_gin_index_migration_upgrade(app) -> None:
 
 
 def test_gin_index_migration_downgrade(app) -> None:
-    """downgrade() drops idx_work_meta_genres_gin from inventory.work.
+    """downgrade() drops idx_work_meta_genres_gin from catalog.works.
 
     Skipped when the test suite runs against SQLite (CI default);
     requires a live PostgreSQL database.
@@ -378,6 +384,12 @@ def test_gin_index_migration_downgrade(app) -> None:
             conn.commit()
 
             assert _index_exists(conn), "Index should exist before downgrade"
+
+            from alembic.migration import MigrationContext
+            from alembic.operations import Operations
+            
+            ctx = MigrationContext.configure(conn)
+            migration.op = Operations(ctx)
 
             # Run downgrade
             migration.downgrade()
