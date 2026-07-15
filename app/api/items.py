@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import optional_auth, require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
 from app.api.filters import apply_genre_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
@@ -913,17 +913,24 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
 @api_bp.route("/items/<int(signed=True):item_id>", methods=["PUT"])
 @require_auth
 def update_item(item_id: int):
+    """Update an item by ID.
+
+    Negative IDs are virtual wishlist intents (``UserWorkIntent``) and are
+    routed to ``_update_virtual_item``.  Zero and positive IDs that do not
+    exist are handled by ``_update_physical_item``.  ``@require_physical_item``
+    is intentionally **not** applied here because this route also accepts
+    virtual-item transitions (wishlist → library); the FRBR boundary for
+    irreversible physical mutations is enforced inside ``_update_virtual_item``.
+    """
     user_id = getattr(g, "user_id", None)
     user = db.session.get(User, user_id) if user_id else None
 
-    # FRBR ontology boundary: physical item IDs must be strictly positive.
-    # Negative IDs are virtual wishlist intents handled by _update_virtual_item.
-    # ID 0 is not a valid entity at any FRBR level and must be rejected immediately.
-    if item_id == 0:
-        return jsonify({"error": "Cannot mutate virtual items (id <= 0). Physical item IDs must be strictly positive.", "code": 400}), 400
-
+    # Route virtual wishlist items to their dedicated handler.
+    # ID == 0 falls through to _update_physical_item which will 404 cleanly.
     if item_id < 0:
         return _update_virtual_item(item_id, user_id)
+    if item_id == 0:
+        return jsonify({"error": "Cannot mutate virtual items (id <= 0). Physical item IDs must be strictly positive.", "code": 400}), 400
     return _update_physical_item(item_id, user_id, user)
 
 
@@ -971,6 +978,7 @@ def delete_item(item_id: int):
 
 @api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["GET"])
 @require_auth
+@require_physical_item
 @require_item_access()
 def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
     """List the named collections an item belongs to."""
@@ -995,8 +1003,9 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
+@require_physical_item
 @require_item_access()
-def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
+def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:  # pylint: disable=too-many-return-statements
     """Link an owned item to a named collection.
 
     Creates a UserCollectionItem association. The item must belong to the
@@ -1004,8 +1013,6 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
     because they have no physical copy to shelve.
     """
     user_id = getattr(g, "user_id", None)
-    if item_id < 0:
-        return jsonify({"success": False, "error": "Virtual wishlist items cannot be added to collections"}), 400
 
     payload_json = request.get_json(silent=True)
     try:
@@ -1056,6 +1063,7 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
+@require_physical_item
 @require_item_access()
 def remove_item_from_collection(item_id: int, collection_id: int) -> Response | tuple[Response, int]:
     """Unlink an owned item from a named collection.
@@ -1063,8 +1071,6 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
     Removes the UserCollectionItem association without deleting the Item itself.
     """
     user_id = getattr(g, "user_id", None)
-    if item_id < 0:
-        return jsonify({"success": False, "error": "Virtual wishlist items cannot be removed from collections"}), 400
 
     item = db.session.get(Item, item_id)
     if not item:

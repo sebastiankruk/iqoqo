@@ -24,6 +24,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.schemas import ItemBulkCreateSchema, ItemLendSchema, ItemManualCreateSchema, ScanBarcodeSchema
+from app.db.models import Expression, Item, Manifestation, User, Work, db
 
 
 def test_add_item_missing_required_fields(client, normal_user_headers):
@@ -187,3 +188,255 @@ class TestVirtualItemGuardrails:
         """Assert ItemLendSchema accepts id=1 as a valid physical item ID."""
         schema = ItemLendSchema(item_id=1)
         assert schema.item_id == 1
+
+
+class TestRequirePhysicalItemDecorator:
+    """Unit-level tests for the @require_physical_item decorator.
+
+    Tests verify the decorator logic independently of full route registration
+    by calling the decorated view function directly with explicit kwargs.
+    """
+
+    def test_negative_id_is_rejected(self, app):
+        """Decorator must return 400 for negative item IDs (virtual wishlist items)."""
+        from app.api.decorators import require_physical_item
+
+        inner_called = []
+
+        @require_physical_item
+        def dummy_view(item_id):
+            inner_called.append(item_id)
+            return "ok", 200
+
+        with app.test_request_context():
+            response, status = dummy_view(item_id=-1)  # pylint: disable=unpacking-non-sequence
+            assert status == 400
+            data = response.get_json()  # type: ignore[union-attr]  # pylint: disable=no-member
+            assert data["code"] == 400
+            assert not inner_called, "Handler must not be called for virtual item IDs"
+
+    def test_zero_id_is_rejected(self, app):
+        """Decorator must return 400 for item_id == 0 (not a valid FRBR entity)."""
+        from app.api.decorators import require_physical_item
+
+        inner_called = []
+
+        @require_physical_item
+        def dummy_view(item_id):
+            inner_called.append(item_id)
+            return "ok", 200
+
+        with app.test_request_context():
+            response, status = dummy_view(item_id=0)  # pylint: disable=unpacking-non-sequence
+            assert status == 400
+            data = response.get_json()  # type: ignore[union-attr]  # pylint: disable=no-member
+            assert data["code"] == 400
+            assert not inner_called, "Handler must not be called for item_id=0"
+
+    def test_positive_id_passes_through(self, app):
+        """Decorator must allow positive item IDs to reach the wrapped handler."""
+        from app.api.decorators import require_physical_item
+
+        inner_called = []
+
+        @require_physical_item
+        def dummy_view(item_id):
+            inner_called.append(item_id)
+            return "ok", 200
+
+        with app.test_request_context():
+            result = dummy_view(item_id=42)
+            assert result == ("ok", 200)
+            assert inner_called == [42], "Handler must be called for valid positive IDs"
+
+    def test_missing_item_id_kwarg_passes_through(self, app):
+        """Decorator must not error if item_id is absent from kwargs."""
+        from app.api.decorators import require_physical_item
+
+        inner_called = []
+
+        @require_physical_item
+        def dummy_view():
+            inner_called.append(True)
+            return "ok", 200
+
+        with app.test_request_context():
+            result = dummy_view()
+            assert result == ("ok", 200)
+            assert inner_called == [True]
+
+    def test_error_payload_standard_format(self, app):
+        """Decorator rejection must follow the project-wide JSON error format."""
+        from app.api.decorators import require_physical_item
+
+        @require_physical_item
+        def dummy_view(item_id):
+            return "ok", 200
+
+        with app.test_request_context():
+            response, status = dummy_view(item_id=-99)  # pylint: disable=unpacking-non-sequence
+            data = response.get_json()  # type: ignore[union-attr]  # pylint: disable=no-member
+            # Must include both "error" and "code" keys (project-wide standard)
+            assert "error" in data
+            assert "code" in data
+            assert data["code"] == status == 400
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _seeded_item_for_validation(app):
+    """Create a minimal FRBR chain and return identifiers for integration tests."""
+    with app.app_context():
+        user = User(email="val_integ@iqoqo.local", display_name="Validator Integration")
+        db.session.add(user)
+        db.session.flush()
+
+        work = Work(title="Integration Test Work")
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        mfn = Manifestation(expression_id=expr.id, isbn13="9780000000099", meta={})
+        db.session.add(mfn)
+        db.session.flush()
+
+        item = Item(manifestation_id=mfn.id, owner_id=user.id, status="available", collection_status="available")
+        db.session.add(item)
+        db.session.commit()
+
+        yield {"item_id": item.id, "user_id": user.id}
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — collections endpoints boundary (task 4.1)
+# ---------------------------------------------------------------------------
+
+
+class TestCollectionsEndpointBoundary:
+    """Integration tests for collection-related endpoints FRBR boundary."""
+
+    def test_get_collections_zero_id_returns_400(self, client, admin_headers):
+        """GET /api/items/0/collections must return 400 from the interceptor."""
+        resp = client.get("/api/items/0/collections", headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+    def test_get_collections_negative_id_returns_400(self, client, admin_headers):
+        """GET /api/items/-1/collections must return 400 — virtual items have no shelf."""
+        resp = client.get("/api/items/-1/collections", headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+    def test_post_collections_zero_id_returns_400(self, client, admin_headers):
+        """POST /api/items/0/collections must return 400 from the interceptor."""
+        resp = client.post("/api/items/0/collections", json={"collection_id": 1}, headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+    def test_post_collections_negative_id_returns_400(self, client, admin_headers):
+        """POST /api/items/-5/collections must return 400 — virtual items cannot be shelved."""
+        resp = client.post("/api/items/-5/collections", json={"collection_id": 1}, headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+    def test_delete_collections_zero_id_returns_400(self, client, admin_headers):
+        """DELETE /api/items/0/collections/1 must return 400 from the interceptor."""
+        resp = client.delete("/api/items/0/collections/1", headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+    def test_delete_collections_negative_id_returns_400(self, client, admin_headers):
+        """DELETE /api/items/-3/collections/1 must return 400 — virtual items cannot be removed."""
+        resp = client.delete("/api/items/-3/collections/1", headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — new model tables exist and work (task 4.1)
+# ---------------------------------------------------------------------------
+
+
+class TestNewTablesSmoke:
+    """Smoke tests confirming new ORM models are reachable."""
+
+    def test_item_custody_event_model_importable(self, app):
+        """ItemCustodyEvent should be importable from the models shim."""
+        from app.db.models import ItemCustodyEvent
+
+        assert ItemCustodyEvent is not None
+
+    def test_entity_audit_log_model_importable(self, app):
+        """EntityAuditLog should be importable from the models shim."""
+        from app.db.models import EntityAuditLog
+
+        assert EntityAuditLog is not None
+
+    def test_item_custody_event_can_be_inserted_and_queried(self, app, _seeded_item_for_validation):
+        """ItemCustodyEvent records can be inserted and queried via ORM."""
+        from app.db.models import ItemCustodyEvent
+
+        with app.app_context():
+            event = ItemCustodyEvent(
+                item_id=_seeded_item_for_validation["item_id"],
+                actor_id=_seeded_item_for_validation["user_id"],
+                event_type="acquisition",
+                notes="Initial purchase",
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            fetched = db.session.get(ItemCustodyEvent, event.id)
+            assert fetched is not None
+            assert fetched.event_type == "acquisition"
+            assert fetched.item_id == _seeded_item_for_validation["item_id"]
+
+    def test_entity_audit_log_can_be_inserted_and_queried(self, app, _seeded_item_for_validation):
+        """EntityAuditLog records can be inserted and queried via ORM."""
+        from app.db.models import EntityAuditLog
+
+        with app.app_context():
+            log = EntityAuditLog(
+                entity_type="work",
+                entity_id=1,
+                actor_id=_seeded_item_for_validation["user_id"],
+                change_type="metadata_edit",
+                diff={"title": {"before": "Old Title", "after": "New Title"}},
+            )
+            db.session.add(log)
+            db.session.commit()
+
+            fetched = db.session.get(EntityAuditLog, log.id)
+            assert fetched is not None
+            assert fetched.entity_type == "work"
+            assert fetched.change_type == "metadata_edit"
+            assert fetched.diff["title"]["after"] == "New Title"
+
+    def test_item_custody_event_is_append_only_in_practice(self, app, _seeded_item_for_validation):
+        """Multiple custody events can be appended for the same item, preserving all entries."""
+        from sqlalchemy import select
+
+        from app.db.models import ItemCustodyEvent
+
+        with app.app_context():
+            item_id = _seeded_item_for_validation["item_id"]
+            for event_type in ("acquisition", "transfer", "condition_update"):
+                db.session.add(ItemCustodyEvent(item_id=item_id, event_type=event_type))
+            db.session.commit()
+
+            events = db.session.execute(select(ItemCustodyEvent).where(ItemCustodyEvent.item_id == item_id)).scalars().all()
+            event_types = {e.event_type for e in events}
+            assert {"acquisition", "transfer", "condition_update"}.issubset(event_types)

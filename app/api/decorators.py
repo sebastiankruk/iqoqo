@@ -126,3 +126,44 @@ def admin_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def require_physical_item(f):
+    """Declarative FRBR boundary interceptor for item-level route handlers.
+
+    Rejects any request whose ``item_id`` route parameter is ``<= 0``.
+    Virtual wishlist items carry negative IDs (``-intent_id``) and ``0`` is
+    not a valid entity at any FRBR level.  Applying this decorator to a
+    route makes the FRBR boundary check explicit and eliminates the brittle
+    inline ``if item_id <= 0:`` guards that would otherwise be scattered
+    across every handler.
+
+    Usage::
+
+        @api_bp.route("/items/<int(signed=True):item_id>/some-action", methods=["POST"])
+        @require_auth
+        @require_physical_item
+        def some_physical_action(item_id: int):
+            ...  # item_id is guaranteed to be > 0 here
+
+    Raises a ``400 Bad Request`` with a structured JSON payload when the
+    interceptor rejects the request, consistent with the project-wide error
+    format ``{"error": "...", "code": 400}``.
+    """
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        item_id = kwargs.get("item_id")
+        if item_id is not None and item_id <= 0:
+            return (
+                jsonify(
+                    {
+                        "error": ("Cannot mutate virtual items (id <= 0). " "Physical item IDs must be strictly positive."),
+                        "code": 400,
+                    }
+                ),
+                400,
+            )
+        return f(*args, **kwargs)
+
+    return decorated

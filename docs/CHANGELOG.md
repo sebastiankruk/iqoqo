@@ -11,10 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **OpenSpec** support in development process
 - **GIN Index on `catalog.works.meta->'genres'`**: Added Alembic migration `3177c5e97570` that creates a functional GIN index `idx_work_meta_genres_gin` using `(meta::jsonb->'genres') jsonb_path_ops` to accelerate faceted genre aggregation queries on the FRBR Work entity.
+- **`ItemCustodyEvent` model** (`app/db/core.py`, migration `839197bcbabc`): CIDOC CRM-compliant immutable event log for tracking custody changes at the FRBR Item tier. Records acquisition, transfer, and condition events in an append-only `inventory.item_custody_events` table indexed on `item_id` and `recorded_at`, laying the groundwork for ActivityPub federation trust chains.
+- **`EntityAuditLog` model** (`app/db/core.py`, migration `839197bcbabc`): Curation and edit history log for Work, Expression, and Manifestation tiers. Stores metadata edits, duplicate resolutions, and record merges in `inventory.entity_audit_logs` with composite index on `(entity_type, entity_id)`. Strictly separated from `ItemCustodyEvent` per FRBR ontology (abstract tiers cannot be "possessed").
+- **`@require_physical_item` decorator** (`app/api/decorators.py`): Declarative FRBR boundary interceptor that rejects API requests with `item_id <= 0` before they reach handler logic, returning a structured `{"error": "...", "code": 400}` response. Eliminates brittle inline `if item_id <= 0:` guards scattered across route handlers.
+- **Playwright E2E tests** (`frontend/__tests__/e2e/require_physical_item_interceptor.spec.ts`): End-to-end validation of UI behaviour when the interceptor rejects invalid item IDs, including API mock and live-server test variants.
 
 ### Changed
 
 - **`DataManager.get_faceted_stats` — SQL aggregation**: Replaced the Python-memory `Counter` genre aggregation with a dialect-aware database-side query using `jsonb_array_elements_text`, `COUNT()`, and `GROUP BY` on PostgreSQL (with automatic SQLite fallback for the test suite). Reduces memory footprint and I/O for faceted navigation at scale.
+- **`app/api/items.py` — FRBR boundary refactor**: Removed inline `if item_id <= 0:` guards from `add_item_to_collection`, `remove_item_from_collection`, and `get_item_collections` route handlers. Applied `@require_physical_item` decorator to centralise the boundary check. Refactored `update_item` docstring to document the intentional virtual-item routing.
 - **`tests/test_lint_safeguards.py` — anchored regex**: Replaced naive `str.contains()` matching with anchored regular expressions (`^[^#\n]*#\s*pylint:\s*disable=`) so safeguard tests only catch actual directive comments and no longer produce false positives from occurrences in docstrings or string literals.
 - **`frontend/vitest.setup.ts`**: Removed duplicate `/* ── next-intl mock ──...` section header comment at line 165.
 
