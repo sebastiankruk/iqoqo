@@ -347,6 +347,9 @@ if [ "$STOP" = true ]; then
         export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
         [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
         COMPOSE_DOWN_CMD="docker compose -f docker-compose.yml"
+        if [ -f "docker-compose.monitoring.yml" ]; then
+            COMPOSE_DOWN_CMD="$COMPOSE_DOWN_CMD -f docker-compose.monitoring.yml"
+        fi
         $COMPOSE_DOWN_CMD down --remove-orphans
     fi
     echo "✅ Stopped."
