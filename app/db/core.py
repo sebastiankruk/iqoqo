@@ -445,3 +445,106 @@ class ItemTag(db.Model):  # type: ignore[name-defined]
 
     item = db.relationship("Item", backref=db.backref("tag_links", cascade="all, delete-orphan", lazy="selectin"))
     added_by = db.relationship("User")
+
+
+class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
+    """
+    CIDOC CRM-compliant immutable event log for item custody changes.
+
+    Records every custody transfer or acquisition event for a physical or
+    digital FRBR Item. This log is append-only — events must never be
+    modified or deleted, in order to preserve a tamper-proof provenance
+    chain suitable for future ActivityPub federation trust.
+
+    Custody applies exclusively at the FRBR Item tier.  Do not use this
+    table to record edits to Work, Expression, or Manifestation records;
+    use :class:`EntityAuditLog` for those tiers instead.
+    """
+
+    __tablename__ = "item_custody_events"
+    __table_args__ = (
+        (
+            db.Index("ix_item_custody_events_item_id", "item_id"),
+            db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (
+            db.Index("ix_item_custody_events_item_id", "item_id"),
+            db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type = db.Column(db.String(100), nullable=False)
+    """
+    CIDOC CRM event type label, e.g. ``"acquisition"``, ``"transfer"``,
+    ``"loss"``, ``"found"``, ``"condition_update"``.
+    """
+    notes = db.Column(db.Text, nullable=True)
+    """Optional free-text provenance notes for this custody event."""
+    recorded_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    # Relationships
+    item = db.relationship(
+        "Item",
+        backref=db.backref("custody_events", cascade="all, delete", lazy="dynamic"),
+    )
+    actor = db.relationship("User", backref="custody_events_as_actor")
+
+
+class EntityAuditLog(db.Model):  # type: ignore[name-defined]
+    """
+    Curation and edit history log for Work, Expression, and Manifestation tiers.
+
+    Records metadata edits, duplicate resolutions, and record merges performed
+    by administrators or custodians at the three abstract FRBR tiers.  This is
+    separate from :class:`ItemCustodyEvent` because curation and possession are
+    fundamentally different concepts in the FRBR / CIDOC CRM ontology.
+
+    :attr entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+    :attr entity_id: The primary key of the affected entity.
+    :attr change_type: A label such as ``"metadata_edit"``, ``"merge"``,
+        ``"duplicate_resolved"``, or ``"field_update"``.
+    :attr diff: Optional JSON snapshot of the before/after field values.
+    """
+
+    __tablename__ = "entity_audit_logs"
+    __table_args__ = (
+        (
+            db.Index("ix_entity_audit_logs_entity", "entity_type", "entity_id"),
+            db.Index("ix_entity_audit_logs_logged_at", "logged_at"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (
+            db.Index("ix_entity_audit_logs_entity", "entity_type", "entity_id"),
+            db.Index("ix_entity_audit_logs_logged_at", "logged_at"),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    actor_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    change_type = db.Column(db.String(100), nullable=False)
+    diff = db.Column(db.JSON, nullable=True)
+    """Optional JSON capturing before/after field values for the edit."""
+    logged_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    # Relationships
+    actor = db.relationship("User", backref="entity_audit_logs_as_actor")

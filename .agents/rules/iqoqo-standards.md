@@ -25,9 +25,15 @@ Talk like caveman
 ## General Architectural Principles
 
 - **Domain First:** This is a "Library of Everything" built on the FRBR (Functional Requirements for Bibliographic Records) ontology. Always respect the Work -> Expression -> Manifestation -> Item hierarchy.
+- **Spec-Driven Development (OpenSpec):** Before proposing structural modifications or implementing new features, you MUST inspect the canonical specifications located in `openspec/specs/`. Always follow the **Explore -> Propose -> Apply -> Archive** workflow using the `openspec` CLI.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
 - **Do Not Hallucinate Metadata:** If an external service (e.g., ISBN lookup) fails, fail gracefully. Do not generate fake book covers or ISBNs.
+
+## Agent Workflows & Execution
+
+- **Plan + Pause:** All complex agent workflows MUST begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
+- **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `mempalace mine .context/notes/` (or the specific file modified).
 
 ## Python Backend (Flask)
 - **Engine:** Use Python 3.14+ exclusively.
@@ -65,4 +71,6 @@ Talk like caveman
 ## Git & Pull Requests
 
 - **Commits:** Strictly use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`, `docs:`).
+- **Local Testing First:** NEVER push code before running all CI tests locally. Ensure the build is clean locally.
 - **PR Finalization:** All code pushed to a `release/*` branch must be accompanied by updated documentation in `docs/CHANGELOG.md` and pass `make lint` and `make test`.
+- **Review Pauses:** Wait 15 minutes after pushing before moving to the next task to review the PR and pipeline results (if applicable).
