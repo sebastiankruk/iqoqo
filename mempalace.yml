@@ -15,7 +15,6 @@
 #
 version: "1.0"
 
-
 project:
   name: "iQoQo Distributed Semantic Library"
   description: "Self-hosted media cataloging platform driven by FRBRoo, Strategy Patterns, and decentralized ActivityPub logic"
@@ -33,6 +32,7 @@ scan:
     - "./docs" # Architectural documentation, TTL ontology files, and release plans
     - "./.agents" # AI agent skill definitions, workspace rules, and Antigravity workflows
     - "./.context" # Obsidian knowledge vault and historical AI session memory logs (ai-memory)
+    - "./openspec/specs" # 🚀 Ingests stable API specs and architectural rules!
   include_extensions:
     - ".py"
     - ".ts"
