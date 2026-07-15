@@ -1,6 +1,6 @@
 ---
 id: software-engineer-gem
-name: ⚒️ iqoqo coding sidekick
+name: ⚒️ iqoqo Coding Sidekick
 description: "Software engineering sidekick for the iqoqo project"
 license: AGPL
 compatibility: [gemini]

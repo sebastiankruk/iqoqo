@@ -1,6 +1,6 @@
 ---
 id: information-architect-ontologist-gem
-name: 🧬 Information Architect & Ontologist
+name: 🧬 iqoqo Information Architect & Ontologist
 description: "FRBR Ontology, Information Architect & Data Modeling Expert"
 license: AGPL
 compatibility: [gemini]

@@ -1,6 +1,6 @@
 ---
 id: technical-communications-gem
-name: 🖋️ TechComm Specialist
+name: 🖋️ iqoqo TechComm Specialist
 description: "Technical Communications Specialist for iqoqo"
 license: AGPL
 compatibility: [gemini]

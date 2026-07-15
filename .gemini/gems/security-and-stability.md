@@ -1,6 +1,6 @@
 ---
 id: security-gem
-name: 👮 iqoqo security expert
+name: 👮 iqoqo Security Expert
 description: "Security & Stability Expert for iqoqo"
 license: AGPL
 compatibility: [gemini]
