@@ -414,6 +414,7 @@ class DataManager:
         }
 
     @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def get_faceted_stats(
         owner_id: uuid.UUID | None = None,
         category: str | None = None,
@@ -513,7 +514,7 @@ class DataManager:
 
         # Category counts (grouped by Expression.content_type)
         cat_rows = db.session.execute(
-            select(Expression.content_type, func.count(Item.id).label("cnt"))
+            select(Expression.content_type, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
@@ -527,7 +528,7 @@ class DataManager:
 
         # Format counts (grouped by Manifestation.meta->'format')
         fmt_rows = db.session.execute(
-            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))
+            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .where(Item.id.in_(select(item_id_col)))
@@ -541,13 +542,13 @@ class DataManager:
         # Status counts (grouped by Item.collection_status + Item.status)
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         status_rows = db.session.execute(
-            select(Item.status, func.count(Item.id).label("cnt")).where(Item.id.in_(select(item_id_col))).group_by(Item.status)
+            select(Item.status, func.count(Item.id).label("cnt")).where(Item.id.in_(select(item_id_col))).group_by(Item.status)  # pylint: disable=not-callable
         ).all()
         for s, cnt in status_rows:
             if s in db_statuses:
                 db_statuses[s] += cnt
         coll_status_rows = db.session.execute(
-            select(Item.collection_status, func.count(Item.id).label("cnt"))
+            select(Item.collection_status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .where(Item.id.in_(select(item_id_col)))
             .group_by(Item.collection_status)
         ).all()
@@ -557,7 +558,7 @@ class DataManager:
 
         # Collection counts
         coll_rows = db.session.execute(
-            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))
+            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(UserCollectionItem)
             .join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
             .where(UserCollectionItem.item_id.in_(select(item_id_col)))
@@ -567,7 +568,7 @@ class DataManager:
 
         # Tag counts
         tag_rows = db.session.execute(
-            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))
+            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(ItemTag)
             .join(Tag, ItemTag.tag_id == Tag.id)
             .where(ItemTag.item_id.in_(select(item_id_col)))
@@ -605,7 +606,7 @@ class DataManager:
 
         # Publisher counts
         pub_rows = db.session.execute(
-            select(Manifestation.publisher, func.count(Item.id).label("cnt"))
+            select(Manifestation.publisher, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .where(

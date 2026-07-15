@@ -996,6 +996,7 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 @require_item_access()
+# pylint: disable=too-many-return-statements
 def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
     """Link an owned item to a named collection.
 

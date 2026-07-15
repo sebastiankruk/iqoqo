@@ -85,11 +85,11 @@ def device_code_flow():
         if err == "authorization_pending":
             print(".", end="", flush=True)
             continue
-        elif err == "slow_down":
+        if err == "slow_down":
             interval += 5
             print(f"\nSerwer zada wolniejszego odpytywania, zwiekszam interwal do {interval}s...")
             continue
-        elif err == "expired_token":
+        if err == "expired_token":
             print("\nKod urzadzenia wygasl. Sprobuj ponownie.", file=sys.stderr)
             sys.exit(1)
         else:
