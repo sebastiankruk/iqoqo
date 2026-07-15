@@ -414,6 +414,7 @@ class DataManager:
         }
 
     @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def get_faceted_stats(
         owner_id: uuid.UUID | None = None,
         category: str | None = None,
