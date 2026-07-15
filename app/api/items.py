@@ -999,18 +999,12 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
     return jsonify({"success": True, "data": {"collections": collections_data}, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
-@limiter.limit("60 per minute", override_defaults=True)
-@require_auth
-@require_permission(PermissionName.WRITE_ITEM)
-@require_physical_item
-@require_item_access()
-def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:  # pylint: disable=too-many-return-statements
-    """Link an owned item to a named collection.
+def _guard_add_item_to_collection(item_id: int) -> tuple[dict | None, tuple[Response, int] | None]:
+    """Validate preconditions for adding an item to a collection.
 
-    Creates a UserCollectionItem association. The item must belong to the
-    authenticated user. Virtual wishlist items (item_id < 0) are rejected
-    because they have no physical copy to shelve.
+    Returns:
+        (dict, None) on success with validated payload data.
+        (None, tuple[Response, int]) on validation failure.
     """
     user_id = getattr(g, "user_id", None)
 
@@ -1018,13 +1012,13 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:  # 
     try:
         payload = ItemCollectionLinkSchema(**(payload_json or {}))
     except ValidationError as e:
-        return jsonify({"success": False, "error": e.errors()}), 400
+        return None, (jsonify({"success": False, "error": e.errors()}), 400)
 
     item = db.session.get(Item, item_id)
     if not item:
-        return jsonify({"success": False, "error": "Item not found"}), 404
+        return None, (jsonify({"success": False, "error": "Item not found"}), 404)
     if not user_id or not verify_item_ownership(item_id, user_id):
-        return jsonify({"success": False, "error": "Forbidden"}), 403
+        return None, (jsonify({"success": False, "error": "Forbidden"}), 403)
 
     collection = (
         db.session.query(UserCollection)
@@ -1035,7 +1029,7 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:  # 
         .first()
     )
     if not collection:
-        return jsonify({"success": False, "error": "Collection not found"}), 404
+        return None, (jsonify({"success": False, "error": "Collection not found"}), 404)
 
     existing = (
         db.session.query(UserCollectionItem)
@@ -1046,16 +1040,39 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:  # 
         .first()
     )
     if existing:
-        return jsonify({"success": False, "error": "Item is already in this collection"}), 409
+        return None, (jsonify({"success": False, "error": "Item is already in this collection"}), 409)
+
+    return {"collection_id": payload.collection_id}, None
+
+
+@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
+@limiter.limit("60 per minute", override_defaults=True)
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+@require_physical_item
+@require_item_access()
+def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
+    """Link an owned item to a named collection.
+
+    Creates a UserCollectionItem association. The item must belong to the
+    authenticated user. Virtual wishlist items (item_id < 0) are rejected
+    because they have no physical copy to shelve.
+    """
+    validated, err = _guard_add_item_to_collection(item_id)
+    if err is not None:
+        return err
+    assert validated is not None  # Narrowed by err check above
+
+    collection_id = validated["collection_id"]
 
     try:
-        link = UserCollectionItem(collection_id=payload.collection_id, item_id=item_id)
+        link = UserCollectionItem(collection_id=collection_id, item_id=item_id)
         db.session.add(link)
         db.session.commit()
-        return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": payload.collection_id}})
+        return jsonify({"success": True, "data": {"item_id": item_id, "collection_id": collection_id}})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
-        logger.error("Database error linking item %s to collection %s: %s", item_id, payload.collection_id, str(e))
+        logger.error("Database error linking item %s to collection %s: %s", item_id, collection_id, str(e))
         return jsonify({"success": False, "error": "An internal database error occurred while processing the request."}), 500
 
 
