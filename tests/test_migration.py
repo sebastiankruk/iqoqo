@@ -343,7 +343,7 @@ def test_gin_index_migration_upgrade(app) -> None:
             from alembic.operations import Operations
 
             ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)
+            migration.op = Operations(ctx)  # type: ignore[attr-defined]
 
             # Run upgrade
             migration.upgrade()
@@ -391,7 +391,7 @@ def test_gin_index_migration_downgrade(app) -> None:
             from alembic.operations import Operations
 
             ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)
+            migration.op = Operations(ctx)  # type: ignore[attr-defined]
 
             # Run downgrade
             migration.downgrade()
