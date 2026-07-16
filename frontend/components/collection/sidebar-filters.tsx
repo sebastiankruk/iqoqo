@@ -278,18 +278,14 @@ export function SidebarFilters({
   });
 
   const validProgressStatuses = Array.from(
-    new Set(
-      activeCategories.flatMap(cat => CATEGORY_STATUS_MAP[cat as keyof typeof CATEGORY_STATUS_MAP] || [])
-    )
+    new Set(activeCategories.flatMap(cat => CATEGORY_STATUS_MAP[cat as keyof typeof CATEGORY_STATUS_MAP] || []))
   );
 
   const rawFormats = activeCategories.flatMap(
     cat => (MEDIA_HIERARCHY[cat as keyof typeof MEDIA_HIERARCHY]?.formats || []) as readonly unknown[]
   ) as Array<{ id: string; label: string }>;
 
-  const validFormats = Array.from(
-    new Map(rawFormats.map(f => [f.id, f])).values()
-  );
+  const validFormats = Array.from(new Map(rawFormats.map(f => [f.id, f])).values());
 
   /** True when viewing Works or Expressions – status/format don't apply at those levels */
   const isHierarchyView = viewMode === "works" || viewMode === "expressions";
@@ -332,57 +328,63 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      {taxonomies?.collections && taxonomies.collections.some(c => (collCountsFromProps?.[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)) && (
-        <AccordionSection title={t("secMyCollections")}>
-          <SearchableFacet
-            options={taxonomies.collections}
-            activeFilters={activeFilters}
-            type="collection"
-            onToggle={value => onToggleFilter({ type: "collection", value })}
-            placeholder={t("findCollection")}
-            counts={collCountsFromProps}
-          />
-        </AccordionSection>
-      )}
+      {taxonomies?.collections &&
+        taxonomies.collections.some(
+          c => (collCountsFromProps?.[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)
+        ) && (
+          <AccordionSection title={t("secMyCollections")}>
+            <SearchableFacet
+              options={taxonomies.collections}
+              activeFilters={activeFilters}
+              type="collection"
+              onToggle={value => onToggleFilter({ type: "collection", value })}
+              placeholder={t("findCollection")}
+              counts={collCountsFromProps}
+            />
+          </AccordionSection>
+        )}
 
-      {taxonomies?.tags && taxonomies.tags.some(t => (tagCounts?.[t] ?? 0) > 0 || isActive(activeFilters, "tag", t)) && (
-        <AccordionSection title={t("secTags")} defaultOpen={false}>
-        <SearchableFacet
-          options={taxonomies?.tags ?? []}
-          activeFilters={activeFilters}
-          type="tag"
-          onToggle={value => onToggleFilter({ type: "tag", value })}
-          placeholder={t("findTag")}
-          counts={tagCounts}
-        />
-        </AccordionSection>
-      )}
+      {taxonomies?.tags &&
+        taxonomies.tags.some(t => (tagCounts?.[t] ?? 0) > 0 || isActive(activeFilters, "tag", t)) && (
+          <AccordionSection title={t("secTags")} defaultOpen={false}>
+            <SearchableFacet
+              options={taxonomies?.tags ?? []}
+              activeFilters={activeFilters}
+              type="tag"
+              onToggle={value => onToggleFilter({ type: "tag", value })}
+              placeholder={t("findTag")}
+              counts={tagCounts}
+            />
+          </AccordionSection>
+        )}
 
-      {taxonomies?.genres && taxonomies.genres.some(g => (genreCounts?.[g] ?? 0) > 0 || isActive(activeFilters, "genre", g)) && (
-        <AccordionSection title={t("secGenres")} defaultOpen={false}>
-        <SearchableFacet
-          options={taxonomies?.genres ?? []}
-          activeFilters={activeFilters}
-          type="genre"
-          onToggle={value => onToggleFilter({ type: "genre", value })}
-          placeholder={t("findGenre")}
-          counts={genreCounts}
-        />
-        </AccordionSection>
-      )}
+      {taxonomies?.genres &&
+        taxonomies.genres.some(g => (genreCounts?.[g] ?? 0) > 0 || isActive(activeFilters, "genre", g)) && (
+          <AccordionSection title={t("secGenres")} defaultOpen={false}>
+            <SearchableFacet
+              options={taxonomies?.genres ?? []}
+              activeFilters={activeFilters}
+              type="genre"
+              onToggle={value => onToggleFilter({ type: "genre", value })}
+              placeholder={t("findGenre")}
+              counts={genreCounts}
+            />
+          </AccordionSection>
+        )}
 
-      {taxonomies?.publishers && taxonomies.publishers.some(p => (publisherCounts?.[p] ?? 0) > 0 || isActive(activeFilters, "publisher", p)) && (
-        <AccordionSection title={t("secPublishers")} defaultOpen={false}>
-        <SearchableFacet
-          options={taxonomies?.publishers ?? []}
-          activeFilters={activeFilters}
-          type="publisher"
-          onToggle={value => onToggleFilter({ type: "publisher", value })}
-          placeholder={t("findPublisher")}
-          counts={publisherCounts}
-        />
-        </AccordionSection>
-      )}
+      {taxonomies?.publishers &&
+        taxonomies.publishers.some(p => (publisherCounts?.[p] ?? 0) > 0 || isActive(activeFilters, "publisher", p)) && (
+          <AccordionSection title={t("secPublishers")} defaultOpen={false}>
+            <SearchableFacet
+              options={taxonomies?.publishers ?? []}
+              activeFilters={activeFilters}
+              type="publisher"
+              onToggle={value => onToggleFilter({ type: "publisher", value })}
+              placeholder={t("findPublisher")}
+              counts={publisherCounts}
+            />
+          </AccordionSection>
+        )}
 
       {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title={t("secPhysicalKind")}>
@@ -415,36 +417,36 @@ export function SidebarFilters({
 
       {!isHierarchyView && (
         <AccordionSection title={t("secCollectionStatus")}>
-        {isHierarchyView ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
-        ) : disableStatus ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {collectionStatuses.map(({ value, label, dot }) => {
-              const active = isActive(activeFilters, "status", value);
-              const count = statusCounts[value] ?? 0;
-              const disabled = !active && count === 0;
-              return (
-                <label
-                  key={value}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => onToggleFilter({ type: "status", value })}
-                    disabled={disabled}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary"
-                  />
-                  <span className={`h-2 w-2 rounded-full ${dot}`} />
-                  <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
-                </label>
-              );
-            })}
-          </div>
-        )}
+          {isHierarchyView ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
+          ) : disableStatus ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {collectionStatuses.map(({ value, label, dot }) => {
+                const active = isActive(activeFilters, "status", value);
+                const count = statusCounts[value] ?? 0;
+                const disabled = !active && count === 0;
+                return (
+                  <label
+                    key={value}
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      onChange={() => onToggleFilter({ type: "status", value })}
+                      disabled={disabled}
+                      className="h-3.5 w-3.5 rounded border-border accent-primary"
+                    />
+                    <span className={`h-2 w-2 rounded-full ${dot}`} />
+                    <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </AccordionSection>
       )}
 

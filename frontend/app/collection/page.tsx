@@ -344,19 +344,6 @@ function CollectionContent() {
 
   const { data: statsData } = useStats();
 
-  const hasActiveFilters =
-    categoryFilters.length > 0 ||
-    formatFilters.length > 0 ||
-    tagFilters.length > 0 ||
-    collectionFilters.length > 0 ||
-    genreFilters.length > 0 ||
-    publisherFilters.length > 0 ||
-    statusFilters.length > 0 ||
-    isBorrowedFilterActive ||
-    !!appliedQuery ||
-    missingCoverOnly ||
-    missingIdOnly;
-
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
     if (categoryFilters.length > 0) f.category = categoryFilters.join(",");
@@ -385,7 +372,11 @@ function CollectionContent() {
     viewMode,
   ]);
 
-  const { data: facetStatsData } = useFacetStats(filtersForFacets, hasActiveFilters);
+  const { data: facetStatsData } = useFacetStats(
+    viewMode === "items" && isLoggedIn ? "user" : "global",
+    filtersForFacets,
+    true
+  );
 
   const isLoading =
     viewMode === "roadmap"

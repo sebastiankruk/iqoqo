@@ -992,15 +992,17 @@ export function useUserCollections() {
 /**
  * Custom hook to fetch cross-filtered facet counts for the sidebar.
  *
+ * @param scope - The scope to fetch stats for ("global" or "user")
  * @param filters - Filter params to narrow counts
  * @param enabled - Whether the query is enabled
  * @returns React Query result with per-facet counts
  */
-export function useFacetStats(filters?: Record<string, string>, enabled = false) {
+export function useFacetStats(scope: "global" | "user", filters?: Record<string, string>, enabled = true) {
   return useQuery({
-    queryKey: ["facetStats", filters],
+    queryKey: ["facetStats", scope, filters],
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.set("scope", scope);
       if (filters) {
         Object.entries(filters).forEach(([k, v]) => {
           if (v) params.set(k, v);

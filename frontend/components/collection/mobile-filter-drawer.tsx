@@ -20,14 +20,7 @@ import { SlidersHorizontal } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { SidebarFilters } from "./sidebar-filters";
 import { useTranslations } from "next-intl";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerFooter,
-  DrawerClose,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 
 /** Props for MobileFilterDrawer component */
@@ -107,13 +100,11 @@ export function MobileFilterDrawer({
   }, [open]);
 
   return (
-    <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Drawer open={open} onOpenChange={isOpen => !isOpen && onClose()}>
       <DrawerContent className="h-[85vh] lg:hidden">
         <DrawerHeader className="border-b border-border text-left px-5 py-4 flex items-center gap-2">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-          <DrawerTitle className="font-serif text-sm font-bold text-foreground">
-            {t("title")}
-          </DrawerTitle>
+          <DrawerTitle className="font-serif text-sm font-bold text-foreground">{t("title")}</DrawerTitle>
         </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">

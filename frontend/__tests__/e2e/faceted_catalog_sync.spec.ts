@@ -308,7 +308,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { genres: [], publishers: [], tags: [], collections: [] },
+          data: { genres: ["Fiction"], publishers: [], tags: [], collections: [] },
         }),
       });
     });
@@ -341,13 +341,16 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
           success: true,
           data: {
             works: 10,
-            items: 0,
-            format_text: 0,
+            items: 10,
+            format_text: 5,
+            format_board_game: 5,
             items_wish_list: 0,
-            items_available: 0,
+            items_available: 5,
             items_ordered: 0,
             items_lent: 0,
             items_lost: 0,
+            genre_counts: { Fiction: 10 },
+            category_counts: { text: 5, board_game: 5 },
           },
         }),
       });
@@ -435,5 +438,64 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     // Verify "text" is removed but "board_game" remains
     await expect(page).not.toHaveURL(/.*category=.*text.*/);
     await expect(page).toHaveURL(/.*category=.*board_game.*/);
+  });
+
+  test("supports full genre cross-filtering flow", async ({ page }) => {
+
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Open Genres accordion
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+
+    // Select Fiction
+    const fictionLabel = page.locator("label").filter({ hasText: "Fiction" }).first();
+    await expect(fictionLabel).toBeVisible();
+    await fictionLabel.click({ force: true });
+
+    // Verify URL updates
+    await expect(page).toHaveURL(/.*genres=Fiction/);
+
+    // Deselect Fiction
+    await fictionLabel.click({ force: true });
+    await expect(page).not.toHaveURL(/.*genres=Fiction/);
+  });
+
+  test("supports AND across facets (category and genre)", async ({ page }) => {
+
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Select Category "Text"
+    const textLabel = page.locator("label").filter({ hasText: "Text" }).first();
+    await textLabel.click({ force: true });
+
+    // Open Genres accordion and select "Fiction"
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+    const fictionLabel = page.locator("label").filter({ hasText: "Fiction" }).first();
+    await fictionLabel.click({ force: true });
+
+    // Verify URL has both
+    await expect(page).toHaveURL(/.*category=text/);
+    await expect(page).toHaveURL(/.*genres=Fiction/);
+  });
+
+  test("supports URL round-trip restoration of filters", async ({ page }) => {
+
+    // Hydrate with category=text and genres=Fiction
+    await page.goto("/collection?category=text&genres=Fiction");
+    await page.waitForLoadState("networkidle");
+
+    // Verify that the UI state matches the URL hydration
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await expect(textCheckbox).toBeChecked();
+
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+    
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await expect(fictionCheckbox).toBeChecked();
   });
 });

@@ -132,7 +132,10 @@ export function FilterBar({
       ))}
 
       {activeFilters.length > 1 && (
-        <button onClick={onClearAll} className="text-xs font-medium text-accent underline-offset-2 hover:underline shrink-0">
+        <button
+          onClick={onClearAll}
+          className="text-xs font-medium text-accent underline-offset-2 hover:underline shrink-0"
+        >
           Clear all
         </button>
       )}
