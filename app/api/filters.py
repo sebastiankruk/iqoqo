@@ -15,21 +15,32 @@
 #
 """Dialect-aware genre filter helper for faceted navigation."""
 
+from sqlalchemy.dialects.postgresql import JSONB
+
 from app.db import db
 from app.db.models import Work
 
 
 def apply_genre_filter(query, genres_list):
-    """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively."""
+    """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively.
+
+    The ``Work.meta`` column is typed as PostgreSQL ``json`` (not ``jsonb``).
+    We explicitly cast to ``jsonb`` so that SQLAlchemy's ``.contains()``
+    emits the ``@>`` containment operator instead of a broken ``LIKE`` on
+    raw JSON.  This also allows the GIN index
+    ``idx_work_meta_genres_gin`` (on ``meta::jsonb->'genres'``) to be
+    used for ``@>`` queries.
+    """
     is_postgres = db.engine.dialect.name == "postgresql"
 
     conditions = []
     for gen in genres_list:
         g_clean = gen.strip()
         if is_postgres:
-            # PostgreSQL optimized GIN index path using JSONB containment
-            conditions.append(Work.meta.contains({"genre": g_clean}))
-            conditions.append(Work.meta["genres"].contains([g_clean]))
+            # Cast meta to jsonb so .contains() emits the @> containment operator
+            meta_jsonb = Work.meta.cast(JSONB)
+            conditions.append(meta_jsonb.contains({"genre": g_clean}))
+            conditions.append(meta_jsonb["genres"].contains([g_clean]))
         else:
             # SQLite fallback path
             conditions.append(Work.meta["genre"].as_string().ilike(f"%{g_clean}%"))
