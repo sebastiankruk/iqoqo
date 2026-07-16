@@ -300,7 +300,7 @@ test.describe("UX/UI Audit Workflow", () => {
           console.log("Mobile filters drawer screenshot saved");
 
           // Verify that MobileFilterDrawer content is visible
-          await expect(page.getByRole("dialog", { name: "Filter drawer" })).toBeVisible();
+          await expect(page.getByRole("dialog", { name: "Filters" })).toBeVisible();
 
           // Count active buttons inside filter drawer
           const drawerButtons = await page.locator("[role='dialog'] button").all();
