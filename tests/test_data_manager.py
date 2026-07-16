@@ -481,7 +481,7 @@ def test_get_faceted_stats_filtered_by_category(app_with_faceted_data, app):
         stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, category="text")
 
     assert stats["category_counts"].get("text") == 2
-    assert stats["category_counts"].get("music", 0) == 0
+    assert stats["category_counts"].get("music") == 1
     assert stats["format_counts"].get("book") == 2
     assert stats["format_counts"].get("cd", 0) == 0
     assert stats["genre_counts"].get("Fantasy") == 1
@@ -497,6 +497,20 @@ def test_get_faceted_stats_filtered_by_genre(app_with_faceted_data, app):
     assert stats["category_counts"].get("text", 0) == 0
     assert stats["format_counts"].get("cd") == 1
     assert stats["format_counts"].get("book", 0) == 0
+
+
+def test_get_faceted_stats_multiselect_same_facet(app_with_faceted_data, app):
+    """Selecting one genre does not zero out other genres' counts."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, genres=["Fantasy"])
+
+    assert stats["genre_counts"].get("Fantasy") == 1
+    assert stats["genre_counts"].get("Science Fiction") == 1
+    assert stats["genre_counts"].get("Rock") == 1
+    assert stats["category_counts"].get("text") == 2
+    assert stats["category_counts"].get("music", 0) == 0
+    assert stats["format_counts"].get("book") == 2
+    assert stats["format_counts"].get("cd", 0) == 0
 
 
 def test_get_faceted_stats_filtered_by_tag(app_with_faceted_data, app):

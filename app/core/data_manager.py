@@ -415,7 +415,7 @@ class DataManager:
 
     @staticmethod
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def get_faceted_stats(
+    def _build_item_ids_subq(
         owner_id: uuid.UUID | None = None,
         category: str | None = None,
         fmt: str | None = None,
@@ -427,18 +427,15 @@ class DataManager:
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
-    ) -> dict[str, Any]:
-        """Return cross-filtered per-facet counts for sidebar faceted navigation.
+    ):
+        """Build and return a subquery of Item IDs matching the given filters.
 
-        When no filters are passed, returns global/unfiltered counts.
-        When filters are active, all facet counts are narrowed to the
-        matching item subset.
-
-        Returns a dict with keys:
-          category_counts, format_counts, status_counts,
-          collection_counts, tag_counts, genre_counts, publisher_counts
+        Each filter group can be independently enabled or disabled via its
+        parameter, allowing callers to exclude a particular facet group's
+        own filters when computing that group's counts for multi-select
+        faceted navigation.
         """
-        from sqlalchemy import func, or_, select, text
+        from sqlalchemy import or_, select
 
         base_query = (
             select(Item.id)
@@ -509,8 +506,69 @@ class DataManager:
             status_conds = [Item.status.in_(statuses), Item.collection_status.in_(statuses)]
             base_query = base_query.where(or_(*status_conds))
 
-        item_ids_subq = base_query.subquery()
-        item_id_col = item_ids_subq.c.id
+        return base_query.subquery()
+
+    @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def get_faceted_stats(
+        owner_id: uuid.UUID | None = None,
+        category: str | None = None,
+        fmt: str | None = None,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
+    ) -> dict[str, Any]:
+        """Return cross-filtered per-facet counts for sidebar faceted navigation.
+
+        When no filters are passed, returns global/unfiltered counts.
+
+        Each facet group's counts are computed excluding that group's own
+        filters so that selecting a value within a group (e.g. a genre) does
+        not zero out counts for other values in the same group.  All other
+        groups' filters are still applied to provide cross-facet narrowing.
+
+        Returns a dict with keys:
+          category_counts, format_counts, status_counts,
+          collection_counts, tag_counts, genre_counts, publisher_counts
+        """
+        from sqlalchemy import func, select, text
+
+        def _subq(
+            exclude_category: bool = False,
+            exclude_fmt: bool = False,
+            exclude_tags: bool = False,
+            exclude_collections: bool = False,
+            exclude_genres: bool = False,
+            exclude_publishers: bool = False,
+            exclude_statuses: bool = False,
+        ):
+            """Build item-id subquery with the specified facet groups excluded."""
+            return DataManager._build_item_ids_subq(
+                owner_id=owner_id,
+                category=None if exclude_category else category,
+                fmt=None if exclude_fmt else fmt,
+                tags=None if exclude_tags else tags,
+                collections=None if exclude_collections else collections,
+                genres=None if exclude_genres else genres,
+                publishers=None if exclude_publishers else publishers,
+                statuses=None if exclude_statuses else statuses,
+                borrowed_only=borrowed_only,
+                missing_cover=missing_cover,
+                missing_id=missing_id,
+            )
+
+        cat_subq = _subq(exclude_category=True)
+        fmt_subq = _subq(exclude_fmt=True)
+        tag_subq = _subq(exclude_tags=True)
+        coll_subq = _subq(exclude_collections=True)
+        genre_subq = _subq(exclude_genres=True)
+        pub_subq = _subq(exclude_publishers=True)
+        status_subq = _subq(exclude_statuses=True)
 
         # Category counts (grouped by Expression.content_type)
         cat_rows = db.session.execute(
@@ -518,7 +576,7 @@ class DataManager:
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
-            .where(Item.id.in_(select(item_id_col)))
+            .where(Item.id.in_(select(cat_subq.c.id)))
             .group_by(Expression.content_type)
         ).all()
         category_counts: dict[str, int] = {}
@@ -531,7 +589,7 @@ class DataManager:
             select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
-            .where(Item.id.in_(select(item_id_col)))
+            .where(Item.id.in_(select(fmt_subq.c.id)))
             .group_by(Manifestation.meta["format"].as_string())
         ).all()
         format_counts: dict[str, int] = {}
@@ -543,7 +601,7 @@ class DataManager:
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         status_rows = db.session.execute(
             select(Item.status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .where(Item.id.in_(select(item_id_col)))
+            .where(Item.id.in_(select(status_subq.c.id)))
             .group_by(Item.status)
         ).all()
         for s, cnt in status_rows:
@@ -551,7 +609,7 @@ class DataManager:
                 db_statuses[s] += cnt
         coll_status_rows = db.session.execute(
             select(Item.collection_status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .where(Item.id.in_(select(item_id_col)))
+            .where(Item.id.in_(select(status_subq.c.id)))
             .group_by(Item.collection_status)
         ).all()
         for cs, cnt in coll_status_rows:
@@ -563,7 +621,7 @@ class DataManager:
             select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(UserCollectionItem)
             .join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
-            .where(UserCollectionItem.item_id.in_(select(item_id_col)))
+            .where(UserCollectionItem.item_id.in_(select(coll_subq.c.id)))
             .group_by(UserCollection.name)
         ).all()
         collection_counts: dict[str, int] = {c: cnt for c, cnt in coll_rows if c}
@@ -573,7 +631,7 @@ class DataManager:
             select(Tag.name, func.count(ItemTag.item_id).label("cnt"))  # pylint: disable=not-callable
             .select_from(ItemTag)
             .join(Tag, ItemTag.tag_id == Tag.id)
-            .where(ItemTag.item_id.in_(select(item_id_col)))
+            .where(ItemTag.item_id.in_(select(tag_subq.c.id)))
             .group_by(Tag.name)
         ).all()
         tag_counts: dict[str, int] = {t: cnt for t, cnt in tag_rows if t}
@@ -598,7 +656,7 @@ class DataManager:
                 .join(Expression, Manifestation.expression_id == Expression.id)
                 .join(Work, Expression.work_id == Work.id)
                 .where(
-                    Item.id.in_(select(item_id_col)),
+                    Item.id.in_(select(genre_subq.c.id)),
                     Work.meta.isnot(None),
                     text("jsonb_typeof(works.meta::jsonb->'genres') = 'array'"),
                 )
@@ -615,7 +673,7 @@ class DataManager:
                 .join(Expression, Expression.work_id == Work.id)
                 .join(Manifestation, Manifestation.expression_id == Expression.id)
                 .join(Item, Item.manifestation_id == Manifestation.id)
-                .where(Item.id.in_(select(item_id_col)))
+                .where(Item.id.in_(select(genre_subq.c.id)))
                 .distinct()
             ).all()
             w_ids = [r[0] for r in w_ids_query]
@@ -639,7 +697,7 @@ class DataManager:
             .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .where(
-                Item.id.in_(select(item_id_col)),
+                Item.id.in_(select(pub_subq.c.id)),
                 Manifestation.publisher.isnot(None),
                 Manifestation.publisher != "",
             )
