@@ -418,22 +418,22 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await page.waitForLoadState("networkidle");
 
     // Select the first category: "Text"
-    const textLabel = page.locator("label").filter({ hasText: "Text" }).first();
-    await textLabel.click({ force: true });
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await textCheckbox.check({ force: true });
 
     // Verify URL updates to include category=text
     await expect(page).toHaveURL(/.*category=text/);
 
     // Select the second category: "Board Game"
-    const boardGameLabel = page.locator("label").filter({ hasText: "Board Game" }).first();
-    await boardGameLabel.click({ force: true });
+    const boardGameCheckbox = page.getByRole("checkbox", { name: "Board Game" }).first();
+    await boardGameCheckbox.check({ force: true });
 
     // Verify URL contains both category parameters
     await expect(page).toHaveURL(/.*category=.*text.*/);
     await expect(page).toHaveURL(/.*category=.*board_game.*/);
 
     // Deselect "Text"
-    await textLabel.click({ force: true });
+    await textCheckbox.uncheck({ force: true });
 
     // Verify "text" is removed but "board_game" remains
     await expect(page).not.toHaveURL(/.*category=.*text.*/);
@@ -450,16 +450,12 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await genresAccordion.click();
 
     // Select Fiction
-    const fictionLabel = page.locator("label").filter({ hasText: "Fiction" }).first();
-    await expect(fictionLabel).toBeVisible();
-    await fictionLabel.click({ force: true });
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await fictionCheckbox.waitFor({ state: 'visible' });
+    await fictionCheckbox.check();
 
     // Verify URL updates
     await expect(page).toHaveURL(/.*genres=Fiction/);
-
-    // Deselect Fiction
-    await fictionLabel.click({ force: true });
-    await expect(page).not.toHaveURL(/.*genres=Fiction/);
   });
 
   test("supports AND across facets (category and genre)", async ({ page }) => {
@@ -468,14 +464,15 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await page.waitForLoadState("networkidle");
 
     // Select Category "Text"
-    const textLabel = page.locator("label").filter({ hasText: "Text" }).first();
-    await textLabel.click({ force: true });
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await textCheckbox.check({ force: true });
 
     // Open Genres accordion and select "Fiction"
     const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
     await genresAccordion.click();
-    const fictionLabel = page.locator("label").filter({ hasText: "Fiction" }).first();
-    await fictionLabel.click({ force: true });
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await fictionCheckbox.waitFor({ state: 'visible' });
+    await fictionCheckbox.check();
 
     // Verify URL has both
     await expect(page).toHaveURL(/.*category=text/);

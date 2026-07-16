@@ -109,12 +109,17 @@ function CollectionContent() {
   const initialGenres = searchParams?.get("genres") || "";
   const initialPublishers = searchParams?.get("publishers") || "";
 
+  const initialCategories = searchParams?.get("category") || "";
+  const initialFormats = searchParams?.get("format") || "";
+
   const initialFilters: ActiveFilter[] = [
     ...(initialStatuses ? initialStatuses.split(",").map(s => ({ type: "status" as const, value: s })) : []),
     ...(initialTags ? initialTags.split(",").map(s => ({ type: "tag" as const, value: s })) : []),
     ...(initialCollections ? initialCollections.split(",").map(s => ({ type: "collection" as const, value: s })) : []),
     ...(initialGenres ? initialGenres.split(",").map(s => ({ type: "genre" as const, value: s })) : []),
     ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
+    ...(initialCategories ? initialCategories.split(",").map(s => ({ type: "category" as const, value: s })) : []),
+    ...(initialFormats ? initialFormats.split(",").map(s => ({ type: "format" as const, value: s })) : []),
   ];
 
   const initialViewMode = (searchParams?.get("view") || "items") as

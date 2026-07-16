@@ -238,6 +238,8 @@
     "progress_want_to_play": "Chcę zagrać",
     "progress_playing": "W trakcie grania",
     "progress_played": "Zagrane",
+    "progress_unread": "Nieprzeczytane",
+    "progress_dnf": "Nie ukończono",
     "fmt_book": "Książka",
     "fmt_cd": "CD",
     "fmt_vinyl": "Winyl",

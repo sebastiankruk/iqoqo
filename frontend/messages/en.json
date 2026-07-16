@@ -238,6 +238,8 @@
     "progress_want_to_play": "Want to Play",
     "progress_playing": "Playing",
     "progress_played": "Played",
+    "progress_unread": "Unread",
+    "progress_dnf": "Did Not Finish",
     "fmt_book": "Book",
     "fmt_cd": "CD",
     "fmt_vinyl": "Vinyl",
