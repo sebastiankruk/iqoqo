@@ -199,15 +199,22 @@ def test_get_works_shelf_aggregation(client, complex_shelf_data, app):
 
 
 def test_unauthorized_access_blocked(client):
-    """Ensure taxonomy and work routes enforce authentication."""
+    """Ensure taxonomy and mutation routes still enforce authentication.
+
+    .. note::
+       ``/api/works/shelf`` and ``/api/expressions/shelf`` are now
+       public global-catalog endpoints (``@optional_auth``), so
+       unauthenticated requests succeed.
+    """
     res1 = client.get("/api/taxonomies")
     assert res1.status_code == 401
 
+    # Works/Expressions shelf are now public — return global catalog data
     res2 = client.get("/api/works/shelf")
-    assert res2.status_code == 401
+    assert res2.status_code == 200
 
     res3 = client.get("/api/expressions/shelf")
-    assert res3.status_code == 401
+    assert res3.status_code == 200
 
     res4 = client.post("/api/works/1/parts", json={"part_work_id": 2})
     assert res4.status_code == 401
@@ -280,12 +287,16 @@ def test_get_taxonomies_null_meta_handling(client, app):
     assert data["tags"] == []
 
 
-def test_get_works_shelf_isolation(client, complex_shelf_data, app):
-    """Ensure User B cannot see the works aggregated from User A's shelf."""
+def test_get_works_shelf_is_global_catalog(client, complex_shelf_data, app):
+    """Works shelf is now a global catalog — all users see the same works.
+
+    User-owned annotations (items, intents) differ per user, but the
+    works themselves are visible to everyone.
+    """
     user_a_id = complex_shelf_data
 
     with app.app_context():
-        user_b = User(email="isolated_user@iqoqo.local", display_name="Isolated Tester")
+        user_b = User(email="global_catalog_user@iqoqo.local", display_name="Global Catalog Viewer")
         db.session.add(user_b)
         db.session.commit()
         user_b_id = user_b.id
@@ -297,7 +308,11 @@ def test_get_works_shelf_isolation(client, complex_shelf_data, app):
         token_a = generate_internal_jwt(user_a)
 
     res_a = client.get("/api/works/shelf", headers={"Authorization": f"Bearer {token_a}"})
+    assert res_a.status_code == 200
     assert len(res_a.json["data"]) == 1
+
+    # User A owns this work (total_items > 0)
+    assert res_a.json["data"][0]["total_items"] > 0
 
     with app.app_context():
         user_b_ref = db.session.get(User, user_b_id)
@@ -305,8 +320,11 @@ def test_get_works_shelf_isolation(client, complex_shelf_data, app):
 
     res_b = client.get("/api/works/shelf", headers={"Authorization": f"Bearer {token_b}"})
     assert res_b.status_code == 200
-    assert len(res_b.json["data"]) == 0
-    assert res_b.json["total"] == 0
+    # Global catalog — User B also sees the same work (but doesn't own it)
+    assert len(res_b.json["data"]) == 1
+    assert res_b.json["data"][0]["title"] == res_a.json["data"][0]["title"]
+    # User B does not own any items for this work
+    assert res_b.json["data"][0]["total_items"] == 0
 
 
 def test_get_works_shelf_orphaned_items(client, app):
@@ -854,18 +872,28 @@ def test_global_catalog_visibility_unowned_items(client, app):
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 1. Without filters, works/shelf and expressions/shelf should only return owned works
+    # 1. Without filters, works/shelf and expressions/shelf show ALL works
+    #    (global catalog — both owned and unowned are visible)
     res_works = client.get("/api/works/shelf", headers=headers)
     assert res_works.status_code == 200
     work_titles = [w["title"] for w in res_works.json["data"]]
     assert "My Personal Book" in work_titles
-    assert "Global Unowned Book" not in work_titles
+    assert "Global Unowned Book" in work_titles  # Now visible in global catalog
+
+    # User A owns "My Personal Book" but not "Global Unowned Book"
+    for w in res_works.json["data"]:
+        if w["title"] == "My Personal Book":
+            assert w["total_items"] > 0
+        elif w["title"] == "Global Unowned Book":
+            assert w["total_items"] == 0
+            assert len(w["owned_manifestations"]) == 1
+            assert w["owned_manifestations"][0]["item_id"] is None
 
     res_exprs = client.get("/api/expressions/shelf", headers=headers)
     assert res_exprs.status_code == 200
     expr_titles = [e["work_title"] for e in res_exprs.json["data"]]
     assert "My Personal Book" in expr_titles
-    assert "Global Unowned Book" not in expr_titles
+    assert "Global Unowned Book" in expr_titles  # Now visible in global catalog
 
     # 2. With global filter (genres=History), global unowned book should be returned with item_id=None
     res_works_filtered = client.get("/api/works/shelf?genres=History", headers=headers)

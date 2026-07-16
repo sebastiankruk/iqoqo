@@ -26,16 +26,16 @@ from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work,
 
 
 @api_bp.route("/works/shelf", methods=["GET"])
-@require_auth
-def get_user_works() -> Response:
+@optional_auth
+def get_works_catalog() -> Response:
     """
-    Returns a specialized view of the user's shelf grouped by Conceptual Work.
-    This resolves the F15 Complex Work/Series requirement by allowing the UI
-    to display a 'Series' or 'Work' card that contains multiple manifestations.
+    Return a global catalog view of all Conceptual Works with optional
+    filtering.  When the user is authenticated their owned items and
+    work-level intents are annotated onto each result so the frontend can
+    show an "already owned" badge.
 
-    Supports optional query parameters:
-    - q: filter by work title or creator name (case-insensitive substring match)
-    - category: filter by expression content_type (e.g. 'text', 'music', 'movie')
+    Query parameters: q, category, tags, collections, genres, publishers,
+    limit, offset.
     """
     user_id = getattr(g, "user_id", None)
     search_q = (request.args.get("q") or "").strip().lower()
@@ -58,26 +58,14 @@ def get_user_works() -> Response:
     offset = request.args.get("offset", 0, type=int)
     offset = max(offset, 0)
 
-    is_global = bool(genres_list or publishers_list or tags_list)
-
-    # Base query
-    if is_global:
-        base_query = (
-            db.session.query(Work.id)
-            .join(Expression, Expression.work_id == Work.id)
-            .join(Manifestation, Manifestation.expression_id == Expression.id)
-        )
-        has_item_joined = False
-    else:
-        base_query = (
-            db.session.query(Work.id)
-            .join(Expression, Expression.work_id == Work.id)
-            .join(Manifestation, Manifestation.expression_id == Expression.id)
-            .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id))
-            .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
-            .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
-        )
-        has_item_joined = True
+    # Always use the global catalog query (no owner-scope filter).
+    # User-owned annotations (items, intents) are attached later.
+    base_query = (
+        db.session.query(Work.id)
+        .join(Expression, Expression.work_id == Work.id)
+        .join(Manifestation, Manifestation.expression_id == Expression.id)
+    )
+    has_item_joined = False
 
     if category:
         base_query = base_query.filter(Expression.content_type == category)
@@ -105,14 +93,11 @@ def get_user_works() -> Response:
         tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
         base_query = base_query.filter(db.or_(*tags_conditions))
 
-    if collections_list:
+    if collections_list and user_id:
         from app.db.models import UserCollection, UserCollectionItem
 
         if not has_item_joined:
-            if user_id:
-                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
-            else:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
@@ -192,7 +177,7 @@ def get_user_works() -> Response:
                         }
                     )
                     total_items += 1
-                elif is_global or has_intent:
+                else:
                     owned_manifestations.append(
                         {
                             "manifestation_id": manif.id,
@@ -230,15 +215,16 @@ def get_user_works() -> Response:
 
 
 @api_bp.route("/expressions/shelf", methods=["GET"])
-@require_auth
-def get_user_expressions() -> Response:
+@optional_auth
+def get_expressions_catalog() -> Response:
     """
-    Returns a specialized view of the user's shelf grouped by Expression.
-    Allows browsing distinct variations (translations, abridgements) of works.
+    Return a global catalog view of all Expressions with optional
+    filtering.  When the user is authenticated their owned items and
+    work-level intents are annotated onto each result so the frontend can
+    show an "already owned" badge.
 
-    Supports optional query parameters:
-    - q: filter by work title or creator name (case-insensitive substring match)
-    - category: filter by expression content_type (e.g. 'text', 'music', 'movie')
+    Query parameters: q, category, tags, collections, genres, publishers,
+    limit, offset.
     """
     user_id = getattr(g, "user_id", None)
     search_q = (request.args.get("q") or "").strip().lower()
@@ -261,25 +247,14 @@ def get_user_expressions() -> Response:
     offset = request.args.get("offset", 0, type=int)
     offset = max(offset, 0)
 
-    is_global = bool(genres_list or publishers_list or tags_list)
-
-    if is_global:
-        base_query = (
-            db.session.query(Expression.id)
-            .join(Work, Expression.work_id == Work.id)
-            .join(Manifestation, Manifestation.expression_id == Expression.id)
-        )
-        has_item_joined = False
-    else:
-        base_query = (
-            db.session.query(Expression.id)
-            .join(Work, Expression.work_id == Work.id)
-            .join(Manifestation, Manifestation.expression_id == Expression.id)
-            .outerjoin(Item, db.and_(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id))
-            .outerjoin(UserWorkIntent, db.and_(UserWorkIntent.work_id == Work.id, UserWorkIntent.user_id == user_id))
-            .filter(db.or_(Item.id.isnot(None), UserWorkIntent.id.isnot(None)))
-        )
-        has_item_joined = True
+    # Always use the global catalog query (no owner-scope filter).
+    # User-owned annotations (items, intents) are attached later.
+    base_query = (
+        db.session.query(Expression.id)
+        .join(Work, Expression.work_id == Work.id)
+        .join(Manifestation, Manifestation.expression_id == Expression.id)
+    )
+    has_item_joined = False
 
     if category:
         base_query = base_query.filter(Expression.content_type == category)
@@ -307,14 +282,11 @@ def get_user_expressions() -> Response:
         tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
         base_query = base_query.filter(db.or_(*tags_conditions))
 
-    if collections_list:
+    if collections_list and user_id:
         from app.db.models import UserCollection, UserCollectionItem
 
         if not has_item_joined:
-            if user_id:
-                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
-            else:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
+            base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
         base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
             UserCollection, UserCollectionItem.collection_id == UserCollection.id
@@ -389,7 +361,7 @@ def get_user_expressions() -> Response:
                     }
                 )
                 total_items += 1
-            elif is_global or has_intent:
+            else:
                 owned_manifestations.append(
                     {
                         "manifestation_id": manif.id,
