@@ -86,7 +86,9 @@ def log_initial_item_status(item_id: int, user_id: uuid.UUID, status: str, colle
         db.session.add(collection_log)
 
 
-def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, q, publishers_list, missing_cover, missing_id):
+def get_virtual_items(
+    user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list=None
+):
     virtual_items = []
 
     is_wish_list_requested = True
@@ -119,18 +121,21 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
     else:
         intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
 
+    if genres_list:
+        intent_query = apply_genre_filter(intent_query, genres_list)
+
     if q:
         pattern = f"%{q.strip().lower()}%"
         intent_query = intent_query.filter(db.or_(Work.title.ilike(pattern), db.cast(Work.meta["authors"], db.String).ilike(pattern)))
 
-    if category_filter or format_filter or publishers_list or missing_cover or missing_id:
+    if category_list or format_list or publishers_list or missing_cover or missing_id:
         intent_query = intent_query.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
             Manifestation, Manifestation.expression_id == Expression.id
         )
-        if category_filter:
-            intent_query = intent_query.filter(db.or_(Expression.content_type == category_filter, Expression.content_type.is_(None)))
-        if format_filter:
-            intent_query = intent_query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if category_list:
+            intent_query = intent_query.filter(db.or_(Expression.content_type.in_(category_list), Expression.content_type.is_(None)))
+        if format_list:
+            intent_query = intent_query.filter(Manifestation.meta["format"].as_string().in_(format_list))
         if publishers_list:
             pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
             intent_query = intent_query.filter(db.or_(*pubs_conditions))
@@ -163,7 +168,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
         work = intent.work
         manifestation = None
         for expr in work.expressions:
-            if category_filter and expr.content_type != category_filter:
+            if category_list and expr.content_type not in category_list:
                 continue
             if expr.manifestations:
                 manifestation = expr.manifestations[0]
@@ -248,6 +253,8 @@ def get_items():
     statuses_filter = request.args.get("statuses", None)
     category_filter = request.args.get("category", None)
     format_filter = request.args.get("format", None)
+    category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
+    format_list = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
@@ -277,7 +284,7 @@ def get_items():
     offset = (page - 1) * limit
 
     virtual_items = get_virtual_items(
-        user_id, statuses_filter, category_filter, format_filter, q, publishers_list, missing_cover, missing_id
+        user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list
     )
 
     combined_items_data = []
@@ -292,8 +299,8 @@ def get_items():
             1000,
             0,
             statuses=statuses_list,
-            category=category_filter,
-            format_filter=format_filter,
+            category=category_list,
+            format_filter=format_list,
             borrowed_only=borrowed_only,
             missing_cover=missing_cover,
             missing_id=missing_id,
@@ -352,18 +359,18 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_filter or format_filter or missing_cover or missing_id)
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id)
         needs_work_join = bool(genres_list or publishers_list or sort_by in ("title", "title-desc", "author"))
         if needs_mfn_join or needs_work_join:
             query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
             query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
             query = query.outerjoin(Work, Expression.work_id == Work.id)
 
-        if category_filter:
-            query = query.filter(Expression.content_type == category_filter)
+        if category_list:
+            query = query.filter(Expression.content_type.in_(category_list))
 
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if format_list:
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
 
         if missing_cover:
             query = query.filter(

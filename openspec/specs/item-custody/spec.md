@@ -11,4 +11,3 @@ The system SHALL maintain an append-only, immutable event log for all custody ch
 
 - **WHEN** an item's custody changes
 - **THEN** the system logs a CIDOC CRM-compliant event to the `ItemCustodyEvent` table without modifying other entity tiers (Work, Expression, Manifestation).
-

@@ -38,7 +38,7 @@ describe("SidebarFilters with Searchable Facets", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const taxonomies = {
-      genres: ["Fantasy", "Sci-Fi", "Mystery", "Thriller", "Romance", "Horror"],
+      genres: ["Fantasy", "Sci-Fi", "Mystery", "Thriller", "Romance", "Horror", "Non-fiction", "Biography", "History", "Poetry", "Drama"],
       tags: ["Read", "Unread", "Favorite", "To Read", "Borrowed", "Reference"],
       publishers: ["Penguin", "Tor", "Bantam", "Del Rey", "HarperCollins", "Macmillan"],
       collections: ["My Collection", "Favorites", "To Read", "Wishlist", "School", "Work"],
@@ -49,7 +49,12 @@ describe("SidebarFilters with Searchable Facets", () => {
   const renderComponent = (activeFilters: ActiveFilter[] = []) =>
     render(
       <QueryClientProvider client={queryClient}>
-        <SidebarFilters activeFilters={activeFilters} onToggleFilter={vi.fn()} />
+        <SidebarFilters 
+          activeFilters={activeFilters} 
+          onToggleFilter={vi.fn()} 
+          genreCounts={{ "Fantasy": 1, "Sci-Fi": 1, "Mystery": 1, "Thriller": 1, "Romance": 1, "Horror": 1, "Non-fiction": 1, "Biography": 1, "History": 1, "Poetry": 1, "Drama": 1 }} 
+          tagCounts={{ "english": 5 }}
+        />
       </QueryClientProvider>
     );
 
@@ -79,7 +84,11 @@ describe("SidebarFilters with Searchable Facets", () => {
     const mockToggle = vi.fn();
     render(
       <QueryClientProvider client={queryClient}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={mockToggle} />
+        <SidebarFilters 
+          activeFilters={[]} 
+          onToggleFilter={mockToggle} 
+          genreCounts={{ "Fantasy": 1, "Sci-Fi": 1 }} 
+        />
       </QueryClientProvider>
     );
 
@@ -96,7 +105,7 @@ describe("SidebarFilters with Searchable Facets", () => {
     // 1. When isLoggedIn is false (default)
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={false} />
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={false} genreCounts={{ "Fantasy": 1 }} />
       </QueryClientProvider>
     );
     expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "global", filters: {} });
@@ -104,7 +113,7 @@ describe("SidebarFilters with Searchable Facets", () => {
     // 2. When isLoggedIn is true
     rerender(
       <QueryClientProvider client={queryClient}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} />
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} genreCounts={{ "Fantasy": 1 }} tagCounts={{ "english": 1 }} />
       </QueryClientProvider>
     );
     expect(useTaxonomies).toHaveBeenLastCalledWith({ scope: "user", filters: {} });
@@ -222,13 +231,10 @@ describe("SearchableFacet counts display", () => {
     );
 
     fireEvent.click(screen.getByText("Tags"));
-    // 'polish' should exist but show no count badge (counts don't include it)
+    // 'polish' should NOT exist because it has no count entry (defaults to 0) and is not active
     expect(screen.getByText("english")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("polish")).toBeInTheDocument();
-    // 'polish' count badge should NOT exist
-    const polishEl = screen.getByText("polish");
-    // No "2" badge sibling since not in counts
+    expect(screen.queryByText("polish")).not.toBeInTheDocument();
   });
 
   it("renders labels normally for 0-count facet items", () => {
@@ -238,8 +244,20 @@ describe("SearchableFacet counts display", () => {
       </QueryClientProvider>
     );
 
+    // The Tags section itself shouldn't even render if all tags have 0 counts and none are active
+    expect(screen.queryByText("Tags")).not.toBeInTheDocument();
+  });
+
+  it("renders labels normally for 0-count facet items if they are active", () => {
+    render(
+      <QueryClientProvider client={queryClient2}>
+        <SidebarFilters activeFilters={[{ type: "tag", value: "english" }]} onToggleFilter={vi.fn()} tagCounts={{ english: 0, polish: 0 }} />
+      </QueryClientProvider>
+    );
+
     fireEvent.click(screen.getByText("Tags"));
     expect(screen.getByText("english")).toBeInTheDocument();
     expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("polish")).not.toBeInTheDocument();
   });
 });

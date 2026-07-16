@@ -390,4 +390,50 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await expect(onWishListLabel).toBeVisible();
     await expect(onWishListLabel).toHaveClass(/opacity-50/);
   });
+
+  test("supports multi-selection for category facets", async ({ page }) => {
+    // Mock facet stats so that the categories are not disabled
+    await page.route("**/*stats*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 10,
+            format_text: 5,
+            format_board_game: 5,
+            category_counts: { text: 5, board_game: 5 },
+          },
+        }),
+      });
+    });
+
+    // Navigate to collection
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Select the first category: "Text"
+    const textLabel = page.locator("label").filter({ hasText: "Text" }).first();
+    await textLabel.click({ force: true });
+
+    // Verify URL updates to include category=text
+    await expect(page).toHaveURL(/.*category=text/);
+
+    // Select the second category: "Board Game"
+    const boardGameLabel = page.locator("label").filter({ hasText: "Board Game" }).first();
+    await boardGameLabel.click({ force: true });
+
+    // Verify URL contains both category parameters
+    await expect(page).toHaveURL(/.*category=.*text.*/);
+    await expect(page).toHaveURL(/.*category=.*board_game.*/);
+
+    // Deselect "Text"
+    await textLabel.click({ force: true });
+
+    // Verify "text" is removed but "board_game" remains
+    await expect(page).not.toHaveURL(/.*category=.*text.*/);
+    await expect(page).toHaveURL(/.*category=.*board_game.*/);
+  });
 });

@@ -365,8 +365,9 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
 
-    const chip = screen.getByText(/status: on shelf/i).closest("button");
-    expect(chip).not.toBeNull();
+    const chipElements = screen.getAllByText(/status: on shelf/i);
+    const chip = chipElements.find(el => el.closest("button"))?.closest("button");
+    expect(chip).toBeDefined();
     fireEvent.click(chip!);
 
     const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;

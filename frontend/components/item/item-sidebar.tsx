@@ -173,6 +173,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const collectionDropdownRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
+    /**
+     * Handles clicking outside the collection dropdown.
+     *
+     * @param event - The mouse event
+     */
     function handleClickOutside(event: MouseEvent) {
       if (collectionDropdownRef.current && !collectionDropdownRef.current.contains(event.target as Node)) {
         setShowCollectionDropdown(false);

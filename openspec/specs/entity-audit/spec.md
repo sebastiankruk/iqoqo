@@ -11,4 +11,3 @@ The system SHALL maintain a dedicated audit log (`EntityAuditLog`) for tracking 
 
 - **WHEN** an administrator or custodian merges two Work records or modifies their metadata
 - **THEN** the system logs an audit event detailing the change and the responsible user, preserving curation history independently from physical item custody.
-

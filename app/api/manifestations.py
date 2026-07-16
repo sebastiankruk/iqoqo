@@ -43,6 +43,8 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
+    category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
+    format_list = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
     tags_filter = request.args.get("tags")
@@ -73,8 +75,8 @@ def get_manifestations() -> tuple[Response, int]:
             q,
             limit,
             offset,
-            category=category_filter,
-            format_filter=format_filter,
+            category=category_list,
+            format_filter=format_list,
             missing_cover=missing_cover,
             missing_id=missing_id,
             tags=tags_list,
@@ -99,10 +101,10 @@ def get_manifestations() -> tuple[Response, int]:
             Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression).join(Work)
         )
 
-        if category_filter:
-            query = query.filter(Expression.content_type == category_filter)
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if category_list:
+            query = query.filter(Expression.content_type.in_(category_list))
+        if format_list:
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
         if missing_cover:
             query = query.filter(
                 db.and_(

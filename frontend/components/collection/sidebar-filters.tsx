@@ -154,6 +154,7 @@ interface SearchableFacetProps {
  * @param root0.type - The filter type
  * @param root0.onToggle - Callback to toggle an option
  * @param root0.placeholder - Search placeholder
+ * @param root0.counts - The facet counts
  * @returns {JSX.Element} The component
  */
 export function SearchableFacet({ options, activeFilters, type, onToggle, placeholder, counts }: SearchableFacetProps) {
@@ -161,14 +162,21 @@ export function SearchableFacet({ options, activeFilters, type, onToggle, placeh
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredOptions = useMemo(() => {
-    if (!searchQuery.trim()) return options;
+    // Filter out options with 0 counts unless they are currently active
+    const availableOptions = options.filter(opt => {
+      const active = isActive(activeFilters, type, opt);
+      const count = counts?.[opt] ?? 0;
+      return active || count > 0;
+    });
+
+    if (!searchQuery.trim()) return availableOptions;
     const lowerQuery = searchQuery.toLowerCase();
-    return options.filter(opt => opt.toLowerCase().includes(lowerQuery));
-  }, [options, searchQuery]);
+    return availableOptions.filter(opt => opt.toLowerCase().includes(lowerQuery));
+  }, [options, searchQuery, activeFilters, type, counts]);
 
   return (
     <div className="flex flex-col gap-2">
-      {options.length > 5 && (
+      {options.length > 10 && (
         <div className="relative sticky top-0 z-10 bg-background pb-1">
           <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
           <input
@@ -231,6 +239,10 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.onChangeMissingCover - Change handler for missing cover filter
  * @param root0.missingId - Filter for items with missing ID
  * @param root0.onChangeMissingId - Change handler for missing ID filter
+ * @param root0.tagCounts - The counts for tags
+ * @param root0.collectionCounts - The counts for collections
+ * @param root0.genreCounts - The counts for genres
+ * @param root0.publisherCounts - The counts for publishers
  * @returns {JSX.Element} The component
  */
 export function SidebarFilters({
@@ -253,25 +265,31 @@ export function SidebarFilters({
   publisherCounts = {},
 }: SidebarFiltersProps) {
   const t = useTranslations("CollectionFilters");
-  const activeCategory = activeFilters.find(f => f.type === "category")?.value;
-  const activeFormat = activeFilters.find(f => f.type === "format")?.value;
-  const activeGenre = activeFilters.find(f => f.type === "genre")?.value;
+  const activeCategories = activeFilters.filter(f => f.type === "category").map(f => f.value);
+  const activeFormats = activeFilters.filter(f => f.type === "format").map(f => f.value);
+  const activeGenres = activeFilters.filter(f => f.type === "genre").map(f => f.value);
   const { data: taxonomies } = useTaxonomies({
     scope: isLoggedIn ? "user" : "global",
     filters: {
-      ...(activeCategory && { category: activeCategory }),
-      ...(activeFormat && { format: activeFormat }),
-      ...(activeGenre && { genre: activeGenre }),
+      ...(activeCategories.length > 0 && { category: activeCategories[0] }),
+      ...(activeFormats.length > 0 && { format: activeFormats[0] }),
+      ...(activeGenres.length > 0 && { genre: activeGenres[0] }),
     },
   });
 
-  const validProgressStatuses = activeCategory
-    ? CATEGORY_STATUS_MAP[activeCategory as keyof typeof CATEGORY_STATUS_MAP] || []
-    : [];
+  const validProgressStatuses = Array.from(
+    new Set(
+      activeCategories.flatMap(cat => CATEGORY_STATUS_MAP[cat as keyof typeof CATEGORY_STATUS_MAP] || [])
+    )
+  );
 
-  const validFormats = activeCategory
-    ? MEDIA_HIERARCHY[activeCategory as keyof typeof MEDIA_HIERARCHY]?.formats || []
-    : [];
+  const rawFormats = activeCategories.flatMap(
+    cat => (MEDIA_HIERARCHY[cat as keyof typeof MEDIA_HIERARCHY]?.formats || []) as readonly unknown[]
+  ) as Array<{ id: string; label: string }>;
+
+  const validFormats = Array.from(
+    new Map(rawFormats.map(f => [f.id, f])).values()
+  );
 
   /** True when viewing Works or Expressions – status/format don't apply at those levels */
   const isHierarchyView = viewMode === "works" || viewMode === "expressions";
@@ -295,7 +313,7 @@ export function SidebarFilters({
                 className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-primary/10 text-foreground ring-1 ring-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
               >
                 <input
-                  type="radio"
+                  type="checkbox"
                   name="category"
                   checked={active}
                   onChange={() => onToggleFilter({ type: "category", value: id })}
@@ -314,7 +332,7 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      {taxonomies?.collections && taxonomies.collections.length > 0 && (
+      {taxonomies?.collections && taxonomies.collections.some(c => (collCountsFromProps?.[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)) && (
         <AccordionSection title={t("secMyCollections")}>
           <SearchableFacet
             options={taxonomies.collections}
@@ -327,7 +345,8 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      <AccordionSection title={t("secTags")} defaultOpen={false}>
+      {taxonomies?.tags && taxonomies.tags.some(t => (tagCounts?.[t] ?? 0) > 0 || isActive(activeFilters, "tag", t)) && (
+        <AccordionSection title={t("secTags")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.tags ?? []}
           activeFilters={activeFilters}
@@ -336,9 +355,11 @@ export function SidebarFilters({
           placeholder={t("findTag")}
           counts={tagCounts}
         />
-      </AccordionSection>
+        </AccordionSection>
+      )}
 
-      <AccordionSection title={t("secGenres")} defaultOpen={false}>
+      {taxonomies?.genres && taxonomies.genres.some(g => (genreCounts?.[g] ?? 0) > 0 || isActive(activeFilters, "genre", g)) && (
+        <AccordionSection title={t("secGenres")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.genres ?? []}
           activeFilters={activeFilters}
@@ -347,9 +368,11 @@ export function SidebarFilters({
           placeholder={t("findGenre")}
           counts={genreCounts}
         />
-      </AccordionSection>
+        </AccordionSection>
+      )}
 
-      <AccordionSection title={t("secPublishers")} defaultOpen={false}>
+      {taxonomies?.publishers && taxonomies.publishers.some(p => (publisherCounts?.[p] ?? 0) > 0 || isActive(activeFilters, "publisher", p)) && (
+        <AccordionSection title={t("secPublishers")} defaultOpen={false}>
         <SearchableFacet
           options={taxonomies?.publishers ?? []}
           activeFilters={activeFilters}
@@ -358,7 +381,8 @@ export function SidebarFilters({
           placeholder={t("findPublisher")}
           counts={publisherCounts}
         />
-      </AccordionSection>
+        </AccordionSection>
+      )}
 
       {!isHierarchyView && validFormats.length > 0 && (
         <AccordionSection title={t("secPhysicalKind")}>
@@ -373,12 +397,12 @@ export function SidebarFilters({
                   className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-accent/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                 >
                   <input
-                    type="radio"
+                    type="checkbox"
                     name="format_filter"
                     checked={active}
                     onChange={() => onToggleFilter({ type: "format", value: fmt.id })}
                     disabled={disabled}
-                    className="h-4 w-4 shrink-0 rounded-full border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="h-4 w-4 shrink-0 rounded border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   <span className="flex-1">{t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
@@ -389,7 +413,8 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      <AccordionSection title={t("secCollectionStatus")}>
+      {!isHierarchyView && (
+        <AccordionSection title={t("secCollectionStatus")}>
         {isHierarchyView ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
         ) : disableStatus ? (
@@ -420,9 +445,10 @@ export function SidebarFilters({
             })}
           </div>
         )}
-      </AccordionSection>
+        </AccordionSection>
+      )}
 
-      {!isHierarchyView && activeCategory && validProgressStatuses.length > 0 && (
+      {!isHierarchyView && activeCategories.length > 0 && validProgressStatuses.length > 0 && (
         <AccordionSection title={t("secProgress")}>
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {

@@ -30,7 +30,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
-import { FilterBar } from "@/components/collection/filter-bar";
+import { FilterBar, chipLabel } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
@@ -234,6 +234,8 @@ function CollectionContent() {
     if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
     if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
     if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
+    if (categoryFilters.length > 0) params.set("category", categoryFilters.join(","));
+    if (formatFilters.length > 0) params.set("format", formatFilters.join(","));
 
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
@@ -253,9 +255,12 @@ function CollectionContent() {
     publisherFilters,
     appliedQuery,
     viewMode,
+    isLoggedIn,
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
+    categoryFilters,
+    formatFilters,
     pathname,
     router,
   ]);
@@ -272,8 +277,8 @@ function CollectionContent() {
     appliedQuery,
     sortBy,
     viewMode === "items" && isLoggedIn,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
+    formatFilters.length > 0 ? formatFilters.join(",") : undefined,
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
@@ -294,8 +299,8 @@ function CollectionContent() {
     limit,
     appliedQuery,
     viewMode === "manifestations",
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
+    formatFilters.length > 0 ? formatFilters.join(",") : undefined,
     missingCoverOnly,
     missingIdOnly,
     tagFilters,
@@ -314,7 +319,7 @@ function CollectionContent() {
     limit,
     viewMode === "works" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
     tagFilters,
     collectionFilters,
     genreFilters,
@@ -330,7 +335,7 @@ function CollectionContent() {
     limit,
     viewMode === "expressions" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
     tagFilters,
     collectionFilters,
     genreFilters,
@@ -354,8 +359,8 @@ function CollectionContent() {
 
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
-    if (categoryFilters.length > 0) f.category = categoryFilters[0];
-    if (formatFilters.length > 0) f.format = formatFilters[0];
+    if (categoryFilters.length > 0) f.category = categoryFilters.join(",");
+    if (formatFilters.length > 0) f.format = formatFilters.join(",");
     if (tagFilters.length > 0) f.tags = tagFilters.join(",");
     if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
     if (genreFilters.length > 0) f.genres = genreFilters.join(",");
@@ -364,6 +369,7 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
+    f.scope = viewMode === "items" ? "user" : "global";
     return f;
   }, [
     categoryFilters,
@@ -376,6 +382,7 @@ function CollectionContent() {
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
+    viewMode,
   ]);
 
   const { data: facetStatsData } = useFacetStats(filtersForFacets, hasActiveFilters);
@@ -447,19 +454,31 @@ function CollectionContent() {
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
       if (exists) {
-        return prev.filter(f => !(f.type === filter.type && f.value === filter.value));
-      } else {
-        // Enforce single-select for category and format
-        if (filter.type === "category" || filter.type === "format") {
-          return [...prev.filter(f => f.type !== filter.type), filter];
+        let next = prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+        if (filter.type === "category") {
+          const remainingCategories = next.filter(f => f.type === "category");
+          if (remainingCategories.length === 0) {
+            next = next.filter(f => f.type !== "format");
+          }
         }
+        return next;
+      } else {
         return [...prev, filter];
       }
     });
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
-    setActiveFilters(prev => prev.filter(f => !(f.type === filter.type && f.value === filter.value)));
+    setActiveFilters(prev => {
+      let next = prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+      if (filter.type === "category") {
+        const remainingCategories = next.filter(f => f.type === "category");
+        if (remainingCategories.length === 0) {
+          next = next.filter(f => f.type !== "format");
+        }
+      }
+      return next;
+    });
   }, []);
 
   const clearAll = useCallback(() => {
@@ -536,8 +555,17 @@ function CollectionContent() {
     return items;
   }, [allItems, sortBy]);
 
+  const ariaLiveText = useMemo(() => {
+    if (activeFilters.length === 0) return `All filters cleared. ${total} results found.`;
+    const filterLabels = activeFilters.map(f => chipLabel(f)).join(", ");
+    return `Filtered to ${filterLabels}. ${total} results found.`;
+  }, [activeFilters, total]);
+
   return (
     <div className="min-h-screen bg-background">
+      <div aria-live="polite" className="sr-only">
+        {ariaLiveText}
+      </div>
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
@@ -998,6 +1026,26 @@ function CollectionContent() {
         </div>
       </div>
       <Footer />
+
+      {/* Floating Filter Pill */}
+      {!mobileFiltersOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] lg:hidden">
+          <button
+            onClick={() => setMobileFiltersOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-foreground text-background px-5 py-2.5 shadow-lg font-medium text-sm transition-transform active:scale-95"
+            aria-label={t("filters")}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span>{t("filters")}</span>
+            {activeFilters.length > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground ml-1">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Bulk-add toolbar – floats above footer when manifestations are selected */}
       {showClientContent && viewMode === "manifestations" && (
         <BulkAddToolbar

@@ -45,8 +45,8 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
         tags: list[str] | None = None,
@@ -88,8 +88,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -133,8 +133,8 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
     ) -> tuple[int, list[int]]:
@@ -146,11 +146,11 @@ class SearchService:
 
         extra_filters_sql = ""
         if category:
-            params["category"] = category
-            extra_filters_sql += " AND e.content_type = :category"
+            params["category"] = tuple(category)
+            extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
-            params["format_filter"] = format_filter
-            extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
+            params["format_filter"] = tuple(format_filter)
+            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
         if missing_cover:
             extra_filters_sql += (
                 " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
@@ -181,8 +181,17 @@ class SearchService:
         ORDER BY rank DESC
         LIMIT :limit OFFSET :offset
         """
-        total = int(db.session.execute(text(count_sql), params).scalar() or 0)
-        result_ids = [row[0] for row in db.session.execute(text(rows_sql), params).all()]
+        count_stmt = text(count_sql)
+        rows_stmt = text(rows_sql)
+        if category:
+            count_stmt = count_stmt.bindparams(bindparam("category", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("category", expanding=True))
+        if format_filter:
+            count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
+
+        total = int(db.session.execute(count_stmt, params).scalar() or 0)
+        result_ids = [row[0] for row in db.session.execute(rows_stmt, params).all()]
         return total, result_ids
 
     @staticmethod
@@ -190,8 +199,8 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
         tags: list[str] | None = None,
@@ -208,9 +217,9 @@ class SearchService:
             .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
         )
         if category:
-            base_query = base_query.filter(Expression.content_type == category)
+            base_query = base_query.filter(Expression.content_type.in_(category))
         if format_filter:
-            base_query = base_query.filter(Manifestation.meta["format"].as_string() == format_filter)
+            base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
         if missing_cover:
             base_query = base_query.filter(
                 db.and_(
@@ -282,8 +291,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -304,13 +313,13 @@ class SearchService:
             extra_filters_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         if category:
-            params["category"] = category
-            extra_filters_sql += " AND e.content_type = :category"
+            params["category"] = tuple(category)
+            extra_filters_sql += " AND e.content_type IN :category"
 
         if format_filter:
-            params["format_filter"] = format_filter
+            params["format_filter"] = tuple(format_filter)
             # exact match using JSONB ->> operator in raw SQL
-            extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
+            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
 
         if missing_cover:
             extra_filters_sql += (
@@ -355,6 +364,12 @@ class SearchService:
         if statuses:
             count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
+        if category:
+            count_stmt = count_stmt.bindparams(bindparam("category", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("category", expanding=True))
+        if format_filter:
+            count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -367,8 +382,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -438,10 +453,10 @@ class SearchService:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
         if category:
-            query = query.filter(Expression.content_type == category)
+            query = query.filter(Expression.content_type.in_(category))
 
         if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
 
         # Apply taxonomy filters
         if tags:
