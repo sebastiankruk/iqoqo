@@ -159,6 +159,8 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
         logger.debug("Google Books request failed for %s: %s", isbn, exc)
+        if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
+            raise
         return None
 
     if not data.get("totalItems") or not data.get("items"):
@@ -217,6 +219,8 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
         logger.debug("Open Library request failed for %s: %s", isbn, exc)
+        if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
+            raise
         return None
 
     if not data:

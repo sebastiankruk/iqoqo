@@ -108,6 +108,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
     with app.app_context():
         gaps = ["format", "publisher", "genres", "cover"] if gap == "all" else [gap]
         processed = 0
+        blocked_strategies = set()
 
         for g in gaps:
             query = get_gap_query(g, content_type)
@@ -118,7 +119,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                     break
 
                 strategy = determine_strategy(man)
-                if not strategy:
+                if not strategy or strategy in blocked_strategies:
                     continue
 
                 if not force:
@@ -205,6 +206,19 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.error("Error fetching %s via %s: %s", identifier, strategy, e)
                     error_msg = str(e)
+                    if hasattr(e, "response") and e.response is not None and e.response.status_code == 429:
+                        try:
+                            err_json = e.response.json()
+                            err_msg = err_json.get("error", {}).get("message", "")
+                            if "Queries per day" in err_msg:
+                                logger.critical("Daily quota exceeded for %s. Aborting this strategy.", strategy)
+                                blocked_strategies.add(strategy)
+                            else:
+                                logger.warning("Rate limit (429) reached for %s. Waiting 60 seconds before continuing...", strategy)
+                                time.sleep(60)
+                        except Exception: # pylint: disable=broad-exception-caught
+                            logger.warning("Rate limit (429) reached for %s. Waiting 60 seconds before continuing...", strategy)
+                            time.sleep(60)
 
                 log_entry = MetadataRefetchLog.query.filter_by(entity_type="manifestation", entity_id=man.id, strategy=strategy).first()
                 if not log_entry:

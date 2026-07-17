@@ -58,7 +58,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
   const isAudio = isAudioMedia(format);
   const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
-  const publisher = item.publisher || (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
+  const publisher =
+    item.publisher || (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
   const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
 
   // Resolve special series label

@@ -426,7 +426,8 @@ export function SidebarFilters({
                 <div className="flex flex-col gap-1">
                   {collectionStatuses.map(({ value, label, dot }) => {
                     const active = isActive(activeFilters, "status", value);
-                    const count = value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
+                    const count =
+                      value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
                     const disabled = !active && count === 0;
                     return (
                       <label
