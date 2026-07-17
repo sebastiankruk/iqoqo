@@ -65,7 +65,7 @@ done
 
 if [[ -z "$STACK" ]]; then
     if [[ -f "$IQOQO_ROOT/.env" ]]; then
-        ENV_FILE=$(grep -oP 'ENV_FILE=\K.*' "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
+        ENV_FILE=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
         if [[ "$ENV_FILE" == *".preview"* ]]; then
             STACK="preview"
         elif [[ "$ENV_FILE" == *".prod"* ]]; then
@@ -96,7 +96,7 @@ fi
 
 load_env() {
     local key="$1"
-    grep -oP "^\s*${key}=\K.*" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
+    sed -n "s/^[[:space:]]*${key}=\(.*\)/\1/p" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
 }
 
 FRONTEND_URL=$(load_env "NEXT_PUBLIC_FRONTEND_URL")
