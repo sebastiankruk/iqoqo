@@ -478,7 +478,7 @@ def test_get_faceted_stats_unfiltered(app_with_faceted_data, app):
 def test_get_faceted_stats_filtered_by_category(app_with_faceted_data, app):
     """get_faceted_stats with category filter narrows all facet counts."""
     with app.app_context():
-        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, category="text")
+        stats = DataManager.get_faceted_stats(owner_id=app_with_faceted_data, category=["text"])
 
     assert stats["category_counts"].get("text") == 2
     assert stats["category_counts"].get("music") == 1

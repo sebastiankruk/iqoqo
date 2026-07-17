@@ -417,8 +417,8 @@ class DataManager:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _build_item_ids_subq(
         owner_id: uuid.UUID | None = None,
-        category: str | None = None,
-        fmt: str | None = None,
+        category: list[str] | None = None,
+        fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,
@@ -452,9 +452,9 @@ class DataManager:
             base_query = base_query.where(Item.lent_to_user_id == owner_id)
 
         if category:
-            base_query = base_query.where(Expression.content_type == category)
+            base_query = base_query.where(Expression.content_type.in_(category))
         if fmt:
-            base_query = base_query.where(Manifestation.meta["format"].as_string() == fmt)
+            base_query = base_query.where(Manifestation.meta["format"].as_string().in_(fmt))
         if missing_cover:
             base_query = base_query.where(
                 or_(
@@ -512,8 +512,8 @@ class DataManager:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def get_faceted_stats(
         owner_id: uuid.UUID | None = None,
-        category: str | None = None,
-        fmt: str | None = None,
+        category: list[str] | None = None,
+        fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,

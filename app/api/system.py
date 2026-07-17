@@ -121,8 +121,8 @@ def get_faceted_stats():
     When no filters are passed, returns global counts for the user's items.
     """
     owner_id = getattr(g, "user_id", None)
-    category = request.args.get("category")
-    fmt = request.args.get("format")
+    category_str = request.args.get("category")
+    fmt_str = request.args.get("format")
     tags_str = request.args.get("tags")
     collections_str = request.args.get("collections")
     genres_str = request.args.get("genres")
@@ -132,6 +132,8 @@ def get_faceted_stats():
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
+    category_list = [c.strip() for c in category_str.split(",") if c.strip()] if category_str else None
+    fmt_list = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
     tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
     collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
     genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None
@@ -140,8 +142,8 @@ def get_faceted_stats():
 
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,
-        category=category if category else None,
-        fmt=fmt if fmt else None,
+        category=category_list,
+        fmt=fmt_list,
         tags=tags_list,
         collections=collections_list,
         genres=genres_list,
