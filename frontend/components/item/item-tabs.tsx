@@ -54,7 +54,7 @@ function DetailsTab({ item }: { item: Item }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Rich metadata including audio tracklists */}
-      <ExtendedMetadata meta={meta} owner_name={item.owner_name} owner_count={item.owner_count} />
+      <ExtendedMetadata meta={meta} workMeta={item.work?.meta as Record<string, unknown> | undefined} owner_name={item.owner_name} owner_count={item.owner_count} />
 
       {/* Series parts info */}
       {item.work && parts.length > 0 && (

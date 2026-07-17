@@ -28,6 +28,7 @@ import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
+  workMeta?: Record<string, unknown>;
   owner_name?: string | null;
   owner_count?: number;
 }
@@ -41,14 +42,19 @@ interface ExtendedMetadataProps {
  * @param root0.owner_count - The number of owners for this manifestation
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMetadataProps) {
+export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
 
   const description = (meta["description"] as string | undefined) || (meta["Description"] as string | undefined);
-  const categories =
+  const manifestationCategories =
     ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
+  const workCategories =
+    ((workMeta?.["categories"] as string[] | undefined) || (workMeta?.["Categories"] as string[] | undefined)) ?? [];
+  const workGenres =
+    ((workMeta?.["genres"] as string[] | undefined) || (workMeta?.["Genres"] as string[] | undefined)) ?? [];
+  const categories = Array.from(new Set([...manifestationCategories, ...workCategories, ...workGenres]));
 
   const format = meta["format"] as string | undefined;
   const isAudio = isAudioMedia(format);

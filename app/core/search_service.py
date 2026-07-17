@@ -346,6 +346,7 @@ class SearchService:
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
+               m.publisher,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
         FROM {_CATALOG}manifestations m
@@ -500,6 +501,7 @@ class SearchService:
                     "title": work.title,
                     "cover_url": manifestation.cover_url,
                     "manifestation_meta": manifestation.meta,
+                    "publisher": manifestation.publisher,
                     "work_meta": work.meta,
                     "content_type": expression.content_type,
                     "added_at": item.added_at,

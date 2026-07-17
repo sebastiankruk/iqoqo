@@ -188,6 +188,7 @@ def get_virtual_items(
                     "manifestation_id": None,
                     "isbn": None,
                     "title": work.title,
+                    "publisher": None,
                     "cover_url": None,
                     "cover_status": None,
                     "authors": work.meta.get("authors", []) if work.meta else [],
@@ -218,6 +219,7 @@ def get_virtual_items(
                 "manifestation_id": manifestation.id,
                 "isbn": manifestation.isbn13,
                 "title": work.title,
+                "publisher": manifestation.publisher if manifestation else None,
                 "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
                 "authors": work.meta.get("authors", []) if work.meta else [],
@@ -322,6 +324,7 @@ def get_items():
                     "manifestation_id": row["manifestation_id"],
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
+                    "publisher": row.get("publisher"),
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "manifestation_meta": row.get("manifestation_meta"),
@@ -455,6 +458,7 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "isbn": manifestation.isbn13 if manifestation else None,
                     "title": work_title,
+                    "publisher": manifestation.publisher if manifestation else None,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
@@ -670,6 +674,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 

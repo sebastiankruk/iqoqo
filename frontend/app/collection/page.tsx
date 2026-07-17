@@ -733,6 +733,7 @@ function CollectionContent() {
                 collectionCounts={facetStatsData?.collection_counts}
                 genreCounts={facetStatsData?.genre_counts}
                 publisherCounts={facetStatsData?.publisher_counts}
+                borrowedCount={facetStatsData?.borrowed_count}
               />
             </div>
           </div>

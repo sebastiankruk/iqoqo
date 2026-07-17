@@ -44,6 +44,7 @@ interface MobileFilterDrawerProps {
   collectionCounts?: Record<string, number>;
   genreCounts?: Record<string, number>;
   publisherCounts?: Record<string, number>;
+  borrowedCount?: number;
 }
 
 /**
@@ -90,6 +91,7 @@ export function MobileFilterDrawer({
   collectionCounts: collCounts = {},
   genreCounts = {},
   publisherCounts = {},
+  borrowedCount,
 }: MobileFilterDrawerProps) {
   const t = useTranslations("CollectionFilters");
   useEffect(() => {
@@ -126,6 +128,7 @@ export function MobileFilterDrawer({
             collectionCounts={collCounts}
             genreCounts={genreCounts}
             publisherCounts={publisherCounts}
+            borrowedCount={borrowedCount}
           />
         </div>
 
