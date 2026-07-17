@@ -1,8 +1,11 @@
 # facet-url-sync Specification
 
 ## Purpose
+
 TBD - created by archiving change faceted-navigation-finalization. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: URL encodes all active facet selections as query parameters
 
 All active facet selections — including category, format, status, tag, collection, genre, and publisher — SHALL be serialized into URL search parameters so that any URL represents a fully reproducible, shareable filter state.
@@ -32,4 +35,3 @@ All active facet selections — including category, format, status, tag, collect
 
 - **WHEN** no filters are active
 - **THEN** no filter-related query parameters SHALL appear in the URL
-

@@ -1,8 +1,11 @@
 # facet-a11y-live-region Specification
 
 ## Purpose
+
 TBD - created by archiving change faceted-navigation-finalization. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Filter state changes are announced to screen readers
 
 The collection page SHALL maintain an invisible ARIA live region that announces the result count and active filter state to screen reader users when any filter is toggled.
@@ -28,4 +31,3 @@ The collection page SHALL maintain an invisible ARIA live region that announces 
 
 - **WHEN** a filter is toggled
 - **THEN** the live region SHALL use `aria-live="polite"` so announcements do not interrupt currently-reading content
-

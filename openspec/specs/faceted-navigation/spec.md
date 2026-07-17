@@ -1,8 +1,11 @@
 # OpenSpec Specification: Faceted Navigation and Cross-Filtering
 
 ## Purpose
+
 This specification locks in the behavioral requirements, cross-filtering rules, and empty-state handling for iqoqo's multi-faceted library navigation interface.
+
 ## Requirements
+
 ### Requirement: Intra-Facet Selection (OR)
 
 Multiple selections within a single facet category (e.g., Category: `text` and `music`, or Format: `book` and `vinyl`) MUST behave as an `OR` operation. The system SHALL display records that match ANY of the selected values within that facet. This rule applies uniformly to ALL facet types: Media Category, Physical Kind (Format), Status, Genre, Publisher, Tag, and Collection. No facet type may use radio-button (single-select) semantics.
@@ -153,4 +156,3 @@ The UI MUST NOT expose raw FRBR schema labels ("Items", "Expressions", "Manifest
 
 - **WHEN** the user is browsing their private library (items scope)
 - **THEN** UI labels SHALL refer to their owned records as "My Copies" or "My Items", not "Items" or "Manifestations"
-

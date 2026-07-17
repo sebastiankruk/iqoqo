@@ -1,8 +1,11 @@
 # active-filter-strip Specification
 
 ## Purpose
+
 TBD - created by archiving change faceted-navigation-finalization. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Active filters are displayed as dismissible pills above the result grid
 
 All active facet selections SHALL be displayed as colored dismissible pill chips in a horizontally-scrollable strip above the result grid. A single "Clear All" text button SHALL appear when two or more filters are active.
@@ -34,4 +37,3 @@ All active facet selections SHALL be displayed as colored dismissible pill chips
 
 - **WHEN** more active filter chips exist than can fit in one line
 - **THEN** the strip SHALL scroll horizontally without wrapping to a second line
-

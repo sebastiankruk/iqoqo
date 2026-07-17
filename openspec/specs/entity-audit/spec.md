@@ -1,8 +1,11 @@
 # entity-audit Specification
 
 ## Purpose
+
 TBD - created by archiving change architectural-hardening-phase-2. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Curation Audit Logging for WEM Tiers
 
 The system SHALL maintain a dedicated audit log (`EntityAuditLog`) for tracking metadata edits, resolving duplicates, and merging records at the Work, Expression, and Manifestation tiers.

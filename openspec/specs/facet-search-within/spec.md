@@ -1,8 +1,11 @@
 # facet-search-within Specification
 
 ## Purpose
+
 TBD - created by archiving change faceted-navigation-finalization. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Facet groups with more than 10 options expose an inline search input
 
 When a facet group contains more than 10 option values, the `SearchableFacet` component SHALL render a borderless inline search input at the top of the option list to allow the user to filter the visible options by keyword.
@@ -27,4 +30,3 @@ When a facet group contains more than 10 option values, the `SearchableFacet` co
 
 - **WHEN** a facet group has 10 or fewer options
 - **THEN** no search input SHALL be rendered in that facet group
-

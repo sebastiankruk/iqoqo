@@ -1,8 +1,11 @@
 # mobile-facet-drawer Specification
 
 ## Purpose
+
 TBD - created by archiving change faceted-navigation-finalization. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Mobile viewports display a floating filter pill trigger
 
 On viewports narrower than the `lg` Tailwind breakpoint, the sidebar facet panel SHALL be hidden. Instead, a floating pill button anchored to the bottom center of the viewport SHALL be rendered to serve as the facet filter trigger.
@@ -44,4 +47,3 @@ The mobile filter drawer SHALL use the Shadcn `<Drawer>` component (backed by va
 - **WHEN** the mobile drawer is opened
 - **THEN** the drawer content area SHALL have a maximum height of 80% of the viewport height (`h-[80vh]`)
 - **AND** the facet list inside SHALL be independently scrollable
-
