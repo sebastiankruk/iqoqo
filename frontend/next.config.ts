@@ -69,6 +69,16 @@ const nextConfig: NextConfig = {
         source: "/static/:path*",
         destination: `${backendBase}/api/static/:path*`,
       },
+      {
+        // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
+        source: "/rum/:path*",
+        destination: "http://127.0.0.1:5080/rum/:path*",
+      },
+      {
+        // Proxy OTel Collector traces to avoid CORS origin mismatches
+        source: "/v1/traces",
+        destination: "http://127.0.0.1:4318/v1/traces",
+      },
     ];
   },
   // Allow cover images from a restricted set of HTTPS origins (metadata comes
