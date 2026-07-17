@@ -93,9 +93,7 @@ def determine_strategy(man: Manifestation) -> str | None:
     if ct == "movie":
         return "tmdb"
     if ct == "music":
-        if man.meta and man.meta.get("discogs_id"):
-            return "discogs"
-        return "musicbrainz"
+        return "discogs" if man.meta and man.meta.get("discogs_id") else "musicbrainz"
     if ct == "board_game":
         return "bgg"
     if ct == "video_game":
@@ -124,9 +122,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                     continue
 
                 if not force:
-                    log_entry = MetadataRefetchLog.query.filter_by(
-                        entity_type="manifestation", entity_id=man.id, strategy=strategy
-                    ).first()
+                    log_entry = MetadataRefetchLog.query.filter_by(entity_type="manifestation", entity_id=man.id, strategy=strategy).first()
                     if log_entry and log_entry.iqoqo_version == IQOQO_VERSION:
                         continue
 
@@ -139,7 +135,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
 
                 time.sleep(RATE_LIMITS.get(strategy, 0.0))
 
-                found_fields: Dict[str, Any] = {}
+                found_fields: dict[str, Any] = {}
                 error_msg = None
 
                 try:
@@ -152,7 +148,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                     elif strategy == "tmdb":
                         title = man.expression.work.title if man.expression and man.expression.work else None
                         if identifier:
-                            res = fetch_video_metadata(identifier) # Assume query can be barcode/UPC
+                            res = fetch_video_metadata(identifier)  # Assume query can be barcode/UPC
                             if res:
                                 found_fields = res
                         elif title:
@@ -204,17 +200,13 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                             if not existing_g and not existing_c:
                                 work.update_meta({"genres": genres})
 
-                except Exception as e: # pylint: disable=broad-exception-caught
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.error("Error fetching %s via %s: %s", identifier, strategy, e)
                     error_msg = str(e)
 
-                log_entry = MetadataRefetchLog.query.filter_by(
-                    entity_type="manifestation", entity_id=man.id, strategy=strategy
-                ).first()
+                log_entry = MetadataRefetchLog.query.filter_by(entity_type="manifestation", entity_id=man.id, strategy=strategy).first()
                 if not log_entry:
-                    log_entry = MetadataRefetchLog(
-                        entity_type="manifestation", entity_id=man.id, strategy=strategy
-                    )
+                    log_entry = MetadataRefetchLog(entity_type="manifestation", entity_id=man.id, strategy=strategy)
                     db.session.add(log_entry)
                 log_entry.checked_at = datetime.now(UTC)
                 log_entry.iqoqo_version = IQOQO_VERSION
@@ -230,8 +222,16 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Refetch missing metadata from external APIs.")
-    parser.add_argument("--gap", type=str, choices=["format", "publisher", "genres", "cover", "all"], default="all", help="Which missing field to target")
-    parser.add_argument("--content-type", type=str, choices=["text", "music", "movie", "board_game", "video_game", "puzzle"], default=None, help="Restrict to specific content type")
+    parser.add_argument(
+        "--gap", type=str, choices=["format", "publisher", "genres", "cover", "all"], default="all", help="Which missing field to target"
+    )
+    parser.add_argument(
+        "--content-type",
+        type=str,
+        choices=["text", "music", "movie", "board_game", "video_game", "puzzle"],
+        default=None,
+        help="Restrict to specific content type",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print items that would be fetched without making API calls")
     parser.add_argument("--force", action="store_true", help="Force refetch even if already logged for this version")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of items to process")

@@ -608,7 +608,10 @@ class DataManager:
             if s in db_statuses:
                 db_statuses[s] += cnt
         coll_status_rows = db.session.execute(
-            select(func.coalesce(Item.collection_status, "available").label("c_status"), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+            select(
+                func.coalesce(Item.collection_status, "available").label("c_status"),
+                func.count(Item.id).label("cnt"),  # pylint: disable=not-callable
+            )
             .where(Item.id.in_(select(status_subq.c.id)))
             .group_by(func.coalesce(Item.collection_status, "available"))
         ).all()

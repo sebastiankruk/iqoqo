@@ -422,29 +422,22 @@ export function SidebarFilters({
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
           ) : (
             (() => {
-              const totalCollectionStatusCount = collectionStatuses.reduce(
-                (sum, { value }) => sum + (value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0)),
-                0
-              );
-
-              if (totalCollectionStatusCount === 0) {
-                return <p className="px-2 py-1.5 text-xs text-muted-foreground italic">{t("noStatusData", { defaultValue: "No status data" })}</p>;
-              }
-
               return (
                 <div className="flex flex-col gap-1">
                   {collectionStatuses.map(({ value, label, dot }) => {
                     const active = isActive(activeFilters, "status", value);
                     const count = value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
+                    const disabled = !active && count === 0;
                     return (
                       <label
                         key={value}
-                        className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"}`}
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                       >
                         <input
                           type="checkbox"
                           checked={active}
                           onChange={() => onToggleFilter({ type: "status", value })}
+                          disabled={disabled}
                           className="h-3.5 w-3.5 rounded border-border accent-primary"
                         />
                         <span className={`h-2 w-2 rounded-full ${dot}`} />
