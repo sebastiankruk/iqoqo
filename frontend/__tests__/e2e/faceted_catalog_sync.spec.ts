@@ -441,7 +441,6 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
   });
 
   test("supports full genre cross-filtering flow", async ({ page }) => {
-
     await page.goto("/collection");
     await page.waitForLoadState("networkidle");
 
@@ -451,7 +450,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
 
     // Select Fiction
     const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
-    await fictionCheckbox.waitFor({ state: 'visible' });
+    await fictionCheckbox.waitFor({ state: "visible" });
     await fictionCheckbox.check();
 
     // Verify URL updates
@@ -459,7 +458,6 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
   });
 
   test("supports AND across facets (category and genre)", async ({ page }) => {
-
     await page.goto("/collection");
     await page.waitForLoadState("networkidle");
 
@@ -471,7 +469,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
     await genresAccordion.click();
     const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
-    await fictionCheckbox.waitFor({ state: 'visible' });
+    await fictionCheckbox.waitFor({ state: "visible" });
     await fictionCheckbox.check();
 
     // Verify URL has both
@@ -480,7 +478,6 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
   });
 
   test("supports URL round-trip restoration of filters", async ({ page }) => {
-
     // Hydrate with category=text and genres=Fiction
     await page.goto("/collection?category=text&genres=Fiction");
     await page.waitForLoadState("networkidle");
@@ -491,7 +488,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
 
     const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
     await genresAccordion.click();
-    
+
     const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
     await expect(fictionCheckbox).toBeChecked();
   });
