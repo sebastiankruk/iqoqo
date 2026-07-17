@@ -269,8 +269,9 @@ export function SidebarFilters({
   const t = useTranslations("CollectionFilters");
   const activeCategories = activeFilters.filter(f => f.type === "category").map(f => f.value);
 
+  const taxonomyScope = viewMode === "items" && isLoggedIn ? "user" : "global";
   const { data: taxonomies } = useTaxonomies({
-    scope: isLoggedIn ? "user" : "global",
+    scope: taxonomyScope,
     filters: {
       ...(activeCategories.length > 0 && { category: activeCategories[0] }),
     },
