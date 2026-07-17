@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Faceted Navigation ...
+- **Faceted Navigation Multi-Select**: Fixed an issue where selecting a genre or format in the sidebar would restrict the underlying taxonomy options, preventing users from selecting multiple genres/formats. `useTaxonomies` now correctly requests the full taxonomy for the active category, relying on `useFacetStats` to hide zero-count options.
 
 ## [0.7.10] - 2026-07-15
 

@@ -266,14 +266,11 @@ export function SidebarFilters({
 }: SidebarFiltersProps) {
   const t = useTranslations("CollectionFilters");
   const activeCategories = activeFilters.filter(f => f.type === "category").map(f => f.value);
-  const activeFormats = activeFilters.filter(f => f.type === "format").map(f => f.value);
-  const activeGenres = activeFilters.filter(f => f.type === "genre").map(f => f.value);
+
   const { data: taxonomies } = useTaxonomies({
     scope: isLoggedIn ? "user" : "global",
     filters: {
       ...(activeCategories.length > 0 && { category: activeCategories[0] }),
-      ...(activeFormats.length > 0 && { format: activeFormats[0] }),
-      ...(activeGenres.length > 0 && { genre: activeGenres[0] }),
     },
   });
 
