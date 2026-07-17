@@ -158,7 +158,7 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
         response.raise_for_status()
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
-        logger.warning("Google Books request failed for %s: %s", isbn, exc)
+        logger.debug("Google Books request failed for %s: %s", isbn, exc)
         return None
 
     if not data.get("totalItems") or not data.get("items"):
@@ -216,7 +216,7 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         response.raise_for_status()
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
-        logger.warning("Open Library request failed for %s: %s", isbn, exc)
+        logger.debug("Open Library request failed for %s: %s", isbn, exc)
         return None
 
     if not data:
@@ -283,7 +283,7 @@ def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
         logger.info("ISBN %s resolved via Google Books", isbn)
         return metadata
 
-    logger.warning("Falling back to Open Library for ISBN %s", isbn)
+    logger.debug("Falling back to Open Library for ISBN %s", isbn)
 
     metadata = _lookup_open_library(isbn)
     if metadata:

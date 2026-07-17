@@ -50,6 +50,7 @@ COMPOSE_ENV_FILE ?= .env
 ifeq ($(MODE),preview)
   COMPOSE_ENV_FILE = .env.preview
   COMPOSE_PROJECT  = iqoqo-preview
+  USE_DOCKER ?= true
 endif
 ifeq ($(MODE),prod)
   COMPOSE_PROJECT  = iqoqo
@@ -58,6 +59,7 @@ ifeq ($(MODE),prod)
   else
     COMPOSE_ENV_FILE = .env
   endif
+  USE_DOCKER ?= true
 endif
 
 # When adding a Make target that writes files inside a Docker container, ensure
@@ -116,7 +118,7 @@ help:
 	@echo "  backup-uninstall - Remove installed backup cron job"
 	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
 	@echo ""
-	@echo "Covers:"
+	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
 	@echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
@@ -475,10 +477,11 @@ retry-missing-covers: .venv/bin/activate
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
 		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
 	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
@@ -490,10 +493,11 @@ fetch-covers: .venv/bin/activate
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
 		$(PYTHON_CMD) scripts/fetch_covers.py $(if $(limit),--limit $(limit),) $(if $(force),--force,); \
 	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
@@ -505,10 +509,11 @@ refetch-metadata: .venv/bin/activate
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
 		$(PYTHON_CMD) scripts/refetch_metadata.py $(if $(gap),--gap $(gap),) $(if $(content-type),--content-type $(content-type),) $(if $(limit),--limit $(limit),) $(if $(force),--force,) $(if $(dry-run),--dry-run,); \
 	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \

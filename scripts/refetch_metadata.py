@@ -198,7 +198,9 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                             existing_g = work.meta.get("genres", []) if work.meta else []
                             existing_c = work.meta.get("categories", []) if work.meta else []
                             if not existing_g and not existing_c:
-                                work.update_meta({"genres": genres})
+                                meta = dict(work.meta) if work.meta else {}
+                                meta["genres"] = genres
+                                work.meta = meta
 
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.error("Error fetching %s via %s: %s", identifier, strategy, e)
