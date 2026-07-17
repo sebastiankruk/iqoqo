@@ -120,7 +120,8 @@ def get_faceted_stats():
     Accepts the same filter query params as /api/items to narrow counts.
     When no filters are passed, returns global counts for the user's items.
     """
-    owner_id = getattr(g, "user_id", None)
+    scope = request.args.get("scope", "user")
+    owner_id = getattr(g, "user_id", None) if scope == "user" else None
     category_str = request.args.get("category")
     fmt_str = request.args.get("format")
     tags_str = request.args.get("tags")
