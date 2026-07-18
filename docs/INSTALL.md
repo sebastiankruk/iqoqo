@@ -144,7 +144,7 @@ After installation, make sure the Docker daemon is running.
      - [upcdatabase.org](https://upcdatabase.org/) (Tier 1a Open Data)
      - [upcitemdb.com](https://upcitemdb.com/) (Tier 1b high-quality data)
      - [Allegro Developer](https://apps.developer.allegro.pl/) (Tier 2 retail resolve & covers)
-       > **Allegro Setup Note:** The Allegro Developer portal requires you to select *at least one* permission, such as **`allegro:api:sale:offers:read`**. Set the **Redirect URI** to `http://localhost`.
+       > **Allegro Setup Note:** The Allegro Developer portal requires you to select _at least one_ permission, such as **`allegro:api:sale:offers:read`**. Set the **Redirect URI** to `http://localhost`.
        > **⚠️ IMPORTANT:** Allegro requires "User Context" for search. After setting your `CLIENT_ID` and `CLIENT_SECRET` in `.env`, you **MUST** run the authentication script once:
        >
        > ```bash
@@ -168,7 +168,7 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 ### Backend (Flask & Celery)
 
 | File           | Loaded By | Purpose                                                                                                                                                |
-|:---------------|:----------|:-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| :------------- | :-------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`.env`**     | Global    | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
 | **`.env.dev`** | `run.sh`  | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |
 
@@ -181,7 +181,7 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 ### Frontend (Next.js)
 
 | File             | Loaded By | Purpose                                                                                                                                                  |
-|:-----------------|:----------|:---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| :--------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`.env`**       | Next.js   | Shared defaults for the frontend.                                                                                                                        |
 | **`.env.local`** | Next.js   | **Local Overrides.** Standard Next.js file for local machine settings. This file is git-ignored and should be used for secrets or machine-specific URLs. |
 
@@ -232,11 +232,11 @@ Use this option if you want to run the Flask application on your host machine bu
 
 4. **Initialize the admin account:**
 
-    To log in, you must create the initial admin user using the credentials specified in your `.env` file (`ADMIN_EMAIL` and `ADMIN_PASSWORD`):
+   To log in, you must create the initial admin user using the credentials specified in your `.env` file (`ADMIN_EMAIL` and `ADMIN_PASSWORD`):
 
-    ```bash
-    PYTHONPATH=. .venv/bin/python scripts/init_auth.py
-    ```
+   ```bash
+   PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+   ```
 
 ### Option B: Full Docker Deployment (Production)
 
@@ -246,21 +246,21 @@ Use this option to run both the Flask application and PostgreSQL database in con
 
    Make sure your `.env` file is configured for Docker:
 
-    ```text
-    # Use 'db' as hostname for container-to-container communication
-    DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
+   ```text
+   # Use 'db' as hostname for container-to-container communication
+   DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
 
-    # Set external ports (change if you have other services running)
-    WEB_PORT=8000    # or 5000 if available
-    DB_PORT=5433     # or 5432 if available
+   # Set external ports (change if you have other services running)
+   WEB_PORT=8000    # or 5000 if available
+   DB_PORT=5433     # or 5432 if available
 
-    # Use production settings
-    FLASK_ENV=production
+   # Use production settings
+   FLASK_ENV=production
 
-    # Configure CORS explicitly when frontend and API use different origins
-    CORS_ENABLED=true
-    CORS_ORIGINS="https://app[.]example.com"
-    CORS_SUPPORTS_CREDENTIALS=false
+   # Configure CORS explicitly when frontend and API use different origins
+   CORS_ENABLED=true
+   CORS_ORIGINS="https://app[.]example.com"
+   CORS_SUPPORTS_CREDENTIALS=false
    ```
 
 2. **Start Production Services:**
@@ -336,11 +336,11 @@ new indexes — is captured in a versioned migration file under `migrations/vers
 
 ### When migrations run
 
-| Workflow                                                         | How migrations run                                                                                              |
-|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
-| **Local dev** (`./run.sh dev`)                                   | Automatically — `flask db upgrade` is called before Flask starts.                                               |
-| **Docker dev** (`docker compose up`)                             | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
-| **Docker prod** (`./run.sh prod`)                                | Same as Docker dev — automatic on every container start.                                                        |
+| Workflow                             | How migrations run                                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Local dev** (`./run.sh dev`)       | Automatically — `flask db upgrade` is called before Flask starts.                                               |
+| **Docker dev** (`docker compose up`) | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
+| **Docker prod** (`./run.sh prod`)    | Same as Docker dev — automatic on every container start.                                                        |
 
 `flask db upgrade` is **idempotent**: running it when the schema is already current is
 completely safe and takes only a fraction of a second. It is therefore safe to run on
@@ -705,6 +705,73 @@ docker compose up -d
 ```
 
 Access the application at `http://localhost:{WEB_PORT}` (default: 5000, or 8000 if you changed it in `.env`).
+
+## Data Curation
+
+### Fixing Non-Canonical Format Values
+
+External APIs (TMDB, MusicBrainz, BGG, etc.) return non-canonical physical kind strings
+(e.g., `"video"` instead of `"dvd"`, `"audio"` instead of `"cd"`) that are stored in
+`Manifestation.meta['format']`. This breaks the Physical Kind facet and the `?format=` filter.
+
+iQoQo provides a three-step workflow to audit and fix these values:
+
+#### 1. Audit
+
+```bash
+make fix-physical-kinds
+```
+
+This scans the database for all non-canonical and NULL format values and prints a table
+with columns: stored value, content type, count, and example titles.
+
+#### 2. Interactive Mapping
+
+```bash
+make fix-physical-kinds ARGS="--interactive"
+```
+
+Walks you through each distinct non-canonical value, shows example titles for context,
+and prompts you to select the correct canonical format. Your selections are written to
+`shared/format_mappings.yaml` — a git-tracked YAML file.
+
+Example mapping entries:
+
+```yaml
+format_normalizations:
+  # Exact value match (any content type)
+  video: dvd
+  audio: cd
+  boardgame: board_game
+
+  # NULL format scoped by content type
+  null:
+    music: cd
+    movie: dvd
+    text: book
+```
+
+#### 3. Apply
+
+```bash
+# Preview changes without modifying the database
+make fix-physical-kinds ARGS="--apply --dry-run"
+
+# Apply the fixes
+make fix-physical-kinds ARGS="--apply"
+```
+
+After applying, non-canonical values are replaced with canonical `MediaFormat` identifiers,
+and the Physical Kind facet and `?format=` filter work correctly.
+
+**Important notes:**
+
+- `shared/format_mappings.yaml` is git-tracked and **per-instance** — different
+  deployments may map `"video"` to `dvd` or `bluray` depending on their collection.
+- Back up your database before running `--apply` (use `make db-export`).
+- Items with unresolvable formats are displayed as "Unknown Video Format",
+  "Unknown Audio Format", or "Unknown Text Format" in the UI until they are mapped.
+- See `shared/format_mappings.yaml` for the complete schema reference.
 
 ## Code Quality Checks
 

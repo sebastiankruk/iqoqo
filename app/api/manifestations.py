@@ -44,7 +44,10 @@ def get_manifestations() -> tuple[Response, int]:
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
     category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
-    format_list = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    format_list_raw = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    from app.core.format_normalizer import expand_format_filter
+
+    format_list = expand_format_filter(format_list_raw)
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
     tags_filter = request.args.get("tags")

@@ -33,6 +33,7 @@ class MediaFormat:
     COMIC_BOOK = "comic_book"
     MAGAZINE = "magazine"
     EBOOK = "ebook"
+    UNKNOWN_TEXT = "unknown_text"
     AUDIOBOOK_CD = "audiobook_cd"
     AUDIOBOOK_CASSETTE = "audiobook_cassette"
     AUDIOBOOK_DIGITAL = "audiobook_digital"
@@ -42,12 +43,14 @@ class MediaFormat:
     CASSETTE = "cassette"
     MINIDISC = "minidisc"
     CD_DVD_COMBO = "cd_dvd_combo"
+    UNKNOWN_AUDIO = "unknown_audio"
     DVD = "dvd"
     BLURAY = "bluray"
     F_4K_UHD = "4k_uhd"
     VCD = "vcd"
     VHS = "vhs"
     LASERDISC = "laserdisc"
+    UNKNOWN_VIDEO = "unknown_video"
     BOARD_GAME = "board_game"
     CARDS = "cards"
     RPG_MANUAL = "rpg_manual"
@@ -60,6 +63,7 @@ class MediaFormat:
         "comic_book",
         "magazine",
         "ebook",
+        "unknown_text",
         "audiobook_cd",
         "audiobook_cassette",
         "audiobook_digital",
@@ -69,12 +73,14 @@ class MediaFormat:
         "cassette",
         "minidisc",
         "cd_dvd_combo",
+        "unknown_audio",
         "dvd",
         "bluray",
         "4k_uhd",
         "vcd",
         "vhs",
         "laserdisc",
+        "unknown_video",
         "board_game",
         "cards",
         "rpg_manual",
@@ -118,6 +124,7 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
@@ -127,12 +134,14 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
     "4k_uhd": "movie",
     "vcd": "movie",
     "vhs": "movie",
     "laserdisc": "movie",
+    "unknown_video": "movie",
     "board_game": "board_game",
     "cards": "board_game",
     "rpg_manual": "board_game",
@@ -147,6 +156,7 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
@@ -156,12 +166,14 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
     "4k_uhd": "movie",
     "vcd": "movie",
     "vhs": "movie",
     "laserdisc": "movie",
+    "unknown_video": "movie",
     "board_game": "board_game",
     "cards": "board_game",
     "rpg_manual": "board_game",

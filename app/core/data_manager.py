@@ -597,6 +597,12 @@ class DataManager:
             if f_val:
                 format_counts[f_val] = cnt
 
+        # Normalize format counts: non-canonical raw values are resolved to
+        # canonical MediaFormat identifiers and their counts are merged.
+        from app.core.format_normalizer import normalize_format_counts
+
+        format_counts = normalize_format_counts(format_counts)
+
         # Status counts (grouped by Item.collection_status + Item.status)
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         status_rows = db.session.execute(

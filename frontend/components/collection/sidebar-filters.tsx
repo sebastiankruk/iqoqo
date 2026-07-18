@@ -393,6 +393,7 @@ export function SidebarFilters({
               const active = isActive(activeFilters, "format", fmt.id);
               const count = formatCounts[fmt.id] ?? 0;
               const disabled = !active && count === 0;
+              const isUnknown = fmt.id.startsWith("unknown_");
               return (
                 <label
                   key={fmt.id}
@@ -406,7 +407,9 @@ export function SidebarFilters({
                     disabled={disabled}
                     className="h-4 w-4 shrink-0 rounded border-input text-primary shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                  <span className="flex-1">{t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}</span>
+                  <span className={`flex-1 ${isUnknown ? "italic" : ""}`}>
+                    {t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}
+                  </span>
                   <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
                 </label>
               );

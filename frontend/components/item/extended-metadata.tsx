@@ -58,7 +58,9 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
 
   const format = meta["format"] as string | undefined;
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "movie", "moving image"].includes(format?.toLowerCase() || "");
+  const isVideo = ["dvd", "bluray", "video", "movie", "moving image", "unknown_video"].includes(
+    format?.toLowerCase() || ""
+  );
   const isBoardGame = ["boardgame", "board_game", "cards", "three-dimensional object"].includes(
     format?.toLowerCase() || ""
   );

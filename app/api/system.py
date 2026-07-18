@@ -134,7 +134,10 @@ def get_faceted_stats():
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
     category_list = [c.strip() for c in category_str.split(",") if c.strip()] if category_str else None
-    fmt_list = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
+    fmt_list_raw = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
+    from app.core.format_normalizer import expand_format_filter
+
+    fmt_list = expand_format_filter(fmt_list_raw)
     tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
     collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
     genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None

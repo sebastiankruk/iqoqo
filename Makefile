@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds
 
 SHELL := /bin/bash
 
@@ -121,8 +121,9 @@ help:
 	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
-	@echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
-	@echo ""
+  @echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
+  @echo "  fix-physical-kinds - Audit and fix non-canonical format values (supports ARGS=\"--interactive\" and ARGS=\"--apply --dry-run\")"
+  @echo ""
 	@echo "Monitoring:"
 	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
 	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
@@ -522,3 +523,7 @@ refetch-metadata: .venv/bin/activate
 
 allegro-auth:
 	@bash scripts/allegro_auth.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod)) $(if $(USE_DOCKER),--docker)
+
+fix-physical-kinds: .venv/bin/activate
+	@echo "Running fix-physical-kinds script..."
+	@.venv/bin/python scripts/fix_physical_kinds.py $(ARGS)

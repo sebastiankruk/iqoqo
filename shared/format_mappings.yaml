@@ -1,0 +1,41 @@
+# shared/format_mappings.yaml
+# User-defined format normalizations for iqoqo.
+# ---------------------------------------------------------
+# This file maps non-canonical physical kind (format) values stored in
+# Manifestation.meta['format'] to canonical MediaFormat identifiers.
+#
+# Edit this file directly or use `make fix-physical-kinds --interactive`
+# to build mappings through an interactive wizard.
+#
+# Schema:
+#
+#   format_normalizations:
+#     <raw_value>: <canonical_format>        # exact-value mapping
+#     null:                                   # NULL format scoped by content type
+#       <content_type>: <canonical_format>
+#
+# All target values MUST be valid MediaFormat identifiers (as listed in
+# shared/taxonomy.yaml).  Unknown targets are ignored with a warning.
+#
+# This file is git-tracked.  Different deployments may have different mappings.
+#
+# ---------------------------------------------------------
+# Examples (commented out — uncomment and edit to activate):
+#
+# format_normalizations:
+#   # Exact value match (applies regardless of content type)
+#   # video: dvd
+#   # audio: cd
+#   # boardgame: board_game
+#   # game: board_game
+#   # standard: book
+#
+#   # NULL format scoped by content type
+#   # null:
+#   #   music: cd
+#   #   movie: dvd
+#   #   text: book
+#   #   audiobook: audiobook_cd
+#
+# ---------------------------------------------------------
+format_normalizations: {}
