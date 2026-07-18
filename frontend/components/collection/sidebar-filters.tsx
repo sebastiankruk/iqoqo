@@ -269,7 +269,7 @@ export function SidebarFilters({
   const t = useTranslations("CollectionFilters");
   const activeCategories = activeFilters.filter(f => f.type === "category").map(f => f.value);
 
-  const taxonomyScope = viewMode === "items" && isLoggedIn ? "user" : "global";
+  const taxonomyScope = isLoggedIn ? "user" : "global";
   const { data: taxonomies } = useTaxonomies({
     scope: taxonomyScope,
     filters: {
@@ -328,7 +328,8 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      {taxonomies?.collections &&
+      {isLoggedIn &&
+        taxonomies?.collections &&
         taxonomies.collections.some(
           c => (collCountsFromProps?.[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)
         ) && (
@@ -344,7 +345,8 @@ export function SidebarFilters({
           </AccordionSection>
         )}
 
-      {taxonomies?.tags &&
+      {isLoggedIn &&
+        taxonomies?.tags &&
         taxonomies.tags.some(t => (tagCounts?.[t] ?? 0) > 0 || isActive(activeFilters, "tag", t)) && (
           <AccordionSection title={t("secTags")} defaultOpen={false}>
             <SearchableFacet
@@ -418,7 +420,7 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      {!isHierarchyView && (
+      {isLoggedIn && !isHierarchyView && (
         <AccordionSection title={t("secCollectionStatus")}>
           {isHierarchyView ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
@@ -458,7 +460,7 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      {!isHierarchyView && activeCategories.length > 0 && validProgressStatuses.length > 0 && (
+      {isLoggedIn && !isHierarchyView && activeCategories.length > 0 && validProgressStatuses.length > 0 && (
         <AccordionSection title={t("secProgress")}>
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {

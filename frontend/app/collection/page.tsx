@@ -361,7 +361,8 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
-    f.scope = viewMode === "items" ? "user" : "global";
+    f.scope = isLoggedIn ? "user" : "global";
+    f.view = viewMode;
     return f;
   }, [
     categoryFilters,
@@ -375,13 +376,10 @@ function CollectionContent() {
     missingCoverOnly,
     missingIdOnly,
     viewMode,
+    isLoggedIn,
   ]);
 
-  const { data: facetStatsData } = useFacetStats(
-    viewMode === "items" && isLoggedIn ? "user" : "global",
-    filtersForFacets,
-    true
-  );
+  const { data: facetStatsData } = useFacetStats(isLoggedIn ? "user" : "global", filtersForFacets, true);
 
   const isLoading =
     viewMode === "roadmap"

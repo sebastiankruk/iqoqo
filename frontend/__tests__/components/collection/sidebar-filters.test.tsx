@@ -64,6 +64,7 @@ describe("SidebarFilters with Searchable Facets", () => {
         <SidebarFilters
           activeFilters={activeFilters}
           onToggleFilter={vi.fn()}
+          isLoggedIn={true}
           genreCounts={{
             Fantasy: 1,
             "Sci-Fi": 1,
@@ -165,6 +166,7 @@ describe("SidebarFilters Cross-Filtering", () => {
         <SidebarFilters
           activeFilters={[]}
           onToggleFilter={vi.fn()}
+          isLoggedIn={true}
           statusCounts={{ wish_list: 0, available: 5, ordered: 0 }}
         />
       </QueryClientProvider>
@@ -183,6 +185,7 @@ describe("SidebarFilters Cross-Filtering", () => {
         <SidebarFilters
           activeFilters={[{ type: "status", value: "wish_list" }]}
           onToggleFilter={vi.fn()}
+          isLoggedIn={true}
           statusCounts={{ wish_list: 0, available: 5 }}
         />
       </QueryClientProvider>
@@ -195,7 +198,12 @@ describe("SidebarFilters Cross-Filtering", () => {
   it("disables unchecked zero-count status inputs", () => {
     render(
       <QueryClientProvider client={queryClient}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} statusCounts={{ wish_list: 0, ordered: 0 }} />
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          isLoggedIn={true}
+          statusCounts={{ wish_list: 0, ordered: 0 }}
+        />
       </QueryClientProvider>
     );
 
@@ -227,6 +235,7 @@ describe("SearchableFacet counts display", () => {
         <SidebarFilters
           activeFilters={[]}
           onToggleFilter={vi.fn()}
+          isLoggedIn={true}
           tagCounts={{ english: 5, polish: 2, german: 0 }}
           collectionCounts={{ Favorites: 3 }}
           genreCounts={{ Fantasy: 4, Horror: 1 }}
@@ -252,7 +261,7 @@ describe("SearchableFacet counts display", () => {
   it("does not show count for items that have no count entry", () => {
     render(
       <QueryClientProvider client={queryClient2}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 5 }} />
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} tagCounts={{ english: 5 }} />
       </QueryClientProvider>
     );
 
@@ -266,7 +275,12 @@ describe("SearchableFacet counts display", () => {
   it("renders labels normally for 0-count facet items", () => {
     render(
       <QueryClientProvider client={queryClient2}>
-        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} tagCounts={{ english: 0, polish: 0 }} />
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          isLoggedIn={true}
+          tagCounts={{ english: 0, polish: 0 }}
+        />
       </QueryClientProvider>
     );
 
@@ -280,6 +294,7 @@ describe("SearchableFacet counts display", () => {
         <SidebarFilters
           activeFilters={[{ type: "tag", value: "english" }]}
           onToggleFilter={vi.fn()}
+          isLoggedIn={true}
           tagCounts={{ english: 0, polish: 0 }}
         />
       </QueryClientProvider>
@@ -289,5 +304,77 @@ describe("SearchableFacet counts display", () => {
     expect(screen.getByText("english")).toBeInTheDocument();
     expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("polish")).not.toBeInTheDocument();
+  });
+});
+
+describe("SidebarFilters — unauthenticated users", () => {
+  const mockTaxonomies = {
+    genres: ["Fantasy", "Fiction"],
+    tags: ["favorites", "english"],
+    publishers: ["Penguin"],
+    collections: ["My Books", "Favorites"],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useTaxonomies).mockReturnValue({
+      data: mockTaxonomies,
+    } as unknown as ReturnType<typeof useTaxonomies>);
+  });
+
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  it("hides Collection Status section for unauthenticated users", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          isLoggedIn={false}
+          statusCounts={{ available: 5, wish_list: 3 }}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.queryByText("Collection Status")).not.toBeInTheDocument();
+    expect(screen.queryByText("On Shelf")).not.toBeInTheDocument();
+    expect(screen.queryByText("On Wish List")).not.toBeInTheDocument();
+  });
+
+  it("hides user-specific facets (Tags, Collections, Progress) for unauthenticated users", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          isLoggedIn={false}
+          tagCounts={{ favorites: 3 }}
+          collectionCounts={{ "My Books": 2 }}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.queryByText("Tags")).not.toBeInTheDocument();
+    expect(screen.queryByText("My Collections")).not.toBeInTheDocument();
+  });
+
+  it("shows global facets (Media Category, Genres, Publishers) for unauthenticated users", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={vi.fn()}
+          isLoggedIn={false}
+          genreCounts={{ Fantasy: 5 }}
+          publisherCounts={{ Penguin: 3 }}
+          categoryCounts={{ text: 10 }}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Media Category")).toBeInTheDocument();
+    // Collection Status and Progress must be absent
+    expect(screen.queryByText("Collection Status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Progress")).not.toBeInTheDocument();
   });
 });

@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Faceted Navigation Multi-Select**: Fixed an issue where selecting a genre or format in the sidebar would restrict the underlying taxonomy options, preventing users from selecting multiple genres/formats. `useTaxonomies` now correctly requests the full taxonomy for the active category, relying on `useFacetStats` to hide zero-count options.
+- **Cross-FRBR Filtering and Facet Counts**: Fixed several issues where filter counts defaulted to Item-level ("My items") even when browsing Works, Expressions, or the Global Library. Key fixes:
+  - Facet counts now reflect the correct FRBR level: `COUNT(DISTINCT Manifestation.id)` for global, `COUNT(DISTINCT Work.id)` for works, `COUNT(DISTINCT Expression.id)` for expressions, and `COUNT(DISTINCT Item.id)` for items.
+  - Lower-level entity attributes (Item-level: status, tags, collections; Manifestation-level: media category, physical kind) now correctly filter higher-level entities via cross-entity subqueries with `SELECT DISTINCT`.
+  - Unauthenticated users no longer see user-specific facets (Collection Status, Progress, Tags, Named Collections) and receive correct global-level counts (no more 0-count for Media Category).
+  - The `/stats/facets` endpoint now uses `@optional_auth` to support unauthenticated global catalog browsing.
 
 ## [0.7.10] - 2026-07-15
 
