@@ -121,9 +121,9 @@ help:
 	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
-  @echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
-  @echo "  fix-physical-kinds - Audit and fix non-canonical format values (supports ARGS=\"--interactive\" and ARGS=\"--apply --dry-run\")"
-  @echo ""
+	@echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
+	@echo "  fix-physical-kinds - Audit and fix non-canonical format values (supports ARGS=\"--interactive\" and ARGS=\"--apply --dry-run\")"
+	@echo ""
 	@echo "Monitoring:"
 	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
 	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
@@ -525,5 +525,17 @@ allegro-auth:
 	@bash scripts/allegro_auth.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod)) $(if $(USE_DOCKER),--docker)
 
 fix-physical-kinds: .venv/bin/activate
-	@echo "Running fix-physical-kinds script..."
-	@.venv/bin/python scripts/fix_physical_kinds.py $(ARGS)
+	@echo "Running fix-physical-kinds script in $(MODE) environment..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/fix_physical_kinds.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		if [ -f ".env.$(MODE)" ]; then \
+			set -a; . ./.env.$(MODE); set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/fix_physical_kinds.py $(ARGS); \
+	fi

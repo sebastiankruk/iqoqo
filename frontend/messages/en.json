@@ -265,7 +265,10 @@
     "fmt_rpg_manual": "RPG Manual",
     "fmt_miniatures": "Miniatures / Wargame",
     "fmt_jigsaw_puzzle": "Jigsaw Puzzle",
-    "fmt_mechanical_puzzle": "Mechanical / 3D Puzzle"
+    "fmt_mechanical_puzzle": "Mechanical / 3D Puzzle",
+    "fmt_unknown_text": "Unknown Text Format",
+    "fmt_unknown_audio": "Unknown Audio Format",
+    "fmt_unknown_video": "Unknown Video Format"
   },
   "Common": {
     "copySuccess": "Link copied to clipboard!",

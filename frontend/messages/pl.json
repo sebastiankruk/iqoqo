@@ -265,7 +265,10 @@
     "fmt_rpg_manual": "Podręcznik RPG",
     "fmt_miniatures": "Figurki / gra bitewna",
     "fmt_jigsaw_puzzle": "Puzzle",
-    "fmt_mechanical_puzzle": "Puzzle mechaniczne / 3D"
+    "fmt_mechanical_puzzle": "Puzzle mechaniczne / 3D",
+    "fmt_unknown_text": "Nieznany format tekstowy",
+    "fmt_unknown_audio": "Nieznany format audio",
+    "fmt_unknown_video": "Nieznany format wideo"
   },
   "Common": {
     "copySuccess": "Link skopiowany do schowka!",
