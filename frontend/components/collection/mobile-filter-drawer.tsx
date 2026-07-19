@@ -32,7 +32,6 @@ interface MobileFilterDrawerProps {
   statusCounts: Record<string, number>;
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
-  disableStatus?: boolean;
   viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
   isCurator?: boolean;
@@ -44,6 +43,7 @@ interface MobileFilterDrawerProps {
   collectionCounts?: Record<string, number>;
   genreCounts?: Record<string, number>;
   publisherCounts?: Record<string, number>;
+  borrowedCount?: number;
 }
 
 /**
@@ -57,7 +57,6 @@ interface MobileFilterDrawerProps {
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
  * @param root0.categoryCounts - The counts for each category
- * @param root0.disableStatus - Whether to disable the status filter
  * @param root0.viewMode - The current view mode
  * @param root0.isLoggedIn - Whether the user is logged in
  * @param root0.isCurator - Whether the user is a curator
@@ -78,7 +77,6 @@ export function MobileFilterDrawer({
   statusCounts,
   formatCounts,
   categoryCounts = {},
-  disableStatus = false,
   viewMode = "items",
   isLoggedIn = false,
   isCurator = false,
@@ -90,6 +88,7 @@ export function MobileFilterDrawer({
   collectionCounts: collCounts = {},
   genreCounts = {},
   publisherCounts = {},
+  borrowedCount,
 }: MobileFilterDrawerProps) {
   const t = useTranslations("CollectionFilters");
   useEffect(() => {
@@ -114,7 +113,6 @@ export function MobileFilterDrawer({
             statusCounts={statusCounts}
             formatCounts={formatCounts}
             categoryCounts={categoryCounts}
-            disableStatus={disableStatus}
             viewMode={viewMode}
             isLoggedIn={isLoggedIn}
             isCurator={isCurator}
@@ -126,6 +124,7 @@ export function MobileFilterDrawer({
             collectionCounts={collCounts}
             genreCounts={genreCounts}
             publisherCounts={publisherCounts}
+            borrowedCount={borrowedCount}
           />
         </div>
 

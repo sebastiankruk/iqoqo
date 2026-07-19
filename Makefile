@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers db-stamp db-upgrade dev allegro-auth
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds
 
 SHELL := /bin/bash
 
@@ -50,6 +50,7 @@ COMPOSE_ENV_FILE ?= .env
 ifeq ($(MODE),preview)
   COMPOSE_ENV_FILE = .env.preview
   COMPOSE_PROJECT  = iqoqo-preview
+  USE_DOCKER ?= true
 endif
 ifeq ($(MODE),prod)
   COMPOSE_PROJECT  = iqoqo
@@ -58,6 +59,7 @@ ifeq ($(MODE),prod)
   else
     COMPOSE_ENV_FILE = .env
   endif
+  USE_DOCKER ?= true
 endif
 
 # When adding a Make target that writes files inside a Docker container, ensure
@@ -116,9 +118,11 @@ help:
 	@echo "  backup-uninstall - Remove installed backup cron job"
 	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
 	@echo ""
-	@echo "Covers:"
+	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
 	@echo "  fetch-covers  - Fetch covers for all manifestations missing covers (supports preview|prod, force=true)"
+	@echo "  refetch-metadata - Refetch missing metadata from external APIs (supports gap=all|format|publisher|genres|cover, content-type=text|music|movie|board_game|puzzle, limit=N, force=true, dry-run=true)"
+	@echo "  fix-physical-kinds - Audit and fix non-canonical format values (supports ARGS=\"--interactive\" and ARGS=\"--apply --dry-run\")"
 	@echo ""
 	@echo "Monitoring:"
 	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
@@ -474,10 +478,11 @@ retry-missing-covers: .venv/bin/activate
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
 		$(PYTHON_CMD) scripts/retry_missing_covers.py $(if $(limit),--limit $(limit),); \
 	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
@@ -489,15 +494,48 @@ fetch-covers: .venv/bin/activate
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
 		$(PYTHON_CMD) scripts/fetch_covers.py $(if $(limit),--limit $(limit),) $(if $(force),--force,); \
 	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
 		if [ -f ".env.$(MODE)" ]; then \
 			set -a; . ./.env.$(MODE); set +a; \
-		elif [ -f ".env" ]; then \
-			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/fetch_covers.py $(if $(limit),--limit $(limit),) $(if $(force),--force,); \
 	fi
 
+refetch-metadata: .venv/bin/activate
+	@echo "Refetching missing metadata in $(MODE) environment..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/refetch_metadata.py $(if $(gap),--gap $(gap),) $(if $(content-type),--content-type $(content-type),) $(if $(limit),--limit $(limit),) $(if $(force),--force,) $(if $(dry-run),--dry-run,); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		if [ -f ".env.$(MODE)" ]; then \
+			set -a; . ./.env.$(MODE); set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/refetch_metadata.py $(if $(gap),--gap $(gap),) $(if $(content-type),--content-type $(content-type),) $(if $(limit),--limit $(limit),) $(if $(force),--force,) $(if $(dry-run),--dry-run,); \
+	fi
+
 allegro-auth:
 	@bash scripts/allegro_auth.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod)) $(if $(USE_DOCKER),--docker)
+
+fix-physical-kinds: .venv/bin/activate
+	@echo "Running fix-physical-kinds script in $(MODE) environment..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/fix_physical_kinds.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		if [ -f ".env.$(MODE)" ]; then \
+			set -a; . ./.env.$(MODE); set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/fix_physical_kinds.py $(ARGS); \
+	fi

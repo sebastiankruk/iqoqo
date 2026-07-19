@@ -32,6 +32,7 @@ services:
     environment:
       - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
       - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+      - ZO_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
       - ZO_DATA_DIR=/data
     volumes:
       - openobserve_data:/data

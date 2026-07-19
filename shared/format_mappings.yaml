@@ -1,0 +1,56 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# shared/format_mappings.yaml
+# User-defined format normalizations for iqoqo.
+# ---------------------------------------------------------
+# This file maps non-canonical physical kind (format) values stored in
+# Manifestation.meta['format'] to canonical MediaFormat identifiers.
+#
+# Edit this file directly or use `make fix-physical-kinds --interactive`
+# to build mappings through an interactive wizard.
+#
+# Schema:
+#
+#   format_normalizations:
+#     <raw_value>: <canonical_format>        # exact-value mapping
+#     null:                                   # NULL format scoped by content type
+#       <content_type>: <canonical_format>
+#
+# All target values MUST be valid MediaFormat identifiers (as listed in
+# shared/taxonomy.yaml).  Unknown targets are ignored with a warning.
+#
+# This file is git-tracked.  Different deployments may have different mappings.
+#
+# ---------------------------------------------------------
+# Examples (commented out — uncomment and edit to activate):
+#
+# format_normalizations:
+#   # Exact value match (applies regardless of content type)
+#   # video: dvd
+#   # audio: cd
+#   # boardgame: board_game
+#   # game: board_game
+#   # standard: book
+#
+#   # NULL format scoped by content type
+#   # null:
+#   #   music: cd
+#   #   movie: dvd
+#   #   text: book
+#   #   audiobook: audiobook_cd
+#
+# ---------------------------------------------------------
+format_normalizations: {}

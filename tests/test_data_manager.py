@@ -536,3 +536,144 @@ def test_get_faceted_stats_empty_filters(app):
     assert all(v == 0 for v in stats["status_counts"].values())
     assert not stats["tag_counts"]
     assert not stats["genre_counts"]
+
+
+# ---------------------------------------------------------------------------
+# Cross-FRBR filtering and facet counts tests (fix-cross-frbr-filtering)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def app_with_cross_frbr_data(app):
+    """Seed DB with data spanning multiple FRBR levels for cross-FRBR tests."""
+    with app.app_context():
+        user = User(email="cross_frbr@iqoqo.local", display_name="Cross FRBR")
+        db.session.add(user)
+        db.session.flush()
+
+        # Work A: "The Great Novel" — one Text expression, two Manifestations, items in diff statuses
+        w1 = Work(title="The Great Novel", meta={"genres": ["Fiction"]})
+        db.session.add(w1)
+        db.session.flush()
+
+        e1 = Expression(work_id=w1.id, content_type="text")
+        db.session.add(e1)
+        db.session.flush()
+
+        m1 = Manifestation(expression_id=e1.id, meta={"format": "book"}, publisher="Penguin")
+        db.session.add(m1)
+        db.session.flush()
+        i1 = Item(manifestation_id=m1.id, owner_id=user.id, status="read", collection_status="available")
+        db.session.add(i1)
+        db.session.flush()
+
+        m2 = Manifestation(expression_id=e1.id, meta={"format": "graphic_novel"}, publisher="Penguin")
+        db.session.add(m2)
+        db.session.flush()
+        i2 = Item(manifestation_id=m2.id, owner_id=user.id, status="want_to_read", collection_status="wish_list")
+        db.session.add(i2)
+        db.session.flush()
+
+        # Work B: "Music Album" — Music, one expression, one manifestation, one item (lent)
+        w2 = Work(title="Music Album", meta={"genres": ["Rock"]})
+        db.session.add(w2)
+        db.session.flush()
+
+        e2 = Expression(work_id=w2.id, content_type="music")
+        db.session.add(e2)
+        db.session.flush()
+
+        m3 = Manifestation(expression_id=e2.id, meta={"format": "cd"}, publisher="Sony")
+        db.session.add(m3)
+        db.session.flush()
+        i3 = Item(manifestation_id=m3.id, owner_id=user.id, status="listened", collection_status="lent")
+        db.session.add(i3)
+        db.session.flush()
+
+        # Manifestation C: no items owned — public catalog entry
+        w3 = Work(title="Reference Book", meta={"genres": ["Nonfiction"]})
+        db.session.add(w3)
+        db.session.flush()
+
+        e3 = Expression(work_id=w3.id, content_type="text")
+        db.session.add(e3)
+        db.session.flush()
+
+        m4 = Manifestation(expression_id=e3.id, meta={"format": "book"}, publisher="O'Reilly")
+        db.session.add(m4)
+        db.session.flush()
+
+        db.session.commit()
+        return user.id
+
+
+def test_faceted_stats_works_view_counts_works(app_with_cross_frbr_data, app):
+    """Works view returns counts of distinct Works, not Items."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(
+            owner_id=app_with_cross_frbr_data,
+            view="works",
+        )
+
+    # The Works view returns global counts. There are 3 Works in the DB.
+    # Work A (text), Work B (music), Work C (text)
+    assert stats["category_counts"].get("text") == 2  # Work A and Work C
+    assert stats["category_counts"].get("music") == 1  # Work B
+    # 4 manifestations: book=2 (m1, m4), graphic_novel=1 (m2), cd=1 (m3)
+    assert stats["format_counts"].get("book") == 2
+    assert stats["format_counts"].get("graphic_novel") == 1
+    assert stats["format_counts"].get("cd") == 1
+
+
+def test_faceted_stats_manifestations_view_global_unauthenticated(app_with_cross_frbr_data, app):
+    """Global (manifestations) view without owner_id counts all Manifestations."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(
+            owner_id=None,
+            view="manifestations",
+        )
+
+    # All 4 manifestations should be counted (including unowned m4)
+    assert stats["category_counts"].get("text") == 3  # m1, m2, m4 (3 text manifestations)
+    assert stats["category_counts"].get("music") == 1  # m3
+    # 2x book, 1x graphic_novel, 1x cd
+    assert stats["format_counts"].get("book") == 2
+    assert stats["format_counts"].get("graphic_novel") == 1
+    assert stats["format_counts"].get("cd") == 1
+    # User-specific facets should be empty/zero for unauthenticated
+    assert all(v == 0 for v in stats["status_counts"].values())
+    assert not stats["collection_counts"]
+    assert not stats["tag_counts"]
+
+
+def test_cross_frbr_filter_works_by_item_status(app_with_cross_frbr_data, app):
+    """Filtering Works by Item-level status returns expected distinct Works."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(
+            owner_id=app_with_cross_frbr_data,
+            view="works",
+            statuses=["read"],
+        )
+
+    # Only Work A has an Item with status "read"
+    assert stats["category_counts"].get("text") == 1
+    assert stats["category_counts"].get("music", 0) == 0
+    # Status counts should still show all user's statuses (excluded from filter via _subq)
+    assert stats["status_counts"].get("read", 0) >= 1
+    assert stats["status_counts"].get("want_to_read", 0) >= 1
+
+
+def test_works_view_distinct_no_duplicates(app_with_cross_frbr_data, app):
+    """Verifies SELECT DISTINCT on Works when multiple Items exist for one Work."""
+    with app.app_context():
+        stats = DataManager.get_faceted_stats(
+            owner_id=app_with_cross_frbr_data,
+            view="works",
+            category=["text"],
+        )
+
+    # Work A has 2 items under text category, Work C is text. Should count as 2 distinct Works
+    assert stats["category_counts"].get("text") == 2
+    # Format counts should count distinct Works per format
+    assert stats["format_counts"].get("book") == 2  # 2 Works with book
+    assert stats["format_counts"].get("graphic_novel") == 1  # 1 Work with graphic_novel

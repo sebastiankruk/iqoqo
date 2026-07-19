@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.11] - TBD
 
+### Added
+
+- **Format Normalization**: Read-time format normalizer (`app/core/format_normalizer.py`) that maps non-canonical physical kind values from external APIs (`"video"`, `"audio"`, `"boardgame"`) to canonical `MediaFormat` identifiers using user-defined mappings in `shared/format_mappings.yaml`. Falls back to `unknown_video`, `unknown_audio`, or `unknown_text` placeholder formats when no mapping exists.
+- **Unknown Format Placeholders**: Three new valid `MediaFormat` values (`unknown_video`, `unknown_audio`, `unknown_text`) added to the taxonomy and displayed as "Unknown Video Format", "Unknown Audio Format", and "Unknown Text Format" in the UI.
+- **Interactive Format Mapping CLI**: `make fix-physical-kinds` runs `scripts/fix_physical_kinds.py`, providing audit, interactive mapping, and apply modes to fix non-canonical/NULL format values in the database. Supports `--dry-run` for previewing SQL changes.
+- **Mappings File**: `shared/format_mappings.yaml` as git-tracked, per-instance configuration for format normalization, with commented examples.
+
+### Changed
+
+- **Facet Aggregation**: `DataManager.get_faceted_stats` now normalizes format counts via `normalize_format_counts()`, merging non-canonical values into their resolved canonical formats.
+- **Format Filter**: `?format=` query parameter is expanded via `expand_format_filter()` to include raw values that normalize to the requested canonical format, ensuring correct matching.
+- **Frontend**: `isAudioMedia()` and `extended-metadata.tsx` updated to recognize `unknown_audio` and `unknown_video`; sidebar Physical Kind facet shows italic styling for unknown format entries.
+
 ### Fixed
 
 - **Faceted Navigation Multi-Select**: Fixed an issue where selecting a genre or format in the sidebar would restrict the underlying taxonomy options, preventing users from selecting multiple genres/formats. `useTaxonomies` now correctly requests the full taxonomy for the active category, relying on `useFacetStats` to hide zero-count options.
+- **Cross-FRBR Filtering and Facet Counts**: Fixed several issues where filter counts defaulted to Item-level ("My items") even when browsing Works, Expressions, or the Global Library. Key fixes:
+  - Facet counts now reflect the correct FRBR level: `COUNT(DISTINCT Manifestation.id)` for global, `COUNT(DISTINCT Work.id)` for works, `COUNT(DISTINCT Expression.id)` for expressions, and `COUNT(DISTINCT Item.id)` for items.
+  - Lower-level entity attributes (Item-level: status, tags, collections; Manifestation-level: media category, physical kind) now correctly filter higher-level entities via cross-entity subqueries with `SELECT DISTINCT`.
+  - Unauthenticated users no longer see user-specific facets (Collection Status, Progress, Tags, Named Collections) and receive correct global-level counts (no more 0-count for Media Category).
+  - The `/stats/facets` endpoint now uses `@optional_auth` to support unauthenticated global catalog browsing.
 
 ## [0.7.10] - 2026-07-15
 

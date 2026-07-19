@@ -73,7 +73,7 @@ export function BrowserTelemetry(): null {
           ]) => {
             // Target the host-exposed OTel Collector port.
             // CORS is whitelisted for localhost:3000 in otel-collector-local.yaml.
-            const collectorUrl = process.env.NEXT_PUBLIC_OTEL_COLLECTOR_URL ?? "http://localhost:4318/v1/traces";
+            const collectorUrl = process.env.NEXT_PUBLIC_OTEL_COLLECTOR_URL ?? window.location.origin + "/v1/traces";
 
             const provider = new WebTracerProvider({
               resource: resourceFromAttributes({

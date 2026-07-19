@@ -16,6 +16,21 @@
 "use client";
 
 import { X, ArrowDownUp } from "lucide-react";
+import { MEDIA_HIERARCHY } from "@/types/taxonomy";
+
+/**
+ * Look up a human-readable label for a format ID from the media hierarchy.
+ *
+ * @param formatId - The raw format identifier (e.g., "unknown_video")
+ * @returns The display label or undefined if not found
+ */
+function getFormatLabel(formatId: string): string | undefined {
+  for (const category of Object.values(MEDIA_HIERARCHY)) {
+    const found = category.formats.find(f => f.id === formatId);
+    if (found) return found.label;
+  }
+  return undefined;
+}
 
 /** Filter type */
 export type FilterType = "status" | "category" | "format" | "tag" | "collection" | "genre" | "publisher";
@@ -66,7 +81,10 @@ const statusLabel: Record<string, string> = {
 export function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "status") return `Status: ${statusLabel[filter.value] ?? filter.value}`;
   if (filter.type === "category") return `Category: ${filter.value.replace("_", " ")}`;
-  if (filter.type === "format") return `Format: ${filter.value.replace("_", " ")}`;
+  if (filter.type === "format") {
+    const label = getFormatLabel(filter.value);
+    return `Format: ${label ?? filter.value.replace("_", " ")}`;
+  }
   if (filter.type === "tag") return `Tag: ${filter.value}`;
   if (filter.type === "collection") return `Collection: ${filter.value}`;
   if (filter.type === "genre") return `Genre: ${filter.value}`;

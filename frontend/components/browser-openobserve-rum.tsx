@@ -54,7 +54,7 @@ export function BrowserOpenObserveRum(): null {
           return;
         }
         const applicationId = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? "iqoqo";
-        const site = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SITE ?? "localhost:5080";
+        const site = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SITE ?? window.location.host;
         const service =
           process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_SERVICE ??
           (env === "production" ? "iqoqo-frontend" : `iqoqo-frontend-${env}`);

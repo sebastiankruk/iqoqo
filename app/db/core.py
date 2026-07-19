@@ -548,3 +548,29 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     actor = db.relationship("User", backref="entity_audit_logs_as_actor")
+
+
+class MetadataRefetchLog(db.Model):  # type: ignore[name-defined]
+    """
+    Log of metadata refetch attempts by strategy.
+    Prevents redundant API calls for entities that have already been checked.
+    """
+
+    __tablename__ = "metadata_refetch_log"
+    __table_args__: tuple = (
+        (
+            db.UniqueConstraint("entity_type", "entity_id", "strategy", name="uq_metadata_refetch_log"),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (db.UniqueConstraint("entity_type", "entity_id", "strategy", name="uq_metadata_refetch_log"),)
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    strategy = db.Column(db.String(100), nullable=False)
+    checked_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    iqoqo_version = db.Column(db.String(50), nullable=False)
+    found_fields = db.Column(db.JSON, nullable=True)
+    error = db.Column(db.Text, nullable=True)

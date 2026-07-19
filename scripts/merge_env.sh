@@ -16,12 +16,12 @@ TARGET_FILE=""
 ENV_FILE=".env"
 
 usage() {
-    echo "Usage: $0 <preview|prod> [--dry-run] [--root DIR]"
+    echo "Usage: $0 <dev|preview|prod> [--dry-run] [--root DIR]"
     echo ""
     echo "  Merges $ENV_FILE into .env.<stage> (target values win on conflicts),"
     echo "  backs up $ENV_FILE -> ${ENV_FILE}.bak, and symlinks $ENV_FILE -> .env.<stage>."
     echo ""
-    echo "  <stage>      Target stage name (preview or prod)"
+    echo "  <stage>      Target stage name (dev, preview or prod)"
     echo "  --dry-run    Show what would be added without modifying files"
     echo "  --root DIR   Use DIR as project root (default: auto-detect from script location)"
     exit 1
@@ -30,7 +30,7 @@ usage() {
 DRY_RUN=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        preview|prod)
+        dev|preview|prod)
             STAGE="$1"
             TARGET_FILE=".env.${STAGE}"
             shift
@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$STAGE" ]]; then
-    echo "Error: stage name required (preview or prod)" >&2
+    echo "Error: stage name required (dev, preview or prod)" >&2
     usage
 fi
 
@@ -59,31 +59,26 @@ if [[ ! -f "$TARGET_FILE" ]]; then
 fi
 
 # Load values from both files
-declare -A target_keys
-declare -A env_keys
-
-extract_keyval() {
-    local line="$1"
-    echo "$line" | grep -oP '^\s*\K[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*' 2>/dev/null || true
-}
+env_keys=()
+env_vals=()
 
 while IFS='=' read -r key val; do
     key="${key## }"; key="${key%% }"
     [[ -z "$key" || "$key" == \#* ]] && continue
-    env_keys["$key"]="$val"
+    env_keys+=("$key")
+    env_vals+=("$val")
 done < "$ENV_FILE"
-
-while IFS='=' read -r key val; do
-    key="${key## }"; key="${key%% }"
-    [[ -z "$key" || "$key" == \#* ]] && continue
-    target_keys["$key"]="$val"
-done < "$TARGET_FILE"
 
 # Find keys in .env but not in target
 new_keys=()
-for key in "${!env_keys[@]}"; do
-    if [[ -z "${target_keys[$key]:-}" ]]; then
+new_vals=()
+
+for i in "${!env_keys[@]}"; do
+    key="${env_keys[$i]}"
+    val="${env_vals[$i]}"
+    if ! grep -q "^[[:space:]]*${key}[[:space:]]*=" "$TARGET_FILE"; then
         new_keys+=("$key")
+        new_vals+=("$val")
     fi
 done
 
@@ -103,8 +98,10 @@ if [[ ${#new_keys[@]} -eq 0 ]]; then
 fi
 
 echo "Adding ${#new_keys[@]} missing key(s) to $TARGET_FILE:"
-for key in "${new_keys[@]}"; do
-    echo "  + $key=${env_keys[$key]}"
+for i in "${!new_keys[@]}"; do
+    key="${new_keys[$i]}"
+    val="${new_vals[$i]}"
+    echo "  + $key=$val"
 done
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -116,8 +113,10 @@ fi
 # Append missing keys to target
 echo "" >> "$TARGET_FILE"
 echo "# --- Merged from $ENV_FILE ---" >> "$TARGET_FILE"
-for key in "${new_keys[@]}"; do
-    echo "$key=${env_keys[$key]}" >> "$TARGET_FILE"
+for i in "${!new_keys[@]}"; do
+    key="${new_keys[$i]}"
+    val="${new_vals[$i]}"
+    echo "$key=$val" >> "$TARGET_FILE"
 done
 echo "Merged into $TARGET_FILE"
 

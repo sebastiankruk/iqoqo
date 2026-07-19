@@ -45,6 +45,7 @@ export function isAudioMedia(format: string | undefined): boolean {
     "cd-ep",
     "sacd",
     "audiobook_cd",
+    "unknown_audio",
   ]);
   return audioFormats.has(format.toLowerCase());
 }

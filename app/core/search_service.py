@@ -53,13 +53,14 @@ class SearchService:
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
@@ -78,6 +79,7 @@ class SearchService:
             collections=collections,
             genres=genres,
             publishers=publishers,
+            statuses=statuses,
             user_id=user_id,
         )
 
@@ -207,6 +209,7 @@ class SearchService:
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
@@ -280,6 +283,12 @@ class SearchService:
             pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
             base_query = base_query.filter(db.or_(*pubs_conditions))
 
+        if statuses and user_id:
+            if not has_item_joined:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+                has_item_joined = True
+            base_query = base_query.filter(Item.status.in_(statuses))
+
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
         return total, result_ids
@@ -346,6 +355,7 @@ class SearchService:
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
+               m.publisher,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
         FROM {_CATALOG}manifestations m
@@ -500,6 +510,7 @@ class SearchService:
                     "title": work.title,
                     "cover_url": manifestation.cover_url,
                     "manifestation_meta": manifestation.meta,
+                    "publisher": manifestation.publisher,
                     "work_meta": work.meta,
                     "content_type": expression.content_type,
                     "added_at": item.added_at,

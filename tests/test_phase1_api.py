@@ -54,6 +54,7 @@ def sample_work(app):
         manifestation = Manifestation(
             expression_id=expression.id,
             isbn13="9781234567890",
+            publisher="Test Publisher",
             meta={"Title": "Test Book", "Authors": ["Test Author"]},
         )
         db.session.add(manifestation)
@@ -240,6 +241,7 @@ def test_get_items_with_data(client, sample_work, admin_headers):
     assert item["authors"] == ["Test Author"]
     assert item["isbn"] == "9781234567890"
     assert item["status"] == "available"
+    assert item["publisher"] == "Test Publisher"
 
 
 def test_get_items_pagination(client, app):
@@ -483,6 +485,7 @@ def test_get_item_detail(client, sample_work, admin_headers):
     assert item["work"]["authors"] == ["Test Author"]
     assert item["expression"]["content_type"] == "text"
     assert item["expression"]["language"] == "en"
+    assert item["publisher"] == "Test Publisher"
 
 
 def test_get_item_detail_unauthenticated(client, sample_work):

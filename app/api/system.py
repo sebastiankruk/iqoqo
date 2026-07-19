@@ -22,7 +22,7 @@ from flask import g, jsonify, make_response, request, send_file, send_from_direc
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import admin_required, require_auth
+from app.api.decorators import admin_required, optional_auth, require_auth
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
@@ -112,15 +112,22 @@ def get_dashboard_stats():
 
 
 @api_bp.route("/stats/facets", methods=["GET"])
-@require_auth
+@optional_auth
 @limiter.limit("60 per minute")
 def get_faceted_stats():
     """Return cross-filtered per-facet counts for the faceted navigation sidebar.
 
     Accepts the same filter query params as /api/items to narrow counts.
-    When no filters are passed, returns global counts for the user's items.
+    When ``scope=user``, counts are filtered to the authenticated user's items.
+    When ``scope=global``, counts reflect all entities in the catalog
+    (unauthenticated users see public catalog-level counts).
+
+    The ``view`` param controls the FRBR level at which counts are aggregated:
+    ``items``, ``manifestations``, ``expressions``, or ``works``.
     """
-    owner_id = getattr(g, "user_id", None)
+    scope = request.args.get("scope", "user")
+    view = request.args.get("view", "items")
+    owner_id = getattr(g, "user_id", None) if scope == "user" else None
     category_str = request.args.get("category")
     fmt_str = request.args.get("format")
     tags_str = request.args.get("tags")
@@ -133,7 +140,10 @@ def get_faceted_stats():
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
     category_list = [c.strip() for c in category_str.split(",") if c.strip()] if category_str else None
-    fmt_list = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
+    fmt_list_raw = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
+    from app.core.format_normalizer import expand_format_filter
+
+    fmt_list = expand_format_filter(fmt_list_raw)
     tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
     collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
     genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None
@@ -152,6 +162,7 @@ def get_faceted_stats():
         borrowed_only=borrowed_only,
         missing_cover=missing_cover,
         missing_id=missing_id,
+        view=view,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 

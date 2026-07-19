@@ -38,6 +38,10 @@ receivers:
         cors:
           # Required to securely accept browser-side OTel traces (Layer 5)
           allowed_origins:
+            - "http://localhost:3000"
+            - "http://127.0.0.1:3000"
+            - "http://localhost:${FRONTEND_PORT}"
+            - "http://127.0.0.1:${FRONTEND_PORT}"
             - "https://iqoqo.cc"
             - "https://dev.iqoqo.cc"
             - "https://cc.iqoqo.app"

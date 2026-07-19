@@ -188,6 +188,7 @@ def get_virtual_items(
                     "manifestation_id": None,
                     "isbn": None,
                     "title": work.title,
+                    "publisher": None,
                     "cover_url": None,
                     "cover_status": None,
                     "authors": work.meta.get("authors", []) if work.meta else [],
@@ -218,6 +219,7 @@ def get_virtual_items(
                 "manifestation_id": manifestation.id,
                 "isbn": manifestation.isbn13,
                 "title": work.title,
+                "publisher": manifestation.publisher if manifestation else None,
                 "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
                 "authors": work.meta.get("authors", []) if work.meta else [],
@@ -254,7 +256,10 @@ def get_items():
     category_filter = request.args.get("category", None)
     format_filter = request.args.get("format", None)
     category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
-    format_list = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    format_list_raw = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    from app.core.format_normalizer import expand_format_filter
+
+    format_list = expand_format_filter(format_list_raw)
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
@@ -322,6 +327,7 @@ def get_items():
                     "manifestation_id": row["manifestation_id"],
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
+                    "publisher": row.get("publisher"),
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "manifestation_meta": row.get("manifestation_meta"),
@@ -455,6 +461,7 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "isbn": manifestation.isbn13 if manifestation else None,
                     "title": work_title,
+                    "publisher": manifestation.publisher if manifestation else None,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
@@ -670,6 +677,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
