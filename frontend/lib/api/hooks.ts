@@ -102,7 +102,8 @@ export const queryKeys = {
     tags?: string[],
     collections?: string[],
     genres?: string[],
-    publishers?: string[]
+    publishers?: string[],
+    statuses?: string[]
   ) =>
     [
       "manifestations",
@@ -115,6 +116,7 @@ export const queryKeys = {
       collections?.join(",") ?? "",
       genres?.join(",") ?? "",
       publishers?.join(",") ?? "",
+      statuses?.join(",") ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   worksShelf: (
@@ -123,7 +125,9 @@ export const queryKeys = {
     tags?: string[],
     collections?: string[],
     genres?: string[],
-    publishers?: string[]
+    publishers?: string[],
+    statuses?: string[],
+    formats?: string[]
   ) =>
     [
       "works",
@@ -134,6 +138,8 @@ export const queryKeys = {
       collections?.join(",") ?? "",
       genres?.join(",") ?? "",
       publishers?.join(",") ?? "",
+      statuses?.join(",") ?? "",
+      formats?.join(",") ?? "",
     ] as const,
   expressionsShelf: (
     query?: string,
@@ -141,7 +147,9 @@ export const queryKeys = {
     tags?: string[],
     collections?: string[],
     genres?: string[],
-    publishers?: string[]
+    publishers?: string[],
+    statuses?: string[],
+    formats?: string[]
   ) =>
     [
       "expressions",
@@ -152,6 +160,8 @@ export const queryKeys = {
       collections?.join(",") ?? "",
       genres?.join(",") ?? "",
       publishers?.join(",") ?? "",
+      statuses?.join(",") ?? "",
+      formats?.join(",") ?? "",
     ] as const,
   workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
@@ -411,6 +421,7 @@ export function useManifestations(
  * @param collections - Optional collections filter
  * @param genres - Optional genres filter
  * @param publishers - Optional publishers filter
+ * @param statuses - Optional statuses filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
  */
 export function useInfiniteManifestations(
@@ -424,11 +435,23 @@ export function useInfiniteManifestations(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  statuses?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
-      ...queryKeys.manifestations(1, limit, query, category, formatFilter, tags, collections, genres, publishers),
+      ...queryKeys.manifestations(
+        1,
+        limit,
+        query,
+        category,
+        formatFilter,
+        tags,
+        collections,
+        genres,
+        publishers,
+        statuses
+      ),
       "infinite",
       missingCover,
       missingId,
@@ -445,6 +468,7 @@ export function useInfiniteManifestations(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
@@ -529,6 +553,8 @@ export function useWorksShelf(
  * @param collections - Collections filter
  * @param genres - Genres filter
  * @param publishers - Publishers filter
+ * @param statuses - Statuses filter
+ * @param formats - Formats filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<WorkShelfEntry[]>>} Infinite query result
  */
 export function useInfiniteWorksShelf(
@@ -539,10 +565,15 @@ export function useInfiniteWorksShelf(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  statuses?: string[],
+  formats?: string[]
 ) {
   return useInfiniteQuery({
-    queryKey: [...queryKeys.worksShelf(query, category, tags, collections, genres, publishers), "infinite"],
+    queryKey: [
+      ...queryKeys.worksShelf(query, category, tags, collections, genres, publishers, statuses, formats),
+      "infinite",
+    ],
     initialPageParam: 0,
     queryFn: async ({ pageParam = 0 }) => {
       const params: Record<string, string | number> = { offset: pageParam, limit };
@@ -552,6 +583,8 @@ export function useInfiniteWorksShelf(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (formats && formats.length > 0) params.formats = formats.join(",");
       const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
       return res.data;
     },
@@ -617,6 +650,8 @@ export function useExpressionsShelf(
  * @param collections - Collections filter
  * @param genres - Genres filter
  * @param publishers - Publishers filter
+ * @param statuses - Statuses filter
+ * @param formats - Formats filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<ExpressionShelfEntry[]>>} Infinite query result
  */
 export function useInfiniteExpressionsShelf(
@@ -627,10 +662,15 @@ export function useInfiniteExpressionsShelf(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  statuses?: string[],
+  formats?: string[]
 ) {
   return useInfiniteQuery({
-    queryKey: [...queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers), "infinite"],
+    queryKey: [
+      ...queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers, statuses, formats),
+      "infinite",
+    ],
     initialPageParam: 0,
     queryFn: async ({ pageParam = 0 }) => {
       const params: Record<string, string | number> = { offset: pageParam, limit };
@@ -640,6 +680,8 @@ export function useInfiniteExpressionsShelf(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (formats && formats.length > 0) params.formats = formats.join(",");
       const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
     },

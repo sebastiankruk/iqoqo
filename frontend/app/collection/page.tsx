@@ -38,7 +38,6 @@ import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
 import {
   useInfiniteItems,
   useInfiniteManifestations,
-  useStats,
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
@@ -311,7 +310,8 @@ function CollectionContent() {
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters
   );
 
   const {
@@ -328,7 +328,9 @@ function CollectionContent() {
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters.length > 0 ? statusFilters : undefined,
+    formatFilters.length > 0 ? formatFilters : undefined
   );
   const {
     data: exprsData,
@@ -344,10 +346,10 @@ function CollectionContent() {
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters.length > 0 ? statusFilters : undefined,
+    formatFilters.length > 0 ? formatFilters : undefined
   );
-
-  const { data: statsData } = useStats();
 
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
@@ -480,43 +482,16 @@ function CollectionContent() {
   }, []);
 
   const formatCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.format_counts) return facetStatsData.format_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("format_")) {
-        counts[key.replace("format_", "")] = value as number;
-      }
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.format_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const categoryCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.category_counts) return facetStatsData.category_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("format_")) {
-        counts[key.replace("format_", "")] = value as number;
-      }
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.category_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const statusCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.status_counts) return facetStatsData.status_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("items_")) {
-        counts[key.replace("items_", "")] = value as number;
-      }
-    }
-    if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
-      counts.want_to_read = statsData.to_read;
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.status_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const filteredItems = useMemo(() => {
     const items = [...allItems];
@@ -719,7 +694,6 @@ function CollectionContent() {
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
                 categoryCounts={categoryCounts}
-                disableStatus={viewMode === "manifestations"}
                 viewMode={viewMode}
                 isLoggedIn={showClientContent}
                 isCurator={showCuratorContent}
@@ -1057,7 +1031,6 @@ function CollectionContent() {
         statusCounts={statusCounts}
         formatCounts={formatCounts}
         categoryCounts={categoryCounts}
-        disableStatus={viewMode === "manifestations"}
         viewMode={viewMode}
         isLoggedIn={showClientContent}
         isCurator={showCuratorContent}

@@ -38,7 +38,6 @@ interface SidebarFiltersProps {
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
-  disableStatus?: boolean;
   /** Current view mode, used to contextually hide irrelevant filters */
   viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
@@ -231,7 +230,6 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.onToggleFilter - Callback to toggle a filter
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
- * @param root0.disableStatus - Whether to disable the status filter
  * @param root0.viewMode - The current view mode
  * @param root0.isLoggedIn - Whether the user is logged in
  * @param root0.categoryCounts - The counts for each category
@@ -252,7 +250,6 @@ export function SidebarFilters({
   statusCounts = {},
   formatCounts = {},
   categoryCounts = {},
-  disableStatus = false,
   viewMode = "items",
   isLoggedIn = false,
   isCurator = false,
@@ -286,9 +283,6 @@ export function SidebarFilters({
   ) as Array<{ id: string; label: string }>;
 
   const validFormats = Array.from(new Map(rawFormats.map(f => [f.id, f])).values());
-
-  /** True when viewing Works or Expressions – status/format don't apply at those levels */
-  const isHierarchyView = viewMode === "works" || viewMode === "expressions";
 
   return (
     <aside className="w-full h-full overflow-y-auto pr-2 pb-20 custom-scrollbar">
@@ -388,7 +382,7 @@ export function SidebarFilters({
           </AccordionSection>
         )}
 
-      {!isHierarchyView && validFormats.length > 0 && (
+      {validFormats.length > 0 && (
         <AccordionSection title={t("secPhysicalKind")}>
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
@@ -420,47 +414,41 @@ export function SidebarFilters({
         </AccordionSection>
       )}
 
-      {isLoggedIn && !isHierarchyView && (
+      {isLoggedIn && (
         <AccordionSection title={t("secCollectionStatus")}>
-          {isHierarchyView ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("statusHelp")}</p>
-          ) : disableStatus ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("notApplicable")}</p>
-          ) : (
-            (() => {
-              return (
-                <div className="flex flex-col gap-1">
-                  {collectionStatuses.map(({ value, label, dot }) => {
-                    const active = isActive(activeFilters, "status", value);
-                    const count =
-                      value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
-                    const disabled = !active && count === 0;
-                    return (
-                      <label
-                        key={value}
-                        className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={active}
-                          onChange={() => onToggleFilter({ type: "status", value })}
-                          disabled={disabled}
-                          className="h-3.5 w-3.5 rounded border-border accent-primary"
-                        />
-                        <span className={`h-2 w-2 rounded-full ${dot}`} />
-                        <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
-                        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              );
-            })()
-          )}
+          {(function renderStatusCheckboxes() {
+            return (
+              <div className="flex flex-col gap-1">
+                {collectionStatuses.map(({ value, label, dot }) => {
+                  const active = isActive(activeFilters, "status", value);
+                  const count =
+                    value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
+                  const disabled = !active && count === 0;
+                  return (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={() => onToggleFilter({ type: "status", value })}
+                        disabled={disabled}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary"
+                      />
+                      <span className={`h-2 w-2 rounded-full ${dot}`} />
+                      <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </AccordionSection>
       )}
 
-      {isLoggedIn && !isHierarchyView && activeCategories.length > 0 && validProgressStatuses.length > 0 && (
+      {isLoggedIn && activeCategories.length > 0 && validProgressStatuses.length > 0 && (
         <AccordionSection title={t("secProgress")}>
           <div className="flex flex-col gap-1">
             {validProgressStatuses.map(status => {

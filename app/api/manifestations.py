@@ -54,11 +54,13 @@ def get_manifestations() -> tuple[Response, int]:
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
     publishers_filter = request.args.get("publishers")
+    statuses_filter = request.args.get("statuses")
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
 
     try:
         page = int(page_param)
@@ -86,6 +88,7 @@ def get_manifestations() -> tuple[Response, int]:
             collections=collections_list,
             genres=genres_list,
             publishers=publishers_list,
+            statuses=statuses_list,
             user_id=user_id,
         )
 
@@ -167,6 +170,12 @@ def get_manifestations() -> tuple[Response, int]:
         if publishers_list:
             pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
             query = query.filter(db.or_(*pubs_conditions))
+
+        if statuses_list and user_id:
+            if not has_item_joined:
+                query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+                has_item_joined = True
+            query = query.filter(Item.status.in_(statuses_list))
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()
