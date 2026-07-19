@@ -615,11 +615,12 @@ def test_faceted_stats_works_view_counts_works(app_with_cross_frbr_data, app):
             view="works",
         )
 
-    # The user owns items across 2 distinct Works
-    assert stats["category_counts"].get("text") == 1  # Work A has text items
-    assert stats["category_counts"].get("music") == 1  # Work B has music items
-    # 3 user-owned manifestations: book=1, graphic_novel=1, cd=1
-    assert stats["format_counts"].get("book") == 1
+    # The Works view returns global counts. There are 3 Works in the DB.
+    # Work A (text), Work B (music), Work C (text)
+    assert stats["category_counts"].get("text") == 2  # Work A and Work C
+    assert stats["category_counts"].get("music") == 1  # Work B
+    # 4 manifestations: book=2 (m1, m4), graphic_novel=1 (m2), cd=1 (m3)
+    assert stats["format_counts"].get("book") == 2
     assert stats["format_counts"].get("graphic_novel") == 1
     assert stats["format_counts"].get("cd") == 1
 
@@ -671,8 +672,8 @@ def test_works_view_distinct_no_duplicates(app_with_cross_frbr_data, app):
             category=["text"],
         )
 
-    # Work A has 2 items under text category — should still count as 1 distinct Work
-    assert stats["category_counts"].get("text") == 1
+    # Work A has 2 items under text category, Work C is text. Should count as 2 distinct Works
+    assert stats["category_counts"].get("text") == 2
     # Format counts should count distinct Works per format
-    assert stats["format_counts"].get("book") == 1  # 1 Work with book
+    assert stats["format_counts"].get("book") == 2  # 2 Works with book
     assert stats["format_counts"].get("graphic_novel") == 1  # 1 Work with graphic_novel

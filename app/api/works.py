@@ -44,11 +44,15 @@ def get_works_catalog() -> Response:
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
     publishers_filter = request.args.get("publishers")
+    statuses_filter = request.args.get("statuses")
+    formats_filter = request.args.get("formats")
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+    formats_list = [f.strip() for f in formats_filter.split(",") if f.strip()] if formats_filter else None
 
     limit_arg = request.args.get("limit")
     limit = int(limit_arg) if limit_arg is not None else 1000
@@ -111,6 +115,15 @@ def get_works_catalog() -> Response:
     if publishers_list:
         pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
         base_query = base_query.filter(db.or_(*pubs_conditions))
+
+    if statuses_list and user_id:
+        if not has_item_joined:
+            base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            has_item_joined = True
+        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+
+    if formats_list:
+        base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
 
     # Get the total count of distinct works matching the filters
     total_count = base_query.with_entities(Work.id).distinct().count()
@@ -233,11 +246,15 @@ def get_expressions_catalog() -> Response:
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
     publishers_filter = request.args.get("publishers")
+    statuses_filter = request.args.get("statuses")
+    formats_filter = request.args.get("formats")
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
     genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+    formats_list = [f.strip() for f in formats_filter.split(",") if f.strip()] if formats_filter else None
 
     limit_arg = request.args.get("limit")
     limit = int(limit_arg) if limit_arg is not None else 1000
@@ -300,6 +317,15 @@ def get_expressions_catalog() -> Response:
     if publishers_list:
         pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
         base_query = base_query.filter(db.or_(*pubs_conditions))
+
+    if statuses_list and user_id:
+        if not has_item_joined:
+            base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+            has_item_joined = True
+        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+
+    if formats_list:
+        base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
 
     # Base query for distinct expression IDs
     base_expr_query = base_query.with_entities(Expression.id).distinct()
