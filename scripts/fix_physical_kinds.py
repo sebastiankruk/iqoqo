@@ -380,7 +380,7 @@ def _update_manifestation_format(raw_val: str, target: str) -> int:
     if is_pg:
         update_sql = """
             UPDATE catalog.manifestations
-            SET meta = jsonb_set(meta, '{format}', (:target)::jsonb, true)
+            SET meta = jsonb_set(meta, '{format}', to_jsonb(:target::text), true)
             WHERE meta ->> 'format' = :raw_val
         """
         result = db.session.execute(db.text(update_sql), {"target": target, "raw_val": raw_val})
@@ -407,7 +407,7 @@ def _update_null_format(ct: str, target: str) -> int:
     if is_pg:
         update_sql = """
             UPDATE catalog.manifestations
-            SET meta = jsonb_set(meta, '{format}', (:target)::jsonb, true)
+            SET meta = jsonb_set(meta, '{format}', to_jsonb(:target::text), true)
             FROM catalog.expressions
             WHERE catalog.manifestations.expression_id = catalog.expressions.id
               AND catalog.manifestations.meta ->> 'format' IS NULL
@@ -482,9 +482,7 @@ def apply_mode(dry_run: bool = False):
             continue
 
         # Count
-        count_q = db.session.query(db.func.count(Manifestation.id)).filter(
-            Manifestation.meta["format"].as_string() == raw_val
-        )  # pylint: disable=not-callable,line-too-long
+        count_q = db.session.query(db.func.count(Manifestation.id)).filter(Manifestation.meta["format"].as_string() == raw_val)  # pylint: disable=not-callable,line-too-long
         affected = count_q.scalar() or 0
 
         if affected == 0:
