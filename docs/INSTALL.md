@@ -729,6 +729,8 @@ with columns: stored value, content type, count, and example titles.
 
 ```bash
 make fix-physical-kinds ARGS="--interactive"
+# make fix-physical-kinds ARGS="--interactive" preview
+# make fix-physical-kinds ARGS="--interactive" prod
 ```
 
 Walks you through each distinct non-canonical value, shows example titles for context,
