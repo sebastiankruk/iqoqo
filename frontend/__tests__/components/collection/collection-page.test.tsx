@@ -97,7 +97,7 @@ vi.mock("@/lib/api/hooks", () => ({
       status_counts: { available: 150, lent: 5, lost: 2, wish_list: 21, reading: 10, read: 50, want_to_read: 23 },
       category_counts: { movie: 20 },
       format_counts: { dvd: 20 },
-    }
+    },
   }),
 }));
 

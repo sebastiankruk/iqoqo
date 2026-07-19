@@ -61,6 +61,8 @@ media_categories:
         ui_aspect_ratio: 1.0
       - id: audiobook_digital
         label: "Digital Audiobook"
+      - id: unknown_audiobook
+        label: "Unknown Audiobook Format"
 
   music:
     label: "Music"
@@ -124,6 +126,8 @@ media_categories:
         ui_aspect_ratio: 0.66666667
       - id: miniatures
         label: "Miniatures / Wargame"
+      - id: unknown_board_game
+        label: "Unknown Board Game Format"
 
   puzzle:
     label: "Puzzle"
@@ -136,6 +140,8 @@ media_categories:
         label: "Jigsaw Puzzle"
       - id: mechanical_puzzle
         label: "Mechanical / 3D Puzzle"
+      - id: unknown_puzzle
+        label: "Unknown Puzzle Format"
 
 # Non-canonical strings that external APIs, legacy data, or user input may
 # send.  Each alias resolves to its canonical media category.  The generator

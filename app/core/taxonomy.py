@@ -37,6 +37,7 @@ class MediaFormat:
     AUDIOBOOK_CD = "audiobook_cd"
     AUDIOBOOK_CASSETTE = "audiobook_cassette"
     AUDIOBOOK_DIGITAL = "audiobook_digital"
+    UNKNOWN_AUDIOBOOK = "unknown_audiobook"
     CD = "cd"
     VINYL = "vinyl"
     SACD = "sacd"
@@ -55,8 +56,10 @@ class MediaFormat:
     CARDS = "cards"
     RPG_MANUAL = "rpg_manual"
     MINIATURES = "miniatures"
+    UNKNOWN_BOARD_GAME = "unknown_board_game"
     JIGSAW_PUZZLE = "jigsaw_puzzle"
     MECHANICAL_PUZZLE = "mechanical_puzzle"
+    UNKNOWN_PUZZLE = "unknown_puzzle"
     ALL = (
         "book",
         "graphic_novel",
@@ -67,6 +70,7 @@ class MediaFormat:
         "audiobook_cd",
         "audiobook_cassette",
         "audiobook_digital",
+        "unknown_audiobook",
         "cd",
         "vinyl",
         "sacd",
@@ -85,8 +89,10 @@ class MediaFormat:
         "cards",
         "rpg_manual",
         "miniatures",
+        "unknown_board_game",
         "jigsaw_puzzle",
         "mechanical_puzzle",
+        "unknown_puzzle",
     )
 
 
@@ -128,6 +134,7 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
+    "unknown_audiobook": "audiobook",
     "cd": "music",
     "vinyl": "music",
     "sacd": "music",
@@ -146,8 +153,10 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "cards": "board_game",
     "rpg_manual": "board_game",
     "miniatures": "board_game",
+    "unknown_board_game": "board_game",
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
+    "unknown_puzzle": "puzzle",
 }
 
 FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
@@ -160,6 +169,7 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
+    "unknown_audiobook": "audiobook",
     "cd": "music",
     "vinyl": "music",
     "sacd": "music",
@@ -178,8 +188,10 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "cards": "board_game",
     "rpg_manual": "board_game",
     "miniatures": "board_game",
+    "unknown_board_game": "board_game",
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
+    "unknown_puzzle": "puzzle",
     "text": "text",
     "audiobook": "audiobook",
     "music": "music",

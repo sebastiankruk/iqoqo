@@ -27,6 +27,7 @@ export const MEDIA_FORMATS = [
   "audiobook_cd",
   "audiobook_cassette",
   "audiobook_digital",
+  "unknown_audiobook",
   "cd",
   "vinyl",
   "sacd",
@@ -45,8 +46,10 @@ export const MEDIA_FORMATS = [
   "cards",
   "rpg_manual",
   "miniatures",
+  "unknown_board_game",
   "jigsaw_puzzle",
   "mechanical_puzzle",
+  "unknown_puzzle",
 ] as const;
 export type MediaFormat = (typeof MEDIA_FORMATS)[number];
 
@@ -108,6 +111,10 @@ export const MEDIA_HIERARCHY = {
       {
         id: "audiobook_digital",
         label: "Digital Audiobook",
+      },
+      {
+        id: "unknown_audiobook",
+        label: "Unknown Audiobook Format",
       },
     ],
   },
@@ -214,6 +221,10 @@ export const MEDIA_HIERARCHY = {
         id: "miniatures",
         label: "Miniatures / Wargame",
       },
+      {
+        id: "unknown_board_game",
+        label: "Unknown Board Game Format",
+      },
     ],
   },
   puzzle: {
@@ -231,6 +242,10 @@ export const MEDIA_HIERARCHY = {
       {
         id: "mechanical_puzzle",
         label: "Mechanical / 3D Puzzle",
+      },
+      {
+        id: "unknown_puzzle",
+        label: "Unknown Puzzle Format",
       },
     ],
   },
@@ -277,6 +292,7 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   audiobook_cd: "audiobook",
   audiobook_cassette: "audiobook",
   audiobook_digital: "audiobook",
+  unknown_audiobook: "audiobook",
   cd: "music",
   vinyl: "music",
   sacd: "music",
@@ -295,8 +311,10 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   cards: "board_game",
   rpg_manual: "board_game",
   miniatures: "board_game",
+  unknown_board_game: "board_game",
   jigsaw_puzzle: "puzzle",
   mechanical_puzzle: "puzzle",
+  unknown_puzzle: "puzzle",
   text: "text",
   audiobook: "audiobook",
   music: "music",

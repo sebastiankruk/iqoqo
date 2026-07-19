@@ -59,4 +59,7 @@ format_normalizations:
   "null":
     movie: unknown_video
     music: unknown_audio
-    text: book
+    text:  book
+    audiobook: unknown_audiobook
+    board_game: unknown_board_game
+    puzzle: unknown_puzzle

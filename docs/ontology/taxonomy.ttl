@@ -66,6 +66,10 @@
     rdfs:label "audiobook_digital" ;
     :belongsToCategory :MediaCategoryAudiobook ;
     rdfs:comment "Digital Audiobook" .
+:MediaFormatUnknownAudiobook a :MediaFormat ;
+    rdfs:label "unknown_audiobook" ;
+    :belongsToCategory :MediaCategoryAudiobook ;
+    rdfs:comment "Unknown Audiobook Format" .
 :MediaCategoryMusic a :MediaCategory ;
     rdfs:label "music" ;
     :defaultImageType "disc" ;
@@ -150,6 +154,10 @@
     rdfs:label "miniatures" ;
     :belongsToCategory :MediaCategoryBoardGame ;
     rdfs:comment "Miniatures / Wargame" .
+:MediaFormatUnknownBoardGame a :MediaFormat ;
+    rdfs:label "unknown_board_game" ;
+    :belongsToCategory :MediaCategoryBoardGame ;
+    rdfs:comment "Unknown Board Game Format" .
 :MediaCategoryPuzzle a :MediaCategory ;
     rdfs:label "puzzle" ;
     :defaultImageType "box" ;
@@ -162,6 +170,10 @@
     rdfs:label "mechanical_puzzle" ;
     :belongsToCategory :MediaCategoryPuzzle ;
     rdfs:comment "Mechanical / 3D Puzzle" .
+:MediaFormatUnknownPuzzle a :MediaFormat ;
+    rdfs:label "unknown_puzzle" ;
+    :belongsToCategory :MediaCategoryPuzzle ;
+    rdfs:comment "Unknown Puzzle Format" .
 
 # Format Aliases (non-canonical names)
 :FormatAliasText a :FormatAlias ;
