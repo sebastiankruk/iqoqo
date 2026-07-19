@@ -175,7 +175,7 @@ def get_manifestations() -> tuple[Response, int]:
             if not has_item_joined:
                 query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
                 has_item_joined = True
-            query = query.filter(Item.status.in_(statuses_list))
+            query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()

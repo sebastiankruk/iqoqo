@@ -120,7 +120,7 @@ def get_works_catalog() -> Response:
         if not has_item_joined:
             base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
-        base_query = base_query.filter(Item.status.in_(statuses_list))
+        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
@@ -322,7 +322,7 @@ def get_expressions_catalog() -> Response:
         if not has_item_joined:
             base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
-        base_query = base_query.filter(Item.status.in_(statuses_list))
+        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))

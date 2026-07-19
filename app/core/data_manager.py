@@ -456,14 +456,12 @@ class DataManager:
         }
         target_cls, target_id_col = _target_map.get(target_entity, (Item, Item.id))
 
-        # For non-Item targets, use LEFT JOIN to Item when no owner filter is active
-        # (otherwise unauthenticated global views would exclude entities without Items).
-        # When owner_id is set or item-level filters are present, we still need INNER JOIN.
+        _has_user_filters = owner_id is not None and (
+            tags is not None or collections is not None or statuses is not None or borrowed_only
+        )
+        
         _needs_item_join = (
-            owner_id is not None
-            or (tags is not None and owner_id is not None)
-            or (collections is not None and owner_id is not None)
-            or (statuses is not None and owner_id is not None)
+            _has_user_filters
             or (missing_cover is True)
             or (missing_id is True)
         )
@@ -512,7 +510,9 @@ class DataManager:
                 .join(Work, Expression.work_id == Work.id)
             )
 
-        if owner_id:
+        _apply_owner_filter = owner_id is not None and (target_entity == "items" or _has_user_filters)
+
+        if _apply_owner_filter:
             base_query = base_query.where(Item.owner_id == owner_id)
 
         if borrowed_only and owner_id:
@@ -748,18 +748,22 @@ class DataManager:
         # ── Full join chain (target → Item, for status/collection/tag) ─
         def _join_full_chain(q):
             if target_entity == "works":
-                return (
+                res = (
                     q.join(Expression, Expression.work_id == Work.id)
                     .join(Manifestation, Manifestation.expression_id == Expression.id)
                     .join(Item, Item.manifestation_id == Manifestation.id)
                 )
-            if target_entity == "expressions":
-                return q.join(Manifestation, Manifestation.expression_id == Expression.id).join(
+            elif target_entity == "expressions":
+                res = q.join(Manifestation, Manifestation.expression_id == Expression.id).join(
                     Item, Item.manifestation_id == Manifestation.id
                 )
-            if target_entity == "manifestations":
-                return q.join(Item, Item.manifestation_id == Manifestation.id)
-            return q.join(Manifestation, Item.manifestation_id == Manifestation.id)
+            elif target_entity == "manifestations":
+                res = q.join(Item, Item.manifestation_id == Manifestation.id)
+            else:
+                res = q.join(Manifestation, Item.manifestation_id == Manifestation.id)
+            if owner_id:
+                res = res.where(Item.owner_id == owner_id)
+            return res
 
         subq_filter_col = cfg["subq_col"]
 
