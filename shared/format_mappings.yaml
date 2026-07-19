@@ -53,4 +53,10 @@
 #   #   audiobook: audiobook_cd
 #
 # ---------------------------------------------------------
-format_normalizations: {}
+format_normalizations:
+  audio: cd
+  boardgame: board_game
+  "null":
+    movie: unknown_video
+    music: unknown_audio
+    text: book
