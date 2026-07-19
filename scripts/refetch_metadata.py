@@ -216,7 +216,7 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                             else:
                                 logger.warning("Rate limit (429) reached for %s. Waiting 60 seconds before continuing...", strategy)
                                 time.sleep(60)
-                        except Exception: # pylint: disable=broad-exception-caught
+                        except Exception:  # pylint: disable=broad-exception-caught
                             logger.warning("Rate limit (429) reached for %s. Waiting 60 seconds before continuing...", strategy)
                             time.sleep(60)
 

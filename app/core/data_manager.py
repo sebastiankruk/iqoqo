@@ -456,15 +456,9 @@ class DataManager:
         }
         target_cls, target_id_col = _target_map.get(target_entity, (Item, Item.id))
 
-        _has_user_filters = owner_id is not None and (
-            tags is not None or collections is not None or statuses is not None or borrowed_only
-        )
-        
-        _needs_item_join = (
-            _has_user_filters
-            or (missing_cover is True)
-            or (missing_id is True)
-        )
+        _has_user_filters = owner_id is not None and (tags is not None or collections is not None or statuses is not None or borrowed_only)
+
+        _needs_item_join = _has_user_filters or (missing_cover is True) or (missing_id is True)
 
         # Build base query starting from the target entity and joining down
         if target_entity == "works":
