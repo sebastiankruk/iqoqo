@@ -681,8 +681,8 @@ def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
             db.session.commit()
             logger.info("Cleared %d stuck cover tasks at startup", stuck_count)
     except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
-        # Don't block app startup if tables aren't created yet or other DB issues
-        logger.warning("Failed to check or clear stuck cover tasks at startup: %s", e)
+        # Don't block if tables aren't created yet or other DB issues
+        logger.warning("Failed to check or clear stuck cover tasks: %s", e)
         db.session.rollback()
 
     return stuck_count

@@ -21,9 +21,10 @@ def run_scheduled_cover_cleanup():
     try:
         from app.utils.covers import cleanup_stuck_pending_covers
 
-        stuck = cleanup_stuck_pending_covers(timeout_minutes=15)
-        if stuck > 0:
-            logger.info("Cover cleanup: cleared %d stuck tasks", stuck)
+        with scheduler.app.app_context():
+            stuck = cleanup_stuck_pending_covers(timeout_minutes=15)
+            if stuck > 0:
+                logger.info("Cover cleanup: cleared %d stuck tasks", stuck)
     except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
         logger.exception("Cover cleanup job failed")
 
