@@ -30,7 +30,7 @@ from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, MediaFormat
 logger = logging.getLogger(__name__)
 
 # All canonical MediaFormat values (fast set lookup)
-_CANONICAL_FORMATS: set[str] = frozenset(MediaFormat.ALL)
+_CANONICAL_FORMATS: frozenset[str] = frozenset(MediaFormat.ALL)
 
 # Path to the user-defined format mappings file
 _MAPPINGS_PATH = Path(__file__).resolve().parents[2] / "shared" / "format_mappings.yaml"

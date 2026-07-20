@@ -144,7 +144,7 @@ def get_non_canonical_rows(content_type: str | None = None, limit: int | None = 
 # ---------------------------------------------------------------------------
 
 
-def audit_mode(content_type: str | None = None, limit: int | None = None):
+def audit_mode(content_type: str | None = None, limit: int | None = None) -> int:
     """Print an audit table of non-canonical format values."""
     rows = get_non_canonical_rows(content_type=content_type, limit=limit)
 
@@ -218,7 +218,7 @@ def _read_existing_mappings() -> dict[str, Any]:
     return data
 
 
-def interactive_mode(content_type: str | None = None, limit: int | None = None):
+def interactive_mode(content_type: str | None = None, limit: int | None = None) -> int:
     """Walk the user through each non-canonical value and build mappings."""
     rows = get_non_canonical_rows(content_type=content_type, limit=limit)
     if not rows:
@@ -380,12 +380,12 @@ def _update_manifestation_format(raw_val: str, target: str) -> int:
     if is_pg:
         update_sql = """
             UPDATE catalog.manifestations
-            SET meta = jsonb_set(meta, '{format}', to_jsonb(:target::text), true)
+            SET meta = CAST(jsonb_set(CAST(catalog.manifestations.meta AS jsonb), '{format}', to_jsonb(CAST(:target AS text)), true) AS json)
             WHERE meta ->> 'format' = :raw_val
         """
         result = db.session.execute(db.text(update_sql), {"target": target, "raw_val": raw_val})
         db.session.commit()
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0)
 
     # SQLite fallback: use SQLAlchemy model update
     mfns = Manifestation.query.filter(Manifestation.meta["format"].as_string() == raw_val).all()  # pylint: disable=not-callable
@@ -407,7 +407,7 @@ def _update_null_format(ct: str, target: str) -> int:
     if is_pg:
         update_sql = """
             UPDATE catalog.manifestations
-            SET meta = jsonb_set(meta, '{format}', to_jsonb(:target::text), true)
+            SET meta = CAST(jsonb_set(CAST(catalog.manifestations.meta AS jsonb), '{format}', to_jsonb(CAST(:target AS text)), true) AS json)
             FROM catalog.expressions
             WHERE catalog.manifestations.expression_id = catalog.expressions.id
               AND catalog.manifestations.meta ->> 'format' IS NULL
@@ -415,7 +415,7 @@ def _update_null_format(ct: str, target: str) -> int:
         """
         result = db.session.execute(db.text(update_sql), {"target": target, "ct": ct})
         db.session.commit()
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0)
 
     # SQLite fallback
     mfns = (
@@ -442,7 +442,7 @@ def _update_null_format(ct: str, target: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-def apply_mode(dry_run: bool = False):
+def apply_mode(dry_run: bool = False) -> int:
     """Read format_mappings.yaml and execute UPDATEs to fix non-canonical values.
 
     Args:
@@ -482,7 +482,9 @@ def apply_mode(dry_run: bool = False):
             continue
 
         # Count
-        count_q = db.session.query(db.func.count(Manifestation.id)).filter(Manifestation.meta["format"].as_string() == raw_val)  # pylint: disable=not-callable,line-too-long
+        count_q = db.session.query(db.func.count(Manifestation.id)).filter(
+            Manifestation.meta["format"].as_string() == raw_val
+        )  # pylint: disable=not-callable,line-too-long
         affected = count_q.scalar() or 0
 
         if affected == 0:

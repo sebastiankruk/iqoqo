@@ -242,6 +242,7 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.collectionCounts - The counts for collections
  * @param root0.genreCounts - The counts for genres
  * @param root0.publisherCounts - The counts for publishers
+ * @param root0.borrowedCount - The number of borrowed items in the collection
  * @returns {JSX.Element} The component
  */
 export function SidebarFilters({

@@ -38,7 +38,8 @@ The system SHALL provide a `FormatNormalizer` that accepts a raw format string a
 - **THEN** the normalizer SHALL return `"unknown_text"` (the most generic fallback)
 
 > [!CONFIRMATION] Data loss?
-> - **Question**: Wouldn't such approach mean we no longer know the original raw value so we don't know what mapping to provide next time? 
+>
+> - **Question**: Wouldn't such approach mean we no longer know the original raw value so we don't know what mapping to provide next time?
 > - **Answer**: no, we do that are read time - db is not touched
 
 ### Requirement: Unknown placeholder formats are valid MediaFormat values
@@ -130,4 +131,3 @@ When a client passes `?format=unknown_video` or `?format=dvd`, the backend SHALL
 
 - **WHEN** `"video"` is mapped to `"dvd"` and the client requests `?format=dvd`
 - **THEN** the response SHALL include items with raw format `"video"` (normalized to `"dvd"`) AND items with raw format `"dvd"`
-

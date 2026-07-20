@@ -206,9 +206,10 @@ def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, 
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.error("Error fetching %s via %s: %s", identifier, strategy, e)
                     error_msg = str(e)
-                    if hasattr(e, "response") and e.response is not None and e.response.status_code == 429:
+                    response = getattr(e, "response", None)
+                    if response is not None and getattr(response, "status_code", None) == 429:
                         try:
-                            err_json = e.response.json()
+                            err_json = response.json()
                             err_msg = err_json.get("error", {}).get("message", "")
                             if "Queries per day" in err_msg:
                                 logger.critical("Daily quota exceeded for %s. Aborting this strategy.", strategy)

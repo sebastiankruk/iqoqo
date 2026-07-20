@@ -763,7 +763,7 @@ class DataManager:
 
         # ── Category counts (grouped by Expression.content_type) ──────────
         cat_query = (
-            select(Expression.content_type, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+            select(Expression.content_type, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
             .select_from(cfg["from_clause"])
             .where(subq_filter_col.in_(select(cat_subq.c.id)))
             .group_by(Expression.content_type)
@@ -777,7 +777,10 @@ class DataManager:
 
         # ── Format counts (grouped by Manifestation.meta->'format') ───────
         fmt_query = (
-            select(Manifestation.meta["format"].as_string(), func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+            select(
+                Manifestation.meta["format"].as_string(),
+                func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
+            )
             .select_from(cfg["from_clause"])
             .where(subq_filter_col.in_(select(fmt_subq.c.id)))
             .group_by(Manifestation.meta["format"].as_string())
@@ -799,7 +802,7 @@ class DataManager:
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
         if owner_id:
             status_query = (
-                select(Item.status, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+                select(Item.status, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
                 .where(subq_filter_col.in_(select(status_subq.c.id)))
                 .group_by(Item.status)
@@ -813,7 +816,7 @@ class DataManager:
             coll_status_query = (
                 select(
                     func.coalesce(Item.collection_status, "available").label("c_status"),
-                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),
+                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
                 )
                 .select_from(cfg["from_clause"])
                 .where(subq_filter_col.in_(select(status_subq.c.id)))
@@ -828,7 +831,7 @@ class DataManager:
         borrowed_count = 0
         if owner_id:
             borrowed_query = (
-                select(func.count(sa_distinct(cfg["target_clause"])))
+                select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
                 .where(Item.lent_to_user_id == owner_id)
                 .where(subq_filter_col.in_(select(status_subq.c.id)))
@@ -840,7 +843,7 @@ class DataManager:
         collection_counts: dict[str, int] = {}
         if owner_id:
             coll_query = (
-                select(UserCollection.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+                select(UserCollection.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
                 .where(subq_filter_col.in_(select(coll_subq.c.id)))
                 .group_by(UserCollection.name)
@@ -856,7 +859,7 @@ class DataManager:
         tag_counts: dict[str, int] = {}
         if owner_id:
             tag_query = (
-                select(Tag.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+                select(Tag.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
                 .where(subq_filter_col.in_(select(tag_subq.c.id)))
                 .group_by(Tag.name)
@@ -874,7 +877,7 @@ class DataManager:
             genre_query = (
                 select(
                     func.jsonb_array_elements_text(text("works.meta::jsonb->'genres'")).label("genre"),
-                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),
+                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
                 )
                 .select_from(cfg["from_clause"])
                 .where(
@@ -883,7 +886,7 @@ class DataManager:
                     text("jsonb_typeof(works.meta::jsonb->'genres') = 'array'"),
                 )
                 .group_by(text("genre"))
-                .order_by(func.count(sa_distinct(cfg["target_clause"])).desc())
+                .order_by(func.count(sa_distinct(cfg["target_clause"])).desc())  # pylint: disable=not-callable
             )
             genre_query = _join_to_work(genre_query)
             genre_rows = db.session.execute(genre_query).all()
@@ -925,7 +928,7 @@ class DataManager:
 
         # ── Publisher counts ──────────────────────────────────────────────
         pub_query = (
-            select(Manifestation.publisher, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))
+            select(Manifestation.publisher, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
             .select_from(cfg["from_clause"])
             .where(
                 subq_filter_col.in_(select(pub_subq.c.id)),

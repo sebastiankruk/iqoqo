@@ -29,6 +29,16 @@ from app.core.format_normalizer import (
 
 
 @pytest.fixture(autouse=True)
+def isolated_format_normalizer(monkeypatch, tmp_path):
+    import app.core.format_normalizer as mod
+
+    monkeypatch.setattr(mod, "_MAPPINGS_PATH", tmp_path / "dummy.yaml")
+    FormatNormalizer.reset()
+    yield
+    FormatNormalizer.reset()
+
+
+@pytest.fixture(autouse=True)
 def reset_normalizer():
     """Reset the normalizer's cached mappings before each test."""
     FormatNormalizer.reset()
@@ -341,7 +351,7 @@ class TestNormalizeFormatCounts:
 
     def test_empty_input(self):
         result = normalize_format_counts({})
-        assert result == {}
+        assert not result
 
 
 # ---------------------------------------------------------------------------
