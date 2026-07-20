@@ -1,8 +1,18 @@
 # OpenSpec Specification: FRBR Ontology Boundaries
 
+## Purpose
+
 This specification defines the boundary rules for the four-tier Functional Requirements for Bibliographic Records (FRBR) ontology implemented in iqoqo.
 
-## 1. The FRBR Hierarchy
+## Requirements
+
+### Requirement: Four-Tier FRBR Hierarchy
+
+All media cataloged in iqoqo MUST align with the four-tier FRBR standard hierarchy (Work -> Expression -> Manifestation -> Item).
+
+#### Scenario: Validating FRBR Hierarchy Structure
+- **WHEN** domain entities are processed or stored
+- **THEN** entity relationships strictly follow Work -> Expression -> Manifestation -> Item.
 
 All media cataloged in iqoqo must align with the FRBR standard:
 
