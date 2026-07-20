@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
-from app.api.filters import apply_genre_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.item_access import require_item_access, verify_item_ownership
@@ -426,16 +426,7 @@ def get_items():
 
         if statuses_filter:
             statuses_list = [s.strip() for s in statuses_filter.split(",")]
-            if "lent" in statuses_list and not borrowed_only:
-                query = query.filter(
-                    db.or_(
-                        Item.status.in_([s for s in statuses_list if s != "lent"]),
-                        db.and_(Item.collection_status == "lent", Item.owner_id == user_id),
-                        Item.collection_status.in_([s for s in statuses_list if s != "lent"]),
-                    )
-                )
-            else:
-                query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+            query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
 
         physical_items = query.all()
 

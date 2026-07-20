@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cross-FRBR Filter Combinations**: Fixed a bug where applying multiple Item-level status filters from different taxonomies (e.g., Progress Status vs. Collection Location) resulted in logical collisions (`db.or_()`) causing filtering bugs. These are now combined correctly via logical AND intersection so a Work must have an Item matching BOTH the intent (e.g., Unread) and location (e.g., On Shelf).
 - **Faceted Navigation Multi-Select**: Fixed an issue where selecting a genre or format in the sidebar would restrict the underlying taxonomy options, preventing users from selecting multiple genres/formats. `useTaxonomies` now correctly requests the full taxonomy for the active category, relying on `useFacetStats` to hide zero-count options.
 - **Physical Kinds SQL Syntax**: Fixed SQL syntax in `scripts/fix_physical_kinds.py` by using explicit casting (`CAST(meta AS jsonb)`) and explicit string formatting instead of colons (`::text`) to prevent SQLAlchemy binding errors and ambiguous column references during `jsonb_set` operations.
 - **Cross-FRBR Filtering and Facet Counts**: Fixed several issues where filter counts defaulted to Item-level ("My items") even when browsing Works, Expressions, or the Global Library. Key fixes:

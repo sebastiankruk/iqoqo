@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, db
 
@@ -120,7 +120,7 @@ def get_works_catalog() -> Response:
         if not has_item_joined:
             base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
-        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+        base_query = apply_statuses_filter(base_query, statuses_list, user_id=user_id)
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
@@ -322,7 +322,7 @@ def get_expressions_catalog() -> Response:
         if not has_item_joined:
             base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
             has_item_joined = True
-        base_query = base_query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+        base_query = apply_statuses_filter(base_query, statuses_list, user_id=user_id)
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))

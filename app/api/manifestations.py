@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -175,7 +175,7 @@ def get_manifestations() -> tuple[Response, int]:
             if not has_item_joined:
                 query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
                 has_item_joined = True
-            query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+            query = apply_statuses_filter(query, statuses_list, user_id=user_id)
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()
