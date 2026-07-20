@@ -61,11 +61,6 @@ The navigation panel MUST support filtering by all of the following facet types.
 - **THEN** the backend SHALL return only records whose Work-level metadata contains that genre value
 - **AND** the result count SHALL be non-zero when matching records exist in the library
 
-#### Scenario: Publisher facet filters records correctly
-
-- **WHEN** the user selects a Publisher value
-- **THEN** the backend SHALL return only records associated with that publisher
-
 #### Scenario: Collection Status allows cross-FRBR filtering
 
 - **WHEN** the user is viewing a non-item view (Works, Expressions, Manifestations)
@@ -106,6 +101,27 @@ The navigation panel MUST support filtering by all of the following facet types.
 - **WHEN** the user is NOT authenticated
 - **THEN** the Collection Status facet SHALL NOT be rendered in any view (Global Library, Expressions, Works)
 - **AND** the Progress facet SHALL NOT be rendered
+
+### Requirement: Publisher facet filters records correctly
+
+When a user filters by a Publisher value, the system MUST match against both the relational publisher column and any unstructured metadata fields (e.g., `meta['Publisher']`, `meta['publisher']`, and conditionally `meta['label']` for music releases). The system SHALL display records that match the publisher in any of these locations.
+
+#### Scenario: Publisher facet matches relational column
+
+- **WHEN** the user selects a Publisher value
+- **AND** the matching publisher is stored in the `Manifestation.publisher` column
+- **THEN** the backend SHALL return records associated with that publisher
+
+#### Scenario: Publisher facet matches JSON metadata
+
+- **WHEN** the user selects a Publisher value
+- **AND** the matching publisher is stored only in the `Manifestation.meta['Publisher']` JSON field
+- **THEN** the backend SHALL return records associated with that publisher
+
+#### Scenario: Publisher faceted counts include JSON metadata
+
+- **WHEN** the faceted sidebar generates `publisherCounts`
+- **THEN** it SHALL include distinct publishers extracted and coalesced from both the relational column and the JSON `meta` fields.
 
 ### Requirement: Empty-State Requirements
 
