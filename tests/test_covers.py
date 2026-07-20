@@ -494,9 +494,10 @@ def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
     ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
 
 
+@patch("app.utils.covers.is_safe_url", return_value=True)
 @patch("app.utils.covers.download_direct_url")
 @patch("app.utils.allegro.fetch_allegro_metadata")
-def test_fetch_external_api_cover_allegro_success(mock_fetch_allegro, mock_download):
+def test_fetch_external_api_cover_allegro_success(mock_fetch_allegro, mock_download, mock_safe_url):
     """Test that fetch_external_api_cover falls back to Allegro when OL/GB fail."""
     mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/some-image.jpg", "source": "Allegro Catalog"}
 
@@ -518,9 +519,10 @@ def test_fetch_external_api_cover_allegro_success(mock_fetch_allegro, mock_downl
     mock_download.assert_any_call("9780553380163", "https://allegro.pl/some-image.jpg", "api_allegro", suffix="allegro")
 
 
+@patch("app.utils.covers.is_safe_url", return_value=True)
 @patch("app.utils.covers.download_direct_url")
 @patch("app.utils.allegro.fetch_allegro_metadata")
-def test_fetch_external_api_cover_allegro_non_isbn(mock_fetch_allegro, mock_download):
+def test_fetch_external_api_cover_allegro_non_isbn(mock_fetch_allegro, mock_download, mock_safe_url):
     """Test that fetch_external_api_cover queries Allegro directly for non-ISBN identifiers."""
     mock_fetch_allegro.return_value = {"cover_url": "https://allegro.pl/ean-image.jpg", "source": "Allegro Catalog"}
     mock_download.return_value = ("/static/covers/5900012345678_allegro.jpg", "api_allegro")

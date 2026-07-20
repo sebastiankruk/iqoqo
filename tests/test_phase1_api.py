@@ -362,10 +362,10 @@ def test_get_items_multi_status_filter(client, app):
         # ----------------------------------------------------------
 
         items = [
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", collection_status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", collection_status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", collection_status="my_collection", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", collection_status="my_collection", meta={}),
         ]
         db.session.add_all(items)
         db.session.commit()
@@ -375,8 +375,8 @@ def test_get_items_multi_status_filter(client, app):
     data = response.json
     assert data["success"] is True
     returned_statuses = {item["status"] for item in data["data"]}
-    assert returned_statuses == {"reading", "wish_list"}
-    assert data["meta"]["total"] == 2
+    assert returned_statuses == {"reading"}
+    assert data["meta"]["total"] == 1
 
 
 def test_get_items_includes_timestamps(client, sample_work):
