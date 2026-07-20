@@ -266,6 +266,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     owner_count = 0
     if user_id:
         from app.db.models import UserWorkIntent
+
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
             if owned_item.collection_status == "wish_list":
@@ -273,7 +274,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
             else:
                 user_owns = True
                 item_id = owned_item.id
-        
+
         if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
             intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=m.expression.work.id).first()
             if intent:

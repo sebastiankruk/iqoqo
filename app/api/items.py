@@ -807,7 +807,7 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
                     )
                     db.session.add(new_item)
                     db.session.flush()
-                    
+
                     sync_tags(new_item.id, intent.user_id, payload.tags)
 
                     # Implement state machine: do not delete intent, set status to fulfilled

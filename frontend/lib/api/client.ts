@@ -39,6 +39,12 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   response => response,
   error => {
+    if (error.response?.status === 401 && typeof window !== "undefined") {
+      const currentPath = window.location.pathname + window.location.search;
+      if (!currentPath.startsWith("/login") && !currentPath.startsWith("/register")) {
+        window.location.href = `/login?callbackUrl=${encodeURIComponent(currentPath)}`;
+      }
+    }
     const message: string = error.response?.data?.error ?? error.message ?? "An unexpected error occurred";
     return Promise.reject(new Error(message));
   }

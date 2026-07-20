@@ -44,6 +44,8 @@ export async function GET(request: Request) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  // Redirect to dashboard explicitly using the correct domain
-  return NextResponse.redirect(new URL("/", baseUrl));
+  // Redirect to specified callbackUrl or default target explicitly using the correct domain
+  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect");
+  const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
+  return NextResponse.redirect(new URL(target, baseUrl));
 }

@@ -74,9 +74,11 @@ function LoginPageContent() {
 
     if (res.ok) {
       const data = await res.json();
+      const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+      const callbackQuery = callbackUrl ? `&callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
       // Exchange token in BFF — /api/auth-exchange is a Next.js route handler
-      // that sets the httpOnly session cookie then redirects to /.
-      window.location.href = `/api/auth-exchange?token=${data.token}`;
+      // that sets the httpOnly session cookie then redirects to callbackUrl or /.
+      window.location.href = `/api/auth-exchange?token=${data.token}${callbackQuery}`;
     } else {
       alert(t("loginFailed"));
     }

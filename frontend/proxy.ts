@@ -29,13 +29,16 @@ export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Protected routes – require authentication
-  const protectedRoutes = ["/profile"];
+  const protectedRoutes = ["/profile", "/collection", "/scan", "/admin"];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
-  // If they are on the login page but already logged in, send them to Discover
+  // If they are on the login page but already logged in, redirect to callbackUrl or /profile
   if (pathname.startsWith("/login")) {
     if (isLoggedIn) {
-      return NextResponse.redirect(new URL("/profile", req.nextUrl));
+      const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") || req.nextUrl.searchParams.get("redirect");
+      const target =
+        callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/profile";
+      return NextResponse.redirect(new URL(target, req.nextUrl));
     }
     return NextResponse.next();
   }
@@ -43,7 +46,8 @@ export function proxy(req: NextRequest) {
   // If they are NOT logged in AND trying to access a protected route, redirect to login
   if (!isLoggedIn && isProtectedRoute) {
     const loginUrl = new URL("/login", req.nextUrl);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    const fullTarget = pathname + req.nextUrl.search;
+    loginUrl.searchParams.set("callbackUrl", fullTarget);
     return NextResponse.redirect(loginUrl);
   }
 

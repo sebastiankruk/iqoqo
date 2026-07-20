@@ -874,10 +874,11 @@ def test_delete_physical_item_helper_inline_ownership(app, client, admin_headers
         assert status == 403
         assert response.json["error"] == "Forbidden"
 
+
 def test_tagging_virtual_item_transitions_to_physical_wishlist(client, test_setup, app):
     """Verify that adding tags to a virtual wishlist item transitions it to a physical wishlist item."""
-    from app.db.models import UserWorkIntent, Item, ItemTag, Tag
     from app.db import db
+    from app.db.models import Item, ItemTag, Tag, UserWorkIntent
 
     headers = get_headers(app, test_setup["user_id"])
     work_id = test_setup["work_id"]
@@ -913,7 +914,7 @@ def test_tagging_virtual_item_transitions_to_physical_wishlist(client, test_setu
         item = db.session.get(Item, physical_item_id)
         assert item is not None
         assert item.collection_status == "wish_list"
-        
+
         # Tags attached
         tags = db.session.query(Tag.name).join(ItemTag).filter(ItemTag.item_id == physical_item_id).all()
         tag_names = {t[0] for t in tags}
