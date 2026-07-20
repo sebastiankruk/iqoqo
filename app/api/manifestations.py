@@ -262,12 +262,23 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     user_owns = False
     item_id: int | None = None
+    wishlist_item_id: int | None = None
     owner_count = 0
     if user_id:
+        from app.db.models import UserWorkIntent
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
-            user_owns = True
-            item_id = owned_item.id
+            if owned_item.collection_status == "wish_list":
+                wishlist_item_id = owned_item.id
+            else:
+                user_owns = True
+                item_id = owned_item.id
+        
+        if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
+            intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=m.expression.work.id).first()
+            if intent:
+                wishlist_item_id = -intent.id
+
     owner_count = Item.query.filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False)).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
@@ -293,6 +304,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
         "item_id": item_id,
+        "wishlist_item_id": wishlist_item_id,
         "owner_count": owner_count,
         "content_type": m.expression.content_type if m.expression else None,
     }

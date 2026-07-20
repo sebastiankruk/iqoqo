@@ -53,10 +53,10 @@ describe("AddToCollectionDropdown", () => {
     queryClient.clear();
   });
 
-  const renderComponent = () =>
+  const renderComponent = (props: { manifestationId: number; wishlistItemId?: number | null } = { manifestationId: 123 }) =>
     render(
       <QueryClientProvider client={queryClient}>
-        <AddToCollectionDropdown manifestationId={123} />
+        <AddToCollectionDropdown {...props} />
       </QueryClientProvider>
     );
 
@@ -125,5 +125,22 @@ describe("AddToCollectionDropdown", () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith("Added to your collection!");
     });
+  });
+
+  it("renders 'View Wishlist Item' when wishlistItemId is present", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { success: true, collections: [] },
+    });
+
+    renderComponent({ manifestationId: 123, wishlistItemId: 789 });
+
+    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
+
+    const viewWishlistBtn = screen.getByText("View Wishlist Item");
+    expect(viewWishlistBtn).toBeInTheDocument();
+
+    fireEvent.click(viewWishlistBtn);
+
+    expect(mockPush).toHaveBeenCalledWith("/item/789");
   });
 });

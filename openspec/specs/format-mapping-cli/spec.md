@@ -61,12 +61,13 @@ The CLI SHALL support an `--interactive` mode that presents each distinct non-ca
 
 ### Requirement: Apply mode updates the database using mappings
 
-The CLI SHALL support an `--apply` mode that reads `shared/format_mappings.yaml` and performs SQL UPDATEs to fix all matching `Manifestation.meta['format']` values.
+The CLI SHALL support an `--apply` mode that reads `shared/format_mappings.yaml` and performs SQL UPDATEs to fix all matching `Manifestation.meta['format']` values. The SQL statements MUST be written in a syntax compatible with both PostgreSQL and the SQLAlchemy parameter binding mechanism to avoid `SyntaxError`s during execution.
 
 #### Scenario: Apply mode updates exact-match mappings
 
 - **WHEN** `--apply` is invoked and `format_mappings.yaml` contains `video: dvd`
 - **THEN** all manifestations with `meta['format'] = 'video'` SHALL have their `meta['format']` set to `'dvd'`
+- **AND** the database operation SHALL execute successfully without syntax errors caused by bind parameter conflicts (e.g., `::text` casting).
 
 #### Scenario: Apply mode updates NULL mappings with content-type scoping
 
@@ -115,3 +116,4 @@ The project's `Makefile` SHALL provide a `fix-physical-kinds` target that invoke
 
 - **WHEN** `make fix-physical-kinds ARGS="--interactive"` is invoked
 - **THEN** the script SHALL be executed with `--interactive`
+

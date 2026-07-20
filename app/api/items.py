@@ -734,7 +734,8 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
 
             # Enforce FRBR Ontology Boundary Rules:
             # If not transitioning away from wishlist status, reject physical traits
-            is_transitioning = payload.collection_status and payload.collection_status != "wish_list"
+            wants_tags = payload.tags is not None
+            is_transitioning = (payload.collection_status and payload.collection_status != "wish_list") or wants_tags
             if not is_transitioning:
                 data = request.get_json(silent=True) or {}
                 physical_fields = {
@@ -798,13 +799,16 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
                         manifestation_id=manifestation.id,
                         owner_id=intent.user_id,
                         status=payload.status or intent.status,
-                        collection_status=payload.collection_status,
+                        collection_status=payload.collection_status if payload.collection_status else "wish_list",
                         is_hidden=payload.is_hidden or False,
                         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
                         lent_to_name=payload.lent_to_name,
                         meta=item_meta,
                     )
                     db.session.add(new_item)
+                    db.session.flush()
+                    
+                    sync_tags(new_item.id, intent.user_id, payload.tags)
 
                     # Implement state machine: do not delete intent, set status to fulfilled
                     intent.status = "fulfilled"
