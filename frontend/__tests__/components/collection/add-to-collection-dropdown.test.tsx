@@ -53,7 +53,9 @@ describe("AddToCollectionDropdown", () => {
     queryClient.clear();
   });
 
-  const renderComponent = (props: { manifestationId: number; wishlistItemId?: number | null } = { manifestationId: 123 }) =>
+  const renderComponent = (
+    props: { manifestationId: number; wishlistItemId?: number | null } = { manifestationId: 123 }
+  ) =>
     render(
       <QueryClientProvider client={queryClient}>
         <AddToCollectionDropdown {...props} />

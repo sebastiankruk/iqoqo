@@ -55,7 +55,7 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
     updateItem.mutate(
       { tags: newTags },
       {
-        onSuccess: (data) => {
+        onSuccess: data => {
           setTagInput("");
           toast.success(`Tag "${trimmed}" added!`);
           if (data?.data?.id && data.data.id !== item.id) {
@@ -74,7 +74,7 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
     updateItem.mutate(
       { tags: newTags },
       {
-        onSuccess: (data) => {
+        onSuccess: data => {
           toast.success(`Tag "${tagToRemove}" removed!`);
           if (data?.data?.id && data.data.id !== item.id) {
             router.replace(`/item/${data.data.id}`);
