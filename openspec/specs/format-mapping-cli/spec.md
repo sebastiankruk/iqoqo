@@ -116,4 +116,3 @@ The project's `Makefile` SHALL provide a `fix-physical-kinds` target that invoke
 
 - **WHEN** `make fix-physical-kinds ARGS="--interactive"` is invoked
 - **THEN** the script SHALL be executed with `--interactive`
-

@@ -11,6 +11,7 @@ This specification defines the boundary rules for the four-tier Functional Requi
 All media cataloged in iqoqo MUST align with the four-tier FRBR standard hierarchy (Work -> Expression -> Manifestation -> Item).
 
 #### Scenario: Validating FRBR Hierarchy Structure
+
 - **WHEN** domain entities are processed or stored
 - **THEN** entity relationships strictly follow Work -> Expression -> Manifestation -> Item.
 

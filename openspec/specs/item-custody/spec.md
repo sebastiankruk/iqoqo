@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change architectural-hardening-phase-2. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Immutable Item Custody Logging
 
 The system SHALL maintain an append-only, immutable event log for all custody changes explicitly tied to the FRBR Item entity.
@@ -26,4 +28,3 @@ The system SHALL ensure that loan request actions are only visible when the item
 
 - **WHEN** an authenticated user views an item that only exists as a wishlist entry (no physical custody)
 - **THEN** the system SHALL NOT render the "Request loan" button.
-
