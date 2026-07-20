@@ -944,7 +944,7 @@ class DataManager:
 
         # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
         if owner_id and view == "items":
-            from app.models.core import UserWorkIntent
+            from app.db.models import UserWorkIntent
             intents = db.session.query(UserWorkIntent).filter(
                 UserWorkIntent.user_id == owner_id,
                 UserWorkIntent.status != "fulfilled"
