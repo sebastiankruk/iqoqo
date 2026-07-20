@@ -136,4 +136,38 @@ describe("ItemActions Component", () => {
     // Should remain at 1 call since polling stopped
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
   });
+
+  describe("Polymorphic Quick Actions", () => {
+    it("renders nothing for unauthenticated user", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: undefined,
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const { container } = render(<ItemActions item={{ ...mockItem, is_owner: true }} />);
+      expect(container.firstChild).toBeNull();
+    });
+
+    it("does not render quick actions for non-owner", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: { id: "test-id", email: "test@example.com", permissions: [] },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const nonOwnerItem = { ...mockItem, is_owner: false, meta: { format: "book" } } as unknown as Item;
+      render(<ItemActions item={nonOwnerItem} />);
+
+      expect(screen.queryByText(/Mark as Read/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
+    });
+
+    it("renders quick actions for owner", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: { id: "test-id", email: "test@example.com", permissions: [] },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const ownerItem = { ...mockItem, is_owner: true, status: "reading", meta: { format: "book" } } as unknown as Item;
+      render(<ItemActions item={ownerItem} />);
+
+      expect(screen.getByText(/Mark as Read/i)).toBeInTheDocument();
+    });
+  });
 });

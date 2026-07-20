@@ -251,7 +251,6 @@ export function SidebarFilters({
   statusCounts = {},
   formatCounts = {},
   categoryCounts = {},
-  viewMode = "items",
   isLoggedIn = false,
   isCurator = false,
   missingCover = false,

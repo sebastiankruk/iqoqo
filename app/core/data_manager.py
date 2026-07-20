@@ -344,6 +344,7 @@ class DataManager:
                 status_counts[c_status] += cnt
 
         intent_filter = [UserWorkIntent.user_id == owner_id] if owner_id else []
+        intent_filter.append(UserWorkIntent.status != "fulfilled")
         intent_count = (
             db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar() or 0  # pylint: disable=not-callable
         )
@@ -940,6 +941,88 @@ class DataManager:
         pub_query = _join_to_manifestation(pub_query)
         pub_rows = db.session.execute(pub_query).all()
         publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
+
+        # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
+        if owner_id and view == "items":
+            from app.models.core import UserWorkIntent
+            intents = db.session.query(UserWorkIntent).filter(
+                UserWorkIntent.user_id == owner_id,
+                UserWorkIntent.status != "fulfilled"
+            ).all()
+
+            def match_filter(f_list, item_vals):
+                if not f_list:
+                    return True
+                if not item_vals:
+                    return True
+                return any(v in item_vals for v in f_list)
+
+            _INTENT_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+
+            for intent in intents:
+                work = intent.work
+                intent_cats = set()
+                intent_formats = set()
+                intent_pubs = set()
+                for expr in work.expressions:
+                    if expr.content_type:
+                        intent_cats.add(expr.content_type)
+                    for man in expr.manifestations:
+                        if man.publisher:
+                            intent_pubs.add(man.publisher)
+                        if man.meta and man.meta.get("format"):
+                            intent_formats.add(man.meta["format"])
+                
+                intent_genres = set()
+                if work.meta:
+                    raw_g = work.meta.get("genres") or work.meta.get("genre")
+                    if isinstance(raw_g, list):
+                        intent_genres.update(g.strip() for g in raw_g if isinstance(g, str) and g.strip())
+                    elif isinstance(raw_g, str) and raw_g.strip():
+                        intent_genres.add(raw_g.strip())
+
+                intent_status_match = False
+                if not statuses:
+                    intent_status_match = True
+                else:
+                    req_intents = [s for s in statuses if s in _INTENT_STATUSES]
+                    if req_intents:
+                        intent_status_match = intent.status in req_intents
+                    elif "wish_list" in statuses:
+                        intent_status_match = True
+
+                # Cross-filter conditions
+                cat_match = match_filter(category, intent_cats)
+                fmt_match = match_filter(fmt, intent_formats)
+                pub_match = match_filter(publishers, intent_pubs)
+                genre_match = match_filter(genres, intent_genres)
+
+                # category counts
+                if fmt_match and pub_match and genre_match and intent_status_match:
+                    for c in intent_cats:
+                        category_counts[c] = category_counts.get(c, 0) + 1
+                
+                # status counts
+                if cat_match and fmt_match and pub_match and genre_match:
+                    if intent.status in db_statuses:
+                        db_statuses[intent.status] += 1
+                    if "wish_list" in db_statuses:
+                        db_statuses["wish_list"] += 1
+                
+                # genre counts
+                if cat_match and fmt_match and pub_match and intent_status_match:
+                    for g in intent_genres:
+                        genre_counts[g] = genre_counts.get(g, 0) + 1
+                
+                # format counts
+                if cat_match and pub_match and genre_match and intent_status_match:
+                    for f in intent_formats:
+                        format_counts[f] = format_counts.get(f, 0) + 1
+
+                # publisher counts
+                if cat_match and fmt_match and genre_match and intent_status_match:
+                    for p in intent_pubs:
+                        publisher_counts[p] = publisher_counts.get(p, 0) + 1
 
         return {
             "category_counts": category_counts,

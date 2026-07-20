@@ -28,10 +28,12 @@ import { useTranslations } from "next-intl";
  */
 export function CurrentContext() {
   const t = useTranslations("CurrentContext");
-  const { data, isLoading } = useItems(1, 10, ["wish_list", "reading"]);
+  const { data: readingData, isLoading: isLoadingReading } = useItems(1, 10, ["reading"]);
+  const { data: wishListData, isLoading: isLoadingWishList } = useItems(1, 10, ["wish_list"]);
 
-  const readingItems = data?.data?.filter(item => item.status === "reading") ?? [];
-  const wishListItems = data?.data?.filter(item => item.collection_status === "wish_list") ?? [];
+  const readingItems = readingData?.data?.filter(item => item.status === "reading") ?? [];
+  const wishListItems = wishListData?.data?.filter(item => item.collection_status === "wish_list") ?? [];
+  const isLoading = isLoadingReading || isLoadingWishList;
 
   if (isLoading) {
     return (

@@ -35,6 +35,7 @@ interface AddToCollectionDropdownProps {
  *
  * @param root0 - Component props
  * @param root0.manifestationId - The ID of the manifestation to add
+ * @param root0.wishlistItemId - Optional virtual wishlist item ID to delete upon acquisition
  * @returns React node representing the dropdown component
  */
 export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: AddToCollectionDropdownProps) {
