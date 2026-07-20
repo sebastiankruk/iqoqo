@@ -877,8 +877,7 @@ def test_delete_physical_item_helper_inline_ownership(app, client, admin_headers
 
 def test_tagging_virtual_item_transitions_to_physical_wishlist(client, test_setup, app):
     """Verify that adding tags to a virtual wishlist item transitions it to a physical wishlist item."""
-    from app.db import db
-    from app.db.models import Item, ItemTag, Tag, UserWorkIntent
+    from app.db.models import ItemTag, Tag
 
     headers = get_headers(app, test_setup["user_id"])
     work_id = test_setup["work_id"]

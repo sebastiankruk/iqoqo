@@ -113,7 +113,17 @@ def get_works_catalog() -> Response:
         base_query = apply_genre_filter(base_query, genres_list)
 
     if publishers_list:
-        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        pubs_conditions = []
+        for p in publishers_list:
+            p_term = f"%{p.strip()}%"
+            pubs_conditions.append(
+                db.or_(
+                    Manifestation.publisher.ilike(p_term),
+                    Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                    Manifestation.meta["publisher"].as_string().ilike(p_term),
+                    db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                )
+            )
         base_query = base_query.filter(db.or_(*pubs_conditions))
 
     if statuses_list and user_id:
@@ -315,7 +325,17 @@ def get_expressions_catalog() -> Response:
         base_query = apply_genre_filter(base_query, genres_list)
 
     if publishers_list:
-        pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+        pubs_conditions = []
+        for p in publishers_list:
+            p_term = f"%{p.strip()}%"
+            pubs_conditions.append(
+                db.or_(
+                    Manifestation.publisher.ilike(p_term),
+                    Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                    Manifestation.meta["publisher"].as_string().ilike(p_term),
+                    db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                )
+            )
         base_query = base_query.filter(db.or_(*pubs_conditions))
 
     if statuses_list and user_id:

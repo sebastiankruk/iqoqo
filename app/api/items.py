@@ -137,7 +137,17 @@ def get_virtual_items(
         if format_list:
             intent_query = intent_query.filter(Manifestation.meta["format"].as_string().in_(format_list))
         if publishers_list:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            pubs_conditions = []
+            for p in publishers_list:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             intent_query = intent_query.filter(db.or_(*pubs_conditions))
         if missing_cover:
             intent_query = intent_query.filter(
@@ -421,7 +431,17 @@ def get_items():
             query = apply_genre_filter(query, genres_list)
 
         if publishers_list:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            pubs_conditions = []
+            for p in publishers_list:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             query = query.filter(db.or_(*pubs_conditions))
 
         if statuses_filter:
@@ -735,7 +755,7 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
             # Enforce FRBR Ontology Boundary Rules:
             # If not transitioning away from wishlist status, reject physical traits
             wants_tags = payload.tags is not None
-            is_transitioning = (payload.collection_status and payload.collection_status != "wish_list") or wants_tags
+            is_transitioning = payload.collection_status != "wish_list" if payload.collection_status else wants_tags
             if not is_transitioning:
                 data = request.get_json(silent=True) or {}
                 physical_fields = {

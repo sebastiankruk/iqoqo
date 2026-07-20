@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """
 Data Import/Export Manager for iqoqo.
 
@@ -553,7 +554,17 @@ class DataManager:
             base_query = _apply_genre_filter(base_query, genres)
 
         if publishers:
-            pub_conds = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            pub_conds = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pub_conds.append(
+                    or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             base_query = base_query.where(or_(*pub_conds))
 
         if statuses and owner_id:
@@ -928,34 +939,53 @@ class DataManager:
                     genre_counts = dict(genre_counter.most_common())
 
         # ── Publisher counts ──────────────────────────────────────────────
+        coalesced_pub = func.coalesce(  # pylint: disable=assignment-from-no-return
+            Manifestation.publisher,
+            Manifestation.meta["Publisher"].as_string(),
+            Manifestation.meta["publisher"].as_string(),
+            db.case((Expression.content_type == "music", Manifestation.meta["label"].as_string()), else_=None),
+        )
         pub_query = (
-            select(Manifestation.publisher, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+            select(
+                coalesced_pub.label("publisher"), func.count(sa_distinct(cfg["target_clause"])).label("cnt")  # pylint: disable=not-callable
+            )
             .select_from(cfg["from_clause"])
             .where(
                 subq_filter_col.in_(select(pub_subq.c.id)),
-                Manifestation.publisher.isnot(None),
-                Manifestation.publisher != "",
+                coalesced_pub.isnot(None),
+                coalesced_pub != "",
             )
-            .group_by(Manifestation.publisher)
+            .group_by(coalesced_pub)
         )
-        pub_query = _join_to_manifestation(pub_query)
+
+        def _join_to_expr_and_man(q):
+            if target_entity == "works":
+                return q.join(Expression, Expression.work_id == Work.id).join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "expressions":
+                return q.join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "manifestations":
+                return q.join(Expression, Manifestation.expression_id == Expression.id)
+            return q.join(Manifestation, Item.manifestation_id == Manifestation.id).join(
+                Expression, Manifestation.expression_id == Expression.id
+            )
+
+        pub_query = _join_to_expr_and_man(pub_query)
         pub_rows = db.session.execute(pub_query).all()
         publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
 
         # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
         if owner_id and view == "items":
-            from app.db.models import UserWorkIntent
-            intents = db.session.query(UserWorkIntent).filter(
-                UserWorkIntent.user_id == owner_id,
-                UserWorkIntent.status != "fulfilled"
-            ).all()
+            intents = (
+                db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled").all()
+            )
 
             def match_filter(f_list, item_vals):
                 if not f_list:
                     return True
                 if not item_vals:
-                    return True
-                return any(v in item_vals for v in f_list)
+                    return False
+                f_list_lower = [f.strip().lower() for f in f_list]
+                return any(any(f in v.lower() for f in f_list_lower) for v in item_vals if v)
 
             _INTENT_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
 
@@ -970,10 +1000,19 @@ class DataManager:
                     for man in expr.manifestations:
                         if man.publisher:
                             intent_pubs.add(man.publisher)
+                        if man.meta:
+                            for key in ["Publisher", "publisher", "label"]:
+                                if key == "label" and expr.content_type != "music":
+                                    continue
+                                val = man.meta.get(key)
+                                if isinstance(val, list):
+                                    intent_pubs.update(v for v in val if isinstance(v, str))
+                                elif isinstance(val, str):
+                                    intent_pubs.add(val)
                         if man.meta and man.meta.get("format"):
                             intent_formats.add(man.meta["format"])
-                
-                intent_genres = set()
+
+                intent_genres: set[str] = set()
                 if work.meta:
                     raw_g = work.meta.get("genres") or work.meta.get("genre")
                     if isinstance(raw_g, list):
@@ -1001,19 +1040,19 @@ class DataManager:
                 if fmt_match and pub_match and genre_match and intent_status_match:
                     for c in intent_cats:
                         category_counts[c] = category_counts.get(c, 0) + 1
-                
+
                 # status counts
                 if cat_match and fmt_match and pub_match and genre_match:
                     if intent.status in db_statuses:
                         db_statuses[intent.status] += 1
                     if "wish_list" in db_statuses:
                         db_statuses["wish_list"] += 1
-                
+
                 # genre counts
                 if cat_match and fmt_match and pub_match and intent_status_match:
                     for g in intent_genres:
                         genre_counts[g] = genre_counts.get(g, 0) + 1
-                
+
                 # format counts
                 if cat_match and pub_match and genre_match and intent_status_match:
                     for f in intent_formats:

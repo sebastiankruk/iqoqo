@@ -87,13 +87,23 @@ def get_taxonomies() -> Response | tuple[Response, int]:
         else:
             collections_query = db.session.query(UserCollection.name).distinct().all()
 
+        from sqlalchemy import func
+
+        coalesced_pub = func.coalesce(  # pylint: disable=assignment-from-no-return
+            Manifestation.publisher,
+            Manifestation.meta["Publisher"].as_string(),
+            Manifestation.meta["publisher"].as_string(),
+            db.case((Expression.content_type == "music", Manifestation.meta["label"].as_string()), else_=None),
+        )
+
         # 3. Publishers
         publishers_query = (
-            db.session.query(Manifestation.publisher)
+            db.session.query(coalesced_pub)
             .join(Item, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
             .filter(
-                Manifestation.publisher.isnot(None),
-                Manifestation.publisher != "",
+                coalesced_pub.isnot(None),
+                coalesced_pub != "",
                 Item.id.in_(db.session.query(item_ids_subq.c.id)),
             )
             .distinct()

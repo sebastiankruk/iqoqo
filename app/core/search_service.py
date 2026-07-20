@@ -280,7 +280,17 @@ class SearchService:
             base_query = apply_genre_filter(base_query, genres)
 
         if publishers:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            pubs_conditions = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             base_query = base_query.filter(db.or_(*pubs_conditions))
 
         if statuses and user_id:
@@ -489,8 +499,18 @@ class SearchService:
             query = apply_genre_filter(query, genres)
 
         if publishers:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
-            query = query.filter(db.or_(*pubs_conditions))
+            pub_conds = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pub_conds.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
+            query = query.filter(db.or_(*pub_conds))
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()
