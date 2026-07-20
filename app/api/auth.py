@@ -18,11 +18,12 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
 import jwt as pyjwt
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, current_app, jsonify, redirect, request
+from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -60,6 +61,10 @@ def generate_internal_jwt(user: User) -> str:
 
 @auth_bp.route("/login/google")
 def google_login():
+    callback_url = request.args.get("callbackUrl") or request.args.get("redirect")
+    if callback_url and callback_url.startswith("/") and not callback_url.startswith("//"):
+        session["oauth_callback_url"] = callback_url
+
     redirect_uri = request.url_root + "api/auth/callback/google"
     original_uri = redirect_uri
 
@@ -79,6 +84,8 @@ def google_login():
 
 @auth_bp.route("/callback/google")
 def google_callback():
+    callback_url = session.pop("oauth_callback_url", None)
+
     try:
         token = oauth.google.authorize_access_token()
     except OAuthError as e:
@@ -131,7 +138,8 @@ def google_callback():
         logger.error("Google OAuth JWT generation failed: %s", e, exc_info=True)
         return redirect(f"{frontend_url}/login?error=jwt_generation_failed")
 
-    return redirect(f"{frontend_url}/api/auth-exchange?token={internal_token}")
+    cb_param = f"&callbackUrl={quote(callback_url)}" if callback_url else ""
+    return redirect(f"{frontend_url}/api/auth-exchange?token={internal_token}{cb_param}")
 
 
 @auth_bp.route("/login", methods=["POST"])

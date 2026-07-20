@@ -96,7 +96,11 @@ function LoginPageContent() {
           <Button
             className="w-full"
             variant="outline"
-            onClick={() => (window.location.href = `/api/auth/login/google`)}
+            onClick={() => {
+              const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+              const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
+              window.location.href = `/api/auth/login/google${cbQuery}`;
+            }}
           >
             {t("googleSignIn")}
           </Button>

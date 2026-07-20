@@ -49,26 +49,23 @@ describe("proxy middleware redirect rules", () => {
   });
 
   it("allows authenticated access to protected routes", () => {
-    const req = new NextRequest("http://localhost:3000/collection", {
-      headers: { Cookie: "iqoqo_session=valid_token" },
-    });
+    const req = new NextRequest("http://localhost:3000/collection");
+    req.cookies.set("iqoqo_session", "valid_token");
     const res = proxy(req);
     expect(res.headers.get("location")).toBeNull();
   });
 
   it("redirects logged-in user on /login to callbackUrl if provided", () => {
-    const req = new NextRequest("http://localhost:3000/login?callbackUrl=%2Fcollection%3Fstatuses%3Dwishlist", {
-      headers: { Cookie: "iqoqo_session=valid_token" },
-    });
+    const req = new NextRequest("http://localhost:3000/login?callbackUrl=%2Fcollection%3Fstatuses%3Dwishlist");
+    req.cookies.set("iqoqo_session", "valid_token");
     const res = proxy(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost:3000/collection?statuses=wishlist");
   });
 
   it("redirects logged-in user on /login to /profile if callbackUrl not provided", () => {
-    const req = new NextRequest("http://localhost:3000/login", {
-      headers: { Cookie: "iqoqo_session=valid_token" },
-    });
+    const req = new NextRequest("http://localhost:3000/login");
+    req.cookies.set("iqoqo_session", "valid_token");
     const res = proxy(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost:3000/profile");
