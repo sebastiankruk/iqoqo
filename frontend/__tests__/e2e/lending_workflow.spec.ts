@@ -333,39 +333,43 @@ test.describe("Loan Button Visibility Rules", () => {
   });
 });
 
-  // 6.12: Loan request button visibility rules match item borrowability
-  test("loan button visibility matches item borrowability", async ({ page }) => {
-    // Mock an owned, available (borrowable) item
-    await page.route("**/api/items/1**", async (route) => {
-      await route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            id: 1,
-            manifestation_id: 10,
-            owner_id: "owner-uuid",
-            collection_status: "available",
-            status: "available",
-            is_borrowable: true,
-            meta: { title: "Lendable Book", format: "paper" },
-          },
-        }),
-      });
+// 6.12: Loan request button visibility rules match item borrowability
+test("loan button visibility matches item borrowability", async ({ page }) => {
+  // Mock an owned, available (borrowable) item
+  await page.route("**/api/items/1**", async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: {
+          id: 1,
+          manifestation_id: 10,
+          owner_id: "owner-uuid",
+          collection_status: "available",
+          status: "available",
+          is_borrowable: true,
+          meta: { title: "Lendable Book", format: "paper" },
+        },
+      }),
     });
-
-    await page.route("**/api/profile**", async (route) => {
-      await route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ success: true, data: { id: "borrower-uuid", email: "borrower@iqoqo.local", permissions: [] } }),
-      });
-    });
-
-    await page.goto("/item/1");
-    await page.waitForLoadState("networkidle");
-
-    // Verify page renders correctly (loan button presence depends on implementation)
-    const bodyText = await page.textContent("body");
-    expect(bodyText).not.toContain("error");
   });
+
+  await page.route("**/api/profile**", async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: { id: "borrower-uuid", email: "borrower@iqoqo.local", permissions: [] },
+      }),
+    });
+  });
+
+  await page.goto("/item/1");
+  await page.waitForLoadState("networkidle");
+
+  // Verify page renders correctly (loan button presence depends on implementation)
+  const bodyText = await page.textContent("body");
+  expect(bodyText).not.toContain("error");
 });
