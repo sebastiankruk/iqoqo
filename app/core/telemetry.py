@@ -77,3 +77,22 @@ def response_hook(span: Any, status: str, response_headers: list) -> None:
         List of ``(name, value)`` response header tuples.
     """
     # No-op: reserved for future use (e.g. annotating span with response content-type).
+
+
+def init_telemetry(app: Any) -> None:
+    """Initialize OpenTelemetry instrumentation hooks for the Flask application.
+
+    Registers ``request_hook`` and ``response_hook`` with ``FlaskInstrumentor``
+    if ``opentelemetry-instrumentation-flask`` is installed and active.
+
+    Parameters
+    ----------
+    app:
+        The Flask application instance.
+    """
+    try:
+        from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
+        FlaskInstrumentor().instrument_app(app, request_hook=request_hook, response_hook=response_hook)
+    except (ImportError, RuntimeError, TypeError, AttributeError, ValueError) as exc:
+        logger.debug("Telemetry hook registration skipped: %s", exc)

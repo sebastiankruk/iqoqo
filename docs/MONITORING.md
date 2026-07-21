@@ -74,17 +74,33 @@ OTEL_HTTP_HOST_PORT=4320
 make monitoring-stop
 ```
 
+### Automated Health Verification
+
+Run `make status` to inspect container health and telemetry ingestion status across your environment:
+
+```bash
+make status
+# or for preview/prod stacks:
+make status STACK=preview
+make status STACK=prod
+```
+
+`make status` validates:
+- OpenObserve API health at `:5080/api/health`
+- OTel Collector readiness at `:8888`
+- Coherence between configured `OTEL_*_EXPORTER` flags and OTel Collector reachability
+
 ---
 
 ## Instrumented Layers
 
-All 8 platform layers are instrumented via **zero-code-change OpenTelemetry auto-instrumentation**:
+All 8 platform layers are instrumented via OpenTelemetry auto-instrumentation and custom span hooks:
 
 | # | Layer                            | Mechanism                                            | Signal                        |
 |---|----------------------------------|------------------------------------------------------|-------------------------------|
 | 1 | **Frontend SSR (Next.js)**       | `@vercel/otel` via `frontend/instrumentation.ts`     | Traces, Metrics               |
-| 2 | **Flask Backend (Gunicorn)**     | `opentelemetry-instrument gunicorn` wrapper          | Traces, Metrics, Logs         |
-| 3 | **Celery Workers**               | `opentelemetry-instrument celery` wrapper            | Traces, Metrics, Logs         |
+| 2 | **Flask Backend (Gunicorn)**     | `opentelemetry-instrument gunicorn` + `request_hook` | Traces, Metrics, Logs         |
+| 3 | **Celery Workers**               | `opentelemetry-instrument celery` + `request_hook`   | Traces, Metrics, Logs         |
 | 4 | **Outbound HTTP (requests)**     | `opentelemetry-instrumentation-requests`             | Traces                        |
 | 5 | **Browser Web Vitals**           | `BrowserTelemetry` React component + OTel Web SDK    | Traces                        |
 | 6 | **Nginx Edge Proxy**             | `ngx_otel_module.so` (via `deploy/Dockerfile.nginx`) | Traces                        |
@@ -93,12 +109,51 @@ All 8 platform layers are instrumented via **zero-code-change OpenTelemetry auto
 
 ---
 
+## Trace Security & Sanitization
+
+To ensure credentials and sensitive tokens never leak into OpenObserve or persistent trace storage:
+
+- `app/core/telemetry.py` defines `request_hook(span, environ)` which intercepts incoming WSGI request headers.
+- Any request containing an `Authorization` header has its span attribute (`http.request.header.authorization`) sanitized to `[REDACTED]`.
+- Token redaction operates automatically under both standalone Flask dev servers and `opentelemetry-instrument gunicorn` execution.
+
+---
+
+## Browser Real User Monitoring (RUM) & Logs
+
+Frontend telemetry can be forwarded directly from client browsers to OpenObserve.
+
+### Environment Configuration
+
+Set the following `NEXT_PUBLIC_` variables in `.env` (embedded into the Next.js client bundle during build/start):
+
+```bash
+NEXT_PUBLIC_OPENOBSERVE_RUM_TOKEN="your_openobserve_rum_token"
+NEXT_PUBLIC_OPENOBSERVE_API_URL="http://localhost:5080"
+```
+
+If `NEXT_PUBLIC_OPENOBSERVE_RUM_TOKEN` is unset or empty, the frontend skips browser RUM initialization without throwing errors.
+
+---
+
 ## AI-First Observability: SQL Queries
 
-Because OpenObserve uses standard SQL, AI agents can diagnose production issues without
-opening a browser or writing PromQL.
+Because OpenObserve uses standard ANSI SQL, AI agents and SREs can execute queries via HTTP REST API without manual browser navigation.
 
-### Recent Celery Errors
+### HTTP 5xx Server Errors (last 1 hour)
+
+```bash
+curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "sql": "SELECT _timestamp, service_name, http_status_code, http_target FROM default WHERE http_status_code >= 500 AND _timestamp > now() - interval 1 hour ORDER BY _timestamp DESC LIMIT 20"
+    }
+  }' | jq '.hits'
+```
+
+### Recent Celery Exception Tracebacks
 
 ```bash
 curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
@@ -152,3 +207,4 @@ ORDER BY _timestamp DESC LIMIT 1
 | `deploy/nginx-main.conf`                       | Nginx main config loading OTel C-module        |
 | `frontend/instrumentation.ts`                  | Next.js server-side OTel bootstrap (Layer 1)   |
 | `frontend/components/browser-telemetry.tsx`    | Browser-side OTel bootstrap (Layer 5)          |
+

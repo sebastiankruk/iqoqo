@@ -165,3 +165,31 @@ def test_run_sh_otel_instrumentation() -> None:
     assert "opentelemetry-instrument celery" in content, "Celery worker is not wrapped with opentelemetry-instrument in run.sh"
     assert 'OTEL_SERVICE_NAME="iqoqo-frontend"' in content, "OTEL_SERVICE_NAME is not set for frontend in run.sh"
     assert 'OTEL_SERVICE_NAME="iqoqo-celery-worker"' in content, "OTEL_SERVICE_NAME is not set for Celery worker in run.sh"
+
+
+def test_telemetry_request_hook_header_redaction() -> None:
+    """Verify that request_hook redacts Authorization headers from trace span attributes."""
+    from unittest.mock import MagicMock
+
+    from app.core.telemetry import request_hook
+
+    mock_span = MagicMock()
+    mock_span.is_recording.return_value = True
+
+    environ = {
+        "HTTP_AUTHORIZATION": "Bearer secret_token_value_12345",
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": "/api/items",
+    }
+
+    request_hook(mock_span, environ)
+    mock_span.set_attribute.assert_called_once_with("http.request.header.authorization", "[REDACTED]")
+
+    # Test non-recording / None span safety
+    mock_span_not_recording = MagicMock()
+    mock_span_not_recording.is_recording.return_value = False
+    request_hook(mock_span_not_recording, environ)
+    mock_span_not_recording.set_attribute.assert_not_called()
+
+    # None span should not raise exception
+    request_hook(None, environ)
