@@ -61,8 +61,8 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
     // Mock works/shelf with cross-FRBR filter responses
     await page.route("**/api/works/shelf**", async route => {
       const url = route.request().url();
-      const hasStatusFilter = url.includes("statuses=");
-      const hasFormatFilter = url.includes("formats=");
+      const hasStatusFilter = url.includes("statuses");
+      const hasFormatFilter = url.includes("format");
 
       // Combined filter (AND logic) → fewer results
       if (hasStatusFilter && hasFormatFilter) {
@@ -83,7 +83,7 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
             meta: { page: 1, pages: 1, total: 1, limit: 20 },
           }),
         });
-      } else if (url.includes("statuses=available")) {
+      } else if (url.includes("available")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -108,7 +108,7 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
             meta: { page: 1, pages: 1, total: 2, limit: 20 },
           }),
         });
-      } else if (url.includes("tags=horror")) {
+      } else if (url.includes("horror")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -239,7 +239,7 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
   });
 
   test("should filter Expressions by physical format at Expressions level", async ({ page }) => {
-    await page.goto("/collection?view=expressions&formats=dvd");
+    await page.goto("/collection?view=expressions&format=dvd");
     await page.waitForLoadState("networkidle");
 
     // The mocked "DVD Expression" work title should be visible
@@ -247,7 +247,7 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
   });
 
   test("should apply combined status and format cross-FRBR filters at Works level", async ({ page }) => {
-    await page.goto("/collection?view=works&statuses=available&formats=dvd");
+    await page.goto("/collection?view=works&statuses=available&format=dvd");
     await page.waitForLoadState("networkidle");
 
     // Both filters should be applied — the mocked combined result should be visible

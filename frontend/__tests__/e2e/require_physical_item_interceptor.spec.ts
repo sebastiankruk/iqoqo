@@ -332,6 +332,7 @@ test.describe("@require_physical_item interceptor — UI response validation", (
       });
     });
 
+    await page.goto("/");
     const result = await page.evaluate(async () => {
       const response = await fetch("/api/items/0", {
         method: "PUT",

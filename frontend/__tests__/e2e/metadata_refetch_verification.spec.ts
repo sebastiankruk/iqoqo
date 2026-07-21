@@ -94,7 +94,7 @@ test.describe("Metadata Refetch Verification", () => {
       });
     });
 
-    await page.goto("/collection/item/1");
+    await page.goto("/item/1");
     await page.waitForSelector("body");
 
     // Page should load
