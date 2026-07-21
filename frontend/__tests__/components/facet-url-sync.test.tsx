@@ -146,7 +146,7 @@ describe("Facet URL Sync — Deserialization", () => {
     const qs = "statuses=available,,wish_list,";
     const filters = queryStringToFilters(qs);
 
-    const statusFilterCount = filters.filter(f => f.type === "status").length;
+    const statusFilterCount = filters.filter(f => (f.type as string) === "statuses").length;
     expect(statusFilterCount).toBe(2);
   });
 });
