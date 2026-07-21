@@ -25,6 +25,7 @@ test.describe("New Features Coverage", () => {
     });
 
     // 2. Mock user profile
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

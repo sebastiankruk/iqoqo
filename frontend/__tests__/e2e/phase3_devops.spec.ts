@@ -23,6 +23,7 @@ test.describe("Phase 3 DevOps & UI Features", () => {
     });
 
     // Mock Profile to bypass login redirects
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,
@@ -64,6 +65,7 @@ test.describe("Phase 3 DevOps & UI Features", () => {
 
   test("Landing page has functional GitHub link", async ({ page }) => {
     // Un-mock profile or mock as 401 to see the landing page Hero
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 401,
@@ -104,6 +106,7 @@ test.describe("Phase 3 — OpenObserve AdBlocker Resilience", () => {
     await page.route("**/*o2jam*", route => route.abort("blockedbyclient"));
 
     // 2. Mock profile as unauthenticated so we land on the public hero
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 401,
@@ -158,6 +161,7 @@ test.describe("Phase 3 — FRBR Wishlist QR Code Boundary", () => {
 
   test.beforeEach(async ({ page }) => {
     // Authenticate as a normal item owner
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,

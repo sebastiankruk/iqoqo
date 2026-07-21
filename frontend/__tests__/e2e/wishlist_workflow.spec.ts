@@ -20,6 +20,7 @@ import packageJson from "../../package.json" assert { type: "json" };
 test.describe("Wishlist and Progress Workflow", () => {
   test.beforeEach(async ({ page }) => {
     // 0. Mock User Profile and Config
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -219,6 +220,7 @@ test.describe("v0.7.0 Token-Based Wishlist Sharing & Isolation", () => {
 test.describe("FRBR Virtual Item Boundary", () => {
   test.beforeEach(async ({ page }) => {
     // Mock the user profile to simulate an authenticated item owner
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -336,6 +338,7 @@ test.describe("FRBR Virtual Item Boundary", () => {
 
 test.describe("Instant Wishlist Subtraction from Item Card", () => {
   test.beforeEach(async ({ page }) => {
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

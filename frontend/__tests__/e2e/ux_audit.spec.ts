@@ -65,6 +65,9 @@ test.describe("UX/UI Audit Workflow", () => {
       });
 
       // Mock user authentication state (matching useProfile hook)
+      await page
+        .context()
+        .addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
       await page.route("**/api/profile**", route =>
         route.fulfill({
           status: 200,

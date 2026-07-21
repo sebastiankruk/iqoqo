@@ -66,6 +66,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
     });
 
     // 2. Mock user authentication state (matching useProfile hook)
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,
@@ -336,6 +337,7 @@ test.describe("Phase 4: Ingestion Performance – Non-Blocking UI during heavy D
     });
 
     // Authenticate as a regular user
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,

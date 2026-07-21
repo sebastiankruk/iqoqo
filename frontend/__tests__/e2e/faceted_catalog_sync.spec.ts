@@ -28,6 +28,7 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
     page.on("response", response => console.log("<< Response:", response.status(), response.url()));
 
     // 2. Mock user profile
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -276,6 +277,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

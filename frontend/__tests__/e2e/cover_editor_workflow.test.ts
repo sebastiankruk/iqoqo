@@ -24,6 +24,7 @@ test.describe("Cover Editor Workflow", () => {
   const testManifestationId = 1;
 
   test.beforeEach(async ({ page }) => {
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -80,6 +81,7 @@ test.describe("Cover Editor Workflow", () => {
 
 test.describe("Cover Editor Permissions", () => {
   test("should work for admin user", async ({ page }) => {
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
