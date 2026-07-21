@@ -532,7 +532,6 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     expect(page.url()).toContain("statuses=available,wish_list");
     expect(page.url()).toContain("formats=dvd");
   });
-});
 
   // 6.1: Shared URL with facet params restores filter state on another browser/device
   test("shared URL with facet params restores filter state", async ({ page }) => {

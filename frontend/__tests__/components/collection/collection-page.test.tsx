@@ -535,7 +535,7 @@ describe("CollectionPage – Sorting Behavior", () => {
       mockUseProfile.mockReturnValue({
         data: { ...MOCK_PROFILE, id: "other-user", permissions: [] },
         isLoading: false,
-      } as ReturnType<typeof useProfile>);
+      } as unknown as ReturnType<typeof useProfile>);
       mockUseItems.mockReturnValue(infiniteQueryResult());
 
       render(<CollectionPage />);

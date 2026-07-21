@@ -588,16 +588,18 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
     // Item should be viewable but auth-gated controls should be hidden
     expect(page.getByText("Someone Else's Wishlist Item")).toBeVisible();
   });
-});
 
   // 6.3: "View Wishlist Item" actions shown correctly vs "Add to Wishlist" for non-wishlist items
   test("view wishlist item actions differentiate from add to wishlist", async ({ page }) => {
-    await page.route("**/api/manifestations**", async (route) => {
+    await page.route("**/api/manifestations**", async route => {
       await route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ success: true, data: [
-          { id: 100, title: "Test Item", isbn13: "1234567890123", item_id: 42, cover_url: null }
-        ], meta: { total: 1, page: 1, pages: 1, limit: 20 } }),
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [{ id: 100, title: "Test Item", isbn13: "1234567890123", item_id: 42, cover_url: null }],
+          meta: { total: 1, page: 1, pages: 1, limit: 20 },
+        }),
       });
     });
 
@@ -627,10 +629,14 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
   // 6.5: Auth-gated action buttons (edit/delete) hidden for non-owners
   test("auth-gated action buttons hidden for non-owners", async ({ page }) => {
     // Remove admin permissions
-    await page.route("**/api/profile**", async (route) => {
+    await page.route("**/api/profile**", async route => {
       await route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ success: true, data: { id: "other-user", email: "other@iqoqo.local", permissions: ["read:metadata"] } }),
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { id: "other-user", email: "other@iqoqo.local", permissions: ["read:metadata"] },
+        }),
       });
     });
 
@@ -638,7 +644,9 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
     await page.waitForLoadState("networkidle");
 
     // Edit/delete buttons should not be visible for non-owners
-    const adminBtn = page.locator('button:has-text("Admin"), button:has-text("Edit"), button:has-text("Delete")').first();
+    const adminBtn = page
+      .locator('button:has-text("Admin"), button:has-text("Edit"), button:has-text("Delete")')
+      .first();
     if (await adminBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       // If visible (could be owned items mock), check that at least some controls are hidden
       expect(true).toBe(true);

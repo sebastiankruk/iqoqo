@@ -86,6 +86,7 @@ make status STACK=prod
 ```
 
 `make status` validates:
+
 - OpenObserve API health at `:5080/api/health`
 - OTel Collector readiness at `:8888`
 - Coherence between configured `OTEL_*_EXPORTER` flags and OTel Collector reachability
@@ -207,4 +208,3 @@ ORDER BY _timestamp DESC LIMIT 1
 | `deploy/nginx-main.conf`                       | Nginx main config loading OTel C-module        |
 | `frontend/instrumentation.ts`                  | Next.js server-side OTel bootstrap (Layer 1)   |
 | `frontend/components/browser-telemetry.tsx`    | Browser-side OTel bootstrap (Layer 5)          |
-

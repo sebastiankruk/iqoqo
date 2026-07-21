@@ -331,14 +331,14 @@ test.describe("Loan Button Visibility Rules", () => {
     // The page may redirect to login, which is also acceptable
     await expect(page).toHaveTitle(/.+/);
   });
-});
 
   // 6.12: Loan request button visibility rules match item borrowability
   test("loan button visibility matches item borrowability", async ({ page }) => {
     // Mock an owned, available (borrowable) item
-    await page.route("**/api/items/1**", async (route) => {
+    await page.route("**/api/items/1**", async route => {
       await route.fulfill({
-        status: 200, contentType: "application/json",
+        status: 200,
+        contentType: "application/json",
         body: JSON.stringify({
           success: true,
           data: {
@@ -354,10 +354,14 @@ test.describe("Loan Button Visibility Rules", () => {
       });
     });
 
-    await page.route("**/api/profile**", async (route) => {
+    await page.route("**/api/profile**", async route => {
       await route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify({ success: true, data: { id: "borrower-uuid", email: "borrower@iqoqo.local", permissions: [] } }),
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { id: "borrower-uuid", email: "borrower@iqoqo.local", permissions: [] },
+        }),
       });
     });
 
