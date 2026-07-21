@@ -221,41 +221,36 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
   });
 
   test("should show only Works with available items when status filter is applied", async ({ page }) => {
-    // Navigate to the global catalog (works shelf)
-    await page.goto("/collection?view=works");
+    // Navigate to the global catalog (works shelf) with status filter
+    await page.goto("/collection?view=works&statuses=available");
+    await page.waitForLoadState("networkidle");
 
-    // The page should load with mocked data
-    await page.waitForSelector("body");
-
-    // The default view should show the global catalog work
-    await expect(page.getByText("Global Catalog Work")).toBeVisible();
+    // The mocked "Available Work" should be visible
+    await expect(page.getByText("Available Work").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Another Available Work").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("should show empty results with 200 status when no items match filters", async ({ page }) => {
     await page.goto("/collection?view=works&tags=nonexistent");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // The page should load without error
-    // Empty results should be displayed gracefully
+    // The page should load without error — empty results displayed gracefully
     await expect(page).toHaveTitle(/.+/);
   });
 
   test("should filter Expressions by physical format at Expressions level", async ({ page }) => {
     await page.goto("/collection?view=expressions&formats=dvd");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // The DVD expression should be visible
-    await expect(page.getByText("DVD Expression")).toBeVisible();
+    // The mocked "DVD Expression" work title should be visible
+    await expect(page.getByText("DVD Expression").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("should apply combined status and format cross-FRBR filters at Works level", async ({ page }) => {
     await page.goto("/collection?view=works&statuses=available&formats=dvd");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // Both filters should be applied, returning Works that match both conditions
-    await expect(page.getByText("Works with both filters")).toBeVisible();
+    // Both filters should be applied — the mocked combined result should be visible
+    await expect(page.getByText("Works with both filters").first()).toBeVisible({ timeout: 10000 });
   });
 });

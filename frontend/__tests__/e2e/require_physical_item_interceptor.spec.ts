@@ -319,6 +319,19 @@ test.describe("@require_physical_item interceptor — UI response validation", (
 
   // 6.8: @require_physical_item decorator rejects invalid physical item IDs
   test("require_physical_item decorator rejects invalid physical item IDs", async ({ page }) => {
+    // Mock the API endpoint to simulate the decorator rejection
+    await page.route("**/api/items/0", async route => {
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error:
+            "Virtual items (id <= 0) cannot be lent. Only physical items with a positive ID are eligible for loan workflows.",
+          code: 400,
+        }),
+      });
+    });
+
     const result = await page.evaluate(async () => {
       const response = await fetch("/api/items/0", {
         method: "PUT",

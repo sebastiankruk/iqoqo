@@ -141,11 +141,10 @@ test.describe("Mobile Facet Drawer", () => {
 
   test("should render two items in collection on mobile", async ({ page }) => {
     await page.goto("/collection?view=items");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // Both items should be visible
-    await expect(page.getByText("Mobile Item 1")).toBeVisible();
-    await expect(page.getByText("Mobile Item 2")).toBeVisible();
+    // Both mocked items should be visible
+    await expect(page.getByText("Mobile Item 1").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Mobile Item 2").first()).toBeVisible({ timeout: 10000 });
   });
 });

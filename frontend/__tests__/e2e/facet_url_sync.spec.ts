@@ -120,12 +120,11 @@ test.describe("Facet URL Sync", () => {
 
   test("should update URL when a filter is selected", async ({ page }) => {
     await page.goto("/collection?view=items");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // Navigate with filter params directly (since selection is done via UI)
+    // Navigate with filter params directly (simulating filter selection)
     await page.goto("/collection?view=items&statuses=available");
-    await page.waitForSelector("body");
+    await page.waitForLoadState("networkidle");
 
     // URL should contain the filter param
     expect(page.url()).toContain("statuses=available");
@@ -133,25 +132,23 @@ test.describe("Facet URL Sync", () => {
 
   test("should load with pre-selected filters when navigating to URL with facet params", async ({ page }) => {
     await page.goto("/collection?view=items&statuses=available&formats=dvd");
-
-    await page.waitForSelector("body");
+    await page.waitForLoadState("networkidle");
 
     // The URL should contain both filter params
     expect(page.url()).toContain("statuses=available");
     expect(page.url()).toContain("formats=dvd");
 
-    // The page should show combined filter results
-    await expect(page.getByText("Combined Filter Item")).toBeVisible();
+    // The mocked "Combined Filter Item" should be visible in results
+    await expect(page.getByText("Combined Filter Item").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("should restore filter state via URL params on page reload", async ({ page }) => {
     await page.goto("/collection?view=items&statuses=available");
-
-    await page.waitForSelector("body");
+    await page.waitForLoadState("networkidle");
 
     // Reload the page
     await page.reload();
-    await page.waitForSelector("body");
+    await page.waitForLoadState("networkidle");
 
     // URL should still contain the filter
     expect(page.url()).toContain("statuses=available");

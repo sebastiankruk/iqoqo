@@ -519,7 +519,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await page.goto("/collection?view=items&statuses=available&formats=dvd&categories=movie");
     await page.waitForLoadState("networkidle");
 
-    // URL should contain all filter params
+    // URL should retain all filter params after hydration
     expect(page.url()).toContain("statuses=available");
     expect(page.url()).toContain("formats=dvd");
   });
@@ -528,7 +528,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     await page.goto("/collection?view=items&statuses=available,wish_list&formats=dvd");
     await page.waitForLoadState("networkidle");
 
-    // Both statuses should be in the URL as comma-separated values
+    // Both statuses should be preserved in the URL as comma-separated values
     expect(page.url()).toContain("statuses=available,wish_list");
     expect(page.url()).toContain("formats=dvd");
   });
@@ -536,6 +536,15 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
 
 // 6.1: Shared URL with facet params restores filter state on another browser/device
 test("shared URL with facet params restores filter state", async ({ page }) => {
+  // Setup minimal mocks for the /works page
+  await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+  await page.route("**/api/profile**", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }) });
+  });
+  await page.route("**/api/config**", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }) });
+  });
+
   await page.goto("/works?statuses=available&formats=paper");
   await page.waitForLoadState("networkidle");
 
@@ -546,6 +555,15 @@ test("shared URL with facet params restores filter state", async ({ page }) => {
 
 // 6.2: Multiple facet groups selected reflect correctly in results and URL
 test("multiple facet groups reflected in results and URL", async ({ page }) => {
+  // Setup minimal mocks for the /works page
+  await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+  await page.route("**/api/profile**", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }) });
+  });
+  await page.route("**/api/config**", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }) });
+  });
+
   await page.goto("/works?statuses=available&formats=paper&tags=horror");
   await page.waitForLoadState("networkidle");
 
