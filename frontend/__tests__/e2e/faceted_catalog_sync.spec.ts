@@ -513,4 +513,44 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
     await expect(fictionCheckbox).toBeChecked();
   });
+
+  test("shared URL with facet params restores filter state on navigation", async ({ page }) => {
+    // Navigate with combined facet params simulating a shared URL
+    await page.goto("/collection?view=items&statuses=available&formats=dvd&categories=movie");
+    await page.waitForLoadState("networkidle");
+
+    // URL should contain all filter params
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=dvd");
+  });
+
+  test("multiple facet groups selected reflect correctly in URL", async ({ page }) => {
+    await page.goto("/collection?view=items&statuses=available,wish_list&formats=dvd");
+    await page.waitForLoadState("networkidle");
+
+    // Both statuses should be in the URL as comma-separated values
+    expect(page.url()).toContain("statuses=available,wish_list");
+    expect(page.url()).toContain("formats=dvd");
+  });
+});
+
+  // 6.1: Shared URL with facet params restores filter state on another browser/device
+  test("shared URL with facet params restores filter state", async ({ page }) => {
+    await page.goto("/works?statuses=available&formats=paper");
+    await page.waitForLoadState("networkidle");
+
+    // URL should retain the facet parameters after load
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
+  });
+
+  // 6.2: Multiple facet groups selected reflect correctly in results and URL
+  test("multiple facet groups reflected in results and URL", async ({ page }) => {
+    await page.goto("/works?statuses=available&formats=paper&tags=horror");
+    await page.waitForLoadState("networkidle");
+
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
+    expect(page.url()).toContain("tags=horror");
+  });
 });

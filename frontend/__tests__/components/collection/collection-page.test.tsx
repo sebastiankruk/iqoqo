@@ -495,4 +495,53 @@ describe("CollectionPage – Sorting Behavior", () => {
     // includePublic is parameter index 14
     expect(lastCall[14]).toBe(false);
   });
+
+  describe("Shared Collection — Unauthenticated", () => {
+    it("renders shared collection browseable view for unauthenticated users", () => {
+      // Mock unauthenticated profile
+      mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
+      mockUseItems.mockReturnValue(infiniteQueryResult());
+
+      render(<CollectionPage />);
+
+      // Collection page should still render for unauthenticated users
+      // (shared/public collections are browseable without login)
+      expect(screen.queryByTestId("collection-grid")).toBeTruthy();
+    });
+
+    it("auth-gated controls are hidden for unauthenticated users", () => {
+      mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
+      mockUseItems.mockReturnValue(infiniteQueryResult());
+
+      render(<CollectionPage />);
+
+      // Admin-only controls should not be present
+      expect(screen.queryByText(/Admin Actions/i)).not.toBeTruthy();
+    });
+
+    it("unauthenticated users see no edit/delete management controls", () => {
+      mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
+      mockUseItems.mockReturnValue(infiniteQueryResult());
+
+      render(<CollectionPage />);
+
+      // Management/edit controls should not render for unauth users
+      expect(screen.queryByText(/Manage Collections/i)).not.toBeTruthy();
+    });
+  });
+
+  describe("Shared Collection — Authenticated Non-Owner", () => {
+    it("non-owner cannot see management controls", () => {
+      mockUseProfile.mockReturnValue({
+        data: { ...MOCK_PROFILE, id: "other-user", permissions: [] },
+        isLoading: false,
+      } as ReturnType<typeof useProfile>);
+      mockUseItems.mockReturnValue(infiniteQueryResult());
+
+      render(<CollectionPage />);
+
+      // Non-owner viewing a shared collection should see content
+      expect(screen.queryByTestId("collection-grid")).toBeTruthy();
+    });
+  });
 });

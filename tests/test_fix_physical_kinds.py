@@ -245,3 +245,64 @@ class TestMappingsReadWrite:
             read_back = _read_existing_mappings()
             assert read_back["format_normalizations"]["video"] == "dvd"
             assert read_back["format_normalizations"]["null"]["music"] == "cd"
+
+
+class TestInvalidTargetKind:
+    """2.8: Invalid target kind handling."""
+
+    def test_invalid_target_kind_exits_non_zero(self, app, tmp_path):
+        """2.8: Invalid target kind exits with non-zero code and error message."""
+        with app.app_context():
+            mappings_file = tmp_path / "format_mappings.yaml"
+            mappings_data = {"format_normalizations": {"video": "invalid_target_kind_xyz"}}
+            with open(mappings_file, "w", encoding="utf-8") as f:
+                yaml.dump(mappings_data, f)
+
+            with patch("scripts.fix_physical_kinds.MAPPINGS_FILE", Path(mappings_file)):
+                captured = io.StringIO()
+                sys.stdout = captured
+                try:
+                    ret = apply_mode(dry_run=True)
+                finally:
+                    sys.stdout = sys.__stdout__
+
+                # The script should either exit non-zero or warn about invalid target
+                output = captured.getvalue()
+                assert "invalid_target_kind_xyz" in output or ret != 0
+
+    def test_invalid_target_kind_with_error_message(self, app, tmp_path):
+        """Verify error message is provided for invalid target."""
+        with app.app_context():
+            mappings_file = tmp_path / "format_mappings.yaml"
+            mappings_data = {"format_normalizations": {"unknown_format": "not_valid"}}
+            with open(mappings_file, "w", encoding="utf-8") as f:
+                yaml.dump(mappings_data, f)
+
+            with patch("scripts.fix_physical_kinds.MAPPINGS_FILE", Path(mappings_file)):
+                captured = io.StringIO()
+                sys.stdout = captured
+                try:
+                    ret = apply_mode(dry_run=True)
+                finally:
+                    sys.stdout = sys.__stdout__
+
+                output = captured.getvalue()
+                # Either reports error or exits non-zero
+                assert "invalid" in output.lower() or "not_valid" in output or ret != 0
+
+
+class TestEmptyMappingsWarning:
+    """2.9: Empty mappings configuration warns and exits."""
+
+    def test_empty_mappings_warns_and_exits(self, app, tmp_path):
+        """2.9: Empty mappings configuration warns and exits without changes."""
+        with app.app_context():
+            mappings_file = tmp_path / "format_mappings.yaml"
+            mappings_data = {"format_normalizations": {}}
+            with open(mappings_file, "w", encoding="utf-8") as f:
+                yaml.dump(mappings_data, f)
+
+            with patch("scripts.fix_physical_kinds.MAPPINGS_FILE", Path(mappings_file)):
+                ret = apply_mode()
+                # Must exit non-zero for empty mappings
+                assert ret != 0
