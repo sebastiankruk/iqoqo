@@ -58,7 +58,7 @@ test.describe("Facet URL Sync", () => {
       const url = route.request().url();
       const statuses = url.includes("statuses=available") ? ["available"] : [];
 
-      if (url.includes("statuses=available") && url.includes("formats=dvd")) {
+      if (url.includes("statuses=available") && url.includes("format=dvd")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -131,12 +131,12 @@ test.describe("Facet URL Sync", () => {
   });
 
   test("should load with pre-selected filters when navigating to URL with facet params", async ({ page }) => {
-    await page.goto("/collection?view=items&statuses=available&formats=dvd");
+    await page.goto("/collection?view=items&statuses=available&format=dvd");
     await page.waitForLoadState("networkidle");
 
     // The URL should contain both filter params
     expect(page.url()).toContain("statuses=available");
-    expect(page.url()).toContain("formats=dvd");
+    expect(page.url()).toContain("format=dvd");
 
     // The mocked "Combined Filter Item" should be visible in results
     await expect(page.getByText("Combined Filter Item").first()).toBeVisible({ timeout: 10000 });
