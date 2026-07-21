@@ -38,12 +38,24 @@ vi.mock("@/components/ui/button", () => ({
 
 // Mock the drawer UI components as proper React component functions
 vi.mock("@/components/ui/drawer", () => {
-  function Drawer({ open, onOpenChange, children }: { open: boolean; onOpenChange: (open: boolean) => void; children: React.ReactNode }) {
+  function Drawer({
+    open,
+    onOpenChange,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    children: React.ReactNode;
+  }) {
     if (!open) return null;
-    return React.createElement("div", {
-      "data-testid": "drawer",
-      onClick: () => onOpenChange(false),
-    }, children);
+    return React.createElement(
+      "div",
+      {
+        "data-testid": "drawer",
+        onClick: () => onOpenChange(false),
+      },
+      children
+    );
   }
   function DrawerContent({ children, className }: { children: React.ReactNode; className?: string }) {
     return React.createElement("div", { "data-testid": "drawer-content", className }, children);

@@ -136,9 +136,11 @@ describe("Facet ARIA Live Region", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockUseItems.mockReturnValue(infiniteQueryResult({
-      data: { pages: [{ data: [], meta: { total: 0, page: 1, pages: 1, limit: 20 } }] },
-    }));
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [{ data: [], meta: { total: 0, page: 1, pages: 1, limit: 20 } }] },
+      })
+    );
 
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
 
