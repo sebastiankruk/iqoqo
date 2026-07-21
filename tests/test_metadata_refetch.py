@@ -170,7 +170,6 @@ class TestDryRunMode:
             assert refetch_data_with_gaps["no_format_man_id"] in man_ids
 
 
-
 class TestForceFlag:
     """Verify force flag overrides last-checked skip logic."""
 
@@ -236,7 +235,7 @@ class TestExistingDataProtection:
             # (the refetch script's own logic checks `if not ...` before
             # overwriting)
             man2 = db.session.get(Manifestation, complete_id)
-            assert man2.meta.get("format") if man2.meta else None == "book"
+            assert (man2.meta.get("format") if man2.meta else None) == "book"
 
     def test_existing_publisher_not_overwritten(self, app, refetch_data_with_gaps):
         """Verify a manifestation with existing publisher keeps its value."""

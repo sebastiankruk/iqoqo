@@ -87,9 +87,10 @@ class TestItemCustodyEventBasicQueries:
 
     def test_custody_event_model_importable(self, app):
         """ItemCustodyEvent should be importable from the models shim."""
-        from app.db.models import ItemCustodyEvent as ICE
+        import importlib
 
-        assert ICE is not None
+        module = importlib.import_module("app.db.models")
+        assert hasattr(module, "ItemCustodyEvent")
 
 
 class TestCustodyEventsAppendOnly:
@@ -113,9 +114,7 @@ class TestCustodyEventsAppendOnly:
             event1_notes = event1.notes
 
             # Count events before
-            count_before = ItemCustodyEvent.query.filter_by(
-                item_id=sample_physical_item["item_id"]
-            ).count()
+            count_before = ItemCustodyEvent.query.filter_by(item_id=sample_physical_item["item_id"]).count()
 
             # Create second event
             event2 = ItemCustodyEvent(
@@ -134,9 +133,7 @@ class TestCustodyEventsAppendOnly:
             assert fetched1.notes == event1_notes
 
             # Verify count increased by 1
-            count_after = ItemCustodyEvent.query.filter_by(
-                item_id=sample_physical_item["item_id"]
-            ).count()
+            count_after = ItemCustodyEvent.query.filter_by(item_id=sample_physical_item["item_id"]).count()
             assert count_after == count_before + 1
 
     def test_multiple_custody_events_accumulate(self, app, custody_user, sample_physical_item):
@@ -159,9 +156,7 @@ class TestCustodyEventsAppendOnly:
                 db.session.add(event)
             db.session.commit()
 
-            events = ItemCustodyEvent.query.filter_by(
-                item_id=sample_physical_item["item_id"]
-            ).order_by(ItemCustodyEvent.id.asc()).all()
+            events = ItemCustodyEvent.query.filter_by(item_id=sample_physical_item["item_id"]).order_by(ItemCustodyEvent.id.asc()).all()
 
             assert len(events) == 4
             assert events[0].event_type == "acquisition"

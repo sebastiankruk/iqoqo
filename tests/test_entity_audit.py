@@ -83,9 +83,10 @@ class TestEntityAuditLogBasicQueries:
 
     def test_entity_audit_log_model_importable(self, app):
         """EntityAuditLog should be importable from the models shim."""
-        from app.db.models import EntityAuditLog as EAL
+        import importlib
 
-        assert EAL is not None
+        module = importlib.import_module("app.db.models")
+        assert hasattr(module, "EntityAuditLog")
 
 
 class TestAuditCustodyIndependence:

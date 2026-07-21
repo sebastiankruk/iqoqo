@@ -90,9 +90,7 @@ def test_manifestations_genre_filter(client, normal_user_headers, app):
 class TestCrossFRBRMultiFilter:
     """2.1-2.5: Cross-FRBR filtering edge cases."""
 
-    def test_three_simultaneous_filters_different_taxonomies(
-        self, client, normal_user_headers, app
-    ):
+    def test_three_simultaneous_filters_different_taxonomies(self, client, normal_user_headers, app):
         """2.1: 3+ simultaneous cross-FRBR filters with AND logic."""
         with app.app_context():
             from app.db.models import Tag, User
