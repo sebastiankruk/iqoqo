@@ -1,21 +1,51 @@
 # iqoqo Release Process
 
-We use an automated release process tied to GitHub Actions.
+We use an automated release process tied to GitHub Actions, supported by OpenSpec change tracking and multi-persona AI quality assurance.
 
-## How to create a new release
+## Development Workflow & OpenSpec Integration
 
-1. **Create a release branch**: Branch off from `main` (e.g., `git checkout -b release/0.3.0`).
-2. **Update Versions**:
-   - Bump the version in `pyproject.toml`.
-   - Bump the version in `frontend/package.json` (to keep it synced).
-3. **Update Changelog**: Move items from `## [Unreleased]` in `docs/CHANGELOG.md` to a new section `## [0.3.0] - YYYY-MM-DD`.
-4. **Commit and Push**: `git commit -am "chore: prep release v0.3.0"` and push the branch.
-5. **Create a Pull Request**: Open a PR from `release/0.3.0` into `main`.
-6. **Merge**: Once approved, merge the PR.
+Before creating a release, all major features, refactorings, and bug fixes follow the OpenSpec specification-driven development cycle:
 
-Upon merge, the GitHub Action will automatically:
+1. **Propose Change**: Create a tracked change using `npx openspec new change "<change-name>" --schema spec-driven` (or the `/opsx-propose` skill).
+2. **Implement & Verify**: Apply tasks using `npx openspec instructions apply` (or `/opsx-apply`), write unit and integration tests, and ensure local test suite passes (`make test`).
+3. **Archive Change**: Sync delta specs to canonical main specs (`npx openspec sync-specs`) and archive completed changes (`npx openspec archive`).
 
-- Read the version from `pyproject.toml`.
-- Extract the notes from `docs/CHANGELOG.md`.
-- Build and push `iqoqo-backend` and `iqoqo-frontend` to the GitHub Container Registry.
-- Create a Git Tag (e.g., `v0.2.0`) and a formal GitHub Release.
+## Pre-Release Checklist
+
+Before branching a release, complete the following verification steps:
+
+- [ ] **Roadmap Verification**: Verify all target version tasks in `.context/notes/🚧 iqoqo roadmap.md` are completed.
+- [ ] **Documentation Currency Check**: Verify `docs/ARCHITECTURE.md`, `docs/CONTRIBUTING.md`, and `docs/INSTALL.md` reflect all new capabilities.
+- [ ] **Spec Synchronization**: Ensure all active OpenSpec changes have synced their delta specs to `openspec/specs/`.
+- [ ] **CHANGELOG Finalization**: Finalize the version section in `docs/CHANGELOG.md` with the release date (`## [x.y.z] - YYYY-MM-DD`).
+- [ ] **Version Bumps**: Synchronize `version` strings in `pyproject.toml` and `frontend/package.json`.
+
+## How to Create a New Release
+
+1. **Create a Release Branch**: Branch off from `main` (e.g., `git checkout -b release/0.7.11`).
+2. **Update Versions & Changelog**:
+   - Update `pyproject.toml` and `frontend/package.json`.
+   - Update `docs/CHANGELOG.md` date header.
+3. **Automated Multi-Agent Tribal Matrix Review**:
+   Before submitting the PR, execute or verify automated reviews across the core domain personas:
+   - **Ontologist Expert**: Validates FRBR tier alignment (Work -> Expression -> Manifestation -> Item).
+   - **Security Auditor**: Checks authentication decorators (`@require_auth`, `@require_physical_item`), RBAC permissions, and inputs.
+   - **DevOps/SRE Expert**: Checks Docker build specs, database migrations, and background jobs context safety.
+   - **Test Craftsman / QA**: Ensures unit, integration, and E2E coverage.
+   - **TechComm Specialist**: Validates documentation currency, ATX markdown syntax, and code block tags.
+   - **Code Quality / Linter**: Runs `make lint-python` and `make lint-js`.
+4. **Commit and Push**: `git commit -am "chore(release): prep release v0.7.11"` and push the branch.
+5. **Create & Merge Pull Request**: Open a PR from `release/0.7.11` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
+6. **Memory Graph Synchronization**:
+   After the release PR is merged into `main`, sync architectural decisions and release notes to the persistent memory graph:
+
+   ```bash
+   mempalace mine .context/notes/ --mode convos --wing iqoqo
+   ```
+
+Upon PR merge to `main`, GitHub Actions automatically:
+
+- Reads the version from `pyproject.toml`.
+- Extracts the release notes from `docs/CHANGELOG.md`.
+- Builds and pushes `iqoqo-backend` and `iqoqo-frontend` images to GHCR.
+- Creates the Git Tag (e.g., `v0.7.11`) and formal GitHub Release.

@@ -175,6 +175,14 @@ item = Item(
 )
 ```
 
+### Virtual Wishlist Items (`UserWorkIntent`)
+
+Wishlist items that do not yet have a specific physical copy (Item record) are represented as **virtual items** backed by the `UserWorkIntent` model.
+
+- **Negative IDs**: In API responses and UI grids, virtual items use negative integer IDs (`-1`, `-2`, etc.) derived from the `UserWorkIntent` record to distinguish them from persistent physical `Item` records.
+- **FRBR Tier**: `UserWorkIntent` models a user's intent or wish regarding a `Work` or `Manifestation` without instantiating an owned physical item copy.
+- **Virtual-to-Physical Transition**: When a user modifies a virtual item (e.g., adding tags, setting shelf location, or changing condition), the backend automatically converts the `UserWorkIntent` into a true physical `Item` record with status `wish_list`, assigning a positive integer database primary key.
+
 ## 🔄 Data Flow and Relationships
 
 ### Querying Down the Hierarchy
@@ -182,6 +190,7 @@ item = Item(
 To display a book in your collection, traverse from Item to Work:
 
 ```python
+
 # Get all books in user's collection with full details
 items = (
     db.session.query(Item)
@@ -258,6 +267,16 @@ def add_book(isbn: str, metadata: dict) -> Item:
 
     return item
 ```
+
+## 🧭 Faceted Navigation & Cross-FRBR Filtering
+
+iqoqo provides multi-dimensional faceted search and aggregated statistics via `DataManager.get_faceted_stats`:
+
+- **Cross-FRBR Filtering**: Queries cross FRBR boundaries using optimized SQL subqueries. Filters applied at the Manifestation level (e.g., format, publisher) or Item level (e.g., status, condition) filter aggregate counts across the Work and Expression tiers without cross-join inflation.
+- **FRBR-Level Count Distinctions**: Facet aggregations accurately distinguish between overall catalog counts, total Work items, unique Manifestations, and user-owned physical Items.
+- **Multi-Select Facet Logic**: Facets enforce `AND` logic across distinct facet fields (e.g., `content_type=text AND status=available`) and `OR` logic within multiple selections of the same facet field (e.g., `format=Hardcover OR format=Paperback`).
+- **Publisher Metadata Extraction**: Publisher facets extract publisher strings across both relational fields and JSON metadata blobs using SQL `func.coalesce(Manifestation.publisher, Manifestation.meta['publisher'].as_string())` `# pylint: disable=not-callable` to ensure full coverage.
+- **Public Facet Endpoint**: Statistics and facet counts are exposed via `/api/stats/facets` protected by `@optional_auth`, allowing public visitors to filter public collection views.
 
 ## 🛠️ Implementation Guidelines
 
@@ -402,6 +421,16 @@ Iqoqo uses a hybrid authentication approach suitable for distributed deployments
    > **Note:** UI hiding is purely cosmetic; all associated API routes enforce strict validation on the backend.
 
 5. **Data Privacy**: Granular GDPR consents (Telemetry, Federation) are tracked per user in the `user_consents` table with explicit opt-in mechanics.
+6. **FRBR Boundary Enforcement (`@require_physical_item`)**: API endpoints operating on physical item features (e.g., updating physical condition or shelf location) use the `@require_physical_item` decorator. If invoked on a virtual item (negative ID / `UserWorkIntent`), the decorator intercepts the call before execution and returns a standardized `400 Bad Request` JSON error response:
+
+   ```json
+   {
+     "error": "This action requires a physical item. Modify the wishlist item to convert it to a physical item first.",
+     "code": 400
+   }
+   ```
+
+7. **Hybrid Public/Authenticated Access (`@optional_auth`)**: Public catalog endpoints (such as `/api/manifestations` and `/api/stats/facets`) use `@optional_auth`. Unauthenticated visitors can browse global catalog stats and manifestations, while authenticated requests automatically resolve `current_user` to return personalized ownership flags and wishlist statuses.
 
 ## ⚙️ Operations & Maintenance
 
@@ -410,6 +439,7 @@ Iqoqo uses a hybrid authentication approach suitable for distributed deployments
 iqoqo uses a cloud-first backup strategy via `scripts/cloud_backup.sh`, triggered by system cron.
 
 **Backup:**
+
 The cloud backup script performs a full disaster-recovery dump:
 
 1. `pg_dumpall` of the PostgreSQL database (raw SQL)
@@ -427,6 +457,16 @@ Run `make db-export` to export the database as JSON to `exports/backup.json`. Th
 #### Background Scheduler
 
 The in-app APScheduler (`app/core/scheduler.py`) runs a cover cleanup watchdog every 5 minutes to reset stuck cover tasks. Enable via `SCHEDULER_AUTOSTART=true`.
+
+> **Flask Application Context**: Scheduled background jobs run outside HTTP request lifecycles. Functions executed by APScheduler (such as `run_scheduled_cover_cleanup()`) must explicitly create an application context using `with scheduler.app.app_context():` to safely access database sessions and application configuration without raising a `RuntimeError`.
+
+### Format Normalization
+
+External APIs (such as OpenLibrary, Google Books, or Discogs) return raw format strings that vary wildly (e.g., `"Mass Market Paperback"`, `"hardcover"`, `"Vinyl LP"`). iqoqo normalizes these into canonical `MediaFormat` identifiers:
+
+- **Pipeline**: `app/core/format_normalizer.py` converts external string values into canonical `MediaFormat` enum values using `shared/format_mappings.yaml` as the git-tracked Single Source of Truth (SSoT).
+- **Unknown Format Placeholders**: If an external format cannot be mapped, fallback placeholders (`unknown_video`, `unknown_audio`, `unknown_text`) are assigned to preserve dataset validity.
+- **CLI Maintenance**: The `make fix-physical-kinds` CLI command audits existing physical items, flags non-canonical format entries, and interactively or automatically applies normalization mappings directly in the database (`--audit`, `--dry-run`, `--apply`).
 
 **Restore:**
 Run `python scripts/restore_covers.py <path_to_zip>` to restore cover images and update their metadata in the database.
@@ -638,12 +678,22 @@ Model classes are split into domain-focused modules under `app/db/`:
 |               | `MANIFESTATION_AUDIO_META_KEYS`                                          |
 | `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`             |
 | `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                   |
+| `history.py`  | `ItemCustodyEvent` (append-only physical possession tracking),           |
+|               | `EntityAuditLog` (Work/Expression/Manifestation curation logs)           |
 | `settings.py` | `LLMTelemetry`, `InstanceSettings`                                       |
 | `models.py`   | Re-export shim — `from app.db.models import Work` continues to work      |
+
+### Item Custody & Entity Audit Logs
+
+To maintain strict ontological separation between physical item possession and conceptual metadata changes, iqoqo implements CIDOC CRM-aligned audit tables:
+
+- **`ItemCustodyEvent`** (`inventory` schema): Append-only audit log tracking physical Item tier transfers, location changes, lending events, and condition alterations.
+- **`EntityAuditLog`** (`catalog` schema): Tracks editorial curation, metadata updates, deduplication merges, and schema migrations at the Work, Expression, and Manifestation tiers.
 
 ### Audio / Music Metadata (FRBRoo Event-Based)
 
 For audio media (CDs, Vinyls, Audiobooks) the FRBR hierarchy is extended
+
 with FRBRoo event-based contributor tables in the `catalog` schema:
 
 ```text
@@ -723,3 +773,9 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 - **"Check if I have it"**: A visitor-facing tool that searches the joined FRBR chain (`Item` → `Manifestation` → `Expression` → `Work`).
 - **Logic**: If an exact match is found in the owner's collection, it returns the Item details. If not owned but exists in the global catalog, it returns the Manifestation details to indicate the item is known to iqoqo.
+
+### 5. Shared Collection UI Patterns
+
+- **Token-Based Access**: Shared collections operate via unique `share_token` URLs, granting read-only access to specific filtered items without exposing account details.
+- **Simplified Navigation**: When viewing a shared collection, the frontend renders a simplified top navbar without personal collection navigation or administrative controls.
+- **Hidden Action Buttons**: Interactive item controls (edit, delete, status toggle, tag modification) are hidden for unauthenticated viewers of shared links.
