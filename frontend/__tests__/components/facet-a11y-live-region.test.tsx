@@ -121,6 +121,12 @@ const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseWorksShelf = vi.mocked(useInfiniteWorksShelf);
 const mockUseExpressionsShelf = vi.mocked(useInfiniteExpressionsShelf);
 
+/**
+ * Generates mock infinite query results for Vitest tests.
+ *
+ * @param overrides - Optional overrides for the result object
+ * @returns Mock infinite query result object
+ */
 function infiniteQueryResult(overrides: Record<string, unknown> = {}) {
   return {
     data: { pages: [] },
@@ -169,6 +175,7 @@ describe("Facet ARIA Live Region", () => {
     render(<CollectionPage />);
 
     const liveRegion = screen.queryByRole("status");
+    expect(liveRegion).toBeDefined();
     // aria-live="polite" is the default for role="status"
     // Also try finding by aria-live attribute directly
     const liveElements = document.querySelectorAll('[aria-live="polite"]');

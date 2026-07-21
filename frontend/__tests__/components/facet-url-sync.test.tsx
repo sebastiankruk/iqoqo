@@ -22,27 +22,8 @@
  * - Multiple filters are serialized as comma-separated values
  * - All facet query params are removed from URL on clear-all
  */
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
-
-// ── Test helpers ────────────────────────────────────────────────────────────
-
-/**
- * Extract filter-related params from a URLSearchParams.
- *
- * @param sp - URLSearchParams instance
- * @returns Record of filter params
- */
-function getFacetParams(sp: URLSearchParams): Record<string, string> {
-  const result: Record<string, string> = {};
-  const keys = ["statuses", "formats", "categories", "tags", "collections", "genres", "publishers"];
-  for (const key of keys) {
-    const val = sp.get(key);
-    if (val) result[key] = val;
-  }
-  return result;
-}
 
 /**
  * Build filter query string from active filters.
@@ -165,7 +146,7 @@ describe("Facet URL Sync — Deserialization", () => {
     const qs = "statuses=available,,wish_list,";
     const filters = queryStringToFilters(qs);
 
-    const statusFilterCount = filters.filter(f => f.type === "statuses").length;
+    const statusFilterCount = filters.filter(f => (f.type as string) === "statuses").length;
     expect(statusFilterCount).toBe(2);
   });
 });

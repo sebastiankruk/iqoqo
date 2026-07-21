@@ -532,58 +532,58 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     expect(decodeURIComponent(page.url())).toContain("statuses=available,wish_list");
     expect(page.url()).toContain("format=dvd");
   });
-});
 
-// 6.1: Shared URL with facet params restores filter state on another browser/device
-test("shared URL with facet params restores filter state", async ({ page }) => {
-  // Setup minimal mocks for the /works page
-  await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
-  await page.route("**/api/profile**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
+  // 6.1: Shared URL with facet params restores filter state on another browser/device
+  test("shared URL with facet params restores filter state", async ({ page }) => {
+    // Setup minimal mocks for the /works page
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
+      });
     });
-  });
-  await page.route("**/api/config**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
+      });
     });
-  });
 
-  await page.goto("/works?statuses=available&formats=paper");
-  await page.waitForLoadState("networkidle");
+    await page.goto("/works?statuses=available&formats=paper");
+    await page.waitForLoadState("networkidle");
 
-  // URL should retain the facet parameters after load
-  expect(page.url()).toContain("statuses=available");
-  expect(page.url()).toContain("formats=paper");
-});
-
-// 6.2: Multiple facet groups selected reflect correctly in results and URL
-test("multiple facet groups reflected in results and URL", async ({ page }) => {
-  // Setup minimal mocks for the /works page
-  await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
-  await page.route("**/api/profile**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
-    });
-  });
-  await page.route("**/api/config**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
-    });
+    // URL should retain the facet parameters after load
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
   });
 
-  await page.goto("/works?statuses=available&formats=paper&tags=horror");
-  await page.waitForLoadState("networkidle");
+  // 6.2: Multiple facet groups selected reflect correctly in results and URL
+  test("multiple facet groups reflected in results and URL", async ({ page }) => {
+    // Setup minimal mocks for the /works page
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
+      });
+    });
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
+      });
+    });
 
-  expect(page.url()).toContain("statuses=available");
-  expect(page.url()).toContain("formats=paper");
-  expect(page.url()).toContain("tags=horror");
+    await page.goto("/works?statuses=available&formats=paper&tags=horror");
+    await page.waitForLoadState("networkidle");
+
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
+    expect(page.url()).toContain("tags=horror");
+  });
 });

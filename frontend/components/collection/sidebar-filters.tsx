@@ -230,7 +230,6 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.onToggleFilter - Callback to toggle a filter
  * @param root0.statusCounts - The counts for each status
  * @param root0.formatCounts - The counts for each format
- * @param root0.viewMode - The current view mode
  * @param root0.isLoggedIn - Whether the user is logged in
  * @param root0.categoryCounts - The counts for each category
  * @param root0.isCurator - Whether the user is a curator

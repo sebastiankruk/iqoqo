@@ -588,65 +588,67 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
     // Item should be viewable — title should appear on the page
     await expect(page.getByText("Someone Else's Wishlist Item").first()).toBeVisible({ timeout: 10000 });
   });
-});
 
-// 6.3: "View Wishlist Item" actions shown correctly vs "Add to Wishlist" for non-wishlist items
-test("view wishlist item actions differentiate from add to wishlist", async ({ page }) => {
-  await page.route("**/api/manifestations**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: [{ id: 100, title: "Test Item", isbn13: "1234567890123", item_id: 42, cover_url: null }],
-        meta: { total: 1, page: 1, pages: 1, limit: 20 },
-      }),
+  // 6.3: "View Wishlist Item" actions shown correctly vs "Add to Wishlist" for non-wishlist items
+  test("view wishlist item actions differentiate from add to wishlist", async ({ page }) => {
+    await page.route("**/api/manifestations**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [{ id: 100, title: "Test Item", isbn13: "1234567890123", item_id: 42, cover_url: null }],
+          meta: { total: 1, page: 1, pages: 1, limit: 20 },
+        }),
+      });
     });
+
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Should show item card with correct action types
+    const itemCard = page.locator('[data-testid="item-card"]').first();
+    if (await itemCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await expect(itemCard).toBeVisible();
+    }
   });
 
-  await page.goto("/collection");
-  await page.waitForLoadState("networkidle");
+  // 6.4: Tag persistence — tags remain after navigating away and returning
+  test("tags persist after navigation away and return", async ({ page }) => {
+    await page.goto("/collection");
+    await page.waitForSelector("body");
 
-  // Should show item card with correct action types
-  const itemCard = page.locator('[data-testid="item-card"]').first();
-  if (await itemCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await expect(itemCard).toBeVisible();
-  }
-});
-
-// 6.4: Tag persistence — tags remain after navigating away and returning
-test("tags persist after navigation away and return", async ({ page }) => {
-  await page.goto("/collection");
-  await page.waitForSelector("body");
-
-  // Navigate to a different page and back
-  await page.goto("/collection");
-  await page.waitForSelector("body");
-  // Tags should be preserved (or at least the page renders correctly)
-  await expect(page.locator("body")).toBeAttached();
-});
-
-// 6.5: Auth-gated action buttons (edit/delete) hidden for non-owners
-test("auth-gated action buttons hidden for non-owners", async ({ page }) => {
-  // Remove admin permissions
-  await page.route("**/api/profile**", async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: { id: "other-user", email: "other@iqoqo.local", permissions: ["read:metadata"] },
-      }),
-    });
+    // Navigate to a different page and back
+    await page.goto("/collection");
+    await page.waitForSelector("body");
+    // Tags should be preserved (or at least the page renders correctly)
+    await expect(page.locator("body")).toBeAttached();
   });
 
-  await page.goto("/collection");
-  await page.waitForLoadState("networkidle");
+  // 6.5: Auth-gated action buttons (edit/delete) hidden for non-owners
+  test("auth-gated action buttons hidden for non-owners", async ({ page }) => {
+    // Remove admin permissions
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { id: "other-user", email: "other@iqoqo.local", permissions: ["read:metadata"] },
+        }),
+      });
+    });
 
-  // Edit/delete buttons should not be visible for non-owners
-  const adminBtn = page.locator('button:has-text("Admin"), button:has-text("Edit"), button:has-text("Delete")').first();
-  if (await adminBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    // If visible (could be owned items mock), check that at least some controls are hidden
-    expect(true).toBe(true);
-  }
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Edit/delete buttons should not be visible for non-owners
+    const adminBtn = page
+      .locator('button:has-text("Admin"), button:has-text("Edit"), button:has-text("Delete")')
+      .first();
+    if (await adminBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      // If visible (could be owned items mock), check that at least some controls are hidden
+      expect(true).toBe(true);
+    }
+  });
 });

@@ -56,7 +56,6 @@ test.describe("Facet URL Sync", () => {
     // Mock items API with query param awareness
     await page.route("**/api/items**", async route => {
       const url = route.request().url();
-      const statuses = url.includes("statuses=available") ? ["available"] : [];
 
       if (url.includes("statuses=available") && url.includes("format=dvd")) {
         await route.fulfill({

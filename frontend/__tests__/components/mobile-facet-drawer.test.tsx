@@ -38,6 +38,15 @@ vi.mock("@/components/ui/button", () => ({
 
 // Mock the drawer UI components as proper React component functions
 vi.mock("@/components/ui/drawer", () => {
+  /**
+   * Mock Drawer component
+   *
+   * @param root0 - Drawer props object
+   * @param root0.open - Open state boolean
+   * @param root0.onOpenChange - Open state change callback
+   * @param root0.children - Child elements
+   * @returns React element or null
+   */
   function Drawer({
     open,
     onOpenChange,
@@ -57,19 +66,60 @@ vi.mock("@/components/ui/drawer", () => {
       children
     );
   }
+  /**
+   * Mock DrawerContent component
+   *
+   * @param root0 - Content props object
+   * @param root0.children - Child elements
+   * @param root0.className - CSS class name
+   * @returns React element
+   */
   function DrawerContent({ children, className }: { children: React.ReactNode; className?: string }) {
     return React.createElement("div", { "data-testid": "drawer-content", className }, children);
   }
+  /**
+   * Mock DrawerHeader component
+   *
+   * @param root0 - Header props object
+   * @param root0.children - Child elements
+   * @param root0.className - CSS class name
+   * @returns React element
+   */
   function DrawerHeader({ children, className }: { children: React.ReactNode; className?: string }) {
     return React.createElement("div", { "data-testid": "drawer-header", className }, children);
   }
+  /**
+   * Mock DrawerTitle component
+   *
+   * @param root0 - Title props object
+   * @param root0.children - Child elements
+   * @param root0.className - CSS class name
+   * @returns React element
+   */
   function DrawerTitle({ children, className }: { children: React.ReactNode; className?: string }) {
     return React.createElement("h2", { "data-testid": "drawer-title", className }, children);
   }
+  /**
+   * Mock DrawerFooter component
+   *
+   * @param root0 - Footer props object
+   * @param root0.children - Child elements
+   * @param root0.className - CSS class name
+   * @returns React element
+   */
   function DrawerFooter({ children, className }: { children: React.ReactNode; className?: string }) {
     return React.createElement("div", { "data-testid": "drawer-footer", className }, children);
   }
+  /**
+   * Mock DrawerClose component
+   *
+   * @param root0 - Close props object
+   * @param root0.children - Child elements
+   * @param root0.asChild - Render as child flag
+   * @returns React element
+   */
   function DrawerClose({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) {
+    if (asChild) return React.createElement("div", { "data-testid": "drawer-close" }, children);
     return React.createElement("div", { "data-testid": "drawer-close" }, children);
   }
   return { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose };
@@ -89,14 +139,14 @@ vi.mock("lucide-react", () => ({
   SlidersHorizontal: () => React.createElement("span", { "data-testid": "sliders-icon" }, "Slider"),
 }));
 
-// ── Component import ───────────────────────────────────────────────────────
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
+import type { ActiveFilter } from "@/components/collection/filter-bar";
 
 describe("MobileFilterDrawer", () => {
   const defaultProps = {
     open: false,
     onClose: vi.fn(),
-    activeFilters: [] as Array<{ type: string; value: string }>,
+    activeFilters: [] as ActiveFilter[],
     onToggleFilter: vi.fn(),
     statusCounts: {} as Record<string, number>,
     formatCounts: {} as Record<string, number>,

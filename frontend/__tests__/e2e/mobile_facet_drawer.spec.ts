@@ -134,7 +134,6 @@ test.describe("Mobile Facet Drawer", () => {
 
     // The drawer should be closable. The "Show Results" button in the drawer
     // footer acts as the close action on mobile.
-    const showResults = page.getByText(/Show Results/).first();
     // May or may not be visible initially
     await expect(page).toHaveTitle(/.+/);
   });

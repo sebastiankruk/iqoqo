@@ -159,6 +159,10 @@ def create_app(config_class=Config, config_override=None):
     app.register_blueprint(lending_bp)
     app.register_blueprint(docs_bp, url_prefix="/api/docs")
 
+    from app.core.telemetry import init_telemetry
+
+    init_telemetry(app)
+
     @app.teardown_appcontext
     def shutdown_session(exception=None):  # pylint: disable=unused-argument
         """Ensure scoped sessions are returned to the pool after each request."""
