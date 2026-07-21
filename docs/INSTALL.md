@@ -42,7 +42,7 @@ For detailed configuration and development setup, continue reading below.
 ### Required Software
 
 - **Python 3.14+** - [Download](https://www.python.org/downloads/)
-- **Node.js 18+** and **npm** - [Download](https://nodejs.org/)
+- **Node.js 20+** and **npm** - [Download](https://nodejs.org/)
 - **PostgreSQL 16-alpine+** - Can be run via Docker (recommended) or installed locally
 - **Docker & Docker Compose** - For containerized deployment
 - **Git** - For version control
@@ -54,6 +54,7 @@ Docker is required to run the PostgreSQL database in a container.
 - **macOS**: You can install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/), but be aware of its licensing terms. For a free and open-source alternative, we recommend [Colima](https://github.com/abiosoft/colima). You can install it using [Homebrew](https://brew.sh/):
 
   ```bash
+
   brew install colima docker docker-compose
   colima start
   ```
@@ -161,6 +162,28 @@ After installation, make sure the Docker daemon is running.
 
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
+### Format Normalization Configuration (`shared/format_mappings.yaml`)
+
+iqoqo uses `shared/format_mappings.yaml` as the git-tracked Single Source of Truth (SSoT) for mapping external API format strings (e.g. `"Mass Market Paperback"`, `"hardcover"`, `"Vinyl LP"`) to canonical `MediaFormat` identifiers:
+
+```yaml
+# shared/format_mappings.yaml mapping structure
+format_normalizations:
+  # Exact string match mappings
+  video: dvd
+  audio: cd
+  hardcover: hardcover
+  paperback: paperback
+  
+  # Scoped fallback mappings for NULL values
+  null:
+    movie: dvd
+    music: cd
+    text: book
+```
+
+Run `make fix-physical-kinds` (`--audit`, `--interactive`, `--dry-run`, `--apply`) to inspect and normalize stored physical item formats.
+
 ## Environment Variable Hierarchy
 
 iqoqo uses a layered approach to configuration to support seamless switching between local development, tunneled development, and production Docker environments.
@@ -168,6 +191,7 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 ### Backend (Flask & Celery)
 
 | File           | Loaded By | Purpose                                                                                                                                                |
+
 | :------------- | :-------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`.env`**     | Global    | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
 | **`.env.dev`** | `run.sh`  | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |

@@ -94,6 +94,14 @@ git checkout -b feature/your-feature-name
    - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete FRBR hierarchy guide with examples
    - [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl) - Formal ontology specification
 
+### OpenSpec Specification-Driven Workflow
+
+For all non-trivial features, refactorings, and documentation updates, iqoqo follows the OpenSpec workflow:
+
+- **Propose a Change**: Define architectural goals, delta specs, design rationale, and granular tasks via `npx openspec new change "<change-name>" --schema spec-driven` (or using the `/openspec-propose` skill).
+- **Implement Tasks**: Execute tasks iteratively using `npx openspec instructions apply` (or the `/openspec-apply-change` skill), updating checkboxes (`- [ ]` → `- [x]`) in `tasks.md` as each sub-task is verified.
+- **Sync & Archive**: Sync delta specifications back to canonical main specs in `openspec/specs/` (`npx openspec sync-specs`) and archive completed changes (`npx openspec archive`).
+
 ### While You Code
 
 #### Code Quality Standards
@@ -101,6 +109,7 @@ git checkout -b feature/your-feature-name
 All code must pass quality checks before being merged. Run these before committing:
 
 ```bash
+
 # Check everything
 make lint
 
@@ -181,11 +190,18 @@ make db-init        # Initialize database with seed data
 make db-seed        # Load seed data into existing database
 make db-export      # Export database to data/backup.json
 make db-stats       # Show database statistics
+make db-stamp       # Stamp current database schema with Alembic revision
+make db-upgrade     # Apply outstanding database Alembic migrations
+
+# Maintenance & Tools
+make fix-physical-kinds # Audit/fix physical item format values (--audit, --dry-run, --apply)
+make status            # Environment and service health check
 
 # Python Environment
 source .venv/bin/activate  # Activate virtual environment
 .venv/bin/python           # Use venv Python directly
 .venv/bin/pytest           # Run tests with venv
+
 ```
 
 **Pro tip**: Use `make help` to see all available commands.
@@ -217,11 +233,20 @@ pytest -k "isbn"          # Run tests matching "isbn"
 pytest tests/test_linting.py  # Run only linting checks
 ```
 
+#### Cross-FRBR Filtering Testing Guidance
+
+When modifying `DataManager.get_faceted_stats`, facet filter builders, or multi-select parameters:
+
+- Test across all FRBR tiers (global catalog, Work aggregation, Expression content types, Manifestation formats, and Item statuses).
+- Verify that filtering at the Manifestation level (e.g. format) properly recalculates counts without cross-join record duplication.
+- Use established test patterns from `tests/test_api_status_filters.py` and `tests/test_faceted_catalog.py` as reference models.
+
 ### Database Changes
 
 For schema changes:
 
 ```bash
+
 # Create migration
 flask db migrate -m "Description of change"
 
@@ -334,6 +359,12 @@ When adding features, always ask:
 - **Add indexes**: For foreign keys and frequently queried columns
 - **Migration safety**: Test `upgrade` and `downgrade` paths
 
+#### Format Normalization Conventions
+
+- `shared/format_mappings.yaml` is the git-tracked Single Source of Truth (SSoT) for external-to-canonical format mappings.
+- `app/core/format_normalizer.py` provides read-time normalization when processing metadata from external APIs.
+- When adding support for new media types or physical formats, first register the canonical identifier in `MediaFormat` (`app/db/core.py`) before adding mapping aliases to `format_mappings.yaml`.
+
 ## 🐛 Reporting Issues
 
 ### Bug Reports
@@ -341,6 +372,7 @@ When adding features, always ask:
 Include:
 
 - Steps to reproduce
+
 - Expected behavior
 - Actual behavior
 - Environment (OS, Python version, Docker version)

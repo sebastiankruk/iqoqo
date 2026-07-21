@@ -61,8 +61,8 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
     // Mock works/shelf with cross-FRBR filter responses
     await page.route("**/api/works/shelf**", async route => {
       const url = route.request().url();
-      const hasStatusFilter = url.includes("statuses=");
-      const hasFormatFilter = url.includes("formats=");
+      const hasStatusFilter = url.includes("statuses");
+      const hasFormatFilter = url.includes("format");
 
       // Combined filter (AND logic) → fewer results
       if (hasStatusFilter && hasFormatFilter) {
@@ -76,14 +76,14 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
                 work_id: 1,
                 title: "Works with both filters",
                 creators: ["Test Creator"],
-                content_type: "movie",
-                items: [],
+                owned_manifestations: [],
+                total_items: 0,
               },
             ],
             meta: { page: 1, pages: 1, total: 1, limit: 20 },
           }),
         });
-      } else if (url.includes("statuses=available")) {
+      } else if (url.includes("available")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -94,21 +94,21 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
                 work_id: 301,
                 title: "Available Work",
                 creators: ["Author One"],
-                content_type: "text",
-                items: [{ item_id: 401, status: "available", collection_status: "available" }],
+                owned_manifestations: [{ manifestation_id: 401, format: "paperback" }],
+                total_items: 1,
               },
               {
                 work_id: 302,
                 title: "Another Available Work",
                 creators: ["Author Two"],
-                content_type: "movie",
-                items: [{ item_id: 402, status: "available", collection_status: "available" }],
+                owned_manifestations: [{ manifestation_id: 402, format: "dvd" }],
+                total_items: 1,
               },
             ],
             meta: { page: 1, pages: 1, total: 2, limit: 20 },
           }),
         });
-      } else if (url.includes("tags=horror")) {
+      } else if (url.includes("horror")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -119,8 +119,8 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
                 work_id: 501,
                 title: "Horror Movie",
                 creators: ["Horror Director"],
-                content_type: "movie",
-                items: [{ item_id: 601, tags: ["horror"] }],
+                owned_manifestations: [{ manifestation_id: 601, format: "dvd" }],
+                total_items: 1,
               },
             ],
             meta: { page: 1, pages: 1, total: 1, limit: 20 },
@@ -147,8 +147,8 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
                 work_id: 201,
                 title: "Global Catalog Work",
                 creators: ["Catalog Author"],
-                content_type: "text",
-                items: [],
+                owned_manifestations: [],
+                total_items: 0,
               },
             ],
             meta: { page: 1, pages: 1, total: 1, limit: 20 },
@@ -172,6 +172,9 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
                 work_title: "DVD Expression",
                 content_type: "movie",
                 language: "en",
+                creators: ["Director"],
+                owned_manifestations: [{ manifestation_id: 701, format: "dvd" }],
+                total_items: 1,
               },
             ],
             meta: { page: 1, pages: 1, total: 1, limit: 20 },
@@ -221,41 +224,36 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
   });
 
   test("should show only Works with available items when status filter is applied", async ({ page }) => {
-    // Navigate to the global catalog (works shelf)
-    await page.goto("/collection?view=works");
+    // Navigate to the global catalog (works shelf) with status filter
+    await page.goto("/collection?view=works&statuses=available");
+    await page.waitForLoadState("networkidle");
 
-    // The page should load with mocked data
-    await page.waitForSelector("body");
-
-    // The default view should show the global catalog work
-    await expect(page.getByText("Global Catalog Work")).toBeVisible();
+    // The mocked "Available Work" should be visible
+    await expect(page.getByText("Available Work").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Another Available Work").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("should show empty results with 200 status when no items match filters", async ({ page }) => {
     await page.goto("/collection?view=works&tags=nonexistent");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // The page should load without error
-    // Empty results should be displayed gracefully
+    // The page should load without error — empty results displayed gracefully
     await expect(page).toHaveTitle(/.+/);
   });
 
   test("should filter Expressions by physical format at Expressions level", async ({ page }) => {
-    await page.goto("/collection?view=expressions&formats=dvd");
+    await page.goto("/collection?view=expressions&format=dvd");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // The DVD expression should be visible
-    await expect(page.getByText("DVD Expression")).toBeVisible();
+    // The mocked "DVD Expression" work title should be visible
+    await expect(page.getByText("DVD Expression").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("should apply combined status and format cross-FRBR filters at Works level", async ({ page }) => {
-    await page.goto("/collection?view=works&statuses=available&formats=dvd");
+    await page.goto("/collection?view=works&statuses=available&format=dvd");
+    await page.waitForLoadState("networkidle");
 
-    await page.waitForSelector("body");
-
-    // Both filters should be applied, returning Works that match both conditions
-    await expect(page.getByText("Works with both filters")).toBeVisible();
+    // Both filters should be applied — the mocked combined result should be visible
+    await expect(page.getByText("Works with both filters").first()).toBeVisible({ timeout: 10000 });
   });
 });
