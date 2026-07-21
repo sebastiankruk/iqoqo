@@ -16,6 +16,7 @@ from typing import Any
 import requests
 
 from app.config import Config
+from app.core.telemetry import record_outbound_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ def get_allegro_token() -> str | None:
             if time.time() - file_mtime > 11 * 3600:
                 auth_url = "https://allegro.pl/auth/oauth/token"
                 data = {"grant_type": "refresh_token", "refresh_token": tokens.get("refresh_token")}
+                record_outbound_telemetry("Allegro", auth_headers, url=auth_url)
                 response = requests.post(
                     auth_url,
                     auth=(client_id, client_secret),
@@ -74,6 +76,7 @@ def get_allegro_token() -> str | None:
     # Fallback to Client Credentials
     try:
         auth_url = "https://allegro.pl/auth/oauth/token"
+        record_outbound_telemetry("Allegro", auth_headers, url=auth_url)
         response = requests.post(
             auth_url,
             auth=(client_id, client_secret),
@@ -112,6 +115,7 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
 
         try:
             catalog_url = "https://api.allegro.pl/sale/products"
+            record_outbound_telemetry("Allegro", headers, url=catalog_url)
             cat_resp = requests.get(catalog_url, headers=headers, params=catalog_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
             if cat_resp.status_code == 200:
                 cat_data = cat_resp.json()
@@ -148,7 +152,9 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
         if os.path.isfile(_TOKEN_FILE):
             listing_url = "https://api.allegro.pl/offers/listing"
             listing_params = {"phrase": barcode}
+            record_outbound_telemetry("Allegro", headers, url=listing_url)
             response = requests.get(listing_url, headers=headers, params=listing_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+
             if response.status_code == 200:
                 data = response.json()
                 items = data.get("items", {})

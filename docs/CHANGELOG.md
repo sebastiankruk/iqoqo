@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Outbound HTTP Header Telemetry**: Added `record_outbound_telemetry` and `sanitize_headers` in `app/core/telemetry.py` to capture request headers (`User-Agent`, `Accept`, `Authorization`) on outbound HTTP calls to Allegro (`app/utils/allegro.py`) and direct image downloads (`app/utils/covers.py`). Automatically redacts sensitive credentials (e.g. `Authorization`, `token`, `secret`, `key`) as `***REDACTED***` before attaching attributes to active OpenTelemetry spans and structured logs.
 - **Format Normalization**: Read-time format normalizer (`app/core/format_normalizer.py`) that maps non-canonical physical kind values from external APIs (`"video"`, `"audio"`, `"boardgame"`) to canonical `MediaFormat` identifiers using user-defined mappings in `shared/format_mappings.yaml`. Falls back to `unknown_video`, `unknown_audio`, or `unknown_text` placeholder formats when no mapping exists.
 - **Unknown Format Placeholders**: Three new valid `MediaFormat` values (`unknown_video`, `unknown_audio`, `unknown_text`) added to the taxonomy and displayed as "Unknown Video Format", "Unknown Audio Format", and "Unknown Text Format" in the UI.
 - **Interactive Format Mapping CLI**: `make fix-physical-kinds` runs `scripts/fix_physical_kinds.py`, providing audit, interactive mapping, and apply modes to fix non-canonical/NULL format values in the database. Supports `--dry-run` for previewing SQL changes.

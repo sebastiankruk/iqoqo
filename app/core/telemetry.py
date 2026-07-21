@@ -96,3 +96,71 @@ def init_telemetry(app: Any) -> None:
         FlaskInstrumentor().instrument_app(app, request_hook=request_hook, response_hook=response_hook)
     except (ImportError, RuntimeError, TypeError, AttributeError, ValueError) as exc:
         logger.debug("Telemetry hook registration skipped: %s", exc)
+
+
+def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Sanitize HTTP request headers by redacting sensitive values.
+
+    Parameters
+    ----------
+    headers:
+        Dictionary of HTTP request headers.
+
+    Returns
+    -------
+    dict[str, str]
+        New dictionary with sensitive header values (like Authorization, keys, secrets)
+        replaced with '***REDACTED***'.
+    """
+    sanitized = {}
+    for key, value in headers.items():
+        key_lower = key.lower()
+        if "authorization" in key_lower or "key" in key_lower or "token" in key_lower or "secret" in key_lower:
+            sanitized[key] = "***REDACTED***"
+        else:
+            sanitized[key] = str(value)
+    return sanitized
+
+
+def record_outbound_telemetry(service_name: str, headers: dict[str, str], url: str | None = None) -> dict[str, str]:
+    """Attach outbound HTTP request headers to active OpenTelemetry span and emit a structured log.
+
+    Parameters
+    ----------
+    service_name:
+        Name of the target external service (e.g. 'Allegro', 'DirectURL').
+    headers:
+        Dictionary of HTTP request headers sent to the service.
+    url:
+        Optional request URL for additional tracing context.
+
+    Returns
+    -------
+    dict[str, str]
+        The sanitized headers dictionary.
+    """
+    sanitized = sanitize_headers(headers)
+
+    # 1. OpenTelemetry Span Enrichment
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        if span is not None and hasattr(span, "is_recording") and span.is_recording():  # type: ignore[union-attr]
+            for key, value in sanitized.items():
+                attr_name = f"http.request.header.{key.lower().replace('-', '_')}"
+                span.set_attribute(attr_name, value)  # type: ignore[union-attr]
+            if url:
+                span.set_attribute("http.url", url)  # type: ignore[union-attr]
+            span.set_attribute("peer.service", service_name)  # type: ignore[union-attr]
+    except (ImportError, AttributeError, KeyError, TypeError, ValueError, RuntimeError) as exc:
+        logger.debug("Failed to set span attributes in record_outbound_telemetry: %s", exc)
+
+    # 2. Structured Application Log
+    log_extra: dict[str, Any] = {f"http.request.header.{k.lower().replace('-', '_')}": v for k, v in sanitized.items()}
+    if url:
+        log_extra["http.url"] = url
+    log_extra["peer.service"] = service_name
+
+    logger.info("Outbound %s API request", service_name, extra=log_extra)
+    return sanitized
