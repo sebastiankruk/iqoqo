@@ -35,8 +35,7 @@ test.describe("Manual Verification Integration E2E", () => {
     await page.goto(`/api/auth-exchange?token=${token}`);
     await page.waitForURL(/\/(collection|dashboard|profile|admin)?$/);
 
-    // 2. Mock default profile endpoint
-    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    // 2. Mock default profile endpoint (real login step above already provides iqoqo_session cookie)
     await page.route("**/api/profile**", async route => {
       if (route.request().method() === "PUT") {
         const data = route.request().postDataJSON();
