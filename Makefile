@@ -125,8 +125,7 @@ help:
 	@echo "  fix-physical-kinds - Audit and fix non-canonical format values (supports ARGS=\"--interactive\" and ARGS=\"--apply --dry-run\")"
 	@echo ""
 	@echo "Monitoring:"
-	@echo "  monitoring-start        - Start default OpenObserve + OTel Collector stack"
-	@echo "  monitoring-stop         - Stop OpenObserve + OTel Collector stack"
+	@echo "  - OpenObserve + OTel Collector start automatically with the main stack (make start)"
 	@echo "  status          - Show health status of all services (--stack preview|prod)"
 	@echo ""
 	@echo "Version management:"
@@ -202,17 +201,9 @@ stop:
 	@echo "Stopping $(MODE) environment..."
 	@./run.sh $(MODE) --stop
 
-monitoring-start:
-	@echo "Ensuring docker network iqoqo_default exists..."
-	@docker network create iqoqo_default 2>/dev/null || true
-	@echo "Starting default observability stack (OpenObserve + OTel Collector)..."
-	@echo "  UI:    http://localhost:$${OPENOBSERVE_HOST_PORT:-5080}"
-	@echo "  Login: $${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / $${OPENOBSERVE_ROOT_PASSWORD:-supersecret}"
-	@docker compose -f docker-compose.monitoring.yml up -d
-
-monitoring-stop:
-	@echo "Stopping OpenObserve + OTel Collector stack..."
-	@docker compose -f docker-compose.monitoring.yml down
+# monitoring-start and monitoring-stop removed — the monitoring stack is now
+# always composed together with the main stack via run.sh (line 751-754).
+# Use `make start <mode>` and `make stop` to manage the full lifecycle.
 
 
 status: ## Show health status of all iQoQo services

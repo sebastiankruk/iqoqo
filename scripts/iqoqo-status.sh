@@ -168,14 +168,14 @@ header "Observability Stack"
 oo_cname=""
 otel_cname=""
 
-for cname_test in "${PREFIX}-openobserve-1" "openobserve-1" "iqoqo-openobserve-1"; do
+for cname_test in "${PREFIX}-openobserve-1" "${PREFIX}-openobserve" "openobserve-1" "iqoqo-openobserve-1"; do
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
         oo_cname="$cname_test"
         break
     fi
 done
 
-for cname_test in "${PREFIX}-otel-collector-1" "otel-collector-1" "iqoqo-otel-collector-1"; do
+for cname_test in "${PREFIX}-otel-collector-1" "${PREFIX}-otel-collector" "otel-collector-1" "iqoqo-otel-collector-1"; do
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
         otel_cname="$cname_test"
         break
@@ -186,13 +186,22 @@ if [[ -n "$oo_cname" ]]; then
     oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
     oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
     oo_health=""
-    oo_health=$(python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:${oo_host_port}/api/health', timeout=3).read().decode())" 2>/dev/null || true)
-    if [[ -z "$oo_health" ]]; then
-        oo_health=$(docker exec "$oo_cname" python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:5080/api/health', timeout=3).read().decode())" 2>/dev/null || \
-                    docker exec "$oo_cname" wget -qO- http://127.0.0.1:5080/api/health 2>/dev/null || true)
+    # Host-side health check with Basic auth (OpenObserve container has no shell/py/wget).
+    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+    if python3 -c "
+import urllib.request, sys
+req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
+req.add_header('Authorization', 'Basic ${oo_auth}')
+try:
+    r = urllib.request.urlopen(req, timeout=3)
+    sys.exit(0 if r.code == 200 else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+        oo_health="ok"
     fi
     if echo "$oo_health" | grep -iq "ok"; then
-        check "OpenObserve API" pass "HTTP 200, status=ok (:5080/api/health) [${oo_status}]"
+        check "OpenObserve API" pass "HTTP 200, status=ok (:5080/healthz) [${oo_status}]"
     else
         check "OpenObserve API" warn "container running but health endpoint unreachable [${oo_status}]"
     fi
