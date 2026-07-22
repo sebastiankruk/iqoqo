@@ -45,7 +45,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - OTEL_SERVICE_NAME=iqoqo-api
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
       - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
       - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
@@ -60,6 +60,7 @@ services:
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
       - ./scripts:/usr/src/app/scripts
+      - ./shared:/usr/src/app/shared
       - ./.allegro_token.json:/usr/src/app/.allegro_token.json
     ports:
       - "127.0.0.1:${WEB_PORT:-5000}:5000"
@@ -82,7 +83,7 @@ services:
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
       - APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
       - OTEL_SERVICE_NAME=iqoqo-frontend
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
       - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
       - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
@@ -140,7 +141,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - OTEL_SERVICE_NAME=iqoqo-celery-worker
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
       - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
       - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
@@ -150,6 +151,7 @@ services:
       - ./app/static/covers:/usr/src/app/app/static/covers
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ./shared:/usr/src/app/shared
       - ./.allegro_token.json:/usr/src/app/.allegro_token.json
     depends_on:
       db:

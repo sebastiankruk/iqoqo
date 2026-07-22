@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.11] - 2026-07-22
+
+### Added
+
+- **Outbound HTTP Header Telemetry**: Added `record_outbound_telemetry` and `sanitize_headers` in `app/core/telemetry.py` to capture request headers (`User-Agent`, `Accept`, `Authorization`) on outbound HTTP calls to Allegro (`app/utils/allegro.py`) and direct image downloads (`app/utils/covers.py`). Automatically redacts sensitive credentials (e.g. `Authorization`, `token`, `secret`, `key`) as `***REDACTED***` before attaching attributes to active OpenTelemetry spans and structured logs.
+- **Format Normalization**: Read-time format normalizer (`app/core/format_normalizer.py`) that maps non-canonical physical kind values from external APIs (`"video"`, `"audio"`, `"boardgame"`) to canonical `MediaFormat` identifiers using user-defined mappings in `shared/format_mappings.yaml`. Falls back to `unknown_video`, `unknown_audio`, or `unknown_text` placeholder formats when no mapping exists.
+- **Unknown Format Placeholders**: Three new valid `MediaFormat` values (`unknown_video`, `unknown_audio`, `unknown_text`) added to the taxonomy and displayed as "Unknown Video Format", "Unknown Audio Format", and "Unknown Text Format" in the UI.
+- **Interactive Format Mapping CLI**: `make fix-physical-kinds` runs `scripts/fix_physical_kinds.py`, providing audit, interactive mapping, and apply modes to fix non-canonical/NULL format values in the database. Supports `--dry-run` for previewing SQL changes.
+- **Mappings File**: `shared/format_mappings.yaml` as git-tracked, per-instance configuration for format normalization, with commented examples.
+
+### Changed
+
+- **Environment-Aware Allegro User-Agent**: Added `ALLEGRO_APP_NAME` env var (default: `iqoqo`) in `app/config.py` to support per-environment Allegro application identifiers (`iqoqo_cc` for prod, `iqoqo_pre` for preview, `iqoqo_dev` for dev). The Allegro User-Agent header now reads `{ALLEGRO_APP_NAME}/{VERSION} (+https://iqoqo.cc)` instead of the hardcoded `iqoqo/...` prefix. Updated `tests/test_allegro.py` assertions to use `Config.ALLEGRO_APP_NAME`.
+- **Facet Aggregation**: `DataManager.get_faceted_stats` now normalizes format counts via `normalize_format_counts()`, merging non-canonical values into their resolved canonical formats.
+- **Format Filter**: `?format=` query parameter is expanded via `expand_format_filter()` to include raw values that normalize to the requested canonical format, ensuring correct matching.
+- **Frontend**: `isAudioMedia()` and `extended-metadata.tsx` updated to recognize `unknown_audio` and `unknown_video`; sidebar Physical Kind facet shows italic styling for unknown format entries.
+
+### Fixed
+
+- **Telemetry Query & Header Redaction**: Extended telemetry sanitization with `sanitize_url()` in `app/core/telemetry.py` to scrub credentials (`key`, `token`, `secret`, `auth`, `signature`, `credential`) from outbound HTTP URLs before logging and OpenTelemetry span attribution. Updated `sanitize_headers` to use an expanded set of sensitive header keywords (`authorization`, `key`, `token`, `secret`, `cookie`, `session`).
+- **CSV Query Parameter Parsing Helper**: Replaced duplicated inline `.split(",")` parameter parsing across `app/api/items.py`, `app/api/manifestations.py`, and `app/api/system.py` with `parse_csv_param()` in `app/api/filters.py` for consistent whitespace stripping and empty-string filtering.
+- **Frontend UX Polish**: Cleaned up scrollbars on collection filter chip rows, restyled the floating mobile filter pill with backdrop blur and border effects, and updated the "View Wishlist Item" dropdown button icon to `Eye`.
+- **Publisher Facet Filter Fix**: Updated `app/api/manifestations.py`, `app/api/items.py`, `app/api/works.py`, and `app/core/search_service.py` to use a `db.or_` condition across the relational `publisher` column and unstructured JSON metadata fields (`meta['Publisher']`, `meta['publisher']`, and conditionally `meta['label']` for music), ensuring publisher filters return results regardless of where the publisher data is stored. Updated taxonomy extraction and faceted stats counting to use `func.coalesce` over these fields so unstructured publishers appear in the sidebar and reflect accurate item counts.
+- **Unauthenticated Protected Route Redirection**: Fixed an issue where unauthenticated access to protected routes (wishlists, personal collections, scan, profile, admin) returned a 404 error or failed silently. Route requests without session authentication are now caught at the Next.js routing proxy (`frontend/proxy.ts`) and redirected to `/login` with full URL and query parameter state preserved via `callbackUrl`. Upon successful login, users are redirected back to their intended destination.
+- **API 401 Interceptor**: Updated `apiClient` response interceptor to catch HTTP 401 Unauthorized responses in browser contexts and trigger login redirection with `callbackUrl`.
+- **Cross-FRBR Filter Combinations**: Fixed a bug where applying multiple Item-level status filters from different taxonomies (e.g., Progress Status vs. Collection Location) resulted in logical collisions (`db.or_()`) causing filtering bugs. These are now combined correctly via logical AND intersection so a Work must have an Item matching BOTH the intent (e.g., Unread) and location (e.g., On Shelf).
+- **Faceted Navigation Multi-Select**: Fixed an issue where selecting a genre or format in the sidebar would restrict the underlying taxonomy options, preventing users from selecting multiple genres/formats. `useTaxonomies` now correctly requests the full taxonomy for the active category, relying on `useFacetStats` to hide zero-count options.
+- **Physical Kinds SQL Syntax**: Fixed SQL syntax in `scripts/fix_physical_kinds.py` by using explicit casting (`CAST(meta AS jsonb)`) and explicit string formatting instead of colons (`::text`) to prevent SQLAlchemy binding errors and ambiguous column references during `jsonb_set` operations.
+- **Comprehensive Test Coverage**: Added ~110 new tests across all 4 test layers (backend, frontend, E2E, scripts) for entity audit logging, item custody events, cross-FRBR filtering, metadata refetch CLI, format mapping CLI, facet ARIA live region, facet URL sync, active filter strip, mobile facet drawer, wishlist tagging, loan button visibility, and shared collection UI. New test files: `test_entity_audit.py`, `test_item_custody.py`, `test_metadata_refetch.py` (backend), `facet-a11y-live-region.test.tsx`, `facet-url-sync.test.tsx`, `active-filter-strip.test.tsx`, `mobile-facet-drawer.test.tsx` (frontend), `cross_frbr_filtering.spec.ts`, `facet_url_sync.spec.ts`, `mobile_facet_drawer.spec.ts`, `facet_aria_live_region.spec.ts`, `facet_search_within.spec.ts`, `metadata_refetch_verification.spec.ts` (E2E), `fix_physical_kinds.bats`, `refetch_metadata.bats`, `format_mappings_validation.bats`, `makefile_tooling.bats` (scripts).
+- **Cross-FRBR Filtering and Facet Counts**: Fixed several issues where filter counts defaulted to Item-level ("My items") even when browsing Works, Expressions, or the Global Library. Key fixes:
+  - Facet counts now reflect the correct FRBR level: `COUNT(DISTINCT Manifestation.id)` for global, `COUNT(DISTINCT Work.id)` for works, `COUNT(DISTINCT Expression.id)` for expressions, and `COUNT(DISTINCT Item.id)` for items.
+  - Lower-level entity attributes (Item-level: status, tags, collections; Manifestation-level: media category, physical kind) now correctly filter higher-level entities via cross-entity subqueries with `SELECT DISTINCT`.
+  - Unauthenticated users no longer see user-specific facets (Collection Status, Progress, Tags, Named Collections) and receive correct global-level counts (no more 0-count for Media Category).
+  - The `/stats/facets` endpoint now uses `@optional_auth` to support unauthenticated global catalog browsing.
+
 ## [0.7.10] - 2026-07-15
 
 ### Added

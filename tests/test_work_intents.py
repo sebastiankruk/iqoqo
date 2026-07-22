@@ -873,3 +873,49 @@ def test_delete_physical_item_helper_inline_ownership(app, client, admin_headers
         response, status = _delete_physical_item(item_id, other_id)
         assert status == 403
         assert response.json["error"] == "Forbidden"
+
+
+def test_tagging_virtual_item_transitions_to_physical_wishlist(client, test_setup, app):
+    """Verify that adding tags to a virtual wishlist item transitions it to a physical wishlist item."""
+    from app.db.models import ItemTag, Tag
+
+    headers = get_headers(app, test_setup["user_id"])
+    work_id = test_setup["work_id"]
+
+    # Create intent
+    client.post(
+        f"/api/works/{work_id}/intent",
+        json={"status": "want_to_read"},
+        headers=headers,
+    )
+
+    with app.app_context():
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        virtual_item_id = -intent.id
+
+    # Transition to physical by adding tags
+    response = client.put(
+        f"/api/items/{virtual_item_id}",
+        json={"tags": ["fantasy", "must-read"]},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    physical_item_id = response.json["data"]["id"]
+    assert physical_item_id > 0
+
+    with app.app_context():
+        # UserWorkIntent not deleted, marked as fulfilled
+        intent = UserWorkIntent.query.filter_by(user_id=test_setup["user_id"], work_id=work_id).first()
+        assert intent is not None
+        assert intent.status == "fulfilled"
+
+        # Physical Item created
+        item = db.session.get(Item, physical_item_id)
+        assert item is not None
+        assert item.collection_status == "wish_list"
+
+        # Tags attached
+        tags = db.session.query(Tag.name).join(ItemTag).filter(ItemTag.item_id == physical_item_id).all()
+        tag_names = {t[0] for t in tags}
+        assert "fantasy" in tag_names
+        assert "must-read" in tag_names

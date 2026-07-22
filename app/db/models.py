@@ -54,6 +54,7 @@ from app.db.core import (  # noqa: F401
     Manifestation,
     MediaCategory,
     MediaFormat,
+    MetadataRefetchLog,
     Tag,
     UserCollection,
     UserCollectionItem,

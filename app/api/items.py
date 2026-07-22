@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
-from app.api.filters import apply_genre_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.item_access import require_item_access, verify_item_ownership
@@ -86,12 +86,14 @@ def log_initial_item_status(item_id: int, user_id: uuid.UUID, status: str, colle
         db.session.add(collection_log)
 
 
-def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, q, publishers_list, missing_cover, missing_id):
+def get_virtual_items(
+    user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list=None
+):
     virtual_items = []
 
     is_wish_list_requested = True
     if statuses_filter:
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        statuses_list = parse_csv_param(statuses_filter) or []
         is_wish_list_requested = any(
             s in statuses_list for s in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play")
         )
@@ -108,7 +110,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
 
     intent_query = db.session.query(UserWorkIntent).join(Work, UserWorkIntent.work_id == Work.id)
     if statuses_filter:
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        statuses_list = parse_csv_param(statuses_filter) or []
         intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
         if intent_statuses:
             # Filter to specific intent progress statuses (e.g. "want_to_read")
@@ -119,20 +121,33 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
     else:
         intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
 
+    if genres_list:
+        intent_query = apply_genre_filter(intent_query, genres_list)
+
     if q:
         pattern = f"%{q.strip().lower()}%"
         intent_query = intent_query.filter(db.or_(Work.title.ilike(pattern), db.cast(Work.meta["authors"], db.String).ilike(pattern)))
 
-    if category_filter or format_filter or publishers_list or missing_cover or missing_id:
+    if category_list or format_list or publishers_list or missing_cover or missing_id:
         intent_query = intent_query.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
             Manifestation, Manifestation.expression_id == Expression.id
         )
-        if category_filter:
-            intent_query = intent_query.filter(db.or_(Expression.content_type == category_filter, Expression.content_type.is_(None)))
-        if format_filter:
-            intent_query = intent_query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if category_list:
+            intent_query = intent_query.filter(db.or_(Expression.content_type.in_(category_list), Expression.content_type.is_(None)))
+        if format_list:
+            intent_query = intent_query.filter(Manifestation.meta["format"].as_string().in_(format_list))
         if publishers_list:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            pubs_conditions = []
+            for p in publishers_list:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             intent_query = intent_query.filter(db.or_(*pubs_conditions))
         if missing_cover:
             intent_query = intent_query.filter(
@@ -163,7 +178,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
         work = intent.work
         manifestation = None
         for expr in work.expressions:
-            if category_filter and expr.content_type != category_filter:
+            if category_list and expr.content_type not in category_list:
                 continue
             if expr.manifestations:
                 manifestation = expr.manifestations[0]
@@ -183,6 +198,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
                     "manifestation_id": None,
                     "isbn": None,
                     "title": work.title,
+                    "publisher": None,
                     "cover_url": None,
                     "cover_status": None,
                     "authors": work.meta.get("authors", []) if work.meta else [],
@@ -213,6 +229,7 @@ def get_virtual_items(user_id, statuses_filter, category_filter, format_filter, 
                 "manifestation_id": manifestation.id,
                 "isbn": manifestation.isbn13,
                 "title": work.title,
+                "publisher": manifestation.publisher if manifestation else None,
                 "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
                 "authors": work.meta.get("authors", []) if work.meta else [],
@@ -248,6 +265,11 @@ def get_items():
     statuses_filter = request.args.get("statuses", None)
     category_filter = request.args.get("category", None)
     format_filter = request.args.get("format", None)
+    category_list = parse_csv_param(category_filter)
+    format_list_raw = parse_csv_param(format_filter)
+    from app.core.format_normalizer import expand_format_filter
+
+    format_list = expand_format_filter(format_list_raw)
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
@@ -261,10 +283,10 @@ def get_items():
     genres_filter = request.args.get("genres", None)
     publishers_filter = request.args.get("publishers", None)
 
-    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
-    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
-    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
-    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    tags_list = parse_csv_param(tags_filter)
+    collections_list = parse_csv_param(collections_filter)
+    genres_list = parse_csv_param(genres_filter)
+    publishers_list = parse_csv_param(publishers_filter)
 
     try:
         page = int(page_param)
@@ -277,7 +299,7 @@ def get_items():
     offset = (page - 1) * limit
 
     virtual_items = get_virtual_items(
-        user_id, statuses_filter, category_filter, format_filter, q, publishers_list, missing_cover, missing_id
+        user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list
     )
 
     combined_items_data = []
@@ -285,15 +307,15 @@ def get_items():
     if q:
         from app.core.search_service import SearchService
 
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+        statuses_list = parse_csv_param(statuses_filter)
         _, results = SearchService.search_items(
             q,
             user_id,
             1000,
             0,
             statuses=statuses_list,
-            category=category_filter,
-            format_filter=format_filter,
+            category=category_list,
+            format_filter=format_list,
             borrowed_only=borrowed_only,
             missing_cover=missing_cover,
             missing_id=missing_id,
@@ -315,6 +337,7 @@ def get_items():
                     "manifestation_id": row["manifestation_id"],
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
+                    "publisher": row.get("publisher"),
                     "cover_url": row["cover_url"],
                     "cover_status": (row.get("manifestation_meta") or {}).get("cover_status"),
                     "manifestation_meta": row.get("manifestation_meta"),
@@ -352,18 +375,18 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_filter or format_filter or missing_cover or missing_id)
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id)
         needs_work_join = bool(genres_list or publishers_list or sort_by in ("title", "title-desc", "author"))
         if needs_mfn_join or needs_work_join:
             query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
             query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
             query = query.outerjoin(Work, Expression.work_id == Work.id)
 
-        if category_filter:
-            query = query.filter(Expression.content_type == category_filter)
+        if category_list:
+            query = query.filter(Expression.content_type.in_(category_list))
 
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if format_list:
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
 
         if missing_cover:
             query = query.filter(
@@ -408,21 +431,22 @@ def get_items():
             query = apply_genre_filter(query, genres_list)
 
         if publishers_list:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            pubs_conditions = []
+            for p in publishers_list:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             query = query.filter(db.or_(*pubs_conditions))
 
         if statuses_filter:
-            statuses_list = [s.strip() for s in statuses_filter.split(",")]
-            if "lent" in statuses_list and not borrowed_only:
-                query = query.filter(
-                    db.or_(
-                        Item.status.in_([s for s in statuses_list if s != "lent"]),
-                        db.and_(Item.collection_status == "lent", Item.owner_id == user_id),
-                        Item.collection_status.in_([s for s in statuses_list if s != "lent"]),
-                    )
-                )
-            else:
-                query = query.filter(db.or_(Item.status.in_(statuses_list), Item.collection_status.in_(statuses_list)))
+            statuses_list = parse_csv_param(statuses_filter)
+            query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
 
         physical_items = query.all()
 
@@ -448,6 +472,7 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "isbn": manifestation.isbn13 if manifestation else None,
                     "title": work_title,
+                    "publisher": manifestation.publisher if manifestation else None,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
@@ -663,6 +688,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
@@ -728,7 +754,8 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
 
             # Enforce FRBR Ontology Boundary Rules:
             # If not transitioning away from wishlist status, reject physical traits
-            is_transitioning = payload.collection_status and payload.collection_status != "wish_list"
+            wants_tags = payload.tags is not None
+            is_transitioning = payload.collection_status != "wish_list" if payload.collection_status else wants_tags
             if not is_transitioning:
                 data = request.get_json(silent=True) or {}
                 physical_fields = {
@@ -792,13 +819,16 @@ def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Respo
                         manifestation_id=manifestation.id,
                         owner_id=intent.user_id,
                         status=payload.status or intent.status,
-                        collection_status=payload.collection_status,
+                        collection_status=payload.collection_status if payload.collection_status else "wish_list",
                         is_hidden=payload.is_hidden or False,
                         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
                         lent_to_name=payload.lent_to_name,
                         meta=item_meta,
                     )
                     db.session.add(new_item)
+                    db.session.flush()
+
+                    sync_tags(new_item.id, intent.user_id, payload.tags)
 
                     # Implement state machine: do not delete intent, set status to fulfilled
                     intent.status = "fulfilled"

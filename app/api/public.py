@@ -445,6 +445,53 @@ def get_shared_collection(token: str):
 
     items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all())
 
+    items_list = [
+        {
+            "id": item.id,
+            "manifestation_id": item.manifestation_id,
+            "status": item.status,
+            "collection_status": item.collection_status,
+            "title": item.manifestation.title,
+            "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
+            "cover_url": item.manifestation.cover_url or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
+        }
+        for item in items
+    ]
+
+    is_wish_list = False
+    if "status" in filters:
+        status_val = filters["status"]
+        if status_val in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play"):
+            is_wish_list = True
+
+    if is_wish_list:
+        from app.api.items import get_virtual_items
+
+        virtual_items = get_virtual_items(
+            user_id=user.id,
+            statuses_filter=filters["status"],
+            category_list=filters.get("tags"),
+            format_list=None,
+            q=filters.get("query"),
+            publishers_list=None,
+            missing_cover=False,
+            missing_id=False,
+            genres_list=None,
+        )
+        # Add virtual items (they have a compatible schema)
+        for vi in virtual_items:
+            items_list.append(
+                {
+                    "id": vi.get("id"),
+                    "manifestation_id": vi.get("manifestation_id"),
+                    "status": vi.get("status"),
+                    "collection_status": vi.get("collection_status"),
+                    "title": vi.get("title"),
+                    "authors": vi.get("authors", []),
+                    "cover_url": vi.get("cover_url"),
+                }
+            )
+
     return jsonify(
         {
             "success": True,
@@ -452,19 +499,7 @@ def get_shared_collection(token: str):
                 "collection_name": collection.name,
                 "collection_description": collection.description,
                 "author": user.public_username or user.display_name or "A user",
-                "items": [
-                    {
-                        "id": item.id,
-                        "manifestation_id": item.manifestation_id,
-                        "status": item.status,
-                        "collection_status": item.collection_status,
-                        "title": item.manifestation.title,
-                        "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
-                        "cover_url": item.manifestation.cover_url
-                        or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
-                    }
-                    for item in items
-                ],
+                "items": items_list,
             },
         }
     )

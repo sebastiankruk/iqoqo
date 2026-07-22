@@ -69,6 +69,7 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     meta: {},
     title: "Dune",
     authors: ["Frank Herbert"],
+    is_owner: true,
     ...overrides,
   };
 }
@@ -179,12 +180,18 @@ describe("ItemCard", () => {
   it("shows 'In Collection' badge when isManifestationView is true and user_owns is true", () => {
     // When item_id is not present
     const { rerender } = render(
-      <ItemCard item={makeCatalogEntry({ user_owns: true, item_id: null })} isManifestationView={true} />
+      <QueryClientProvider client={queryClient}>
+        <ItemCard item={makeCatalogEntry({ user_owns: true, item_id: null })} isManifestationView={true} />
+      </QueryClientProvider>
     );
     expect(screen.getByText(/In Collection/i)).toBeInTheDocument();
 
     // When item_id is present
-    rerender(<ItemCard item={makeCatalogEntry({ user_owns: true, item_id: 123 })} isManifestationView={true} />);
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ItemCard item={makeCatalogEntry({ user_owns: true, item_id: 123 })} isManifestationView={true} />
+      </QueryClientProvider>
+    );
     expect(screen.getByText(/In Collection →/i)).toBeInTheDocument();
   });
 
@@ -196,10 +203,12 @@ describe("ItemCard", () => {
 
   it("renders a cover image in horizontal variant when coverUrl is provided", () => {
     render(
-      <ItemCard
-        item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })}
-        variant="horizontal"
-      />
+      <QueryClientProvider client={queryClient}>
+        <ItemCard
+          item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })}
+          variant="horizontal"
+        />
+      </QueryClientProvider>
     );
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/horizontal-cover.jpg");
@@ -228,13 +237,18 @@ describe("ItemCard", () => {
     expect(screen.getByRole("link")).toHaveAttribute("href", "/item/-5");
   });
 
-  it("renders wishlist drop button when collection_status is wish_list", () => {
-    renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list" })} />);
+  it("renders wishlist drop button when collection_status is wish_list and user is owner", () => {
+    renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list", is_owner: true })} />);
     expect(screen.getByLabelText("Remove from wishlist")).toBeInTheDocument();
   });
 
+  it("does not render wishlist drop button when user is not owner", () => {
+    renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list", is_owner: false })} />);
+    expect(screen.queryByLabelText("Remove from wishlist")).not.toBeInTheDocument();
+  });
+
   it("does not render wishlist drop button when collection_status is not wish_list", () => {
-    renderWithQuery(<ItemCard item={makeItem({ collection_status: "available" })} />);
+    renderWithQuery(<ItemCard item={makeItem({ collection_status: "available", is_owner: true })} />);
     expect(screen.queryByLabelText("Remove from wishlist")).not.toBeInTheDocument();
   });
 
@@ -244,7 +258,7 @@ describe("ItemCard", () => {
 
     renderWithQuery(
       <ItemCard
-        item={makeItem({ id: -10, collection_status: "wish_list", title: "Dune" })}
+        item={makeItem({ id: -10, collection_status: "wish_list", title: "Dune", is_owner: true })}
         onWishlistRemove={onWishlistRemove}
       />
     );
@@ -262,7 +276,7 @@ describe("ItemCard", () => {
     const { toast } = await import("sonner");
     vi.mocked(apiClient.delete).mockRejectedValueOnce(new Error("Network error"));
 
-    renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list" })} />);
+    renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list", is_owner: true })} />);
 
     fireEvent.click(screen.getByLabelText("Remove from wishlist"));
 
@@ -271,9 +285,12 @@ describe("ItemCard", () => {
     });
   });
 
-  it("shows HeartOff in horizontal variant for wishlist items", () => {
+  it("shows HeartOff in horizontal variant for wishlist items owned by user", () => {
     renderWithQuery(
-      <ItemCard item={makeItem({ id: -5, collection_status: "wish_list", title: "Wish Book" })} variant="horizontal" />
+      <ItemCard
+        item={makeItem({ id: -5, collection_status: "wish_list", title: "Wish Book", is_owner: true })}
+        variant="horizontal"
+      />
     );
     expect(screen.getByLabelText("Remove from wishlist")).toBeInTheDocument();
   });

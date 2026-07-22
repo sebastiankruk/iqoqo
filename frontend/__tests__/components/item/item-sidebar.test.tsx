@@ -247,4 +247,60 @@ describe("ItemSidebar Component", () => {
       expect(screen.queryByText("Named Collections")).not.toBeInTheDocument();
     });
   });
+
+  describe("Request Loan button", () => {
+    it("hides Request Loan button when unauthenticated", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: null,
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const nonOwnerItem = {
+        ...mockItem,
+        owner_id: "other_user",
+        is_owner: false,
+        collection_status: "available",
+      } as unknown as Item;
+
+      render(<ItemSidebar item={nonOwnerItem} />);
+      expect(screen.queryByRole("button", { name: /Request Loan/i })).not.toBeInTheDocument();
+    });
+
+    it("hides Request Loan button when item is purely a wishlist item", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "viewer1",
+          permissions: [],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const wishlistItem = {
+        ...mockItem,
+        owner_id: "other_user",
+        is_owner: false,
+        collection_status: "wish_list",
+      } as unknown as Item;
+
+      render(<ItemSidebar item={wishlistItem} />);
+      expect(screen.queryByRole("button", { name: /Request Loan/i })).not.toBeInTheDocument();
+    });
+
+    it("shows Request Loan button when authenticated and item is available", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "viewer1",
+          permissions: [],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const availableItem = {
+        ...mockItem,
+        owner_id: "other_user",
+        is_owner: false,
+        collection_status: "available",
+      } as unknown as Item;
+
+      render(<ItemSidebar item={availableItem} />);
+      expect(screen.getByRole("button", { name: /Request Loan/i })).toBeInTheDocument();
+    });
+  });
 });

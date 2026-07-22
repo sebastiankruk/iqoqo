@@ -28,6 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
 from app.core.tasks import submit_task
+from app.core.telemetry import record_outbound_telemetry
 from app.db import db
 from app.db.models import Manifestation
 from app.utils.images import is_valid_cover, optimize_and_save_image
@@ -211,6 +212,7 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
+        record_outbound_telemetry(source_name or "DirectURL", headers, url=url)
         with requests.get(url, stream=True, timeout=10, headers=headers) as response:
             if response.status_code == 200:
                 # Fast fail on known bad sizes if header is present
@@ -681,8 +683,8 @@ def cleanup_stuck_pending_covers(timeout_minutes: int = 30) -> int:
             db.session.commit()
             logger.info("Cleared %d stuck cover tasks at startup", stuck_count)
     except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
-        # Don't block app startup if tables aren't created yet or other DB issues
-        logger.warning("Failed to check or clear stuck cover tasks at startup: %s", e)
+        # Don't block if tables aren't created yet or other DB issues
+        logger.warning("Failed to check or clear stuck cover tasks: %s", e)
         db.session.rollback()
 
     return stuck_count

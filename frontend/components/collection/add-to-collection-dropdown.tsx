@@ -16,15 +16,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus } from "lucide-react";
+import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useUserCollections } from "@/lib/api/hooks";
 import { CollectionQuickAdd } from "./collection-quick-add";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface AddToCollectionDropdownProps {
   manifestationId: number;
+  wishlistItemId?: number | null;
 }
 
 /**
@@ -33,12 +35,14 @@ interface AddToCollectionDropdownProps {
  *
  * @param root0 - Component props
  * @param root0.manifestationId - The ID of the manifestation to add
+ * @param root0.wishlistItemId - Optional virtual wishlist item ID to delete upon acquisition
  * @returns React node representing the dropdown component
  */
-export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDropdownProps) {
+export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: AddToCollectionDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
+  const router = useRouter();
   const { data: collections, isLoading: collectionsLoading } = useUserCollections();
 
   useEffect(() => {
@@ -124,14 +128,24 @@ export function AddToCollectionDropdown({ manifestationId }: AddToCollectionDrop
         <div className="absolute left-0 top-full mt-2 min-w-56 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-50">
           {/* Wishlist option */}
           <div className="border-b border-border/50">
-            <button
-              onClick={() => addMutation.mutate({ collectionId: null, collectionStatus: "wish_list" })}
-              disabled={addMutation.isPending}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
-            >
-              <BookmarkPlus className="h-4 w-4 shrink-0 text-primary" />
-              <span>Add to Wishlist</span>
-            </button>
+            {wishlistItemId ? (
+              <button
+                onClick={() => router.push(`/item/${wishlistItemId}`)}
+                className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
+              >
+                <Eye className="h-4 w-4 shrink-0 text-primary" />
+                <span>View Wishlist Item</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => addMutation.mutate({ collectionId: null, collectionStatus: "wish_list" })}
+                disabled={addMutation.isPending}
+                className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
+              >
+                <BookmarkPlus className="h-4 w-4 shrink-0 text-primary" />
+                <span>Add to Wishlist</span>
+              </button>
+            )}
           </div>
 
           {/* Primary option: add to general library without any named folder */}

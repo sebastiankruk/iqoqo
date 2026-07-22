@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """
 Data Import/Export Manager for iqoqo.
 
@@ -344,6 +345,7 @@ class DataManager:
                 status_counts[c_status] += cnt
 
         intent_filter = [UserWorkIntent.user_id == owner_id] if owner_id else []
+        intent_filter.append(UserWorkIntent.status != "fulfilled")
         intent_count = (
             db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar() or 0  # pylint: disable=not-callable
         )
@@ -414,11 +416,11 @@ class DataManager:
         }
 
     @staticmethod
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    def get_faceted_stats(
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    def _build_item_ids_subq(
         owner_id: uuid.UUID | None = None,
-        category: str | None = None,
-        fmt: str | None = None,
+        category: list[str] | None = None,
+        fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,
@@ -427,37 +429,95 @@ class DataManager:
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
-    ) -> dict[str, Any]:
-        """Return cross-filtered per-facet counts for sidebar faceted navigation.
+        target_entity: str = "items",
+    ):
+        """Build a subquery of entity IDs matching the given filters.
 
-        When no filters are passed, returns global/unfiltered counts.
-        When filters are active, all facet counts are narrowed to the
-        matching item subset.
+        The ``target_entity`` parameter controls which FRBR-level entity IDs
+        are returned in the subquery: ``"items"``, ``"manifestations"``,
+        ``"expressions"``, or ``"works"``.  For non-Item targets the query
+        starts from the target entity and joins down through the FRBR
+        hierarchy to apply lower-level filters (statuses, tags, etc.).
 
-        Returns a dict with keys:
-          category_counts, format_counts, status_counts,
-          collection_counts, tag_counts, genre_counts, publisher_counts
+        Each filter group can be independently enabled or disabled via its
+        parameter, allowing callers to exclude a particular facet group's
+        own filters when computing that group's counts for multi-select
+        faceted navigation.
+
+        User-specific filters (tags, collections, statuses) are only applied
+        when an owner_id is provided (authenticated user).
         """
-        from sqlalchemy import func, or_, select, text
+        from sqlalchemy import distinct, or_, select
 
-        base_query = (
-            select(Item.id)
-            .select_from(Item)
-            .join(Manifestation, Item.manifestation_id == Manifestation.id)
-            .join(Expression, Manifestation.expression_id == Expression.id)
-            .join(Work, Expression.work_id == Work.id)
-        )
+        # Map target entity to class and ID column
+        _target_map = {
+            "items": (Item, Item.id),
+            "manifestations": (Manifestation, Manifestation.id),
+            "expressions": (Expression, Expression.id),
+            "works": (Work, Work.id),
+        }
+        target_cls, target_id_col = _target_map.get(target_entity, (Item, Item.id))
 
-        if owner_id:
+        _has_user_filters = owner_id is not None and (tags is not None or collections is not None or statuses is not None or borrowed_only)
+
+        _needs_item_join = _has_user_filters or (missing_cover is True) or (missing_id is True)
+
+        # Build base query starting from the target entity and joining down
+        if target_entity == "works":
+            base_query = (
+                select(distinct(target_id_col).label("id"))
+                .select_from(target_cls)
+                .join(Expression, Expression.work_id == Work.id)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+            )
+            # Item join: LEFT if no item-level filters, otherwise INNER
+            if _needs_item_join:
+                base_query = base_query.join(Item, Item.manifestation_id == Manifestation.id)
+            else:
+                base_query = base_query.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+        elif target_entity == "expressions":
+            base_query = (
+                select(distinct(target_id_col).label("id"))
+                .select_from(target_cls)
+                .join(Work, Expression.work_id == Work.id)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+            )
+            if _needs_item_join:
+                base_query = base_query.join(Item, Item.manifestation_id == Manifestation.id)
+            else:
+                base_query = base_query.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+        elif target_entity == "manifestations":
+            base_query = (
+                select(distinct(target_id_col).label("id"))
+                .select_from(target_cls)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+            )
+            if _needs_item_join:
+                base_query = base_query.join(Item, Item.manifestation_id == Manifestation.id)
+            else:
+                base_query = base_query.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+        else:  # "items"
+            base_query = (
+                select(distinct(target_id_col).label("id"))
+                .select_from(target_cls)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+            )
+
+        _apply_owner_filter = owner_id is not None and (target_entity == "items" or _has_user_filters)
+
+        if _apply_owner_filter:
             base_query = base_query.where(Item.owner_id == owner_id)
 
         if borrowed_only and owner_id:
             base_query = base_query.where(Item.lent_to_user_id == owner_id)
 
         if category:
-            base_query = base_query.where(Expression.content_type == category)
+            base_query = base_query.where(Expression.content_type.in_(category))
         if fmt:
-            base_query = base_query.where(Manifestation.meta["format"].as_string() == fmt)
+            base_query = base_query.where(Manifestation.meta["format"].as_string().in_(fmt))
         if missing_cover:
             base_query = base_query.where(
                 or_(
@@ -473,179 +533,535 @@ class DataManager:
                 )
             )
 
-        if tags:
+        # User-specific filters: only applied when owner_id is present
+        if tags and owner_id:
             base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
             tag_conds = [Tag.name.ilike(t.strip()) for t in tags]
             base_query = base_query.where(or_(*tag_conds))
 
-        if collections:
+        if collections and owner_id:
             base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
                 UserCollection, UserCollectionItem.collection_id == UserCollection.id
             )
             coll_conds = [UserCollection.name.ilike(c.strip()) for c in collections]
             base_query = base_query.where(or_(*coll_conds))
-            if owner_id:
-                base_query = base_query.where(UserCollection.owner_id == owner_id)
+            base_query = base_query.where(UserCollection.owner_id == owner_id)
 
         if genres:
             from app.api.filters import apply_genre_filter as _apply_genre_filter
 
-            genre_query = (
-                select(Item.id)
-                .select_from(Item)
-                .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                .join(Expression, Manifestation.expression_id == Expression.id)
-                .join(Work, Expression.work_id == Work.id)
-            )
-            genre_query = _apply_genre_filter(genre_query, genres)
-            genre_item_ids = genre_query.subquery()
-            base_query = base_query.where(Item.id.in_(select(genre_item_ids.c.id)))
+            # Apply genre filter directly on the base query using its Work join
+            base_query = _apply_genre_filter(base_query, genres)
 
         if publishers:
-            pub_conds = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            pub_conds = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pub_conds.append(
+                    or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             base_query = base_query.where(or_(*pub_conds))
 
-        if statuses:
+        if statuses and owner_id:
             status_conds = [Item.status.in_(statuses), Item.collection_status.in_(statuses)]
             base_query = base_query.where(or_(*status_conds))
 
-        item_ids_subq = base_query.subquery()
-        item_id_col = item_ids_subq.c.id
+        return base_query.subquery()
 
-        # Category counts (grouped by Expression.content_type)
-        cat_rows = db.session.execute(
-            select(Expression.content_type, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .select_from(Item)
-            .join(Manifestation, Item.manifestation_id == Manifestation.id)
-            .join(Expression, Manifestation.expression_id == Expression.id)
-            .where(Item.id.in_(select(item_id_col)))
+    @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    def get_faceted_stats(
+        owner_id: uuid.UUID | None = None,
+        category: list[str] | None = None,
+        fmt: list[str] | None = None,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
+        view: str = "items",
+    ) -> dict[str, Any]:
+        """Return cross-filtered per-facet counts for sidebar faceted navigation.
+
+        The ``view`` parameter controls which FRBR-level entity is counted:
+        ``"items"``, ``"manifestations"``, ``"expressions"``, or ``"works"``.
+        When no filters are passed, returns global/unfiltered counts at the
+        requested level.
+
+        Each facet group's counts are computed excluding that group's own
+        filters so that selecting a value within a group (e.g. a genre) does
+        not zero out counts for other values in the same group.  All other
+        groups' filters are still applied to provide cross-facet narrowing.
+
+        Returns a dict with keys:
+          category_counts, format_counts, status_counts,
+          collection_counts, tag_counts, genre_counts, publisher_counts
+        """
+        from sqlalchemy import distinct as sa_distinct
+        from sqlalchemy import func, select, text
+
+        # Map view to target entity class, ID column, and canonical join path
+        _view_config = {
+            "works": {
+                "cls": Work,
+                "from_clause": Work,
+                "joins": [
+                    (Expression, Expression.work_id == Work.id),
+                    (Manifestation, Manifestation.expression_id == Expression.id),
+                    (Item, Item.manifestation_id == Manifestation.id),
+                ],
+                "target_col": Work.id,
+                "target_clause": Work.id,
+                "subq_col": Work.id,
+            },
+            "expressions": {
+                "cls": Expression,
+                "from_clause": Expression,
+                "joins": [
+                    (Work, Expression.work_id == Work.id),
+                    (Manifestation, Manifestation.expression_id == Expression.id),
+                    (Item, Item.manifestation_id == Manifestation.id),
+                ],
+                "target_col": Expression.id,
+                "target_clause": Expression.id,
+                "subq_col": Expression.id,
+            },
+            "manifestations": {
+                "cls": Manifestation,
+                "from_clause": Manifestation,
+                "joins": [
+                    (Expression, Manifestation.expression_id == Expression.id),
+                    (Work, Expression.work_id == Work.id),
+                    (Item, Item.manifestation_id == Manifestation.id),
+                ],
+                "target_col": Manifestation.id,
+                "target_clause": Manifestation.id,
+                "subq_col": Manifestation.id,
+            },
+            "items": {
+                "cls": Item,
+                "from_clause": Item,
+                "joins": [
+                    (Manifestation, Item.manifestation_id == Manifestation.id),
+                    (Expression, Manifestation.expression_id == Expression.id),
+                    (Work, Expression.work_id == Work.id),
+                ],
+                "target_col": Item.id,
+                "target_clause": Item.id,
+                "subq_col": Item.id,
+            },
+        }
+        cfg = _view_config.get(view, _view_config["items"])
+        target_entity = view if view in ("items", "manifestations", "works", "expressions") else "items"
+
+        def _subq(
+            exclude_category: bool = False,
+            exclude_fmt: bool = False,
+            exclude_tags: bool = False,
+            exclude_collections: bool = False,
+            exclude_genres: bool = False,
+            exclude_publishers: bool = False,
+            exclude_statuses: bool = False,
+        ):
+            """Build entity-id subquery with the specified facet groups excluded."""
+            # For user-specific facets when unauthenticated, no subquery filtering is possible
+            _tags = None if (exclude_tags or not owner_id) else tags
+            _collections = None if (exclude_collections or not owner_id) else collections
+            _statuses = None if (exclude_statuses or not owner_id) else statuses
+            return DataManager._build_item_ids_subq(
+                owner_id=owner_id,
+                category=None if exclude_category else category,
+                fmt=None if exclude_fmt else fmt,
+                tags=_tags,
+                collections=_collections,
+                genres=None if exclude_genres else genres,
+                publishers=None if exclude_publishers else publishers,
+                statuses=_statuses,
+                borrowed_only=borrowed_only,
+                missing_cover=missing_cover,
+                missing_id=missing_id,
+                target_entity=target_entity,
+            )
+
+        cat_subq = _subq(exclude_category=True)
+        fmt_subq = _subq(exclude_fmt=True)
+        tag_subq = _subq(exclude_tags=True)
+        coll_subq = _subq(exclude_collections=True)
+        genre_subq = _subq(exclude_genres=True)
+        pub_subq = _subq(exclude_publishers=True)
+        status_subq = _subq(exclude_statuses=True)
+
+        # ── Helpers: per-facet join paths ──────────────────────────────
+        def _apply_joins(q, *join_pairs):
+            for join_cls, condition in join_pairs:
+                q = q.join(join_cls, condition)
+            return q
+
+        def _outerjoin_items(q):
+            """Outer-join Item so entities without Items are still counted."""
+            if target_entity == "works":
+                return q.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+            if target_entity == "expressions":
+                return q.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+            if target_entity == "manifestations":
+                return q.outerjoin(Item, Item.manifestation_id == Manifestation.id)
+            return q  # items: already Item-native
+
+        # ── Join to Expression (needed for category counts) ───────────
+        def _join_to_expression(q):
+            if target_entity == "works":
+                return q.join(Expression, Expression.work_id == Work.id)
+            if target_entity == "expressions":
+                return q  # Expression is already the from_clause
+            if target_entity == "manifestations":
+                return q.join(Expression, Manifestation.expression_id == Expression.id)
+            return q.join(Manifestation, Item.manifestation_id == Manifestation.id).join(
+                Expression, Manifestation.expression_id == Expression.id
+            )
+
+        # ── Join to Manifestation (needed for format/publisher counts) ─
+        def _join_to_manifestation(q):
+            if target_entity == "works":
+                return q.join(Expression, Expression.work_id == Work.id).join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "expressions":
+                return q.join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "manifestations":
+                return q  # Manifestation already the from_clause
+            return q.join(Manifestation, Item.manifestation_id == Manifestation.id)
+
+        # ── Join to Work (needed for genre counts) ────────────────────
+        def _join_to_work(q):
+            if target_entity == "works":
+                return q  # Work is already the from_clause
+            if target_entity == "expressions":
+                return q.join(Work, Expression.work_id == Work.id)
+            if target_entity == "manifestations":
+                return q.join(Expression, Manifestation.expression_id == Expression.id).join(Work, Expression.work_id == Work.id)
+            return (
+                q.join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+            )
+
+        # ── Full join chain (target → Item, for status/collection/tag) ─
+        def _join_full_chain(q):
+            if target_entity == "works":
+                res = (
+                    q.join(Expression, Expression.work_id == Work.id)
+                    .join(Manifestation, Manifestation.expression_id == Expression.id)
+                    .join(Item, Item.manifestation_id == Manifestation.id)
+                )
+            elif target_entity == "expressions":
+                res = q.join(Manifestation, Manifestation.expression_id == Expression.id).join(
+                    Item, Item.manifestation_id == Manifestation.id
+                )
+            elif target_entity == "manifestations":
+                res = q.join(Item, Item.manifestation_id == Manifestation.id)
+            else:
+                res = q.join(Manifestation, Item.manifestation_id == Manifestation.id)
+            if owner_id:
+                res = res.where(Item.owner_id == owner_id)
+            return res
+
+        subq_filter_col = cfg["subq_col"]
+
+        # ── Category counts (grouped by Expression.content_type) ──────────
+        cat_query = (
+            select(Expression.content_type, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(subq_filter_col.in_(select(cat_subq.c.id)))
             .group_by(Expression.content_type)
-        ).all()
+        )
+        cat_query = _join_to_expression(cat_query)
+        cat_rows = db.session.execute(cat_query).all()
         category_counts: dict[str, int] = {}
         for ct, cnt in cat_rows:
             if ct:
                 category_counts[ct] = cnt
 
-        # Format counts (grouped by Manifestation.meta->'format')
-        fmt_rows = db.session.execute(
-            select(Manifestation.meta["format"].as_string(), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .select_from(Item)
-            .join(Manifestation, Item.manifestation_id == Manifestation.id)
-            .where(Item.id.in_(select(item_id_col)))
+        # ── Format counts (grouped by Manifestation.meta->'format') ───────
+        fmt_query = (
+            select(
+                Manifestation.meta["format"].as_string(),
+                func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
+            )
+            .select_from(cfg["from_clause"])
+            .where(subq_filter_col.in_(select(fmt_subq.c.id)))
             .group_by(Manifestation.meta["format"].as_string())
-        ).all()
+        )
+        fmt_query = _join_to_manifestation(fmt_query)
+        fmt_rows = db.session.execute(fmt_query).all()
         format_counts: dict[str, int] = {}
         for f_val, cnt in fmt_rows:
             if f_val:
                 format_counts[f_val] = cnt
 
-        # Status counts (grouped by Item.collection_status + Item.status)
+        # Normalize format counts: non-canonical raw values are resolved to
+        # canonical MediaFormat identifiers and their counts are merged.
+        from app.core.format_normalizer import normalize_format_counts
+
+        format_counts = normalize_format_counts(format_counts)
+
+        # ── Status counts (grouped by Item.status + collection_status) ────
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
-        status_rows = db.session.execute(
-            select(Item.status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .where(Item.id.in_(select(item_id_col)))
-            .group_by(Item.status)
-        ).all()
-        for s, cnt in status_rows:
-            if s in db_statuses:
-                db_statuses[s] += cnt
-        coll_status_rows = db.session.execute(
-            select(Item.collection_status, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .where(Item.id.in_(select(item_id_col)))
-            .group_by(Item.collection_status)
-        ).all()
-        for cs, cnt in coll_status_rows:
-            if cs in db_statuses:
-                db_statuses[cs] += cnt
+        if owner_id:
+            status_query = (
+                select(Item.status, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(subq_filter_col.in_(select(status_subq.c.id)))
+                .group_by(Item.status)
+            )
+            status_query = _join_full_chain(status_query)
+            status_rows = db.session.execute(status_query).all()
+            for s, cnt in status_rows:
+                if s in db_statuses:
+                    db_statuses[s] += cnt
 
-        # Collection counts
-        coll_rows = db.session.execute(
-            select(UserCollection.name, func.count(UserCollectionItem.item_id).label("cnt"))  # pylint: disable=not-callable
-            .select_from(UserCollectionItem)
-            .join(UserCollection, UserCollectionItem.collection_id == UserCollection.id)
-            .where(UserCollectionItem.item_id.in_(select(item_id_col)))
-            .group_by(UserCollection.name)
-        ).all()
-        collection_counts: dict[str, int] = {c: cnt for c, cnt in coll_rows if c}
+            coll_status_query = (
+                select(
+                    func.coalesce(Item.collection_status, "available").label("c_status"),
+                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
+                )
+                .select_from(cfg["from_clause"])
+                .where(subq_filter_col.in_(select(status_subq.c.id)))
+                .group_by(func.coalesce(Item.collection_status, "available"))
+            )
+            coll_status_query = _join_full_chain(coll_status_query)
+            coll_status_rows = db.session.execute(coll_status_query).all()
+            for cs, cnt in coll_status_rows:
+                if cs in db_statuses:
+                    db_statuses[cs] += cnt
 
-        # Tag counts
-        tag_rows = db.session.execute(
-            select(Tag.name, func.count(ItemTag.item_id).label("cnt"))  # pylint: disable=not-callable
-            .select_from(ItemTag)
-            .join(Tag, ItemTag.tag_id == Tag.id)
-            .where(ItemTag.item_id.in_(select(item_id_col)))
-            .group_by(Tag.name)
-        ).all()
-        tag_counts: dict[str, int] = {t: cnt for t, cnt in tag_rows if t}
+        borrowed_count = 0
+        if owner_id:
+            borrowed_query = (
+                select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(Item.lent_to_user_id == owner_id)
+                .where(subq_filter_col.in_(select(status_subq.c.id)))
+            )
+            borrowed_query = _join_full_chain(borrowed_query)
+            borrowed_count = db.session.execute(borrowed_query).scalar() or 0
 
-        # Genre counts — dialect-aware implementation.
-        # On PostgreSQL: push aggregation to the database via jsonb_array_elements_text,
-        # leveraging the idx_work_meta_genres_gin GIN index to avoid loading all
-        # Work.meta rows into application memory.
-        # On SQLite (test environment): fall back to the Python Counter approach since
-        # jsonb_array_elements_text and the ::jsonb cast are PostgreSQL-only.
+        # ── Collection counts ─────────────────────────────────────────────
+        collection_counts: dict[str, int] = {}
+        if owner_id:
+            coll_query = (
+                select(UserCollection.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(subq_filter_col.in_(select(coll_subq.c.id)))
+                .group_by(UserCollection.name)
+            )
+            coll_query = _join_full_chain(coll_query)
+            coll_query = coll_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
+                UserCollection, UserCollectionItem.collection_id == UserCollection.id
+            )
+            coll_rows = db.session.execute(coll_query).all()
+            collection_counts = {c: cnt for c, cnt in coll_rows if c}
+
+        # ── Tag counts ────────────────────────────────────────────────────
+        tag_counts: dict[str, int] = {}
+        if owner_id:
+            tag_query = (
+                select(Tag.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(subq_filter_col.in_(select(tag_subq.c.id)))
+                .group_by(Tag.name)
+            )
+            tag_query = _join_full_chain(tag_query)
+            tag_query = tag_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
+            tag_rows = db.session.execute(tag_query).all()
+            tag_counts = {t: cnt for t, cnt in tag_rows if t}
+
+        # ── Genre counts ──────────────────────────────────────────────────
         genre_counts: dict[str, int] = {}
         _is_pg = db.engine.dialect.name == "postgresql"
 
         if _is_pg:
-            genre_rows = db.session.execute(
+            genre_query = (
                 select(
-                    func.jsonb_array_elements_text(text("works.meta::jsonb->'genres'")).label("genre"),  # pylint: disable=not-callable
-                    func.count(Item.id).label("cnt"),  # pylint: disable=not-callable
+                    func.jsonb_array_elements_text(text("works.meta::jsonb->'genres'")).label("genre"),
+                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
                 )
-                .select_from(Item)
-                .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                .join(Expression, Manifestation.expression_id == Expression.id)
-                .join(Work, Expression.work_id == Work.id)
+                .select_from(cfg["from_clause"])
                 .where(
-                    Item.id.in_(select(item_id_col)),
+                    subq_filter_col.in_(select(genre_subq.c.id)),
                     Work.meta.isnot(None),
                     text("jsonb_typeof(works.meta::jsonb->'genres') = 'array'"),
                 )
                 .group_by(text("genre"))
-                .order_by(func.count(Item.id).desc())  # pylint: disable=not-callable
-            ).all()
+                .order_by(func.count(sa_distinct(cfg["target_clause"])).desc())  # pylint: disable=not-callable
+            )
+            genre_query = _join_to_work(genre_query)
+            genre_rows = db.session.execute(genre_query).all()
             genre_counts = {g.strip(): cnt for g, cnt in genre_rows if g and g.strip()}
         else:
             # SQLite fallback: in-memory Counter aggregation.
             from collections import Counter
 
-            w_ids_query = db.session.execute(
-                select(Work.id)
-                .join(Expression, Expression.work_id == Work.id)
-                .join(Manifestation, Manifestation.expression_id == Expression.id)
-                .join(Item, Item.manifestation_id == Manifestation.id)
-                .where(Item.id.in_(select(item_id_col)))
-                .distinct()
-            ).all()
-            w_ids = [r[0] for r in w_ids_query]
-            if w_ids:
-                works_meta = db.session.execute(select(Work.meta).where(Work.id.in_(w_ids))).all()
-                genre_counter: Counter[str] = Counter()
-                for (meta,) in works_meta:
-                    if meta:
-                        raw = meta.get("genres") or meta.get("genre")
-                        if isinstance(raw, list):
-                            for g_val in raw:
-                                if isinstance(g_val, str) and g_val.strip():
-                                    genre_counter[g_val.strip()] += 1
-                        elif isinstance(raw, str) and raw.strip():
-                            genre_counter[raw.strip()] += 1
-                genre_counts = dict(genre_counter.most_common())
+            # Get target entity IDs from the subquery
+            target_ids_result = db.session.execute(select(genre_subq.c.id)).all()
+            target_ids = [r[0] for r in target_ids_result]
 
-        # Publisher counts
-        pub_rows = db.session.execute(
-            select(Manifestation.publisher, func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
-            .select_from(Item)
-            .join(Manifestation, Item.manifestation_id == Manifestation.id)
-            .where(
-                Item.id.in_(select(item_id_col)),
-                Manifestation.publisher.isnot(None),
-                Manifestation.publisher != "",
+            if target_ids:
+                if target_entity == "works":
+                    w_ids = target_ids
+                else:
+                    w_ids_query = db.session.execute(
+                        select(Work.id)
+                        .join(Expression, Expression.work_id == Work.id)
+                        .join(Manifestation, Manifestation.expression_id == Expression.id)
+                        .join(Item, Item.manifestation_id == Manifestation.id)
+                        .where(subq_filter_col.in_(target_ids))
+                        .distinct()
+                    ).all()
+                    w_ids = [r[0] for r in w_ids_query]
+                if w_ids:
+                    works_meta = db.session.execute(select(Work.meta).where(Work.id.in_(w_ids))).all()
+                    genre_counter: Counter[str] = Counter()
+                    for (meta,) in works_meta:
+                        if meta:
+                            raw = meta.get("genres") or meta.get("genre")
+                            if isinstance(raw, list):
+                                for g_val in raw:
+                                    if isinstance(g_val, str) and g_val.strip():
+                                        genre_counter[g_val.strip()] += 1
+                            elif isinstance(raw, str) and raw.strip():
+                                genre_counter[raw.strip()] += 1
+                    genre_counts = dict(genre_counter.most_common())
+
+        # ── Publisher counts ──────────────────────────────────────────────
+        coalesced_pub = func.coalesce(  # pylint: disable=assignment-from-no-return
+            Manifestation.publisher,
+            Manifestation.meta["Publisher"].as_string(),
+            Manifestation.meta["publisher"].as_string(),
+            db.case((Expression.content_type == "music", Manifestation.meta["label"].as_string()), else_=None),
+        )
+        pub_query = (
+            select(
+                coalesced_pub.label("publisher"), func.count(sa_distinct(cfg["target_clause"])).label("cnt")  # pylint: disable=not-callable
             )
-            .group_by(Manifestation.publisher)
-        ).all()
+            .select_from(cfg["from_clause"])
+            .where(
+                subq_filter_col.in_(select(pub_subq.c.id)),
+                coalesced_pub.isnot(None),
+                coalesced_pub != "",
+            )
+            .group_by(coalesced_pub)
+        )
+
+        def _join_to_expr_and_man(q):
+            if target_entity == "works":
+                return q.join(Expression, Expression.work_id == Work.id).join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "expressions":
+                return q.join(Manifestation, Manifestation.expression_id == Expression.id)
+            if target_entity == "manifestations":
+                return q.join(Expression, Manifestation.expression_id == Expression.id)
+            return q.join(Manifestation, Item.manifestation_id == Manifestation.id).join(
+                Expression, Manifestation.expression_id == Expression.id
+            )
+
+        pub_query = _join_to_expr_and_man(pub_query)
+        pub_rows = db.session.execute(pub_query).all()
         publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
+
+        # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
+        if owner_id and view == "items":
+            intents = (
+                db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled").all()
+            )
+
+            def match_filter(f_list, item_vals):
+                if not f_list:
+                    return True
+                if not item_vals:
+                    return False
+                f_list_lower = [f.strip().lower() for f in f_list]
+                return any(any(f in v.lower() for f in f_list_lower) for v in item_vals if v)
+
+            _INTENT_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+
+            for intent in intents:
+                work = intent.work
+                intent_cats = set()
+                intent_formats = set()
+                intent_pubs = set()
+                for expr in work.expressions:
+                    if expr.content_type:
+                        intent_cats.add(expr.content_type)
+                    for man in expr.manifestations:
+                        if man.publisher:
+                            intent_pubs.add(man.publisher)
+                        if man.meta:
+                            for key in ["Publisher", "publisher", "label"]:
+                                if key == "label" and expr.content_type != "music":
+                                    continue
+                                val = man.meta.get(key)
+                                if isinstance(val, list):
+                                    intent_pubs.update(v for v in val if isinstance(v, str))
+                                elif isinstance(val, str):
+                                    intent_pubs.add(val)
+                        if man.meta and man.meta.get("format"):
+                            intent_formats.add(man.meta["format"])
+
+                intent_genres: set[str] = set()
+                if work.meta:
+                    raw_g = work.meta.get("genres") or work.meta.get("genre")
+                    if isinstance(raw_g, list):
+                        intent_genres.update(g.strip() for g in raw_g if isinstance(g, str) and g.strip())
+                    elif isinstance(raw_g, str) and raw_g.strip():
+                        intent_genres.add(raw_g.strip())
+
+                intent_status_match = False
+                if not statuses:
+                    intent_status_match = True
+                else:
+                    req_intents = [s for s in statuses if s in _INTENT_STATUSES]
+                    if req_intents:
+                        intent_status_match = intent.status in req_intents
+                    elif "wish_list" in statuses:
+                        intent_status_match = True
+
+                # Cross-filter conditions
+                cat_match = match_filter(category, intent_cats)
+                fmt_match = match_filter(fmt, intent_formats)
+                pub_match = match_filter(publishers, intent_pubs)
+                genre_match = match_filter(genres, intent_genres)
+
+                # category counts
+                if fmt_match and pub_match and genre_match and intent_status_match:
+                    for c in intent_cats:
+                        category_counts[c] = category_counts.get(c, 0) + 1
+
+                # status counts
+                if cat_match and fmt_match and pub_match and genre_match:
+                    if intent.status in db_statuses:
+                        db_statuses[intent.status] += 1
+                    if "wish_list" in db_statuses:
+                        db_statuses["wish_list"] += 1
+
+                # genre counts
+                if cat_match and fmt_match and pub_match and intent_status_match:
+                    for g in intent_genres:
+                        genre_counts[g] = genre_counts.get(g, 0) + 1
+
+                # format counts
+                if cat_match and pub_match and genre_match and intent_status_match:
+                    for f in intent_formats:
+                        format_counts[f] = format_counts.get(f, 0) + 1
+
+                # publisher counts
+                if cat_match and fmt_match and genre_match and intent_status_match:
+                    for p in intent_pubs:
+                        publisher_counts[p] = publisher_counts.get(p, 0) + 1
 
         return {
             "category_counts": category_counts,
@@ -655,4 +1071,5 @@ class DataManager:
             "tag_counts": tag_counts,
             "genre_counts": genre_counts,
             "publisher_counts": publisher_counts,
+            "borrowed_count": borrowed_count,
         }

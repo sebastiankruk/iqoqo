@@ -30,7 +30,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
-import { FilterBar } from "@/components/collection/filter-bar";
+import { FilterBar, chipLabel } from "@/components/collection/filter-bar";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
@@ -38,7 +38,6 @@ import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
 import {
   useInfiniteItems,
   useInfiniteManifestations,
-  useStats,
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
@@ -109,12 +108,17 @@ function CollectionContent() {
   const initialGenres = searchParams?.get("genres") || "";
   const initialPublishers = searchParams?.get("publishers") || "";
 
+  const initialCategories = searchParams?.get("category") || "";
+  const initialFormats = searchParams?.get("format") || "";
+
   const initialFilters: ActiveFilter[] = [
     ...(initialStatuses ? initialStatuses.split(",").map(s => ({ type: "status" as const, value: s })) : []),
     ...(initialTags ? initialTags.split(",").map(s => ({ type: "tag" as const, value: s })) : []),
     ...(initialCollections ? initialCollections.split(",").map(s => ({ type: "collection" as const, value: s })) : []),
     ...(initialGenres ? initialGenres.split(",").map(s => ({ type: "genre" as const, value: s })) : []),
     ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
+    ...(initialCategories ? initialCategories.split(",").map(s => ({ type: "category" as const, value: s })) : []),
+    ...(initialFormats ? initialFormats.split(",").map(s => ({ type: "format" as const, value: s })) : []),
   ];
 
   const initialViewMode = (searchParams?.get("view") || "items") as
@@ -234,6 +238,8 @@ function CollectionContent() {
     if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
     if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
     if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
+    if (categoryFilters.length > 0) params.set("category", categoryFilters.join(","));
+    if (formatFilters.length > 0) params.set("format", formatFilters.join(","));
 
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
@@ -253,9 +259,12 @@ function CollectionContent() {
     publisherFilters,
     appliedQuery,
     viewMode,
+    isLoggedIn,
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
+    categoryFilters,
+    formatFilters,
     pathname,
     router,
   ]);
@@ -272,8 +281,8 @@ function CollectionContent() {
     appliedQuery,
     sortBy,
     viewMode === "items" && isLoggedIn,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
+    formatFilters.length > 0 ? formatFilters.join(",") : undefined,
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
@@ -294,14 +303,15 @@ function CollectionContent() {
     limit,
     appliedQuery,
     viewMode === "manifestations",
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
-    formatFilters.length > 0 ? formatFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
+    formatFilters.length > 0 ? formatFilters.join(",") : undefined,
     missingCoverOnly,
     missingIdOnly,
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters
   );
 
   const {
@@ -314,11 +324,13 @@ function CollectionContent() {
     limit,
     viewMode === "works" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters.length > 0 ? statusFilters : undefined,
+    formatFilters.length > 0 ? formatFilters : undefined
   );
   const {
     data: exprsData,
@@ -330,32 +342,19 @@ function CollectionContent() {
     limit,
     viewMode === "expressions" && isLoggedIn,
     appliedQuery,
-    categoryFilters.length > 0 ? categoryFilters[0] : undefined,
+    categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
     tagFilters,
     collectionFilters,
     genreFilters,
-    publisherFilters
+    publisherFilters,
+    statusFilters.length > 0 ? statusFilters : undefined,
+    formatFilters.length > 0 ? formatFilters : undefined
   );
-
-  const { data: statsData } = useStats();
-
-  const hasActiveFilters =
-    categoryFilters.length > 0 ||
-    formatFilters.length > 0 ||
-    tagFilters.length > 0 ||
-    collectionFilters.length > 0 ||
-    genreFilters.length > 0 ||
-    publisherFilters.length > 0 ||
-    statusFilters.length > 0 ||
-    isBorrowedFilterActive ||
-    !!appliedQuery ||
-    missingCoverOnly ||
-    missingIdOnly;
 
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
-    if (categoryFilters.length > 0) f.category = categoryFilters[0];
-    if (formatFilters.length > 0) f.format = formatFilters[0];
+    if (categoryFilters.length > 0) f.category = categoryFilters.join(",");
+    if (formatFilters.length > 0) f.format = formatFilters.join(",");
     if (tagFilters.length > 0) f.tags = tagFilters.join(",");
     if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
     if (genreFilters.length > 0) f.genres = genreFilters.join(",");
@@ -364,6 +363,8 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
+    f.scope = isLoggedIn ? "user" : "global";
+    f.view = viewMode;
     return f;
   }, [
     categoryFilters,
@@ -376,9 +377,11 @@ function CollectionContent() {
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
+    viewMode,
+    isLoggedIn,
   ]);
 
-  const { data: facetStatsData } = useFacetStats(filtersForFacets, hasActiveFilters);
+  const { data: facetStatsData } = useFacetStats(isLoggedIn ? "user" : "global", filtersForFacets, true);
 
   const isLoading =
     viewMode === "roadmap"
@@ -447,19 +450,31 @@ function CollectionContent() {
     setActiveFilters(prev => {
       const exists = prev.some(f => f.type === filter.type && f.value === filter.value);
       if (exists) {
-        return prev.filter(f => !(f.type === filter.type && f.value === filter.value));
-      } else {
-        // Enforce single-select for category and format
-        if (filter.type === "category" || filter.type === "format") {
-          return [...prev.filter(f => f.type !== filter.type), filter];
+        let next = prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+        if (filter.type === "category") {
+          const remainingCategories = next.filter(f => f.type === "category");
+          if (remainingCategories.length === 0) {
+            next = next.filter(f => f.type !== "format");
+          }
         }
+        return next;
+      } else {
         return [...prev, filter];
       }
     });
   }, []);
 
   const removeFilter = useCallback((filter: ActiveFilter) => {
-    setActiveFilters(prev => prev.filter(f => !(f.type === filter.type && f.value === filter.value)));
+    setActiveFilters(prev => {
+      let next = prev.filter(f => !(f.type === filter.type && f.value === filter.value));
+      if (filter.type === "category") {
+        const remainingCategories = next.filter(f => f.type === "category");
+        if (remainingCategories.length === 0) {
+          next = next.filter(f => f.type !== "format");
+        }
+      }
+      return next;
+    });
   }, []);
 
   const clearAll = useCallback(() => {
@@ -467,43 +482,16 @@ function CollectionContent() {
   }, []);
 
   const formatCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.format_counts) return facetStatsData.format_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("format_")) {
-        counts[key.replace("format_", "")] = value as number;
-      }
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.format_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const categoryCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.category_counts) return facetStatsData.category_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("format_")) {
-        counts[key.replace("format_", "")] = value as number;
-      }
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.category_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const statusCounts = useMemo<Record<string, number>>(() => {
-    if (facetStatsData?.status_counts) return facetStatsData.status_counts;
-    if (!statsData) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const [key, value] of Object.entries(statsData)) {
-      if (key.startsWith("items_")) {
-        counts[key.replace("items_", "")] = value as number;
-      }
-    }
-    if (counts.want_to_read === undefined && statsData.to_read !== undefined) {
-      counts.want_to_read = statsData.to_read;
-    }
-    return counts;
-  }, [statsData, facetStatsData]);
+    return facetStatsData?.status_counts ?? ({} as Record<string, number>);
+  }, [facetStatsData]);
 
   const filteredItems = useMemo(() => {
     const items = [...allItems];
@@ -536,8 +524,17 @@ function CollectionContent() {
     return items;
   }, [allItems, sortBy]);
 
+  const ariaLiveText = useMemo(() => {
+    if (activeFilters.length === 0) return `All filters cleared. ${total} results found.`;
+    const filterLabels = activeFilters.map(f => chipLabel(f)).join(", ");
+    return `Filtered to ${filterLabels}. ${total} results found.`;
+  }, [activeFilters, total]);
+
   return (
     <div className="min-h-screen bg-background">
+      <div aria-live="polite" className="sr-only">
+        {ariaLiveText}
+      </div>
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
@@ -697,7 +694,6 @@ function CollectionContent() {
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
                 categoryCounts={categoryCounts}
-                disableStatus={viewMode === "manifestations"}
                 viewMode={viewMode}
                 isLoggedIn={showClientContent}
                 isCurator={showCuratorContent}
@@ -709,6 +705,7 @@ function CollectionContent() {
                 collectionCounts={facetStatsData?.collection_counts}
                 genreCounts={facetStatsData?.genre_counts}
                 publisherCounts={facetStatsData?.publisher_counts}
+                borrowedCount={facetStatsData?.borrowed_count}
               />
             </div>
           </div>
@@ -998,6 +995,26 @@ function CollectionContent() {
         </div>
       </div>
       <Footer />
+
+      {/* Floating Filter Pill */}
+      {!mobileFiltersOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] lg:hidden">
+          <button
+            onClick={() => setMobileFiltersOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 px-5 py-2.5 shadow-2xl hover:bg-black hover:text-white font-medium text-sm transition-transform active:scale-95"
+            aria-label={t("filters")}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span>{t("filters")}</span>
+            {activeFilters.length > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-black ml-1">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Bulk-add toolbar – floats above footer when manifestations are selected */}
       {showClientContent && viewMode === "manifestations" && (
         <BulkAddToolbar
@@ -1014,7 +1031,6 @@ function CollectionContent() {
         statusCounts={statusCounts}
         formatCounts={formatCounts}
         categoryCounts={categoryCounts}
-        disableStatus={viewMode === "manifestations"}
         viewMode={viewMode}
         isLoggedIn={showClientContent}
         isCurator={showCuratorContent}

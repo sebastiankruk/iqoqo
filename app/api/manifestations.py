@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -43,17 +43,24 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
+    category_list = parse_csv_param(category_filter)
+    format_list_raw = parse_csv_param(format_filter)
+    from app.core.format_normalizer import expand_format_filter
+
+    format_list = expand_format_filter(format_list_raw)
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
     tags_filter = request.args.get("tags")
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
     publishers_filter = request.args.get("publishers")
+    statuses_filter = request.args.get("statuses")
 
-    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
-    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
-    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
-    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    tags_list = parse_csv_param(tags_filter)
+    collections_list = parse_csv_param(collections_filter)
+    genres_list = parse_csv_param(genres_filter)
+    publishers_list = parse_csv_param(publishers_filter)
+    statuses_list = parse_csv_param(statuses_filter)
 
     try:
         page = int(page_param)
@@ -73,14 +80,15 @@ def get_manifestations() -> tuple[Response, int]:
             q,
             limit,
             offset,
-            category=category_filter,
-            format_filter=format_filter,
+            category=category_list,
+            format_filter=format_list,
             missing_cover=missing_cover,
             missing_id=missing_id,
             tags=tags_list,
             collections=collections_list,
             genres=genres_list,
             publishers=publishers_list,
+            statuses=statuses_list,
             user_id=user_id,
         )
 
@@ -99,10 +107,10 @@ def get_manifestations() -> tuple[Response, int]:
             Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression).join(Work)
         )
 
-        if category_filter:
-            query = query.filter(Expression.content_type == category_filter)
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+        if category_list:
+            query = query.filter(Expression.content_type.in_(category_list))
+        if format_list:
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
         if missing_cover:
             query = query.filter(
                 db.and_(
@@ -160,8 +168,24 @@ def get_manifestations() -> tuple[Response, int]:
             query = apply_genre_filter(query, genres_list)
 
         if publishers_list:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers_list]
+            pubs_conditions = []
+            for p in publishers_list:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             query = query.filter(db.or_(*pubs_conditions))
+
+        if statuses_list and user_id:
+            if not has_item_joined:
+                query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+                has_item_joined = True
+            query = apply_statuses_filter(query, statuses_list, user_id=user_id)
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()
@@ -248,12 +272,24 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     user_owns = False
     item_id: int | None = None
+    wishlist_item_id: int | None = None
     owner_count = 0
     if user_id:
+        from app.db.models import UserWorkIntent
+
         owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
         if owned_item:
-            user_owns = True
-            item_id = owned_item.id
+            if owned_item.collection_status == "wish_list":
+                wishlist_item_id = owned_item.id
+            else:
+                user_owns = True
+                item_id = owned_item.id
+
+        if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
+            intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=m.expression.work.id).first()
+            if intent:
+                wishlist_item_id = -intent.id
+
     owner_count = Item.query.filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False)).count()
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
@@ -279,6 +315,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "cover_status": m.meta.get("cover_status") if m.meta else None,
         "user_owns": user_owns,
         "item_id": item_id,
+        "wishlist_item_id": wishlist_item_id,
         "owner_count": owner_count,
         "content_type": m.expression.content_type if m.expression else None,
     }

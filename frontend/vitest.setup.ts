@@ -426,6 +426,9 @@ vi.mock("next-intl", () => ({
         fmt_miniatures: "Miniatures / Wargame",
         fmt_jigsaw_puzzle: "Jigsaw Puzzle",
         fmt_mechanical_puzzle: "Mechanical / 3D Puzzle",
+        fmt_unknown_text: "Unknown Text Format",
+        fmt_unknown_audio: "Unknown Audio Format",
+        fmt_unknown_video: "Unknown Video Format",
       },
     };
 

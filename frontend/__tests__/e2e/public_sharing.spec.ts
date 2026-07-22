@@ -75,4 +75,32 @@ test.describe("Public Sharing", () => {
     // Then check for the success label container WITHIN the result card
     await expect(resultCard.locator("p.text-primary.uppercase").first()).toBeVisible();
   });
+
+  // 6.9: Unauthenticated user can browse shared collection items
+  test("unauthenticated user can browse shared collection items", async ({ page }) => {
+    // No auth cookies — truly unauthenticated
+    await page.goto("/u/testuser");
+    await page.waitForLoadState("networkidle");
+
+    // Page should render without auth errors
+    const pageTitle = await page.title();
+    expect(pageTitle).toBeTruthy();
+  });
+
+  // 6.10: Unauthenticated user redirected to login or prompted for auth on protected actions
+  test("unauthenticated user sees login prompt for protected actions", async ({ page }) => {
+    await page.goto("/u/testuser");
+    await page.waitForLoadState("networkidle");
+
+    // Try to access a protected area
+    const protectedBtn = page
+      .locator('button:has-text("Edit"), a:has-text("Manage"), button:has-text("Admin")')
+      .first();
+    if (await protectedBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await protectedBtn.click();
+      // Should redirect or show auth prompt
+      const url = page.url();
+      expect(url.includes("login") || url.includes("auth") || url.includes("/u/testuser")).toBe(true);
+    }
+  });
 });

@@ -43,6 +43,8 @@ vi.mock("next/navigation", () => ({
 
 const baseItem = {
   id: 1,
+  owner_id: "test-user",
+  is_owner: true,
   manifestation_id: 1,
   status: "available",
   meta: {},

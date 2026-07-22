@@ -19,6 +19,7 @@ import packageJson from "../../package.json" assert { type: "json" };
 test.describe("Board Game Ingestion Workflow", () => {
   test("should allow user to scan a board game barcode and add to collection", async ({ page }) => {
     // 0. Mock User Profile and Config
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -143,6 +144,7 @@ test.describe("Board Game Ingestion Workflow", () => {
 
   test("should allow user to search board game by barcode", async ({ page }) => {
     // 0. Mock User Profile and Config
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

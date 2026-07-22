@@ -19,6 +19,7 @@ import packageJson from "../../package.json" assert { type: "json" };
 test.describe("Audio Media Workflow", () => {
   test("should display tracklist and support status updates for audio CD", async ({ page }) => {
     // 0. Mock User Profile and Config
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -167,6 +168,7 @@ test.describe("Audio Media Workflow", () => {
 
   test("should lookup and add an audio CD via generic scanner endpoint using UPC", async ({ page }) => {
     // 0. Mock User Profile and Config
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

@@ -28,6 +28,7 @@ test.describe("Faceted Catalog Synchronization and Inventory Isolation", () => {
     page.on("response", response => console.log("<< Response:", response.status(), response.url()));
 
     // 2. Mock user profile
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -276,6 +277,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,
@@ -308,7 +310,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: { genres: [], publishers: [], tags: [], collections: [] },
+          data: { genres: ["Fiction"], publishers: [], tags: [], collections: [] },
         }),
       });
     });
@@ -341,13 +343,16 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
           success: true,
           data: {
             works: 10,
-            items: 0,
-            format_text: 0,
+            items: 10,
+            format_text: 5,
+            format_board_game: 5,
             items_wish_list: 0,
-            items_available: 0,
+            items_available: 5,
             items_ordered: 0,
             items_lent: 0,
             items_lost: 0,
+            genre_counts: { Fiction: 10 },
+            category_counts: { text: 5, board_game: 5 },
           },
         }),
       });
@@ -376,6 +381,25 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
       });
     });
 
+    await page.route("**/api/stats/facets**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            status_counts: {
+              available: 5,
+              wish_list: 0,
+              ordered: 0,
+              lent: 0,
+              lost: 0,
+            },
+          },
+        }),
+      });
+    });
+
     await page.goto("/collection");
     await page.waitForLoadState("networkidle");
 
@@ -389,5 +413,177 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     const onWishListLabel = page.locator("label").filter({ hasText: "On Wish List" }).first();
     await expect(onWishListLabel).toBeVisible();
     await expect(onWishListLabel).toHaveClass(/opacity-50/);
+  });
+
+  test("supports multi-selection for category facets", async ({ page }) => {
+    // Mock facet stats so that the categories are not disabled
+    await page.route("**/*stats*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            works: 10,
+            items: 10,
+            format_text: 5,
+            format_board_game: 5,
+            category_counts: { text: 5, board_game: 5 },
+          },
+        }),
+      });
+    });
+
+    // Navigate to collection
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Select the first category: "Text"
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await textCheckbox.check({ force: true });
+
+    // Verify URL updates to include category=text
+    await expect(page).toHaveURL(/.*category=text/);
+
+    // Select the second category: "Board Game"
+    const boardGameCheckbox = page.getByRole("checkbox", { name: "Board Game" }).first();
+    await boardGameCheckbox.check({ force: true });
+
+    // Verify URL contains both category parameters
+    await expect(page).toHaveURL(/.*category=.*text.*/);
+    await expect(page).toHaveURL(/.*category=.*board_game.*/);
+
+    // Deselect "Text"
+    await textCheckbox.uncheck({ force: true });
+
+    // Verify "text" is removed but "board_game" remains
+    await expect(page).not.toHaveURL(/.*category=.*text.*/);
+    await expect(page).toHaveURL(/.*category=.*board_game.*/);
+  });
+
+  test("supports full genre cross-filtering flow", async ({ page }) => {
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Open Genres accordion
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+
+    // Select Fiction
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await fictionCheckbox.waitFor({ state: "visible" });
+    await fictionCheckbox.check();
+
+    // Verify URL updates
+    await expect(page).toHaveURL(/.*genres=Fiction/);
+  });
+
+  test("supports AND across facets (category and genre)", async ({ page }) => {
+    await page.goto("/collection");
+    await page.waitForLoadState("networkidle");
+
+    // Select Category "Text"
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await textCheckbox.check({ force: true });
+
+    // Open Genres accordion and select "Fiction"
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await fictionCheckbox.waitFor({ state: "visible" });
+    await fictionCheckbox.check();
+
+    // Verify URL has both
+    await expect(page).toHaveURL(/.*category=text/);
+    await expect(page).toHaveURL(/.*genres=Fiction/);
+  });
+
+  test("supports URL round-trip restoration of filters", async ({ page }) => {
+    // Hydrate with category=text and genres=Fiction
+    await page.goto("/collection?category=text&genres=Fiction");
+    await page.waitForLoadState("networkidle");
+
+    // Verify that the UI state matches the URL hydration
+    const textCheckbox = page.getByRole("checkbox", { name: "Text" }).first();
+    await expect(textCheckbox).toBeChecked();
+
+    const genresAccordion = page.getByRole("button", { name: /Genres/i }).first();
+    await genresAccordion.click();
+
+    const fictionCheckbox = page.getByRole("checkbox", { name: "Fiction" }).first();
+    await expect(fictionCheckbox).toBeChecked();
+  });
+
+  test("shared URL with facet params restores filter state on navigation", async ({ page }) => {
+    // Navigate with combined facet params simulating a shared URL
+    await page.goto("/collection?view=items&statuses=available&format=dvd&category=movie");
+    await page.waitForLoadState("networkidle");
+
+    // URL should retain all filter params after hydration
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("format=dvd");
+  });
+
+  test("multiple facet groups selected reflect correctly in URL", async ({ page }) => {
+    await page.goto("/collection?view=items&statuses=available,wish_list&format=dvd");
+    await page.waitForLoadState("networkidle");
+
+    // Both statuses should be preserved in the URL as comma-separated values
+    expect(decodeURIComponent(page.url())).toContain("statuses=available,wish_list");
+    expect(page.url()).toContain("format=dvd");
+  });
+
+  // 6.1: Shared URL with facet params restores filter state on another browser/device
+  test("shared URL with facet params restores filter state", async ({ page }) => {
+    // Setup minimal mocks for the /works page
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
+      });
+    });
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
+      });
+    });
+
+    await page.goto("/works?statuses=available&formats=paper");
+    await page.waitForLoadState("networkidle");
+
+    // URL should retain the facet parameters after load
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
+  });
+
+  // 6.2: Multiple facet groups selected reflect correctly in results and URL
+  test("multiple facet groups reflected in results and URL", async ({ page }) => {
+    // Setup minimal mocks for the /works page
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { id: "u1", email: "a@i.local", permissions: [] } }),
+      });
+    });
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { federation_enabled: false, version: "1.0.0" } }),
+      });
+    });
+
+    await page.goto("/works?statuses=available&formats=paper&tags=horror");
+    await page.waitForLoadState("networkidle");
+
+    expect(page.url()).toContain("statuses=available");
+    expect(page.url()).toContain("formats=paper");
+    expect(page.url()).toContain("tags=horror");
   });
 });

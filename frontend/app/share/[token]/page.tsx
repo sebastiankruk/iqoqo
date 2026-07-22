@@ -24,6 +24,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ShareButton } from "@/components/ui/share-button";
 import { Footer } from "@/components/dashboard/footer";
+import { Navbar } from "@/components/dashboard/navbar";
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
@@ -95,6 +96,7 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
       <main className="flex-1">
         {/* Header Section */}
         <div className="bg-primary/5 border-b">

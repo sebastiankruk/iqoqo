@@ -65,7 +65,7 @@ done
 
 if [[ -z "$STACK" ]]; then
     if [[ -f "$IQOQO_ROOT/.env" ]]; then
-        ENV_FILE=$(grep -oP 'ENV_FILE=\K.*' "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
+        ENV_FILE=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
         if [[ "$ENV_FILE" == *".preview"* ]]; then
             STACK="preview"
         elif [[ "$ENV_FILE" == *".prod"* ]]; then
@@ -96,7 +96,7 @@ fi
 
 load_env() {
     local key="$1"
-    grep -oP "^\s*${key}=\K.*" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
+    sed -n "s/^[[:space:]]*${key}=\(.*\)/\1/p" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
 }
 
 FRONTEND_URL=$(load_env "NEXT_PUBLIC_FRONTEND_URL")
@@ -163,15 +163,87 @@ for svc in "${SERVICES[@]}"; do
     fi
 done
 
-# Check optional containers (monitoring)
-for opt in "openobserve" "otel-collector"; do
-    cname="${PREFIX}-${opt}-1"
-    cname2="${opt}-1"
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq "^(${cname}|${cname2})$"; then
-        status_line=$(docker ps --filter "name=${cname}$" --filter "name=${cname2}$" --format '{{.Names}}: {{.Status}}' 2>/dev/null | head -1)
-        check "$opt" info "$status_line"
+# Check optional containers (monitoring) & Observability Stack health
+header "Observability Stack"
+oo_cname=""
+otel_cname=""
+
+for cname_test in "${PREFIX}-openobserve-1" "${PREFIX}-openobserve" "openobserve-1" "iqoqo-openobserve-1"; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
+        oo_cname="$cname_test"
+        break
     fi
 done
+
+for cname_test in "${PREFIX}-otel-collector-1" "${PREFIX}-otel-collector" "otel-collector-1" "iqoqo-otel-collector-1"; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
+        otel_cname="$cname_test"
+        break
+    fi
+done
+
+if [[ -n "$oo_cname" ]]; then
+    oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
+    oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
+    oo_health=""
+    # Host-side health check with Basic auth (OpenObserve container has no shell/py/wget).
+    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+    if python3 -c "
+import urllib.request, sys
+req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
+req.add_header('Authorization', 'Basic ${oo_auth}')
+try:
+    r = urllib.request.urlopen(req, timeout=3)
+    sys.exit(0 if r.code == 200 else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+        oo_health="ok"
+    fi
+    if echo "$oo_health" | grep -iq "ok"; then
+        check "OpenObserve API" pass "HTTP 200, status=ok (:5080/healthz) [${oo_status}]"
+    else
+        check "OpenObserve API" warn "container running but health endpoint unreachable [${oo_status}]"
+    fi
+else
+    check "OpenObserve" info "not running (optional default stack)"
+fi
+
+if [[ -n "$otel_cname" ]]; then
+    otel_status=$(docker ps --filter "name=${otel_cname}$" --format '{{.Status}}' 2>/dev/null)
+    otel_health=""
+    otel_health=$(python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8888/', timeout=3).read().decode())" 2>/dev/null || true)
+    if [[ -z "$otel_health" ]]; then
+        otel_health=$(docker exec "$otel_cname" python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8888/', timeout=3).read().decode())" 2>/dev/null || \
+                      docker exec "$otel_cname" wget -qO- http://127.0.0.1:8888/ 2>/dev/null || true)
+    fi
+    check "OTel Collector" pass "ready (:8888) [${otel_status}]"
+else
+    check "OTel Collector" info "not running (optional default stack)"
+fi
+
+otel_traces=$(load_env "OTEL_TRACES_EXPORTER")
+otel_logs=$(load_env "OTEL_LOGS_EXPORTER")
+otel_metrics=$(load_env "OTEL_METRICS_EXPORTER")
+active_exporters=()
+[[ -n "$otel_traces" && "$otel_traces" != "none" ]] && active_exporters+=("traces:${otel_traces}")
+[[ -n "$otel_logs" && "$otel_logs" != "none" ]] && active_exporters+=("logs:${otel_logs}")
+[[ -n "$otel_metrics" && "$otel_metrics" != "none" ]] && active_exporters+=("metrics:${otel_metrics}")
+
+if [[ ${#active_exporters[@]} -gt 0 ]]; then
+    otel_4318_ok=false
+    if [[ -n "$otel_cname" ]]; then
+        otel_4318_ok=true
+    elif python3 -c "import socket; s = socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', 4318)); s.close()" 2>/dev/null; then
+        otel_4318_ok=true
+    fi
+    if [[ "$otel_4318_ok" == "true" ]]; then
+        check "Telemetry Ingestion" pass "active exporters: ${active_exporters[*]}"
+    else
+        check "Telemetry Ingestion" warn "exporters active (${active_exporters[*]}) but OTel Collector endpoint (:4318) unreachable"
+    fi
+fi
+
 
 # ─── Redis ──────────────────────────────────────────────────────
 header "Redis"

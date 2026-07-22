@@ -30,13 +30,16 @@ These statuses track the user's interaction progress with the content, categoriz
 
 | Status         | Description                                         |
 |:---------------|:----------------------------------------------------|
+| `unread`       | Never opened / unread copy.                         |
 | `want_to_read` | Intended for future reading.                        |
 | `reading`      | Content is currently being consumed.                |
 | `read`         | Content has been completed.                         |
+| `dnf`          | Did Not Finish (abandoned prior to completion).     |
 
 ### Audio (Music, Audiobooks)
 
 | Status           | Description                    |
+
 |:-----------------|:-------------------------------|
 | `want_to_listen` | Intended for future listening. |
 | `listening`      | Currently listening.           |

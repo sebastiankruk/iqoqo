@@ -70,3 +70,8 @@ iqoqo.egg-info/
 # Use knowledge base
 !.context/
 .contex/ai-memory
+
+# OpenSpec
+openspec/changes/
+.context/notes/openspec/changes/
+**/openspec/changes/**

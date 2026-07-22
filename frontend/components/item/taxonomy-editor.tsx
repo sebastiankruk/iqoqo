@@ -22,6 +22,7 @@ import { useUpdateItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DiscoveryPivot } from "./discovery-pivot";
+import { useRouter } from "next/navigation";
 
 interface TaxonomyEditorProps {
   item: Item;
@@ -37,6 +38,7 @@ interface TaxonomyEditorProps {
 export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
   const [tagInput, setTagInput] = useState("");
   const updateItem = useUpdateItem(item.id);
+  const router = useRouter();
 
   // Initialize tags from item
   const currentTags = item.tags || [];
@@ -53,9 +55,12 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
     updateItem.mutate(
       { tags: newTags },
       {
-        onSuccess: () => {
+        onSuccess: data => {
           setTagInput("");
           toast.success(`Tag "${trimmed}" added!`);
+          if (data?.data?.id && data.data.id !== item.id) {
+            router.replace(`/item/${data.data.id}`);
+          }
         },
         onError: err => {
           toast.error(`Failed to add tag: ${(err as Error).message}`);
@@ -69,8 +74,11 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
     updateItem.mutate(
       { tags: newTags },
       {
-        onSuccess: () => {
+        onSuccess: data => {
           toast.success(`Tag "${tagToRemove}" removed!`);
+          if (data?.data?.id && data.data.id !== item.id) {
+            router.replace(`/item/${data.data.id}`);
+          }
         },
         onError: err => {
           toast.error(`Failed to remove tag: ${(err as Error).message}`);

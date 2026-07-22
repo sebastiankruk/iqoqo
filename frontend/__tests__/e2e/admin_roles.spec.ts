@@ -23,6 +23,7 @@ test.describe("Admin Roles Management Workflow", () => {
     });
 
     // Mock Admin Auth Profile
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,

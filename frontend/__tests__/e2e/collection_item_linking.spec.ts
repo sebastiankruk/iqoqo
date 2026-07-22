@@ -24,6 +24,7 @@ test.describe("Item-Collection Linking Workflow", () => {
     });
 
     // Mock auth profile
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", async route => {
       await route.fulfill({
         status: 200,

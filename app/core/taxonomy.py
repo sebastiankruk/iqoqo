@@ -33,54 +33,66 @@ class MediaFormat:
     COMIC_BOOK = "comic_book"
     MAGAZINE = "magazine"
     EBOOK = "ebook"
+    UNKNOWN_TEXT = "unknown_text"
     AUDIOBOOK_CD = "audiobook_cd"
     AUDIOBOOK_CASSETTE = "audiobook_cassette"
     AUDIOBOOK_DIGITAL = "audiobook_digital"
+    UNKNOWN_AUDIOBOOK = "unknown_audiobook"
     CD = "cd"
     VINYL = "vinyl"
     SACD = "sacd"
     CASSETTE = "cassette"
     MINIDISC = "minidisc"
     CD_DVD_COMBO = "cd_dvd_combo"
+    UNKNOWN_AUDIO = "unknown_audio"
     DVD = "dvd"
     BLURAY = "bluray"
     F_4K_UHD = "4k_uhd"
     VCD = "vcd"
     VHS = "vhs"
     LASERDISC = "laserdisc"
+    UNKNOWN_VIDEO = "unknown_video"
     BOARD_GAME = "board_game"
     CARDS = "cards"
     RPG_MANUAL = "rpg_manual"
     MINIATURES = "miniatures"
+    UNKNOWN_BOARD_GAME = "unknown_board_game"
     JIGSAW_PUZZLE = "jigsaw_puzzle"
     MECHANICAL_PUZZLE = "mechanical_puzzle"
+    UNKNOWN_PUZZLE = "unknown_puzzle"
     ALL = (
         "book",
         "graphic_novel",
         "comic_book",
         "magazine",
         "ebook",
+        "unknown_text",
         "audiobook_cd",
         "audiobook_cassette",
         "audiobook_digital",
+        "unknown_audiobook",
         "cd",
         "vinyl",
         "sacd",
         "cassette",
         "minidisc",
         "cd_dvd_combo",
+        "unknown_audio",
         "dvd",
         "bluray",
         "4k_uhd",
         "vcd",
         "vhs",
         "laserdisc",
+        "unknown_video",
         "board_game",
         "cards",
         "rpg_manual",
         "miniatures",
+        "unknown_board_game",
         "jigsaw_puzzle",
         "mechanical_puzzle",
+        "unknown_puzzle",
     )
 
 
@@ -118,27 +130,33 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
+    "unknown_audiobook": "audiobook",
     "cd": "music",
     "vinyl": "music",
     "sacd": "music",
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
     "4k_uhd": "movie",
     "vcd": "movie",
     "vhs": "movie",
     "laserdisc": "movie",
+    "unknown_video": "movie",
     "board_game": "board_game",
     "cards": "board_game",
     "rpg_manual": "board_game",
     "miniatures": "board_game",
+    "unknown_board_game": "board_game",
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
+    "unknown_puzzle": "puzzle",
 }
 
 FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
@@ -147,27 +165,33 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
     "audiobook_digital": "audiobook",
+    "unknown_audiobook": "audiobook",
     "cd": "music",
     "vinyl": "music",
     "sacd": "music",
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
     "4k_uhd": "movie",
     "vcd": "movie",
     "vhs": "movie",
     "laserdisc": "movie",
+    "unknown_video": "movie",
     "board_game": "board_game",
     "cards": "board_game",
     "rpg_manual": "board_game",
     "miniatures": "board_game",
+    "unknown_board_game": "board_game",
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
+    "unknown_puzzle": "puzzle",
     "text": "text",
     "audiobook": "audiobook",
     "music": "music",

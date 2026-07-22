@@ -22,7 +22,8 @@ from flask import g, jsonify, make_response, request, send_file, send_from_direc
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
-from app.api.decorators import admin_required, require_auth
+from app.api.decorators import admin_required, optional_auth, require_auth
+from app.api.filters import parse_csv_param
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
@@ -112,17 +113,24 @@ def get_dashboard_stats():
 
 
 @api_bp.route("/stats/facets", methods=["GET"])
-@require_auth
+@optional_auth
 @limiter.limit("60 per minute")
 def get_faceted_stats():
     """Return cross-filtered per-facet counts for the faceted navigation sidebar.
 
     Accepts the same filter query params as /api/items to narrow counts.
-    When no filters are passed, returns global counts for the user's items.
+    When ``scope=user``, counts are filtered to the authenticated user's items.
+    When ``scope=global``, counts reflect all entities in the catalog
+    (unauthenticated users see public catalog-level counts).
+
+    The ``view`` param controls the FRBR level at which counts are aggregated:
+    ``items``, ``manifestations``, ``expressions``, or ``works``.
     """
-    owner_id = getattr(g, "user_id", None)
-    category = request.args.get("category")
-    fmt = request.args.get("format")
+    scope = request.args.get("scope", "user")
+    view = request.args.get("view", "items")
+    owner_id = getattr(g, "user_id", None) if scope == "user" else None
+    category_str = request.args.get("category")
+    fmt_str = request.args.get("format")
     tags_str = request.args.get("tags")
     collections_str = request.args.get("collections")
     genres_str = request.args.get("genres")
@@ -132,16 +140,21 @@ def get_faceted_stats():
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
-    tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
-    collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
-    genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None
-    publishers_list = [p.strip() for p in publishers_str.split(",") if p.strip()] if publishers_str else None
-    statuses_list = [s.strip() for s in statuses_str.split(",") if s.strip()] if statuses_str else None
+    category_list = parse_csv_param(category_str)
+    fmt_list_raw = parse_csv_param(fmt_str)
+    from app.core.format_normalizer import expand_format_filter
+
+    fmt_list = expand_format_filter(fmt_list_raw)
+    tags_list = parse_csv_param(tags_str)
+    collections_list = parse_csv_param(collections_str)
+    genres_list = parse_csv_param(genres_str)
+    publishers_list = parse_csv_param(publishers_str)
+    statuses_list = parse_csv_param(statuses_str)
 
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,
-        category=category if category else None,
-        fmt=fmt if fmt else None,
+        category=category_list,
+        fmt=fmt_list,
         tags=tags_list,
         collections=collections_list,
         genres=genres_list,
@@ -150,6 +163,7 @@ def get_faceted_stats():
         borrowed_only=borrowed_only,
         missing_cover=missing_cover,
         missing_id=missing_id,
+        view=view,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 

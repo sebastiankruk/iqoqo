@@ -23,6 +23,7 @@ test.describe("Admin User Management & RBAC Workflow", () => {
     });
 
     // Mock Admin Auth Profile with permissions
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
     await page.route("**/api/profile**", route =>
       route.fulfill({
         status: 200,

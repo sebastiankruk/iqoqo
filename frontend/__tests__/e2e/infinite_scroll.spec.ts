@@ -29,6 +29,9 @@ test.describe("Infinite Scrolling Collection", () => {
         meta: {},
       }));
 
+    // Bypass Next.js proxy unauthenticated-redirect check
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+
     // Route profile so the page renders in logged-in (items) mode
     await page.route("**/api/profile/**", async route => {
       await route.fulfill({

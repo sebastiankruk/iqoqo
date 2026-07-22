@@ -211,7 +211,7 @@ export function ItemCard({
   };
 
   // Wishlist removal button visible on hover for wishlist items.
-  const wishlistRemoveBtn = isWishlist && (
+  const wishlistRemoveBtn = isWishlist && userOwns && (
     <button
       type="button"
       aria-label="Remove from wishlist"

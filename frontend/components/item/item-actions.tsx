@@ -214,7 +214,7 @@ export function ItemActions({ item }: { item: Item }) {
     <div className="mt-8 flex flex-col gap-6 rounded-2xl border bg-card/50 p-6 shadow-sm border-border/40">
       <div className="flex flex-wrap items-center gap-4 w-full">
         {/* Polymorphic quick actions */}
-        {isBook && item.status !== "read" && (
+        {item.is_owner && isBook && item.status !== "read" && (
           <button
             onClick={() => handleStatusUpdate(item.status === "reading" ? "read" : "reading")}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
@@ -224,7 +224,7 @@ export function ItemActions({ item }: { item: Item }) {
           </button>
         )}
 
-        {isAudio && item.status !== "listened" && (
+        {item.is_owner && isAudio && item.status !== "listened" && (
           <button
             onClick={() => handleStatusUpdate(item.status === "listening" ? "listened" : "listening")}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
@@ -234,7 +234,7 @@ export function ItemActions({ item }: { item: Item }) {
           </button>
         )}
 
-        {isVideo && item.status !== "watched" && (
+        {item.is_owner && isVideo && item.status !== "watched" && (
           <button
             onClick={() => handleStatusUpdate("watched")}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
@@ -244,7 +244,7 @@ export function ItemActions({ item }: { item: Item }) {
           </button>
         )}
 
-        {isGame && (
+        {item.is_owner && isGame && (
           <button
             onClick={() => handleStatusUpdate("played")}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"

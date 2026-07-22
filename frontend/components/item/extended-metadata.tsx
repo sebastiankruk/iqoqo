@@ -19,6 +19,21 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
+import { MEDIA_HIERARCHY } from "@/types/taxonomy";
+
+/**
+ * Look up a human-readable label for a format ID from the media hierarchy.
+ *
+ * @param formatId - The raw format identifier (e.g., "unknown_video")
+ * @returns The display label or undefined if not found
+ */
+function getFormatLabel(formatId: string): string | undefined {
+  for (const category of Object.values(MEDIA_HIERARCHY)) {
+    const found = category.formats.find(f => f.id === formatId);
+    if (found) return found.label;
+  }
+  return undefined;
+}
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
@@ -28,6 +43,7 @@ import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
+  workMeta?: Record<string, unknown>;
   owner_name?: string | null;
   owner_count?: number;
 }
@@ -37,22 +53,31 @@ interface ExtendedMetadataProps {
  *
  * @param root0 - The props object
  * @param root0.meta - The metadata to display
+ * @param root0.workMeta - The work-level metadata
  * @param root0.owner_name - The owner name to display
  * @param root0.owner_count - The number of owners for this manifestation
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMetadataProps) {
+export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
 
   const description = (meta["description"] as string | undefined) || (meta["Description"] as string | undefined);
-  const categories =
+  const manifestationCategories =
     ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
+  const workCategories =
+    ((workMeta?.["categories"] as string[] | undefined) || (workMeta?.["Categories"] as string[] | undefined)) ?? [];
+  const workGenres =
+    ((workMeta?.["genres"] as string[] | undefined) || (workMeta?.["Genres"] as string[] | undefined)) ?? [];
+  const categories = Array.from(new Set([...manifestationCategories, ...workCategories, ...workGenres]));
 
   const format = meta["format"] as string | undefined;
+  const formatLabel = format ? (getFormatLabel(format) ?? format) : undefined;
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "movie", "moving image"].includes(format?.toLowerCase() || "");
+  const isVideo = ["dvd", "bluray", "video", "movie", "moving image", "unknown_video"].includes(
+    format?.toLowerCase() || ""
+  );
   const isBoardGame = ["boardgame", "board_game", "cards", "three-dimensional object"].includes(
     format?.toLowerCase() || ""
   );
@@ -212,7 +237,7 @@ export function ExtendedMetadata({ meta, owner_name, owner_count }: ExtendedMeta
                 <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
                   Media Format
                 </span>
-                <span className="font-semibold uppercase">{format}</span>
+                <span className="font-semibold uppercase">{formatLabel}</span>
               </div>
             )}
           </div>

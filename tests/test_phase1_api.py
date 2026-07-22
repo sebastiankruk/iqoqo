@@ -54,6 +54,7 @@ def sample_work(app):
         manifestation = Manifestation(
             expression_id=expression.id,
             isbn13="9781234567890",
+            publisher="Test Publisher",
             meta={"Title": "Test Book", "Authors": ["Test Author"]},
         )
         db.session.add(manifestation)
@@ -240,6 +241,7 @@ def test_get_items_with_data(client, sample_work, admin_headers):
     assert item["authors"] == ["Test Author"]
     assert item["isbn"] == "9781234567890"
     assert item["status"] == "available"
+    assert item["publisher"] == "Test Publisher"
 
 
 def test_get_items_pagination(client, app):
@@ -360,10 +362,10 @@ def test_get_items_multi_status_filter(client, app):
         # ----------------------------------------------------------
 
         items = [
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", collection_status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", collection_status="wish_list", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", collection_status="my_collection", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", collection_status="my_collection", meta={}),
         ]
         db.session.add_all(items)
         db.session.commit()
@@ -373,8 +375,8 @@ def test_get_items_multi_status_filter(client, app):
     data = response.json
     assert data["success"] is True
     returned_statuses = {item["status"] for item in data["data"]}
-    assert returned_statuses == {"reading", "wish_list"}
-    assert data["meta"]["total"] == 2
+    assert returned_statuses == {"reading"}
+    assert data["meta"]["total"] == 1
 
 
 def test_get_items_includes_timestamps(client, sample_work):
@@ -483,6 +485,7 @@ def test_get_item_detail(client, sample_work, admin_headers):
     assert item["work"]["authors"] == ["Test Author"]
     assert item["expression"]["content_type"] == "text"
     assert item["expression"]["language"] == "en"
+    assert item["publisher"] == "Test Publisher"
 
 
 def test_get_item_detail_unauthenticated(client, sample_work):

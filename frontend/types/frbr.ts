@@ -111,6 +111,8 @@ export interface CatalogEntry extends Manifestation {
   work_id?: number | null;
   /** Item ID if the authenticated user owns this manifestation */
   item_id?: number | null;
+  /** Wishlist Item ID (intent ID) if the user has it in wishlist */
+  wishlist_item_id?: number | null;
   /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */
   content_type?: string | null;
 }
@@ -307,4 +309,5 @@ export type FacetStatsResponse = {
   tag_counts: Record<string, number>;
   genre_counts: Record<string, number>;
   publisher_counts: Record<string, number>;
+  borrowed_count?: number;
 };

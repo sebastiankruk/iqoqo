@@ -45,21 +45,22 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
@@ -78,6 +79,7 @@ class SearchService:
             collections=collections,
             genres=genres,
             publishers=publishers,
+            statuses=statuses,
             user_id=user_id,
         )
 
@@ -88,8 +90,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -133,8 +135,8 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
     ) -> tuple[int, list[int]]:
@@ -146,11 +148,11 @@ class SearchService:
 
         extra_filters_sql = ""
         if category:
-            params["category"] = category
-            extra_filters_sql += " AND e.content_type = :category"
+            params["category"] = tuple(category)
+            extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
-            params["format_filter"] = format_filter
-            extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
+            params["format_filter"] = tuple(format_filter)
+            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
         if missing_cover:
             extra_filters_sql += (
                 " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
@@ -181,8 +183,17 @@ class SearchService:
         ORDER BY rank DESC
         LIMIT :limit OFFSET :offset
         """
-        total = int(db.session.execute(text(count_sql), params).scalar() or 0)
-        result_ids = [row[0] for row in db.session.execute(text(rows_sql), params).all()]
+        count_stmt = text(count_sql)
+        rows_stmt = text(rows_sql)
+        if category:
+            count_stmt = count_stmt.bindparams(bindparam("category", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("category", expanding=True))
+        if format_filter:
+            count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
+
+        total = int(db.session.execute(count_stmt, params).scalar() or 0)
+        result_ids = [row[0] for row in db.session.execute(rows_stmt, params).all()]
         return total, result_ids
 
     @staticmethod
@@ -190,14 +201,15 @@ class SearchService:
         q: str,
         limit: int,
         offset: int,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
@@ -208,9 +220,9 @@ class SearchService:
             .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
         )
         if category:
-            base_query = base_query.filter(Expression.content_type == category)
+            base_query = base_query.filter(Expression.content_type.in_(category))
         if format_filter:
-            base_query = base_query.filter(Manifestation.meta["format"].as_string() == format_filter)
+            base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
         if missing_cover:
             base_query = base_query.filter(
                 db.and_(
@@ -268,8 +280,24 @@ class SearchService:
             base_query = apply_genre_filter(base_query, genres)
 
         if publishers:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
+            pubs_conditions = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pubs_conditions.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
             base_query = base_query.filter(db.or_(*pubs_conditions))
+
+        if statuses and user_id:
+            if not has_item_joined:
+                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
+                has_item_joined = True
+            base_query = base_query.filter(Item.status.in_(statuses))
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -282,8 +310,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -304,13 +332,13 @@ class SearchService:
             extra_filters_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         if category:
-            params["category"] = category
-            extra_filters_sql += " AND e.content_type = :category"
+            params["category"] = tuple(category)
+            extra_filters_sql += " AND e.content_type IN :category"
 
         if format_filter:
-            params["format_filter"] = format_filter
+            params["format_filter"] = tuple(format_filter)
             # exact match using JSONB ->> operator in raw SQL
-            extra_filters_sql += " AND m.meta ->> 'format' = :format_filter"
+            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
 
         if missing_cover:
             extra_filters_sql += (
@@ -337,6 +365,7 @@ class SearchService:
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
+               m.publisher,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
         FROM {_CATALOG}manifestations m
@@ -355,6 +384,12 @@ class SearchService:
         if statuses:
             count_stmt = count_stmt.bindparams(bindparam("statuses", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("statuses", expanding=True))
+        if category:
+            count_stmt = count_stmt.bindparams(bindparam("category", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("category", expanding=True))
+        if format_filter:
+            count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -367,8 +402,8 @@ class SearchService:
         limit: int,
         offset: int,
         statuses: list[str] | None = None,
-        category: str | None = None,
-        format_filter: str | None = None,
+        category: list[str] | None = None,
+        format_filter: list[str] | None = None,
         borrowed_only: bool = False,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -438,10 +473,10 @@ class SearchService:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
         if category:
-            query = query.filter(Expression.content_type == category)
+            query = query.filter(Expression.content_type.in_(category))
 
         if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string() == format_filter)
+            query = query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
 
         # Apply taxonomy filters
         if tags:
@@ -464,8 +499,18 @@ class SearchService:
             query = apply_genre_filter(query, genres)
 
         if publishers:
-            pubs_conditions = [Manifestation.publisher.ilike(f"%{p.strip()}%") for p in publishers]
-            query = query.filter(db.or_(*pubs_conditions))
+            pub_conds = []
+            for p in publishers:
+                p_term = f"%{p.strip()}%"
+                pub_conds.append(
+                    db.or_(
+                        Manifestation.publisher.ilike(p_term),
+                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
+                        Manifestation.meta["publisher"].as_string().ilike(p_term),
+                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
+                    )
+                )
+            query = query.filter(db.or_(*pub_conds))
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()
@@ -485,6 +530,7 @@ class SearchService:
                     "title": work.title,
                     "cover_url": manifestation.cover_url,
                     "manifestation_meta": manifestation.meta,
+                    "publisher": manifestation.publisher,
                     "work_meta": work.meta,
                     "content_type": expression.content_type,
                     "added_at": item.added_at,

@@ -433,7 +433,10 @@ export default function ManifestationPage() {
                         </Button>
                       </div>
                     ) : (
-                      <AddToCollectionDropdown manifestationId={manifestation.id} />
+                      <AddToCollectionDropdown
+                        manifestationId={manifestation.id}
+                        wishlistItemId={manifestation.wishlist_item_id}
+                      />
                     )}
                   </div>
                   {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (
