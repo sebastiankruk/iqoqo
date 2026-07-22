@@ -51,6 +51,7 @@ PACKAGE_LOCK_JSON_PATHS: list[Path] = [
     REPO_ROOT / "frontend" / "package-lock.json",
 ]
 TEST_INFRA_CONFIG_PATH = REPO_ROOT / "tests" / "test_infra_config.py"
+CHANGELOG_PATH = REPO_ROOT / "docs" / "CHANGELOG.md"
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ def read_version() -> str:
     """Return the version string from pyproject.toml."""
     with open(PYPROJECT_PATH, "rb") as fh:
         data = tomllib.load(fh)
-    return data["project"]["version"]
+    return str(data["project"]["version"])
 
 
 def parse_semver(version: str) -> tuple[int, int, int]:
@@ -138,6 +139,36 @@ def write_test_infra_version(new_version: str) -> None:
         print(f"  ✓ {TEST_INFRA_CONFIG_PATH.relative_to(REPO_ROOT)}")
 
 
+def update_changelog(new_version: str) -> None:
+    """Ensure a version entry for new_version exists in docs/CHANGELOG.md.
+
+    If the version header `## [{new_version}]` is not present, inserts a template
+    for the version at the top of the version list.
+    """
+    if not CHANGELOG_PATH.exists():
+        return
+    text = CHANGELOG_PATH.read_text(encoding="utf-8")
+
+    if f"## [{new_version}]" in text:
+        return
+
+    entry_template = f"## [{new_version}] - TBD\n\n" "### Added\n\n" "### Changed\n\n" "### Fixed\n\n"
+
+    match = re.search(r"(?m)^## \[\d+\.\d+\.\d+\]", text)
+    if match:
+        idx = match.start()
+        updated = text[:idx] + entry_template + text[idx:]
+    else:
+        updated = text + ("\n\n" if not text.endswith("\n") else "") + entry_template
+
+    CHANGELOG_PATH.write_text(updated, encoding="utf-8")
+    try:
+        rel_path = CHANGELOG_PATH.relative_to(REPO_ROOT)
+    except ValueError:
+        rel_path = CHANGELOG_PATH
+    print(f"  ✓ {rel_path}")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -183,6 +214,7 @@ def main() -> None:
         if lock_path.exists():
             write_package_lock_json_version(lock_path, new_version)
     write_test_infra_version(new_version)
+    update_changelog(new_version)
 
     print(f"\nDone! Version is now {new_version}.")
     if new_version != current:
@@ -194,6 +226,7 @@ def main() -> None:
             "frontend/package.json",
             "frontend/package-lock.json",
             "tests/test_infra_config.py",
+            "docs/CHANGELOG.md",
         ]
         existing_files = [f for f in git_add_files if (REPO_ROOT / f).exists()]
         print(f"  git add {' '.join(existing_files)}")
