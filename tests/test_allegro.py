@@ -15,6 +15,7 @@
 #
 from unittest.mock import MagicMock, mock_open, patch
 
+from app.config import Config
 from app.utils.allegro import fetch_allegro_metadata, get_allegro_token
 
 
@@ -33,7 +34,7 @@ def test_get_allegro_token_client_credentials(mock_post, mock_isfile):
         called_headers = mock_post.call_args[1].get("headers")
         assert called_headers is not None
         assert "User-Agent" in called_headers
-        assert called_headers["User-Agent"].startswith("iqoqo/")
+        assert called_headers["User-Agent"].startswith(Config.ALLEGRO_APP_NAME + "/")
 
 
 @patch("os.path.isfile")
@@ -74,7 +75,7 @@ def test_get_allegro_token_refresh(mock_post, mock_mtime, mock_isfile):
                 called_headers = mock_post.call_args[1].get("headers")
                 assert called_headers is not None
                 assert "User-Agent" in called_headers
-                assert called_headers["User-Agent"].startswith("iqoqo/")
+                assert called_headers["User-Agent"].startswith(Config.ALLEGRO_APP_NAME + "/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -105,7 +106,7 @@ def test_fetch_allegro_metadata_catalog_success(mock_isfile, mock_get, mock_toke
     called_headers = mock_get.call_args[1].get("headers")
     assert called_headers is not None
     assert "User-Agent" in called_headers
-    assert called_headers["User-Agent"].startswith("iqoqo/")
+    assert called_headers["User-Agent"].startswith(Config.ALLEGRO_APP_NAME + "/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -137,7 +138,7 @@ def test_fetch_allegro_metadata_listing_fallback(mock_isfile, mock_get, mock_tok
         called_headers = call[1].get("headers")
         assert called_headers is not None
         assert "User-Agent" in called_headers
-        assert called_headers["User-Agent"].startswith("iqoqo/")
+        assert called_headers["User-Agent"].startswith(Config.ALLEGRO_APP_NAME + "/")
 
 
 @patch("app.utils.allegro.get_allegro_token")
@@ -169,4 +170,4 @@ def test_fetch_allegro_metadata_catalog_with_client_credentials_only(mock_isfile
     called_headers = mock_get.call_args[1].get("headers")
     assert called_headers is not None
     assert "User-Agent" in called_headers
-    assert called_headers["User-Agent"].startswith("iqoqo/")
+    assert called_headers["User-Agent"].startswith(Config.ALLEGRO_APP_NAME + "/")

@@ -156,6 +156,8 @@ After installation, make sure the Docker daemon is running.
 
      Add these to your `.env` as `UPC_DATABASE_ORG_KEY`, `UPC_ITEM_DB_KEY`, `ALLEGRO_CLIENT_ID`, and `ALLEGRO_CLIENT_SECRET`.
 
+     > **Multi-Environment Deployments:** If you run multiple iqoqo instances (prod, preview, dev) with separate Allegro app registrations, also set `ALLEGRO_APP_NAME` to the registered application name (e.g. `iqoqo_cc`, `iqoqo_pre`, `iqoqo_dev`). Allegro validates the `User-Agent` header against this name.
+
    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
      Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
@@ -174,7 +176,7 @@ format_normalizations:
   audio: cd
   hardcover: hardcover
   paperback: paperback
-  
+
   # Scoped fallback mappings for NULL values
   null:
     movie: dvd
@@ -190,11 +192,11 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 
 ### Backend (Flask & Celery)
 
-| File           | Loaded By | Purpose                                                                                                                                                |
+| File | Loaded By | Purpose |
 
 | :------------- | :-------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`.env`**     | Global    | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`).          |
-| **`.env.dev`** | `run.sh`  | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |
+| **`.env`** | Global | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`). |
+| **`.env.dev`** | `run.sh` | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |
 
 **Inheritance Logic:**
 

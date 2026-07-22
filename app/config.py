@@ -50,8 +50,7 @@ class Config:
             raise RuntimeError("SECRET_KEY must not be a default or placeholder value.")
         if len(key.encode()) < 32:
             raise RuntimeError(
-                "SECRET_KEY must be at least 32 bytes (OWASP A02). "
-                'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+                'SECRET_KEY must be at least 32 bytes (OWASP A02). Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
 
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
@@ -126,6 +125,11 @@ class Config:
 
     # Base URL for static cover image serving mapping
     COVERS_BASE_URL = os.environ.get("COVERS_BASE_URL", "/static/covers")
+
+    # Allegro API — app identifier used in User-Agent header.
+    # Allegro validates this against the registered application name.
+    # Set per-environment: iqoqo_cc (prod), iqoqo_pre (preview), iqoqo_dev (dev).
+    ALLEGRO_APP_NAME = os.environ.get("ALLEGRO_APP_NAME", "iqoqo")
 
     # Discogs credentials — v2 OAuth preferred, legacy token as fallback
     DISCOGS_CONSUMER_KEY = os.environ.get("DISCOGS_CONSUMER_KEY")

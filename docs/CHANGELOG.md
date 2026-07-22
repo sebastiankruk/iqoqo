@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Environment-Aware Allegro User-Agent**: Added `ALLEGRO_APP_NAME` env var (default: `iqoqo`) in `app/config.py` to support per-environment Allegro application identifiers (`iqoqo_cc` for prod, `iqoqo_pre` for preview, `iqoqo_dev` for dev). The Allegro User-Agent header now reads `{ALLEGRO_APP_NAME}/{VERSION} (+https://iqoqo.cc)` instead of the hardcoded `iqoqo/...` prefix. Updated `tests/test_allegro.py` assertions to use `Config.ALLEGRO_APP_NAME`.
 - **Facet Aggregation**: `DataManager.get_faceted_stats` now normalizes format counts via `normalize_format_counts()`, merging non-canonical values into their resolved canonical formats.
 - **Format Filter**: `?format=` query parameter is expanded via `expand_format_filter()` to include raw values that normalize to the requested canonical format, ensuring correct matching.
 - **Frontend**: `isAudioMedia()` and `extended-metadata.tsx` updated to recognize `unknown_audio` and `unknown_video`; sidebar Physical Kind facet shows italic styling for unknown format entries.

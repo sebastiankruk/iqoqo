@@ -26,7 +26,8 @@ _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_toke
 
 # Allegro requires a specific User-Agent format to avoid 403 EDGE_REQUEST_REJECTED errors:
 # ApplicationName/Version (+DocumentationURL)
-_USER_AGENT: str = f"iqoqo/{Config.VERSION} (+https://iqoqo.cc)"
+# ApplicationName is set via ALLEGRO_APP_NAME env var (iqoqo_cc, iqoqo_pre, iqoqo_dev).
+_USER_AGENT: str = f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
 
 
 def get_allegro_token() -> str | None:
