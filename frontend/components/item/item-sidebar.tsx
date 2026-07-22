@@ -52,6 +52,7 @@ import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { CoverProvenance } from "@/components/cover/cover-provenance";
 import {
   Dialog,
   DialogContent,
@@ -302,7 +303,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   return (
     <div className="flex flex-col items-center gap-5">
       {/* Book/Audio cover */}
-      <div className="-mt-28 w-full max-w-[220px]">
+      <div className="-mt-28 w-full max-w-[220px] flex flex-col items-center">
         <div
           className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}
         >
@@ -315,6 +316,13 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             </div>
           )}
         </div>
+        <CoverProvenance
+          source={
+            (item.manifestation_meta?.["cover_source"] as string | undefined) ??
+            (item.meta?.["cover_source"] as string | undefined)
+          }
+          className="mt-2.5"
+        />
       </div>
 
       {/* Status badges */}

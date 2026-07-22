@@ -221,3 +221,29 @@ def update_profile_settings():
 
     db.session.commit()
     return jsonify({"success": True, "message": "Profile updated successfully.", "data": user.to_dict()})
+
+
+@profile_bp.route("/insights/velocity", methods=["GET"], strict_slashes=False)
+@require_auth
+def get_insights_velocity():
+    """Returns acquisition velocity data for the authenticated user."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    from app.core.data_manager import get_velocity_stats
+
+    data = get_velocity_stats(user_id)
+    return jsonify({"success": True, "data": data})
+
+
+@profile_bp.route("/insights/distribution", methods=["GET"], strict_slashes=False)
+@require_auth
+def get_insights_distribution():
+    """Returns media type and format distribution data for the authenticated user."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    from app.core.data_manager import get_distribution_stats
+
+    data = get_distribution_stats(user_id)
+    return jsonify({"success": True, "data": data})

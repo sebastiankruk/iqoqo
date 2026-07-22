@@ -17,6 +17,8 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
+import { getVelocityInsights, getDistributionInsights } from "./profile";
+import type { VelocityPoint, InsightsData } from "@/types/insights";
 import type {
   Item,
   CatalogEntry,
@@ -1370,5 +1372,31 @@ export function useResolveLoan() {
       void qc.invalidateQueries({ queryKey: ["loanRequests"] });
       void qc.invalidateQueries({ queryKey: ["items"] });
     },
+  });
+}
+
+/**
+ * Custom hook to fetch acquisition velocity insights.
+ *
+ * @returns Query result
+ */
+export function useVelocityInsights() {
+  return useQuery<VelocityPoint[]>({
+    queryKey: ["insights", "velocity"],
+    queryFn: getVelocityInsights,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Custom hook to fetch distribution insights (content types & formats).
+ *
+ * @returns Query result
+ */
+export function useDistributionInsights() {
+  return useQuery<InsightsData>({
+    queryKey: ["insights", "distribution"],
+    queryFn: getDistributionInsights,
+    staleTime: 5 * 60 * 1000,
   });
 }

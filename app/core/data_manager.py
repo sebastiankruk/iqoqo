@@ -27,6 +27,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import distinct, func, or_, select
+
 from app.db import db
 from app.db.models import (
     ITEM_STATUSES,
@@ -301,8 +303,6 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
-        from sqlalchemy import func, select
-
         # Group by Item.status (progress) and Item.collection_status
         owner_filter = [Item.owner_id == owner_id] if owner_id else []
         status_rows = db.session.execute(
@@ -352,8 +352,6 @@ class DataManager:
         status_counts["wish_list"] += intent_count
 
         if owner_id:
-            from sqlalchemy import distinct
-
             works_count = (
                 db.session.execute(
                     select(func.count(distinct(Work.id)))  # pylint: disable=not-callable
@@ -447,8 +445,6 @@ class DataManager:
         User-specific filters (tags, collections, statuses) are only applied
         when an owner_id is provided (authenticated user).
         """
-        from sqlalchemy import distinct, or_, select
-
         # Map target entity to class and ID column
         _target_map = {
             "items": (Item, Item.id),
@@ -605,8 +601,8 @@ class DataManager:
           category_counts, format_counts, status_counts,
           collection_counts, tag_counts, genre_counts, publisher_counts
         """
-        from sqlalchemy import distinct as sa_distinct
-        from sqlalchemy import func, select, text
+        sa_distinct = distinct
+        from sqlalchemy import text
 
         # Map view to target entity class, ID column, and canonical join path
         _view_config = {
@@ -1073,3 +1069,84 @@ class DataManager:
             "publisher_counts": publisher_counts,
             "borrowed_count": borrowed_count,
         }
+
+
+def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
+    """Returns monthly item acquisition count for the last 12 months for a given user."""
+    owner_val: Any
+    if isinstance(owner_id, str):
+        try:
+            owner_val = uuid.UUID(owner_id)
+        except ValueError:
+            owner_val = owner_id
+    else:
+        owner_val = owner_id
+
+    now = datetime.now(UTC)
+    months = []
+    for i in range(11, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        months.append(f"{year:04d}-{month:02d}")
+
+    bind = db.session.get_bind()
+    dialect_name = bind.dialect.name if bind else "sqlite"
+    if dialect_name == "sqlite":
+        month_expr = func.strftime("%Y-%m", Item.added_at)
+    else:
+        month_expr = func.to_char(func.date_trunc("month", Item.added_at), "YYYY-MM")
+
+    stmt = (
+        select(month_expr.label("month"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
+        .where(Item.owner_id == owner_val)
+        .group_by(month_expr)
+    )
+
+    results = db.session.execute(stmt).all()
+    count_map = {r.month: r.count for r in results if r.month}
+
+    return [{"month": m, "count": count_map.get(m, 0)} for m in months]
+
+
+def get_distribution_stats(owner_id: Any) -> dict[str, list[dict[str, Any]]]:
+    """Returns collection items breakdown by content_type and physical format for a given user."""
+    owner_val: Any
+    if isinstance(owner_id, str):
+        try:
+            owner_val = uuid.UUID(owner_id)
+        except ValueError:
+            owner_val = owner_id
+    else:
+        owner_val = owner_id
+
+    # 1. By type (Expression.content_type)
+    stmt_type = (
+        select(Expression.content_type.label("type"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
+        .select_from(Item)
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(Item.owner_id == owner_val)
+        .group_by(Expression.content_type)
+    )
+    type_results = db.session.execute(stmt_type).all()
+    by_type = [{"type": r.type or "unknown", "count": r.count} for r in type_results]
+
+    # 2. By format (Manifestation.meta['format'])
+    format_expr = Manifestation.meta["format"].as_string()
+    stmt_format = (
+        select(format_expr.label("format"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
+        .select_from(Item)
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .where(Item.owner_id == owner_val)
+        .group_by(format_expr)
+    )
+    format_results = db.session.execute(stmt_format).all()
+    by_format = [{"format": r.format or "book", "count": r.count} for r in format_results]
+
+    return {
+        "by_type": by_type,
+        "by_format": by_format,
+    }
