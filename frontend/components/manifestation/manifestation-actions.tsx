@@ -36,6 +36,7 @@ import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
+import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -332,6 +333,12 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {manifestation.id && (
+        <div className="mt-2 w-full">
+          <EscalationTrigger level="manifestation" targetId={manifestation.id} />
         </div>
       )}
 

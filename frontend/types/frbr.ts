@@ -311,3 +311,27 @@ export type FacetStatsResponse = {
   publisher_counts: Record<string, number>;
   borrowed_count?: number;
 };
+
+/** Custodian metadata escalation request */
+export interface EscalationRequest {
+  id: number;
+  user_id: string;
+  user_display_name?: string;
+  user_username?: string | null;
+  user_avatar_url?: string | null;
+  work_id?: number | null;
+  expression_id?: number | null;
+  manifestation_id?: number | null;
+  item_id?: number | null;
+  field_name: string;
+  current_value?: string | null;
+  suggested_value: string;
+  note?: string | null;
+  status: "pending" | "accepted" | "rejected" | "duplicate";
+  resolved_by?: string | null;
+  resolver_display_name?: string | null;
+  resolved_at?: string | null;
+  resolution_note?: string | null;
+  created_at: string;
+  updated_at: string;
+}

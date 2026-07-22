@@ -13,7 +13,7 @@
     "**/.context/**",
     "**/.git/**",
     ".agent/**",
-    ".gemini/skills/**",
+    ".gemini/**",
     ".opencode/**"
   ],
 }

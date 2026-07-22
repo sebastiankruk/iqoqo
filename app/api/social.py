@@ -23,8 +23,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
-from app.api.decorators import require_auth
-from app.db.models import Expression, Item, Manifestation, SocialFeedback, SocialNote, Work, db
+from app.api.decorators import require_auth, require_permission
+from app.core.permissions import PermissionName
+from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, Work, db
 
 VALID_LEVELS = {"work", "expression", "manifestation", "item"}
 
@@ -323,3 +324,137 @@ def delete_social_note(note_id: int) -> Response | tuple[Response, int]:
     db.session.commit()
 
     return jsonify({"success": True, "message": "Note deleted successfully"})
+
+
+def _validate_escalation_input(data: dict | None) -> tuple[dict | None, str | None]:
+    """Validate escalation request input data, returning (validated_dict, error_message)."""
+    if not data:
+        return None, "Missing JSON payload"
+
+    field_name = _sanitize_text(str(data.get("field_name", "")))
+    suggested_value = _sanitize_text(str(data.get("suggested_value", "")))
+
+    if not field_name:
+        return None, "field_name is required"
+    if not suggested_value:
+        return None, "suggested_value is required"
+
+    current_val_raw = data.get("current_value")
+    current_value = _sanitize_text(str(current_val_raw)) if current_val_raw is not None else None
+
+    note_raw = data.get("note")
+    note = _sanitize_text(str(note_raw)) if note_raw is not None else None
+
+    for val, name in [(suggested_value, "suggested_value"), (current_value, "current_value"), (note, "note")]:
+        if val and len(val) > MAX_SOCIAL_TEXT_LENGTH:
+            return None, f"{name} must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
+
+    return {
+        "field_name": field_name,
+        "suggested_value": suggested_value,
+        "current_value": current_value,
+        "note": note,
+    }, None
+
+
+@api_bp.route("/escalations/<level>/<int:target_id>", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.ESCALATE_REQUEST)
+def create_escalation_request(level: str, target_id: int) -> Response | tuple[Response, int]:
+    """Submit a custodian escalation request targeting a FRBR entity field."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    if level not in VALID_LEVELS:
+        return jsonify({"error": f"Invalid level: '{level}'", "code": 400}), 400
+
+    if not _verify_target_exists(level, target_id):
+        return jsonify({"error": f"{level.capitalize()} not found", "code": 404}), 404
+
+    data = request.get_json(silent=True)
+    validated, error_msg = _validate_escalation_input(data)
+    if error_msg or not validated:
+        return jsonify({"error": error_msg or "Invalid input", "code": 400}), 400
+
+    kwargs = {
+        "user_id": user_id,
+        "field_name": validated["field_name"],
+        "suggested_value": validated["suggested_value"],
+        "current_value": validated["current_value"],
+        "note": validated["note"],
+        "status": "pending",
+        f"{level}_id": target_id,
+    }
+
+    escalation = EscalationRequest(**kwargs)
+    db.session.add(escalation)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": escalation.to_dict()}), 201
+
+
+@api_bp.route("/escalations/mine", methods=["GET"])
+@require_auth
+def list_my_escalation_requests() -> Response | tuple[Response, int]:
+    """List escalation requests submitted by the current user."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    stmt = select(EscalationRequest).where(EscalationRequest.user_id == user_id).order_by(EscalationRequest.created_at.desc())
+    requests = db.session.scalars(stmt).all()
+    return jsonify({"success": True, "data": [req.to_dict() for req in requests]})
+
+
+@api_bp.route("/escalations/queue", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.ESCALATE_RESOLVE)
+def list_escalation_queue() -> Response | tuple[Response, int]:
+    """List all pending escalation requests for custodian review."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    stmt = (
+        select(EscalationRequest)
+        .options(selectinload(EscalationRequest.user))  # type: ignore[arg-type]
+        .where(EscalationRequest.status == "pending")
+        .order_by(EscalationRequest.created_at.asc())
+    )
+    requests = db.session.scalars(stmt).all()
+    return jsonify({"success": True, "data": [req.to_dict() for req in requests]})
+
+
+@api_bp.route("/escalations/<int:escalation_id>", methods=["PATCH"])
+@require_auth
+@require_permission(PermissionName.ESCALATE_RESOLVE)
+def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response, int]:
+    """Resolve an escalation request (status: accepted, rejected, duplicate)."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    escalation = db.session.get(EscalationRequest, escalation_id)
+    if not escalation:
+        return jsonify({"error": "Escalation request not found", "code": 404}), 404
+
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status")
+    valid_statuses = {"accepted", "rejected", "duplicate"}
+    if not new_status or new_status not in valid_statuses:
+        return jsonify({"error": f"Invalid status. Must be one of {sorted(valid_statuses)}", "code": 400}), 400
+
+    resolution_note = data.get("resolution_note")
+    if resolution_note is not None:
+        resolution_note = _sanitize_text(str(resolution_note))
+        if len(resolution_note) > MAX_SOCIAL_TEXT_LENGTH:
+            return jsonify({"error": f"resolution_note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
+
+    escalation.status = new_status
+    escalation.resolved_by = user_id
+    escalation.resolved_at = datetime.now(UTC)
+    escalation.resolution_note = resolution_note
+    db.session.commit()
+
+    return jsonify({"success": True, "data": escalation.to_dict()})

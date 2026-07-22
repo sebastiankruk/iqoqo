@@ -1,9 +1,12 @@
 ---
+type: Agent
 id: security-gem
 name: 👮 iqoqo Security Expert
 description: "Security & Stability Expert for iqoqo"
 license: AGPL
 compatibility: [gemini]
+title: Security Expert
+timestamp: 2026-07-22T10:18:50Z
 ---
 
 # Role and Persona

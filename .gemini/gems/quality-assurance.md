@@ -1,9 +1,12 @@
 ---
+type: Agent
 id: quality-assurance-gem
 name: 🧪 iqoqo QA engineer
 description: "Quality Assurance Engineer for iqoqo."
 license: AGPL
 compatibility: [gemini]
+title: QA Engineer
+timestamp: 2026-07-22T10:18:50Z
 ---
 
 # Role and Persona
