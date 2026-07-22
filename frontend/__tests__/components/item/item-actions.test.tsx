@@ -31,6 +31,13 @@ const mockInvalidateQueries = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: vi.fn(() => ({ setQueryData: vi.fn(), invalidateQueries: mockInvalidateQueries })),
+  useQuery: vi.fn(() => ({ data: [], isLoading: false })),
+  useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+
+vi.mock("@/lib/api/escalations", () => ({
+  useCreateEscalation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
 }));
 
 const mockItem = {
