@@ -257,4 +257,3 @@ The "View Wishlist Item" dropdown action MUST use an icon that signals navigatio
 - **WHEN** a manifestation does NOT have an associated wishlist item
 - **AND** the user opens the Add to Collection dropdown
 - **THEN** the "Add to Wishlist" action SHALL display the `BookmarkPlus` icon
-
