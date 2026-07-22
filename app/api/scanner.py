@@ -594,7 +594,7 @@ def _scan_to_library(
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 @limiter.limit("20 per minute", override_defaults=True)
-def scan_barcode() -> Response | tuple[Response, int]:
+def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-many-return-statements
     """Scan a barcode and add the corresponding item to the authenticated user's collection."""
     payload, err = _parse_and_validate_scan(request)
     if err:
