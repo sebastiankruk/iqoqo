@@ -104,7 +104,7 @@ describe("SuccessCard", () => {
 
   it("calls apiClient.post to /scan and shows success toast when 'Add to Library' succeeds", async () => {
     mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 99, manifestation_id: 100 } } });
-    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="inventory" onDismiss={vi.fn()} />);
 
     // Explicitly clear mock to avoid interference from earlier renders in this file
     mockApiPost.mockClear();
@@ -117,6 +117,7 @@ describe("SuccessCard", () => {
         format: "book",
         manifestation_id: undefined,
         collection_status: "available",
+        policy: "inventory",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Library!');
       expect(mockPush).toHaveBeenCalledWith("/item/99");
@@ -135,8 +136,8 @@ describe("SuccessCard", () => {
   });
 
   it("calls apiClient.post to /scan and shows success toast when 'Add to Wishlist' succeeds", async () => {
-    mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 101, manifestation_id: 102 } } });
-    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+    mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 101, manifestation_id: 102, action: "added_to_wishlist" } } });
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="wishlist" onDismiss={vi.fn()} />);
 
     // Explicitly clear mock to avoid interference from earlier renders
     mockApiPost.mockClear();
@@ -149,6 +150,7 @@ describe("SuccessCard", () => {
         format: "book",
         manifestation_id: undefined,
         collection_status: "wish_list",
+        policy: "wishlist",
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
       expect(mockPush).toHaveBeenCalledWith("/manifestation/102");

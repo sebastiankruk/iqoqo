@@ -1,0 +1,570 @@
+diff --git a/app/api/scanner.py b/app/api/scanner.py
+index 692172c5..195e19fa 100644
+--- a/app/api/scanner.py
++++ b/app/api/scanner.py
+@@ -514,6 +514,7 @@ def _scan_to_wishlist(
+                         else manifestation.cover_url
+                     ),
+                     "is_new_manifestation": is_new_manifestation,
++                    "action": "added_to_wishlist",
+                 },
+                 "error": None,
+             }
+@@ -580,6 +581,7 @@ def _scan_to_library(
+                         else manifestation.cover_url
+                     ),
+                     "is_new_manifestation": is_new_manifestation,
++                    "action": "added_to_inventory",
+                 },
+                 "error": None,
+             }
+@@ -603,6 +605,7 @@ def scan_barcode() -> Response | tuple[Response, int]:
+     manifestation_id: int | None = payload.manifestation_id
+     format_hint: str | None = payload.format
+     collection_status: str | None = payload.collection_status
++    policy: str | None = payload.policy
+     assert collection_status is not None
+ 
+     is_new_manifestation = False
+@@ -650,7 +653,7 @@ def scan_barcode() -> Response | tuple[Response, int]:
+ 
+     content_type = manifestation.expression.content_type if manifestation.expression else "text"
+     statuses = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))
+-    if collection_status == "wish_list":
++    if policy == "wishlist" or collection_status == "wish_list":
+         default_progress = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+     else:
+         default_progress = statuses[0]
+@@ -660,7 +663,47 @@ def scan_barcode() -> Response | tuple[Response, int]:
+             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+ 
+     user_id = getattr(g, "user_id", None)
+-    if collection_status == "wish_list":
++
++    if policy == "catalog":
++        _record_scan_telemetry(
++            barcode or manifestation.title,
++            format_hint,
++            provider=format_hint or "ingest",
++            status="success",
++            manifestation_id=manifestation.id,
++        )
++        return (
++            jsonify(
++                {
++                    "success": True,
++                    "data": {
++                        "message": "Item successfully added to catalog",
++                        "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
++                        "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
++                        "item_id": None,
++                        "intent_id": None,
++                        "manifestation_id": manifestation.id,
++                        "title": (
++                            manifestation.meta.get("title") or manifestation.meta.get("Title")
++                            if manifestation.meta
++                            else manifestation.title
++                        ),
++                        "author": _get_manifestation_author(manifestation),
++                        "cover_url": (
++                            manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
++                            if manifestation.meta
++                            else manifestation.cover_url
++                        ),
++                        "is_new_manifestation": is_new_manifestation,
++                        "action": "cataloged",
++                    },
++                    "error": None,
++                }
++            ),
++            201,
++        )
++
++    if policy == "wishlist" or collection_status == "wish_list":
+         return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
+ 
+     return _scan_to_library(
+diff --git a/app/api/schemas.py b/app/api/schemas.py
+index c3c2457e..93625e13 100644
+--- a/app/api/schemas.py
++++ b/app/api/schemas.py
+@@ -187,9 +187,18 @@ class ScanBarcodeSchema(BaseModel):
+     manifestation_id: int | None = None
+     format: str | None = None
+     collection_status: str | None = "available"
++    policy: str | None = "inventory"
+     lent_to_user_id: str | None = None
+     lent_to_name: str | None = None
+ 
++    @field_validator("policy")
++    @classmethod
++    def validate_policy(cls, v: str | None) -> str | None:
++        valid_policies = {"inventory", "wishlist", "catalog"}
++        if v is not None and v not in valid_policies:
++            raise ValueError(f"Invalid policy: '{v}'. Must be one of {valid_policies}")
++        return v
++
+     @field_validator("lent_to_user_id")
+     @classmethod
+     def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+diff --git a/frontend/__tests__/app/scan/page.test.tsx b/frontend/__tests__/app/scan/page.test.tsx
+index 74cd0b79..ee201605 100644
+--- a/frontend/__tests__/app/scan/page.test.tsx
++++ b/frontend/__tests__/app/scan/page.test.tsx
+@@ -13,7 +13,7 @@
+ // You should have received a copy of the GNU Affero General Public License
+ // along with this program.  If not, see <https://www.gnu.org/licenses/>
+ //
+-import { render, screen, fireEvent } from "@testing-library/react";
++import { render, screen, fireEvent, act } from "@testing-library/react";
+ import { describe, it, expect, vi, afterEach } from "vitest";
+ import ScanPage from "@/app/scan/page";
+ import * as hooks from "@/lib/api/hooks";
+@@ -35,7 +35,17 @@ vi.mock("sonner", () => ({
+ }));
+ 
+ // Mock the components so we don't need their full implementation
+-vi.mock("@/components/scanner/top-bar", () => ({ TopBar: () => <div data-testid="top-bar" /> }));
++let mockSetMediaType: (val: string) => void;
++let mockSetPolicy: (val: string) => void;
++
++vi.mock("@/components/scanner/top-bar", () => ({
++  TopBar: (props: any) => {
++    mockSetMediaType = props.setFormat;
++    mockSetPolicy = props.setPolicy;
++    return <div data-testid="top-bar" />;
++  },
++}));
++
+ vi.mock("@/components/scanner/viewfinder", () => ({ Viewfinder: () => <div data-testid="viewfinder" /> }));
+ vi.mock("@/components/scanner/bottom-sheet", () => ({
+   BottomSheet: ({ onShowManualForm }: { onShowManualForm?: () => void }) => (
+@@ -112,4 +122,31 @@ describe("ScanPage", () => {
+       expect.any(Object)
+     );
+   });
++
++  it("updates localStorage when media type and policy change", () => {
++    vi.mocked(hooks.useAddManualItem).mockReturnValue({
++      mutate: vi.fn(),
++      isPending: false,
++    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
++
++    const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
++
++    render(<ScanPage />);
++
++    // Trigger state changes
++    act(() => {
++      if (mockSetMediaType) {
++        mockSetMediaType("movie");
++      }
++      if (mockSetPolicy) {
++        mockSetPolicy("catalog");
++      }
++    });
++
++    // Verify localStorage was updated
++    expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_media_type", "movie");
++    expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_policy", "catalog");
++
++    setItemSpy.mockRestore();
++  });
+ });
+diff --git a/frontend/app/scan/page.tsx b/frontend/app/scan/page.tsx
+index 6c274ff2..9eb20339 100644
+--- a/frontend/app/scan/page.tsx
++++ b/frontend/app/scan/page.tsx
+@@ -20,7 +20,7 @@
+  */
+ "use client";
+ 
+-import { useState, useCallback, useRef } from "react";
++import { useState, useCallback, useRef, useEffect } from "react";
+ import { TopBar } from "@/components/scanner/top-bar";
+ import { Viewfinder } from "@/components/scanner/viewfinder";
+ import { BottomSheet } from "@/components/scanner/bottom-sheet";
+@@ -51,11 +51,28 @@ export default function ScanPage() {
+   const [scannerActive, setScannerActive] = useState(false);
+   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
+   const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
++  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">("inventory");
+   const [snappedCover, setSnappedCover] = useState<File | null>(null);
+   const [hasTorch, setHasTorch] = useState(false);
+   const [torchOn, setTorchOn] = useState(false);
+   const videoRef = useRef<HTMLVideoElement>(null);
+ 
++  useEffect(() => {
++    const savedFormat = localStorage.getItem("iqoqo_scanner_media_type");
++    if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
++
++    const savedPolicy = localStorage.getItem("iqoqo_scanner_policy");
++    if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
++  }, []);
++
++  useEffect(() => {
++    localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
++  }, [activeFormat]);
++
++  useEffect(() => {
++    localStorage.setItem("iqoqo_scanner_policy", policy);
++  }, [policy]);
++
+   const addManualMutation = useAddManualItem();
+   const router = useRouter();
+ 
+@@ -174,6 +191,8 @@ export default function ScanPage() {
+         <TopBar
+           currentFormat={activeFormat}
+           setFormat={f => setActiveFormat(f as ScanFormat)}
++          currentPolicy={policy}
++          setPolicy={setPolicy}
+           hasFlash={hasTorch}
+           isFlashOn={torchOn}
+           onToggleFlash={handleToggleTorch}
+@@ -201,6 +220,7 @@ export default function ScanPage() {
+           <SuccessCard
+             isbn={result.isbn}
+             meta={result.meta}
++            policy={policy}
+             onDismiss={handleDismiss}
+             snappedCover={snappedCover}
+             onShowManualForm={handleShowManualForm}
+diff --git a/frontend/components/scanner/success-card.tsx b/frontend/components/scanner/success-card.tsx
+index 0b57f234..c7d074f8 100644
+--- a/frontend/components/scanner/success-card.tsx
++++ b/frontend/components/scanner/success-card.tsx
+@@ -32,6 +32,7 @@ import { isAudioMedia } from "@/lib/utils";
+ interface SuccessCardProps {
+   isbn: string;
+   meta: IsbnMeta;
++  policy?: "inventory" | "wishlist" | "catalog";
+   onDismiss: () => void;
+   onScanAnother?: () => void;
+   snappedCover?: File | null;
+@@ -54,6 +55,7 @@ interface SuccessCardProps {
+ export function SuccessCard({
+   isbn,
+   meta,
++  policy = "inventory",
+   onDismiss,
+   onScanAnother,
+   snappedCover,
+@@ -137,20 +139,22 @@ export function SuccessCard({
+   if (isAudio) formatDisplay = "Audio Media";
+   if (isGame) formatDisplay = "Board Game";
+ 
+-  const handleAdd = async (collectionStatus: "available" | "wish_list") => {
++  const handleAdd = async (collectionStatus: "available" | "wish_list" | "catalog") => {
+     if (isMissingID) {
+       toast.error("Standard barcode required to add to collection.");
+       return;
+     }
+     setAdding(true);
+     try {
++      const payload_collection_status = collectionStatus === "catalog" ? "available" : collectionStatus;
+       const res = await apiClient.post<
+-        ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number }>
++        ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number; action?: string }>
+       >("/scan", {
+         barcode: machineIdentifier,
+         manifestation_id: meta.manifestation_id,
+         format: format,
+-        collection_status: collectionStatus,
++        collection_status: payload_collection_status,
++        policy: policy,
+       });
+ 
+       const responseData = res.data;
+@@ -174,7 +178,13 @@ export function SuccessCard({
+           toast.warning(`"${title}" added, but cover upload failed.`);
+         }
+       } else {
+-        toast.success(`"${title}" added to your ${collectionStatus === "wish_list" ? "Wishlist" : "Library"}!`);
++        if (data.action === "cataloged") {
++          toast.success(`"${title}" added to Catalog!`);
++        } else if (data.action === "added_to_wishlist") {
++          toast.success(`"${title}" added to your Wishlist!`);
++        } else {
++          toast.success(`"${title}" added to your Library!`);
++        }
+       }
+ 
+       // Invalidate cached queries BEFORE navigating so the UI has fresh statistics
+@@ -335,36 +345,58 @@ export function SuccessCard({
+                   </Button>
+                 ) : (
+                   <>
+-                    <Button
+-                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+-                      variant="default"
+-                      disabled={adding}
+-                      onClick={() => handleAdd("available")}
+-                    >
+-                      {adding ? (
+-                        "Adding..."
+-                      ) : (
+-                        <>
+-                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+-                          Add to Library
+-                        </>
+-                      )}
+-                    </Button>
+-                    <Button
+-                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
+-                      variant="outline"
+-                      disabled={adding}
+-                      onClick={() => handleAdd("wish_list")}
+-                    >
+-                      {adding ? (
+-                        "Adding..."
+-                      ) : (
+-                        <>
+-                          <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
+-                          Add to Wishlist
+-                        </>
+-                      )}
+-                    </Button>
++                    {policy === "catalog" ? (
++                      <Button
++                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
++                        variant="default"
++                        disabled={adding}
++                        onClick={() => handleAdd("catalog")}
++                      >
++                        {adding ? "Adding..." : "Add to Catalog"}
++                      </Button>
++                    ) : policy === "wishlist" ? (
++                      <Button
++                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
++                        variant="default"
++                        disabled={adding}
++                        onClick={() => handleAdd("wish_list")}
++                      >
++                        {adding ? "Adding..." : "Add to Wishlist"}
++                      </Button>
++                    ) : (
++                      <>
++                        <Button
++                          className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
++                          variant="default"
++                          disabled={adding}
++                          onClick={() => handleAdd("available")}
++                        >
++                          {adding ? (
++                            "Adding..."
++                          ) : (
++                            <>
++                              <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
++                              Add to Library
++                            </>
++                          )}
++                        </Button>
++                        <Button
++                          className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
++                          variant="outline"
++                          disabled={adding}
++                          onClick={() => handleAdd("wish_list")}
++                        >
++                          {adding ? (
++                            "Adding..."
++                          ) : (
++                            <>
++                              <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
++                              Add to Wishlist
++                            </>
++                          )}
++                        </Button>
++                      </>
++                    )}
+ 
+                     <Button
+                       variant="outline"
+diff --git a/frontend/components/scanner/top-bar.tsx b/frontend/components/scanner/top-bar.tsx
+index ba6eb17b..a5b11f4c 100644
+--- a/frontend/components/scanner/top-bar.tsx
++++ b/frontend/components/scanner/top-bar.tsx
+@@ -23,19 +23,36 @@ import { MEDIA_REGISTRY } from "@/lib/media";
+ interface TopBarProps {
+   currentFormat?: ScanFormat;
+   setFormat?: (format: ScanFormat) => void;
++  currentPolicy?: "inventory" | "wishlist" | "catalog";
++  setPolicy?: (policy: "inventory" | "wishlist" | "catalog") => void;
+   onCancel?: () => void;
+   hasFlash?: boolean;
+   isFlashOn?: boolean;
+   onToggleFlash?: () => void;
+ }
+ 
++const POLICY_OPTIONS = [
++  { value: "inventory", label: "Inventory" },
++  { value: "wishlist", label: "Wishlist" },
++  { value: "catalog", label: "Catalog" },
++] as const;
++
+ /**
+- * Scanner page top overlay bar with format selector.
++ * Scanner page top overlay bar with format and policy selector.
+  *
+  * @param {TopBarProps} props - The component props
+  * @returns {JSX.Element} The component
+  */
+-export function TopBar({ currentFormat, setFormat, onCancel, hasFlash, isFlashOn, onToggleFlash }: TopBarProps) {
++export function TopBar({
++  currentFormat,
++  setFormat,
++  currentPolicy,
++  setPolicy,
++  onCancel,
++  hasFlash,
++  isFlashOn,
++  onToggleFlash,
++}: TopBarProps) {
+   return (
+     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
+       <div className="flex items-center justify-between bg-black/40 px-4 py-4 backdrop-blur-sm">
+@@ -68,30 +85,50 @@ export function TopBar({ currentFormat, setFormat, onCancel, hasFlash, isFlashOn
+         )}
+       </div>
+ 
+-      {setFormat && (
+-        <div className="flex justify-center bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5">
+-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+-            {SCAN_FORMATS.map(f => {
+-              const meta = MEDIA_REGISTRY[f];
+-              const Icon = meta.icon;
+-              return (
++      {(setFormat || setPolicy) && (
++        <div className="flex flex-col bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5 gap-3">
++          {setFormat && (
++            <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar">
++              {SCAN_FORMATS.map(f => {
++                const meta = MEDIA_REGISTRY[f];
++                const Icon = meta.icon;
++                return (
++                  <button
++                    key={f}
++                    onClick={() => setFormat(f)}
++                    title={meta.label}
++                    aria-label={meta.label}
++                    className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
++                      currentFormat === f
++                        ? "bg-primary text-primary-foreground border-primary shadow-lg"
++                        : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
++                    }`}
++                  >
++                    <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
++                    <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
++                  </button>
++                );
++              })}
++            </div>
++          )}
++
++          {setPolicy && (
++            <div className="flex justify-center gap-2">
++              {POLICY_OPTIONS.map(opt => (
+                 <button
+-                  key={f}
+-                  onClick={() => setFormat(f)}
+-                  title={meta.label}
+-                  aria-label={meta.label}
+-                  className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
+-                    currentFormat === f
+-                      ? "bg-primary text-primary-foreground border-primary shadow-lg"
++                  key={opt.value}
++                  onClick={() => setPolicy(opt.value)}
++                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full border transition-colors ${
++                    currentPolicy === opt.value
++                      ? "bg-white text-black border-white"
+                       : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
+                   }`}
+                 >
+-                  <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
+-                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
++                  {opt.label}
+                 </button>
+-              );
+-            })}
+-          </div>
++              ))}
++            </div>
++          )}
+         </div>
+       )}
+     </div>
+diff --git a/tests/test_api_scanner.py b/tests/test_api_scanner.py
+index a7550ef5..4a18b366 100644
+--- a/tests/test_api_scanner.py
++++ b/tests/test_api_scanner.py
+@@ -484,6 +484,70 @@ def test_scan_barcode_wishlist_success(mock_ingest_isbn, client, normal_user_hea
+     assert response.json["data"]["item_id"] is None
+     assert response.json["data"]["intent_id"] is not None
+     assert response.json["data"]["manifestation_id"] == 555
++    assert response.json["data"]["action"] == "added_to_wishlist"
++
++
++@patch("app.api.scanner.IngestService.ingest_from_isbn")
++def test_scan_barcode_policy_catalog_success(mock_ingest_isbn, client, normal_user_headers, app):
++    """Test scan endpoint correctly respects policy='catalog' and returns manifestation without user linkage."""
++    mock_work = MagicMock()
++    mock_work.id = 123
++    mock_work.title = "Some Book"
++    mock_work.meta = {"authors": ["Some Author"]}
++
++    mock_expression = MagicMock()
++    mock_expression.content_type = "text"
++    mock_expression.work = mock_work
++
++    mock_manifestation = MagicMock()
++    mock_manifestation.id = 555
++    mock_manifestation.title = "Some Book"
++    mock_manifestation.author = "Some Author"
++    mock_manifestation.cover_url = "http://cover.jpg"
++    mock_manifestation.meta = {"title": "Some Book", "authors": ["Some Author"]}
++    mock_manifestation.expression = mock_expression
++    mock_ingest_isbn.return_value = mock_manifestation
++
++    payload = {"barcode": "9780553380163", "format": "book", "policy": "catalog"}
++    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
++
++    assert response.status_code == 201
++    assert response.json["data"]["item_id"] is None
++    assert response.json["data"]["intent_id"] is None
++    assert response.json["data"]["manifestation_id"] == 555
++    assert response.json["data"]["action"] == "cataloged"
++
++
++@patch("app.api.scanner.IngestService.ingest_from_isbn")
++def test_scan_barcode_policy_wishlist_success(mock_ingest_isbn, client, normal_user_headers, app):
++    """Test scan endpoint correctly adds to wishlist using policy='wishlist'."""
++    mock_work = MagicMock()
++    mock_work.id = 123
++    mock_work.title = "Some Book"
++    mock_work.meta = {"authors": ["Some Author"]}
++
++    mock_expression = MagicMock()
++    mock_expression.content_type = "text"
++    mock_expression.work = mock_work
++
++    mock_manifestation = MagicMock()
++    mock_manifestation.id = 555
++    mock_manifestation.title = "Some Book"
++    mock_manifestation.author = "Some Author"
++    mock_manifestation.cover_url = "http://cover.jpg"
++    mock_manifestation.meta = {"title": "Some Book", "authors": ["Some Author"]}
++    mock_manifestation.expression = mock_expression
++    mock_ingest_isbn.return_value = mock_manifestation
++
++    # We send collection_status available to ensure policy overrides it or triggers wishlist logic
++    payload = {"barcode": "9780553380163", "format": "book", "collection_status": "available", "policy": "wishlist"}
++    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
++
++    assert response.status_code == 201
++    assert response.json["data"]["item_id"] is None
++    assert response.json["data"]["intent_id"] is not None
++    assert response.json["data"]["manifestation_id"] == 555
++    assert response.json["data"]["action"] == "added_to_wishlist"
+ 
+ 
+ @patch("app.strategies.boardgame.resolve_physical_media")
