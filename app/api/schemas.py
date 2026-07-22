@@ -187,8 +187,17 @@ class ScanBarcodeSchema(BaseModel):
     manifestation_id: int | None = None
     format: str | None = None
     collection_status: str | None = "available"
+    policy: str | None = "inventory"
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
+
+    @field_validator("policy")
+    @classmethod
+    def validate_policy(cls, v: str | None) -> str | None:
+        valid_policies = {"inventory", "wishlist", "catalog"}
+        if v is not None and v not in valid_policies:
+            raise ValueError(f"Invalid policy: '{v}'. Must be one of {valid_policies}")
+        return v
 
     @field_validator("lent_to_user_id")
     @classmethod

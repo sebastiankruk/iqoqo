@@ -32,6 +32,7 @@ import { isAudioMedia } from "@/lib/utils";
 interface SuccessCardProps {
   isbn: string;
   meta: IsbnMeta;
+  policy?: "inventory" | "wishlist" | "catalog";
   onDismiss: () => void;
   onScanAnother?: () => void;
   snappedCover?: File | null;
@@ -54,6 +55,7 @@ interface SuccessCardProps {
 export function SuccessCard({
   isbn,
   meta,
+  policy = "inventory",
   onDismiss,
   onScanAnother,
   snappedCover,
@@ -137,20 +139,22 @@ export function SuccessCard({
   if (isAudio) formatDisplay = "Audio Media";
   if (isGame) formatDisplay = "Board Game";
 
-  const handleAdd = async (collectionStatus: "available" | "wish_list") => {
+  const handleAdd = async (collectionStatus: "available" | "wish_list" | "catalog") => {
     if (isMissingID) {
       toast.error("Standard barcode required to add to collection.");
       return;
     }
     setAdding(true);
     try {
+      const payload_collection_status = collectionStatus === "catalog" ? "available" : collectionStatus;
       const res = await apiClient.post<
-        ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number }>
+        ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number; action?: string }>
       >("/scan", {
         barcode: machineIdentifier,
         manifestation_id: meta.manifestation_id,
         format: format,
-        collection_status: collectionStatus,
+        collection_status: payload_collection_status,
+        policy: policy,
       });
 
       const responseData = res.data;
@@ -174,7 +178,13 @@ export function SuccessCard({
           toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        toast.success(`"${title}" added to your ${collectionStatus === "wish_list" ? "Wishlist" : "Library"}!`);
+        if (data.action === "cataloged") {
+          toast.success(`"${title}" added to Catalog!`);
+        } else if (data.action === "added_to_wishlist") {
+          toast.success(`"${title}" added to your Wishlist!`);
+        } else {
+          toast.success(`"${title}" added to your Library!`);
+        }
       }
 
       // Invalidate cached queries BEFORE navigating so the UI has fresh statistics
@@ -335,36 +345,58 @@ export function SuccessCard({
                   </Button>
                 ) : (
                   <>
-                    <Button
-                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                      variant="default"
-                      disabled={adding}
-                      onClick={() => handleAdd("available")}
-                    >
-                      {adding ? (
-                        "Adding..."
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                          Add to Library
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
-                      variant="outline"
-                      disabled={adding}
-                      onClick={() => handleAdd("wish_list")}
-                    >
-                      {adding ? (
-                        "Adding..."
-                      ) : (
-                        <>
-                          <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
-                          Add to Wishlist
-                        </>
-                      )}
-                    </Button>
+                    {policy === "catalog" ? (
+                      <Button
+                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                        variant="default"
+                        disabled={adding}
+                        onClick={() => handleAdd("catalog")}
+                      >
+                        {adding ? "Adding..." : "Add to Catalog"}
+                      </Button>
+                    ) : policy === "wishlist" ? (
+                      <Button
+                        className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                        variant="default"
+                        disabled={adding}
+                        onClick={() => handleAdd("wish_list")}
+                      >
+                        {adding ? "Adding..." : "Add to Wishlist"}
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                          variant="default"
+                          disabled={adding}
+                          onClick={() => handleAdd("available")}
+                        >
+                          {adding ? (
+                            "Adding..."
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
+                              Add to Library
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          className="flex-1 min-w-[140px] h-12 rounded-xl shadow-md border-primary/20 hover:bg-primary/5"
+                          variant="outline"
+                          disabled={adding}
+                          onClick={() => handleAdd("wish_list")}
+                        >
+                          {adding ? (
+                            "Adding..."
+                          ) : (
+                            <>
+                              <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
+                              Add to Wishlist
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
 
                     <Button
                       variant="outline"

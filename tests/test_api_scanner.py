@@ -484,6 +484,70 @@ def test_scan_barcode_wishlist_success(mock_ingest_isbn, client, normal_user_hea
     assert response.json["data"]["item_id"] is None
     assert response.json["data"]["intent_id"] is not None
     assert response.json["data"]["manifestation_id"] == 555
+    assert response.json["data"]["action"] == "added_to_wishlist"
+
+
+@patch("app.api.scanner.IngestService.ingest_from_isbn")
+def test_scan_barcode_policy_catalog_success(mock_ingest_isbn, client, normal_user_headers, app):
+    """Test scan endpoint correctly respects policy='catalog' and returns manifestation without user linkage."""
+    mock_work = MagicMock()
+    mock_work.id = 123
+    mock_work.title = "Some Book"
+    mock_work.meta = {"authors": ["Some Author"]}
+
+    mock_expression = MagicMock()
+    mock_expression.content_type = "text"
+    mock_expression.work = mock_work
+
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 555
+    mock_manifestation.title = "Some Book"
+    mock_manifestation.author = "Some Author"
+    mock_manifestation.cover_url = "http://cover.jpg"
+    mock_manifestation.meta = {"title": "Some Book", "authors": ["Some Author"]}
+    mock_manifestation.expression = mock_expression
+    mock_ingest_isbn.return_value = mock_manifestation
+
+    payload = {"barcode": "9780553380163", "format": "book", "policy": "catalog"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["item_id"] is None
+    assert response.json["data"]["intent_id"] is None
+    assert response.json["data"]["manifestation_id"] == 555
+    assert response.json["data"]["action"] == "cataloged"
+
+
+@patch("app.api.scanner.IngestService.ingest_from_isbn")
+def test_scan_barcode_policy_wishlist_success(mock_ingest_isbn, client, normal_user_headers, app):
+    """Test scan endpoint correctly adds to wishlist using policy='wishlist'."""
+    mock_work = MagicMock()
+    mock_work.id = 123
+    mock_work.title = "Some Book"
+    mock_work.meta = {"authors": ["Some Author"]}
+
+    mock_expression = MagicMock()
+    mock_expression.content_type = "text"
+    mock_expression.work = mock_work
+
+    mock_manifestation = MagicMock()
+    mock_manifestation.id = 555
+    mock_manifestation.title = "Some Book"
+    mock_manifestation.author = "Some Author"
+    mock_manifestation.cover_url = "http://cover.jpg"
+    mock_manifestation.meta = {"title": "Some Book", "authors": ["Some Author"]}
+    mock_manifestation.expression = mock_expression
+    mock_ingest_isbn.return_value = mock_manifestation
+
+    # We send collection_status available to ensure policy overrides it or triggers wishlist logic
+    payload = {"barcode": "9780553380163", "format": "book", "collection_status": "available", "policy": "wishlist"}
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["data"]["item_id"] is None
+    assert response.json["data"]["intent_id"] is not None
+    assert response.json["data"]["manifestation_id"] == 555
+    assert response.json["data"]["action"] == "added_to_wishlist"
 
 
 @patch("app.strategies.boardgame.resolve_physical_media")

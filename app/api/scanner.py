@@ -514,6 +514,7 @@ def _scan_to_wishlist(
                         else manifestation.cover_url
                     ),
                     "is_new_manifestation": is_new_manifestation,
+                    "action": "added_to_wishlist",
                 },
                 "error": None,
             }
@@ -580,6 +581,7 @@ def _scan_to_library(
                         else manifestation.cover_url
                     ),
                     "is_new_manifestation": is_new_manifestation,
+                    "action": "added_to_inventory",
                 },
                 "error": None,
             }
@@ -603,6 +605,7 @@ def scan_barcode() -> Response | tuple[Response, int]:
     manifestation_id: int | None = payload.manifestation_id
     format_hint: str | None = payload.format
     collection_status: str | None = payload.collection_status
+    policy: str | None = payload.policy
     assert collection_status is not None
 
     is_new_manifestation = False
@@ -650,7 +653,7 @@ def scan_barcode() -> Response | tuple[Response, int]:
 
     content_type = manifestation.expression.content_type if manifestation.expression else "text"
     statuses = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))
-    if collection_status == "wish_list":
+    if policy == "wishlist" or collection_status == "wish_list":
         default_progress = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
     else:
         default_progress = statuses[0]
@@ -660,7 +663,47 @@ def scan_barcode() -> Response | tuple[Response, int]:
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     user_id = getattr(g, "user_id", None)
-    if collection_status == "wish_list":
+
+    if policy == "catalog":
+        _record_scan_telemetry(
+            barcode or manifestation.title,
+            format_hint,
+            provider=format_hint or "ingest",
+            status="success",
+            manifestation_id=manifestation.id,
+        )
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "message": "Item successfully added to catalog",
+                        "identifier_label": "ISBN" if (manifestation.meta.get("isbn") or "").strip() else "Barcode",
+                        "identifier_value": manifestation.meta.get("isbn") or manifestation.meta.get("barcode"),
+                        "item_id": None,
+                        "intent_id": None,
+                        "manifestation_id": manifestation.id,
+                        "title": (
+                            manifestation.meta.get("title") or manifestation.meta.get("Title")
+                            if manifestation.meta
+                            else manifestation.title
+                        ),
+                        "author": _get_manifestation_author(manifestation),
+                        "cover_url": (
+                            manifestation.meta.get("cover_url") or manifestation.meta.get("thumb")
+                            if manifestation.meta
+                            else manifestation.cover_url
+                        ),
+                        "is_new_manifestation": is_new_manifestation,
+                        "action": "cataloged",
+                    },
+                    "error": None,
+                }
+            ),
+            201,
+        )
+
+    if policy == "wishlist" or collection_status == "wish_list":
         return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
 
     return _scan_to_library(

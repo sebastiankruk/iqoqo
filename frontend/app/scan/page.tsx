@@ -20,7 +20,7 @@
  */
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -51,10 +51,27 @@ export default function ScanPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
   const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
+  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">("inventory");
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const savedFormat = localStorage.getItem("iqoqo_scanner_media_type");
+    if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
+
+    const savedPolicy = localStorage.getItem("iqoqo_scanner_policy");
+    if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
+  }, [activeFormat]);
+
+  useEffect(() => {
+    localStorage.setItem("iqoqo_scanner_policy", policy);
+  }, [policy]);
 
   const addManualMutation = useAddManualItem();
   const router = useRouter();
@@ -174,6 +191,8 @@ export default function ScanPage() {
         <TopBar
           currentFormat={activeFormat}
           setFormat={f => setActiveFormat(f as ScanFormat)}
+          currentPolicy={policy}
+          setPolicy={setPolicy}
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
@@ -201,6 +220,7 @@ export default function ScanPage() {
           <SuccessCard
             isbn={result.isbn}
             meta={result.meta}
+            policy={policy}
             onDismiss={handleDismiss}
             snappedCover={snappedCover}
             onShowManualForm={handleShowManualForm}
