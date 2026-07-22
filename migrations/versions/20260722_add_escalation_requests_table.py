@@ -16,7 +16,7 @@
 """Add escalation requests table.
 
 Revision ID: 20260722_add_escalation_requests
-Revises: 20260709_defer_tsvector
+Revises: 0c3eaee0322b
 Create Date: 2026-07-22 12:00:00.000000
 
 """
@@ -26,7 +26,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260722_add_escalation_requests"
-down_revision = "20260709_defer_tsvector"
+down_revision = "0c3eaee0322b"
 branch_labels = None
 depends_on = None
 
