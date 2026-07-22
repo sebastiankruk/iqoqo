@@ -26,6 +26,8 @@ describe("PermissionName Enum", () => {
   it("should have metadata permissions", () => {
     expect(PermissionName.READ_METADATA).toBe("read:metadata");
     expect(PermissionName.WRITE_METADATA).toBe("write:metadata");
+    expect(PermissionName.ESCALATE_REQUEST).toBe("escalate:request");
+    expect(PermissionName.ESCALATE_RESOLVE).toBe("escalate:resolve");
   });
 
   it("should have new cover permissions", () => {

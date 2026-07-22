@@ -41,6 +41,7 @@ import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
+import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -445,6 +446,10 @@ export function ItemActions({ item }: { item: Item }) {
             )}
           </div>
         )}
+
+        <div className="mt-2">
+          <EscalationTrigger level="item" targetId={item.id} />
+        </div>
       </div>
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

@@ -25,6 +25,8 @@ class PermissionName(StrEnum):
     DELETE_ITEM = "delete:item"
     DELETE_MANIFESTATION = "delete:manifestation"
     EDIT_COVER = "edit:cover"
+    ESCALATE_REQUEST = "escalate:request"
+    ESCALATE_RESOLVE = "escalate:resolve"
     LLM_GENERATE_CLOUD = "llm_generate:cloud"
     LLM_GENERATE_COVER = "llm_generate:cover"
     LLM_GENERATE_METADATA = "llm_generate:metadata"

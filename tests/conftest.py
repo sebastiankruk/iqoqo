@@ -143,6 +143,8 @@ def admin_headers(app):
             "llm_generate:cover",
             "llm_generate:cloud",
             "edit:cover",
+            "escalate:request",
+            "escalate:resolve",
         ]
         perms = [get_or_create_perm(n) for n in perm_names]
         db.session.flush()
