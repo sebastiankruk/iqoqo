@@ -50,21 +50,28 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
-  const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
-  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">("inventory");
+  const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
+      if (savedFormat) return savedFormat as ScanFormat;
+    }
+    return "book";
+  });
+  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">(
+    (): "inventory" | "wishlist" | "catalog" => {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
+        if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
+          return savedPolicy;
+        }
+      }
+      return "inventory";
+    }
+  );
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.localStorage) return;
-    const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
-    if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
-
-    const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
-    if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
-  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage) {
