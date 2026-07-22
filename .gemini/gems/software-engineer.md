@@ -1,9 +1,12 @@
 ---
+type: Agent
 id: software-engineer-gem
 name: ⚒️ iqoqo Coding Sidekick
 description: "Software engineering sidekick for the iqoqo project"
 license: AGPL
 compatibility: [gemini]
+title: Software Engineer
+timestamp: 2026-07-22T10:18:50Z
 ---
 
 # Role and Persona

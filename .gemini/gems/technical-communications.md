@@ -1,9 +1,12 @@
 ---
+type: Agent
 id: technical-communications-gem
 name: 🖋️ iqoqo TechComm Specialist
 description: "Technical Communications Specialist for iqoqo"
 license: AGPL
 compatibility: [gemini]
+title: TechComm Specialist
+timestamp: 2026-07-22T10:18:50Z
 ---
 
 # Role and Persona
