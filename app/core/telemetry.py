@@ -29,6 +29,7 @@ traces, regardless of the OpenObserve / OTel Collector retention policy.
 
 import logging
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -112,14 +113,54 @@ def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
         New dictionary with sensitive header values (like Authorization, keys, secrets)
         replaced with '***REDACTED***'.
     """
+    sensitive_keywords = {"authorization", "key", "token", "secret", "cookie", "session"}
     sanitized = {}
     for key, value in headers.items():
         key_lower = key.lower()
-        if "authorization" in key_lower or "key" in key_lower or "token" in key_lower or "secret" in key_lower:
+        if any(kw in key_lower for kw in sensitive_keywords):
             sanitized[key] = "***REDACTED***"
         else:
             sanitized[key] = str(value)
     return sanitized
+
+
+def sanitize_url(url: str | None) -> str | None:
+    """Sanitize URL query parameters by redacting sensitive parameter values.
+
+    Parameters
+    ----------
+    url:
+        The URL string to sanitize (or None).
+
+    Returns
+    -------
+    str | None
+        Sanitized URL string with sensitive query parameter values replaced with
+        '***REDACTED***', or None if input is None or empty.
+        Returns '***REDACTED_URL_PARSE_ERROR***' if parsing fails unexpectedly.
+    """
+    if not url:
+        return url
+
+    sensitive_keywords = {"key", "token", "secret", "auth", "signature", "credential"}
+    try:
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        sanitized_params = []
+        for key, val in params:
+            key_lower = key.lower()
+            if any(kw in key_lower for kw in sensitive_keywords):
+                sanitized_params.append((key, "***REDACTED***"))
+            else:
+                sanitized_params.append((key, val))
+        new_query = urlencode(sanitized_params)
+        new_parsed = parsed._replace(query=new_query)
+        return urlunparse(new_parsed)
+    except (TypeError, ValueError, AttributeError):
+        logger.debug("sanitize_url: failed to parse URL", exc_info=True)
+        return "***REDACTED_URL_PARSE_ERROR***"
 
 
 def record_outbound_telemetry(service_name: str, headers: dict[str, str], url: str | None = None) -> dict[str, str]:
@@ -140,6 +181,7 @@ def record_outbound_telemetry(service_name: str, headers: dict[str, str], url: s
         The sanitized headers dictionary.
     """
     sanitized = sanitize_headers(headers)
+    sanitized_url = sanitize_url(url) if url else None
 
     # 1. OpenTelemetry Span Enrichment
     try:
@@ -150,16 +192,16 @@ def record_outbound_telemetry(service_name: str, headers: dict[str, str], url: s
             for key, value in sanitized.items():
                 attr_name = f"http.request.header.{key.lower().replace('-', '_')}"
                 span.set_attribute(attr_name, value)  # type: ignore[union-attr]
-            if url:
-                span.set_attribute("http.url", url)  # type: ignore[union-attr]
+            if sanitized_url:
+                span.set_attribute("http.url", sanitized_url)  # type: ignore[union-attr]
             span.set_attribute("peer.service", service_name)  # type: ignore[union-attr]
     except (ImportError, AttributeError, KeyError, TypeError, ValueError, RuntimeError) as exc:
         logger.debug("Failed to set span attributes in record_outbound_telemetry: %s", exc)
 
     # 2. Structured Application Log
     log_extra: dict[str, Any] = {f"http.request.header.{k.lower().replace('-', '_')}": v for k, v in sanitized.items()}
-    if url:
-        log_extra["http.url"] = url
+    if sanitized_url:
+        log_extra["http.url"] = sanitized_url
     log_extra["peer.service"] = service_name
 
     logger.info("Outbound %s API request", service_name, extra=log_extra)

@@ -23,6 +23,7 @@ from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import admin_required, optional_auth, require_auth
+from app.api.filters import parse_csv_param
 from app.config import Config
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
@@ -139,16 +140,16 @@ def get_faceted_stats():
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
 
-    category_list = [c.strip() for c in category_str.split(",") if c.strip()] if category_str else None
-    fmt_list_raw = [f.strip() for f in fmt_str.split(",") if f.strip()] if fmt_str else None
+    category_list = parse_csv_param(category_str)
+    fmt_list_raw = parse_csv_param(fmt_str)
     from app.core.format_normalizer import expand_format_filter
 
     fmt_list = expand_format_filter(fmt_list_raw)
-    tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
-    collections_list = [c.strip() for c in collections_str.split(",") if c.strip()] if collections_str else None
-    genres_list = [g.strip() for g in genres_str.split(",") if g.strip()] if genres_str else None
-    publishers_list = [p.strip() for p in publishers_str.split(",") if p.strip()] if publishers_str else None
-    statuses_list = [s.strip() for s in statuses_str.split(",") if s.strip()] if statuses_str else None
+    tags_list = parse_csv_param(tags_str)
+    collections_list = parse_csv_param(collections_str)
+    genres_list = parse_csv_param(genres_str)
+    publishers_list = parse_csv_param(publishers_str)
+    statuses_list = parse_csv_param(statuses_str)
 
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,

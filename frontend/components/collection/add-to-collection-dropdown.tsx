@@ -16,7 +16,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus } from "lucide-react";
+import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useUserCollections } from "@/lib/api/hooks";
@@ -133,7 +133,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
                 onClick={() => router.push(`/item/${wishlistItemId}`)}
                 className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
               >
-                <BookmarkPlus className="h-4 w-4 shrink-0 text-primary" />
+                <Eye className="h-4 w-4 shrink-0 text-primary" />
                 <span>View Wishlist Item</span>
               </button>
             ) : (

@@ -21,6 +21,25 @@ from app.db import db
 from app.db.models import Work
 
 
+def parse_csv_param(value: str | None) -> list[str] | None:
+    """Parse comma-separated string parameter into a list of non-empty stripped strings.
+
+    Parameters
+    ----------
+    value:
+        Optional comma-separated string parameter.
+
+    Returns
+    -------
+    list[str] | None
+        List of non-empty stripped string tokens, or None if input is empty/None/whitespace only.
+    """
+    if not value:
+        return None
+    tokens = [t.strip() for t in value.split(",") if t.strip()]
+    return tokens if tokens else None
+
+
 def apply_genre_filter(query, genres_list):
     """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively.
 

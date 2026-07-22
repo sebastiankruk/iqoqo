@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter, apply_statuses_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -43,8 +43,8 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
-    category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
-    format_list_raw = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    category_list = parse_csv_param(category_filter)
+    format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
 
     format_list = expand_format_filter(format_list_raw)
@@ -56,11 +56,11 @@ def get_manifestations() -> tuple[Response, int]:
     publishers_filter = request.args.get("publishers")
     statuses_filter = request.args.get("statuses")
 
-    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
-    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
-    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
-    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
-    statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+    tags_list = parse_csv_param(tags_filter)
+    collections_list = parse_csv_param(collections_filter)
+    genres_list = parse_csv_param(genres_filter)
+    publishers_list = parse_csv_param(publishers_filter)
+    statuses_list = parse_csv_param(statuses_filter)
 
     try:
         page = int(page_param)

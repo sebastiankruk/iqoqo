@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.11] - 2026-07-21
+## [0.7.11] - 2026-07-22
 
 ### Added
 
@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Telemetry Query & Header Redaction**: Extended telemetry sanitization with `sanitize_url()` in `app/core/telemetry.py` to scrub credentials (`key`, `token`, `secret`, `auth`, `signature`, `credential`) from outbound HTTP URLs before logging and OpenTelemetry span attribution. Updated `sanitize_headers` to use an expanded set of sensitive header keywords (`authorization`, `key`, `token`, `secret`, `cookie`, `session`).
+- **CSV Query Parameter Parsing Helper**: Replaced duplicated inline `.split(",")` parameter parsing across `app/api/items.py`, `app/api/manifestations.py`, and `app/api/system.py` with `parse_csv_param()` in `app/api/filters.py` for consistent whitespace stripping and empty-string filtering.
+- **Frontend UX Polish**: Cleaned up scrollbars on collection filter chip rows, restyled the floating mobile filter pill with backdrop blur and border effects, and updated the "View Wishlist Item" dropdown button icon to `Eye`.
 - **Publisher Facet Filter Fix**: Updated `app/api/manifestations.py`, `app/api/items.py`, `app/api/works.py`, and `app/core/search_service.py` to use a `db.or_` condition across the relational `publisher` column and unstructured JSON metadata fields (`meta['Publisher']`, `meta['publisher']`, and conditionally `meta['label']` for music), ensuring publisher filters return results regardless of where the publisher data is stored. Updated taxonomy extraction and faceted stats counting to use `func.coalesce` over these fields so unstructured publishers appear in the sidebar and reflect accurate item counts.
 - **Unauthenticated Protected Route Redirection**: Fixed an issue where unauthenticated access to protected routes (wishlists, personal collections, scan, profile, admin) returned a 404 error or failed silently. Route requests without session authentication are now caught at the Next.js routing proxy (`frontend/proxy.ts`) and redirected to `/login` with full URL and query parameter state preserved via `callbackUrl`. Upon successful login, users are redirected back to their intended destination.
 - **API 401 Interceptor**: Updated `apiClient` response interceptor to catch HTTP 401 Unauthorized responses in browser contexts and trigger login redirection with `callbackUrl`.

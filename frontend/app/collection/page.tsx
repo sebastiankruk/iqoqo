@@ -1001,13 +1001,13 @@ function CollectionContent() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] lg:hidden">
           <button
             onClick={() => setMobileFiltersOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-foreground text-background px-5 py-2.5 shadow-lg font-medium text-sm transition-transform active:scale-95"
+            className="flex items-center gap-2 rounded-full bg-black/80 backdrop-blur-md border border-white/10 text-zinc-300 px-5 py-2.5 shadow-2xl hover:bg-black hover:text-white font-medium text-sm transition-transform active:scale-95"
             aria-label={t("filters")}
           >
             <SlidersHorizontal className="h-4 w-4" />
             <span>{t("filters")}</span>
             {activeFilters.length > 0 && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground ml-1">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-black ml-1">
                 {activeFilters.length}
               </span>
             )}

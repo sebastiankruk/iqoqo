@@ -133,7 +133,7 @@ export function FilterBar({
   resultCount,
 }: FilterBarProps) {
   return (
-    <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap pb-1 custom-scrollbar">
+    <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <p className="mr-1 text-sm text-muted-foreground shrink-0" data-testid="result-count">
         <span className="font-semibold text-foreground">{resultCount}</span> items
       </p>

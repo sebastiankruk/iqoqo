@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
-from app.api.filters import apply_genre_filter, apply_statuses_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.item_access import require_item_access, verify_item_ownership
@@ -93,7 +93,7 @@ def get_virtual_items(
 
     is_wish_list_requested = True
     if statuses_filter:
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        statuses_list = parse_csv_param(statuses_filter) or []
         is_wish_list_requested = any(
             s in statuses_list for s in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play")
         )
@@ -110,7 +110,7 @@ def get_virtual_items(
 
     intent_query = db.session.query(UserWorkIntent).join(Work, UserWorkIntent.work_id == Work.id)
     if statuses_filter:
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()]
+        statuses_list = parse_csv_param(statuses_filter) or []
         intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
         if intent_statuses:
             # Filter to specific intent progress statuses (e.g. "want_to_read")
@@ -265,8 +265,8 @@ def get_items():
     statuses_filter = request.args.get("statuses", None)
     category_filter = request.args.get("category", None)
     format_filter = request.args.get("format", None)
-    category_list = [c.strip() for c in category_filter.split(",") if c.strip()] if category_filter else None
-    format_list_raw = [f.strip() for f in format_filter.split(",") if f.strip()] if format_filter else None
+    category_list = parse_csv_param(category_filter)
+    format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
 
     format_list = expand_format_filter(format_list_raw)
@@ -283,10 +283,10 @@ def get_items():
     genres_filter = request.args.get("genres", None)
     publishers_filter = request.args.get("publishers", None)
 
-    tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
-    collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
-    genres_list = [gen.strip() for gen in genres_filter.split(",") if gen.strip()] if genres_filter else None
-    publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
+    tags_list = parse_csv_param(tags_filter)
+    collections_list = parse_csv_param(collections_filter)
+    genres_list = parse_csv_param(genres_filter)
+    publishers_list = parse_csv_param(publishers_filter)
 
     try:
         page = int(page_param)
@@ -307,7 +307,7 @@ def get_items():
     if q:
         from app.core.search_service import SearchService
 
-        statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
+        statuses_list = parse_csv_param(statuses_filter)
         _, results = SearchService.search_items(
             q,
             user_id,
@@ -445,7 +445,7 @@ def get_items():
             query = query.filter(db.or_(*pubs_conditions))
 
         if statuses_filter:
-            statuses_list = [s.strip() for s in statuses_filter.split(",")]
+            statuses_list = parse_csv_param(statuses_filter)
             query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
 
         physical_items = query.all()
