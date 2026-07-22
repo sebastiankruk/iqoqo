@@ -284,5 +284,31 @@
     "notFound": "Item not found in this collection.",
     "profileTitle": "{name}'s Collection",
     "hiddenItemNote": "Some items may be hidden due to privacy settings."
+  },
+  "CoverProvenance": {
+    "sourcePrefix": "Source",
+    "user_photo": "User photo",
+    "api_openlibrary": "OpenLibrary",
+    "api_google_books": "Google Books",
+    "api_allegro": "Allegro",
+    "api_direct_download": "Direct download",
+    "api_musicbrainz": "MusicBrainz",
+    "api_tmdb": "TMDb",
+    "api_igdb": "IGDB",
+    "ai_generated": "AI-generated",
+    "fallback_pil": "Placeholder",
+    "unknown": "Unknown"
+  },
+  "CollectionInsights": {
+    "title": "Collector Insights",
+    "subtitle": "Temporal acquisition patterns and collection breakdown",
+    "velocityTitle": "Acquisition Velocity",
+    "velocityDesc": "Items cataloged per month over the past 12 months",
+    "distributionTitle": "Collection Distribution",
+    "distributionDesc": "Breakdown by content type and physical format",
+    "byType": "By Content Type",
+    "byFormat": "By Format",
+    "emptyState": "No collection items cataloged yet.",
+    "itemsCount": "{count} items"
   }
 }

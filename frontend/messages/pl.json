@@ -284,5 +284,31 @@
     "notFound": "Brak pozycji w tej kolekcji.",
     "profileTitle": "Kolekcja użytkownika {name}",
     "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności."
+  },
+  "CoverProvenance": {
+    "sourcePrefix": "Źródło",
+    "user_photo": "Zdjęcie użytkownika",
+    "api_openlibrary": "OpenLibrary",
+    "api_google_books": "Google Books",
+    "api_allegro": "Allegro",
+    "api_direct_download": "Pobranie bezpośrednie",
+    "api_musicbrainz": "MusicBrainz",
+    "api_tmdb": "TMDb",
+    "api_igdb": "IGDB",
+    "ai_generated": "Wygenerowane przez AI",
+    "fallback_pil": "Miejsce na okładkę",
+    "unknown": "Nieznane"
+  },
+  "CollectionInsights": {
+    "title": "Analiza kolekcji",
+    "subtitle": "Temporalne wzorce pozyskiwania i rozkład kolekcji",
+    "velocityTitle": "Tempo dodawania pozycji",
+    "velocityDesc": "Liczba pozycji skatalogowanych miesięcznie w ciągu ostatnich 12 miesięcy",
+    "distributionTitle": "Rozkład kolekcji",
+    "distributionDesc": "Podział według typu zawartości i formatu fizycznego",
+    "byType": "Według typu zawartości",
+    "byFormat": "Według formatu",
+    "emptyState": "Brak skatalogowanych pozycji w kolekcji.",
+    "itemsCount": "{count} pozycji"
   }
 }
