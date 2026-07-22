@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
 
@@ -57,6 +57,27 @@ vi.mock("@/components/scanner/bottom-sheet", () => ({
 vi.mock("@/components/scanner/success-card", () => ({ SuccessCard: () => <div data-testid="success-card" /> }));
 
 describe("ScanPage", () => {
+  beforeEach(() => {
+    let store: Record<string, string> = {};
+    const mockLocalStorage = {
+      getItem: (key: string) => store[key] || null,
+      setItem: (key: string, value: string) => {
+        store[key] = value.toString();
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        store = {};
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      value: mockLocalStorage,
+      writable: true,
+      configurable: true,
+    });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -129,7 +150,7 @@ describe("ScanPage", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
-    const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
+    const setItemSpy = vi.spyOn(window.localStorage, "setItem");
 
     render(<ScanPage />);
 

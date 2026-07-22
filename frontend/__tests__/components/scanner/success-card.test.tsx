@@ -136,7 +136,9 @@ describe("SuccessCard", () => {
   });
 
   it("calls apiClient.post to /scan and shows success toast when 'Add to Wishlist' succeeds", async () => {
-    mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 101, manifestation_id: 102, action: "added_to_wishlist" } } });
+    mockApiPost.mockResolvedValueOnce({
+      data: { success: true, data: { item_id: 101, manifestation_id: 102, action: "added_to_wishlist" } },
+    });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="wishlist" onDismiss={vi.fn()} />);
 
     // Explicitly clear mock to avoid interference from earlier renders
