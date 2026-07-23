@@ -48,7 +48,7 @@ export async function createEscalation(
     `/escalations/${level}/${targetId}`,
     data
   );
-  return res.data;
+  return res.data.data;
 }
 
 /**
@@ -56,9 +56,8 @@ export async function createEscalation(
  *
  * @returns Array of user's escalation requests.
  */
-export async function getMyEscalations() {
-  const res = await apiFetch<{ success: boolean; data: EscalationRequest[] }>("/escalations/mine");
-  return res.data;
+export async function getMyEscalations(): Promise<EscalationRequest[]> {
+  return apiFetch<EscalationRequest[]>("/escalations/mine");
 }
 
 /**
@@ -66,9 +65,8 @@ export async function getMyEscalations() {
  *
  * @returns Array of pending escalation requests.
  */
-export async function getEscalationQueue() {
-  const res = await apiFetch<{ success: boolean; data: EscalationRequest[] }>("/escalations/queue");
-  return res.data;
+export async function getEscalationQueue(): Promise<EscalationRequest[]> {
+  return apiFetch<EscalationRequest[]>("/escalations/queue");
 }
 
 /**
@@ -91,7 +89,7 @@ export async function resolveEscalation(
     `/escalations/${escalationId}`,
     data
   );
-  return res.data;
+  return res.data.data;
 }
 
 /**
@@ -103,10 +101,7 @@ export async function resolveEscalation(
 export function useMyEscalations(enabled = true) {
   return useQuery<EscalationRequest[]>({
     queryKey: escalationQueryKeys.mine,
-    queryFn: async () => {
-      const res = await apiFetch<{ success: boolean; data: EscalationRequest[] }>("/escalations/mine");
-      return res.data;
-    },
+    queryFn: () => getMyEscalations(),
     enabled,
     staleTime: 10_000,
   });
@@ -121,10 +116,7 @@ export function useMyEscalations(enabled = true) {
 export function useEscalationQueue(enabled = true) {
   return useQuery<EscalationRequest[]>({
     queryKey: escalationQueryKeys.queue,
-    queryFn: async () => {
-      const res = await apiFetch<{ success: boolean; data: EscalationRequest[] }>("/escalations/queue");
-      return res.data;
-    },
+    queryFn: () => getEscalationQueue(),
     enabled,
     staleTime: 10_000,
   });

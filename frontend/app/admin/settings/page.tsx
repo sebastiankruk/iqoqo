@@ -39,6 +39,7 @@ import {
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
+import { MyEscalations } from "@/components/escalation/my-escalations";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
@@ -435,6 +436,8 @@ function SettingsContent(): React.JSX.Element {
                   </button>
                 </div>
               </div>
+
+              <MyEscalations />
             </div>
           )}
 

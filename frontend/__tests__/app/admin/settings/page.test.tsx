@@ -44,6 +44,10 @@ vi.mock("@/components/admin/user-management", () => ({
   UserManagement: () => <div data-testid="user-management" />,
 }));
 
+vi.mock("@/components/escalation/my-escalations", () => ({
+  MyEscalations: () => <div data-testid="my-escalations">My Escalations</div>,
+}));
+
 describe("SettingsHubPage", () => {
   const mockPush = vi.fn();
 
