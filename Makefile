@@ -462,7 +462,7 @@ db-stats: .venv/bin/activate
 sync-permissions: .venv/bin/activate
 	@echo "Synchronizing permissions (Code & Database)..."
 	@PYTHONPATH=. .venv/bin/python scripts/sync_permissions.py
-	@PYTHONPATH=. .venv/bin/python scripts/init_auth.py
+	@PYTHONPATH=. .venv/bin/python scripts/sync_db_permissions.py
 	@echo "Permissions synchronized successfully."
 
 verify-perms: .venv/bin/activate

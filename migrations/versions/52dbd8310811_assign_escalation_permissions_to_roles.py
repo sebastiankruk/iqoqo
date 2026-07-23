@@ -34,6 +34,17 @@ depends_on = None
 def upgrade():
     conn = op.get_bind()
 
+    # Ensure escalate permissions exist in auth.permissions table
+    conn.execute(
+        sa.text("""
+            INSERT INTO auth.permissions (name, description)
+            VALUES 
+              ('escalate:request', 'Submit custodian metadata escalation requests.'),
+              ('escalate:resolve', 'Review and resolve custodian metadata escalation requests.')
+            ON CONFLICT (name) DO NOTHING
+        """)
+    )
+
     # Insert escalate:request permission for the user role
     conn.execute(
         sa.text("""
