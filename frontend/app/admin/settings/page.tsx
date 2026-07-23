@@ -186,7 +186,7 @@ function SettingsContent(): React.JSX.Element {
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
-  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
 
   const hasCustodianAccess = canViewMetadata || canEditCover;

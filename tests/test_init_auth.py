@@ -40,9 +40,11 @@ def test_init_auth_roles_permissions(app):
         contributor_perms = {p.name for p in contributor_role.permissions}
 
         # Determine expected contributor permissions dynamically based on the wildcard rules
-        # Contributor gets: all :metadata, edit:cover (full editor + upload), llm_generate:*, delete:item
+        # Contributor gets: all :metadata, edit:cover (full editor + upload), llm_generate:*, delete:item, escalate:resolve
         expected_perms = {
-            p for p in all_perms if (p.endswith(":metadata") or p == "edit:cover" or p.startswith("llm_generate:") or p == "delete:item")
+            p
+            for p in all_perms
+            if (p.endswith(":metadata") or p == "edit:cover" or p.startswith("llm_generate:") or p == "delete:item" or p == "escalate:resolve")
         }
 
         missing = expected_perms - contributor_perms
@@ -67,6 +69,7 @@ def test_init_auth_roles_permissions(app):
             "regenerate:cover",
             "llm_generate:metadata",
             "llm_generate:cover",
+            "escalate:request",
         }
 
         missing_user = expected_user_perms - user_perms
