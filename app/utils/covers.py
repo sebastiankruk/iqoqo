@@ -176,16 +176,12 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
             font_author: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36
             )
-            font_cta: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22
-            )
             font_footer: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", 20
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28
             )
         except OSError:
             font_title = ImageFont.load_default()
             font_author = ImageFont.load_default()
-            font_cta = ImageFont.load_default()
             font_footer = ImageFont.load_default()
 
         # 3. Word-wrap the title so it stays within the image margins
@@ -206,21 +202,27 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
 
         # 5. Render author
         if author:
-            author_y = height - 190
+            author_y = height - 150
             draw.text((margin + 2, author_y + 2), author, font=font_author, fill="black")
             draw.text((margin, author_y), author, font=font_author, fill="#E2E8F0")
 
-        # 6. Render call-to-action placeholder text below author line
-        cta_text = "Placeholder — contribute a cover"
-        cta_y = height - 125
-        draw.text((margin + 1, cta_y + 1), cta_text, font=font_cta, fill="black")
-        draw.text((margin, cta_y), cta_text, font=font_cta, fill="#94A3B8")
-
-        # 7. Render subtle "powered by iqoqo" footer
+        # 6. Render decorative line above footer
         footer_text = "powered by iqoqo"
-        footer_y = height - 55
-        draw.text((margin + 1, footer_y + 1), footer_text, font=font_footer, fill="black")
-        draw.text((margin, footer_y), footer_text, font=font_footer, fill="#64748B")
+        footer_y = height - 80
+        line_y = footer_y - 12
+        line_margin = int(width * 0.2)  # 60% centered = 20% margin each side
+        draw.line(
+            [(line_margin, line_y), (width - line_margin, line_y)],
+            fill="#475569",
+            width=1,
+        )
+
+        # 7. Render prominent "powered by iqoqo" footer — centered
+        bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+        text_width = bbox[2] - bbox[0]
+        footer_x = (width - text_width) // 2
+        draw.text((footer_x + 1, footer_y + 1), footer_text, font=font_footer, fill="black")
+        draw.text((footer_x, footer_y), footer_text, font=font_footer, fill="#64748B")
 
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format="JPEG", quality=85)

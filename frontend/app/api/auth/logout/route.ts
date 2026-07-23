@@ -13,7 +13,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 /**
@@ -22,8 +21,7 @@ import { NextResponse } from "next/server";
  * @returns {Promise<NextResponse>} The Next.js response with success message
  */
 export async function POST() {
-  const cookieStore = await cookies();
-  cookieStore.delete("iqoqo_session");
-
-  return NextResponse.json({ success: true, message: "Logged out successfully" });
+  const response = NextResponse.json({ success: true, message: "Logged out successfully" });
+  response.cookies.delete("iqoqo_session");
+  return response;
 }

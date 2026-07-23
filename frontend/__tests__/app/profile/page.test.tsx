@@ -43,6 +43,11 @@ vi.mock("@/lib/api/hooks", () => ({
   useAppConfig: vi.fn(),
 }));
 
+// Mock MyEscalations component to decouple profile page test
+vi.mock("@/components/escalation/my-escalations", () => ({
+  MyEscalations: () => <div data-testid="my-escalations">My Escalations</div>,
+}));
+
 import ProfilePage from "@/app/profile/page";
 import { apiClient, apiFetch } from "@/lib/api/client";
 import { useAppConfig } from "@/lib/api/hooks";
@@ -71,8 +76,12 @@ describe("ProfilePage", () => {
     // Default: federation disabled (federation button won't render)
     vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: false, version: "0.0.7" } } as never);
 
-    // Mock the apiFetch function to return the profile data
-    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
+    // Mock the apiFetch function to return profile data for /profile/ and empty list for /escalations/mine
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === "/profile/") return Promise.resolve(mockProfileData) as never;
+      if (path === "/escalations/mine") return Promise.resolve([]) as never;
+      return Promise.resolve(null) as never;
+    });
   });
 
   it("renders loading state initially, then profile data", async () => {
@@ -91,9 +100,6 @@ describe("ProfilePage", () => {
   it("toggles GDPR consents", async () => {
     // Enable federation so the federation consent button renders
     vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: true, version: "0.0.7" } } as never);
-
-    // Extra apiFetch mock for this test's profile load
-    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
 
     render(<ProfilePage />);
 
@@ -130,7 +136,6 @@ describe("ProfilePage", () => {
 
   it("toggles telemetry consent specifically", async () => {
     vi.mocked(useAppConfig).mockReturnValue({ data: { federation_enabled: false, version: "0.0.7" } } as never);
-    vi.mocked(apiFetch).mockResolvedValueOnce(mockProfileData);
 
     render(<ProfilePage />);
 

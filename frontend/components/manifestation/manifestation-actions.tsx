@@ -102,7 +102,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     hasPermission(PermissionName.REFETCH_METADATA) ||
     hasPermission(PermissionName.REFETCH_COVER) ||
     hasPermission(PermissionName.REGENERATE_COVER) ||
-    (hasPermission(PermissionName.READ_METADATA) && !!manifestation.id) ||
+    (hasPermission(PermissionName.WRITE_METADATA) && !!manifestation.id) ||
     (hasPermission(PermissionName.EDIT_COVER) && !!manifestation.id) ||
     hasPermission(PermissionName.UPLOAD_COVER) ||
     hasPermission(PermissionName.DELETE_MANIFESTATION);
@@ -238,7 +238,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 </Button>
               )}
 
-              {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
+              {hasPermission(PermissionName.WRITE_METADATA) && manifestation.id && (
                 <Button
                   variant="outline"
                   size="sm"

@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Escalation Queue Admin UI**: New `EscalationQueue` component mounted as a tab in the admin content page, visible to users with `escalate:resolve` permission. Custodians can view pending metadata correction requests, accept/reject/mark-duplicate with optional resolution notes.
+
 ### Changed
 
+- **FRBR Search Permission Gating**: The FRBR entity search endpoint now uses `@require_permission(READ_METADATA)` instead of `@admin_required`, allowing custodians (non-admins) with `read:metadata` to search FRBR entities.
+- **Edit FRBR Button Gating**: The "Edit FRBR" button in item and manifestation action panels now requires `write:metadata` permission instead of `read:metadata`.
+- **Fallback Cover Design**: Removed CTA text, enlarged "powered by iqoqo" footer to 28px bold, centered horizontally, added decorative separator line.
+
 ### Fixed
+
+- **Escalation Permission Assignment**: Added Alembic data migration to assign `escalate:request` permission to `user` role and `escalate:resolve` to `custodian` and `admin` roles, fixing the submit-to-retrieve pipeline end-to-end.
 
 ## [0.7.11] - 2026-07-22
 

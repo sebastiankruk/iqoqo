@@ -32,6 +32,7 @@ import {
   Search,
   X,
   Image as ImageIcon,
+  LifeBuoy,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -39,6 +40,7 @@ import { UserManagement } from "@/components/admin/user-management";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
+import { EscalationQueue } from "@/components/admin/escalation-queue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
@@ -142,10 +144,11 @@ function ContentManagementContent(): React.JSX.Element {
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
-  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+  const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
 
-  const hasCustodianAccess = canViewMetadata || canEditCover;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -179,6 +182,14 @@ function ContentManagementContent(): React.JSX.Element {
                     icon={ImageIcon}
                     isActive={effectiveTab === "cover-art"}
                     onClick={() => handleTabChange("cover-art")}
+                  />
+                )}
+                {canViewEscalationQueue && (
+                  <NavItem
+                    label="Escalation Queue"
+                    icon={LifeBuoy}
+                    isActive={effectiveTab === "escalations"}
+                    onClick={() => handleTabChange("escalations")}
                   />
                 )}
               </nav>
@@ -274,6 +285,8 @@ function ContentManagementContent(): React.JSX.Element {
           {effectiveTab === "cover-art" && canEditCover && (
             <CoverArtEditorWrapper preselectedManifestationId={preselectedManifestationId} />
           )}
+
+          {effectiveTab === "escalations" && canViewEscalationQueue && <EscalationQueue />}
         </section>
       </main>
 
