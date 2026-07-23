@@ -82,7 +82,7 @@ def run_init_auth(app: Flask | None = None) -> None:
         # Admin gets everything
         admin_role.permissions = db.session.execute(db.select(Permission)).scalars().all()
 
-        # Contributor gets metadata, llm_generate, delete item, and edit:cover (full editor + upload)
+        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
         all_perms = db.session.execute(db.select(Permission)).scalars().all()
         contributor_perms = [
             p
@@ -91,6 +91,7 @@ def run_init_auth(app: Flask | None = None) -> None:
             or p.name == PermissionName.EDIT_COVER.value
             or p.name.startswith("llm_generate:")
             or p.name == PermissionName.DELETE_ITEM.value
+            or p.name == PermissionName.ESCALATE_RESOLVE.value
         ]
         contributor_role.permissions = contributor_perms
 
@@ -105,6 +106,7 @@ def run_init_auth(app: Flask | None = None) -> None:
             PermissionName.REFETCH_COVER.value,
             PermissionName.LLM_GENERATE_METADATA.value,
             PermissionName.LLM_GENERATE_COVER.value,
+            PermissionName.ESCALATE_REQUEST.value,
         }
         user_role.permissions = [p for p in all_perms if p.name in user_perm_names]
 

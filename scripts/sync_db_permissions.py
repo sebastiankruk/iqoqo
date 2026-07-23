@@ -89,18 +89,19 @@ def run_sync_permissions(app: Flask | None = None) -> None:
             if p not in admin_role.permissions:
                 admin_role.permissions.append(p)
 
-        # Contributor gets metadata, llm_generate, delete item, and edit:cover
+        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
         for p in all_perms:
             is_contrib_perm = (
                 p.name.endswith(":metadata")
                 or p.name == PermissionName.EDIT_COVER.value
                 or p.name.startswith("llm_generate:")
                 or p.name == PermissionName.DELETE_ITEM.value
+                or p.name == PermissionName.ESCALATE_RESOLVE.value
             )
             if is_contrib_perm and p not in contributor_role.permissions:
                 contributor_role.permissions.append(p)
 
-        # Standard User gets permissions to interact with items and basic tasks
+        # Standard User gets permissions to interact with items, basic tasks, and escalate:request
         user_perm_names = {
             PermissionName.WRITE_ITEM.value,
             PermissionName.UPDATE_ITEM.value,
@@ -110,6 +111,7 @@ def run_sync_permissions(app: Flask | None = None) -> None:
             PermissionName.REGENERATE_COVER.value,
             PermissionName.LLM_GENERATE_METADATA.value,
             PermissionName.LLM_GENERATE_COVER.value,
+            PermissionName.ESCALATE_REQUEST.value,
         }
         for p in all_perms:
             if p.name in user_perm_names and p not in user_role.permissions:

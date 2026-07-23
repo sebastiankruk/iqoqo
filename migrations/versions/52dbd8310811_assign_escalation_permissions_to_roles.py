@@ -57,13 +57,13 @@ def upgrade():
         """)
     )
 
-    # Insert escalate:resolve permission for the custodian role
+    # Insert escalate:resolve permission for the contributor and custodian roles
     conn.execute(
         sa.text("""
             INSERT INTO auth.role_permissions (role_id, permission_id)
             SELECT r.id, p.id
             FROM auth.roles r, auth.permissions p
-            WHERE r.name = 'custodian'
+            WHERE r.name IN ('contributor', 'custodian')
               AND p.name = 'escalate:resolve'
             ON CONFLICT (role_id, permission_id) DO NOTHING
         """)
@@ -89,16 +89,16 @@ def downgrade():
     conn.execute(
         sa.text("""
             DELETE FROM auth.role_permissions
-            WHERE role_id = (SELECT id FROM auth.roles WHERE name = 'user')
+            WHERE role_id IN (SELECT id FROM auth.roles WHERE name IN ('user', 'member'))
               AND permission_id = (SELECT id FROM auth.permissions WHERE name = 'escalate:request')
         """)
     )
 
-    # Remove escalate:resolve from custodian role
+    # Remove escalate:resolve from contributor and custodian roles
     conn.execute(
         sa.text("""
             DELETE FROM auth.role_permissions
-            WHERE role_id = (SELECT id FROM auth.roles WHERE name = 'custodian')
+            WHERE role_id IN (SELECT id FROM auth.roles WHERE name IN ('contributor', 'custodian'))
               AND permission_id = (SELECT id FROM auth.permissions WHERE name = 'escalate:resolve')
         """)
     )
