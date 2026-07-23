@@ -59,9 +59,11 @@ export default function ScanPage() {
 
   useEffect(() => {
     const savedFormat = localStorage.getItem("iqoqo_scanner_media_type");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
 
     const savedPolicy = localStorage.getItem("iqoqo_scanner_policy");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
   }, []);
 

@@ -55,30 +55,38 @@ def get_gap_query(gap: str, content_type: str | None = None):
     if content_type:
         q = q.filter(Expression.content_type == content_type)
 
+    is_sqlite = db.engine.dialect.name == "sqlite"
+
+    def json_extract(table, key):
+        if is_sqlite:
+            return f"JSON_EXTRACT({table}.meta, '$.{key}')"
+        return f"{table}.meta->>'{key}'"
+
     if gap == "format":
-        # manifestation.meta->>'format' IS NULL
-        q = q.filter(text("manifestations.meta->>'format' IS NULL"))
+        expr = json_extract("manifestations", "format")
+        q = q.filter(text(f"{expr} IS NULL"))
     elif gap == "publisher":
-        # publisher IS NULL AND meta->>'publisher' IS NULL
+        expr = json_extract("manifestations", "publisher")
         q = q.filter(
             and_(
                 or_(Manifestation.publisher.is_(None), Manifestation.publisher == ""),
-                text("manifestations.meta->>'publisher' IS NULL"),
+                text(f"{expr} IS NULL"),
             )
         )
     elif gap == "genres":
-        # work.meta->>'genres' IS NULL/empty AND work.meta->>'categories' IS NULL/empty
+        g_expr = json_extract("works", "genres")
+        c_expr = json_extract("works", "categories")
         q = q.filter(
             and_(
                 or_(
-                    text("works.meta->>'genres' IS NULL"),
-                    text("works.meta->>'genres' = '[]'"),
-                    text("works.meta->>'genres' = ''"),
+                    text(f"{g_expr} IS NULL"),
+                    text(f"{g_expr} = '[]'"),
+                    text(f"{g_expr} = ''"),
                 ),
                 or_(
-                    text("works.meta->>'categories' IS NULL"),
-                    text("works.meta->>'categories' = '[]'"),
-                    text("works.meta->>'categories' = ''"),
+                    text(f"{c_expr} IS NULL"),
+                    text(f"{c_expr} = '[]'"),
+                    text(f"{c_expr} = ''"),
                 ),
             )
         )

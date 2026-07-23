@@ -129,7 +129,7 @@ describe("ScanPage", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useAddManualItem>);
 
-    const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
+    const setItemSpy = vi.spyOn(window.localStorage, "setItem");
 
     render(<ScanPage />);
 
