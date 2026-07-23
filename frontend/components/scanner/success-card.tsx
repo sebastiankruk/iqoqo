@@ -178,9 +178,9 @@ export function SuccessCard({
           toast.warning(`"${title}" added, but cover upload failed.`);
         }
       } else {
-        if (data.action === "cataloged") {
+        if (data.action === "cataloged" || collectionStatus === "catalog") {
           toast.success(`"${title}" added to Catalog!`);
-        } else if (data.action === "added_to_wishlist") {
+        } else if (data.action === "added_to_wishlist" || collectionStatus === "wish_list") {
           toast.success(`"${title}" added to your Wishlist!`);
         } else {
           toast.success(`"${title}" added to your Library!`);

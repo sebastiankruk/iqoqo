@@ -50,8 +50,24 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
-  const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
-  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">("inventory");
+  const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
+      if (savedFormat) return savedFormat as ScanFormat;
+    }
+    return "book";
+  });
+  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">(
+    (): "inventory" | "wishlist" | "catalog" => {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
+        if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
+          return savedPolicy;
+        }
+      }
+      return "inventory";
+    }
+  );
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -73,6 +89,15 @@ export default function ScanPage() {
 
   useEffect(() => {
     localStorage.setItem("iqoqo_scanner_policy", policy);
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
+    }
+  }, [activeFormat]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem("iqoqo_scanner_policy", policy);
+    }
   }, [policy]);
 
   const addManualMutation = useAddManualItem();
