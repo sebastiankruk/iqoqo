@@ -74,6 +74,21 @@ export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    const savedFormat = localStorage.getItem("iqoqo_scanner_media_type");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
+
+    const savedPolicy = localStorage.getItem("iqoqo_scanner_policy");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
+  }, [activeFormat]);
+
+  useEffect(() => {
+    localStorage.setItem("iqoqo_scanner_policy", policy);
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
     }

@@ -91,6 +91,7 @@ help:
 	@echo "  lint-css       - Run CSS linter (stylelint)"
 	@echo "  lint-markdown  - Run Markdown linter"
 	@echo "  lint-license   - Check copyright headers"
+	@echo "  validate-yaml  - Validate YAML configuration files"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
@@ -250,8 +251,12 @@ lint-markdown:
 	@echo "Running markdownlint..."
 	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#context"
 
+validate-yaml: .venv/bin/activate
+	@echo "Checking YAML configuration files..."
+	@.venv/bin/python scripts/validate_yaml.py
+
 # Run all linting checks (stops on first failure)
-lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license
+lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license validate-yaml
 	@echo "All linting checks passed!"
 
 # Formatting targets
