@@ -23,19 +23,36 @@ import { MEDIA_REGISTRY } from "@/lib/media";
 interface TopBarProps {
   currentFormat?: ScanFormat;
   setFormat?: (format: ScanFormat) => void;
+  currentPolicy?: "inventory" | "wishlist" | "catalog";
+  setPolicy?: (policy: "inventory" | "wishlist" | "catalog") => void;
   onCancel?: () => void;
   hasFlash?: boolean;
   isFlashOn?: boolean;
   onToggleFlash?: () => void;
 }
 
+const POLICY_OPTIONS = [
+  { value: "inventory", label: "Inventory" },
+  { value: "wishlist", label: "Wishlist" },
+  { value: "catalog", label: "Catalog" },
+] as const;
+
 /**
- * Scanner page top overlay bar with format selector.
+ * Scanner page top overlay bar with format and policy selector.
  *
  * @param {TopBarProps} props - The component props
  * @returns {JSX.Element} The component
  */
-export function TopBar({ currentFormat, setFormat, onCancel, hasFlash, isFlashOn, onToggleFlash }: TopBarProps) {
+export function TopBar({
+  currentFormat,
+  setFormat,
+  currentPolicy,
+  setPolicy,
+  onCancel,
+  hasFlash,
+  isFlashOn,
+  onToggleFlash,
+}: TopBarProps) {
   return (
     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
       <div className="flex items-center justify-between bg-black/40 px-4 py-4 backdrop-blur-sm">
@@ -68,30 +85,50 @@ export function TopBar({ currentFormat, setFormat, onCancel, hasFlash, isFlashOn
         )}
       </div>
 
-      {setFormat && (
-        <div className="flex justify-center bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {SCAN_FORMATS.map(f => {
-              const meta = MEDIA_REGISTRY[f];
-              const Icon = meta.icon;
-              return (
+      {(setFormat || setPolicy) && (
+        <div className="flex flex-col bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5 gap-3">
+          {setFormat && (
+            <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar">
+              {SCAN_FORMATS.map(f => {
+                const meta = MEDIA_REGISTRY[f];
+                const Icon = meta.icon;
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFormat(f)}
+                    title={meta.label}
+                    aria-label={meta.label}
+                    className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
+                      currentFormat === f
+                        ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                        : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
+                    <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {setPolicy && (
+            <div className="flex justify-center gap-2">
+              {POLICY_OPTIONS.map(opt => (
                 <button
-                  key={f}
-                  onClick={() => setFormat(f)}
-                  title={meta.label}
-                  aria-label={meta.label}
-                  className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
-                    currentFormat === f
-                      ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                  key={opt.value}
+                  onClick={() => setPolicy(opt.value)}
+                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full border transition-colors ${
+                    currentPolicy === opt.value
+                      ? "bg-white text-black border-white"
                       : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
-                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
+                  {opt.label}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -20,7 +20,7 @@
  */
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -50,11 +50,40 @@ export default function ScanPage() {
   const [author, setAuthor] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
-  const [activeFormat, setActiveFormat] = useState<ScanFormat>("book");
+  const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
+      if (savedFormat) return savedFormat as ScanFormat;
+    }
+    return "book";
+  });
+  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">(
+    (): "inventory" | "wishlist" | "catalog" => {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
+        if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
+          return savedPolicy;
+        }
+      }
+      return "inventory";
+    }
+  );
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
+    }
+  }, [activeFormat]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem("iqoqo_scanner_policy", policy);
+    }
+  }, [policy]);
 
   const addManualMutation = useAddManualItem();
   const router = useRouter();
@@ -174,6 +203,8 @@ export default function ScanPage() {
         <TopBar
           currentFormat={activeFormat}
           setFormat={f => setActiveFormat(f as ScanFormat)}
+          currentPolicy={policy}
+          setPolicy={setPolicy}
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
@@ -201,6 +232,7 @@ export default function ScanPage() {
           <SuccessCard
             isbn={result.isbn}
             meta={result.meta}
+            policy={policy}
             onDismiss={handleDismiss}
             snappedCover={snappedCover}
             onShowManualForm={handleShowManualForm}

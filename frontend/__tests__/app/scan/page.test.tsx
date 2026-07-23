@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
 
@@ -35,7 +35,17 @@ vi.mock("sonner", () => ({
 }));
 
 // Mock the components so we don't need their full implementation
-vi.mock("@/components/scanner/top-bar", () => ({ TopBar: () => <div data-testid="top-bar" /> }));
+let mockSetMediaType: (val: string) => void;
+let mockSetPolicy: (val: string) => void;
+
+vi.mock("@/components/scanner/top-bar", () => ({
+  TopBar: (props: any) => {
+    mockSetMediaType = props.setFormat;
+    mockSetPolicy = props.setPolicy;
+    return <div data-testid="top-bar" />;
+  },
+}));
+
 vi.mock("@/components/scanner/viewfinder", () => ({ Viewfinder: () => <div data-testid="viewfinder" /> }));
 vi.mock("@/components/scanner/bottom-sheet", () => ({
   BottomSheet: ({ onShowManualForm }: { onShowManualForm?: () => void }) => (
@@ -47,6 +57,27 @@ vi.mock("@/components/scanner/bottom-sheet", () => ({
 vi.mock("@/components/scanner/success-card", () => ({ SuccessCard: () => <div data-testid="success-card" /> }));
 
 describe("ScanPage", () => {
+  beforeEach(() => {
+    let store: Record<string, string> = {};
+    const mockLocalStorage = {
+      getItem: (key: string) => store[key] || null,
+      setItem: (key: string, value: string) => {
+        store[key] = value.toString();
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        store = {};
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      value: mockLocalStorage,
+      writable: true,
+      configurable: true,
+    });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -111,5 +142,32 @@ describe("ScanPage", () => {
       expect.objectContaining({ Title: "Test Title", Authors: ["Test Author"], Format: "music" }),
       expect.any(Object)
     );
+  });
+
+  it("updates localStorage when media type and policy change", () => {
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    const setItemSpy = vi.spyOn(window.localStorage, "setItem");
+
+    render(<ScanPage />);
+
+    // Trigger state changes
+    act(() => {
+      if (mockSetMediaType) {
+        mockSetMediaType("movie");
+      }
+      if (mockSetPolicy) {
+        mockSetPolicy("catalog");
+      }
+    });
+
+    // Verify localStorage was updated
+    expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_media_type", "movie");
+    expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_policy", "catalog");
+
+    setItemSpy.mockRestore();
   });
 });
