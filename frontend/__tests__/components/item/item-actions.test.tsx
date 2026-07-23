@@ -300,4 +300,37 @@ describe("ItemActions Component", () => {
       expect(screen.queryByText(/Mark as Read/i)).not.toBeInTheDocument();
     });
   });
+
+  describe("Edit FRBR button visibility (write:metadata)", () => {
+    it("does NOT render Edit FRBR for user with read:metadata but WITHOUT write:metadata", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["read:metadata"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ItemActions item={mockItem} />);
+
+      // Admin panel should NOT be visible for read-only metadata users
+      expect(screen.queryByText(/Admin Actions/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Edit FRBR/i)).not.toBeInTheDocument();
+    });
+
+    it("renders Edit FRBR for user with write:metadata permission", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["write:metadata"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ItemActions item={mockItem} />);
+
+      fireEvent.click(screen.getByText(/Admin Actions/i));
+      expect(screen.getByText(/Edit FRBR/i)).toBeInTheDocument();
+    });
+  });
 });

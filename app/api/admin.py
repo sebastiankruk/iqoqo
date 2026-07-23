@@ -21,7 +21,7 @@ from datetime import date
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.decorators import admin_required, require_auth
+from app.api.decorators import admin_required, require_auth, require_permission
 from app.core import frbr_service
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
@@ -603,14 +603,9 @@ def update_item(item_id):
 
 @admin_bp.route("/frbr/search", methods=["GET"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.READ_METADATA)
 def search_frbr_entities():
     """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.READ_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_METADATA} required"}), 403
-
     query = request.args.get("q", "").strip()
     entity_type = request.args.get("type", "manifestation")  # work, expression, manifestation
     limit = request.args.get("limit", 20, type=int)

@@ -107,7 +107,7 @@ export function ItemActions({ item }: { item: Item }) {
 
   const showAdminActions =
     hasPermission(PermissionName.REFETCH_METADATA) ||
-    (hasPermission(PermissionName.READ_METADATA) && !!item.manifestation_id) ||
+    (hasPermission(PermissionName.WRITE_METADATA) && !!item.manifestation_id) ||
     hasPermission(PermissionName.REFETCH_COVER) ||
     hasPermission(PermissionName.REGENERATE_COVER) ||
     hasPermission(PermissionName.UPLOAD_COVER) ||
@@ -341,7 +341,7 @@ export function ItemActions({ item }: { item: Item }) {
               </Button>
             )}
 
-            {hasPermission(PermissionName.READ_METADATA) && item.manifestation_id && (
+            {hasPermission(PermissionName.WRITE_METADATA) && item.manifestation_id && (
               <Button
                 variant="outline"
                 size="sm"

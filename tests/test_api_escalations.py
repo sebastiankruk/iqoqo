@@ -281,3 +281,61 @@ def test_cascade_delete_escalation(app, client, escalations_setup):
 
         esc = db.session.get(EscalationRequest, esc_id)
         assert esc is None
+
+
+def test_submit_to_retrieve_pipeline(client, escalations_setup):
+    """End-to-end submit-to-retrieve: member submits escalation, then sees it via /mine and /queue."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    # Submit escalation
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={
+            "field_name": "title",
+            "suggested_value": "Pipeline Test Title",
+        },
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    created = resp.get_json()["data"]
+    esc_id = created["id"]
+
+    # Verify visible in /mine
+    resp_mine = client.get("/api/escalations/mine", headers=member_headers)
+    assert resp_mine.status_code == 200
+    mine_data = resp_mine.get_json()["data"]
+    mine_ids = [e["id"] for e in mine_data]
+    assert esc_id in mine_ids
+
+    # Verify visible in /queue
+    resp_queue = client.get("/api/escalations/queue", headers=custodian_headers)
+    assert resp_queue.status_code == 200
+    queue_data = resp_queue.get_json()["data"]
+    queue_ids = [e["id"] for e in queue_data]
+    assert esc_id in queue_ids
+
+
+def test_custodian_can_view_queue(client, escalations_setup):
+    """Verify that a custodian (non-admin) can call GET /api/escalations/queue and receive 200."""
+    custodian_headers = escalations_setup["custodian_headers"]
+
+    resp = client.get("/api/escalations/queue", headers=custodian_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert isinstance(body["data"], list)
+
+
+def test_plain_user_without_permission_cannot_create_escalation(client, escalations_setup):
+    """Verify that a user without escalate:request permission gets 403 when trying to create an escalation."""
+    plain_headers = escalations_setup["plain_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "title", "suggested_value": "Should Not Work"},
+        headers=plain_headers,
+    )
+    assert resp.status_code == 403
