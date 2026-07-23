@@ -45,19 +45,26 @@ vi.mock("recharts", async () => {
 });
 
 vi.mock("@/lib/api/hooks", () => ({
+  useStats: vi.fn(),
   useVelocityInsights: vi.fn(),
   useDistributionInsights: vi.fn(),
 }));
 
-import { useVelocityInsights, useDistributionInsights } from "@/lib/api/hooks";
+import { useStats, useVelocityInsights, useDistributionInsights } from "@/lib/api/hooks";
 import { CollectionInsights } from "@/components/dashboard/collection-insights";
 
+const mockUseStats = vi.mocked(useStats);
 const mockUseVelocity = vi.mocked(useVelocityInsights);
 const mockUseDistribution = vi.mocked(useDistributionInsights);
 
 describe("CollectionInsights", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseStats.mockReturnValue({
+      data: { total_items: 5 },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useStats>);
   });
 
   it("renders both VelocityChart and TypeDistributionChart components", () => {
@@ -95,5 +102,16 @@ describe("CollectionInsights", () => {
     render(<CollectionInsights />);
     expect(screen.getByTestId("velocity-chart-error")).toBeInTheDocument();
     expect(screen.getByTestId("type-distribution-chart")).toBeInTheDocument();
+  });
+
+  it("does not render stats charts section when total_items is 0", () => {
+    mockUseStats.mockReturnValue({
+      data: { total_items: 0 },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useStats>);
+
+    render(<CollectionInsights />);
+    expect(screen.queryByTestId("collection-insights")).not.toBeInTheDocument();
   });
 });

@@ -44,7 +44,13 @@ def test_init_auth_roles_permissions(app):
         expected_perms = {
             p
             for p in all_perms
-            if (p.endswith(":metadata") or p == "edit:cover" or p.startswith("llm_generate:") or p == "delete:item" or p == "escalate:resolve")
+            if (
+                p.endswith(":metadata")
+                or p == "edit:cover"
+                or p.startswith("llm_generate:")
+                or p == "delete:item"
+                or p == "escalate:resolve"
+            )
         }
 
         missing = expected_perms - contributor_perms

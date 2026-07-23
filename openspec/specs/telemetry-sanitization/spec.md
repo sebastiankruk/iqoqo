@@ -16,4 +16,3 @@ The system's OpenTelemetry hook MUST redact non-standard vendor authentication h
 
 - **WHEN** the backend makes an outbound HTTP request containing a `Content-Type: application/json` header
 - **THEN** the telemetry hook SHALL record the header value exactly as `application/json` without redaction.
-

@@ -30,4 +30,3 @@ The scanner API SHALL return context-aware responses based on the executed polic
 
 - **WHEN** a scan executes with a non-inventory policy
 - **THEN** the API response SHALL include the resolved `Manifestation` data and indicate the action taken (e.g., `"action": "added_to_wishlist"` or `"action": "cataloged"`).
-

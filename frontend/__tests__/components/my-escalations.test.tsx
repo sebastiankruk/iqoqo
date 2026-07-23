@@ -27,7 +27,7 @@ describe("MyEscalations Component", () => {
     vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as ReturnType<typeof escalationsApi.useMyEscalations>);
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
 
     render(<MyEscalations />);
     expect(screen.getByText("Help Requests")).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe("MyEscalations Component", () => {
     vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
       data: [],
       isLoading: false,
-    } as ReturnType<typeof escalationsApi.useMyEscalations>);
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
 
     render(<MyEscalations />);
     expect(screen.getByText("No help requests submitted")).toBeInTheDocument();
@@ -61,7 +61,7 @@ describe("MyEscalations Component", () => {
         },
       ],
       isLoading: false,
-    } as ReturnType<typeof escalationsApi.useMyEscalations>);
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
 
     render(<MyEscalations />);
     expect(screen.getByText("Help Requests (1)")).toBeInTheDocument();

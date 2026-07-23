@@ -69,7 +69,8 @@ function formatDate(iso: string): string {
 /**
  * Render status badge icon and label.
  *
- * @param status - Escalation status.
+ * @param props - Component props.
+ * @param props.status - Escalation status.
  * @returns Status badge JSX element.
  */
 function StatusBadge({ status }: { status: string }) {

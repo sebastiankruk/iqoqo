@@ -150,4 +150,3 @@ The system SHALL apply defense-in-depth sanitization to all user-supplied text f
 
 - **WHEN** an authenticated user submits an escalation with `suggested_value` containing `<script>alert('xss')</script>Correct Title`
 - **THEN** the system SHALL strip the HTML tags, storing only `alert('xss')Correct Title`.
-

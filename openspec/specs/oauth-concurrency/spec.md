@@ -11,4 +11,3 @@ The system's End-to-End (E2E) test suite SHALL include a test case that actively
 
 - **WHEN** the Playwright test suite executes the authentication flows
 - **THEN** it SHALL simulate multiple browser tabs simultaneously hitting the OAuth `callbackUrl` and assert the system's behavior (documenting the failure or success state of the race condition).
-

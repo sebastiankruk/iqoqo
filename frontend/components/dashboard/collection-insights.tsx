@@ -17,6 +17,7 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
+import { useStats } from "@/lib/api/hooks";
 import { VelocityChart } from "./velocity-chart";
 import { TypeDistributionChart } from "./type-distribution-chart";
 import { BarChart3 } from "lucide-react";
@@ -28,6 +29,11 @@ import { BarChart3 } from "lucide-react";
  */
 export function CollectionInsights() {
   const t = useTranslations("CollectionInsights");
+  const { data: stats } = useStats();
+
+  if (stats && stats.total_items === 0) {
+    return null;
+  }
 
   return (
     <section data-testid="collection-insights" className="mt-8 space-y-4">

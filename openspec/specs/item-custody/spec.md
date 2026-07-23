@@ -45,4 +45,3 @@ The system SHALL surface escalation trigger hooks on custody-adjacent display vi
 
 - **WHEN** a user with `write:metadata` permission views an item detail page
 - **THEN** the system SHALL NOT render the escalation trigger, because the user already has direct access to edit the metadata via the "Edit FRBR" admin action.
-

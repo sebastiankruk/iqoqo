@@ -25,4 +25,3 @@ The scanner UI SHALL remember the user's last selected scanning policy (Inventor
 
 - **WHEN** a user selects the "Add to Wishlist" policy and scans an item
 - **THEN** the UI SHALL retain the "Add to Wishlist" policy for the next scan, preventing accidental inventory additions.
-

@@ -16,4 +16,3 @@ The system's Continuous Integration pipeline SHALL validate the syntax and struc
 
 - **WHEN** `shared/format_mappings.yaml` is structurally valid and parses into a Python dictionary
 - **THEN** the CI validation step SHALL pass and exit with a zero status code.
-
