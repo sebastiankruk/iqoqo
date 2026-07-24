@@ -268,6 +268,32 @@ export function ItemActions({ item }: { item: Item }) {
       </div>
 
       <div className="border-t border-border/40 pt-4 w-full flex flex-col gap-4">
+        {/* Pending status card above all accordion buttons */}
+        {hasEscalateRequestForHook && !hasWriteMetadataForHook && pendingEscalation && (
+          <div
+            data-testid="escalation-status-card"
+            className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
+          >
+            <div className="flex items-center justify-between font-medium">
+              <span className="flex items-center gap-1.5 capitalize">
+                <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                Help Request: {pendingEscalation.status}
+              </span>
+              <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
+                {pendingEscalation.field_name}
+              </span>
+            </div>
+            <div className="text-muted-foreground">
+              Suggested: <span className="font-mono text-foreground">{pendingEscalation.suggested_value}</span>
+            </div>
+            {pendingEscalation.resolution_note && (
+              <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                Custodian note: &ldquo;{pendingEscalation.resolution_note}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -284,6 +310,18 @@ export function ItemActions({ item }: { item: Item }) {
             {isHierarchyOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             <span>FRBR Hierarchy</span>
           </Button>
+
+          {hasEscalateRequestForHook && !hasWriteMetadataForHook && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsRequestsOpen(!isRequestsOpen)}
+              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+            >
+              {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              <span>Requests</span>
+            </Button>
+          )}
 
           {showAdminActions && (
             <Button
@@ -458,88 +496,47 @@ export function ItemActions({ item }: { item: Item }) {
           </div>
         )}
 
-        {hasEscalateRequestForHook && !hasWriteMetadataForHook && (
-          <div className="border-t border-border/40 pt-4 w-full">
-            {/* Pending status card outside the accordion */}
-            {pendingEscalation && (
-              <div
-                data-testid="escalation-status-card"
-                className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5 mb-3"
-              >
-                <div className="flex items-center justify-between font-medium">
-                  <span className="flex items-center gap-1.5 capitalize">
-                    <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
-                    Help Request: {pendingEscalation.status}
-                  </span>
-                  <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
-                    {pendingEscalation.field_name}
-                  </span>
-                </div>
-                <div className="text-muted-foreground">
-                  Suggested: <span className="font-mono text-foreground">{pendingEscalation.suggested_value}</span>
-                </div>
-                {pendingEscalation.resolution_note && (
-                  <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                    Custodian note: &ldquo;{pendingEscalation.resolution_note}&rdquo;
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Accordion header */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsRequestsOpen(!isRequestsOpen)}
-              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
-            >
-              {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              <span>Requests</span>
-            </Button>
-
-            {/* Accordion content */}
-            {isRequestsOpen && (
-              <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
-                {/* Existing request cards for this target */}
-                {itemEscalations.length > 0 && (
-                  <div className="space-y-2">
-                    {itemEscalations.map(esc => (
-                      <div
-                        key={esc.id}
-                        className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
-                      >
-                        <div className="flex items-center justify-between font-medium">
-                          <span className="flex items-center gap-1.5 capitalize">
-                            {esc.status === "pending" ? (
-                              <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-                                {esc.status}
-                              </span>
-                            )}
-                            {esc.field_name}
+        {/* Requests accordion content */}
+        {hasEscalateRequestForHook && !hasWriteMetadataForHook && isRequestsOpen && (
+          <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+            {/* Existing request cards for this target */}
+            {itemEscalations.length > 0 && (
+              <div className="space-y-2">
+                {itemEscalations.map(esc => (
+                  <div
+                    key={esc.id}
+                    className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between font-medium">
+                      <span className="flex items-center gap-1.5 capitalize">
+                        {esc.status === "pending" ? (
+                          <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                            {esc.status}
                           </span>
-                          <span className="text-muted-foreground text-[10px] tabular-nums">
-                            {esc.created_at ? new Date(esc.created_at).toLocaleDateString() : ""}
-                          </span>
-                        </div>
-                        <div className="text-muted-foreground">
-                          Suggested: <span className="font-mono text-foreground">{esc.suggested_value}</span>
-                        </div>
-                        {esc.resolution_note && (
-                          <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                            Custodian note: &ldquo;{esc.resolution_note}&rdquo;
-                          </div>
                         )}
+                        {esc.field_name}
+                      </span>
+                      <span className="text-muted-foreground text-[10px] tabular-nums">
+                        {esc.created_at ? new Date(esc.created_at).toLocaleDateString() : ""}
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      Suggested: <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                    </div>
+                    {esc.resolution_note && (
+                      <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                        Custodian note: &ldquo;{esc.resolution_note}&rdquo;
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-
-                {/* Ask custodians button - only inside accordion */}
-                <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
+                ))}
               </div>
             )}
+
+            {/* Ask custodians button - only inside accordion */}
+            <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
           </div>
         )}
       </div>

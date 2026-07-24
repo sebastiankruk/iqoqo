@@ -437,7 +437,9 @@ function SettingsContent(): React.JSX.Element {
                 </div>
               </div>
 
-              <MyEscalations />
+              <div id="help-requests">
+                <MyEscalations />
+              </div>
             </div>
           )}
 

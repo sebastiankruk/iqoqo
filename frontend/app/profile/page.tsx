@@ -242,7 +242,9 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <MyEscalations />
+        <div id="help-requests">
+          <MyEscalations />
+        </div>
 
         <div className="flex justify-between items-center pt-4">
           <Button variant="outline" onClick={handleLogout}>
