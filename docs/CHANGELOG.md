@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Escalation Permission Assignment**: Added Alembic data migration to assign `escalate:request` permission to `user` role and `escalate:resolve` to `custodian` and `admin` roles, fixing the submit-to-retrieve pipeline end-to-end.
+- **Stats Charts Display for Empty Collections**: Hide `CollectionInsights` dashboard charts section (`VelocityChart` and `TypeDistributionChart`) when the authenticated user has zero items in their collection (`stats.total_items === 0`).
 
 ## [0.7.11] - 2026-07-22
 
