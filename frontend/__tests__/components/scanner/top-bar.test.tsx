@@ -55,7 +55,6 @@ vi.mock("@/lib/media", () => ({
 
 describe("TopBar", () => {
   const setFormat = vi.fn();
-  const setPolicy = vi.fn();
   const onCancel = vi.fn();
   const onToggleFlash = vi.fn();
 
@@ -64,7 +63,7 @@ describe("TopBar", () => {
   });
 
   it("renders format selector with all scan formats", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+    render(<TopBar currentFormat="book" setFormat={setFormat} />);
 
     // Should render the "Scan New Item" title
     expect(screen.getByText("Scan New Item")).toBeInTheDocument();
@@ -75,28 +74,11 @@ describe("TopBar", () => {
     });
   });
 
-  it("policy selector renders inventory/wishlist/catalog options", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
-
-    expect(screen.getByText("Inventory")).toBeInTheDocument();
-    expect(screen.getByText("Wishlist")).toBeInTheDocument();
-    expect(screen.getByText("Catalog")).toBeInTheDocument();
-  });
-
-  it("policy change calls setPolicy callback", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
-
-    fireEvent.click(screen.getByText("Wishlist"));
-    expect(setPolicy).toHaveBeenCalledWith("wishlist");
-  });
-
   it("flash toggle button renders when hasFlash is true", () => {
     render(
       <TopBar
         currentFormat="book"
         setFormat={setFormat}
-        currentPolicy="inventory"
-        setPolicy={setPolicy}
         hasFlash={true}
         isFlashOn={false}
         onToggleFlash={onToggleFlash}
@@ -111,29 +93,13 @@ describe("TopBar", () => {
   });
 
   it("flash button hidden when hasFlash is false", () => {
-    render(
-      <TopBar
-        currentFormat="book"
-        setFormat={setFormat}
-        currentPolicy="inventory"
-        setPolicy={setPolicy}
-        hasFlash={false}
-      />
-    );
+    render(<TopBar currentFormat="book" setFormat={setFormat} hasFlash={false} />);
 
     expect(screen.queryByLabelText("Toggle flash")).not.toBeInTheDocument();
   });
 
   it("back-link invokes cancel callback", () => {
-    render(
-      <TopBar
-        currentFormat="book"
-        setFormat={setFormat}
-        currentPolicy="inventory"
-        setPolicy={setPolicy}
-        onCancel={onCancel}
-      />
-    );
+    render(<TopBar currentFormat="book" setFormat={setFormat} onCancel={onCancel} />);
 
     const backLink = screen.getByLabelText("Go back to library");
     fireEvent.click(backLink);

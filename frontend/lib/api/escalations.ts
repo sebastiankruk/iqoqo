@@ -29,6 +29,7 @@ export const escalationQueryKeys = {
  * @param level - The FRBR level ('work', 'expression', 'manifestation', 'item').
  * @param targetId - The target entity ID.
  * @param data - The escalation payload containing field_name and suggested_value.
+ * @param [data.request_type] - Type of request ('correction' or 'deletion').
  * @param data.field_name - Name of the field to correct.
  * @param data.suggested_value - Suggested correct value.
  * @param data.current_value - Current incorrect value (optional).

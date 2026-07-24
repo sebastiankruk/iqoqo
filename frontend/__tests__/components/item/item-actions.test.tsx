@@ -83,7 +83,7 @@ describe("ItemActions Component", () => {
 
     expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Remove from library/i)).toBeInTheDocument();
+    expect(screen.getByText(/More Actions/i)).toBeInTheDocument();
   });
 
   it("starts polling invalidateQueries every 3s when cover_status is pending", () => {

@@ -122,9 +122,6 @@ function ContentManagementContent(): React.JSX.Element {
     return null;
   })();
 
-  const activeTab = internalTab || searchParams.get("tab") || "profile";
-  const effectiveTab = activeTab;
-
   const permissions = profile?.permissions ?? [];
   const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
 
@@ -142,21 +139,16 @@ function ContentManagementContent(): React.JSX.Element {
 
   const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
 
-  // Auto-select first available custodian tab when landing with no explicit tab
-  useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    if (!tabParam && !internalTab && profile && hasCustodianAccess) {
-      if (canViewMetadata) {
-        setInternalTab("metadata");
-      } else if (canEditCover) {
-        setInternalTab("cover-art");
-      } else if (canViewEscalationQueue) {
-        setInternalTab("escalations");
-      }
-    }
-    // Only run on mount when profile first loads
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, hasCustodianAccess]);
+  const fallbackCustodianTab = canViewMetadata
+    ? "metadata"
+    : canEditCover
+      ? "cover-art"
+      : canViewEscalationQueue
+        ? "escalations"
+        : "metadata";
+
+  const effectiveTab =
+    internalTab || searchParams.get("tab") || (profile && hasCustodianAccess ? fallbackCustodianTab : "profile");
 
   if (profileLoading || !profile) {
     return (

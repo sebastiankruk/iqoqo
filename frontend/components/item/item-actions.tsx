@@ -33,6 +33,7 @@ import {
   ImagePlus,
   ImageDown,
   Clock,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +45,12 @@ import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +87,6 @@ export function ItemActions({ item }: { item: Item }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isHierarchyOpen, setIsHierarchyOpen] = useState(false);
   const [isRequestsOpen, setIsRequestsOpen] = useState(false);
-  const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
 
   const isPending = item.cover_status === "pending" || item.meta?.cover_status === "pending";
 
@@ -101,9 +107,6 @@ export function ItemActions({ item }: { item: Item }) {
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
       }, 3000);
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveCoverAction(null);
     }
     return () => {
       if (interval !== undefined) {
@@ -148,7 +151,6 @@ export function ItemActions({ item }: { item: Item }) {
     if (!item.manifestation_id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
-    setActiveCoverAction("regenerate");
     try {
       await regenerateCover.mutateAsync(item.manifestation_id);
       qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
@@ -184,7 +186,6 @@ export function ItemActions({ item }: { item: Item }) {
   const handleRefetchCover = async () => {
     if (!item.manifestation_id) return;
     setIsRefetchingCover(true);
-    setActiveCoverAction("refetch");
     try {
       await apiClient.post(`/manifestations/${item.manifestation_id}/refetch-cover`);
       qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
@@ -311,17 +312,21 @@ export function ItemActions({ item }: { item: Item }) {
             <span>FRBR Hierarchy</span>
           </Button>
 
-          {hasEscalateRequestForHook && !hasWriteMetadataForHook && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsRequestsOpen(!isRequestsOpen)}
-              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
-            >
-              {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              <span>Requests</span>
-            </Button>
-          )}
+          {hasEscalateRequestForHook &&
+            !hasWriteMetadataForHook &&
+            (itemEscalations.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRequestsOpen(!isRequestsOpen)}
+                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+              >
+                {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <span>Requests ({itemEscalations.length})</span>
+              </Button>
+            ) : (
+              <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
+            ))}
 
           {showAdminActions && (
             <Button
@@ -402,38 +407,6 @@ export function ItemActions({ item }: { item: Item }) {
               </Button>
             )}
 
-            {hasPermission(PermissionName.REFETCH_COVER) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefetchCover}
-                disabled={isPending || isRefetchingCover}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <ImageDown
-                  className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
-                />
-                {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.REGENERATE_COVER) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegenerateClick}
-                disabled={isPending || isRequesting}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
-                />
-                {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
-                  ? "Generating..."
-                  : "Regenerate Cover"}
-              </Button>
-            )}
-
             {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
               <CameraCapture
                 manifestation_id={item.manifestation_id}
@@ -469,29 +442,66 @@ export function ItemActions({ item }: { item: Item }) {
               />
             )}
 
-            {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                Edit Cover Art
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.DELETE_ITEM) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteItem.isPending}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Remove from library
-              </Button>
+            {(hasPermission(PermissionName.REFETCH_COVER) ||
+              hasPermission(PermissionName.REGENERATE_COVER) ||
+              hasPermission(PermissionName.EDIT_COVER) ||
+              hasPermission(PermissionName.DELETE_ITEM)) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                    More Actions
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {hasPermission(PermissionName.REFETCH_COVER) && (
+                    <DropdownMenuItem
+                      onClick={handleRefetchCover}
+                      disabled={isPending || isRefetchingCover}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <ImageDown className="h-3.5 w-3.5" />
+                      Refetch Cover
+                    </DropdownMenuItem>
+                  )}
+                  {hasPermission(PermissionName.REGENERATE_COVER) && (
+                    <DropdownMenuItem
+                      onClick={handleRegenerateClick}
+                      disabled={isPending || isRequesting}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Regenerate Cover
+                    </DropdownMenuItem>
+                  )}
+                  {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)
+                      }
+                      className="gap-2 cursor-pointer"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      Edit Cover Art
+                    </DropdownMenuItem>
+                  )}
+                  {hasPermission(PermissionName.DELETE_ITEM) && (
+                    <DropdownMenuItem
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      disabled={deleteItem.isPending}
+                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove from library
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         )}

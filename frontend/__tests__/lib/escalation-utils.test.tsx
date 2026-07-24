@@ -17,6 +17,11 @@ import { describe, it, expect } from "vitest";
 import { getTargetHref, getAdminTargetHref, getTargetLabel } from "@/lib/escalation-utils";
 import type { EscalationRequest } from "@/types/frbr";
 
+/**
+ * Helper to build mock EscalationRequest for testing.
+ * @param overrides Partial EscalationRequest fields.
+ * @returns EscalationRequest object.
+ */
 function makeEsc(overrides: Partial<EscalationRequest> = {}): EscalationRequest {
   return {
     id: 1,

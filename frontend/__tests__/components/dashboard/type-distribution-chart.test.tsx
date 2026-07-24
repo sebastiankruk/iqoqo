@@ -99,7 +99,7 @@ describe("TypeDistributionChart", () => {
       data: { by_type: [], by_format: [] },
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useDistributionInsights>);
+    } as unknown as ReturnType<typeof useDistributionInsights>);
     render(<TypeDistributionChart />);
 
     // Should show the empty state text

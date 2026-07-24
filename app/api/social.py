@@ -17,9 +17,11 @@
 
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 from flask import Response, g, jsonify, request
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
@@ -338,27 +340,33 @@ def _validate_escalation_input(data: dict | None) -> tuple[dict | None, str | No
     note_raw = data.get("note")
     note = _sanitize_text(str(note_raw)) if note_raw is not None else None
 
+    error: str | None = None
+    field_name = ""
+    suggested_value = ""
+    current_value = None
+
     if request_type == "deletion":
         if not note:
-            return None, "Note is required for deletion requests"
-        field_name = ""
-        suggested_value = ""
-        current_value = None
+            error = "Note is required for deletion requests"
     else:
         field_name = _sanitize_text(str(data.get("field_name", "")))
         suggested_value = _sanitize_text(str(data.get("suggested_value", "")))
-
-        if not field_name:
-            return None, "field_name is required"
-        if not suggested_value:
-            return None, "suggested_value is required"
-
         current_val_raw = data.get("current_value")
         current_value = _sanitize_text(str(current_val_raw)) if current_val_raw is not None else None
 
-    for val, name in [(suggested_value, "suggested_value"), (current_value, "current_value"), (note, "note")]:
-        if val and len(val) > MAX_SOCIAL_TEXT_LENGTH:
-            return None, f"{name} must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
+        if not field_name:
+            error = "field_name is required"
+        elif not suggested_value:
+            error = "suggested_value is required"
+
+    if not error:
+        for val, name in [(suggested_value, "suggested_value"), (current_value, "current_value"), (note, "note")]:
+            if val and len(val) > MAX_SOCIAL_TEXT_LENGTH:
+                error = f"{name} must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
+                break
+
+    if error:
+        return None, error
 
     return {
         "request_type": request_type,
@@ -453,6 +461,79 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
     return jsonify({"success": True, "data": [req.to_dict() for req in requests]})
 
 
+def _delete_manifestation_target(escalation: EscalationRequest, user: User | None) -> tuple[Response, int] | None:
+    """Handle manifestation deletion when accepting a deletion request."""
+    if not user or not user.has_permission(PermissionName.DELETE_MANIFESTATION):
+        return jsonify({"error": "Permission delete:manifestation required to accept deletion request", "code": 403}), 403
+    if not escalation.manifestation_id:
+        return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
+
+    manif_stmt = select(Manifestation).where(Manifestation.id == escalation.manifestation_id).with_for_update()
+    target_manif = db.session.execute(manif_stmt).scalar_one_or_none()
+    if not target_manif:
+        return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
+
+    cnt = func.count()  # pylint: disable=not-callable
+    item_count = db.session.execute(select(cnt).select_from(Item).where(Item.manifestation_id == escalation.manifestation_id)).scalar() or 0
+    if item_count > 0:
+        db.session.rollback()
+        return jsonify({"error": "Cannot delete manifestation: dependent items exist", "code": 409}), 409
+
+    from app.db.models import ScanTelemetry
+
+    ScanTelemetry.query.filter_by(manifestation_id=escalation.manifestation_id).update(
+        {"manifestation_id": None}, synchronize_session=False
+    )
+    db.session.delete(target_manif)
+    return None
+
+
+def _delete_item_target(escalation: EscalationRequest, user: User | None, user_id: Any) -> tuple[Response, int] | None:
+    """Handle item deletion when accepting a deletion request."""
+    if not user or not user.has_permission(PermissionName.DELETE_ITEM):
+        return jsonify({"error": "Permission delete:item required to accept deletion request", "code": 403}), 403
+    if not escalation.item_id:
+        return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
+
+    item_stmt = select(Item).where(Item.id == escalation.item_id).with_for_update()
+    target_item = db.session.execute(item_stmt).scalar_one_or_none()
+    if not target_item:
+        return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
+
+    if target_item.owner_id != user_id:
+        db.session.rollback()
+        return jsonify({"error": "Forbidden: You do not own this item", "code": 403}), 403
+
+    db.session.delete(target_item)
+    return None
+
+
+def _handle_deletion_acceptance(escalation: EscalationRequest, user: User | None, user_id: Any) -> tuple[Response, int] | None:
+    """Helper to handle target entity deletion when accepting a deletion request."""
+    target_level = escalation.target_type or ("manifestation" if escalation.manifestation_id else "item" if escalation.item_id else None)
+    if target_level == "manifestation":
+        return _delete_manifestation_target(escalation, user)
+    if target_level == "item":
+        return _delete_item_target(escalation, user, user_id)
+    return None
+
+
+def _validate_resolution_payload(data: dict) -> tuple[str | None, str | None, str | None]:
+    """Validate resolution payload, returning (new_status, resolution_note, error_msg)."""
+    new_status = data.get("status")
+    valid_statuses = {"accepted", "rejected", "duplicate"}
+    if not new_status or new_status not in valid_statuses:
+        return None, None, f"Invalid status. Must be one of {sorted(valid_statuses)}"
+
+    resolution_note = data.get("resolution_note")
+    if resolution_note is not None:
+        resolution_note = _sanitize_text(str(resolution_note))
+        if len(resolution_note) > MAX_SOCIAL_TEXT_LENGTH:
+            return None, None, f"resolution_note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters"
+
+    return str(new_status), resolution_note, None
+
+
 @api_bp.route("/escalations/<int:escalation_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.ESCALATE_RESOLVE)
@@ -462,50 +543,31 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
     if not user_id:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
 
-    escalation = db.session.get(EscalationRequest, escalation_id)
-    if not escalation:
-        return jsonify({"error": "Escalation request not found", "code": 404}), 404
-
     data = request.get_json(silent=True) or {}
-    new_status = data.get("status")
-    valid_statuses = {"accepted", "rejected", "duplicate"}
-    if not new_status or new_status not in valid_statuses:
-        return jsonify({"error": f"Invalid status. Must be one of {sorted(valid_statuses)}", "code": 400}), 400
-
-    resolution_note = data.get("resolution_note")
-    if resolution_note is not None:
-        resolution_note = _sanitize_text(str(resolution_note))
-        if len(resolution_note) > MAX_SOCIAL_TEXT_LENGTH:
-            return jsonify({"error": f"resolution_note must be at most {MAX_SOCIAL_TEXT_LENGTH} characters", "code": 400}), 400
+    new_status, resolution_note, err_msg = _validate_resolution_payload(data)
+    if err_msg or not new_status:
+        return jsonify({"error": err_msg, "code": 400}), 400
 
     user = db.session.get(User, user_id)
-    if escalation.request_type == "deletion" and new_status == "accepted":
-        target_level = escalation.target_type or (
-            "manifestation" if escalation.manifestation_id else "item" if escalation.item_id else None
-        )
-        if target_level == "manifestation":
-            if not user or not user.has_permission(PermissionName.DELETE_MANIFESTATION):
-                return jsonify({"error": "Permission delete:manifestation required to accept deletion request", "code": 403}), 403
-            if not escalation.manifestation_id or not db.session.get(Manifestation, escalation.manifestation_id):
-                return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
-            target_manif = db.session.get(Manifestation, escalation.manifestation_id)
-            from app.db.models import ScanTelemetry
 
-            ScanTelemetry.query.filter_by(manifestation_id=escalation.manifestation_id).update({"manifestation_id": None})
-            db.session.delete(target_manif)
-        elif target_level == "item":
-            if not user or not user.has_permission(PermissionName.DELETE_ITEM):
-                return jsonify({"error": "Permission delete:item required to accept deletion request", "code": 403}), 403
-            if not escalation.item_id or not db.session.get(Item, escalation.item_id):
-                return jsonify({"error": "Target entity no longer exists", "code": 404}), 404
-            target_item = db.session.get(Item, escalation.item_id)
-            db.session.delete(target_item)
+    try:
+        stmt = select(EscalationRequest).where(EscalationRequest.id == escalation_id).with_for_update()
+        escalation = db.session.execute(stmt).scalar_one_or_none()
+        if not escalation:
+            return jsonify({"error": "Escalation request not found", "code": 404}), 404
 
-    escalation.status = new_status
-    escalation.resolved_by = user_id
-    escalation.resolved_at = datetime.now(UTC)
-    escalation.resolution_note = resolution_note
-    resp_data = escalation.to_dict()
-    db.session.commit()
+        if escalation.request_type == "deletion" and new_status == "accepted":
+            err_resp = _handle_deletion_acceptance(escalation, user, user_id)
+            if err_resp:
+                return err_resp
 
-    return jsonify({"success": True, "data": resp_data})
+        escalation.status = new_status
+        escalation.resolved_by = user_id
+        escalation.resolved_at = datetime.now(UTC)
+        escalation.resolution_note = resolution_note
+        resp_data = escalation.to_dict()
+        db.session.commit()
+        return jsonify({"success": True, "data": resp_data})
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"error": "Database error occurred during resolution", "code": 500}), 500

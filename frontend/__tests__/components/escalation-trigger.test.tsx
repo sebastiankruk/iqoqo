@@ -16,6 +16,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
+import type { EscalationRequest } from "@/types/frbr";
 
 // Mock next-intl to provide translations for HelpRequests namespace
 vi.mock("next-intl", () => ({
@@ -330,7 +331,14 @@ describe("EscalationTrigger Component", () => {
       },
     ];
 
-    render(<EscalationTrigger level="item" targetId={123} escalations={escalations} alwaysShowDialog={true} />);
+    render(
+      <EscalationTrigger
+        level="item"
+        targetId={123}
+        escalations={escalations as unknown as EscalationRequest[]}
+        alwaysShowDialog={true}
+      />
+    );
 
     // Should show the dialog button
     expect(screen.getByText("Ask custodians for help")).toBeInTheDocument();
