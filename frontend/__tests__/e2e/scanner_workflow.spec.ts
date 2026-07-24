@@ -147,13 +147,13 @@ test.describe("Scanner Workflow", () => {
     await page.waitForLoadState("networkidle");
 
     // Verify format selector is visible
-    const bookBtn = page.getByLabel("Book");
+    const bookBtn = page.getByRole("button", { name: "Book", exact: true });
     if (await bookBtn.isVisible()) {
       await bookBtn.click();
       await page.waitForTimeout(200);
     }
 
-    const movieBtn = page.getByLabel("Movie");
+    const movieBtn = page.getByRole("button", { name: "Movie", exact: true });
     if (await movieBtn.isVisible()) {
       await movieBtn.click();
       await page.waitForTimeout(200);
