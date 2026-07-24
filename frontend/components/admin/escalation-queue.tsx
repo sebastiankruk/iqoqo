@@ -309,11 +309,18 @@ function ProcessedRequestsSection() {
                       <span className="font-mono text-foreground">{esc.suggested_value}</span>
                     </div>
                   </div>
-                  {esc.resolved_at && (
-                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                      {formatDate(esc.resolved_at)}
-                    </span>
-                  )}
+                  <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                    {esc.resolved_at && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {formatDate(esc.resolved_at)}
+                      </span>
+                    )}
+                    {esc.resolver_display_name && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {t("resolvedBy", { name: esc.resolver_display_name })}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {esc.resolution_note && (
                   <div className="rounded bg-muted/50 p-2 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">

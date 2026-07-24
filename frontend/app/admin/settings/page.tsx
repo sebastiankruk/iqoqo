@@ -35,6 +35,7 @@ import {
   Search,
   X,
   Image as ImageIcon,
+  LifeBuoy,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -188,8 +189,9 @@ function SettingsContent(): React.JSX.Element {
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
   const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+  const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
 
-  const hasCustodianAccess = canViewMetadata || canEditCover;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -220,6 +222,7 @@ function SettingsContent(): React.JSX.Element {
                     icon={Database}
                     isActive={activeTab === "metadata"}
                     onClick={() => handleTabChange("metadata")}
+                    href="/admin/content?tab=metadata"
                   />
                 )}
                 {canEditCover && (
@@ -229,6 +232,15 @@ function SettingsContent(): React.JSX.Element {
                     isActive={activeTab === "cover-art"}
                     onClick={() => handleTabChange("cover-art")}
                     href="/admin/content?tab=cover-art"
+                  />
+                )}
+                {canViewEscalationQueue && (
+                  <NavItem
+                    label="User Requests"
+                    icon={LifeBuoy}
+                    isActive={activeTab === "escalations"}
+                    onClick={() => handleTabChange("escalations")}
+                    href="/admin/content?tab=escalations"
                   />
                 )}
               </nav>

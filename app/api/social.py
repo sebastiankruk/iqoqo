@@ -431,7 +431,7 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
 
     stmt = (
         select(EscalationRequest)
-        .options(selectinload(EscalationRequest.user))  # type: ignore[arg-type]
+        .options(selectinload(EscalationRequest.user), selectinload(EscalationRequest.resolver))  # type: ignore[arg-type]
         .where(EscalationRequest.status.in_(statuses))
         .order_by(EscalationRequest.created_at.desc())
     )

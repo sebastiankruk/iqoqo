@@ -343,6 +343,7 @@
     "failedToLoad": "Failed to load escalation queue",
     "noProcessedRequests": "No processed requests yet",
     "failedToLoadProcessed": "Failed to load processed requests",
+    "resolvedBy": "by {name}",
     "requestAccepted": "Request accepted",
     "requestRejected": "Request rejected",
     "requestDuplicate": "Request marked as duplicate",

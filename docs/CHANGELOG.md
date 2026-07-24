@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **User Requests Sidebar Nav & Resolver Info**: Added missing "User Requests" item to `/admin/settings` sidebar under Custodians section, updated "Metadata" nav item to navigate to `/admin/content?tab=metadata`, and fixed backend queue query to eagerly load resolver relationships so `resolver_display_name` renders on processed request tiles.
 - **Escalation Permission Assignment**: Added Alembic data migration to assign `escalate:request` permission to `user` role and `escalate:resolve` to `custodian` and `admin` roles, fixing the submit-to-retrieve pipeline end-to-end.
 - **Stats Charts Display for Empty Collections**: Hide `CollectionInsights` dashboard charts section (`VelocityChart` and `TypeDistributionChart`) when the authenticated user has zero items in their collection (`stats.total_items === 0`).
 

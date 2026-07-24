@@ -343,6 +343,7 @@
     "failedToLoad": "Nie udało się załadować próśb",
     "noProcessedRequests": "Brak przetworzonych próśb",
     "failedToLoadProcessed": "Nie udało się załadować przetworzonych próśb",
+    "resolvedBy": "przez {name}",
     "requestAccepted": "Prośba zaakceptowana",
     "requestRejected": "Prośba odrzucona",
     "requestDuplicate": "Prośba oznaczona jako duplikat",
