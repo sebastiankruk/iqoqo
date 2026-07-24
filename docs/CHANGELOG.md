@@ -10,9 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Escalation Queue Admin UI**: New `EscalationQueue` component mounted as a tab in the admin content page, visible to users with `escalate:resolve` permission. Custodians can view pending metadata correction requests, accept/reject/mark-duplicate with optional resolution notes.
+- **Escalation Queue Status Filter**: Extended `GET /api/escalations/queue` endpoint with optional `?status=` query parameter (comma-separated statuses). Defaults to `pending` when absent for backward compatibility. Added `useResolvedEscalations()` hook for fetching non-pending requests.
+- **Shared Escalation Utilities**: Extracted `getTargetHref()` and `getTargetLabel()` into `frontend/lib/escalation-utils.tsx` shared utility, used by both admin queue and my-escalations components.
 
 ### Changed
 
+- **User Requests UX Rename**: Renamed "Escalation Queue" to "User Requests" in admin tab, "Escalation" status card to "Help Request", "Duplicate" action to "Mark as Duplicate", and empty state messages from "escalation requests" to "user requests" throughout the UI.
+- **Navbar "My Help Requests" Link**: Added "My Help Requests" dropdown menu item between "Manage Collections" and "Admin Configuration" with a pending-count badge using `useMyEscalations()` hook.
+- **Processed Requests Section**: Added expandable "Processed Requests" section below the pending queue in the admin "User Requests" view — toggle button with chevron, fetching resolved escalations via the new `useResolvedEscalations()` hook.
+- **Clickable Target Labels**: Target entity labels in the escalation queue are now clickable links to `/manifestation/{id}` or `/item/{id}`, matching the pattern from `my-escalations.tsx`.
+- **Requests Accordion on Manifestation/Item Pages**: EscalationTrigger is now wrapped in a collapsible "Requests" accordion panel (ChevronUp/Down pattern) on manifestation and item pages, shown only to users without `write:metadata`. Pending request status is displayed outside the collapsed accordion; "Ask custodians" button is hidden until accordion expands.
+- **Multi-Escalation Support**: EscalationTrigger now accepts pre-filtered escalations array prop, supporting multiple requests per target. All existing requests are listed inside the accordion while pending status is shown externally.
+- **i18n Coverage**: Added full Polish and English translations (`HelpRequests` namespace) for all user-facing labels across escalation components, including dialog forms, action buttons, empty states, and status labels.
+- **Card Padding Fix**: Fixed card padding in `my-escalations.tsx` from `p-3.5 space-y-2` to `p-4 space-y-3` for better visual breathing room.
 - **FRBR Search Permission Gating**: The FRBR entity search endpoint now uses `@require_permission(READ_METADATA)` instead of `@admin_required`, allowing custodians (non-admins) with `read:metadata` to search FRBR entities.
 - **Edit FRBR Button Gating**: The "Edit FRBR" button in item and manifestation action panels now requires `write:metadata` permission instead of `read:metadata`.
 - **Fallback Cover Design**: Removed CTA text, enlarged "powered by iqoqo" footer to 28px bold, centered horizontally, added decorative separator line.

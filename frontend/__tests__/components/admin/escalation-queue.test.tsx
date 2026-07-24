@@ -17,8 +17,54 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { EscalationQueue } from "@/components/admin/escalation-queue";
 
+// Mock next-intl to provide translations for HelpRequests namespace
+vi.mock("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: (namespace: string) => {
+    if (namespace === "HelpRequests") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          accept: "Accept",
+          accepted: "Accepted",
+          rejected: "Rejected",
+          duplicate: "Duplicate",
+          pending: "Pending",
+          reject: "Reject",
+          confirm: "Confirm",
+          cancel: "Cancel",
+          markAsDuplicate: "Mark as Duplicate",
+          noPendingUserRequests: "No pending user requests",
+          newRequestsAppear: "New requests from users will appear here.",
+          failedToLoad: "Failed to load escalation queue",
+          failedToLoadProcessed: "Failed to load processed requests",
+          resolutionNoteOptional: "Resolution note (optional)",
+          processedRequests: "Processed Requests",
+          noProcessedRequests: "No processed requests yet",
+          requestAccepted: "Request accepted",
+          requestRejected: "Request rejected",
+          requestDuplicate: "Request marked as duplicate",
+          failedToResolve: "Failed to resolve request",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));
+
+// Mock next/link
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
+
 vi.mock("@/lib/api/escalations", () => ({
   useEscalationQueue: vi.fn(),
+  useResolvedEscalations: vi.fn(() => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+  })),
   useResolveEscalation: vi.fn(() => ({
     mutate: vi.fn(),
     isPending: false,
@@ -66,7 +112,7 @@ describe("EscalationQueue Component", () => {
 
     render(<EscalationQueue />);
     expect(screen.getByTestId("escalation-queue-empty")).toBeInTheDocument();
-    expect(screen.getByText(/No pending escalation requests/i)).toBeInTheDocument();
+    expect(screen.getByText(/No pending user requests/i)).toBeInTheDocument();
   });
 
   it("renders pending requests with resolve buttons", () => {
@@ -98,7 +144,7 @@ describe("EscalationQueue Component", () => {
     // Resolve buttons should be present
     expect(screen.getByText("Accept")).toBeInTheDocument();
     expect(screen.getByText("Reject")).toBeInTheDocument();
-    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+    expect(screen.getByText("Mark as Duplicate")).toBeInTheDocument();
   });
 
   it("renders requests with work, expression, and item targets", () => {

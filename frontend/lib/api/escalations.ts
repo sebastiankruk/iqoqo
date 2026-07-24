@@ -20,6 +20,7 @@ import type { EscalationRequest } from "@/types/frbr";
 export const escalationQueryKeys = {
   mine: ["escalations", "mine"] as const,
   queue: ["escalations", "queue"] as const,
+  resolved: ["escalations", "queue", "resolved"] as const,
 };
 
 /**
@@ -61,12 +62,14 @@ export async function getMyEscalations(): Promise<EscalationRequest[]> {
 }
 
 /**
- * Fetch pending escalation requests for custodian review queue.
+ * Fetch escalation requests for custodian review queue.
  *
- * @returns Array of pending escalation requests.
+ * @param status - Comma-separated statuses to filter by. Defaults to "pending".
+ * @returns Array of escalation requests.
  */
-export async function getEscalationQueue(): Promise<EscalationRequest[]> {
-  return apiFetch<EscalationRequest[]>("/escalations/queue");
+export async function getEscalationQueue(status = "pending"): Promise<EscalationRequest[]> {
+  const params = new URLSearchParams({ status });
+  return apiFetch<EscalationRequest[]>(`/escalations/queue?${params.toString()}`);
 }
 
 /**
@@ -108,18 +111,29 @@ export function useMyEscalations(enabled = true) {
 }
 
 /**
- * Hook to fetch pending escalation requests in the custodian queue.
+ * Hook to fetch escalation requests in the custodian queue.
  *
+ * @param status - Comma-separated statuses to filter by. Defaults to "pending".
  * @param enabled - Whether the query should be executed.
  * @returns Query result containing the custodian queue.
  */
-export function useEscalationQueue(enabled = true) {
+export function useEscalationQueue(status = "pending", enabled = true) {
   return useQuery<EscalationRequest[]>({
-    queryKey: escalationQueryKeys.queue,
-    queryFn: () => getEscalationQueue(),
+    queryKey: [...escalationQueryKeys.queue, status],
+    queryFn: () => getEscalationQueue(status),
     enabled,
     staleTime: 10_000,
   });
+}
+
+/**
+ * Hook to fetch resolved (non-pending) escalation requests for processed history.
+ *
+ * @param enabled - Whether the query should be executed.
+ * @returns Query result containing resolved escalation requests.
+ */
+export function useResolvedEscalations(enabled = true) {
+  return useEscalationQueue("accepted,rejected,duplicate", enabled);
 }
 
 /**

@@ -16,26 +16,16 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, ClipboardCopy, Loader2, MessageSquare } from "lucide-react";
+import { Check, X, ClipboardCopy, Loader2, MessageSquare, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
 
-import { useEscalationQueue, useResolveEscalation } from "@/lib/api/escalations";
+import { useEscalationQueue, useResolveEscalation, useResolvedEscalations } from "@/lib/api/escalations";
+import { getTargetHref, getTargetLabel } from "@/lib/escalation-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { EscalationRequest } from "@/types/frbr";
-
-/** Determine the target FRBR level and ID from the escalation request fields.
- *
- * @param esc - The escalation request.
- * @returns The formatted target label.
- */
-function getTargetLabel(esc: EscalationRequest): string {
-  if (esc.work_id) return `Work #${esc.work_id}`;
-  if (esc.expression_id) return `Expression #${esc.expression_id}`;
-  if (esc.manifestation_id) return `Manifestation #${esc.manifestation_id}`;
-  if (esc.item_id) return `Item #${esc.item_id}`;
-  return "Unknown target";
-}
 
 /** Format ISO date string to a readable locale string.
  *
@@ -61,6 +51,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
   const [activeAction, setActiveAction] = useState<"accepted" | "rejected" | "duplicate" | null>(null);
   const [resolutionNote, setResolutionNote] = useState("");
   const resolveMutation = useResolveEscalation();
+  const t = useTranslations("HelpRequests");
 
   const handleResolve = (status: "accepted" | "rejected" | "duplicate") => {
     resolveMutation.mutate(
@@ -73,12 +64,17 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
       },
       {
         onSuccess: () => {
-          toast.success(`Request ${status}`);
+          const statusMessages: Record<string, string> = {
+            accepted: t("requestAccepted"),
+            rejected: t("requestRejected"),
+            duplicate: t("requestDuplicate"),
+          };
+          toast.success(statusMessages[status] || `Request ${status}`);
           setActiveAction(null);
           setResolutionNote("");
         },
         onError: err => {
-          toast.error(err instanceof Error ? err.message : "Failed to resolve request");
+          toast.error(err instanceof Error ? err.message : t("failedToResolve"));
         },
       }
     );
@@ -95,7 +91,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
           disabled={resolveMutation.isPending}
         >
           <Check className="h-3.5 w-3.5" />
-          Accept
+          {t("accept")}
         </Button>
         <Button
           size="sm"
@@ -105,7 +101,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
           disabled={resolveMutation.isPending}
         >
           <X className="h-3.5 w-3.5" />
-          Reject
+          {t("reject")}
         </Button>
         <Button
           size="sm"
@@ -115,7 +111,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
           disabled={resolveMutation.isPending}
         >
           <ClipboardCopy className="h-3.5 w-3.5" />
-          Duplicate
+          {t("markAsDuplicate")}
         </Button>
       </div>
     );
@@ -124,7 +120,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
   return (
     <div className="flex flex-col gap-2 mt-2 w-full">
       <textarea
-        placeholder="Resolution note (optional)"
+        placeholder={t("resolutionNoteOptional")}
         value={resolutionNote}
         onChange={e => setResolutionNote(e.target.value)}
         rows={2}
@@ -137,10 +133,10 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
           onClick={() => handleResolve(activeAction!)}
           disabled={resolveMutation.isPending}
         >
-          {resolveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Confirm"}
+          {resolveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("confirm")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setActiveAction(null)} disabled={resolveMutation.isPending}>
-          Cancel
+          {t("cancel")}
         </Button>
       </div>
     </div>
@@ -174,14 +170,161 @@ function QueueSkeleton() {
  * @returns The empty state JSX element.
  */
 function QueueEmpty() {
+  const t = useTranslations("HelpRequests");
   return (
     <div
       data-testid="escalation-queue-empty"
       className="flex flex-col items-center justify-center py-16 text-muted-foreground"
     >
       <MessageSquare className="h-12 w-12 mb-4 opacity-30" />
-      <p className="text-sm font-medium">No pending escalation requests</p>
-      <p className="text-xs mt-1">New requests from users will appear here.</p>
+      <p className="text-sm font-medium">{t("noPendingUserRequests")}</p>
+      <p className="text-xs mt-1">{t("newRequestsAppear")}</p>
+    </div>
+  );
+}
+
+/**
+ * Render status badge for a resolved escalation.
+ *
+ * @param props - Component props.
+ * @param props.status - The resolved status.
+ * @returns Status badge JSX element.
+ */
+function ResolvedStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "accepted":
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+          <Check className="h-3 w-3" />
+          Accepted
+        </span>
+      );
+    case "rejected":
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20">
+          <X className="h-3 w-3" />
+          Rejected
+        </span>
+      );
+    case "duplicate":
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+          <ClipboardCopy className="h-3 w-3" />
+          Duplicate
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full border">
+          {status}
+        </span>
+      );
+  }
+}
+
+/**
+ * Resolved (processed) requests section with toggle.
+ *
+ * @returns The processed requests JSX element.
+ */
+function ProcessedRequestsSection() {
+  const [isOpen, setIsOpen] = useState(false);
+  const { data: resolved, isLoading, isError, error } = useResolvedEscalations(isOpen);
+  const t = useTranslations("HelpRequests");
+
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground px-2"
+      >
+        {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        <span>{t("processedRequests")}</span>
+      </Button>
+
+      {isOpen && (
+        <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          {isLoading && (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <Card key={i}>
+                  <CardContent className="p-3 space-y-2">
+                    <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-48 animate-pulse rounded bg-muted" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {isError && (
+            <Card>
+              <CardContent className="p-3 text-destructive text-xs">
+                {t("failedToLoadProcessed")}: {error instanceof Error ? error.message : "Unknown error"}
+              </CardContent>
+            </Card>
+          )}
+
+          {resolved && resolved.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-center">
+              <Check className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-xs">{t("noProcessedRequests")}</p>
+            </div>
+          )}
+
+          {resolved?.map(esc => (
+            <Card key={esc.id}>
+              <CardContent className="p-3 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">
+                        {esc.user_display_name || esc.user_username || "Anonymous"}
+                      </span>
+                      <ResolvedStatusBadge status={esc.status} />
+                      {(() => {
+                        const href = getTargetHref(esc);
+                        return href ? (
+                          <Link
+                            href={href}
+                            className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
+                          >
+                            {getTargetLabel(esc)}
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            {getTargetLabel(esc)}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="flex items-baseline gap-2 text-xs">
+                      <span className="font-mono font-medium text-muted-foreground uppercase text-[10px]">
+                        {esc.field_name}
+                      </span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                    </div>
+                  </div>
+                  {esc.resolved_at && (
+                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                      {formatDate(esc.resolved_at)}
+                    </span>
+                  )}
+                </div>
+                {esc.resolution_note && (
+                  <div className="rounded bg-muted/50 p-2 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                    {esc.resolution_note}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -198,19 +341,29 @@ function QueueEmpty() {
  */
 export function EscalationQueue() {
   const { data: queue, isLoading, isError, error } = useEscalationQueue();
+  const t = useTranslations("HelpRequests");
 
   if (isLoading) return <QueueSkeleton />;
   if (isError) {
     return (
       <Card>
         <CardContent className="p-4 text-destructive">
-          <p>Failed to load escalation queue: {error instanceof Error ? error.message : "Unknown error"}</p>
+          <p>
+            {t("failedToLoad")}: {error instanceof Error ? error.message : "Unknown error"}
+          </p>
         </CardContent>
       </Card>
     );
   }
 
-  if (!queue || queue.length === 0) return <QueueEmpty />;
+  if (!queue || queue.length === 0) {
+    return (
+      <div data-testid="escalation-queue">
+        <QueueEmpty />
+        <ProcessedRequestsSection />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4" data-testid="escalation-queue">
@@ -224,9 +377,22 @@ export function EscalationQueue() {
                   <span className="text-sm font-semibold">
                     {esc.user_display_name || esc.user_username || "Anonymous"}
                   </span>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                    {getTargetLabel(esc)}
-                  </span>
+                  {(() => {
+                    const href = getTargetHref(esc);
+                    return href ? (
+                      <Link
+                        href={href}
+                        className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
+                      >
+                        {getTargetLabel(esc)}
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    ) : (
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {getTargetLabel(esc)}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-baseline gap-2 text-xs">
                   <span className="font-mono font-semibold text-primary">{esc.field_name}</span>
@@ -256,6 +422,7 @@ export function EscalationQueue() {
           </CardContent>
         </Card>
       ))}
+      <ProcessedRequestsSection />
     </div>
   );
 }

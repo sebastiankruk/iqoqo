@@ -17,36 +17,10 @@
 
 import Link from "next/link";
 import { CheckCircle2, XCircle, AlertCircle, Clock, HelpCircle, ExternalLink } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useMyEscalations } from "@/lib/api/escalations";
+import { getTargetHref, getTargetLabel } from "@/lib/escalation-utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { EscalationRequest } from "@/types/frbr";
-
-/**
- * Get target entity link path.
- *
- * @param esc - Escalation request object.
- * @returns Target URL path or null.
- */
-function getTargetHref(esc: EscalationRequest): string | null {
-  if (esc.manifestation_id) return `/manifestation/${esc.manifestation_id}`;
-  if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
-  if (esc.item_id) return `/item/${esc.item_id}`;
-  return null;
-}
-
-/**
- * Get target entity label.
- *
- * @param esc - Escalation request object.
- * @returns Formatted target label string.
- */
-function getTargetLabel(esc: EscalationRequest): string {
-  if (esc.manifestation_id) return `Manifestation #${esc.manifestation_id}`;
-  if (esc.work_id) return `Work #${esc.work_id}`;
-  if (esc.expression_id) return `Expression #${esc.expression_id}`;
-  if (esc.item_id) return `Item #${esc.item_id}`;
-  return "FRBR Entity";
-}
 
 /**
  * Format ISO date string to readable locale format.
@@ -74,33 +48,34 @@ function formatDate(iso: string): string {
  * @returns Status badge JSX element.
  */
 function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations("HelpRequests");
   switch (status) {
     case "accepted":
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
           <CheckCircle2 className="h-3 w-3" />
-          Accepted
+          {t("accepted")}
         </span>
       );
     case "rejected":
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20">
           <XCircle className="h-3 w-3" />
-          Rejected
+          {t("rejected")}
         </span>
       );
     case "duplicate":
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
           <AlertCircle className="h-3 w-3" />
-          Duplicate
+          {t("duplicate")}
         </span>
       );
     default:
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
           <Clock className="h-3 w-3 animate-pulse" />
-          Pending
+          {t("pending")}
         </span>
       );
   }
@@ -113,6 +88,7 @@ function StatusBadge({ status }: { status: string }) {
  */
 export function MyEscalations() {
   const { data: requests, isLoading } = useMyEscalations();
+  const t = useTranslations("HelpRequests");
 
   if (isLoading) {
     return (
@@ -134,16 +110,14 @@ export function MyEscalations() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Help Requests</CardTitle>
-          <CardDescription>Metadata correction requests submitted to custodians</CardDescription>
+          <CardTitle className="text-xl">{t("helpRequestsTitle")}</CardTitle>
+          <CardDescription>{t("helpRequestsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-center">
             <HelpCircle className="h-8 w-8 mb-2 opacity-40" />
-            <p className="text-sm font-medium">No help requests submitted</p>
-            <p className="text-xs mt-1">
-              When you request metadata corrections on item or manifestation pages, your requests will appear here.
-            </p>
+            <p className="text-sm font-medium">{t("noHelpRequestsSubmitted")}</p>
+            <p className="text-xs mt-1">{t("helpRequestsHint")}</p>
           </div>
         </CardContent>
       </Card>
@@ -153,8 +127,10 @@ export function MyEscalations() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Help Requests ({requests.length})</CardTitle>
-        <CardDescription>Track status and custodian responses for your metadata correction requests</CardDescription>
+        <CardTitle className="text-xl">
+          {t("helpRequestsTitle")} ({requests.length})
+        </CardTitle>
+        <CardDescription>{t("trackStatusDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {requests.map(esc => {
@@ -162,7 +138,7 @@ export function MyEscalations() {
           return (
             <div
               key={esc.id}
-              className="rounded-lg border border-border bg-card p-3.5 text-xs shadow-xs space-y-2"
+              className="rounded-lg border border-border bg-card p-4 text-xs shadow-xs space-y-3"
               data-testid="my-escalation-card"
             >
               <div className="flex items-start justify-between gap-3">
@@ -198,7 +174,7 @@ export function MyEscalations() {
 
               {esc.resolution_note && (
                 <div className="rounded bg-muted/60 p-2 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                  Custodian note: &ldquo;{esc.resolution_note}&rdquo;
+                  {t("custodianNote")}: &ldquo;{esc.resolution_note}&rdquo;
                 </div>
               )}
             </div>

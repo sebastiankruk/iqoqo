@@ -186,7 +186,7 @@ function ContentManagementContent(): React.JSX.Element {
                 )}
                 {canViewEscalationQueue && (
                   <NavItem
-                    label="Escalation Queue"
+                    label="User Requests"
                     icon={LifeBuoy}
                     isActive={effectiveTab === "escalations"}
                     onClick={() => handleTabChange("escalations")}

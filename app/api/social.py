@@ -411,16 +411,31 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.ESCALATE_RESOLVE)
 def list_escalation_queue() -> Response | tuple[Response, int]:
-    """List all pending escalation requests for custodian review."""
+    """List escalation requests for custodian review.
+
+    Supports optional ``?status=`` query parameter (comma-separated list of
+    statuses). Defaults to ``pending`` when absent, preserving backward
+    compatibility.
+    """
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
 
+    raw_status = request.args.get("status", "pending")
+    statuses = [s.strip().lower() for s in raw_status.split(",") if s.strip()]
+
+    allowed_statuses = {"pending", "accepted", "rejected", "duplicate"}
+    for s in statuses:
+        if s not in allowed_statuses:
+            return jsonify(
+                {"error": f"Invalid status '{s}'. Must be one of {sorted(allowed_statuses)}", "code": 400}
+            ), 400
+
     stmt = (
         select(EscalationRequest)
         .options(selectinload(EscalationRequest.user))  # type: ignore[arg-type]
-        .where(EscalationRequest.status == "pending")
-        .order_by(EscalationRequest.created_at.asc())
+        .where(EscalationRequest.status.in_(statuses))
+        .order_by(EscalationRequest.created_at.desc())
     )
     requests = db.session.scalars(stmt).all()
     return jsonify({"success": True, "data": [req.to_dict() for req in requests]})

@@ -30,6 +30,7 @@ import {
   Check,
   SunMoon,
   Globe,
+  HelpCircle,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -52,6 +53,7 @@ import {
   DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
+import { useMyEscalations } from "@/lib/api/escalations";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
 
 /**
@@ -73,6 +75,9 @@ export function Navbar() {
 
   const { setTheme, theme } = useTheme();
   const locale = useLocale();
+
+  const { data: myEscalations } = useMyEscalations(!!profile);
+  const pendingCount = myEscalations?.filter(e => e.status === "pending").length ?? 0;
 
   const setLanguage = (newLocale: string) => {
     document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
@@ -238,6 +243,16 @@ export function Navbar() {
                       className="cursor-pointer rounded-md py-2 px-3 text-sm"
                     >
                       <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                      <Link href="/admin/settings?tab=profile#help-requests">
+                        <HelpCircle className="mr-2 h-4 w-4" /> {t("myHelpRequests")}
+                        {pendingCount > 0 && (
+                          <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            {pendingCount}
+                          </span>
+                        )}
+                      </Link>
                     </DropdownMenuItem>
                     {profile.roles?.includes("admin") && (
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">

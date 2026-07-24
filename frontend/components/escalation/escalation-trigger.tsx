@@ -18,10 +18,12 @@
 import { useState } from "react";
 import { HelpCircle, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation, useMyEscalations } from "@/lib/api/escalations";
+import type { EscalationRequest } from "@/types/frbr";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,6 +38,10 @@ import {
 interface EscalationTriggerProps {
   level: "work" | "expression" | "manifestation" | "item";
   targetId: number;
+  /** Pre-filtered escalations for this target. When provided, internal fetch is skipped. */
+  escalations?: EscalationRequest[];
+  /** When true, show only the dialog button (no status card). Useful inside accordions. */
+  alwaysShowDialog?: boolean;
 }
 
 /**
@@ -44,10 +50,18 @@ interface EscalationTriggerProps {
  * @param props - Component props.
  * @param props.level - The FRBR entity level.
  * @param props.targetId - The target entity ID.
+ * @param props.escalations - Optional pre-filtered escalations for this target. When provided, internal fetch is skipped.
+ * @param props.alwaysShowDialog - When true, show only the dialog button (no status card). Useful inside accordions.
  * @returns The rendered trigger button, status card, or null.
  */
-export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
+export function EscalationTrigger({
+  level,
+  targetId,
+  escalations: providedEscalations,
+  alwaysShowDialog = false,
+}: EscalationTriggerProps) {
   const { data: profile } = useProfile();
+  const t = useTranslations("HelpRequests");
   const [open, setOpen] = useState(false);
   const [fieldName, setFieldName] = useState("title");
   const [currentValue, setCurrentValue] = useState("");
@@ -57,7 +71,8 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
   const hasWriteMetadata = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
   const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
 
-  const { data: myEscalations } = useMyEscalations(hasEscalateRequest);
+  const shouldFetch = hasEscalateRequest && !providedEscalations;
+  const { data: myEscalations } = useMyEscalations(shouldFetch);
   const createMutation = useCreateEscalation();
 
   // If user has direct write access or lacks escalate permission, do not render trigger
@@ -65,14 +80,25 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
     return null;
   }
 
-  // Find active or recent escalation for this target
-  const activeEscalation = myEscalations?.find(e => {
-    if (level === "work") return e.work_id === targetId;
-    if (level === "expression") return e.expression_id === targetId;
-    if (level === "manifestation") return e.manifestation_id === targetId;
-    if (level === "item") return e.item_id === targetId;
-    return false;
-  });
+  // Use provided escalations if available, otherwise find from fetched
+  const allTargetEscalations =
+    providedEscalations ??
+    myEscalations?.filter(e => {
+      if (level === "work") return e.work_id === targetId;
+      if (level === "expression") return e.expression_id === targetId;
+      if (level === "manifestation") return e.manifestation_id === targetId;
+      if (level === "item") return e.item_id === targetId;
+      return false;
+    }) ??
+    [];
+
+  // When alwaysShowDialog is true, skip status card rendering entirely.
+  // In standalone mode, show status card for first matching escalation (any status).
+  const activeEscalation = alwaysShowDialog
+    ? undefined
+    : allTargetEscalations.length > 0
+      ? allTargetEscalations[0]
+      : undefined;
 
   if (activeEscalation) {
     const getStatusIcon = () => {
@@ -96,14 +122,14 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
         <div className="flex items-center justify-between font-medium">
           <span className="flex items-center gap-1.5 capitalize">
             {getStatusIcon()}
-            Escalation: {activeEscalation.status}
+            {t("helpRequest")}: {t(activeEscalation.status)}
           </span>
           <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
             {activeEscalation.field_name}
           </span>
         </div>
         <div className="text-muted-foreground">
-          Suggested: <span className="font-mono text-foreground">{activeEscalation.suggested_value}</span>
+          {t("suggested")}: <span className="font-mono text-foreground">{activeEscalation.suggested_value}</span>
         </div>
         {activeEscalation.resolution_note && (
           <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
@@ -117,7 +143,7 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!suggestedValue.trim()) {
-      toast.error("Suggested value is required");
+      toast.error(t("suggestedValueRequired"));
       return;
     }
 
@@ -134,14 +160,14 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
       },
       {
         onSuccess: () => {
-          toast.success("Escalation request submitted to custodians");
+          toast.success(t("escalationSubmitted"));
           setOpen(false);
           setSuggestedValue("");
           setCurrentValue("");
           setNote("");
         },
         onError: err => {
-          toast.error(err instanceof Error ? err.message : "Failed to submit escalation request");
+          toast.error(err instanceof Error ? err.message : t("failedToSubmit"));
         },
       }
     );
@@ -152,21 +178,19 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="w-full justify-start gap-2">
           <HelpCircle className="h-4 w-4 text-muted-foreground" />
-          <span>Ask custodians for help</span>
+          <span>{t("askCustodiansForHelp")}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Request Metadata Correction</DialogTitle>
-            <DialogDescription>
-              Submit a request to custodians to review and update locked metadata on this entity.
-            </DialogDescription>
+            <DialogTitle>{t("requestMetadataCorrection")}</DialogTitle>
+            <DialogDescription>{t("requestDescription")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <label htmlFor="field_name" className="text-xs font-medium">
-                Field to correct
+                {t("fieldToCorrect")}
               </label>
               <select
                 id="field_name"
@@ -184,7 +208,7 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
             </div>
             <div className="grid gap-2">
               <label htmlFor="current_value" className="text-xs font-medium">
-                Current value (optional)
+                {t("currentValueOptional")}
               </label>
               <input
                 id="current_value"
@@ -197,7 +221,7 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
             </div>
             <div className="grid gap-2">
               <label htmlFor="suggested_value" className="text-xs font-medium">
-                Suggested value <span className="text-destructive">*</span>
+                {t("suggestedValue")} <span className="text-destructive">*</span>
               </label>
               <input
                 id="suggested_value"
@@ -211,7 +235,7 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
             </div>
             <div className="grid gap-2">
               <label htmlFor="note" className="text-xs font-medium">
-                Reason / Note (optional)
+                {t("reasonNoteOptional")}
               </label>
               <textarea
                 id="note"
@@ -225,10 +249,10 @@ export function EscalationTrigger({ level, targetId }: EscalationTriggerProps) {
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Submitting..." : "Submit Request"}
+              {createMutation.isPending ? t("submitting") : t("submitRequest")}
             </Button>
           </DialogFooter>
         </form>

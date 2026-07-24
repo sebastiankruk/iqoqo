@@ -49,6 +49,7 @@ vi.mock("next-intl", () => ({
           publicProfile: "Public Profile",
           profileSettings: "Profile Settings",
           manageCollections: "Manage Collections",
+          myHelpRequests: "My Help Requests",
           adminConfiguration: "Admin Configuration",
           logOut: "Log out",
           home: "Home",
@@ -72,6 +73,13 @@ vi.mock("@/lib/api/hooks", () => ({
   useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
   useAppConfig: vi.fn(() => ({ data: { maintenance_mode: false }, isLoading: false })),
+}));
+
+// Mock escalation hooks used by the Navbar
+vi.mock("@/lib/api/escalations", () => ({
+  useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
+  useCreateEscalation: vi.fn(),
+  useEscalationQueue: vi.fn(),
 }));
 
 describe("Navbar", () => {
