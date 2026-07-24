@@ -77,7 +77,7 @@ describe("Admin Content Page - Escalation Queue tab", () => {
 
     render(<ContentManagementPage />);
 
-    expect(screen.getByText("Escalation Queue")).toBeInTheDocument();
+    expect(screen.getByText("User Requests")).toBeInTheDocument();
   });
 
   it("hides Escalation Queue nav item for regular user without escalate:resolve", () => {

@@ -16,6 +16,40 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock next-intl to provide translations for HelpRequests namespace
+vi.mock("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: (namespace: string) => {
+    if (namespace === "HelpRequests") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          askCustodiansForHelp: "Ask custodians for help",
+          helpRequest: "Help Request",
+          pending: "pending",
+          accepted: "accepted",
+          rejected: "Rejected",
+          duplicate: "Duplicate",
+          suggested: "Suggested",
+          suggestedValue: "Suggested value",
+          fieldToCorrect: "Field to correct",
+          currentValueOptional: "Current value (optional)",
+          reasonNoteOptional: "Reason / Note (optional)",
+          submitRequest: "Submit Request",
+          submitting: "Submitting...",
+          cancel: "Cancel",
+          requestMetadataCorrection: "Request Metadata Correction",
+          requestDescription: "Submit a request to custodians to review and update locked metadata on this entity.",
+          suggestedValueRequired: "Suggested value is required",
+          escalationSubmitted: "Escalation request submitted to custodians",
+          failedToSubmit: "Failed to submit escalation request",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));
+
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
 }));
@@ -92,7 +126,7 @@ describe("EscalationTrigger Component", () => {
     render(<EscalationTrigger level="item" targetId={123} />);
 
     expect(screen.getByTestId("escalation-status-card")).toBeInTheDocument();
-    expect(screen.getByText(/Escalation: pending/i)).toBeInTheDocument();
+    expect(screen.getByText(/Help Request: pending/i)).toBeInTheDocument();
     expect(screen.getByText("Corrected Title")).toBeInTheDocument();
   });
 
@@ -120,7 +154,7 @@ describe("EscalationTrigger Component", () => {
 
     render(<EscalationTrigger level="item" targetId={123} />);
 
-    expect(screen.getByText(/Escalation: accepted/i)).toBeInTheDocument();
+    expect(screen.getByText(/Help Request: accepted/i)).toBeInTheDocument();
     expect(screen.getByText(/Updated ISBN in metadata editor/i)).toBeInTheDocument();
   });
 });

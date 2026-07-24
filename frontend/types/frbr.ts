@@ -323,10 +323,12 @@ export interface EscalationRequest {
   expression_id?: number | null;
   manifestation_id?: number | null;
   item_id?: number | null;
+  target_type?: string | null;
   field_name: string;
   current_value?: string | null;
   suggested_value: string;
   note?: string | null;
+  request_type?: "correction" | "deletion";
   status: "pending" | "accepted" | "rejected" | "duplicate";
   resolved_by?: string | null;
   resolver_display_name?: string | null;

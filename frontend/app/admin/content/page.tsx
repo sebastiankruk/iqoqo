@@ -125,15 +125,7 @@ function ContentManagementContent(): React.JSX.Element {
   const activeTab = internalTab || searchParams.get("tab") || "profile";
   const effectiveTab = activeTab;
 
-  if (profileLoading || !profile) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
-      </div>
-    );
-  }
-
-  const permissions = profile.permissions ?? [];
+  const permissions = profile?.permissions ?? [];
   const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
 
   const canViewSettings =
@@ -149,6 +141,30 @@ function ContentManagementContent(): React.JSX.Element {
   const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
 
   const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
+
+  // Auto-select first available custodian tab when landing with no explicit tab
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (!tabParam && !internalTab && profile && hasCustodianAccess) {
+      if (canViewMetadata) {
+        setInternalTab("metadata");
+      } else if (canEditCover) {
+        setInternalTab("cover-art");
+      } else if (canViewEscalationQueue) {
+        setInternalTab("escalations");
+      }
+    }
+    // Only run on mount when profile first loads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, hasCustodianAccess]);
+
+  if (profileLoading || !profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -186,7 +202,7 @@ function ContentManagementContent(): React.JSX.Element {
                 )}
                 {canViewEscalationQueue && (
                   <NavItem
-                    label="Escalation Queue"
+                    label="User Requests"
                     icon={LifeBuoy}
                     isActive={effectiveTab === "escalations"}
                     onClick={() => handleTabChange("escalations")}

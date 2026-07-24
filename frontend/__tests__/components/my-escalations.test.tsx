@@ -18,8 +18,39 @@ import { describe, it, expect, vi } from "vitest";
 import { MyEscalations } from "@/components/escalation/my-escalations";
 import * as escalationsApi from "@/lib/api/escalations";
 
+// Mock next-intl to provide translations for HelpRequests namespace
+vi.mock("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: (namespace: string) => {
+    if (namespace === "HelpRequests") {
+      return (key: string) => {
+        const translations: Record<string, string> = {
+          helpRequestsTitle: "Help Requests",
+          helpRequestsDesc: "Metadata correction requests submitted to custodians",
+          noHelpRequestsSubmitted: "No help requests submitted",
+          helpRequestsHint:
+            "When you request metadata corrections on item or manifestation pages, your requests will appear here.",
+          trackStatusDesc: "Track status and custodian responses for your metadata correction requests",
+          pending: "Pending",
+          accepted: "Accepted",
+          rejected: "Rejected",
+          duplicate: "Duplicate",
+          custodianNote: "Custodian note",
+        };
+        return translations[key] || key;
+      };
+    }
+    return (key: string) => key;
+  },
+}));
+
 vi.mock("@/lib/api/escalations", () => ({
   useMyEscalations: vi.fn(),
+}));
+
+// Mock next/link
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
 describe("MyEscalations Component", () => {
