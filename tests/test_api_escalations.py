@@ -485,6 +485,7 @@ def test_accept_deletion_request_target_not_found(client, escalations_setup):
     )
     assert resolve_resp.status_code == 404
 
+
 # ── Status filter query tests ──────────────────────────────────────────────
 
 

@@ -262,6 +262,7 @@ def custodian_headers(app):
     from app.db.models import Permission, Role, User, db
 
     with app.app_context():
+
         def get_or_create_perm(name):
             p = Permission.query.filter_by(name=name).first()
             if not p:

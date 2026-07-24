@@ -445,12 +445,8 @@ def test_escalation_permission_migration_upgrade(app) -> None:
             migration.upgrade()
             conn.commit()
 
-            assert _role_permission_exists(conn, "user", "escalate:request"), (
-                "user role should have escalate:request"
-            )
-            assert _role_permission_exists(conn, "custodian", "escalate:resolve"), (
-                "custodian role should have escalate:resolve"
-            )
+            assert _role_permission_exists(conn, "user", "escalate:request"), "user role should have escalate:request"
+            assert _role_permission_exists(conn, "custodian", "escalate:resolve"), "custodian role should have escalate:resolve"
 
 
 def test_escalation_permission_migration_downgrade(app) -> None:
@@ -478,9 +474,9 @@ def test_escalation_permission_migration_downgrade(app) -> None:
             conn.commit()
 
             # Verify escalated:request removed from user role
-            assert not _role_permission_exists(conn, "user", "escalate:request"), (
-                "user role should not have escalate:request after downgrade"
-            )
-            assert not _role_permission_exists(conn, "custodian", "escalate:resolve"), (
-                "custodian role should not have escalate:resolve after downgrade"
-            )
+            assert not _role_permission_exists(
+                conn, "user", "escalate:request"
+            ), "user role should not have escalate:request after downgrade"
+            assert not _role_permission_exists(
+                conn, "custodian", "escalate:resolve"
+            ), "custodian role should not have escalate:resolve after downgrade"
