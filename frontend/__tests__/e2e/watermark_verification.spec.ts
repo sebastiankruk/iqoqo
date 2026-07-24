@@ -26,7 +26,7 @@ test.describe("Watermark Verification Workflow", () => {
     expect(src).toContain("_wm.jpg");
 
     // Visual verification (requires pre-generated baseline screenshots)
-    // await expect(genAiCover).toHaveScreenshot('llm_gen_corner_wm.png', { maxDiffPixels: 100 });
+    await expect(genAiCover).toHaveScreenshot("llm_gen_corner_wm.png", { maxDiffPixels: 200 });
   });
 
   test("verifies center watermark presence on placeholders", async ({ page }) => {
@@ -39,6 +39,6 @@ test.describe("Watermark Verification Workflow", () => {
     expect(src).toContain("_wm.jpg");
 
     // Visual verification (requires pre-generated baseline screenshots)
-    // await expect(placeholderCover).toHaveScreenshot("placeholder_center_wm.png", { maxDiffPixels: 100 });
+    await expect(placeholderCover).toHaveScreenshot("placeholder_center_wm.png", { maxDiffPixels: 200 });
   });
 });

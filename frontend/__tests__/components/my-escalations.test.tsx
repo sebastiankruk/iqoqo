@@ -36,6 +36,12 @@ vi.mock("next-intl", () => ({
           rejected: "Rejected",
           duplicate: "Duplicate",
           custodianNote: "Custodian note",
+          deletion: "Deletion",
+          correction: "Correction",
+          reasonForDeletion: "Reason for deletion",
+          deletion: "Deletion",
+          correction: "Correction",
+          reasonForDeletion: "Reason for deletion",
         };
         return translations[key] || key;
       };
@@ -100,5 +106,131 @@ describe("MyEscalations Component", () => {
     expect(screen.getByText("author")).toBeInTheDocument();
     expect(screen.getByText("Alice Vincent")).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
+  });
+
+  // ── 4.17 Deletion badge ─────────────────────────────────────────────────
+  it("renders deletion badge for deletion request type", () => {
+    vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
+      data: [
+        {
+          id: 2,
+          user_id: "user-1",
+          manifestation_id: 2007,
+          request_type: "deletion",
+          field_name: "",
+          suggested_value: "",
+          note: "Duplicate entry",
+          status: "pending",
+          resolution_note: undefined,
+          created_at: "2026-07-23T19:27:25Z",
+          updated_at: "2026-07-23T19:27:25Z",
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
+
+    render(<MyEscalations />);
+
+    expect(screen.getByText("Help Requests (1)")).toBeInTheDocument();
+    // Look for the translated "deletion" text (lower-case from mock)
+    expect(screen.getByText("Deletion")).toBeInTheDocument();
+  });
+
+  // ── 4.18 Accepted status badge ─────────────────────────────────────────
+  it("renders accepted status badge for accepted escalation", () => {
+    vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
+      data: [
+        {
+          id: 3,
+          user_id: "user-1",
+          manifestation_id: 2007,
+          field_name: "title",
+          suggested_value: "Fixed Title",
+          status: "accepted",
+          resolution_note: "Done",
+          created_at: "2026-07-23T19:27:25Z",
+          updated_at: "2026-07-23T19:27:25Z",
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
+
+    render(<MyEscalations />);
+
+    expect(screen.getByText("Accepted")).toBeInTheDocument();
+    expect(screen.getByText("Fixed Title")).toBeInTheDocument();
+  });
+
+  // ── 4.19 Rejected status badge ─────────────────────────────────────────
+  it("renders rejected status badge for rejected escalation", () => {
+    vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
+      data: [
+        {
+          id: 4,
+          user_id: "user-1",
+          manifestation_id: 2007,
+          field_name: "isbn",
+          suggested_value: "1234567890",
+          status: "rejected",
+          resolution_note: "Not valid",
+          created_at: "2026-07-23T19:27:25Z",
+          updated_at: "2026-07-23T19:27:25Z",
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
+
+    render(<MyEscalations />);
+
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+  });
+
+  // ── 4.20 Resolution note visible ───────────────────────────────────────
+  it("renders resolution note when present", () => {
+    vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
+      data: [
+        {
+          id: 5,
+          user_id: "user-1",
+          manifestation_id: 2007,
+          field_name: "title",
+          suggested_value: "Updated",
+          status: "accepted",
+          resolution_note: "Fixed via admin panel",
+          created_at: "2026-07-23T19:27:25Z",
+          updated_at: "2026-07-23T19:27:25Z",
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
+
+    render(<MyEscalations />);
+
+    expect(screen.getByText(/Fixed via admin panel/i)).toBeInTheDocument();
+  });
+
+  // ── 4.21 Target links clickable ────────────────────────────────────────
+  it("renders target label as link with correct href", () => {
+    vi.mocked(escalationsApi.useMyEscalations).mockReturnValue({
+      data: [
+        {
+          id: 6,
+          user_id: "user-1",
+          manifestation_id: 99,
+          field_name: "title",
+          suggested_value: "Corrected",
+          status: "pending",
+          resolution_note: undefined,
+          created_at: "2026-07-23T19:27:25Z",
+          updated_at: "2026-07-23T19:27:25Z",
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof escalationsApi.useMyEscalations>);
+
+    render(<MyEscalations />);
+
+    const targetLink = screen.getByText("Manifestation #99");
+    expect(targetLink.closest("a")).toHaveAttribute("href", "/manifestation/99");
   });
 });

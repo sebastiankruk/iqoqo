@@ -114,4 +114,52 @@ describe("CollectionInsights", () => {
     render(<CollectionInsights />);
     expect(screen.queryByTestId("collection-insights")).not.toBeInTheDocument();
   });
+
+  it("renders collection-insights section during loading", () => {
+    mockUseStats.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useStats>);
+
+    mockUseVelocity.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useVelocityInsights>);
+
+    mockUseDistribution.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useDistributionInsights>);
+
+    render(<CollectionInsights />);
+    // Section should render even when loading (stats undefined means it doesn't return null)
+    expect(screen.getByTestId("collection-insights")).toBeInTheDocument();
+  });
+
+  it("renders collection-insights section on error", () => {
+    mockUseStats.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as ReturnType<typeof useStats>);
+
+    mockUseVelocity.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as ReturnType<typeof useVelocityInsights>);
+
+    mockUseDistribution.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as ReturnType<typeof useDistributionInsights>);
+
+    render(<CollectionInsights />);
+    // Section should render even on error (stats undefined means it doesn't return null)
+    expect(screen.getByTestId("collection-insights")).toBeInTheDocument();
+  });
 });

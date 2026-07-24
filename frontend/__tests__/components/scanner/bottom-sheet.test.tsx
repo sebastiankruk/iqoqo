@@ -13,55 +13,100 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
+/**
+ * Tests for BottomSheet scanner component.
+ *
+ * Verifies tab rendering, tab switching, manual search, barcode camera,
+ * error display, and manual entry fallback.
+ */
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
-  useLocale: () => "en",
   useTranslations: () => (key: string) => key,
 }));
 
-// Mock CameraCapture to simplify rendering
+// Mock CameraCapture component
 vi.mock("@/components/scanner/camera-capture", () => ({
-  CameraCapture: vi.fn(({ label }: { label: string }) => <div data-testid="camera-capture-mock">{label}</div>),
+  CameraCapture: ({ label }: { label: string }) => <button data-testid="camera-capture">{label}</button>,
 }));
 
-function createMockRef() {
-  return { current: null } as React.RefObject<HTMLVideoElement | null>;
-}
+// Mock the api client for lookup
+vi.mock("@/lib/api/client", () => ({
+  apiFetch: vi.fn(),
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+  },
+}));
 
 describe("BottomSheet", () => {
-  it("renders three tabs: Barcode, Snap Cover, Manual Search", () => {
-    render(<BottomSheet videoRef={createMockRef()} onFound={vi.fn()} />);
-    expect(screen.getByText("Barcode")).toBeTruthy();
-    expect(screen.getByText("Snap Cover")).toBeTruthy();
-    expect(screen.getByText("Manual Search")).toBeTruthy();
+  let videoRef: React.RefObject<HTMLVideoElement | null>;
+  const onFound = vi.fn();
+  const onScannerStateChange = vi.fn();
+  const onTabChange = vi.fn();
+  const onExtractComplete = vi.fn();
+  const onExtractionFailure = vi.fn();
+  const onShowManualForm = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    videoRef = { current: null };
   });
 
-  it("shows start camera button in barcode tab by default", () => {
-    render(<BottomSheet videoRef={createMockRef()} onFound={vi.fn()} />);
-    expect(screen.getByTestId("start-camera-button")).toBeTruthy();
+  it("renders all three tabs: barcode, snap cover, manual search", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
+
+    expect(screen.getByTestId("scanner-tab-barcode")).toBeInTheDocument();
+    expect(screen.getByTestId("scanner-tab-cover")).toBeInTheDocument();
+    expect(screen.getByTestId("scanner-tab-manual")).toBeInTheDocument();
   });
 
-  it("switches to cover tab and shows CameraCapture components", () => {
-    render(<BottomSheet videoRef={createMockRef()} onFound={vi.fn()} />);
+  it("switches active content when tabs are clicked", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onTabChange={onTabChange} />);
+
+    // Click "Snap Cover" tab
     fireEvent.click(screen.getByTestId("scanner-tab-cover"));
-    const captures = screen.getAllByTestId("camera-capture-mock");
-    expect(captures.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("switches to manual tab and shows search input", () => {
-    render(<BottomSheet videoRef={createMockRef()} onFound={vi.fn()} />);
-    fireEvent.click(screen.getByText("Manual Search"));
-    expect(screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…")).toBeTruthy();
-  });
-
-  it("calls onTabChange callback when switching tabs", () => {
-    const onTabChange = vi.fn();
-    render(<BottomSheet videoRef={createMockRef()} onFound={vi.fn()} onTabChange={onTabChange} />);
-    fireEvent.click(screen.getByText("Snap Cover"));
     expect(onTabChange).toHaveBeenCalledWith("cover");
+
+    // CameraCapture should be rendered (as "Snap Cover" and "Upload from Gallery" buttons)
+    const cameraCaptures = screen.getAllByTestId("camera-capture");
+    expect(cameraCaptures.length).toBe(2);
+  });
+
+  it("manual search tab shows text input and search button", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
+
+    // Switch to manual tab
+    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
+
+    // Should show a text input
+    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
+    expect(input).toBeInTheDocument();
+
+    // Should show manual entry fallback button
+    expect(screen.getByText("Manual Entry Form")).toBeInTheDocument();
+  });
+
+  it("barcode tab renders camera viewfinder controls", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
+
+    // Should be on barcode tab by default
+    expect(screen.getByTestId("start-camera-button")).toBeInTheDocument();
+    expect(screen.getByText(/Tap to start camera/i)).toBeInTheDocument();
+  });
+
+  it("shows manual entry fallback button", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
+
+    // Switch to manual tab
+    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
+
+    const manualEntryBtn = screen.getByText("Manual Entry Form");
+    fireEvent.click(manualEntryBtn);
+    expect(onShowManualForm).toHaveBeenCalled();
   });
 });

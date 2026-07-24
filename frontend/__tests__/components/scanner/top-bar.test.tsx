@@ -13,67 +13,130 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
+/**
+ * Tests for TopBar scanner component.
+ *
+ * Verifies format selector, policy selector, flash toggle, and back-link.
+ */
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TopBar } from "@/components/scanner/top-bar";
 
-// Mock next/link to just render children
+// Mock next/link
 vi.mock("next/link", () => ({
-  default: ({ children, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
-    <a {...props}>{children}</a>
+  default: ({
+    children,
+    href,
+    onClick,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    onClick?: React.MouseEventHandler;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} onClick={onClick} {...props}>
+      {children}
+    </a>
   ),
 }));
 
-// Mock next-intl
-vi.mock("next-intl", () => ({
-  useLocale: () => "en",
-  useTranslations: () => (key: string) => key,
+// Mock the MEDIA_REGISTRY to provide icons
+vi.mock("@/lib/media", () => ({
+  MEDIA_REGISTRY: {
+    book: { icon: () => null, label: "Book" },
+    audiobook: { icon: () => null, label: "Audiobook" },
+    music: { icon: () => null, label: "Music" },
+    movie: { icon: () => null, label: "Movie" },
+    board_game: { icon: () => null, label: "Board Game" },
+    puzzle: { icon: () => null, label: "Puzzle" },
+  },
 }));
 
 describe("TopBar", () => {
-  it("renders Scan New Item heading", () => {
-    render(<TopBar />);
-    expect(screen.getByText("Scan New Item")).toBeTruthy();
+  const setFormat = vi.fn();
+  const setPolicy = vi.fn();
+  const onCancel = vi.fn();
+  const onToggleFlash = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("renders policy buttons when setPolicy is provided", () => {
-    const setPolicy = vi.fn();
-    render(<TopBar setPolicy={setPolicy} />);
-    expect(screen.getByText("Inventory")).toBeTruthy();
-    expect(screen.getByText("Wishlist")).toBeTruthy();
-    expect(screen.getByText("Catalog")).toBeTruthy();
+  it("renders format selector with all scan formats", () => {
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+
+    // Should render the "Scan New Item" title
+    expect(screen.getByText("Scan New Item")).toBeInTheDocument();
+
+    // Check format buttons exist (via aria-label)
+    ["Book", "Audiobook", "Music", "Movie", "Board Game", "Puzzle"].forEach(label => {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    });
   });
 
-  it("calls onCancel when back link is clicked", () => {
-    const onCancel = vi.fn();
-    render(<TopBar onCancel={onCancel} />);
-    fireEvent.click(screen.getByLabelText("Go back to library"));
-    expect(onCancel).toHaveBeenCalledOnce();
+  it("policy selector renders inventory/wishlist/catalog options", () => {
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+
+    expect(screen.getByText("Inventory")).toBeInTheDocument();
+    expect(screen.getByText("Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Catalog")).toBeInTheDocument();
   });
 
-  it("renders flash toggle button when hasFlash is true", () => {
-    render(<TopBar hasFlash={true} isFlashOn={false} />);
-    expect(screen.getByLabelText("Toggle flash")).toBeTruthy();
+  it("policy change calls setPolicy callback", () => {
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+
+    fireEvent.click(screen.getByText("Wishlist"));
+    expect(setPolicy).toHaveBeenCalledWith("wishlist");
   });
 
-  it("calls onToggleFlash when flash button is clicked", () => {
-    const onToggleFlash = vi.fn();
-    render(<TopBar hasFlash={true} isFlashOn={false} onToggleFlash={onToggleFlash} />);
-    fireEvent.click(screen.getByLabelText("Toggle flash"));
-    expect(onToggleFlash).toHaveBeenCalledOnce();
+  it("flash toggle button renders when hasFlash is true", () => {
+    render(
+      <TopBar
+        currentFormat="book"
+        setFormat={setFormat}
+        currentPolicy="inventory"
+        setPolicy={setPolicy}
+        hasFlash={true}
+        isFlashOn={false}
+        onToggleFlash={onToggleFlash}
+      />
+    );
+
+    const flashBtn = screen.getByLabelText("Toggle flash");
+    expect(flashBtn).toBeInTheDocument();
+
+    fireEvent.click(flashBtn);
+    expect(onToggleFlash).toHaveBeenCalled();
   });
 
-  it("does not render flash button when hasFlash is falsy", () => {
-    render(<TopBar />);
-    expect(screen.queryByLabelText("Toggle flash")).toBeNull();
+  it("flash button hidden when hasFlash is false", () => {
+    render(
+      <TopBar
+        currentFormat="book"
+        setFormat={setFormat}
+        currentPolicy="inventory"
+        setPolicy={setPolicy}
+        hasFlash={false}
+      />
+    );
+
+    expect(screen.queryByLabelText("Toggle flash")).not.toBeInTheDocument();
   });
 
-  it("renders format buttons when setFormat is provided", () => {
-    const setFormat = vi.fn();
-    render(<TopBar currentFormat="book" setFormat={setFormat} />);
-    // Format buttons are rendered as <button> elements; just verify they exist
-    const buttons = screen.getAllByRole("button");
-    // Back button + format buttons (at least 2 for book and another format)
-    expect(buttons.length).toBeGreaterThan(2);
+  it("back-link invokes cancel callback", () => {
+    render(
+      <TopBar
+        currentFormat="book"
+        setFormat={setFormat}
+        currentPolicy="inventory"
+        setPolicy={setPolicy}
+        onCancel={onCancel}
+      />
+    );
+
+    const backLink = screen.getByLabelText("Go back to library");
+    fireEvent.click(backLink);
+    expect(onCancel).toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@
 //
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 
 // Mock next-intl to provide translations for HelpRequests namespace
 vi.mock("next-intl", () => ({
@@ -42,6 +43,13 @@ vi.mock("next-intl", () => ({
           suggestedValueRequired: "Suggested value is required",
           escalationSubmitted: "Escalation request submitted to custodians",
           failedToSubmit: "Failed to submit escalation request",
+          deletion: "Deletion",
+          reasonForDeletion: "Reason for deletion",
+          reasonForDeletionRequired: "Reason for deletion is required",
+          reasonForDeletionPlaceholder: "Explain why this entity should be deleted",
+          requestDeletion: "Request Deletion",
+          deletionRequestSubmitted: "Deletion request submitted to custodians",
+          metadataCorrection: "Metadata Correction",
         };
         return translations[key] || key;
       };
@@ -60,11 +68,12 @@ vi.mock("@/lib/api/escalations", () => ({
 }));
 
 import { useProfile } from "@/lib/api/hooks";
-import { useMyEscalations } from "@/lib/api/escalations";
+import { useMyEscalations, useCreateEscalation } from "@/lib/api/escalations";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 
 const mockUseProfile = vi.mocked(useProfile);
 const mockUseMyEscalations = vi.mocked(useMyEscalations);
+const mockUseCreateEscalation = vi.mocked(useCreateEscalation);
 
 describe("EscalationTrigger Component", () => {
   beforeEach(() => {
@@ -156,5 +165,174 @@ describe("EscalationTrigger Component", () => {
 
     expect(screen.getByText(/Help Request: accepted/i)).toBeInTheDocument();
     expect(screen.getByText(/Updated ISBN in metadata editor/i)).toBeInTheDocument();
+  });
+
+  it("renders rejected status card when escalation is rejected", () => {
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          user_id: "u1",
+          item_id: 123,
+          field_name: "title",
+          suggested_value: "Rejected Title",
+          status: "rejected",
+          resolution_note: "Not needed",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    render(<EscalationTrigger level="item" targetId={123} />);
+
+    expect(screen.getByTestId("escalation-status-card")).toBeInTheDocument();
+    expect(screen.getByText(/Help Request: Rejected/i)).toBeInTheDocument();
+  });
+
+  it("renders duplicate status card when escalation is duplicate", () => {
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          user_id: "u1",
+          item_id: 123,
+          field_name: "title",
+          suggested_value: "Duplicate Title",
+          status: "duplicate",
+          resolution_note: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    render(<EscalationTrigger level="item" targetId={123} />);
+
+    expect(screen.getByTestId("escalation-status-card")).toBeInTheDocument();
+    expect(screen.getByText(/Help Request: Duplicate/i)).toBeInTheDocument();
+  });
+
+  it("deletion request flow: toggles type, fills reason, submits", async () => {
+    const user = userEvent.setup();
+    const mockMutate = vi.fn();
+
+    mockUseCreateEscalation.mockReturnValue({
+      mutate: mockMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof useCreateEscalation>);
+
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    render(<EscalationTrigger level="item" targetId={123} />);
+
+    // Click the "Ask custodians for help" button to open dialog
+    await user.click(screen.getByText("Ask custodians for help"));
+
+    // Should show the dialog
+    expect(screen.getByText("Request Metadata Correction")).toBeInTheDocument();
+
+    // Switch to deletion type
+    await user.click(screen.getByText("Request Deletion"));
+
+    // Fill reason
+    const reasonInput = screen.getByPlaceholderText("Explain why this entity should be deleted");
+    await user.type(reasonInput, "Duplicate entry");
+
+    // Submit
+    await user.click(screen.getByText("Submit Request"));
+
+    expect(mockMutate).toHaveBeenCalled();
+  });
+
+  it("alwaysShowDialog prop renders dialog button without status card", () => {
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          user_id: "u1",
+          item_id: 123,
+          field_name: "title",
+          suggested_value: "Some Value",
+          status: "pending",
+          resolution_note: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    render(<EscalationTrigger level="item" targetId={123} alwaysShowDialog={true} />);
+
+    // Dialog button should be visible
+    expect(screen.getByText("Ask custodians for help")).toBeInTheDocument();
+    // Status card should NOT be present
+    expect(screen.queryByTestId("escalation-status-card")).not.toBeInTheDocument();
+  });
+
+  it("multi-escalation accordion expands to show both requests", () => {
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    // Provide pre-filtered escalations
+    const escalations = [
+      {
+        id: 1,
+        user_id: "u1",
+        item_id: 123,
+        field_name: "title",
+        suggested_value: "First Correction",
+        status: "pending",
+        request_type: "correction" as const,
+        resolution_note: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        user_id: "u1",
+        item_id: 123,
+        field_name: "author",
+        suggested_value: "Second Correction",
+        status: "pending",
+        request_type: "correction" as const,
+        resolution_note: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    render(<EscalationTrigger level="item" targetId={123} escalations={escalations} alwaysShowDialog={true} />);
+
+    // Should show the dialog button
+    expect(screen.getByText("Ask custodians for help")).toBeInTheDocument();
   });
 });

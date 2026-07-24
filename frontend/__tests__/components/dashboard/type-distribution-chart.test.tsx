@@ -92,4 +92,18 @@ describe("TypeDistributionChart", () => {
     fireEvent.click(byFormatBtn);
     expect(byFormatBtn).toHaveClass("bg-card");
   });
+
+  // ── 6.4 Empty data arrays ─────────────────────────────────────────────
+  it("renders empty state when data has empty arrays", () => {
+    mockUseDistribution.mockReturnValue({
+      data: { by_type: [], by_format: [] },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useDistributionInsights>);
+    render(<TypeDistributionChart />);
+
+    // Should show the empty state text
+    expect(screen.getByTestId("type-distribution-chart")).toBeInTheDocument();
+    expect(screen.getByText("No collection items cataloged yet.")).toBeInTheDocument();
+  });
 });

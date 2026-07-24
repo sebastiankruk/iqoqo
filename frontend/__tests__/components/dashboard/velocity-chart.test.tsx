@@ -80,4 +80,13 @@ describe("VelocityChart", () => {
     expect(screen.getByTestId("velocity-chart")).toBeInTheDocument();
     expect(screen.getByText("Acquisition Velocity")).toBeInTheDocument();
   });
+
+  it("renders chart without crash when data is empty array", () => {
+    mockUseVelocity.mockReturnValue({ data: [], isLoading: false, isError: false } as ReturnType<
+      typeof useVelocityInsights
+    >);
+    render(<VelocityChart />);
+    // Chart section should still render even with empty data
+    expect(screen.getByTestId("velocity-chart")).toBeInTheDocument();
+  });
 });

@@ -391,6 +391,27 @@ def seed_e2e_data():
         db.session.commit()
         print("E2E seed data created successfully")
 
+        # ── Escalation E2E test data ────────────────────────────────────────
+        from app.db.social import EscalationRequest  # noqa: E402
+
+        existing_esc = EscalationRequest.query.filter_by(
+            user_id=test_user.id, manifestation_id=m_public.id
+        ).first()
+        if not existing_esc:
+            esc = EscalationRequest(
+                user_id=test_user.id,
+                manifestation_id=m_public.id,
+                field_name="title",
+                suggested_value="Public Treasure (Corrected)",
+                current_value="Public Treasure",
+                note="This title should be corrected",
+                request_type="correction",
+                status="pending",
+            )
+            db.session.add(esc)
+            db.session.commit()
+            print("E2E escalation seed data created successfully")
+
 
 if __name__ == "__main__":
     seed_e2e_data()
