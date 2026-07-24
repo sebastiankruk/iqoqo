@@ -318,7 +318,7 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
             "note": self.note,
             "status": self.status,
             "resolved_by": str(self.resolved_by) if self.resolved_by else None,
-            "resolver_display_name": self.resolver.display_name if self.resolver else None,
+            "resolver_display_name": (self.resolver.display_name or self.resolver.public_username) if self.resolver else None,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
             "resolution_note": self.resolution_note,
             "created_at": self.created_at.isoformat() if self.created_at else None,

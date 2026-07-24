@@ -315,9 +315,9 @@ function ProcessedRequestsSection() {
                         {formatDate(esc.resolved_at)}
                       </span>
                     )}
-                    {esc.resolver_display_name && (
+                    {(esc.resolver_display_name || esc.resolved_by) && (
                       <span className="text-[10px] text-muted-foreground">
-                        {t("resolvedBy", { name: esc.resolver_display_name })}
+                        {t("resolvedBy", { name: esc.resolver_display_name || "Custodian" })}
                       </span>
                     )}
                   </div>
