@@ -83,7 +83,7 @@
     "eslint-plugin-jsdoc": "^47.0.2",
     "happy-dom": "^20.8.9",
     "jsdom": "^28.1.0",
-    "shadcn": "^4.0.0",
+    "shadcn": "^4.14.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
@@ -93,6 +93,9 @@
     "@swc/helpers": "0.5.15",
     "@babel/core": "^7.29.6",
     "esbuild": ">=0.28.1",
-    "uuid": "^13.0.1"
+    "uuid": "^13.0.1",
+    "sharp": ">=0.35.0",
+    "brace-expansion": "1.1.16",
+    "@hono/node-server": ">=2.0.5"
   }
 }

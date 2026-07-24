@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-deletion-request-support. Update Purpose after archive.
+Defines the custodial resolution workflow for deletion-type escalation requests: request type visibility in the admin queue, permission-gated "Accept & Delete" action requiring entity-specific DELETE permissions, entity deletion execution on acceptance, rejection and duplicate handling without DELETE permission requirements, and deletion request display in the user's "My Help Requests" view.
 
 ## Requirements
 

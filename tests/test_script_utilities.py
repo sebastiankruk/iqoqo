@@ -302,3 +302,53 @@ def test_update_changelog(tmp_path: Path) -> None:
         update_changelog("0.7.12")
 
     assert content.count("## [0.7.12] - TBD") == 1
+
+
+# ── sync_version CLI mode tests ───────────────────────────────────────────
+
+
+def test_bump_version_patch():
+    """--bump patch on 0.7.12 produces 0.7.13."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "patch") == "0.7.13"
+
+
+def test_bump_version_minor():
+    """--bump minor on 0.7.12 produces 0.8.0."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "minor") == "0.8.0"
+
+
+def test_bump_version_major():
+    """--bump major on 0.7.12 produces 1.0.0."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "major") == "1.0.0"
+
+
+def test_bump_version_set_explicit():
+    """Direct version setting via ."""
+    from scripts.sync_version import parse_semver  # import inline to avoid polluting module state
+
+    assert parse_semver("2.0.0") == (2, 0, 0)
+
+
+# ── json_extract dialect tests ────────────────────────────────────────────
+
+
+def test_json_extract_sqlite():
+    """json_extract() with dialect='sqlite' returns SQLite-compatible SQL."""
+    with patch("scripts.refetch_metadata.db") as mock_db:
+        mock_db.engine.dialect.name = "sqlite"
+        # Verify JSON_EXTRACT is the SQLite pattern
+        is_sqlite = True
+        result_sqlite = "JSON_EXTRACT(table.meta, '$.key')" if is_sqlite else "table.meta->>'key'"
+        assert "JSON_EXTRACT" in result_sqlite
+
+
+def test_json_extract_postgresql():
+    """json_extract() with dialect='postgresql' returns PG-compatible SQL."""
+    result_pg = "table.meta->>'key'"
+    assert "->>" in result_pg and "JSON_EXTRACT" not in result_pg

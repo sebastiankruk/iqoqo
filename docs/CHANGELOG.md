@@ -5,13 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.12] - TBD
+## [0.7.12] - 2026-07-24
 
 ### Added
 
 - **Escalation Queue Admin UI**: New `EscalationQueue` component mounted as a tab in the admin content page, visible to users with `escalate:resolve` permission. Custodians can view pending metadata correction requests, accept/reject/mark-duplicate with optional resolution notes.
 - **Escalation Queue Status Filter**: Extended `GET /api/escalations/queue` endpoint with optional `?status=` query parameter (comma-separated statuses). Defaults to `pending` when absent for backward compatibility. Added `useResolvedEscalations()` hook for fetching non-pending requests.
 - **Shared Escalation Utilities**: Extracted `getTargetHref()` and `getTargetLabel()` into `frontend/lib/escalation-utils.tsx` shared utility, used by both admin queue and my-escalations components.
+- **Deletion Request Type**: Added `request_type` column to `EscalationRequest` model (default `"correction"`, supports `"correction"` and `"deletion"`) with Alembic migration. Enables distinguishing between metadata correction and entity deletion requests throughout the escalation pipeline.
+- **Deletion Request Form**: Added request type selector (radio group) in the escalation trigger dialog, allowing users to toggle between "Metadata Correction" and "Request Deletion" modes. Form state clears on type switch to prevent stale data leakage between modes.
+- **Accept & Delete Resolution**: Added entity deletion execution when accepting deletion-type escalation requests. Requires `delete:manifestation` or `delete:item` permission in addition to `escalate:resolve`. Entity deletion and escalation status update are wrapped in a single database transaction.
+- **Deletion Request UI Badges**: Added `RequestTypeBadge` component displaying distinct "Deletion" (destructive/warning) vs "Correction" (neutral) styling on both admin queue tiles and user "My Help Requests" cards.
 
 ### Changed
 
@@ -26,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FRBR Search Permission Gating**: The FRBR entity search endpoint now uses `@require_permission(READ_METADATA)` instead of `@admin_required`, allowing custodians (non-admins) with `read:metadata` to search FRBR entities.
 - **Edit FRBR Button Gating**: The "Edit FRBR" button in item and manifestation action panels now requires `write:metadata` permission instead of `read:metadata`.
 - **Fallback Cover Design**: Removed CTA text, enlarged "powered by iqoqo" footer to 28px bold, centered horizontally, added decorative separator line.
+- **API Validation for Deletion Requests**: Extended `_validate_escalation_input()` to accept optional `request_type` field. When `request_type` is `"deletion"`, `field_name` and `suggested_value` become optional but `note` becomes required (max 2048 chars). Invalid `request_type` values are rejected with HTTP 400.
+- **Resolve Endpoint Permission Gating**: Updated `PATCH /api/escalations/<id>` to check entity-specific DELETE permissions (`delete:manifestation` or `delete:item`) when accepting deletion-type requests. Rejection and duplicate actions are exempt from DELETE checks, allowing custodians without DELETE permissions to still decline requests.
+- **Admin Queue "Accept & Delete" Button**: Changed "Accept" button label to "Accept & Delete" for deletion-type requests in the admin queue. The button is disabled with a permission tooltip when the resolver lacks the required entity-specific DELETE permission.
+- **Deletion Request i18n Coverage**: Added new `HelpRequests` namespace translation keys for "Request Deletion", "Accept & Delete", "Reason for deletion", "Deletion request submitted to custodians", and related labels in both `en.json` and `pl.json`.
 
 ### Fixed
 

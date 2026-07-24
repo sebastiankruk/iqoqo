@@ -1,7 +1,7 @@
 # deletion-request-submission Specification
 
 ## Purpose
-TBD - created by archiving change add-deletion-request-support. Update Purpose after archive.
+Defines the user-facing submission flow for deletion requests within the escalation system: request type selection in the escalation trigger dialog, form adaptation between correction and deletion modes, API input validation for the `request_type` field, and i18n coverage for all deletion-related user labels.
 ## Requirements
 ### Requirement: Deletion Request Type Selection in Submission Dialog
 

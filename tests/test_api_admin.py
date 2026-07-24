@@ -90,3 +90,106 @@ def test_frbr_search_by_plain_user_without_read_metadata(client, frbr_search_set
 
     resp = client.get("/api/v1/admin/frbr/search?q=Searchable", headers=headers)
     assert resp.status_code == 403
+
+
+# ── Custodian (non-admin) permission enforcement tests ────────────────────
+
+
+def test_custodian_can_update_work(client, admin_headers, custodian_headers, app):
+    """Custodian (with write:metadata, NOT admin) can PUT work FRBR endpoint."""
+    with app.app_context():
+        work = Work(title="Custodian Test Work")
+        db.session.add(work)
+        db.session.commit()
+        work_id = work.id
+
+    resp = client.put(
+        f"/api/v1/admin/frbr/work/{work_id}",
+        json={"title": "Updated by Custodian"},
+        headers=custodian_headers,
+    )
+    assert resp.status_code == 200
+
+
+def test_read_metadata_user_cannot_update_work(client, normal_user_headers, app):
+    """User with only read:metadata (via normal_user) cannot PUT work — expects 403."""
+    with app.app_context():
+        work = Work(title="Forbidden Test Work")
+        db.session.add(work)
+        db.session.commit()
+        work_id = work.id
+
+    resp = client.put(
+        f"/api/v1/admin/frbr/work/{work_id}",
+        json={"title": "Should Fail"},
+        headers=normal_user_headers,
+    )
+    # normal_user has write:item, but not write:metadata — should be forbidden
+    assert resp.status_code == 403
+
+
+def test_custodian_can_update_manifestation(client, custodian_headers, app):
+    """Custodian (write:metadata, NOT admin) can PUT manifestation FRBR endpoint."""
+    with app.app_context():
+        work = Work(title="Custodian Manif Test")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000100", meta={})
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    resp = client.put(
+        f"/api/v1/admin/frbr/manifestation/{manif_id}",
+        json={"publisher": "Custodian Publisher"},
+        headers=custodian_headers,
+    )
+    assert resp.status_code == 200
+
+
+def test_custodian_can_add_work_part(client, custodian_headers, app):
+    """Custodian (write:metadata, NOT admin) can POST add work part."""
+    with app.app_context():
+        w1 = Work(title="Container Work")
+        w2 = Work(title="Part Work")
+        db.session.add_all([w1, w2])
+        db.session.commit()
+        w1_id = w1.id
+        w2_id = w2.id
+
+    resp = client.post(
+        f"/api/works/{w1_id}/parts",
+        json={"part_work_id": w2_id, "sequence": 1},
+        headers=custodian_headers,
+    )
+    assert resp.status_code == 200
+
+
+def test_custodian_with_read_metadata_can_access_frbr_tree(client, custodian_headers, app):
+    """Non-admin with read:metadata can access FRBR tree endpoint."""
+    with app.app_context():
+        work = Work(title="FRBR Tree Custodian Test")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000200", meta={})
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    resp = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=custodian_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body["data"]["manifestation"]["id"] == manif_id
+
+
+def test_user_without_read_metadata_cannot_access_frbr_tree(client, normal_user_headers, app):
+    """User without read:metadata gets 403 on FRBR tree endpoint."""
+    resp = client.get("/api/v1/admin/frbr/tree/manifestation/1", headers=normal_user_headers)
+    assert resp.status_code in [401, 403]

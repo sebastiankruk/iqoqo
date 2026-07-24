@@ -95,3 +95,27 @@ def test_add_source_badge_new_providers(tmp_path):
 
     with Image.open(img_path) as result_img:
         assert result_img.size == (200, 300)
+
+
+def test_velocity_returns_empty_array_for_user_with_no_items(client, guest_user_headers):
+    """User with 0 items gets velocity: [] shape from velocity endpoint."""
+    res = client.get("/api/profile/insights/velocity", headers=guest_user_headers)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    items = data["data"]
+    assert isinstance(items, list)
+    assert len(items) == 12
+    for entry in items:
+        assert entry["count"] == 0
+
+
+def test_distribution_returns_empty_arrays_for_user_with_no_items(client, guest_user_headers):
+    """User with 0 items gets by_type: [], by_format: [] from distribution endpoint."""
+    res = client.get("/api/profile/insights/distribution", headers=guest_user_headers)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    dist = data["data"]
+    assert dist["by_type"] == []
+    assert dist["by_format"] == []

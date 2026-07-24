@@ -10,7 +10,7 @@
   "devDependencies": {
     "bats": "^1.13.0",
     "eslint": "^9.39.4",
-    "markdownlint-cli2": "^0.23.0",
+    "markdownlint-cli2": "^0.23.1",
     "prettier": "^3.2.4",
     "stylelint": "^16.2.0",
     "stylelint-config-standard": "^36.0.0"

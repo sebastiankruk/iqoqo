@@ -484,3 +484,256 @@ def test_accept_deletion_request_target_not_found(client, escalations_setup):
         headers=admin_headers,
     )
     assert resolve_resp.status_code == 404
+
+# ── Status filter query tests ──────────────────────────────────────────────
+
+
+def test_queue_filter_by_status_pending_default(client, escalations_setup):
+    """GET /api/escalations/queue without ?status= returns only pending escalations."""
+    headers = escalations_setup["custodian_headers"]
+
+    resp = client.get("/api/escalations/queue", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    for entry in data:
+        assert entry["status"] == "pending"
+
+
+def test_queue_filter_by_status_resolved(client, escalations_setup):
+    """?status=accepted,rejected,duplicate returns only non-pending escalations."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    # Create and resolve escalation
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "title", "suggested_value": "Resolved Later"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+    client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted"},
+        headers=custodian_headers,
+    )
+
+    resp2 = client.get("/api/escalations/queue?status=accepted,rejected,duplicate", headers=custodian_headers)
+    assert resp2.status_code == 200
+    data = resp2.get_json()["data"]
+    assert len(data) >= 1
+    for entry in data:
+        assert entry["status"] != "pending"
+
+
+def test_queue_filter_by_single_status(client, escalations_setup):
+    """?status=rejected returns only rejected escalations."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "isbn", "suggested_value": "0000000000000"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+    client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "rejected"},
+        headers=custodian_headers,
+    )
+
+    resp2 = client.get("/api/escalations/queue?status=rejected", headers=custodian_headers)
+    assert resp2.status_code == 200
+    data = resp2.get_json()["data"]
+    assert len(data) >= 1
+    for entry in data:
+        assert entry["status"] == "rejected"
+
+
+def test_queue_filter_invalid_status_returns_400(client, escalations_setup):
+    """?status=imaginary returns 400 with sorted allowed statuses."""
+    headers = escalations_setup["custodian_headers"]
+
+    resp = client.get("/api/escalations/queue?status=imaginary", headers=headers)
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert "Invalid status" in body["error"]
+    assert "accepted" in body["error"]
+    assert "duplicate" in body["error"]
+    assert "pending" in body["error"]
+    assert "rejected" in body["error"]
+
+
+def test_queue_filter_mixed_valid_invalid_returns_400(client, escalations_setup):
+    """?status=pending,bogus returns 400."""
+    headers = escalations_setup["custodian_headers"]
+
+    resp = client.get("/api/escalations/queue?status=pending,bogus", headers=headers)
+    assert resp.status_code == 400
+    assert "bogus" in resp.get_json()["error"]
+
+
+# ── Resolution status variant tests ───────────────────────────────────────
+
+
+def test_resolve_escalation_rejected_status(client, escalations_setup):
+    """Custodian resolves with rejected — verifies status and resolved_at non-null."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "title", "suggested_value": "To Reject"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "rejected"},
+        headers=custodian_headers,
+    )
+    assert resolve_resp.status_code == 200
+    resolved = resolve_resp.get_json()["data"]
+    assert resolved["status"] == "rejected"
+    assert resolved["resolved_at"] is not None
+
+
+def test_resolve_escalation_duplicate_status(client, escalations_setup):
+    """Custodian resolves with duplicate — verifies status and resolved_at non-null."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "isbn", "suggested_value": "0000000000001"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "duplicate"},
+        headers=custodian_headers,
+    )
+    assert resolve_resp.status_code == 200
+    resolved = resolve_resp.get_json()["data"]
+    assert resolved["status"] == "duplicate"
+    assert resolved["resolved_at"] is not None
+
+
+def test_resolver_display_name_present_in_resolved_queue(client, escalations_setup):
+    """Resolves escalation, fetches queue with status=accepted, asserts resolver_display_name equals custodian display name."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "title", "suggested_value": "Resolved Name"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+    client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted"},
+        headers=custodian_headers,
+    )
+
+    resp2 = client.get("/api/escalations/queue?status=accepted", headers=custodian_headers)
+    assert resp2.status_code == 200
+    data = resp2.get_json()["data"]
+    accepted = [e for e in data if e["id"] == esc_id]
+    assert len(accepted) == 1
+    assert accepted[0]["resolver_display_name"] == "Custodian One"
+
+
+def test_resolver_display_name_null_for_pending(client, escalations_setup):
+    """Fetches default pending queue, asserts resolver_display_name is null."""
+    headers = escalations_setup["custodian_headers"]
+
+    resp = client.get("/api/escalations/queue", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    for entry in data:
+        assert entry["resolver_display_name"] is None
+
+
+# ── Multi target-type escalation creation ─────────────────────────────────
+
+
+def test_create_escalation_for_work_target(client, escalations_setup):
+    """Creates escalation with target_type work, verifies 201."""
+    headers = escalations_setup["member_headers"]
+    work_id = escalations_setup["work_id"]
+
+    resp = client.post(
+        f"/api/escalations/work/{work_id}",
+        json={"field_name": "title", "suggested_value": "Better Title"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+
+
+def test_create_escalation_for_expression_target(client, escalations_setup):
+    """Creates escalation with target_type expression, verifies 201."""
+    headers = escalations_setup["member_headers"]
+    expr_id = escalations_setup["expression_id"]
+
+    resp = client.post(
+        f"/api/escalations/expression/{expr_id}",
+        json={"field_name": "language", "suggested_value": "pl"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+
+
+def test_create_escalation_for_item_target(client, escalations_setup):
+    """Creates escalation with target_type item, verifies 201."""
+    headers = escalations_setup["member_headers"]
+    item_id = escalations_setup["item_id"]
+
+    resp = client.post(
+        f"/api/escalations/item/{item_id}",
+        json={"field_name": "status", "suggested_value": "damaged"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+
+
+def test_create_escalation_invalid_request_type_rejected(client, escalations_setup):
+    """Sends request_type='bogus', asserts 400."""
+    headers = escalations_setup["member_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "bogus", "note": "test"},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+
+
+def test_resolve_escalation_oversized_note_rejected(client, escalations_setup):
+    """Sends resolution with note > 2048 chars, asserts 400."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"field_name": "title", "suggested_value": "T"},
+        headers=member_headers,
+    )
+    esc_id = resp.get_json()["data"]["id"]
+
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted", "resolution_note": "X" * 2049},
+        headers=custodian_headers,
+    )
+    assert resolve_resp.status_code == 400

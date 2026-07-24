@@ -100,3 +100,11 @@ def test_list_llm_permissions(app):
         all_perms = User.list_llm_permissions(user)
         assert all_perms["allow_cloud_llm"] is True
         assert all_perms["allow_generate_metadata"] is True
+
+
+def test_require_permission_returns_401_when_no_user(app, client):
+    """Verify require_permission returns 401 for unauthenticated request."""
+    # The FRBR tree endpoint requires read:metadata permission via inline check.
+    # Without auth headers, any @require_auth or require_permission endpoint should return 401.
+    resp = client.get("/api/v1/admin/frbr/tree/manifestation/1")
+    assert resp.status_code in [401, 403]
