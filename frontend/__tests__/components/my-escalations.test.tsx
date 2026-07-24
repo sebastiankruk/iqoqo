@@ -28,7 +28,8 @@ vi.mock("next-intl", () => ({
           helpRequestsTitle: "Help Requests",
           helpRequestsDesc: "Metadata correction requests submitted to custodians",
           noHelpRequestsSubmitted: "No help requests submitted",
-          helpRequestsHint: "When you request metadata corrections on item or manifestation pages, your requests will appear here.",
+          helpRequestsHint:
+            "When you request metadata corrections on item or manifestation pages, your requests will appear here.",
           trackStatusDesc: "Track status and custodian responses for your metadata correction requests",
           pending: "Pending",
           accepted: "Accepted",

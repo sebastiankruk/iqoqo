@@ -427,9 +427,7 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
     allowed_statuses = {"pending", "accepted", "rejected", "duplicate"}
     for s in statuses:
         if s not in allowed_statuses:
-            return jsonify(
-                {"error": f"Invalid status '{s}'. Must be one of {sorted(allowed_statuses)}", "code": 400}
-            ), 400
+            return jsonify({"error": f"Invalid status '{s}'. Must be one of {sorted(allowed_statuses)}", "code": 400}), 400
 
     stmt = (
         select(EscalationRequest)
