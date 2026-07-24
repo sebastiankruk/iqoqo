@@ -26,7 +26,6 @@ import {
   ChevronUp,
   ExternalLink,
   Trash2,
-  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -38,12 +37,6 @@ import { useEscalationQueue, useResolveEscalation, useResolvedEscalations } from
 import { getTargetLabel, getAdminTargetHref } from "@/lib/escalation-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { EscalationRequest } from "@/types/frbr";
 
 /** Format ISO date string to a readable locale string.
@@ -160,35 +153,26 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
           {isDeletionRequest ? <Trash2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
           {isDeletionRequest ? t("acceptAndDelete") : t("accept")}
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0"
-              disabled={resolveMutation.isPending}
-              aria-label="More actions"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => setActiveAction("rejected")}
-              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-              {t("reject")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setActiveAction("duplicate")}
-              className="gap-2 text-amber-600 focus:text-amber-600 cursor-pointer"
-            >
-              <ClipboardCopy className="h-4 w-4" />
-              {t("markAsDuplicate")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+          onClick={() => setActiveAction("rejected")}
+          disabled={resolveMutation.isPending}
+        >
+          <X className="h-3.5 w-3.5" />
+          {t("reject")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1 text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950"
+          onClick={() => setActiveAction("duplicate")}
+          disabled={resolveMutation.isPending}
+        >
+          <ClipboardCopy className="h-3.5 w-3.5" />
+          {t("markAsDuplicate")}
+        </Button>
       </div>
     );
   }

@@ -171,6 +171,8 @@ describe("EscalationQueue Component", () => {
     expect(screen.getByText("Correct Title")).toBeInTheDocument();
     expect(screen.getByText("Please fix")).toBeInTheDocument();
     expect(screen.getByText("Accept")).toBeInTheDocument();
+    expect(screen.getByText("Reject")).toBeInTheDocument();
+    expect(screen.getByText("Mark as Duplicate")).toBeInTheDocument();
   });
 
   it("renders requests with work, expression, and item targets", () => {

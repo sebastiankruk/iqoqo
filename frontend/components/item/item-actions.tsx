@@ -33,7 +33,6 @@ import {
   ImagePlus,
   ImageDown,
   Clock,
-  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,12 +44,7 @@ import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -442,66 +436,55 @@ export function ItemActions({ item }: { item: Item }) {
               />
             )}
 
-            {(hasPermission(PermissionName.REFETCH_COVER) ||
-              hasPermission(PermissionName.REGENERATE_COVER) ||
-              hasPermission(PermissionName.EDIT_COVER) ||
-              hasPermission(PermissionName.DELETE_ITEM)) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                    More Actions
-                    <ChevronDown className="h-3 w-3 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {hasPermission(PermissionName.REFETCH_COVER) && (
-                    <DropdownMenuItem
-                      onClick={handleRefetchCover}
-                      disabled={isPending || isRefetchingCover}
-                      className="gap-2 cursor-pointer"
-                    >
-                      <ImageDown className="h-3.5 w-3.5" />
-                      Refetch Cover
-                    </DropdownMenuItem>
-                  )}
-                  {hasPermission(PermissionName.REGENERATE_COVER) && (
-                    <DropdownMenuItem
-                      onClick={handleRegenerateClick}
-                      disabled={isPending || isRequesting}
-                      className="gap-2 cursor-pointer"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Regenerate Cover
-                    </DropdownMenuItem>
-                  )}
-                  {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)
-                      }
-                      className="gap-2 cursor-pointer"
-                    >
-                      <ImageIcon className="h-3.5 w-3.5" />
-                      Edit Cover Art
-                    </DropdownMenuItem>
-                  )}
-                  {hasPermission(PermissionName.DELETE_ITEM) && (
-                    <DropdownMenuItem
-                      onClick={() => setDeleteConfirmOpen(true)}
-                      disabled={deleteItem.isPending}
-                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Remove from library
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {hasPermission(PermissionName.REFETCH_COVER) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefetchCover}
+                disabled={isPending || isRefetchingCover}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <ImageDown className="h-3.5 w-3.5" />
+                Refetch Cover
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.REGENERATE_COVER) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerateClick}
+                disabled={isPending || isRequesting}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRequesting ? "animate-spin" : ""}`} />
+                Regenerate Cover
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                Edit Cover Art
+              </Button>
+            )}
+
+            {hasPermission(PermissionName.DELETE_ITEM) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteItem.isPending}
+                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove from library
+              </Button>
             )}
           </div>
         )}

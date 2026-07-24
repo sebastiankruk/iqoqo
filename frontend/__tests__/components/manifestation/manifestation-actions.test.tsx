@@ -147,8 +147,9 @@ describe("ManifestationActions Component", () => {
     fireEvent.click(screen.getByText(/Admin Actions/i));
 
     expect(screen.getByText(/Refetch Metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/Regenerate Cover/i)).toBeInTheDocument();
     expect(screen.getByTestId("camera-capture")).toBeInTheDocument();
-    expect(screen.getByText(/More Actions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Delete manifestation/i)).toBeInTheDocument();
   });
 
   describe("Edit FRBR button visibility (write:metadata)", () => {
