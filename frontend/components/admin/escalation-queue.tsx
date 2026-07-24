@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { useEscalationQueue, useResolveEscalation, useResolvedEscalations } from "@/lib/api/escalations";
-import { getTargetHref, getTargetLabel } from "@/lib/escalation-utils";
+import { getTargetLabel, getAdminTargetHref } from "@/lib/escalation-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { EscalationRequest } from "@/types/frbr";
@@ -285,7 +285,7 @@ function ProcessedRequestsSection() {
                       </span>
                       <ResolvedStatusBadge status={esc.status} />
                       {(() => {
-                        const href = getTargetHref(esc);
+                        const href = getAdminTargetHref(esc);
                         return href ? (
                           <Link
                             href={href}
@@ -378,7 +378,7 @@ export function EscalationQueue() {
                     {esc.user_display_name || esc.user_username || "Anonymous"}
                   </span>
                   {(() => {
-                    const href = getTargetHref(esc);
+                    const href = getAdminTargetHref(esc);
                     return href ? (
                       <Link
                         href={href}

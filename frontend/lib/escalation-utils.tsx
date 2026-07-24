@@ -16,13 +16,27 @@
 import type { EscalationRequest } from "@/types/frbr";
 
 /**
- * Get target entity link path for an escalation request.
+ * Get target entity link path for an escalation request (public view).
  *
  * @param esc - Escalation request object.
  * @returns Target URL path or null if no target entity is set.
  */
 export function getTargetHref(esc: EscalationRequest): string | null {
   if (esc.manifestation_id) return `/manifestation/${esc.manifestation_id}`;
+  if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
+  if (esc.item_id) return `/item/${esc.item_id}`;
+  return null;
+}
+
+/**
+ * Get target entity admin link path for an escalation request (custodian view).
+ * Links manifestations to the FRBR Metadata Editor so custodians can edit the entity.
+ *
+ * @param esc - Escalation request object.
+ * @returns Admin target URL path or null if no target entity is set.
+ */
+export function getAdminTargetHref(esc: EscalationRequest): string | null {
+  if (esc.manifestation_id) return `/admin/content?tab=metadata&manifestationId=${esc.manifestation_id}`;
   if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
   if (esc.item_id) return `/item/${esc.item_id}`;
   return null;
