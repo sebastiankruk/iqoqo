@@ -8,7 +8,7 @@ Provide custodians and admins with a dedicated frontend interface to view and ma
 
 ### Requirement: Escalation Queue Admin UI
 
-The system SHALL provide a frontend interface within the admin content page, labeled "User Requests", that allows users with `escalate:resolve` permission to view and manage pending escalation requests. The queue MUST display all pending requests with requester name, clickable target entity link, field name, suggested value, note, and creation timestamp. Custodians MUST be able to accept, reject, or mark requests as duplicate with an optional resolution note, directly from this interface. The system SHALL also provide an expandable "Processed Requests" section, hidden by default, that lists previously resolved requests.
+The system SHALL provide a frontend interface within the admin content page, labeled "User Requests", that allows users with `escalate:resolve` permission to view and manage pending escalation requests. The queue MUST display all pending requests with requester name, clickable target entity link, field name, suggested value, note, and creation timestamp. For pending requests, the UI SHALL present all resolution actions ("Accept" / "Accept & Delete", "Reject", "Mark as Duplicate") as direct inline buttons on the card. Overflow dropdown menus MUST NOT be used for queue actions — all actions shall be directly visible to minimize interaction cost. The system SHALL also provide an expandable "Processed Requests" section, hidden by default, that lists previously resolved requests.
 
 #### Scenario: Custodian views escalation queue in admin panel
 
