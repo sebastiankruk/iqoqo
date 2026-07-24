@@ -57,6 +57,14 @@ vi.mock("next/link", () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
+vi.mock("@/lib/api/hooks", () => ({
+  useProfile: vi.fn(() => ({
+    data: {
+      permissions: ["delete:manifestation", "delete:item"],
+    },
+  })),
+}));
+
 vi.mock("@/lib/api/escalations", () => ({
   useEscalationQueue: vi.fn(),
   useResolvedEscalations: vi.fn(() => ({
