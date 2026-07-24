@@ -394,9 +394,7 @@ def seed_e2e_data():
         # ── Escalation E2E test data ────────────────────────────────────────
         from app.db.social import EscalationRequest  # noqa: E402
 
-        existing_esc = EscalationRequest.query.filter_by(
-            user_id=test_user.id, manifestation_id=m_public.id
-        ).first()
+        existing_esc = EscalationRequest.query.filter_by(user_id=test_user.id, manifestation_id=m_public.id).first()
         if not existing_esc:
             esc = EscalationRequest(
                 user_id=test_user.id,

@@ -34,16 +34,8 @@ teardown() {
 }
 
 @test "validate_yaml.py exits 1 for malformed YAML file" {
-  echo "key: value\n  bad indent" > "${TEST_DIR}/bad.yaml"
-  run python -c "
-import sys
-sys.path.insert(0, 'scripts')
-from validate_yaml import validate_yaml
-try:
-    validate_yaml('${TEST_DIR}/bad.yaml')
-except SystemExit as e:
-    sys.exit(e.code)
-"
+  printf 'key: value\n[[invalid yaml syntax\n' > "${TEST_DIR}/bad.yaml"
+  run python scripts/validate_yaml.py "${TEST_DIR}/bad.yaml"
   [ "$status" -eq 1 ]
 }
 

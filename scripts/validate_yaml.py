@@ -41,4 +41,5 @@ def validate_yaml(file_path: str) -> None:
 
 
 if __name__ == "__main__":
-    validate_yaml("shared/format_mappings.yaml")
+    file_path = sys.argv[1] if len(sys.argv) > 1 else "shared/format_mappings.yaml"
+    validate_yaml(file_path)
