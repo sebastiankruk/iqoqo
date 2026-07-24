@@ -52,6 +52,21 @@ def escalations_setup(app):
         if resolve_perm not in custodian_role.permissions:
             custodian_role.permissions.append(resolve_perm)
 
+        # Setup admin role
+        admin_role = Role.query.filter_by(name="admin").first()
+        if not admin_role:
+            admin_role = Role(name="admin")
+            db.session.add(admin_role)
+
+        del_manif_perm = Permission.query.filter_by(name="delete:manifestation").first()
+        if not del_manif_perm:
+            del_manif_perm = Permission(name="delete:manifestation")
+            db.session.add(del_manif_perm)
+        if del_manif_perm not in admin_role.permissions:
+            admin_role.permissions.append(del_manif_perm)
+        if resolve_perm not in admin_role.permissions:
+            admin_role.permissions.append(resolve_perm)
+
         # Create member user
         u_member = User(email="member1@iqoqo.local", display_name="Member One", public_username="member1")
         u_member.roles.append(member_role)
@@ -61,6 +76,11 @@ def escalations_setup(app):
         u_custodian = User(email="custodian1@iqoqo.local", display_name="Custodian One", public_username="custodian1")
         u_custodian.roles.append(custodian_role)
         db.session.add(u_custodian)
+
+        # Create admin user
+        u_admin = User(email="admin1@iqoqo.local", display_name="Admin One", public_username="admin1")
+        u_admin.roles.append(admin_role)
+        db.session.add(u_admin)
 
         # Create regular user without permissions
         u_plain = User(email="plain1@iqoqo.local", display_name="Plain One", public_username="plain1")
@@ -87,13 +107,16 @@ def escalations_setup(app):
 
         member_token = generate_internal_jwt(u_member)
         custodian_token = generate_internal_jwt(u_custodian)
+        admin_token = generate_internal_jwt(u_admin)
         plain_token = generate_internal_jwt(u_plain)
 
         return {
             "member_id": str(u_member.id),
             "custodian_id": str(u_custodian.id),
+            "admin_id": str(u_admin.id),
             "member_headers": {"Authorization": f"Bearer {member_token}"},
             "custodian_headers": {"Authorization": f"Bearer {custodian_token}"},
+            "admin_headers": {"Authorization": f"Bearer {admin_token}"},
             "plain_headers": {"Authorization": f"Bearer {plain_token}"},
             "work_id": work.id,
             "expression_id": expr.id,
@@ -262,8 +285,8 @@ def test_resolve_escalation_request(client, escalations_setup):
     assert resolved["resolved_by"] == escalations_setup["custodian_id"]
 
 
-def test_cascade_delete_escalation(app, client, escalations_setup):
-    """Test that deleting target Manifestation cascade-deletes the escalation request."""
+def test_preserve_escalation_history_on_delete(app, client, escalations_setup):
+    """Test that deleting target Manifestation sets foreign key to NULL and preserves escalation request history."""
     member_headers = escalations_setup["member_headers"]
     manif_id = escalations_setup["manifestation_id"]
 
@@ -280,7 +303,9 @@ def test_cascade_delete_escalation(app, client, escalations_setup):
         db.session.commit()
 
         esc = db.session.get(EscalationRequest, esc_id)
-        assert esc is None
+        assert esc is not None
+        assert esc.manifestation_id is None
+        assert esc.target_type == "manifestation"
 
 
 def test_submit_to_retrieve_pipeline(client, escalations_setup):
@@ -339,3 +364,123 @@ def test_plain_user_without_permission_cannot_create_escalation(client, escalati
         headers=plain_headers,
     )
     assert resp.status_code == 403
+
+
+def test_create_deletion_request_success(client, escalations_setup):
+    """Verify authenticated user can submit a valid deletion request with reason note."""
+    headers = escalations_setup["member_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={
+            "request_type": "deletion",
+            "note": "Created by mistake - invalid barcode scanned",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    data = resp.get_json()["data"]
+    assert data["request_type"] == "deletion"
+    assert data["field_name"] == ""
+    assert data["suggested_value"] == ""
+    assert data["note"] == "Created by mistake - invalid barcode scanned"
+
+
+def test_create_deletion_request_missing_note_rejected(client, escalations_setup):
+    """Verify deletion request without reason note returns 400 validation error."""
+    headers = escalations_setup["member_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "deletion", "note": ""},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "Note is required for deletion requests"
+
+
+def test_accept_deletion_request_with_permission(client, escalations_setup):
+    """Verify resolving deletion request as accepted by admin (with DELETE permission) deletes target entity."""
+    member_headers = escalations_setup["member_headers"]
+    admin_headers = escalations_setup["admin_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    # Submit deletion request
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "deletion", "note": "Duplicate entry"},
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    esc_id = resp.get_json()["data"]["id"]
+
+    # Admin accepts deletion request
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted", "resolution_note": "Verified duplicate, deleting entity"},
+        headers=admin_headers,
+    )
+    assert resolve_resp.status_code == 200
+
+    # Verify manifestation was deleted
+    with client.application.app_context():
+        manif = db.session.get(Manifestation, manif_id)
+        assert manif is None
+
+
+def test_accept_deletion_request_without_permission_rejected(client, escalations_setup):
+    """Verify resolving deletion request as accepted by custodian without DELETE permission returns 403."""
+    member_headers = escalations_setup["member_headers"]
+    custodian_headers = escalations_setup["custodian_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    # Submit deletion request
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "deletion", "note": "Remove this entity"},
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    esc_id = resp.get_json()["data"]["id"]
+
+    # Custodian (lacking delete:manifestation) attempts to accept deletion
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted"},
+        headers=custodian_headers,
+    )
+    assert resolve_resp.status_code == 403
+    body = resolve_resp.get_json()
+    assert "Permission delete:manifestation required" in body["error"]
+
+
+def test_accept_deletion_request_target_not_found(client, escalations_setup):
+    """Verify accepting deletion request when target entity no longer exists returns 404."""
+    member_headers = escalations_setup["member_headers"]
+    admin_headers = escalations_setup["admin_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "deletion", "note": "To be removed"},
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    esc_id = resp.get_json()["data"]["id"]
+
+    # Delete target directly in DB first
+    with client.application.app_context():
+        manif = db.session.get(Manifestation, manif_id)
+        db.session.delete(manif)
+        db.session.commit()
+
+    # Try resolving
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resolve_resp.status_code == 404

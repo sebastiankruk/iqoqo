@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, XCircle, AlertCircle, Clock, HelpCircle, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Clock, HelpCircle, ExternalLink, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { getTargetHref, getTargetLabel } from "@/lib/escalation-utils";
@@ -38,6 +38,30 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Render badge for escalation request type (Correction vs Deletion).
+ *
+ * @param props - Component props.
+ * @param props.type - The request type string.
+ * @returns Request type badge JSX element.
+ */
+function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | string }) {
+  const t = useTranslations("HelpRequests");
+  if (type === "deletion") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 px-1.5 py-0.5 rounded border border-destructive/20">
+        <Trash2 className="h-3 w-3" />
+        {t("deletion")}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+      {t("correction")}
+    </span>
+  );
 }
 
 /**
@@ -135,15 +159,19 @@ export function MyEscalations() {
       <CardContent className="space-y-3">
         {requests.map(esc => {
           const href = getTargetHref(esc);
+          const isDeletion = esc.request_type === "deletion" || !esc.field_name;
           return (
             <div
               key={esc.id}
-              className="rounded-lg border border-border bg-card p-4 text-xs shadow-xs space-y-3"
+              className={`rounded-lg border p-4 text-xs shadow-xs space-y-3 ${
+                isDeletion ? "border-destructive/30 bg-destructive/5 dark:bg-destructive/10" : "border-border bg-card"
+              }`}
               data-testid="my-escalation-card"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
+                    <RequestTypeBadge type={esc.request_type} />
                     <StatusBadge status={esc.status} />
                     {href ? (
                       <Link
@@ -157,13 +185,22 @@ export function MyEscalations() {
                       <span className="font-medium text-foreground">{getTargetLabel(esc)}</span>
                     )}
                   </div>
-                  <div className="flex items-baseline gap-2 text-xs">
-                    <span className="font-mono font-medium text-muted-foreground uppercase text-[10px]">
-                      {esc.field_name}
-                    </span>
-                    <span className="text-muted-foreground">→</span>
-                    <span className="font-mono text-foreground">{esc.suggested_value}</span>
-                  </div>
+                  {isDeletion ? (
+                    <div className="text-xs text-foreground bg-background/80 p-2.5 rounded border border-border/40 mt-1">
+                      <span className="font-semibold text-muted-foreground block mb-0.5">
+                        {t("reasonForDeletion")}:
+                      </span>
+                      {esc.note || "—"}
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-2 text-xs">
+                      <span className="font-mono font-medium text-muted-foreground uppercase text-[10px]">
+                        {esc.field_name}
+                      </span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                    </div>
+                  )}
                 </div>
                 {esc.created_at && (
                   <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">

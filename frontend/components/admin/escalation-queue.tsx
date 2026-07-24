@@ -16,11 +16,23 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, ClipboardCopy, Loader2, MessageSquare, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import {
+  Check,
+  X,
+  ClipboardCopy,
+  Loader2,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
+import { useProfile } from "@/lib/api/hooks";
+import { PermissionName } from "@/lib/permissions";
 import { useEscalationQueue, useResolveEscalation, useResolvedEscalations } from "@/lib/api/escalations";
 import { getTargetLabel, getAdminTargetHref } from "@/lib/escalation-utils";
 import { Button } from "@/components/ui/button";
@@ -41,6 +53,30 @@ function formatDate(iso: string): string {
 }
 
 /**
+ * Render badge for escalation request type (Correction vs Deletion).
+ *
+ * @param props - Component props.
+ * @param props.type - The request type string.
+ * @returns Request type badge JSX element.
+ */
+function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | string }) {
+  const t = useTranslations("HelpRequests");
+  if (type === "deletion") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 px-1.5 py-0.5 rounded border border-destructive/20">
+        <Trash2 className="h-3 w-3" />
+        {t("deletion")}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+      {t("correction")}
+    </span>
+  );
+}
+
+/**
  * Resolve dialog or inline form per queue item.
  *
  * @param root0 - The props object.
@@ -51,7 +87,26 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
   const [activeAction, setActiveAction] = useState<"accepted" | "rejected" | "duplicate" | null>(null);
   const [resolutionNote, setResolutionNote] = useState("");
   const resolveMutation = useResolveEscalation();
+  const { data: profile } = useProfile();
   const t = useTranslations("HelpRequests");
+
+  const isDeletionRequest = esc.request_type === "deletion" || !esc.field_name;
+
+  const canAcceptDeletion = () => {
+    if (!isDeletionRequest) return true;
+    if (esc.manifestation_id) {
+      return Boolean(profile?.permissions?.includes(PermissionName.DELETE_MANIFESTATION));
+    }
+    if (esc.item_id) {
+      return Boolean(profile?.permissions?.includes(PermissionName.DELETE_ITEM));
+    }
+    return Boolean(
+      profile?.permissions?.includes(PermissionName.DELETE_MANIFESTATION) ||
+      profile?.permissions?.includes(PermissionName.DELETE_ITEM)
+    );
+  };
+
+  const acceptAllowed = canAcceptDeletion();
 
   const handleResolve = (status: "accepted" | "rejected" | "duplicate") => {
     resolveMutation.mutate(
@@ -65,7 +120,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
       {
         onSuccess: () => {
           const statusMessages: Record<string, string> = {
-            accepted: t("requestAccepted"),
+            accepted: isDeletionRequest ? t("entityRemovedSuccess") : t("requestAccepted"),
             rejected: t("requestRejected"),
             duplicate: t("requestDuplicate"),
           };
@@ -86,12 +141,17 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+          className={
+            isDeletionRequest
+              ? "gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+              : "gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+          }
           onClick={() => setActiveAction("accepted")}
-          disabled={resolveMutation.isPending}
+          disabled={resolveMutation.isPending || !acceptAllowed}
+          title={!acceptAllowed ? t("deletePermissionRequired") : undefined}
         >
-          <Check className="h-3.5 w-3.5" />
-          {t("accept")}
+          {isDeletionRequest ? <Trash2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+          {isDeletionRequest ? t("acceptAndDelete") : t("accept")}
         </Button>
         <Button
           size="sm"
@@ -129,7 +189,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
       <div className="flex gap-1.5">
         <Button
           size="sm"
-          variant={activeAction === "accepted" ? "default" : "outline"}
+          variant={activeAction === "accepted" ? (isDeletionRequest ? "destructive" : "default") : "outline"}
           onClick={() => handleResolve(activeAction!)}
           disabled={resolveMutation.isPending}
         >
@@ -274,62 +334,73 @@ function ProcessedRequestsSection() {
             </div>
           )}
 
-          {resolved?.map(esc => (
-            <Card key={esc.id}>
-              <CardContent className="p-3 space-y-2 text-xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">
-                        {esc.user_display_name || esc.user_username || "Anonymous"}
-                      </span>
-                      <ResolvedStatusBadge status={esc.status} />
-                      {(() => {
-                        const href = getAdminTargetHref(esc);
-                        return href ? (
-                          <Link
-                            href={href}
-                            className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
-                          >
-                            {getTargetLabel(esc)}
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            {getTargetLabel(esc)}
+          {resolved?.map(esc => {
+            const isDeletion = esc.request_type === "deletion" || !esc.field_name;
+            return (
+              <Card key={esc.id}>
+                <CardContent className="p-3 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">
+                          {esc.user_display_name || esc.user_username || "Anonymous"}
+                        </span>
+                        <RequestTypeBadge type={esc.request_type} />
+                        <ResolvedStatusBadge status={esc.status} />
+                        {(() => {
+                          const href = getAdminTargetHref(esc);
+                          return href ? (
+                            <Link
+                              href={href}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
+                            >
+                              {getTargetLabel(esc)}
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : (
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                              {getTargetLabel(esc)}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      {isDeletion ? (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{t("reasonForDeletion")}:</span>{" "}
+                          {esc.note || "—"}
+                        </p>
+                      ) : (
+                        <div className="flex items-baseline gap-2 text-xs">
+                          <span className="font-mono font-medium text-muted-foreground uppercase text-[10px]">
+                            {esc.field_name}
                           </span>
-                        );
-                      })()}
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-baseline gap-2 text-xs">
-                      <span className="font-mono font-medium text-muted-foreground uppercase text-[10px]">
-                        {esc.field_name}
-                      </span>
-                      <span className="text-muted-foreground">→</span>
-                      <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                      {esc.resolved_at && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {formatDate(esc.resolved_at)}
+                        </span>
+                      )}
+                      {(esc.resolver_display_name || esc.resolved_by) && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {t("resolvedBy", { name: esc.resolver_display_name || "Custodian" })}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
-                    {esc.resolved_at && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        {formatDate(esc.resolved_at)}
-                      </span>
-                    )}
-                    {(esc.resolver_display_name || esc.resolved_by) && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {t("resolvedBy", { name: esc.resolver_display_name || "Custodian" })}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {esc.resolution_note && (
-                  <div className="rounded bg-muted/50 p-2 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                    {esc.resolution_note}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {esc.resolution_note && (
+                    <div className="rounded bg-muted/50 p-2 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                      {esc.resolution_note}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
@@ -374,61 +445,76 @@ export function EscalationQueue() {
 
   return (
     <div className="space-y-4" data-testid="escalation-queue">
-      {queue.map(esc => (
-        <Card key={esc.id}>
-          <CardContent className="p-4 space-y-3">
-            {/* Requester and target info */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1 flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">
-                    {esc.user_display_name || esc.user_username || "Anonymous"}
-                  </span>
-                  {(() => {
-                    const href = getAdminTargetHref(esc);
-                    return href ? (
-                      <Link
-                        href={href}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
-                      >
-                        {getTargetLabel(esc)}
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    ) : (
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {getTargetLabel(esc)}
+      {queue.map(esc => {
+        const isDeletion = esc.request_type === "deletion" || !esc.field_name;
+        return (
+          <Card key={esc.id}>
+            <CardContent className="p-4 space-y-3">
+              {/* Requester and target info */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold">
+                      {esc.user_display_name || esc.user_username || "Anonymous"}
+                    </span>
+                    <RequestTypeBadge type={esc.request_type} />
+                    {(() => {
+                      const href = getAdminTargetHref(esc);
+                      return href ? (
+                        <Link
+                          href={href}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded hover:underline hover:text-foreground transition-colors"
+                        >
+                          {getTargetLabel(esc)}
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      ) : (
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {getTargetLabel(esc)}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  {isDeletion ? (
+                    <div className="text-xs font-medium text-foreground bg-muted/30 p-2.5 rounded-md border border-border/50">
+                      <span className="text-xs font-semibold text-muted-foreground block mb-1">
+                        {t("reasonForDeletion")}:
                       </span>
-                    );
-                  })()}
+                      {esc.note || "—"}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-2 text-xs">
+                        <span className="font-mono font-semibold text-primary">{esc.field_name}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                      </div>
+                      {esc.current_value && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="line-through">{esc.current_value}</span>
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
-                <div className="flex items-baseline gap-2 text-xs">
-                  <span className="font-mono font-semibold text-primary">{esc.field_name}</span>
-                  <span className="text-muted-foreground">→</span>
-                  <span className="font-mono text-foreground">{esc.suggested_value}</span>
-                </div>
-                {esc.current_value && (
-                  <p className="text-xs text-muted-foreground">
-                    <span className="line-through">{esc.current_value}</span>
-                  </p>
-                )}
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
+                  {esc.created_at ? formatDate(esc.created_at) : ""}
+                </span>
               </div>
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
-                {esc.created_at ? formatDate(esc.created_at) : ""}
-              </span>
-            </div>
 
-            {/* Note */}
-            {esc.note && (
-              <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2 italic border-l-2 border-primary/50">
-                {esc.note}
-              </p>
-            )}
+              {/* Note for correction requests */}
+              {!isDeletion && esc.note && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2 italic border-l-2 border-primary/50">
+                  {esc.note}
+                </p>
+              )}
 
-            {/* Resolve actions */}
-            <ResolveActions request={esc} />
-          </CardContent>
-        </Card>
-      ))}
+              {/* Resolve actions */}
+              <ResolveActions request={esc} />
+            </CardContent>
+          </Card>
+        );
+      })}
       <ProcessedRequestsSection />
     </div>
   );

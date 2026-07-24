@@ -63,6 +63,7 @@ export function EscalationTrigger({
   const { data: profile } = useProfile();
   const t = useTranslations("HelpRequests");
   const [open, setOpen] = useState(false);
+  const [requestType, setRequestType] = useState<"correction" | "deletion">("correction");
   const [fieldName, setFieldName] = useState("title");
   const [currentValue, setCurrentValue] = useState("");
   const [suggestedValue, setSuggestedValue] = useState("");
@@ -74,6 +75,14 @@ export function EscalationTrigger({
   const shouldFetch = hasEscalateRequest && !providedEscalations;
   const { data: myEscalations } = useMyEscalations(shouldFetch);
   const createMutation = useCreateEscalation();
+
+  const handleTypeChange = (newType: "correction" | "deletion") => {
+    setRequestType(newType);
+    setFieldName("title");
+    setCurrentValue("");
+    setSuggestedValue("");
+    setNote("");
+  };
 
   // If user has direct write access or lacks escalate permission, do not render trigger
   if (hasWriteMetadata || !hasEscalateRequest) {
@@ -101,6 +110,7 @@ export function EscalationTrigger({
       : undefined;
 
   if (activeEscalation) {
+    const isDeletion = activeEscalation.request_type === "deletion" || !activeEscalation.field_name;
     const getStatusIcon = () => {
       switch (activeEscalation.status) {
         case "accepted":
@@ -125,12 +135,18 @@ export function EscalationTrigger({
             {t("helpRequest")}: {t(activeEscalation.status)}
           </span>
           <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
-            {activeEscalation.field_name}
+            {isDeletion ? t("deletion") : activeEscalation.field_name}
           </span>
         </div>
-        <div className="text-muted-foreground">
-          {t("suggested")}: <span className="font-mono text-foreground">{activeEscalation.suggested_value}</span>
-        </div>
+        {isDeletion ? (
+          <div className="text-muted-foreground">
+            {t("reasonForDeletion")}: <span className="text-foreground">{activeEscalation.note || "—"}</span>
+          </div>
+        ) : (
+          <div className="text-muted-foreground">
+            {t("suggested")}: <span className="font-mono text-foreground">{activeEscalation.suggested_value}</span>
+          </div>
+        )}
         {activeEscalation.resolution_note && (
           <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
             Custodian note: &ldquo;{activeEscalation.resolution_note}&rdquo;
@@ -142,9 +158,16 @@ export function EscalationTrigger({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!suggestedValue.trim()) {
-      toast.error(t("suggestedValueRequired"));
-      return;
+    if (requestType === "deletion") {
+      if (!note.trim()) {
+        toast.error(t("reasonForDeletionRequired") || "Reason for deletion is required");
+        return;
+      }
+    } else {
+      if (!suggestedValue.trim()) {
+        toast.error(t("suggestedValueRequired"));
+        return;
+      }
     }
 
     createMutation.mutate(
@@ -152,16 +175,18 @@ export function EscalationTrigger({
         level,
         targetId,
         data: {
-          field_name: fieldName,
-          current_value: currentValue.trim() || undefined,
-          suggested_value: suggestedValue.trim(),
+          request_type: requestType,
+          field_name: requestType === "deletion" ? "" : fieldName,
+          current_value: requestType === "deletion" ? undefined : currentValue.trim() || undefined,
+          suggested_value: requestType === "deletion" ? "" : suggestedValue.trim(),
           note: note.trim() || undefined,
         },
       },
       {
         onSuccess: () => {
-          toast.success(t("escalationSubmitted"));
+          toast.success(requestType === "deletion" ? t("deletionRequestSubmitted") : t("escalationSubmitted"));
           setOpen(false);
+          setRequestType("correction");
           setSuggestedValue("");
           setCurrentValue("");
           setNote("");
@@ -184,68 +209,115 @@ export function EscalationTrigger({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{t("requestMetadataCorrection")}</DialogTitle>
+            <DialogTitle>
+              {requestType === "deletion" ? t("requestDeletion") : t("requestMetadataCorrection")}
+            </DialogTitle>
             <DialogDescription>{t("requestDescription")}</DialogDescription>
           </DialogHeader>
+
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <label htmlFor="field_name" className="text-xs font-medium">
-                {t("fieldToCorrect")}
-              </label>
-              <select
-                id="field_name"
-                value={fieldName}
-                onChange={e => setFieldName(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <div className="flex rounded-md bg-muted p-1 gap-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-xs px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  requestType === "correction"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => handleTypeChange("correction")}
               >
-                <option value="title">Title</option>
-                <option value="isbn">ISBN / Identifier</option>
-                <option value="format">Format / Classification</option>
-                <option value="author">Author / Creator</option>
-                <option value="year">Publication Year</option>
-                <option value="other">Other metadata</option>
-              </select>
+                {t("metadataCorrection")}
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-xs px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  requestType === "deletion"
+                    ? "bg-background text-destructive shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => handleTypeChange("deletion")}
+              >
+                {t("requestDeletion")}
+              </button>
             </div>
-            <div className="grid gap-2">
-              <label htmlFor="current_value" className="text-xs font-medium">
-                {t("currentValueOptional")}
-              </label>
-              <input
-                id="current_value"
-                type="text"
-                placeholder="Current incorrect value"
-                value={currentValue}
-                onChange={e => setCurrentValue(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="suggested_value" className="text-xs font-medium">
-                {t("suggestedValue")} <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="suggested_value"
-                type="text"
-                placeholder="Correct value"
-                value={suggestedValue}
-                onChange={e => setSuggestedValue(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="note" className="text-xs font-medium">
-                {t("reasonNoteOptional")}
-              </label>
-              <textarea
-                id="note"
-                placeholder="Why should this field be changed? Provide sources or context."
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                rows={3}
-                className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
+
+            {requestType === "deletion" ? (
+              <div className="grid gap-2">
+                <label htmlFor="deletion_note" className="text-xs font-medium">
+                  {t("reasonForDeletion")} <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  id="deletion_note"
+                  placeholder={t("reasonForDeletionPlaceholder")}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  rows={4}
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  required
+                />
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <label htmlFor="field_name" className="text-xs font-medium">
+                    {t("fieldToCorrect")}
+                  </label>
+                  <select
+                    id="field_name"
+                    value={fieldName}
+                    onChange={e => setFieldName(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="title">Title</option>
+                    <option value="isbn">ISBN / Identifier</option>
+                    <option value="format">Format / Classification</option>
+                    <option value="author">Author / Creator</option>
+                    <option value="year">Publication Year</option>
+                    <option value="other">Other metadata</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="current_value" className="text-xs font-medium">
+                    {t("currentValueOptional")}
+                  </label>
+                  <input
+                    id="current_value"
+                    type="text"
+                    placeholder="Current incorrect value"
+                    value={currentValue}
+                    onChange={e => setCurrentValue(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="suggested_value" className="text-xs font-medium">
+                    {t("suggestedValue")} <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="suggested_value"
+                    type="text"
+                    placeholder="Correct value"
+                    value={suggestedValue}
+                    onChange={e => setSuggestedValue(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="note" className="text-xs font-medium">
+                    {t("reasonNoteOptional")}
+                  </label>
+                  <textarea
+                    id="note"
+                    placeholder="Why should this field be changed? Provide sources or context."
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    rows={3}
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

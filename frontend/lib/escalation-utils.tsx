@@ -53,5 +53,9 @@ export function getTargetLabel(esc: EscalationRequest): string {
   if (esc.work_id) return `Work #${esc.work_id}`;
   if (esc.expression_id) return `Expression #${esc.expression_id}`;
   if (esc.item_id) return `Item #${esc.item_id}`;
-  return "FRBR Entity";
+  if (esc.target_type) {
+    const levelName = esc.target_type.charAt(0).toUpperCase() + esc.target_type.slice(1);
+    return `${levelName} (deleted)`;
+  }
+  return "FRBR Entity (deleted)";
 }
