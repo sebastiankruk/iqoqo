@@ -219,12 +219,12 @@ export default function ScanPage() {
         )}
 
         {!result && !showManual && (
-          <div className="absolute right-4 top-[calc(50%+140px)] sm:top-[calc(50%+160px)] z-30 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-lg">
+          <div className="absolute right-4 top-[calc(50%+140px)] sm:top-[calc(50%+160px)] z-30 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-lg pointer-events-none">
             {POLICY_OPTIONS.map(opt => (
               <button
                 key={opt.value}
                 onClick={() => setPolicy(opt.value)}
-                className={`px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
+                className={`pointer-events-auto px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
                   policy === opt.value
                     ? "bg-white text-black border-white shadow"
                     : "bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white"
