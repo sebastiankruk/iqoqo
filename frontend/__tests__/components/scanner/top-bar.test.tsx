@@ -98,6 +98,17 @@ describe("TopBar", () => {
     expect(screen.queryByLabelText("Toggle flash")).not.toBeInTheDocument();
   });
 
+  it("policy selector changes active policy", () => {
+    const setPolicy = vi.fn();
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+
+    const wishlistBtn = screen.getByText("Wishlist");
+    expect(wishlistBtn).toBeInTheDocument();
+
+    fireEvent.click(wishlistBtn);
+    expect(setPolicy).toHaveBeenCalledWith("wishlist");
+  });
+
   it("back-link invokes cancel callback", () => {
     render(<TopBar currentFormat="book" setFormat={setFormat} onCancel={onCancel} />);
 

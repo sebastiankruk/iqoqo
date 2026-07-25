@@ -17,8 +17,6 @@ import { test, expect } from "@playwright/test";
 import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Policy Scanning", () => {
-  const testBarcode = "9780140449136";
-
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
@@ -72,6 +70,39 @@ test.describe("Policy Scanning", () => {
         body: JSON.stringify({ success: true, data: [] }),
       });
     });
+  });
+
+  test("verifies policy pill is positioned in upper camera viewport without overlapping bottom sheet on mobile and desktop", async ({
+    page,
+  }) => {
+    const viewports = [
+      { name: "mobile", width: 375, height: 667 },
+      { name: "desktop", width: 1280, height: 800 },
+    ];
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto("/scan");
+      await page.waitForLoadState("networkidle");
+
+      const wishlistBtn = page.getByText("Wishlist", { exact: true });
+      await expect(wishlistBtn).toBeVisible();
+
+      const pillBox = await wishlistBtn.boundingBox();
+      expect(pillBox).not.toBeNull();
+      if (pillBox) {
+        // Must be in upper dark camera overlay region (y < 200px)
+        expect(pillBox.y).toBeLessThan(200);
+
+        // Verify bottom sheet top position
+        const bottomSheet = page.getByTestId("scanner-tab-barcode");
+        const bsBox = await bottomSheet.boundingBox();
+        if (bsBox) {
+          // Pill bottom must be strictly above bottom sheet tab controls
+          expect(pillBox.y + pillBox.height).toBeLessThan(bsBox.y);
+        }
+      }
+    }
   });
 
   test("switches policy to Wishlist and verifies UI", async ({ page }) => {
