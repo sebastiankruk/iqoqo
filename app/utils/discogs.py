@@ -23,6 +23,20 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+#: Raw Discogs format names/descriptions (case-insensitive) that identify a
+#: Blu-ray Pure Audio release.  Mirrors
+#: :data:`app.strategies.audio.BLURAY_AUDIO_RAW_LABELS` — kept local to avoid a
+#: circular import through the strategies package.
+_BLURAY_AUDIO_LABELS: frozenset[str] = frozenset(
+    {
+        "blu-ray audio",
+        "bd-a",
+        "bluray hifi",
+        "pure audio blu-ray",
+        "blu-ray pure audio",
+    }
+)
+
 
 def _normalize_release_data(release: dict) -> dict:
     """Helper to convert Discogs release JSON into iqoqo metadata format."""
@@ -62,7 +76,13 @@ def _normalize_release_data(release: dict) -> dict:
                 format_labels.append(item)
 
     media_format = (
-        "vinyl" if any(label == "Vinyl" for label in format_labels) else "cd" if any(label == "CD" for label in format_labels) else "audio"
+        "vinyl"
+        if any(label == "Vinyl" for label in format_labels)
+        else (
+            "bluray_audio"
+            if any(str(label).strip().lower() in _BLURAY_AUDIO_LABELS for label in format_labels)
+            else "cd" if any(label == "CD" for label in format_labels) else "audio"
+        )
     )
 
     return {
