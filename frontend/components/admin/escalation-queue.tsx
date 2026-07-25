@@ -137,7 +137,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
 
   if (!activeAction) {
     return (
-      <div className="flex gap-1.5" data-testid="resolve-buttons">
+      <div className="flex items-center gap-1.5" data-testid="resolve-buttons">
         <Button
           size="sm"
           variant="outline"
@@ -156,7 +156,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 text-destructive border-destructive/20 hover:bg-destructive/10"
+          className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
           onClick={() => setActiveAction("rejected")}
           disabled={resolveMutation.isPending}
         >

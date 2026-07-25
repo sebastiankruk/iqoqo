@@ -408,6 +408,13 @@ def test_accept_deletion_request_with_permission(client, escalations_setup):
     admin_headers = escalations_setup["admin_headers"]
     manif_id = escalations_setup["manifestation_id"]
 
+    # Delete dependent item first so manifestation can be deleted
+    with client.application.app_context():
+        item = db.session.get(Item, escalations_setup["item_id"])
+        if item:
+            db.session.delete(item)
+            db.session.commit()
+
     # Submit deletion request
     resp = client.post(
         f"/api/escalations/manifestation/{manif_id}",
@@ -429,6 +436,29 @@ def test_accept_deletion_request_with_permission(client, escalations_setup):
     with client.application.app_context():
         manif = db.session.get(Manifestation, manif_id)
         assert manif is None
+
+
+def test_accept_deletion_request_with_dependent_items_fails_409(client, escalations_setup):
+    """Verify resolving deletion request for manifestation with dependent items returns 409 Conflict."""
+    member_headers = escalations_setup["member_headers"]
+    admin_headers = escalations_setup["admin_headers"]
+    manif_id = escalations_setup["manifestation_id"]
+
+    resp = client.post(
+        f"/api/escalations/manifestation/{manif_id}",
+        json={"request_type": "deletion", "note": "Attempt to delete manifestation with items"},
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    esc_id = resp.get_json()["data"]["id"]
+
+    resolve_resp = client.patch(
+        f"/api/escalations/{esc_id}",
+        json={"status": "accepted", "resolution_note": "Trying to delete"},
+        headers=admin_headers,
+    )
+    assert resolve_resp.status_code == 409
+    assert "dependent items exist" in resolve_resp.get_json()["error"]
 
 
 def test_accept_deletion_request_without_permission_rejected(client, escalations_setup):

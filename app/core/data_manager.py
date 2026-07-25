@@ -1092,6 +1092,8 @@ def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
             year -= 1
         months.append(f"{year:04d}-{month:02d}")
 
+    cutoff_date = datetime(int(months[0].split("-")[0]), int(months[0].split("-")[1]), 1, tzinfo=UTC)
+
     bind = db.session.get_bind()
     dialect_name = bind.dialect.name if bind else "sqlite"
     if dialect_name == "sqlite":
@@ -1101,7 +1103,7 @@ def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
 
     stmt = (
         select(month_expr.label("month"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
-        .where(Item.owner_id == owner_val)
+        .where(Item.owner_id == owner_val, Item.added_at >= cutoff_date)
         .group_by(month_expr)
     )
 

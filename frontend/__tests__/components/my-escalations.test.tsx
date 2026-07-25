@@ -39,9 +39,6 @@ vi.mock("next-intl", () => ({
           deletion: "Deletion",
           correction: "Correction",
           reasonForDeletion: "Reason for deletion",
-          deletion: "Deletion",
-          correction: "Correction",
-          reasonForDeletion: "Reason for deletion",
         };
         return translations[key] || key;
       };

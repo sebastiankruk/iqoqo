@@ -159,10 +159,8 @@ describe("ScanPage", () => {
       if (mockSetMediaType) {
         mockSetMediaType("movie");
       }
-      if (mockSetPolicy) {
-        mockSetPolicy("catalog");
-      }
     });
+    fireEvent.click(screen.getByText("Catalog"));
 
     // Verify localStorage was updated
     expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_media_type", "movie");

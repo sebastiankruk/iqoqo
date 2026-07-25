@@ -40,6 +40,7 @@ import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 import { Button } from "@/components/ui/button";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +73,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isRequestsOpen, setIsRequestsOpen] = useState(false);
-  const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
 
   const isPending = manifestation.meta?.cover_status === "pending";
 
@@ -94,9 +94,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveCoverAction(null);
     }
     return () => {
       if (interval !== undefined) {
@@ -161,7 +158,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     if (!manifestation.id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
-    setActiveCoverAction("regenerate");
     try {
       await regenerateCover.mutateAsync(manifestation.id);
       qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
@@ -202,7 +198,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const handleRefetchCover = async () => {
     if (!manifestation.id) return;
     setIsRefetchingCover(true);
-    setActiveCoverAction("refetch");
     try {
       await apiClient.post(`/manifestations/${manifestation.id}/refetch-cover`);
       qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
@@ -263,17 +258,27 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
               </Button>
             )}
 
-            {manifestation.id && hasEscalateRequestForHook && !hasWriteMetadataForHook && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsRequestsOpen(!isRequestsOpen)}
-                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
-              >
-                {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                <span>Requests</span>
-              </Button>
-            )}
+            {manifestation.id &&
+              hasEscalateRequestForHook &&
+              !hasWriteMetadataForHook &&
+              (manifestationEscalations.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsRequestsOpen(!isRequestsOpen)}
+                  className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+                >
+                  {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <span>Requests ({manifestationEscalations.length})</span>
+                </Button>
+              ) : (
+                <EscalationTrigger
+                  level="manifestation"
+                  targetId={manifestation.id!}
+                  escalations={manifestationEscalations}
+                  alwaysShowDialog
+                />
+              ))}
           </div>
 
           {showAdminActions && isPanelOpen && (
@@ -303,38 +308,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 </Button>
               )}
 
-              {hasPermission(PermissionName.REFETCH_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefetchCover}
-                  disabled={isPending || isRefetchingCover}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <ImageDown
-                    className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
-                  />
-                  {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.REGENERATE_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRegenerateClick}
-                  disabled={isPending || isRequesting}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
-                  />
-                  {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
-                    ? "Generating..."
-                    : "Regenerate Cover"}
-                </Button>
-              )}
-
               {hasPermission(PermissionName.UPLOAD_COVER) && (
                 <CameraCapture
                   manifestation_id={manifestation.id}
@@ -360,6 +333,32 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 />
               )}
 
+              {hasPermission(PermissionName.REFETCH_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetchCover}
+                  disabled={isPending || isRefetchingCover}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageDown className="h-3.5 w-3.5" />
+                  Refetch Cover
+                </Button>
+              )}
+
+              {hasPermission(PermissionName.REGENERATE_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateClick}
+                  disabled={isPending || isRequesting}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isRequesting ? "animate-spin" : ""}`} />
+                  Regenerate Cover
+                </Button>
+              )}
+
               {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
                 <Button
                   variant="outline"
@@ -378,7 +377,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                   size="sm"
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={isDeleting}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete manifestation

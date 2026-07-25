@@ -8,7 +8,7 @@ Define the layout, multi-request handling, and accordion panel behavior for user
 
 ### Requirement: Requests Accordion Panel on Manifestation and Item Pages
 
-The system SHALL render a collapsible "Requests" section on manifestation detail and item detail pages. This section SHALL use the same accordion pattern as existing "Admin Actions" and "FRBR Actions" panels (Shadcn UI collapsible with `ChevronUp`/`ChevronDown` toggle). The section SHALL contain the "Ask custodians for help" submission trigger and the list of the current user's escalation requests for that target entity.
+The system SHALL render a collapsible "Requests" section on manifestation detail and item detail pages. This section SHALL use the same accordion pattern as existing "Admin Actions" and "FRBR Actions" panels (Shadcn UI collapsible with `ChevronUp`/`ChevronDown` toggle). The entity action sections SHALL render all admin actions (Refetch Cover, Regenerate Cover, Edit Cover Art, Remove from library / Delete manifestation) as direct inline `<Button>` elements. Overflow `<DropdownMenu>` components MUST NOT be used for admin actions — hiding actions behind a `[...]` control was rejected as a confusing UX pattern. The section SHALL contain the "Ask custodians for help" submission trigger and the list of the current user's escalation requests for that target entity.
 
 #### Scenario: Non-custodian user opens the Requests accordion
 

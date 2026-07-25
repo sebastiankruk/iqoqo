@@ -36,6 +36,12 @@ import type { IsbnMeta, ScanFormat } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
 
+const POLICY_OPTIONS = [
+  { value: "inventory", label: "Inventory" },
+  { value: "wishlist", label: "Wishlist" },
+  { value: "catalog", label: "Catalog" },
+] as const;
+
 /**
  * The scan page component for scanning barcodes and manual entry.
  *
@@ -74,21 +80,6 @@ export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const savedFormat = localStorage.getItem("iqoqo_scanner_media_type");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (savedFormat) setActiveFormat(savedFormat as ScanFormat);
-
-    const savedPolicy = localStorage.getItem("iqoqo_scanner_policy");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (savedPolicy) setPolicy(savedPolicy as "inventory" | "wishlist" | "catalog");
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
-  }, [activeFormat]);
-
-  useEffect(() => {
-    localStorage.setItem("iqoqo_scanner_policy", policy);
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
     }
@@ -218,8 +209,6 @@ export default function ScanPage() {
         <TopBar
           currentFormat={activeFormat}
           setFormat={f => setActiveFormat(f as ScanFormat)}
-          currentPolicy={policy}
-          setPolicy={setPolicy}
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
@@ -227,6 +216,24 @@ export default function ScanPage() {
 
         {!result && !showManual && scannerTab === "barcode" && (
           <Viewfinder isScanning={scannerActive} format={activeFormat} />
+        )}
+
+        {!result && !showManual && (
+          <div className="absolute right-4 top-[calc(50%+140px)] sm:top-[calc(50%+160px)] z-30 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-lg pointer-events-none">
+            {POLICY_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setPolicy(opt.value)}
+                className={`pointer-events-auto px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
+                  policy === opt.value
+                    ? "bg-white text-black border-white shadow"
+                    : "bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         )}
 
         {!result && !showManual && (

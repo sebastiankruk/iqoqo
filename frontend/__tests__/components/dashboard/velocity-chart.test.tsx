@@ -82,7 +82,7 @@ describe("VelocityChart", () => {
   });
 
   it("renders chart without crash when data is empty array", () => {
-    mockUseVelocity.mockReturnValue({ data: [], isLoading: false, isError: false } as ReturnType<
+    mockUseVelocity.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<
       typeof useVelocityInsights
     >);
     render(<VelocityChart />);
