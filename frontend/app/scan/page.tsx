@@ -219,7 +219,7 @@ export default function ScanPage() {
         )}
 
         {!result && !showManual && (
-          <div className="absolute right-4 top-[calc(50%+140px)] sm:top-[calc(50%+160px)] z-20 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-lg">
+          <div className="absolute right-4 top-[calc(50%+140px)] sm:top-[calc(50%+160px)] z-30 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-lg">
             {POLICY_OPTIONS.map(opt => (
               <button
                 key={opt.value}
