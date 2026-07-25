@@ -85,7 +85,7 @@ export function TopBar({
         )}
       </div>
 
-      {(setFormat || setPolicy) && (
+      {(setFormat || currentPolicy || setPolicy) && (
         <div className="flex flex-col bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5 gap-3">
           {setFormat && (
             <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar">
@@ -112,14 +112,14 @@ export function TopBar({
             </div>
           )}
 
-          {setPolicy && (
+          {(currentPolicy || setPolicy) && (
             <div className="flex justify-center items-center gap-1.5 border-t border-white/10 pt-2">
               {POLICY_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => setPolicy(opt.value)}
+                  onClick={() => setPolicy?.(opt.value)}
                   className={`px-3 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
-                    currentPolicy === opt.value
+                    (currentPolicy ?? "inventory") === opt.value
                       ? "bg-white text-black border-white shadow-md"
                       : "bg-white/10 text-white/70 border-white/10 hover:bg-white/20 hover:text-white"
                   }`}
