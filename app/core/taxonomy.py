@@ -44,6 +44,7 @@ class MediaFormat:
     CASSETTE = "cassette"
     MINIDISC = "minidisc"
     CD_DVD_COMBO = "cd_dvd_combo"
+    BLURAY_AUDIO = "bluray_audio"
     UNKNOWN_AUDIO = "unknown_audio"
     DVD = "dvd"
     BLURAY = "bluray"
@@ -77,6 +78,7 @@ class MediaFormat:
         "cassette",
         "minidisc",
         "cd_dvd_combo",
+        "bluray_audio",
         "unknown_audio",
         "dvd",
         "bluray",
@@ -141,6 +143,7 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "bluray_audio": "music",
     "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
@@ -176,6 +179,7 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "cassette": "music",
     "minidisc": "music",
     "cd_dvd_combo": "music",
+    "bluray_audio": "music",
     "unknown_audio": "music",
     "dvd": "movie",
     "bluray": "movie",
@@ -201,6 +205,10 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "audio": "music",
     "sound": "music",
     "lp": "music",
+    "blu-ray audio": "music",
+    "bd-a": "music",
+    "bluray hifi": "music",
+    "pure audio blu-ray": "music",
     "video": "movie",
     "moving image": "movie",
     "game": "board_game",

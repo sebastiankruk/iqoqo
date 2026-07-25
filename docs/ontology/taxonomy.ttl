@@ -98,6 +98,10 @@
     rdfs:label "cd_dvd_combo" ;
     :belongsToCategory :MediaCategoryMusic ;
     rdfs:comment "CD + DVD Edition" .
+:MediaFormatBlurayAudio a :MediaFormat ;
+    rdfs:label "bluray_audio" ;
+    :belongsToCategory :MediaCategoryMusic ;
+    rdfs:comment "Blu-ray Pure Audio" .
 :MediaFormatUnknownAudio a :MediaFormat ;
     rdfs:label "unknown_audio" ;
     :belongsToCategory :MediaCategoryMusic ;
@@ -205,6 +209,18 @@
     :resolvesToCategory :MediaCategoryMusic .
 :FormatAliasLp a :FormatAlias ;
     rdfs:label "lp" ;
+    :resolvesToCategory :MediaCategoryMusic .
+:FormatAliasBluRayAudio a :FormatAlias ;
+    rdfs:label "blu-ray audio" ;
+    :resolvesToCategory :MediaCategoryMusic .
+:FormatAliasBdA a :FormatAlias ;
+    rdfs:label "bd-a" ;
+    :resolvesToCategory :MediaCategoryMusic .
+:FormatAliasBlurayHifi a :FormatAlias ;
+    rdfs:label "bluray hifi" ;
+    :resolvesToCategory :MediaCategoryMusic .
+:FormatAliasPureAudioBluRay a :FormatAlias ;
+    rdfs:label "pure audio blu-ray" ;
     :resolvesToCategory :MediaCategoryMusic .
 :FormatAliasVideo a :FormatAlias ;
     rdfs:label "video" ;

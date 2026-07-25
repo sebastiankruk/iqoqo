@@ -44,6 +44,7 @@ export function isAudioMedia(format: string | undefined): boolean {
     "audiobook",
     "cd-ep",
     "sacd",
+    "bluray_audio",
     "audiobook_cd",
     "unknown_audio",
   ]);

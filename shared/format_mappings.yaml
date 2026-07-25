@@ -56,6 +56,11 @@
 format_normalizations:
   audio: cd
   boardgame: board_game
+  # BluRay HiFi Pure Audio raw values → canonical bluray_audio format
+  "blu-ray audio": bluray_audio
+  "bd-a": bluray_audio
+  "bluray hifi": bluray_audio
+  "pure audio blu-ray": bluray_audio
   "null":
     movie: unknown_video
     music: unknown_audio

@@ -83,6 +83,8 @@ media_categories:
         label: "MiniDisc"
       - id: cd_dvd_combo
         label: "CD + DVD Edition"
+      - id: bluray_audio
+        label: "Blu-ray Pure Audio"
       - id: unknown_audio
         label: "Unknown Audio Format"
 
@@ -161,6 +163,10 @@ format_aliases:
   audio: music
   sound: music
   lp: music
+  "blu-ray audio": music
+  bd-a: music
+  "bluray hifi": music
+  "pure audio blu-ray": music
   # movie aliases
   video: movie
   "moving image": movie
