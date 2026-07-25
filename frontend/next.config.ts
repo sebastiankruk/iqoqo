@@ -51,35 +51,34 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format) or be relative "/api".
     // We favor FLASK_API_URL if available for the server-side proxy destination.
-    const apiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5002/api";
+    const apiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5001/api";
     const backendBase = apiUrl.replace(/\/api\/?$/, "");
 
-    return [
-      {
-        // Only proxy to Flask if NOT an internal Next.js auth exception route.
-        // aligning with deploy/nginx.conf locations
-        source: "/api/:path((?!auth-exchange|auth/logout).*)",
-        // Proxy to Flask backend. All browser API calls go through Next.js
-        // (same-origin) so the session cookie is forwarded without CORS issues.
-        destination: `${backendBase}/api/:path`,
-      },
-      {
-        // Intercept static asset requests (stored as /static/... in DB)
-        // and proxy them to the backend API static serving endpoint.
-        source: "/static/:path*",
-        destination: `${backendBase}/api/static/:path*`,
-      },
-      {
-        // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
-        source: "/rum/:path*",
-        destination: "http://127.0.0.1:5080/rum/:path*",
-      },
-      {
-        // Proxy OTel Collector traces to avoid CORS origin mismatches
-        source: "/v1/traces",
-        destination: "http://127.0.0.1:4318/v1/traces",
-      },
-    ];
+    return {
+      afterFiles: [
+        {
+          // Proxy to Flask backend for any API routes not handled locally by Next.js app/api/
+          source: "/api/:path*",
+          destination: `${backendBase}/api/:path*`,
+        },
+        {
+          // Intercept static asset requests (stored as /static/... in DB)
+          // and proxy them to the backend API static serving endpoint.
+          source: "/static/:path*",
+          destination: `${backendBase}/api/static/:path*`,
+        },
+        {
+          // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
+          source: "/rum/:path*",
+          destination: "http://127.0.0.1:5080/rum/:path*",
+        },
+        {
+          // Proxy OTel Collector traces to avoid CORS origin mismatches
+          source: "/v1/traces",
+          destination: "http://127.0.0.1:4318/v1/traces",
+        },
+      ],
+    };
   },
   // Allow cover images from a restricted set of HTTPS origins (metadata comes
   // from multiple providers: Google Books, Open Library, etc.). Apply

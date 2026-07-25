@@ -94,6 +94,8 @@ def add_source_badge(filepath: str, source: str):
         "api_google_books": ("D", "gray"),
         "api_allegro": ("A", "orange"),
         "api_direct_download": ("C", "teal"),  # CD/Audio direct download
+        "api_musicbrainz": ("M", "teal"),
+        "api_tmdb": ("T", "red"),
         "api_igdb": ("I", "purple"),  # IGDB Cover
         "llm_gemini": ("G", "purple"),
         "llm_openai": ("O", "green"),
@@ -143,12 +145,16 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
         hash_str = f"{identifier}_{title}"
         hash_val = int(hashlib.md5(hash_str.encode("utf-8")).hexdigest(), 16)
 
-        # Keep colours slightly muted/darker for sufficient contrast with white text
-        color1 = (hash_val % 200, (hash_val // 256) % 200, (hash_val // 65536) % 200)
+        # Muted/darker palette for dark mode elegance and strong white text contrast
+        color1 = (
+            40 + (hash_val % 100),
+            40 + ((hash_val // 256) % 100),
+            50 + ((hash_val // 65536) % 100),
+        )
         color2 = (
-            (hash_val // 16_777_216) % 150,
-            (hash_val // 4_294_967_296) % 150,
-            100,
+            20 + ((hash_val // 16_777_216) % 80),
+            20 + ((hash_val // 4_294_967_296) % 80),
+            30 + ((hash_val // 1_099_511_627_776) % 80),
         )
 
         width, height = 600, 900
@@ -170,9 +176,13 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
             font_author: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36
             )
+            font_footer: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28
+            )
         except OSError:
             font_title = ImageFont.load_default()
             font_author = ImageFont.load_default()
+            font_footer = ImageFont.load_default()
 
         # 3. Word-wrap the title so it stays within the image margins
         margin = 40
@@ -190,11 +200,29 @@ def generate_fallback_cover(identifier: str, title: str, author: str) -> tuple[s
             bbox = font_title.getbbox(line) if hasattr(font_title, "getbbox") else (0, 0, 0, 50)
             offset_y += int(bbox[3] - bbox[1] + 15) if bbox else 65
 
-        # 5. Render author near the bottom of the image
+        # 5. Render author
         if author:
-            author_y = height - 120
+            author_y = height - 150
             draw.text((margin + 2, author_y + 2), author, font=font_author, fill="black")
             draw.text((margin, author_y), author, font=font_author, fill="#E2E8F0")
+
+        # 6. Render decorative line above footer
+        footer_text = "powered by iqoqo"
+        footer_y = height - 80
+        line_y = footer_y - 12
+        line_margin = int(width * 0.2)  # 60% centered = 20% margin each side
+        draw.line(
+            [(line_margin, line_y), (width - line_margin, line_y)],
+            fill="#475569",
+            width=1,
+        )
+
+        # 7. Render prominent "powered by iqoqo" footer — centered
+        bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+        text_width = bbox[2] - bbox[0]
+        footer_x = (width - text_width) // 2
+        draw.text((footer_x + 1, footer_y + 1), footer_text, font=font_footer, fill="black")
+        draw.text((footer_x, footer_y), footer_text, font=font_footer, fill="#64748B")
 
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format="JPEG", quality=85)

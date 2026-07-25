@@ -143,6 +143,8 @@ def admin_headers(app):
             "llm_generate:cover",
             "llm_generate:cloud",
             "edit:cover",
+            "escalate:request",
+            "escalate:resolve",
         ]
         perms = [get_or_create_perm(n) for n in perm_names]
         db.session.flush()
@@ -249,4 +251,39 @@ def restricted_user_headers(app):
         db.session.commit()
 
         token = generate_internal_jwt(user)
+        return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def custodian_headers(app):
+    """Fixture to provide authorization headers for a custodian (non-admin)
+    with write:metadata, read:metadata, escalate:resolve but NOT admin role."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import Permission, Role, User, db
+
+    with app.app_context():
+
+        def get_or_create_perm(name):
+            p = Permission.query.filter_by(name=name).first()
+            if not p:
+                p = Permission(name=name)
+                db.session.add(p)
+            return p
+
+        # Create custodian role with write_metadata, read_metadata, escalate:resolve
+        custodian_role = Role(name="custodian_test")
+        custodial_perms = [
+            get_or_create_perm("write:metadata"),
+            get_or_create_perm("read:metadata"),
+            get_or_create_perm("escalate:resolve"),
+        ]
+        custodian_role.permissions.extend(custodial_perms)
+        db.session.add(custodian_role)
+
+        custodian = User(email="custodian_test@iqoqo.local", display_name="Custodian Test")
+        custodian.roles.append(custodian_role)
+        db.session.add(custodian)
+        db.session.commit()
+
+        token = generate_internal_jwt(custodian)
         return {"Authorization": f"Bearer {token}"}

@@ -35,10 +35,12 @@ import {
   Search,
   X,
   Image as ImageIcon,
+  LifeBuoy,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
+import { MyEscalations } from "@/components/escalation/my-escalations";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
@@ -185,10 +187,11 @@ function SettingsContent(): React.JSX.Element {
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
-  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+  const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
 
-  const hasCustodianAccess = canViewMetadata || canEditCover;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -219,6 +222,7 @@ function SettingsContent(): React.JSX.Element {
                     icon={Database}
                     isActive={activeTab === "metadata"}
                     onClick={() => handleTabChange("metadata")}
+                    href="/admin/content?tab=metadata"
                   />
                 )}
                 {canEditCover && (
@@ -228,6 +232,15 @@ function SettingsContent(): React.JSX.Element {
                     isActive={activeTab === "cover-art"}
                     onClick={() => handleTabChange("cover-art")}
                     href="/admin/content?tab=cover-art"
+                  />
+                )}
+                {canViewEscalationQueue && (
+                  <NavItem
+                    label="User Requests"
+                    icon={LifeBuoy}
+                    isActive={activeTab === "escalations"}
+                    onClick={() => handleTabChange("escalations")}
+                    href="/admin/content?tab=escalations"
                   />
                 )}
               </nav>
@@ -434,6 +447,10 @@ function SettingsContent(): React.JSX.Element {
                     {isSaving ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
+              </div>
+
+              <div id="help-requests">
+                <MyEscalations />
               </div>
             </div>
           )}

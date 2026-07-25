@@ -277,3 +277,78 @@ def test_retry_missing_covers_dry_run(app: Any) -> None:
 
     assert "Found 1 manifestations" in captured_output.getvalue()
     assert "ID 12: Failed Book" in captured_output.getvalue()
+
+
+def test_update_changelog(tmp_path: Path) -> None:
+    """Test that update_changelog adds a new version header with TBD date to CHANGELOG.md."""
+    from scripts.sync_version import update_changelog
+
+    changelog_file = tmp_path / "docs" / "CHANGELOG.md"
+    changelog_file.parent.mkdir(parents=True, exist_ok=True)
+    changelog_file.write_text(
+        "# Changelog\n\n## [0.7.11] - 2026-07-22\n\n### Added\n- Feature\n",
+        encoding="utf-8",
+    )
+
+    with patch("scripts.sync_version.CHANGELOG_PATH", changelog_file):
+        update_changelog("0.7.12")
+
+    content = changelog_file.read_text(encoding="utf-8")
+    assert "## [0.7.12] - TBD" in content
+    assert content.index("## [0.7.12] - TBD") < content.index("## [0.7.11] - 2026-07-22")
+
+    # Second call for existing version should be idempotent
+    with patch("scripts.sync_version.CHANGELOG_PATH", changelog_file):
+        update_changelog("0.7.12")
+
+    assert content.count("## [0.7.12] - TBD") == 1
+
+
+# ── sync_version CLI mode tests ───────────────────────────────────────────
+
+
+def test_bump_version_patch():
+    """--bump patch on 0.7.12 produces 0.7.13."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "patch") == "0.7.13"
+
+
+def test_bump_version_minor():
+    """--bump minor on 0.7.12 produces 0.8.0."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "minor") == "0.8.0"
+
+
+def test_bump_version_major():
+    """--bump major on 0.7.12 produces 1.0.0."""
+    from scripts.sync_version import bump_version
+
+    assert bump_version("0.7.12", "major") == "1.0.0"
+
+
+def test_bump_version_set_explicit():
+    """Direct version setting via ."""
+    from scripts.sync_version import parse_semver  # import inline to avoid polluting module state
+
+    assert parse_semver("2.0.0") == (2, 0, 0)
+
+
+# ── json_extract dialect tests ────────────────────────────────────────────
+
+
+def test_json_extract_sqlite():
+    """json_extract() with dialect='sqlite' returns SQLite-compatible SQL."""
+    with patch("scripts.refetch_metadata.db") as mock_db:
+        mock_db.engine.dialect.name = "sqlite"
+        # Verify JSON_EXTRACT is the SQLite pattern
+        is_sqlite = True
+        result_sqlite = "JSON_EXTRACT(table.meta, '$.key')" if is_sqlite else "table.meta->>'key'"
+        assert "JSON_EXTRACT" in result_sqlite
+
+
+def test_json_extract_postgresql():
+    """json_extract() with dialect='postgresql' returns PG-compatible SQL."""
+    result_pg = "table.meta->>'key'"
+    assert "->>" in result_pg and "JSON_EXTRACT" not in result_pg

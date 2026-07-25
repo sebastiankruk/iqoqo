@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.12] - 2026-07-25
+
+### Added
+
+- **Escalation Queue Admin UI**: New `EscalationQueue` component mounted as a tab in the admin content page, visible to users with `escalate:resolve` permission. Custodians can view pending metadata correction requests, accept/reject/mark-duplicate with optional resolution notes.
+- **Escalation Queue Status Filter**: Extended `GET /api/escalations/queue` endpoint with optional `?status=` query parameter (comma-separated statuses). Defaults to `pending` when absent for backward compatibility. Added `useResolvedEscalations()` hook for fetching non-pending requests.
+- **Shared Escalation Utilities**: Extracted `getTargetHref()` and `getTargetLabel()` into `frontend/lib/escalation-utils.tsx` shared utility, used by both admin queue and my-escalations components.
+- **Deletion Request Type**: Added `request_type` column to `EscalationRequest` model (default `"correction"`, supports `"correction"` and `"deletion"`) with Alembic migration. Enables distinguishing between metadata correction and entity deletion requests throughout the escalation pipeline.
+- **Deletion Request Form**: Added request type selector (radio group) in the escalation trigger dialog, allowing users to toggle between "Metadata Correction" and "Request Deletion" modes. Form state clears on type switch to prevent stale data leakage between modes.
+- **Accept & Delete Resolution**: Added entity deletion execution when accepting deletion-type escalation requests. Requires `delete:manifestation` or `delete:item` permission in addition to `escalate:resolve`. Entity deletion and escalation status update are wrapped in a single database transaction.
+- **Deletion Request UI Badges**: Added `RequestTypeBadge` component displaying distinct "Deletion" (destructive/warning) vs "Correction" (neutral) styling on both admin queue tiles and user "My Help Requests" cards.
+
+### Changed
+
+- **User Requests UX Rename**: Renamed "Escalation Queue" to "User Requests" in admin tab, "Escalation" status card to "Help Request", "Duplicate" action to "Mark as Duplicate", and empty state messages from "escalation requests" to "user requests" throughout the UI.
+- **Navbar "My Help Requests" Link**: Added "My Help Requests" dropdown menu item between "Manage Collections" and "Admin Configuration" with a pending-count badge using `useMyEscalations()` hook.
+- **Processed Requests Section**: Added expandable "Processed Requests" section below the pending queue in the admin "User Requests" view — toggle button with chevron, fetching resolved escalations via the new `useResolvedEscalations()` hook.
+- **Clickable Target Labels**: Target entity labels in the escalation queue are now clickable links to `/manifestation/{id}` or `/item/{id}`, matching the pattern from `my-escalations.tsx`.
+- **Requests Accordion on Manifestation/Item Pages**: EscalationTrigger is now wrapped in a collapsible "Requests" accordion panel (ChevronUp/Down pattern) on manifestation and item pages, shown only to users without `write:metadata`. Pending request status is displayed outside the collapsed accordion; "Ask custodians" button is hidden until accordion expands.
+- **Multi-Escalation Support**: EscalationTrigger now accepts pre-filtered escalations array prop, supporting multiple requests per target. All existing requests are listed inside the accordion while pending status is shown externally.
+- **i18n Coverage**: Added full Polish and English translations (`HelpRequests` namespace) for all user-facing labels across escalation components, including dialog forms, action buttons, empty states, and status labels.
+- **Card Padding Fix**: Fixed card padding in `my-escalations.tsx` from `p-3.5 space-y-2` to `p-4 space-y-3` for better visual breathing room.
+- **FRBR Search Permission Gating**: The FRBR entity search endpoint now uses `@require_permission(READ_METADATA)` instead of `@admin_required`, allowing custodians (non-admins) with `read:metadata` to search FRBR entities.
+- **Edit FRBR Button Gating**: The "Edit FRBR" button in item and manifestation action panels now requires `write:metadata` permission instead of `read:metadata`.
+- **Fallback Cover Design**: Removed CTA text, enlarged "powered by iqoqo" footer to 28px bold, centered horizontally, added decorative separator line.
+- **API Validation for Deletion Requests**: Extended `_validate_escalation_input()` to accept optional `request_type` field. When `request_type` is `"deletion"`, `field_name` and `suggested_value` become optional but `note` becomes required (max 2048 chars). Invalid `request_type` values are rejected with HTTP 400.
+- **Resolve Endpoint Permission Gating**: Updated `PATCH /api/escalations/<id>` to check entity-specific DELETE permissions (`delete:manifestation` or `delete:item`) when accepting deletion-type requests. Rejection and duplicate actions are exempt from DELETE checks, allowing custodians without DELETE permissions to still decline requests.
+- **Admin Queue "Accept & Delete" Button**: Changed "Accept" button label to "Accept & Delete" for deletion-type requests in the admin queue. The button is disabled with a permission tooltip when the resolver lacks the required entity-specific DELETE permission.
+- **Deletion Request i18n Coverage**: Added new `HelpRequests` namespace translation keys for "Request Deletion", "Accept & Delete", "Reason for deletion", "Deletion request submitted to custodians", and related labels in both `en.json` and `pl.json`.
+- **Scanner Policy Pill Layout**: Restored policy selector pill (`Inventory`, `Wishlist`, `Catalog`) inside `TopBar` below format selector icons in `top-bar.tsx`. Eliminates misplacement and `BottomSheet` overlap on mobile and desktop viewports while preserving `localStorage` state persistence. Added viewport E2E and unit layout tests.
+- **Top-Level Action Density Control**: Enforced a strict maximum of 4 top-level primary buttons across `item-actions.tsx`, `manifestation-actions.tsx`, and `escalation-queue.tsx`, routing tertiary actions to a unified `<DropdownMenu>` ("More Actions").
+- **Admin Tab Navigation**: Refactored tab selection in `frontend/app/admin/content/page.tsx` into a synchronous expression to prevent `react-hooks/set-state-in-effect` cascading renders.
+- **Atomic Deletion Safety**: Added atomic row locking (`with_for_update()`) and PostgreSQL FK cascade check (`409 Conflict`) for manifestation deletion requests with existing dependent `Item` records in `app/api/social.py`.
+
+### Test Hardening
+
+- **Backend Escalation API Tests**: Added 14 new tests to `tests/test_api_escalations.py` covering queue status filtering (pending/resolved/single/invalid/mixed), resolve operations (rejected/duplicate status), resolver display name presence/absence, create escalation for all target types (work/expression/item), invalid request type rejection, and oversized resolution note validation.
+- **Backend Permissions & Auth Tests**: Added 12 new tests covering custodian permission boundaries including FRBR entity mutations, image uploads, work part addition, FRBR tree access, escalation permission migrations (upgrade/downgrade), and require_permission decorator 401 behavior.
+- **Backend Cover & Dashboard Tests**: Added 3 new tests for fallback cover design elements (separator line, footer font, no CTA text), and empty-collection edge cases for velocity and distribution insights endpoints.
+- **Frontend Escalation Component Tests**: Added 22 new tests across `escalation-queue`, `escalation-trigger`, and `my-escalations` component test suites covering error states, processed requests toggle/loading/empty/error states, resolver display name, deletion badges, permission gating (delete:manifestation, delete:item), clickable target labels, rejected/duplicate status cards, deletion request flow, alwaysShowDialog prop, multi-escalation accordion, status badges, resolution notes, and target link hrefs.
+- **Frontend Escalation Utils Tests**: Created `escalation-utils.test.tsx` with 15 tests covering `getTargetHref()`, `getAdminTargetHref()`, and `getTargetLabel()` for all 4 FRBR target types and deleted-entity fallback cases.
+- **Frontend Scanner Component Tests**: Added `bottom-sheet.test.tsx` (tab rendering, tab switching, manual search, camera viewfinder, error display, manual entry fallback), `top-bar.test.tsx` (format selector, policy selector, flash toggle, back-link), and extended `camera-capture.test.tsx` with cover/gallery/vision mode uploads, drag-and-drop, confirmation dialog, and error handling.
+- **Frontend Dashboard & Navbar Tests**: Added 7 new tests covering `CollectionInsights` loading/error states, `VelocityChart` empty array rendering, `TypeDistributionChart` empty data arrays, and navbar "My Help Requests" link with pending count badge, zero-pending state, and correct href.
+- **i18n Structural Tests**: Created `help-requests-completeness.test.ts` verifying key parity between `en.json` and `pl.json` for the `HelpRequests` namespace and ensuring no translation values are empty strings.
+- **Script Test Hardening**: Added `test_validate_yaml.py` with tests for valid/malformed/missing YAML, `test_script_utilities.py` with sync_version bump (patch/minor/major/set) and json_extract dialect (sqlite/postgresql) tests, and `validate_yaml.bats` BATS test for Makefile target validation.
+- **E2E Test Expansion**: Extended `seed_e2e.py` with pending escalation seed data, created `escalation_workflow.spec.ts` (custodian resolution flow), `scanner_workflow.spec.ts` (barcode scan, format selection), `policy_scanning.spec.ts` (policy switching), and enabled `toHaveScreenshot()` assertions in `watermark_verification.spec.ts`.
+
+### Fixed
+
+- **User Requests Sidebar Nav & Resolver Info**: Added missing "User Requests" item to `/admin/settings` sidebar under Custodians section, updated "Metadata" nav item to navigate to `/admin/content?tab=metadata`, and fixed backend queue query to eagerly load resolver relationships so `resolver_display_name` renders on processed request tiles.
+- **Escalation Permission Assignment**: Added Alembic data migration to assign `escalate:request` permission to `user` role and `escalate:resolve` to `custodian` and `admin` roles, fixing the submit-to-retrieve pipeline end-to-end.
+- **Stats Charts Display for Empty Collections**: Hide `CollectionInsights` dashboard charts section (`VelocityChart` and `TypeDistributionChart`) when the authenticated user has zero items in their collection (`stats.total_items === 0`).
+
 ## [0.7.11] - 2026-07-22
 
 ### Added

@@ -24,6 +24,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
 import { useAppConfig } from "@/lib/api/hooks";
+import { MyEscalations } from "@/components/escalation/my-escalations";
 
 /**
  * User consent record
@@ -239,6 +240,10 @@ export default function ProfilePage() {
               {profile.consents?.telemetry ? "Opted In" : "Opted Out"}
             </Button>
           </div>
+        </div>
+
+        <div id="help-requests">
+          <MyEscalations />
         </div>
 
         <div className="flex justify-between items-center pt-4">

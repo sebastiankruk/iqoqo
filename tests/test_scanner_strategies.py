@@ -62,3 +62,35 @@ def test_game_lookup_strategy_success():
         assert result["title"] == "Catan"
         assert provider == "bgg"
         mock_fetch.assert_called_once()
+
+
+def test_audio_lookup_strategy():
+    """AudioLookupStrategy delegates to Discogs fetcher for short numeric barcode."""
+    from app.strategies.audio import AudioLookupStrategy
+
+    strategy = AudioLookupStrategy()
+    with patch("app.strategies.audio.fetch_discogs_by_id") as mock_discogs_by_id:
+        mock_discogs_by_id.return_value = {"title": "Dark Side of the Moon", "data_source": "discogs"}
+        result, provider = strategy.lookup("12345")
+
+        assert result is not None
+        assert result["title"] == "Dark Side of the Moon"
+        assert provider == "discogs"
+        mock_discogs_by_id.assert_called_once()
+
+
+def test_video_lookup_strategy():
+    """VideoLookupStrategy delegates to TMDB fetcher via resolve_physical_media."""
+    from app.strategies.video import VideoLookupStrategy
+
+    strategy = VideoLookupStrategy()
+    with patch("app.strategies.video.resolve_physical_media") as mock_upc:
+        mock_upc.return_value = {"title": "The Matrix", "media_type": "Blu-ray"}
+        with patch("app.strategies.video.fetch_video_metadata") as mock_tmdb:
+            mock_tmdb.return_value = {"title": "The Matrix", "data_source": "tmdb", "release_date": "1999"}
+            result, provider = strategy.lookup("883929312517")
+
+            assert result is not None
+            assert result["title"] == "The Matrix"
+            assert provider == "tmdb"
+            assert result.get("data_source") == "tmdb"

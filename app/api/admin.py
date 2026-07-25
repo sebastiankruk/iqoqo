@@ -21,7 +21,7 @@ from datetime import date
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.decorators import admin_required, require_auth
+from app.api.decorators import admin_required, require_auth, require_permission
 from app.core import frbr_service
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
@@ -438,7 +438,6 @@ def reveal_setting():
 
 @admin_bp.route("/frbr/tree/manifestation/<int:manif_id>", methods=["GET"])
 @require_auth
-@admin_required
 def get_frbr_tree(manif_id):
     """Fetches the full FRBR lineage upward from a Manifestation."""
     user = _get_current_user()
@@ -504,14 +503,9 @@ def get_frbr_tree(manif_id):
 
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.WRITE_METADATA)
 def update_work(work_id):
     """Update a Work entity."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.WRITE_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
-
     data = request.json or {}
     try:
         work = frbr_service.update_work(work_id, title=data.get("title"), meta=parse_meta(data.get("meta")))
@@ -522,14 +516,9 @@ def update_work(work_id):
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.WRITE_METADATA)
 def update_expression(expr_id):
     """Update an Expression entity."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.WRITE_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
-
     data = request.json or {}
     try:
         expr = frbr_service.update_expression(
@@ -546,14 +535,9 @@ def update_expression(expr_id):
 
 @admin_bp.route("/frbr/manifestation/<int:manif_id>", methods=["PUT"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation(manif_id):
     """Update a Manifestation entity."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.WRITE_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
-
     data = request.json or {}
     pub_date_str = data.get("publication_date")
     try:
@@ -579,14 +563,9 @@ def update_manifestation(manif_id):
 
 @admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.WRITE_METADATA)
 def update_item(item_id):
     """Update an Item entity."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.WRITE_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.WRITE_METADATA} required"}), 403
-
     data = request.json or {}
     try:
         item = frbr_service.update_item(
@@ -603,14 +582,9 @@ def update_item(item_id):
 
 @admin_bp.route("/frbr/search", methods=["GET"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.READ_METADATA)
 def search_frbr_entities():
     """Search for FRBR entities (Works, Expressions, Manifestations) by title or identifier."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.READ_METADATA):
-        return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_METADATA} required"}), 403
-
     query = request.args.get("q", "").strip()
     entity_type = request.args.get("type", "manifestation")  # work, expression, manifestation
     limit = request.args.get("limit", 20, type=int)
@@ -686,13 +660,9 @@ def search_frbr_entities():
 
 @admin_bp.route("/media/upload-cover", methods=["POST"])
 @require_auth
-@admin_required
+@require_permission(PermissionName.UPLOAD_COVER)
 def upload_cover():
     """Accepts a client-side processed image blob, saves it, and binds it to an entity."""
-    user = _get_current_user()
-
-    if not _has_permission(user, PermissionName.EDIT_COVER) and not _has_permission(user, PermissionName.UPLOAD_COVER):
-        return jsonify({"success": False, "error": "Permission denied"}), 403
 
     file = request.files.get("file")
     entity_type = request.form.get("entity_type")

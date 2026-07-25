@@ -398,3 +398,85 @@ def test_gin_index_migration_downgrade(app) -> None:
             conn.commit()
 
             assert not _index_exists(conn), "Index should not exist after downgrade"
+
+
+# ── Escalation permission migration: 52dbd8310811 ──────────────────────────
+
+
+def _role_permission_exists(connection, role_name: str, perm_name: str) -> bool:
+    """Check if role-permission mapping exists."""
+    import sqlalchemy as sa
+
+    result = connection.execute(
+        sa.text(
+            "SELECT 1 FROM auth.role_permissions rp "
+            "JOIN auth.roles r ON r.id = rp.role_id "
+            "JOIN auth.permissions p ON p.id = rp.permission_id "
+            "WHERE r.name = :role_name AND p.name = :perm_name LIMIT 1"
+        ),
+        {"role_name": role_name, "perm_name": perm_name},
+    )
+    return result.fetchone() is not None
+
+
+def test_escalation_permission_migration_upgrade(app) -> None:
+    """Run migration 52dbd8310811 upgrade, verify permissions assigned to roles."""
+    if not _is_postgresql(app):
+        pytest.skip("Escalation permission migration tests require PostgreSQL")
+
+    from importlib import import_module
+
+    import sqlalchemy as sa
+
+    migration = import_module("migrations.versions.52dbd8310811_assign_escalation_permissions_to_roles")
+
+    with app.app_context():
+        from app.db import db
+
+        engine = db.engine
+        with engine.connect() as conn:
+            from alembic.migration import MigrationContext
+            from alembic.operations import Operations
+
+            ctx = MigrationContext.configure(conn)
+            migration.op = Operations(ctx)  # type: ignore[attr-defined]
+
+            # Run upgrade
+            migration.upgrade()
+            conn.commit()
+
+            assert _role_permission_exists(conn, "user", "escalate:request"), "user role should have escalate:request"
+            assert _role_permission_exists(conn, "custodian", "escalate:resolve"), "custodian role should have escalate:resolve"
+
+
+def test_escalation_permission_migration_downgrade(app) -> None:
+    """Run migration 52dbd8310811 downgrade, verify permissions removed."""
+    if not _is_postgresql(app):
+        pytest.skip("Escalation permission migration tests require PostgreSQL")
+
+    from importlib import import_module
+
+    migration = import_module("migrations.versions.52dbd8310811_assign_escalation_permissions_to_roles")
+
+    with app.app_context():
+        from app.db import db
+
+        engine = db.engine
+        with engine.connect() as conn:
+            from alembic.migration import MigrationContext
+            from alembic.operations import Operations
+
+            ctx = MigrationContext.configure(conn)
+            migration.op = Operations(ctx)  # type: ignore[attr-defined]
+
+            # Run downgrade
+            migration.downgrade()
+            conn.commit()
+
+            # Verify escalated:request removed from user role
+            assert not _role_permission_exists(
+                conn, "user", "escalate:request"
+            ), "user role should not have escalate:request after downgrade"
+            assert not _role_permission_exists(
+                conn, "custodian", "escalate:resolve"
+            ), "custodian role should not have escalate:resolve after downgrade"

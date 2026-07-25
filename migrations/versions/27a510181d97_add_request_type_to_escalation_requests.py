@@ -1,0 +1,52 @@
+"""Add request_type to escalation_requests
+
+Revision ID: 27a510181d97
+Revises: 52dbd8310811
+Create Date: 2026-07-24 14:56:17.609589
+
+"""
+
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '27a510181d97'
+down_revision = '52dbd8310811'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = [col["name"] for col in inspector.get_columns("escalation_requests", schema="inventory")]
+    if "request_type" not in columns:
+        with op.batch_alter_table("escalation_requests", schema="inventory") as batch_op:
+            batch_op.add_column(
+                sa.Column("request_type", sa.String(length=20), server_default="correction", nullable=False)
+            )
+
+
+def downgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = [col["name"] for col in inspector.get_columns("escalation_requests", schema="inventory")]
+    if "request_type" in columns:
+        with op.batch_alter_table("escalation_requests", schema="inventory") as batch_op:
+            batch_op.drop_column("request_type")

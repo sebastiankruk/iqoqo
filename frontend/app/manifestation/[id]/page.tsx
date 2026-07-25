@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
+import { CoverProvenance } from "@/components/cover/cover-provenance";
 import { useTranslations } from "next-intl";
 
 /**
@@ -189,6 +190,9 @@ export default function ManifestationPage() {
                   <BookOpen className="h-24 w-24 text-muted-foreground/30" />
                 </div>
               )}
+            </div>
+            <div className="mt-2.5 flex justify-center">
+              <CoverProvenance source={manifestation.meta?.["cover_source"] as string | undefined} />
             </div>
             {!coverUrl && (
               <div className="mt-4">

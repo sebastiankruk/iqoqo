@@ -223,3 +223,111 @@ class SocialNote(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class EscalationRequest(db.Model):  # type: ignore[name-defined]
+    """
+    User escalation request targeting a field on any level of the FRBR hierarchy for custodian review.
+    At most one of work_id, expression_id, manifestation_id, or item_id is set (may become null if entity deleted).
+    """
+
+    __tablename__ = "escalation_requests"
+    __table_args__: tuple = (
+        (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) <= 1",
+                name="chk_escalation_target_exactly_one",
+            ),
+            db.CheckConstraint(
+                "status IN ('pending', 'accepted', 'rejected', 'duplicate')",
+                name="chk_escalation_status_valid",
+            ),
+            {"schema": _INVENTORY},
+        )
+        if _INVENTORY
+        else (
+            db.CheckConstraint(
+                "(case when work_id is not null then 1 else 0 end + "
+                "case when expression_id is not null then 1 else 0 end + "
+                "case when manifestation_id is not null then 1 else 0 end + "
+                "case when item_id is not null then 1 else 0 end) <= 1",
+                name="chk_escalation_target_exactly_one",
+            ),
+            db.CheckConstraint(
+                "status IN ('pending', 'accepted', 'rejected', 'duplicate')",
+                name="chk_escalation_status_valid",
+            ),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # FRBR hierarchy relations
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="SET NULL"), nullable=True, index=True)
+    expression_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="SET NULL"), nullable=True, index=True)
+    manifestation_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    item_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    target_type = db.Column(db.String(20), nullable=True)
+    field_name = db.Column(db.String(100), nullable=False)
+    current_value = db.Column(db.Text, nullable=True)
+    suggested_value = db.Column(db.Text, nullable=False)
+    note = db.Column(db.Text, nullable=True)
+    request_type = db.Column(db.String(20), default="correction", nullable=False)
+
+    status = db.Column(db.String(20), default="pending", nullable=False, index=True)
+
+    resolved_by = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"), nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolution_note = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+
+    user = db.relationship(
+        "User", foreign_keys=[user_id], backref=db.backref("escalation_requests", cascade="all, delete-orphan", lazy="dynamic")
+    )
+    resolver = db.relationship("User", foreign_keys=[resolved_by])
+
+    work = db.relationship("Work", backref=db.backref("escalation_requests", lazy="dynamic"))
+    expression = db.relationship("Expression", backref=db.backref("escalation_requests", lazy="dynamic"))
+    manifestation = db.relationship("Manifestation", backref=db.backref("escalation_requests", lazy="dynamic"))
+    item = db.relationship("Item", backref=db.backref("escalation_requests", lazy="dynamic"))
+
+    def to_dict(self) -> dict:
+        """Serialize the escalation request details."""
+        return {
+            "id": self.id,
+            "user_id": str(self.user_id),
+            "user_display_name": self.user.display_name if self.user else "Anonymous",
+            "user_username": self.user.public_username if self.user else None,
+            "user_avatar_url": self.user.avatar_url if self.user else None,
+            "work_id": self.work_id,
+            "expression_id": self.expression_id,
+            "manifestation_id": self.manifestation_id,
+            "item_id": self.item_id,
+            "target_type": self.target_type
+            or (
+                "manifestation"
+                if self.manifestation_id
+                else "item" if self.item_id else "work" if self.work_id else "expression" if self.expression_id else None
+            ),
+            "field_name": self.field_name,
+            "current_value": self.current_value,
+            "suggested_value": self.suggested_value,
+            "note": self.note,
+            "request_type": self.request_type,
+            "status": self.status,
+            "resolved_by": str(self.resolved_by) if self.resolved_by else None,
+            "resolver_display_name": (self.resolver.display_name or self.resolver.public_username) if self.resolver else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolution_note": self.resolution_note,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

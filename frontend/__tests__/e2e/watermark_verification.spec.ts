@@ -25,8 +25,9 @@ test.describe("Watermark Verification Workflow", () => {
     const src = await genAiCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
-    // Visual verification (requires pre-generated baseline screenshots)
-    // await expect(genAiCover).toHaveScreenshot('llm_gen_corner_wm.png', { maxDiffPixels: 100 });
+    // Visual verification (requires pre-generated baseline screenshots per platform)
+    // Skipped in CI — baseline must be generated locally and committed first
+    // await expect(genAiCover).toHaveScreenshot("llm_gen_corner_wm.png", { maxDiffPixels: 200 });
   });
 
   test("verifies center watermark presence on placeholders", async ({ page }) => {
@@ -38,7 +39,8 @@ test.describe("Watermark Verification Workflow", () => {
     const src = await placeholderCover.getAttribute("src");
     expect(src).toContain("_wm.jpg");
 
-    // Visual verification (requires pre-generated baseline screenshots)
-    // await expect(placeholderCover).toHaveScreenshot("placeholder_center_wm.png", { maxDiffPixels: 100 });
+    // Visual verification (requires pre-generated baseline screenshots per platform)
+    // Skipped in CI — baseline must be generated locally and committed first
+    // await expect(placeholderCover).toHaveScreenshot("placeholder_center_wm.png", { maxDiffPixels: 200 });
   });
 });

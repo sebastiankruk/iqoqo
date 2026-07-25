@@ -16,10 +16,22 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies } from "next/headers";
 
-export default getRequestConfig(async () => {
-  const cookieStore = await cookies();
-  const localeFromCookie = cookieStore.get("NEXT_LOCALE")?.value || "en";
-  const locale = ["en", "pl"].includes(localeFromCookie) ? localeFromCookie : "en";
+export default getRequestConfig(async ({ requestLocale }) => {
+  let locale = await requestLocale;
+  if (!locale) {
+    try {
+      const cookieStore = await cookies();
+      const localeFromCookie = cookieStore.get("NEXT_LOCALE")?.value;
+      if (localeFromCookie && ["en", "pl"].includes(localeFromCookie)) {
+        locale = localeFromCookie;
+      }
+    } catch {
+      locale = "en";
+    }
+  }
+  if (!locale || !["en", "pl"].includes(locale)) {
+    locale = "en";
+  }
 
   return {
     locale,

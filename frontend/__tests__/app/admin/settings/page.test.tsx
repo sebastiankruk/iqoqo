@@ -30,6 +30,12 @@ vi.mock("@/lib/api/hooks", () => ({
   useAppConfig: vi.fn(() => ({ data: { maintenance_mode: false }, isLoading: false })),
 }));
 
+vi.mock("@/lib/api/escalations", () => ({
+  useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
+  useCreateEscalation: vi.fn(),
+  useEscalationQueue: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn().mockReturnValue("/"),
   useRouter: vi.fn(),
@@ -42,6 +48,10 @@ vi.mock("@/components/admin/instance-settings", () => ({
 
 vi.mock("@/components/admin/user-management", () => ({
   UserManagement: () => <div data-testid="user-management" />,
+}));
+
+vi.mock("@/components/escalation/my-escalations", () => ({
+  MyEscalations: () => <div data-testid="my-escalations">My Escalations</div>,
 }));
 
 describe("SettingsHubPage", () => {

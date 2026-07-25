@@ -27,16 +27,20 @@ import {
   ChevronDown,
   ChevronUp,
   ImageDown,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
+import { useMyEscalations } from "@/lib/api/escalations";
 import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { PermissionName } from "@/lib/permissions";
 import type { CatalogEntry, Manifestation } from "@/types/frbr";
+import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 import { Button } from "@/components/ui/button";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,11 +72,19 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const [isRefetchingCover, setIsRefetchingCover] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [activeCoverAction, setActiveCoverAction] = useState<"regenerate" | "refetch" | null>(null);
+  const [isRequestsOpen, setIsRequestsOpen] = useState(false);
 
   const isPending = manifestation.meta?.cover_status === "pending";
 
   const { data: profile } = useProfile();
+
+  const hasEscalateRequestForHook = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
+  const hasWriteMetadataForHook = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
+  const { data: myEscalations } = useMyEscalations(hasEscalateRequestForHook && !hasWriteMetadataForHook);
+
+  // Filter escalations for this manifestation
+  const manifestationEscalations = myEscalations?.filter(e => e.manifestation_id === manifestation.id) ?? [];
+  const pendingEscalation = manifestationEscalations.find(e => e.status === "pending");
 
   // Poll server state every 3s while cover is pending OR processing
   const isProcessing = isPending || manifestation.meta?.cover_status === "processing";
@@ -82,9 +94,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
       interval = setInterval(() => {
         qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
       }, 3000);
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveCoverAction(null);
     }
     return () => {
       if (interval !== undefined) {
@@ -101,7 +110,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     hasPermission(PermissionName.REFETCH_METADATA) ||
     hasPermission(PermissionName.REFETCH_COVER) ||
     hasPermission(PermissionName.REGENERATE_COVER) ||
-    (hasPermission(PermissionName.READ_METADATA) && !!manifestation.id) ||
+    (hasPermission(PermissionName.WRITE_METADATA) && !!manifestation.id) ||
     (hasPermission(PermissionName.EDIT_COVER) && !!manifestation.id) ||
     hasPermission(PermissionName.UPLOAD_COVER) ||
     hasPermission(PermissionName.DELETE_MANIFESTATION);
@@ -149,7 +158,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     if (!manifestation.id) return;
     setIsRequesting(true);
     setRegenerateConfirmOpen(false);
-    setActiveCoverAction("regenerate");
     try {
       await regenerateCover.mutateAsync(manifestation.id);
       qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
@@ -190,7 +198,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const handleRefetchCover = async () => {
     if (!manifestation.id) return;
     setIsRefetchingCover(true);
-    setActiveCoverAction("refetch");
     try {
       await apiClient.post(`/manifestations/${manifestation.id}/refetch-cover`);
       qc.setQueryData(queryKeys.manifestation(manifestation.id), (prev: Manifestation | undefined) => {
@@ -210,19 +217,71 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
 
   return (
     <>
-      {showAdminActions && (
+      {(showAdminActions || (manifestation.id && hasEscalateRequestForHook && !hasWriteMetadataForHook)) && (
         <div className="border-t border-border pt-4 w-full">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
-          >
-            {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            <span>Admin Actions</span>
-          </Button>
+          {/* Pending status card outside the accordion — shown above all buttons */}
+          {hasEscalateRequestForHook && !hasWriteMetadataForHook && pendingEscalation && (
+            <div
+              data-testid="escalation-status-card"
+              className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5 mb-3"
+            >
+              <div className="flex items-center justify-between font-medium">
+                <span className="flex items-center gap-1.5 capitalize">
+                  <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                  Help Request: {pendingEscalation.status}
+                </span>
+                <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
+                  {pendingEscalation.field_name}
+                </span>
+              </div>
+              <div className="text-muted-foreground">
+                Suggested: <span className="font-mono text-foreground">{pendingEscalation.suggested_value}</span>
+              </div>
+              {pendingEscalation.resolution_note && (
+                <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                  Custodian note: &ldquo;{pendingEscalation.resolution_note}&rdquo;
+                </div>
+              )}
+            </div>
+          )}
 
-          {isPanelOpen && (
+          <div className="flex items-center gap-2">
+            {showAdminActions && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPanelOpen(!isPanelOpen)}
+                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+              >
+                {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <span>Admin Actions</span>
+              </Button>
+            )}
+
+            {manifestation.id &&
+              hasEscalateRequestForHook &&
+              !hasWriteMetadataForHook &&
+              (manifestationEscalations.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsRequestsOpen(!isRequestsOpen)}
+                  className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+                >
+                  {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <span>Requests ({manifestationEscalations.length})</span>
+                </Button>
+              ) : (
+                <EscalationTrigger
+                  level="manifestation"
+                  targetId={manifestation.id!}
+                  escalations={manifestationEscalations}
+                  alwaysShowDialog
+                />
+              ))}
+          </div>
+
+          {showAdminActions && isPanelOpen && (
             <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
               {hasPermission(PermissionName.REFETCH_METADATA) && (
                 <Button
@@ -237,7 +296,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 </Button>
               )}
 
-              {hasPermission(PermissionName.READ_METADATA) && manifestation.id && (
+              {hasPermission(PermissionName.WRITE_METADATA) && manifestation.id && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -246,38 +305,6 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit FRBR
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.REFETCH_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefetchCover}
-                  disabled={isPending || isRefetchingCover}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <ImageDown
-                    className={`h-3.5 w-3.5 ${isPending && activeCoverAction === "refetch" ? "animate-bounce" : ""}`}
-                  />
-                  {isPending && activeCoverAction === "refetch" ? "Refetching..." : "Refetch Cover"}
-                </Button>
-              )}
-
-              {hasPermission(PermissionName.REGENERATE_COVER) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRegenerateClick}
-                  disabled={isPending || isRequesting}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isPending && (activeCoverAction === "regenerate" || !activeCoverAction) ? "animate-spin" : ""}`}
-                  />
-                  {isPending && (activeCoverAction === "regenerate" || !activeCoverAction)
-                    ? "Generating..."
-                    : "Regenerate Cover"}
                 </Button>
               )}
 
@@ -306,6 +333,32 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                 />
               )}
 
+              {hasPermission(PermissionName.REFETCH_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefetchCover}
+                  disabled={isPending || isRefetchingCover}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <ImageDown className="h-3.5 w-3.5" />
+                  Refetch Cover
+                </Button>
+              )}
+
+              {hasPermission(PermissionName.REGENERATE_COVER) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateClick}
+                  disabled={isPending || isRequesting}
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isRequesting ? "animate-spin" : ""}`} />
+                  Regenerate Cover
+                </Button>
+              )}
+
               {hasPermission(PermissionName.EDIT_COVER) && manifestation.id && (
                 <Button
                   variant="outline"
@@ -324,12 +377,61 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
                   size="sm"
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={isDeleting}
-                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+                  className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete manifestation
                 </Button>
               )}
+            </div>
+          )}
+
+          {/* Requests accordion content */}
+          {hasEscalateRequestForHook && !hasWriteMetadataForHook && isRequestsOpen && (
+            <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+              {/* Existing request cards for this target */}
+              {manifestationEscalations.length > 0 && (
+                <div className="space-y-2">
+                  {manifestationEscalations.map(esc => (
+                    <div
+                      key={esc.id}
+                      className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between font-medium">
+                        <span className="flex items-center gap-1.5 capitalize">
+                          {esc.status === "pending" ? (
+                            <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                              {esc.status}
+                            </span>
+                          )}
+                          {esc.field_name}
+                        </span>
+                        <span className="text-muted-foreground text-[10px] tabular-nums">
+                          {esc.created_at ? new Date(esc.created_at).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground">
+                        Suggested: <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                      </div>
+                      {esc.resolution_note && (
+                        <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                          Custodian note: &ldquo;{esc.resolution_note}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ask custodians button - only inside accordion */}
+              <EscalationTrigger
+                level="manifestation"
+                targetId={manifestation.id!}
+                escalations={manifestationEscalations}
+                alwaysShowDialog
+              />
             </div>
           )}
         </div>

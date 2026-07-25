@@ -113,7 +113,7 @@ def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
         New dictionary with sensitive header values (like Authorization, keys, secrets)
         replaced with '***REDACTED***'.
     """
-    sensitive_keywords = {"authorization", "key", "token", "secret", "cookie", "session"}
+    sensitive_keywords = {"authorization", "key", "token", "secret", "cookie", "session", "client-id", "client_id", "api-key"}
     sanitized = {}
     for key, value in headers.items():
         key_lower = key.lower()

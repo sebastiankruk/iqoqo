@@ -29,6 +29,13 @@ const mockInvalidateQueries = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: vi.fn(() => ({ setQueryData: vi.fn(), invalidateQueries: mockInvalidateQueries })),
+  useQuery: vi.fn(() => ({ data: [], isLoading: false })),
+  useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+
+vi.mock("@/lib/api/escalations", () => ({
+  useCreateEscalation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
 }));
 
 // Mock CameraCapture since it's a subcomponent
@@ -143,5 +150,37 @@ describe("ManifestationActions Component", () => {
     expect(screen.getByText(/Regenerate Cover/i)).toBeInTheDocument();
     expect(screen.getByTestId("camera-capture")).toBeInTheDocument();
     expect(screen.getByText(/Delete manifestation/i)).toBeInTheDocument();
+  });
+
+  describe("Edit FRBR button visibility (write:metadata)", () => {
+    it("does NOT render Edit FRBR for user with read:metadata but WITHOUT write:metadata", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["read:metadata"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ManifestationActions manifestation={mockManifestation} />);
+
+      expect(screen.queryByText(/Admin Actions/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Edit FRBR/i)).not.toBeInTheDocument();
+    });
+
+    it("renders Edit FRBR for user with write:metadata permission", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["write:metadata"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ManifestationActions manifestation={mockManifestation} />);
+
+      fireEvent.click(screen.getByText(/Admin Actions/i));
+      expect(screen.getByText(/Edit FRBR/i)).toBeInTheDocument();
+    });
   });
 });
