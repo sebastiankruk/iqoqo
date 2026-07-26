@@ -64,6 +64,20 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
+#: Controlled vocabulary for :attr:`Expression.kind`.
+#:
+#: ``live_performance`` — a concert / gig / live-recorded realization of a Work,
+#: linked to a Performance Event via :class:`ExpressionContribution` rows that
+#: capture performers, venue, and date.  Concerts must be typed here, never as
+#: genre tags or item-level flags.
+#:
+#: ``None`` (NULL) is the default and means a studio / ordinary realization.
+#: Additional kinds (``remix``, ``directors_cut``, …) may be added in future
+#: releases without a schema migration — the vocabulary is enforced at the
+#: service layer, not by a database CHECK constraint.
+EXPRESSION_KINDS: tuple[str, ...] = ("live_performance",)
+EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
+
 
 class Work(db.Model):  # type: ignore[name-defined]
     """
@@ -77,7 +91,15 @@ class Work(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(1000), nullable=False)
+    #: Sort key derived from ``title`` with leading articles stripped
+    #: ("The", "A", "An", and Polish "Ten"/"Ta"/"To").  Populated by the
+    #: service layer; used for alphabetical ordering in catalog views.
+    sort_title = db.Column(db.String(1000), nullable=True, index=True)
     meta = db.Column(db.JSON, default=dict)
+    #: Verbatim external-provider payload (BGG/Discogs/TMDB/MusicBrainz/Allegro)
+    #: captured at ingestion time.  Read-only audit trail for provenance and
+    #: future re-scraping — never edited by the service layer.
+    raw_payload = db.Column(db.JSON, nullable=True)
 
     # Dialect-aware full-text search columns using SearchVector type.
     # Computed columns are only generated on dialects that support them (PostgreSQL).
@@ -143,7 +165,13 @@ class Expression(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False)
     content_type = db.Column(db.String(50))  # e.g., 'text', 'sound', 'notated_music', 'video'
     language = db.Column(db.String(10))  # BCP-47 language tag, e.g., 'en', 'pl'
+    #: FRBRoo expression kind (controlled vocabulary, see
+    #: :data:`app.db.core.EXPRESSION_KINDS`).  Initial value: ``live_performance``
+    #: for concert recordings.  ``None`` = studio/default realization.
+    kind = db.Column(db.String(50), nullable=True, index=True)
     meta = db.Column(db.JSON, default=dict)
+    #: Verbatim external-provider payload captured at ingestion time.
+    raw_payload = db.Column(db.JSON, nullable=True)
 
     # Relationships
     manifestations = db.relationship("Manifestation", backref="expression", lazy=True, cascade="all, delete-orphan")
@@ -174,10 +202,17 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     upc = db.Column(db.String(12), index=True)
     ean = db.Column(db.String(13), index=True)
 
+    # Promoted core relational columns
     publisher = db.Column(db.String(500))
     publication_date = db.Column(db.Date)
     cover_url = db.Column(db.String(255), nullable=True)
+    format = db.Column(db.String(50), nullable=True, index=True)
+    label = db.Column(db.String(500), nullable=True)
+    barcode = db.Column(db.String(100), nullable=True, index=True)
+    catalog_number = db.Column(db.String(100), nullable=True)
     meta = db.Column(db.JSON, default=dict)
+    #: Verbatim external-provider payload captured at ingestion time.
+    raw_payload = db.Column(db.JSON, nullable=True)
 
     # Dialect-aware full-text search column.
     fts_simple = db.Column(
@@ -304,6 +339,8 @@ class Item(db.Model):  # type: ignore[name-defined]
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     meta = db.Column(db.JSON, default=dict)
+    #: Verbatim external-provider payload captured at ingestion time.
+    raw_payload = db.Column(db.JSON, nullable=True)
     feedbacks = db.relationship(
         "SocialFeedback", foreign_keys="SocialFeedback.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan"
     )

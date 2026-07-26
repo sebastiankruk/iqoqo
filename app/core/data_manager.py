@@ -71,7 +71,9 @@ class DataManager:
                 {
                     "id": work.id,
                     "title": work.title,
+                    "sort_title": work.sort_title or (work.meta.get("sort_title") if work.meta else None),
                     "meta": work.meta,
+                    "raw_payload": work.raw_payload,
                 }
             )
 
@@ -83,7 +85,9 @@ class DataManager:
                     "work_id": expr.work_id,
                     "content_type": expr.content_type,
                     "language": expr.language,
+                    "kind": expr.kind or (expr.meta.get("kind") if expr.meta else None),
                     "meta": expr.meta,
+                    "raw_payload": expr.raw_payload,
                 }
             )
 
@@ -96,10 +100,15 @@ class DataManager:
                     "isbn13": manif.isbn13,
                     "upc": manif.upc,
                     "ean": manif.ean,
-                    "publisher": manif.publisher,
+                    "publisher": manif.publisher or (manif.meta.get("publisher") if manif.meta else None),
                     "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
                     "cover_url": manif.cover_url,
+                    "format": manif.format or (manif.meta.get("format") if manif.meta else None),
+                    "label": manif.label or (manif.meta.get("label") if manif.meta else None),
+                    "barcode": manif.barcode or (manif.meta.get("barcode") if manif.meta else None),
+                    "catalog_number": manif.catalog_number or (manif.meta.get("catalog_number") if manif.meta else None),
                     "meta": manif.meta,
+                    "raw_payload": manif.raw_payload,
                 }
             )
 
@@ -115,6 +124,7 @@ class DataManager:
                     "condition": item.condition,
                     "added_at": item.added_at.isoformat() if item.added_at else None,
                     "meta": item.meta,
+                    "raw_payload": item.raw_payload,
                 }
             )
 
@@ -279,6 +289,38 @@ class DataManager:
         Expression.query.delete()
         Work.query.delete()
         db.session.commit()
+
+    @staticmethod
+    def verify_column_meta_drift() -> dict[str, Any]:
+        """
+        Post-migration verification query health check.
+
+        Compares relational column values against historical ``meta`` JSON keys.
+        Returns a dict summarizing any non-zero drift counts.
+        """
+        drift = {
+            "format_drift": 0,
+            "label_drift": 0,
+            "barcode_drift": 0,
+            "sort_title_drift": 0,
+            "total_drift": 0,
+        }
+
+        for m in Manifestation.query.filter(Manifestation.meta.is_not(None)).all():
+            if m.meta:
+                if "format" in m.meta and m.meta["format"] and m.format != m.meta["format"]:
+                    drift["format_drift"] += 1
+                if "label" in m.meta and m.meta["label"] and m.label != m.meta["label"]:
+                    drift["label_drift"] += 1
+                if "barcode" in m.meta and m.meta["barcode"] and m.barcode != m.meta["barcode"]:
+                    drift["barcode_drift"] += 1
+
+        for w in Work.query.all():
+            if w.title and not w.sort_title:
+                drift["sort_title_drift"] += 1
+
+        drift["total_drift"] = drift["format_drift"] + drift["label_drift"] + drift["barcode_drift"] + drift["sort_title_drift"]
+        return drift
 
     @staticmethod
     def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:

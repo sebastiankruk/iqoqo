@@ -93,6 +93,7 @@ def _normalize_release_data(release: dict) -> dict:
         "format": media_format,
         "language": "en",
         "discogs_id": str(release.get("id")),
+        "raw_payload": release,
     }
 
 

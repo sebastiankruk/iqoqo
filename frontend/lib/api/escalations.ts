@@ -44,7 +44,7 @@ export async function createEscalation(
     suggested_value: string;
     current_value?: string;
     note?: string;
-    request_type?: "correction" | "deletion";
+    request_type?: "correction" | "deletion" | "change_type";
   }
 ) {
   const res = await apiClient.post<{ success: boolean; data: EscalationRequest }>(
@@ -159,7 +159,7 @@ export function useCreateEscalation() {
         suggested_value: string;
         current_value?: string;
         note?: string;
-        request_type?: "correction" | "deletion";
+        request_type?: "correction" | "deletion" | "change_type";
       };
     }) => createEscalation(level, targetId, data),
     onSuccess: () => {

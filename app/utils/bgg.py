@@ -142,6 +142,7 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
             "Format": "boardgame",
             "format": "boardgame",
             "Source": "BGG",
+            "raw_payload": {"bgg_id": bgg_id, "xml": thing_resp.text},
         }
     except (requests.RequestException, ET.ParseError, ValueError, KeyError) as e:
         logger.warning(f"BGG fetch failed for {query}: {e}")

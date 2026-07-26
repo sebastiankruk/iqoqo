@@ -294,6 +294,32 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
+    # FRBRoo event contributions (creators / performers / publishers) +
+    # expression kind so the UI can badge live performances distinctly.
+    from app.core.frbr_service import is_live_performance, serialize_container_aggregation, serialize_contributions
+
+    expression = m.expression
+    work = expression.work if expression else None
+    contributions = serialize_contributions(work=work, expression=expression, manifestation=m)
+    expression_kind = expression.kind if expression else None
+
+    # F16 Container Work contents (board games): if this manifestation's Work
+    # is itself a container, surface its aggregated rulebook Work + physical
+    # components.  If it's a member Work, surface the container's contents.
+    container_aggregation: dict[str, Any] = {"works": [], "items": []}
+    container_work_obj: Work | None = None
+    if work is not None:
+        if getattr(work, "aggregates", None) and work.aggregates.count() > 0:
+            container_work_obj = work
+        elif getattr(work, "member_of", None):
+            for membership in work.member_of:
+                candidate = membership.container
+                if candidate is not None:
+                    container_work_obj = candidate
+                    break
+    if container_work_obj is not None:
+        container_aggregation = serialize_container_aggregation(container_work_obj)
+
     data = {
         "id": m.id,
         "expression_id": m.expression_id,
@@ -318,6 +344,10 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "wishlist_item_id": wishlist_item_id,
         "owner_count": owner_count,
         "content_type": m.expression.content_type if m.expression else None,
+        "expression_kind": expression_kind,
+        "is_live_performance": is_live_performance(expression),
+        "contributions": contributions,
+        "container_aggregation": container_aggregation,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

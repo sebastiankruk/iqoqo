@@ -50,8 +50,8 @@ describe("HelpRequests i18n namespace", () => {
   });
 
   it("has no empty string values in either locale", () => {
-    const emptyInEn = Object.entries(enHelpRequests).filter(([_k, v]) => v === "");
-    const emptyInPl = Object.entries(plHelpRequests).filter(([_k, v]) => v === "");
+    const emptyInEn = Object.entries(enHelpRequests).filter(([, v]) => v === "");
+    const emptyInPl = Object.entries(plHelpRequests).filter(([, v]) => v === "");
 
     if (emptyInEn.length > 0) {
       console.error(

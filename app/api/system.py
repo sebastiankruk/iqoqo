@@ -79,7 +79,27 @@ def serve_gallery_image(filename: str):
 
 @api_bp.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
+    check_drift = request.args.get("check_drift", "false").lower() in ("1", "true", "yes")
+    drift_info = None
+    status = "ok"
+    status_code = 200
+
+    if check_drift:
+        drift_info = DataManager.verify_column_meta_drift()
+        if drift_info.get("total_drift", 0) > 0:
+            status = "degraded"
+            status_code = 500
+
+    payload = {
+        "status": status,
+        "service": "iqoqo-api",
+        "version": Config.VERSION,
+        "api_version": "v1",
+    }
+    if drift_info is not None:
+        payload["drift"] = drift_info
+
+    return jsonify(payload), status_code
 
 
 @api_bp.route("/config", methods=["GET"])

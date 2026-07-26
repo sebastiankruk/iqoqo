@@ -15,7 +15,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from app.core.frbr_service import add_expression_contribution, add_work_contribution, get_or_create_contributor
+from app.core.frbr_service import (
+    add_expression_contribution,
+    add_work_contribution,
+    get_or_create_contributor,
+    get_or_create_live_performance_expression,
+)
 from app.db.core import MediaCategory, MediaFormat
 from app.db.models import Expression, Manifestation, Work, db
 from app.utils.bgg import fetch_bgg_metadata
@@ -38,6 +43,60 @@ def _extract_genres(meta: dict) -> list[str]:
         elif isinstance(raw, str) and raw.strip():
             genres.append(raw.strip())
     return genres
+
+
+#: Case-insensitive title substrings that strongly indicate a live recording.
+_LIVE_TITLE_MARKERS: tuple[str, ...] = (
+    "(live",
+    "[live",
+    " live at ",
+    " live in ",
+    " live from ",
+    " unplugged",
+)
+
+
+def _detect_live_performance(meta: dict) -> bool:
+    """Return ``True`` when provider metadata signals a live recording.
+
+    Signals inspected (any hit → live):
+
+    - ``meta['styles']`` / ``meta['genres']`` containing a value equal to
+      ``"Live"`` (Discogs style tag, MusicBrainz secondary type).
+    - ``meta['secondary_types']`` containing ``"Live"`` (MusicBrainz
+      release-group secondary types).
+    - ``meta['title']`` containing a live marker substring such as
+      ``"(live"``, ``"[live"``, ``" live at "``, ``" unplugged"``.
+
+    This is a *detector only* — it never mutates ``meta``.  The ingestion
+    pipeline uses the hit to type the resulting Expression as
+    ``kind='live_performance'`` (Performance Event), never as a genre tag or
+    item-level flag.
+    """
+    if not isinstance(meta, dict):
+        return False
+
+    def _iter_str(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, list):
+            for v in value:
+                if isinstance(v, str):
+                    yield v
+
+    for key in ("styles", "genres", "secondary_types", "secondary-types"):
+        for raw in _iter_str(meta.get(key)):
+            if raw.strip().lower() == "live":
+                return True
+
+    title = meta.get("title") or meta.get("Title") or ""
+    if isinstance(title, str):
+        lowered = f" {title.lower()} "
+        for marker in _LIVE_TITLE_MARKERS:
+            if marker in lowered:
+                return True
+
+    return False
 
 
 class IngestService:
@@ -102,11 +161,15 @@ class IngestService:
         # Map format string → FRBR content type (canonical formats + aliases)
         content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
 
+        raw_payload = meta.get("raw_payload") or meta
+
+        from app.core.frbr_service import derive_sort_title
+
         work_genres = _extract_genres(meta)
         work_meta: dict = {"authors": [author_name] if author_name else []}
         if work_genres:
             work_meta["genres"] = work_genres
-        work = Work(title=title, meta=work_meta)
+        work = Work(title=title, sort_title=derive_sort_title(title), meta=work_meta, raw_payload=raw_payload)
         db.session.add(work)
         db.session.flush()
 
@@ -115,7 +178,12 @@ class IngestService:
             if contributor:
                 add_work_contribution(work.id, contributor.id, "author")
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=content_type)
+        expression = Expression(
+            work=work,
+            language=meta.get("language", "en"),
+            content_type=content_type,
+            raw_payload=raw_payload,
+        )
         db.session.add(expression)
         db.session.flush()
 
@@ -130,7 +198,15 @@ class IngestService:
             }
         )
 
-        manifestation = Manifestation(expression=expression, meta=man_meta)
+        manifestation = Manifestation(
+            expression=expression,
+            format=raw_format,
+            label=meta.get("publisher") or meta.get("label"),
+            barcode=meta.get("barcode") or meta.get("identifier"),
+            catalog_number=meta.get("catalog_number") or meta.get("catno"),
+            meta=man_meta,
+            raw_payload=raw_payload,
+        )
         db.session.add(manifestation)
         db.session.commit()
 
@@ -268,11 +344,22 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MUSIC)
-        db.session.add(expression)
-        db.session.flush()
+        is_live = _detect_live_performance(meta)
+        if is_live:
+            expression = get_or_create_live_performance_expression(
+                work_id=work.id,
+                content_type=MediaCategory.MUSIC,
+                language=meta.get("language", "en"),
+                venue=meta.get("venue"),
+                performance_date=meta.get("performance_date") or meta.get("date"),
+                performers=[(author_name, "performer")] if author_name else [],
+            )
+        else:
+            expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MUSIC)
+            db.session.add(expression)
+            db.session.flush()
 
-        if author_name:
+        if author_name and not is_live:
             contributor = get_or_create_contributor(author_name, "person")
             if contributor:
                 add_expression_contribution(expression.id, contributor.id, "performer")
@@ -336,11 +423,24 @@ class IngestService:
         db.session.add(work)
         db.session.flush()
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MOVIE)
-        db.session.add(expression)
-        db.session.flush()
+        is_live = _detect_live_performance(meta)
+        if is_live:
+            # A concert video (e.g. Live at Wembley Blu-ray) is a Performance
+            # Event Expression realized in a video Manifestation.
+            expression = get_or_create_live_performance_expression(
+                work_id=work.id,
+                content_type=MediaCategory.MOVIE,
+                language=meta.get("language", "en"),
+                venue=meta.get("venue"),
+                performance_date=meta.get("performance_date") or meta.get("date"),
+                performers=[(author_name, "performer")] if author_name else [],
+            )
+        else:
+            expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.MOVIE)
+            db.session.add(expression)
+            db.session.flush()
 
-        if author_name:
+        if author_name and not is_live:
             contributor = get_or_create_contributor(author_name, "person")
             if contributor:
                 # Directors are Work-level (CreationEvent) per FRBRoo ontology
