@@ -912,6 +912,46 @@ def update_item(
     return item
 
 
+def update_frbr_entity_type(
+    entity_class: Any,
+    entity_id: int,
+    new_type: str,
+) -> Any:
+    """
+    Update the type of a FRBR entity and adapt parent entities upwards to maintain consistency.
+    """
+    entity = db.session.get(entity_class, entity_id)
+    if not entity:
+        raise ValueError(f"{entity_class.__name__} with id {entity_id} not found")
+
+    if hasattr(entity, "meta"):
+        current_meta = dict(entity.meta or {})
+        current_meta["type"] = new_type
+        entity.meta = current_meta
+
+    if entity_class == Manifestation:
+        if entity.expression:
+            entity.expression.content_type = new_type
+            if entity.expression.work:
+                w_meta = dict(entity.expression.work.meta or {})
+                w_meta["type"] = new_type
+                entity.expression.work.meta = w_meta
+    elif entity_class == Expression:
+        entity.content_type = new_type
+        if entity.work:
+            w_meta = dict(entity.work.meta or {})
+            w_meta["type"] = new_type
+            entity.work.meta = w_meta
+    elif entity_class == Work:
+        w_meta = dict(entity.meta or {})
+        w_meta["type"] = new_type
+        entity.meta = w_meta
+        # Adapt downward if desired, but requirements specify upward.
+
+    db.session.commit()
+    return entity
+
+
 # Define Namespaces
 FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")

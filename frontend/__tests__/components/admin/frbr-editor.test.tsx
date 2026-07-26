@@ -17,14 +17,24 @@ import { render, screen, waitFor, fireEvent, act } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
 import * as adminApi from "@/lib/api/admin";
+import { PermissionName } from "@/lib/permissions";
 
 vi.mock("@/lib/api/admin");
+
+vi.mock("@/lib/api/escalations", () => ({
+  useCreateEscalation: vi.fn(() => ({
+    mutateAsync: vi.fn(),
+  })),
+}));
 
 vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: vi.fn(() => ({
     data: { data: [] },
     isLoading: false,
     refetch: vi.fn(),
+  })),
+  useProfile: vi.fn(() => ({
+    data: { permissions: [PermissionName.WRITE_METADATA, PermissionName.ESCALATE_REQUEST] },
   })),
 }));
 
@@ -101,7 +111,7 @@ describe("FrbrEditor Component", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("text")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Text (Book/Comic/Manga/Magazine)")).toBeInTheDocument();
       expect(screen.getByDisplayValue("en")).toBeInTheDocument();
     });
   });
@@ -146,6 +156,69 @@ describe("FrbrEditor Component", () => {
           isbn13: "9780441172719",
         })
       );
+    });
+  });
+
+  it("submits updated manifestation type to the API", async () => {
+    render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+
+    const typeSelect = screen.getByDisplayValue("Book");
+    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+
+    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(adminApi.updateFrbrEntity).toHaveBeenCalledWith(
+        "manifestation",
+        3,
+        expect.objectContaining({
+          meta: expect.objectContaining({
+            type: "Movie",
+          }),
+        })
+      );
+    });
+  });
+
+  it("dispatches a User Request when changing type without WRITE_METADATA", async () => {
+    // Override useProfile mock for this test only
+    const { useProfile } = await import("@/lib/api/hooks");
+    vi.mocked(useProfile).mockReturnValue({
+      data: { permissions: [PermissionName.ESCALATE_REQUEST] }, // No WRITE_METADATA
+    } as any);
+
+    // Get the createEscalation mock
+    const { useCreateEscalation } = await import("@/lib/api/escalations");
+    const mutateAsyncMock = vi.fn();
+    vi.mocked(useCreateEscalation).mockReturnValue({ mutateAsync: mutateAsyncMock } as any);
+
+    render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+
+    const typeSelect = screen.getByDisplayValue("Book");
+    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+
+    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: "manifestation",
+          targetId: 3,
+          data: expect.objectContaining({
+            request_type: "CHANGE_TYPE",
+            field_name: "type",
+            suggested_value: "Movie",
+          }),
+        })
+      );
+      // Ensure it doesn't call direct update
+      expect(adminApi.updateFrbrEntity).not.toHaveBeenCalled();
     });
   });
 });

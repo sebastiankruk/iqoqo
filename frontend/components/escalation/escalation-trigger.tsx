@@ -63,7 +63,7 @@ export function EscalationTrigger({
   const { data: profile } = useProfile();
   const t = useTranslations("HelpRequests");
   const [open, setOpen] = useState(false);
-  const [requestType, setRequestType] = useState<"correction" | "deletion">("correction");
+  const [requestType, setRequestType] = useState<"correction" | "deletion" | "CHANGE_TYPE">("correction");
   const [fieldName, setFieldName] = useState("title");
   const [currentValue, setCurrentValue] = useState("");
   const [suggestedValue, setSuggestedValue] = useState("");
@@ -76,9 +76,13 @@ export function EscalationTrigger({
   const { data: myEscalations } = useMyEscalations(shouldFetch);
   const createMutation = useCreateEscalation();
 
-  const handleTypeChange = (newType: "correction" | "deletion") => {
+  const handleTypeChange = (newType: "correction" | "deletion" | "CHANGE_TYPE") => {
     setRequestType(newType);
-    setFieldName("title");
+    if (newType === "CHANGE_TYPE") {
+        setFieldName("type");
+    } else {
+        setFieldName("title");
+    }
     setCurrentValue("");
     setSuggestedValue("");
     setNote("");
@@ -210,7 +214,7 @@ export function EscalationTrigger({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>
-              {requestType === "deletion" ? t("requestDeletion") : t("requestMetadataCorrection")}
+              {requestType === "deletion" ? t("requestDeletion") : requestType === "CHANGE_TYPE" ? "Change Type" : t("requestMetadataCorrection")}
             </DialogTitle>
             <DialogDescription>{t("requestDescription")}</DialogDescription>
           </DialogHeader>
@@ -239,6 +243,17 @@ export function EscalationTrigger({
               >
                 {t("requestDeletion")}
               </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-xs px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  requestType === "CHANGE_TYPE"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => handleTypeChange("CHANGE_TYPE")}
+              >
+                Change Type
+              </button>
             </div>
 
             {requestType === "deletion" ? (
@@ -260,15 +275,17 @@ export function EscalationTrigger({
               <>
                 <div className="grid gap-2">
                   <label htmlFor="field_name" className="text-xs font-medium">
-                    {t("fieldToCorrect")}
+                    {requestType === "CHANGE_TYPE" ? "Field" : t("fieldToCorrect")}
                   </label>
                   <select
                     id="field_name"
                     value={fieldName}
+                    disabled={requestType === "CHANGE_TYPE"}
                     onChange={e => setFieldName(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="title">Title</option>
+                    <option value="type">Entity Type</option>
                     <option value="isbn">ISBN / Identifier</option>
                     <option value="format">Format / Classification</option>
                     <option value="author">Author / Creator</option>
