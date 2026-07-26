@@ -46,10 +46,7 @@ vi.mock("@/lib/api/client", () => ({
 describe("BottomSheet", () => {
   let videoRef: React.RefObject<HTMLVideoElement | null>;
   const onFound = vi.fn();
-  const onScannerStateChange = vi.fn();
   const onTabChange = vi.fn();
-  const onExtractComplete = vi.fn();
-  const onExtractionFailure = vi.fn();
   const onShowManualForm = vi.fn();
 
   beforeEach(() => {
