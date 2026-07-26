@@ -17,29 +17,30 @@
 
 All model definitions have been split into domain-specific modules:
 
-- :mod:`app.db.auth`     — User, Role, Permission, TokenBlocklist, ConsentRecord
-- :mod:`app.db.core`     — Work, Expression, Manifestation, Item, ITEM_STATUSES
-- :mod:`app.db.audio`    — Contributor, WorkContribution, ExpressionContribution,
-                            WorkPart, MANIFESTATION_AUDIO_META_KEYS
-- :mod:`app.db.video`    — ManifestationContribution, MANIFESTATION_VIDEO_META_KEYS
-- :mod:`app.db.games`    — ContainerAggregation, MANIFESTATION_GAME_META_KEYS
-- :mod:`app.db.settings` — LLMTelemetry, InstanceSettings
-- :mod:`app.db.social`   — SharedCollection
+- :mod:`app.db.auth`          — User, Role, Permission, TokenBlocklist, ConsentRecord
+- :mod:`app.db.core`          — Work, Expression, Manifestation, Item, ITEM_STATUSES
+- :mod:`app.db.contributions` — Contributor, WorkContribution, ExpressionContribution,
+                                ManifestationContribution, WorkPart (shared FRBRoo events)
+- :mod:`app.db.audio`         — MANIFESTATION_AUDIO_META_KEYS (+ shared event re-exports)
+- :mod:`app.db.video`         — MANIFESTATION_VIDEO_META_KEYS, video role vocabularies
+- :mod:`app.db.games`         — ContainerAggregation, MANIFESTATION_GAME_META_KEYS
+- :mod:`app.db.settings`      — LLMTelemetry, InstanceSettings
+- :mod:`app.db.social`        — SharedCollection
 
 Existing imports of the form ``from app.db.models import Work`` continue to
 work unchanged thanks to this shim.
 """
 
-from app.db.audio import (  # noqa: F401
+from app.db.audio import MANIFESTATION_AUDIO_META_KEYS  # noqa: F401
+from app.db.auth import ConsentRecord, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
+from app.db.contributions import (  # noqa: F401
     EXPRESSION_CONTRIBUTION_ROLES,
-    MANIFESTATION_AUDIO_META_KEYS,
     WORK_CONTRIBUTION_ROLES,
     Contributor,
     ExpressionContribution,
     WorkContribution,
     WorkPart,
 )
-from app.db.auth import ConsentRecord, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
 from app.db.core import (  # noqa: F401
     COLLECTION_STATUSES,
     ITEM_STATUSES,

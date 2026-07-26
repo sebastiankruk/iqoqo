@@ -15,14 +15,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
-from app.db.core import Expression, Item, Manifestation, Work
+from app.db.core import EXPRESSION_KIND_LIVE_PERFORMANCE, EXPRESSION_KINDS, Expression, Item, Manifestation, Work
 from app.db.models import db
+from app.db.video import ManifestationContribution
+
+if TYPE_CHECKING:
+    from app.db.games import ContainerAggregation
 
 
 def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
@@ -44,7 +48,13 @@ def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
     return work
 
 
-def create_expression(work_id: int, content_type: str = "text", language: str = "en", meta: dict[str, Any] | None = None) -> Expression:
+def create_expression(
+    work_id: int,
+    content_type: str = "text",
+    language: str = "en",
+    meta: dict[str, Any] | None = None,
+    kind: str | None = None,
+) -> Expression:
     """
     Creates a new Expression for a Work.
 
@@ -53,13 +63,21 @@ def create_expression(work_id: int, content_type: str = "text", language: str = 
         content_type: Type of content (e.g., 'text', 'sound', 'notated_music')
         language: Language code (e.g., 'en', 'pl')
         meta: Additional metadata for the expression
+        kind: FRBRoo expression kind (see :data:`app.db.core.EXPRESSION_KINDS`).
+              ``None`` (default) means a studio/ordinary realization.  Use
+              ``"live_performance"`` for concert recordings.
 
     Returns:
         The created Expression object
+
+    Raises:
+        ValueError: If *kind* is not in the controlled vocabulary.
     """
     if meta is None:
         meta = {}
-    expression = Expression(work_id=work_id, content_type=content_type, language=language, meta=meta)
+    if kind is not None and kind not in EXPRESSION_KINDS:
+        raise ValueError(f"Invalid expression kind {kind!r}; must be one of {EXPRESSION_KINDS}")
+    expression = Expression(work_id=work_id, content_type=content_type, language=language, meta=meta, kind=kind)
     db.session.add(expression)
     db.session.commit()
     return expression
@@ -286,6 +304,174 @@ def create_work_part(container_work_id: int, part_work_id: int, sequence: int = 
     return work_part
 
 
+def add_manifestation_contribution(
+    manifestation_id: int,
+    contributor_id: int,
+    role: str,
+    sequence: int = 0,
+) -> ManifestationContribution:
+    """
+    Link a contributor to a Manifestation with a publication role (Publication Event).
+
+    Args:
+        manifestation_id: ID of the parent :class:`~app.db.core.Manifestation`.
+        contributor_id: ID of the :class:`~app.db.audio.Contributor`.
+        role: Publication role (see :data:`~app.db.video.MANIFESTATION_VIDEO_ROLES`).
+        sequence: Display order when multiple contributors share the same role.
+
+    Returns:
+        The created :class:`~app.db.video.ManifestationContribution`.
+    """
+    contribution = ManifestationContribution(
+        manifestation_id=manifestation_id,
+        contributor_id=contributor_id,
+        role=role,
+        sequence=sequence,
+    )
+    db.session.add(contribution)
+    db.session.commit()
+    return contribution
+
+
+# ---------------------------------------------------------------------------
+# FRBRoo F16 Container Work (board games)
+# ---------------------------------------------------------------------------
+
+
+def add_container_component(
+    container_work_id: int,
+    component_name: str,
+    *,
+    aggregated_work_id: int | None = None,
+    aggregated_item_id: int | None = None,
+    quantity: int = 1,
+) -> "ContainerAggregation":
+    """
+    Add a component to an F16 Container Work (e.g., a board game box).
+
+    Exactly one of ``aggregated_work_id`` (for abstract Works like a rulebook)
+    or ``aggregated_item_id`` (for physical components like board/pieces) must
+    be provided — enforced by the ``ck_container_aggregation_type_match``
+    check constraint on the model.
+
+    Args:
+        container_work_id: ID of the container :class:`~app.db.core.Work` (the box).
+        component_name: Human-readable label (e.g., ``"Rulebook"``, ``"Main Board"``).
+        aggregated_work_id: Optional Work ID for an aggregated Work (rulebook).
+        aggregated_item_id: Optional Item ID for an aggregated physical component.
+        quantity: Number of these components in the box (default 1).
+
+    Returns:
+        The created :class:`~app.db.games.ContainerAggregation`.
+
+    Raises:
+        ValueError: If both or neither of the aggregated IDs are provided.
+    """
+    from app.db.games import ContainerAggregation
+
+    if (aggregated_work_id is None) == (aggregated_item_id is None):
+        raise ValueError(
+            "Exactly one of aggregated_work_id (rulebook Work) or " "aggregated_item_id (physical component Item) must be provided."
+        )
+
+    aggregated_type = "work" if aggregated_work_id is not None else "item"
+    agg = ContainerAggregation(
+        container_work_id=container_work_id,
+        aggregated_type=aggregated_type,
+        aggregated_work_id=aggregated_work_id,
+        aggregated_item_id=aggregated_item_id,
+        component_name=component_name,
+        quantity=quantity,
+    )
+    db.session.add(agg)
+    db.session.commit()
+    return agg
+
+
+def get_or_create_rulebook_work(container_work: Work, title: str | None = None) -> Work:
+    """
+    Get or create the aggregated Rulebook Work inside an F16 Container.
+
+    The rulebook is a sibling Work whose title is derived from the container
+    (``"<container title> — Rulebook"``) unless explicitly overridden.  If a
+    rulebook Work is already aggregated into the container, it is returned
+    as-is (idempotent).
+
+    Args:
+        container_work: The container (box) :class:`~app.db.core.Work`.
+        title: Optional explicit title for the rulebook Work.
+
+    Returns:
+        The rulebook :class:`~app.db.core.Work` (already linked via
+        :class:`~app.db.games.ContainerAggregation` with
+        ``aggregated_type='work'`` and ``component_name='Rulebook'``).
+    """
+    from app.db.games import ContainerAggregation
+
+    # Look for an existing aggregated Work component named 'Rulebook'
+    existing = (
+        ContainerAggregation.query.filter_by(
+            container_work_id=container_work.id,
+            aggregated_type="work",
+            component_name="Rulebook",
+        )
+        .order_by(ContainerAggregation.id.asc())
+        .first()
+    )
+    if existing and existing.aggregated_work_id:
+        return db.session.get(Work, existing.aggregated_work_id)  # type: ignore[return-value]
+
+    rulebook_title = title or f"{container_work.title} — Rulebook"
+    rulebook = create_work(title=rulebook_title, meta={"aggregated_into_work_id": container_work.id})
+    add_container_component(
+        container_work_id=container_work.id,
+        component_name="Rulebook",
+        aggregated_work_id=rulebook.id,
+        quantity=1,
+    )
+    return rulebook
+
+
+def serialize_container_aggregation(container_work: Work | None) -> dict[str, Any]:
+    """
+    Serialize an F16 Container Work's contents for API payloads.
+
+    Returns a dict with two keys:
+
+    - ``works``  — aggregated Works (e.g. Rulebook) with ``work_id``, ``title``, ``quantity``.
+    - ``items``  — aggregated Items (physical components) with ``item_id``,
+      ``component_name``, ``quantity``.
+
+    Safe to call with ``None`` — returns empty buckets.
+    """
+    result: dict[str, Any] = {"works": [], "items": []}
+    if container_work is None:
+        return result
+
+    for agg in getattr(container_work, "aggregates", None) or []:
+        if agg.aggregated_type == "work" and agg.aggregated_work_id:
+            work = db.session.get(Work, agg.aggregated_work_id)
+            result["works"].append(
+                {
+                    "aggregation_id": agg.id,
+                    "work_id": agg.aggregated_work_id,
+                    "title": getattr(work, "title", None),
+                    "component_name": agg.component_name,
+                    "quantity": agg.quantity or 1,
+                }
+            )
+        elif agg.aggregated_type == "item" and agg.aggregated_item_id:
+            result["items"].append(
+                {
+                    "aggregation_id": agg.id,
+                    "item_id": agg.aggregated_item_id,
+                    "component_name": agg.component_name,
+                    "quantity": agg.quantity or 1,
+                }
+            )
+    return result
+
+
 # --- UPDATE METHODS ---
 
 
@@ -321,6 +507,7 @@ def update_expression(
     content_type: str | None = None,
     language: str | None = None,
     meta: dict[str, Any] | None = None,
+    kind: str | None = None,
 ) -> Expression:
     """
     Update an existing Expression.
@@ -331,9 +518,15 @@ def update_expression(
         content_type: New content type
         language: New language code
         meta: Metadata to merge with existing
+        kind: New expression kind (``live_performance`` or ``None`` to clear
+              via :func:`clear_expression_kind`).
 
     Returns:
         The updated Expression object
+
+    Raises:
+        ValueError: If the Expression/Work does not exist, or *kind* is not in
+                    the controlled vocabulary.
     """
     expr = db.session.get(Expression, expression_id)
     if expr is None:
@@ -348,11 +541,176 @@ def update_expression(
         expr.content_type = content_type
     if language is not None:
         expr.language = language
+    if kind is not None:
+        if kind not in EXPRESSION_KINDS:
+            raise ValueError(f"Invalid expression kind {kind!r}; must be one of {EXPRESSION_KINDS}")
+        expr.kind = kind
     if meta is not None:
         current_meta = dict(expr.meta or {})
         current_meta.update(meta)
         expr.meta = current_meta
     db.session.commit()
+    return expr
+
+
+def clear_expression_kind(expression_id: int) -> Expression:
+    """
+    Reset an Expression's ``kind`` to ``None`` (studio/ordinary realization).
+
+    Args:
+        expression_id: The ID of the expression to reset.
+
+    Returns:
+        The updated Expression object.
+    """
+    expr = db.session.get(Expression, expression_id)
+    if expr is None:
+        raise ValueError(f"Expression with id {expression_id} not found")
+    expr.kind = None
+    db.session.commit()
+    return expr
+
+
+def is_live_performance(expression: Expression | None) -> bool:
+    """Return ``True`` iff *expression* is typed as a live-performance Event."""
+    return bool(expression is not None and expression.kind == EXPRESSION_KIND_LIVE_PERFORMANCE)
+
+
+def serialize_contributions(
+    work: Work | None = None,
+    expression: Expression | None = None,
+    manifestation: Manifestation | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Serialize FRBRoo event contributions for API payloads.
+
+    Returns a dict with three keys, each an ordered list of contributor dicts
+    (``name``, ``role``, ``sequence``, ``contributor_id``):
+
+    - ``creators``   — Work-level Composition Event rows (``WorkContribution``).
+    - ``performers`` — Expression-level Performance Event rows (``ExpressionContribution``).
+    - ``publishers`` — Manifestation-level Publication Event rows (``ManifestationContribution``).
+
+    Any entity left as ``None`` contributes an empty list to its bucket.  The
+    serializer tolerates lazy-loaded relationships and missing backrefs so it
+    is safe to call from any API surface.
+    """
+    creators: list[dict[str, Any]] = []
+    performers: list[dict[str, Any]] = []
+    publishers: list[dict[str, Any]] = []
+
+    if work is not None:
+        for wc in getattr(work, "contributions", None) or []:
+            contributor = getattr(wc, "contributor", None)
+            creators.append(
+                {
+                    "contributor_id": wc.contributor_id,
+                    "name": getattr(contributor, "name", None),
+                    "role": wc.role,
+                    "sequence": wc.sequence or 0,
+                }
+            )
+        creators.sort(key=lambda c: (c["role"], c["sequence"], c["name"] or ""))
+
+    if expression is not None:
+        for ec in getattr(expression, "contributions", None) or []:
+            contributor = getattr(ec, "contributor", None)
+            performers.append(
+                {
+                    "contributor_id": ec.contributor_id,
+                    "name": getattr(contributor, "name", None),
+                    "role": ec.role,
+                    "sequence": ec.sequence or 0,
+                }
+            )
+        performers.sort(key=lambda c: (c["role"], c["sequence"], c["name"] or ""))
+
+    if manifestation is not None:
+        for mc in getattr(manifestation, "contributions", None) or []:
+            contributor = getattr(mc, "contributor", None)
+            publishers.append(
+                {
+                    "contributor_id": mc.contributor_id,
+                    "name": getattr(contributor, "name", None),
+                    "role": mc.role,
+                    "sequence": mc.sequence or 0,
+                }
+            )
+        publishers.sort(key=lambda c: (c["role"], c["sequence"], c["name"] or ""))
+
+    return {"creators": creators, "performers": performers, "publishers": publishers}
+
+
+def get_or_create_live_performance_expression(
+    work_id: int,
+    content_type: str = "music",
+    language: str = "en",
+    venue: str | None = None,
+    performance_date: Any | None = None,
+    performers: list[tuple[str, str]] | None = None,
+    meta: dict[str, Any] | None = None,
+) -> Expression:
+    """
+    Get or create a Performance Event Expression for a live recording.
+
+    Concerts are modeled as an Expression of the parent Work with
+    ``kind='live_performance'``.  Performers, venue, and date are captured via
+    :class:`ExpressionContribution` rows (Performance Event); venue/date land
+    in the expression ``meta`` JSON when provided.
+
+    Args:
+        work_id: ID of the parent Work (e.g., the tour/album being performed).
+        content_type: Typically ``"music"`` or ``"movie"`` (concert video).
+        language: BCP-47 language tag.
+        venue: Optional venue name, stored in ``meta['venue']``.
+        performance_date: Optional date of the performance, stored ISO in
+                          ``meta['performance_date']``.
+        performers: Optional list of ``(name, role)`` tuples added as
+                    :class:`ExpressionContribution` rows (e.g.,
+                    ``[("Miles Davis Quintet", "band")]``).
+        meta: Extra ``meta`` keys to merge.
+
+    Returns:
+        The existing or newly created Expression with
+        ``kind='live_performance'``.
+    """
+    # Prefer reusing an existing live_performance Expression for the same Work
+    # with the same venue/date when one already exists (idempotent).
+    existing = (
+        Expression.query.filter_by(work_id=work_id, kind=EXPRESSION_KIND_LIVE_PERFORMANCE, content_type=content_type)
+        .order_by(Expression.id.asc())
+        .first()
+    )
+
+    merged_meta: dict[str, Any] = dict(meta or {})
+    if venue:
+        merged_meta["venue"] = venue
+    if performance_date:
+        merged_meta["performance_date"] = performance_date.isoformat() if hasattr(performance_date, "isoformat") else str(performance_date)
+
+    if existing is not None:
+        # Merge any newly provided venue/date/meta into the existing row.
+        if merged_meta:
+            current = dict(existing.meta or {})
+            current.update({k: v for k, v in merged_meta.items() if v is not None})
+            existing.meta = current
+            db.session.commit()
+        expr = existing
+    else:
+        expr = create_expression(
+            work_id=work_id,
+            content_type=content_type,
+            language=language,
+            meta=merged_meta,
+            kind=EXPRESSION_KIND_LIVE_PERFORMANCE,
+        )
+
+    for name, role in performers or []:
+        contributor = get_or_create_contributor(name, contributor_type="person")
+        if contributor is not None:
+            already = ExpressionContribution.query.filter_by(expression_id=expr.id, contributor_id=contributor.id, role=role).first()
+            if already is None:
+                add_expression_contribution(expression_id=expr.id, contributor_id=contributor.id, role=role)
+
     return expr
 
 

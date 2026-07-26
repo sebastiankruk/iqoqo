@@ -64,6 +64,20 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
+#: Controlled vocabulary for :attr:`Expression.kind`.
+#:
+#: ``live_performance`` — a concert / gig / live-recorded realization of a Work,
+#: linked to a Performance Event via :class:`ExpressionContribution` rows that
+#: capture performers, venue, and date.  Concerts must be typed here, never as
+#: genre tags or item-level flags.
+#:
+#: ``None`` (NULL) is the default and means a studio / ordinary realization.
+#: Additional kinds (``remix``, ``directors_cut``, …) may be added in future
+#: releases without a schema migration — the vocabulary is enforced at the
+#: service layer, not by a database CHECK constraint.
+EXPRESSION_KINDS: tuple[str, ...] = ("live_performance",)
+EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
+
 
 class Work(db.Model):  # type: ignore[name-defined]
     """
@@ -143,6 +157,10 @@ class Expression(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False)
     content_type = db.Column(db.String(50))  # e.g., 'text', 'sound', 'notated_music', 'video'
     language = db.Column(db.String(10))  # BCP-47 language tag, e.g., 'en', 'pl'
+    #: FRBRoo expression kind (controlled vocabulary, see
+    #: :data:`app.db.core.EXPRESSION_KINDS`).  Initial value: ``live_performance``
+    #: for concert recordings.  ``None`` = studio/default realization.
+    kind = db.Column(db.String(50), nullable=True, index=True)
     meta = db.Column(db.JSON, default=dict)
 
     # Relationships
