@@ -88,22 +88,37 @@ export default function ManifestationPage() {
   const childCovers = parts.map(p => p.cover_url).filter(Boolean) as string[];
 
   const format =
-    (manifestation.meta?.format as string | undefined) || (manifestation.meta?.Format as string | undefined) || "book";
+    (manifestation.meta?.format as string | undefined) ||
+    (manifestation.meta?.Format as string | undefined) ||
+    (manifestation.meta?.type as string | undefined) ||
+    manifestation.content_type ||
+    "book";
+
+  const rawContentType = (
+    manifestation.content_type ||
+    (manifestation.meta?.type as string) ||
+    (manifestation.meta?.format as string) ||
+    (manifestation.meta?.Format as string) ||
+    format ||
+    ""
+  ).toLowerCase();
+
   const isAudio =
-    manifestation.content_type === "audiobook" ||
-    manifestation.content_type === "music" ||
+    rawContentType === "audiobook" ||
+    rawContentType === "music" ||
+    rawContentType === "audio" ||
     format.toLowerCase() === "cd" ||
     format.toLowerCase() === "vinyl" ||
     format.toLowerCase() === "audiobook_cd";
 
   // Resolve special series label
-  const contentType = manifestation.content_type ?? "text";
   let baseLabel = t("book");
-  if (contentType === "movie") baseLabel = t("movie");
-  else if (contentType === "music") baseLabel = t("music");
-  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = t("game");
+  if (rawContentType === "movie" || rawContentType === "video" || rawContentType === "film") baseLabel = t("movie");
+  else if (rawContentType === "music" || rawContentType === "audio") baseLabel = t("music");
+  else if (["board_game", "board game", "puzzle", "game", "video game", "software"].includes(rawContentType))
+    baseLabel = t("game");
 
-  const badgeLabel = isSeries ? t("seriesSuffix", { label: baseLabel }) : isAudio ? t("cdAudio") : t("book");
+  const badgeLabel = isSeries ? t("seriesSuffix", { label: baseLabel }) : isAudio ? t("cdAudio") : baseLabel;
 
   const isBoardGame = manifestation.content_type === "board_game";
   const schemaType = isBoardGame ? "Game" : "Book";

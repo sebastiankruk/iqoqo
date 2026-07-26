@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
+from sqlalchemy import select
 
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
 from app.db.core import EXPRESSION_KIND_LIVE_PERFORMANCE, EXPRESSION_KINDS, Expression, Item, Manifestation, Work
@@ -29,7 +30,6 @@ from app.db.video import ManifestationContribution
 
 if TYPE_CHECKING:
     from app.db.games import ContainerAggregation
-
 
 import re
 
@@ -617,6 +617,15 @@ def update_expression(
         expr.work_id = work_id
     if content_type is not None:
         expr.content_type = content_type
+        child_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == expr.id)).scalars().all()
+        for m in child_manifs:
+            m_meta = dict(m.meta or {})
+            m_meta["type"] = content_type
+            m_meta["format"] = content_type
+            m_meta["Format"] = content_type
+            m.meta = m_meta
+            if hasattr(m, "format"):
+                m.format = content_type
     if language is not None:
         expr.language = language
     if kind is not None:
@@ -851,6 +860,19 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         manif.publication_date = publication_date
     if format is not None:
         manif.format = format
+        current_meta = dict(manif.meta or {})
+        current_meta["format"] = format
+        current_meta["Format"] = format
+        current_meta["type"] = format
+        manif.meta = current_meta
+        if manif.expression:
+            manif.expression.content_type = format
+            if manif.expression.work:
+                w_meta = dict(manif.expression.work.meta or {})
+                w_meta["type"] = format
+                w_meta["format"] = format
+                w_meta["Format"] = format
+                manif.expression.work.meta = w_meta
     if label is not None:
         manif.label = label
     if barcode is not None:
@@ -862,6 +884,20 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     if meta is not None:
         current_meta = dict(manif.meta or {})
         current_meta.update(meta)
+        new_type = meta.get("type") or meta.get("format") or meta.get("Format")
+        if new_type:
+            current_meta["type"] = new_type
+            current_meta["format"] = new_type
+            current_meta["Format"] = new_type
+            manif.format = new_type
+            if manif.expression:
+                manif.expression.content_type = new_type
+                if manif.expression.work:
+                    w_meta = dict(manif.expression.work.meta or {})
+                    w_meta["type"] = new_type
+                    w_meta["format"] = new_type
+                    w_meta["Format"] = new_type
+                    manif.expression.work.meta = w_meta
         manif.meta = current_meta
     db.session.commit()
     return manif
@@ -910,6 +946,77 @@ def update_item(
         item.meta = current_meta
     db.session.commit()
     return item
+
+
+def update_frbr_entity_type(
+    entity_class: Any,
+    entity_id: int,
+    new_type: str,
+) -> Any:
+    """
+    Update the type of a FRBR entity and adapt parent/child entities to maintain consistency.
+    """
+    entity = db.session.get(entity_class, entity_id)
+    if not entity:
+        raise ValueError(f"{entity_class.__name__} with id {entity_id} not found")
+
+    if hasattr(entity, "meta"):
+        current_meta = dict(entity.meta or {})
+        current_meta["type"] = new_type
+        current_meta["format"] = new_type
+        current_meta["Format"] = new_type
+        entity.meta = current_meta
+
+    if hasattr(entity, "format"):
+        entity.format = new_type
+
+    if entity_class == Manifestation:
+        if entity.expression:
+            entity.expression.content_type = new_type
+            if entity.expression.work:
+                w_meta = dict(entity.expression.work.meta or {})
+                w_meta["type"] = new_type
+                w_meta["format"] = new_type
+                w_meta["Format"] = new_type
+                entity.expression.work.meta = w_meta
+    elif entity_class == Expression:
+        entity.content_type = new_type
+        if entity.work:
+            w_meta = dict(entity.work.meta or {})
+            w_meta["type"] = new_type
+            w_meta["format"] = new_type
+            w_meta["Format"] = new_type
+            entity.work.meta = w_meta
+        child_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == entity.id)).scalars().all()
+        for m in child_manifs:
+            m_meta = dict(m.meta or {})
+            m_meta["type"] = new_type
+            m_meta["format"] = new_type
+            m_meta["Format"] = new_type
+            m.meta = m_meta
+            if hasattr(m, "format"):
+                m.format = new_type
+    elif entity_class == Work:
+        w_meta = dict(entity.meta or {})
+        w_meta["type"] = new_type
+        w_meta["format"] = new_type
+        w_meta["Format"] = new_type
+        entity.meta = w_meta
+        child_exprs = db.session.execute(select(Expression).where(Expression.work_id == entity.id)).scalars().all()
+        for sub_expr in child_exprs:
+            sub_expr.content_type = new_type
+            sub_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == sub_expr.id)).scalars().all()
+            for m in sub_manifs:
+                m_meta = dict(m.meta or {})
+                m_meta["type"] = new_type
+                m_meta["format"] = new_type
+                m_meta["Format"] = new_type
+                m.meta = m_meta
+                if hasattr(m, "format"):
+                    m.format = new_type
+
+    db.session.commit()
+    return entity
 
 
 # Define Namespaces

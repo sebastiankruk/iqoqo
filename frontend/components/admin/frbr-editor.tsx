@@ -31,6 +31,9 @@ import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, T
 import Link from "next/link";
 import { useWorkParts } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/hooks";
+import { PermissionName } from "@/lib/permissions";
+import { useCreateEscalation } from "@/lib/api/escalations";
 
 interface MetaField {
   key: string;
@@ -57,6 +60,7 @@ interface FrbrEditorProps {
 
 interface WorkFormData {
   title: string;
+  type?: string;
   metaFields: MetaField[];
 }
 
@@ -67,6 +71,7 @@ interface ExpressionFormData {
 }
 
 interface ManifestationFormData {
+  type?: string;
   isbn13?: string;
   upc?: string;
   ean?: string;
@@ -496,13 +501,15 @@ function ExpressionEditor({
   tree: FrbrTree;
   onSubmit: (data: ExpressionFormData) => Promise<void>;
 }) {
+  const initialType = tree.expression?.content_type ?? "";
+  const [type, setType] = useState(initialType);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: ExpressionFormData = {
-      content_type: formData.get("content_type") as string | undefined,
+      content_type: type,
       language: formData.get("language") as string | undefined,
       metaFields,
     };
@@ -514,7 +521,20 @@ function ExpressionEditor({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium">Content Type</label>
-          <InputField name="content_type" defaultValue={tree.expression?.content_type ?? ""} />
+          <select
+            name="content_type"
+            value={type}
+            onChange={e => setType(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="text">Text (Book/Comic/Manga/Magazine)</option>
+            <option value="image">Image (Artwork)</option>
+            <option value="audio">Audio (Music/Audiobook/Podcast)</option>
+            <option value="video">Video (Movie/TV Show/Anime)</option>
+            <option value="software">Software (Video Game)</option>
+            <option value="object">Object (Board Game/Model/Merch)</option>
+            <option value="other">Other</option>
+          </select>
         </div>
         <div>
           <label className="text-sm font-medium">Language</label>
@@ -586,12 +606,16 @@ function ManifestationEditor({
   tree: FrbrTree;
   onSubmit: (data: ManifestationFormData) => Promise<void>;
 }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.manifestation.meta));
+  const initialType = (tree.manifestation.meta?.type as string) || "Book";
+  const [type, setType] = useState(initialType);
+  const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
+  const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: ManifestationFormData = {
+      type,
       isbn13: formData.get("isbn13") as string | undefined,
       upc: formData.get("upc") as string | undefined,
       ean: formData.get("ean") as string | undefined,
@@ -602,13 +626,52 @@ function ManifestationEditor({
     await onSubmit(data);
   };
 
+  const isBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"].includes(type);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-medium">ISBN-13</label>
-          <InputField name="isbn13" defaultValue={tree.manifestation.isbn13 ?? ""} />
+        <div className="col-span-2">
+          <label className="text-sm font-medium">Type</label>
+          <select
+            name="type"
+            value={type}
+            onChange={e => setType(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="Book">Book</option>
+            <option value="Comic Book">Comic Book</option>
+            <option value="Manga">Manga</option>
+            <option value="Board Game">Board Game</option>
+            <option value="Roleplaying Game">Roleplaying Game</option>
+            <option value="Card Game">Card Game</option>
+            <option value="Miniature Game">Miniature Game</option>
+            <option value="Movie">Movie</option>
+            <option value="TV Show">TV Show</option>
+            <option value="Anime">Anime</option>
+            <option value="Video Game">Video Game</option>
+            <option value="Music">Music</option>
+            <option value="Audiobook">Audiobook</option>
+            <option value="Podcast">Podcast</option>
+            <option value="Software">Software</option>
+            <option value="Magazine">Magazine</option>
+            <option value="Journal">Journal</option>
+            <option value="Newspaper">Newspaper</option>
+            <option value="Zine">Zine</option>
+            <option value="Artwork">Artwork</option>
+            <option value="Model">Model</option>
+            <option value="Figure">Figure</option>
+            <option value="Merchandise">Merchandise</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
+
+        {isBookLike && (
+          <div>
+            <label className="text-sm font-medium">ISBN-13</label>
+            <InputField name="isbn13" defaultValue={tree.manifestation.isbn13 ?? ""} />
+          </div>
+        )}
         <div>
           <label className="text-sm font-medium">UPC</label>
           <InputField name="upc" defaultValue={tree.manifestation.upc ?? ""} />
@@ -769,14 +832,20 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
  *
  * @param props - Component properties
  * @param props.manifestationId - The manifestation ID to load
+ * @param props.onClose - Optional callback when the editor is closed
  * @returns FRBR editor JSX element
  */
-export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
+export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const [tree, setTree] = useState<FrbrTree | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("manifestation");
+  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const { data: profile } = useProfile();
+  const createEscalation = useCreateEscalation();
+  const hasWriteMetadata = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
+  const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
+
   const [itemFilter, setItemFilter] = useState({ owner: "", status: "", condition: "" });
 
   const fetchTree = useCallback(async () => {
@@ -830,7 +899,38 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
   const handleManifestationSubmit = async (data: ManifestationFormData) => {
     if (!tree?.manifestation) return;
     try {
+      const originalType = tree.manifestation.meta?.type as string;
+      const typeChanged = data.type && data.type !== originalType;
+
+      if (typeChanged && !hasWriteMetadata) {
+        if (hasEscalateRequest) {
+          await createEscalation.mutateAsync({
+            level: "manifestation",
+            targetId: tree.manifestation.id,
+            data: {
+              request_type: "change_type",
+              field_name: "type",
+              current_value: originalType,
+              suggested_value: data.type ?? "",
+              note: "Type change suggested via editor",
+            },
+          });
+          toast.success("Type change requested via User Requests.");
+          // We can still try to save other fields if the user has partial permissions,
+          // but if they don't have WRITE_METADATA, the backend will reject it anyway.
+          // In this flow, we just return after dispatching the request.
+          return;
+        } else {
+          toast.error("You do not have permission to change the type or escalate requests.");
+          return;
+        }
+      }
+
       const meta = transformFieldsToMeta(data.metaFields);
+      if (data.type) {
+        meta.type = data.type;
+      }
+
       await updateFrbrEntity("manifestation", tree.manifestation.id, {
         isbn13: data.isbn13,
         upc: data.upc,
@@ -918,51 +1018,59 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b">
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "work"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("work")}
-        >
-          Work (F1)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "expression"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("expression")}
-        >
-          Expression (F2)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "manifestation"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("manifestation")}
-        >
-          Manifestation (F3)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "items"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("items")}
-        >
-          Items (F5)
-        </button>
+      <div className="flex border-b justify-between items-center">
+        <div className="flex">
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "work"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("work")}
+          >
+            Work (F1)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "expression"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("expression")}
+          >
+            Expression (F2)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "manifestation"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("manifestation")}
+          >
+            Manifestation (F3)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "items"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("items")}
+          >
+            Items (F5)
+          </button>
+        </div>
+        {onClose && (
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="px-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        )}
       </div>
 
       {activeTab === "work" && (

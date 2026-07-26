@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth, require_permission
+from app.core.frbr_service import update_frbr_entity_type
 from app.core.permissions import PermissionName
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, User, Work, db
 
@@ -534,6 +535,30 @@ def _validate_resolution_payload(data: dict) -> tuple[str | None, str | None, st
     return str(new_status), resolution_note, None
 
 
+def _handle_type_change_acceptance(escalation: EscalationRequest) -> tuple[Response, int] | None:
+    if escalation.manifestation_id:
+        entity_class = Manifestation
+        entity_id = escalation.manifestation_id
+    elif escalation.expression_id:
+        entity_class = Expression
+        entity_id = escalation.expression_id
+    elif escalation.work_id:
+        entity_class = Work
+        entity_id = escalation.work_id
+    elif escalation.item_id:
+        entity_class = Item
+        entity_id = escalation.item_id
+    else:
+        return jsonify({"error": "No target entity for type change", "code": 400}), 400
+
+    try:
+        update_frbr_entity_type(entity_class, entity_id, escalation.suggested_value)
+    except ValueError as e:
+        return jsonify({"error": str(e), "code": 400}), 400
+
+    return None
+
+
 @api_bp.route("/escalations/<int:escalation_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.ESCALATE_RESOLVE)
@@ -556,10 +581,15 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
         if not escalation:
             return jsonify({"error": "Escalation request not found", "code": 404}), 404
 
-        if escalation.request_type == "deletion" and new_status == "accepted":
-            err_resp = _handle_deletion_acceptance(escalation, user, user_id)
-            if err_resp:
-                return err_resp
+        err_resp = None
+        if new_status == "accepted":
+            if escalation.request_type == "deletion":
+                err_resp = _handle_deletion_acceptance(escalation, user, user_id)
+            elif escalation.request_type == "change_type":
+                err_resp = _handle_type_change_acceptance(escalation)
+
+        if err_resp:
+            return err_resp
 
         escalation.status = new_status
         escalation.resolved_by = user_id

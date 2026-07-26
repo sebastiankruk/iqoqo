@@ -63,13 +63,22 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
 
   // Resolve special series label
-  const contentType = item.expression?.content_type ?? "text";
-  let baseLabel = "Book";
-  if (contentType === "movie") baseLabel = "Movie";
-  else if (contentType === "music") baseLabel = "Music";
-  else if (contentType === "board_game" || contentType === "puzzle") baseLabel = "Game";
+  const rawContentType = (
+    item.expression?.content_type ||
+    (item.manifestation_meta?.type as string) ||
+    (item.manifestation_meta?.format as string) ||
+    (meta["type"] as string) ||
+    (meta["format"] as string) ||
+    "text"
+  ).toLowerCase();
 
-  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : "Book";
+  let baseLabel = "Book";
+  if (rawContentType === "movie" || rawContentType === "video" || rawContentType === "film") baseLabel = "Movie";
+  else if (rawContentType === "music" || rawContentType === "audio") baseLabel = "Music";
+  else if (["board_game", "board game", "puzzle", "game", "video game", "software"].includes(rawContentType))
+    baseLabel = "Game";
+
+  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : baseLabel;
 
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">

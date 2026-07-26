@@ -170,12 +170,15 @@ export function EscalationTrigger({
       }
     }
 
+    const payloadRequestType =
+      requestType === "deletion" ? "deletion" : fieldName === "type" ? "change_type" : "correction";
+
     createMutation.mutate(
       {
         level,
         targetId,
         data: {
-          request_type: requestType,
+          request_type: payloadRequestType,
           field_name: requestType === "deletion" ? "" : fieldName,
           current_value: requestType === "deletion" ? undefined : currentValue.trim() || undefined,
           suggested_value: requestType === "deletion" ? "" : suggestedValue.trim(),
@@ -269,6 +272,7 @@ export function EscalationTrigger({
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="title">Title</option>
+                    <option value="type">Entity Type</option>
                     <option value="isbn">ISBN / Identifier</option>
                     <option value="format">Format / Classification</option>
                     <option value="author">Author / Creator</option>
