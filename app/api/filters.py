@@ -40,6 +40,14 @@ def parse_csv_param(value: str | None) -> list[str] | None:
     return tokens if tokens else None
 
 
+def escape_ilike_term(term: str) -> str:
+    """Canonicalize apostrophe variants (’ ‘ ʼ -> ') and escape ILIKE metacharacters (% _ \\)."""
+    if not term:
+        return ""
+    cleaned = term.translate(str.maketrans("’‘ʼ", "'''")).strip()
+    return cleaned.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def apply_genre_filter(query, genres_list):
     """Apply genre filter on Work.meta, handling scalar ``genre`` and array ``genres`` case-insensitively.
 
@@ -54,16 +62,17 @@ def apply_genre_filter(query, genres_list):
 
     conditions = []
     for gen in genres_list:
-        g_clean = gen.strip()
+        g_clean = gen.strip().translate(str.maketrans("’‘ʼ", "'''"))
         if is_postgres:
             # Cast meta to jsonb so .contains() emits the @> containment operator
             meta_jsonb = Work.meta.cast(JSONB)
             conditions.append(meta_jsonb.contains({"genre": g_clean}))
             conditions.append(meta_jsonb["genres"].contains([g_clean]))
         else:
-            # SQLite fallback path
-            conditions.append(Work.meta["genre"].as_string().ilike(f"%{g_clean}%"))
-            conditions.append(Work.meta["genres"].as_string().ilike(f"%{g_clean}%"))
+            # SQLite fallback path with explicit ESCAPE '\\'
+            g_escaped = escape_ilike_term(gen)
+            conditions.append(Work.meta["genre"].as_string().ilike(f"%{g_escaped}%", escape="\\"))
+            conditions.append(Work.meta["genres"].as_string().ilike(f"%{g_escaped}%", escape="\\"))
     query = query.filter(db.or_(*conditions))
     return query
 

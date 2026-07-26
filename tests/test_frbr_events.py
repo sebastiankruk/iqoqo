@@ -79,7 +79,7 @@ class TestSharedContributionEntities:
         assert VideoManifestationContribution is ManifestationContribution
 
     def test_models_shim_exposes_all_shared_events(self):
-        from app.db.models import (  # noqa: F401
+        from app.db.models import (  # noqa: F401  # pylint: disable=reimported
             Contributor,
             ExpressionContribution,
             ManifestationContribution,
@@ -394,7 +394,7 @@ class TestContainerAggregation:
             assert len(payload["works"]) == 1
             assert payload["works"][0]["work_id"] == rulebook.id
             assert payload["works"][0]["component_name"] == "Rulebook"
-            assert payload["items"] == []
+            assert not payload["items"]
 
     def test_serialize_container_aggregation_with_none(self):
         payload = serialize_container_aggregation(None)
@@ -439,9 +439,9 @@ class TestContributionsSerializer:
         with app.app_context():
             work = create_work("Solo Work")
             payload = serialize_contributions(work=work)
-            assert payload["creators"] == []
-            assert payload["performers"] == []
-            assert payload["publishers"] == []
+            assert not payload["creators"]
+            assert not payload["performers"]
+            assert not payload["publishers"]
 
 
 # ---------------------------------------------------------------------------

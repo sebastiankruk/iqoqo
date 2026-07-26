@@ -101,6 +101,7 @@ def fetch_video_metadata(query: str) -> dict[str, Any] | None:
             "tmdb_media_type": media_type,
             "tmdb_id": best_match.get("id"),
             "Source": "TMDB",
+            "raw_payload": best_match,
         }
     except requests.RequestException as e:
         logger.warning(f"TMDB fetch failed for {query}: {e}")

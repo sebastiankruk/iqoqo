@@ -161,11 +161,15 @@ class IngestService:
         # Map format string → FRBR content type (canonical formats + aliases)
         content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
 
+        raw_payload = meta.get("raw_payload") or meta
+
+        from app.core.frbr_service import derive_sort_title
+
         work_genres = _extract_genres(meta)
         work_meta: dict = {"authors": [author_name] if author_name else []}
         if work_genres:
             work_meta["genres"] = work_genres
-        work = Work(title=title, meta=work_meta)
+        work = Work(title=title, sort_title=derive_sort_title(title), meta=work_meta, raw_payload=raw_payload)
         db.session.add(work)
         db.session.flush()
 
@@ -174,7 +178,12 @@ class IngestService:
             if contributor:
                 add_work_contribution(work.id, contributor.id, "author")
 
-        expression = Expression(work=work, language=meta.get("language", "en"), content_type=content_type)
+        expression = Expression(
+            work=work,
+            language=meta.get("language", "en"),
+            content_type=content_type,
+            raw_payload=raw_payload,
+        )
         db.session.add(expression)
         db.session.flush()
 
@@ -189,7 +198,15 @@ class IngestService:
             }
         )
 
-        manifestation = Manifestation(expression=expression, meta=man_meta)
+        manifestation = Manifestation(
+            expression=expression,
+            format=raw_format,
+            label=meta.get("publisher") or meta.get("label"),
+            barcode=meta.get("barcode") or meta.get("identifier"),
+            catalog_number=meta.get("catalog_number") or meta.get("catno"),
+            meta=man_meta,
+            raw_payload=raw_payload,
+        )
         db.session.add(manifestation)
         db.session.commit()
 

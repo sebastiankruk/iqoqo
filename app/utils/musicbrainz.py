@@ -96,6 +96,7 @@ def fetch_audio_metadata(barcode: str) -> dict | None:
             "cover_url": cover_url,
             "format": _detect_media_format(release),
             "language": "en",  # Defaulting, as MusicBrainz language tags are complex
+            "raw_payload": release,
         }
     except requests.RequestException as e:
         logger.error(f"Failed to fetch audio metadata for {barcode}: {e}")

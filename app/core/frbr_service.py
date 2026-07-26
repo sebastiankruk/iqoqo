@@ -1,5 +1,7 @@
 """This module provides services for creating FRBR-compliant objects."""
 
+# pylint: disable=too-many-lines
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -15,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
@@ -29,20 +31,41 @@ if TYPE_CHECKING:
     from app.db.games import ContainerAggregation
 
 
-def create_work(title: str, meta: dict[str, Any] | None = None) -> Work:
+import re
+
+_LEADING_ARTICLES_RE = re.compile(r"^(?:the|a|an|ten|ta|to)\s+", re.IGNORECASE)
+
+
+def derive_sort_title(title: str) -> str:
+    """Derive alphabetical sort title by stripping leading articles (The, A, An, Ten, Ta, To)."""
+    if not title:
+        return ""
+    return _LEADING_ARTICLES_RE.sub("", title).strip()
+
+
+def create_work(
+    title: str,
+    meta: dict[str, Any] | None = None,
+    sort_title: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
+) -> Work:
     """
     Creates a new Work.
 
     Args:
         title: The title of the work
         meta: Additional metadata for the work
+        sort_title: Alphabetical sort key (auto-derived from title if None)
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The created Work object
     """
     if meta is None:
         meta = {}
-    work = Work(title=title, meta=meta)
+    if sort_title is None and title:
+        sort_title = derive_sort_title(title)
+    work = Work(title=title, sort_title=sort_title, meta=meta, raw_payload=raw_payload)
     db.session.add(work)
     db.session.commit()
     return work
@@ -54,6 +77,7 @@ def create_expression(
     language: str = "en",
     meta: dict[str, Any] | None = None,
     kind: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Expression:
     """
     Creates a new Expression for a Work.
@@ -66,6 +90,7 @@ def create_expression(
         kind: FRBRoo expression kind (see :data:`app.db.core.EXPRESSION_KINDS`).
               ``None`` (default) means a studio/ordinary realization.  Use
               ``"live_performance"`` for concert recordings.
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The created Expression object
@@ -77,13 +102,20 @@ def create_expression(
         meta = {}
     if kind is not None and kind not in EXPRESSION_KINDS:
         raise ValueError(f"Invalid expression kind {kind!r}; must be one of {EXPRESSION_KINDS}")
-    expression = Expression(work_id=work_id, content_type=content_type, language=language, meta=meta, kind=kind)
+    expression = Expression(
+        work_id=work_id,
+        content_type=content_type,
+        language=language,
+        meta=meta,
+        kind=kind,
+        raw_payload=raw_payload,
+    )
     db.session.add(expression)
     db.session.commit()
     return expression
 
 
-def create_manifestation(
+def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positional-arguments,redefined-builtin
     expression_id: int,
     isbn13: str | None = None,
     upc: str | None = None,
@@ -91,6 +123,11 @@ def create_manifestation(
     publisher: str | None = None,
     publication_date: Any | None = None,
     meta: dict[str, Any] | None = None,
+    format: str | None = None,
+    label: str | None = None,
+    barcode: str | None = None,
+    catalog_number: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Manifestation:
     """
     Creates a new Manifestation for an Expression.
@@ -103,12 +140,26 @@ def create_manifestation(
         publisher: Publisher name
         publication_date: Date of publication
         meta: Additional metadata (e.g., Title, Authors, cover images)
+        format: Canonical format marker (e.g. 'dvd', 'bluray_audio')
+        label: Publisher / record label name
+        barcode: Generic barcode
+        catalog_number: Catalog number
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The created Manifestation object
     """
     if meta is None:
         meta = {}
+    if format is None:
+        format = meta.get("format") or meta.get("video_format") or meta.get("format_name")
+    if label is None:
+        label = meta.get("label") or meta.get("studio") or meta.get("imprint") or publisher
+    if barcode is None:
+        barcode = meta.get("barcode") or meta.get("identifier") or ean or upc or isbn13
+    if catalog_number is None:
+        catalog_number = meta.get("catalog_number") or meta.get("catno") or meta.get("sku")
+
     manifestation = Manifestation(
         expression_id=expression_id,
         isbn13=isbn13,
@@ -116,7 +167,12 @@ def create_manifestation(
         ean=ean,
         publisher=publisher,
         publication_date=publication_date,
+        format=format,
+        label=label,
+        barcode=barcode,
+        catalog_number=catalog_number,
         meta=meta,
+        raw_payload=raw_payload,
     )
     db.session.add(manifestation)
     db.session.commit()
@@ -129,6 +185,7 @@ def create_item(
     status: str = "available",
     condition: str | None = None,
     meta: dict[str, Any] | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Item:
     """
     Creates a new Item for a Manifestation.
@@ -138,14 +195,19 @@ def create_item(
         owner_id: The ID of the owner
         status: Status of the item (e.g., 'available', 'lent', 'lost', 'wish_list')
         condition: Condition of the item
-        meta: Additional metadata (e.g., tags, notes, location)
-
-    Returns:
-        The created Item object
+        meta: Additional metadata
+        raw_payload: Verbatim provider payload JSON
     """
     if meta is None:
         meta = {}
-    item = Item(manifestation_id=manifestation_id, owner_id=owner_id, status=status, condition=condition, meta=meta)
+    item = Item(
+        manifestation_id=manifestation_id,
+        owner_id=owner_id,
+        status=status,
+        condition=condition,
+        meta=meta,
+        raw_payload=raw_payload,
+    )
     db.session.add(item)
     db.session.commit()
     return item
@@ -371,7 +433,7 @@ def add_container_component(
 
     if (aggregated_work_id is None) == (aggregated_item_id is None):
         raise ValueError(
-            "Exactly one of aggregated_work_id (rulebook Work) or " "aggregated_item_id (physical component Item) must be provided."
+            "Exactly one of aggregated_work_id (rulebook Work) or aggregated_item_id (physical component Item) must be provided."
         )
 
     aggregated_type = "work" if aggregated_work_id is not None else "item"
@@ -475,14 +537,22 @@ def serialize_container_aggregation(container_work: Work | None) -> dict[str, An
 # --- UPDATE METHODS ---
 
 
-def update_work(work_id: int, title: str | None = None, meta: dict[str, Any] | None = None) -> Work:
+def update_work(
+    work_id: int,
+    title: str | None = None,
+    sort_title: str | None = None,
+    meta: dict[str, Any] | None = None,
+    raw_payload: dict[str, Any] | None = None,
+) -> Work:
     """
     Update an existing Work.
 
     Args:
         work_id: The ID of the work to update
         title: New title for the work
+        sort_title: New alphabetical sort title
         meta: Metadata to merge with existing
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The updated Work object
@@ -493,6 +563,12 @@ def update_work(work_id: int, title: str | None = None, meta: dict[str, Any] | N
 
     if title is not None:
         work.title = title
+        if sort_title is None:
+            work.sort_title = derive_sort_title(title)
+    if sort_title is not None:
+        work.sort_title = sort_title
+    if raw_payload is not None:
+        work.raw_payload = raw_payload
     if meta is not None:
         current_meta = dict(work.meta or {})
         current_meta.update(meta)
@@ -508,6 +584,7 @@ def update_expression(
     language: str | None = None,
     meta: dict[str, Any] | None = None,
     kind: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Expression:
     """
     Update an existing Expression.
@@ -520,6 +597,7 @@ def update_expression(
         meta: Metadata to merge with existing
         kind: New expression kind (``live_performance`` or ``None`` to clear
               via :func:`clear_expression_kind`).
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The updated Expression object
@@ -545,6 +623,8 @@ def update_expression(
         if kind not in EXPRESSION_KINDS:
             raise ValueError(f"Invalid expression kind {kind!r}; must be one of {EXPRESSION_KINDS}")
         expr.kind = kind
+    if raw_payload is not None:
+        expr.raw_payload = raw_payload
     if meta is not None:
         current_meta = dict(expr.meta or {})
         current_meta.update(meta)
@@ -711,10 +791,10 @@ def get_or_create_live_performance_expression(
             if already is None:
                 add_expression_contribution(expression_id=expr.id, contributor_id=contributor.id, role=role)
 
-    return expr
+    return cast(Expression, expr)
 
 
-def update_manifestation(
+def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positional-arguments,redefined-builtin
     manifestation_id: int,
     expression_id: int | None = None,
     isbn13: str | None = None,
@@ -723,6 +803,11 @@ def update_manifestation(
     publisher: str | None = None,
     publication_date: Any | None = None,
     meta: dict[str, Any] | None = None,
+    format: str | None = None,
+    label: str | None = None,
+    barcode: str | None = None,
+    catalog_number: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Manifestation:
     """
     Update an existing Manifestation.
@@ -736,6 +821,11 @@ def update_manifestation(
         publisher: New publisher name
         publication_date: New publication date
         meta: Metadata to merge with existing
+        format: New canonical format
+        label: New label
+        barcode: New barcode
+        catalog_number: New catalog number
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The updated Manifestation object
@@ -759,6 +849,16 @@ def update_manifestation(
         manif.publisher = publisher
     if publication_date is not None:
         manif.publication_date = publication_date
+    if format is not None:
+        manif.format = format
+    if label is not None:
+        manif.label = label
+    if barcode is not None:
+        manif.barcode = barcode
+    if catalog_number is not None:
+        manif.catalog_number = catalog_number
+    if raw_payload is not None:
+        manif.raw_payload = raw_payload
     if meta is not None:
         current_meta = dict(manif.meta or {})
         current_meta.update(meta)
@@ -773,6 +873,7 @@ def update_item(
     status: str | None = None,
     condition: str | None = None,
     meta: dict[str, Any] | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ) -> Item:
     """
     Update an existing Item.
@@ -783,6 +884,7 @@ def update_item(
         status: New status
         condition: New condition
         meta: Metadata to merge with existing
+        raw_payload: Verbatim provider payload JSON
 
     Returns:
         The updated Item object
@@ -800,6 +902,8 @@ def update_item(
         item.status = status
     if condition is not None:
         item.condition = condition
+    if raw_payload is not None:
+        item.raw_payload = raw_payload
     if meta is not None:
         current_meta = dict(item.meta or {})
         current_meta.update(meta)
