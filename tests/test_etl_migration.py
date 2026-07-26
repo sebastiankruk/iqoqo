@@ -24,6 +24,7 @@ Pins:
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -129,6 +130,7 @@ class TestRawPayloadPersistence:
         assert meta is not None
         assert "raw_payload" in meta
 
+    @patch.dict(os.environ, {"TMDB_API_KEY": "dummy_key"})
     @patch("requests.get")
     def test_tmdb_includes_raw_payload(self, mock_get):
         mock_get.return_value.status_code = 200
