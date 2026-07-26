@@ -1,3 +1,18 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 import pytest
 
 from app.core.frbr_service import update_frbr_entity_type
@@ -64,7 +79,7 @@ def test_type_change_user_request_acceptance(client, app, admin_headers):
             field_name="type",
             current_value="Movie",
             suggested_value="Video Game",
-            request_type="CHANGE_TYPE",
+            request_type="change_type",
             status="pending",
         )
         db.session.add(req)

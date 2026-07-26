@@ -839,7 +839,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const [tree, setTree] = useState<FrbrTree | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "item">("manifestation");
+  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const { data: profile } = useProfile();
   const createEscalation = useCreateEscalation();
@@ -908,10 +908,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             level: "manifestation",
             targetId: tree.manifestation.id,
             data: {
-              request_type: "CHANGE_TYPE",
+              request_type: "change_type",
               field_name: "type",
               current_value: originalType,
-              suggested_value: data.type,
+              suggested_value: data.type ?? "",
               note: "Type change suggested via editor",
             },
           });

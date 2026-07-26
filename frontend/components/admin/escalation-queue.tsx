@@ -59,7 +59,7 @@ function formatDate(iso: string): string {
  * @param props.type - The request type string.
  * @returns Request type badge JSX element.
  */
-function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "CHANGE_TYPE" | string }) {
+function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change_type" | string }) {
   const t = useTranslations("HelpRequests");
   if (type === "deletion") {
     return (
@@ -69,7 +69,7 @@ function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "CHANGE
       </span>
     );
   }
-  if (type === "CHANGE_TYPE") {
+  if (type === "change_type") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
         Change Type

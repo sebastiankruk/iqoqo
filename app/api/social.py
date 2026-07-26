@@ -585,7 +585,7 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
         if new_status == "accepted":
             if escalation.request_type == "deletion":
                 err_resp = _handle_deletion_acceptance(escalation, user, user_id)
-            elif escalation.request_type == "CHANGE_TYPE":
+            elif escalation.request_type == "change_type":
                 err_resp = _handle_type_change_acceptance(escalation)
 
         if err_resp:

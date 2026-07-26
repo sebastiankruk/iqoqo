@@ -211,7 +211,7 @@ describe("FrbrEditor Component", () => {
           level: "manifestation",
           targetId: 3,
           data: expect.objectContaining({
-            request_type: "CHANGE_TYPE",
+            request_type: "change_type",
             field_name: "type",
             suggested_value: "Movie",
           }),
