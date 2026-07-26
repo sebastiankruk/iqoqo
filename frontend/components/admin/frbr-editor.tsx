@@ -524,7 +524,7 @@ function ExpressionEditor({
           <select
             name="content_type"
             value={type}
-            onChange={(e) => setType(e.target.value)}
+            onChange={e => setType(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <option value="text">Text (Book/Comic/Manga/Magazine)</option>
@@ -636,7 +636,7 @@ function ManifestationEditor({
           <select
             name="type"
             value={type}
-            onChange={(e) => setType(e.target.value)}
+            onChange={e => setType(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <option value="Book">Book</option>
@@ -665,7 +665,7 @@ function ManifestationEditor({
             <option value="Other">Other</option>
           </select>
         </div>
-        
+
         {isBookLike && (
           <div>
             <label className="text-sm font-medium">ISBN-13</label>
@@ -832,6 +832,7 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
  *
  * @param props - Component properties
  * @param props.manifestationId - The manifestation ID to load
+ * @param props.onClose - Optional callback when the editor is closed
  * @returns FRBR editor JSX element
  */
 export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
@@ -915,7 +916,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             },
           });
           toast.success("Type change requested via User Requests.");
-          // We can still try to save other fields if the user has partial permissions, 
+          // We can still try to save other fields if the user has partial permissions,
           // but if they don't have WRITE_METADATA, the backend will reject it anyway.
           // In this flow, we just return after dispatching the request.
           return;
@@ -929,7 +930,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       if (data.type) {
         meta.type = data.type;
       }
-      
+
       await updateFrbrEntity("manifestation", tree.manifestation.id, {
         isbn13: data.isbn13,
         upc: data.upc,
@@ -1017,51 +1018,59 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b">
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "work"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("work")}
-        >
-          Work (F1)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "expression"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("expression")}
-        >
-          Expression (F2)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "manifestation"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("manifestation")}
-        >
-          Manifestation (F3)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "items"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("items")}
-        >
-          Items (F5)
-        </button>
+      <div className="flex border-b justify-between items-center">
+        <div className="flex">
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "work"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("work")}
+          >
+            Work (F1)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "expression"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("expression")}
+          >
+            Expression (F2)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "manifestation"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("manifestation")}
+          >
+            Manifestation (F3)
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "items"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setActiveTab("items")}
+          >
+            Items (F5)
+          </button>
+        </div>
+        {onClose && (
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="px-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        )}
       </div>
 
       {activeTab === "work" && (

@@ -40,6 +40,7 @@ def test_type_change_user_request_acceptance(client, app, admin_headers):
     import uuid
 
     from app.db.models import User
+
     with app.app_context():
         user = User(id=uuid.uuid4(), email="test@iqoqo.app", password_hash="hash", display_name="Test User")
         db.session.add(user)
@@ -64,7 +65,7 @@ def test_type_change_user_request_acceptance(client, app, admin_headers):
             current_value="Movie",
             suggested_value="Video Game",
             request_type="CHANGE_TYPE",
-            status="pending"
+            status="pending",
         )
         db.session.add(req)
         db.session.commit()
@@ -75,9 +76,7 @@ def test_type_change_user_request_acceptance(client, app, admin_headers):
 
     # Admin approves
     resp = client.patch(
-        f"/api/escalations/{req_id}",
-        json={"status": "accepted", "resolution_note": "Approved type change"},
-        headers=admin_headers
+        f"/api/escalations/{req_id}", json={"status": "accepted", "resolution_note": "Approved type change"}, headers=admin_headers
     )
 
     assert resp.status_code == 200

@@ -79,9 +79,9 @@ export function EscalationTrigger({
   const handleTypeChange = (newType: "correction" | "deletion" | "CHANGE_TYPE") => {
     setRequestType(newType);
     if (newType === "CHANGE_TYPE") {
-        setFieldName("type");
+      setFieldName("type");
     } else {
-        setFieldName("title");
+      setFieldName("title");
     }
     setCurrentValue("");
     setSuggestedValue("");
@@ -214,7 +214,11 @@ export function EscalationTrigger({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>
-              {requestType === "deletion" ? t("requestDeletion") : requestType === "CHANGE_TYPE" ? "Change Type" : t("requestMetadataCorrection")}
+              {requestType === "deletion"
+                ? t("requestDeletion")
+                : requestType === "CHANGE_TYPE"
+                  ? "Change Type"
+                  : t("requestMetadataCorrection")}
             </DialogTitle>
             <DialogDescription>{t("requestDescription")}</DialogDescription>
           </DialogHeader>
