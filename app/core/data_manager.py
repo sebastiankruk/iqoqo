@@ -319,9 +319,7 @@ class DataManager:
             if w.title and not w.sort_title:
                 drift["sort_title_drift"] += 1
 
-        drift["total_drift"] = (
-            drift["format_drift"] + drift["label_drift"] + drift["barcode_drift"] + drift["sort_title_drift"]
-        )
+        drift["total_drift"] = drift["format_drift"] + drift["label_drift"] + drift["barcode_drift"] + drift["sort_title_drift"]
         return drift
 
     @staticmethod

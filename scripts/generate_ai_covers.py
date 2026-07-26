@@ -144,7 +144,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Batch AI Cover Generation and Watermarking CLI")
     parser.add_argument("--batch-all-unwatermarked", action="store_true", help="Process all missing or unwatermarked AI covers")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of manifestations to process")
-    parser.add_argument("--dry-run", action="store_true", help="Log eligible manifestations without modifying database or generating images")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Log eligible manifestations without modifying database or generating images"
+    )
     parser.add_argument("--watermark-only", action="store_true", help="Only watermark existing AI covers without invoking generation")
     parser.add_argument("--prompt-spec", type=str, default=None, help="Path to custom prompt specification markdown file")
 

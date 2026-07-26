@@ -24,6 +24,7 @@ _CONNECT_TIMEOUT: int = 3
 _READ_TIMEOUT: int = 7
 _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
 
+
 def get_allegro_user_agent() -> str:
     """Return Allegro User-Agent header string formatted per Allegro API specification.
 

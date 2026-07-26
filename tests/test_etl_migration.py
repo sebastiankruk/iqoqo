@@ -124,9 +124,7 @@ class TestRawPayloadPersistence:
     @patch("requests.get")
     def test_musicbrainz_includes_raw_payload(self, mock_get):
         mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            "releases": [{"id": "mb-123", "title": "Album", "artist-credit": [{"name": "Artist"}]}]
-        }
+        mock_get.return_value.json.return_value = {"releases": [{"id": "mb-123", "title": "Album", "artist-credit": [{"name": "Artist"}]}]}
         meta = fetch_audio_metadata("123456")
         assert meta is not None
         assert "raw_payload" in meta
@@ -146,6 +144,7 @@ class TestRawPayloadPersistence:
 class TestDataManagerExportColumnFirst:
     def test_export_all_includes_relational_columns_and_raw_payload(self, app):
         import uuid
+
         with app.app_context():
             owner_id = uuid.uuid4()
             work = create_work("The Godfather", raw_payload={"source": "tmdb", "id": 1})
