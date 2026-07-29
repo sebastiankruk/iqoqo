@@ -34,6 +34,7 @@ import { apiClient } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
+import { EXPRESSION_KINDS } from "@/types/frbr";
 
 interface MetaField {
   key: string;
@@ -67,6 +68,7 @@ interface WorkFormData {
 interface ExpressionFormData {
   content_type?: string;
   language?: string;
+  kind?: string;
   metaFields: MetaField[];
 }
 
@@ -503,6 +505,8 @@ function ExpressionEditor({
 }) {
   const initialType = tree.expression?.content_type ?? "";
   const [type, setType] = useState(initialType);
+  const initialKind = tree.expression?.kind ?? "";
+  const [kind, setKind] = useState(initialKind);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -511,6 +515,7 @@ function ExpressionEditor({
     const data: ExpressionFormData = {
       content_type: type,
       language: formData.get("language") as string | undefined,
+      kind,
       metaFields,
     };
     await onSubmit(data);
@@ -534,6 +539,22 @@ function ExpressionEditor({
             <option value="software">Software (Video Game)</option>
             <option value="object">Object (Board Game/Model/Merch)</option>
             <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Kind</label>
+          <select
+            name="kind"
+            value={kind}
+            onChange={e => setKind(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="">Studio / Default</option>
+            {EXPRESSION_KINDS.map(k => (
+              <option key={k} value={k}>
+                {formatKeyForDisplay(k)}
+              </option>
+            ))}
           </select>
         </div>
         <div>
@@ -887,6 +908,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       await updateFrbrEntity("expression", tree.expression.id, {
         content_type: data.content_type,
         language: data.language,
+        kind: data.kind,
         meta,
       });
       toast.success("Expression updated successfully");

@@ -23,6 +23,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 from sqlalchemy import select
 
+from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
 from app.db.core import EXPRESSION_KIND_LIVE_PERFORMANCE, EXPRESSION_KINDS, Expression, Item, Manifestation, Work
 from app.db.models import db
@@ -620,12 +621,10 @@ def update_expression(
         child_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == expr.id)).scalars().all()
         for m in child_manifs:
             m_meta = dict(m.meta or {})
-            m_meta["type"] = content_type
-            m_meta["format"] = content_type
-            m_meta["Format"] = content_type
+            carrier = _sync_type_meta(m_meta, m.format, content_type)
             m.meta = m_meta
             if hasattr(m, "format"):
-                m.format = content_type
+                m.format = carrier
     if language is not None:
         expr.language = language
     if kind is not None:
@@ -948,6 +947,61 @@ def update_item(
     return item
 
 
+#: Media category → its canonical ``unknown_*`` placeholder format,
+#: derived from the taxonomy so it stays in sync automatically.
+_CATEGORY_TO_UNKNOWN_FORMAT = {category: fmt for fmt, category in FORMAT_TO_CATEGORY.items() if fmt.startswith("unknown_")}
+
+
+def _resolve_carrier_format(current_format: Any, new_type: str) -> str:
+    """
+    Resolve the carrier format to store after a content-type change.
+
+    A real carrier (e.g. ``bluray``, ``vinyl``) whose category matches the new
+    type is preserved. A carrier from another category (the type genuinely
+    changed category) or a type-like/empty value degrades to the category's
+    ``unknown_*`` placeholder instead of clobbering the carrier with the
+    content type itself.
+
+    Args:
+        current_format: The format currently stored (column or meta value).
+        new_type: The new content type being applied (e.g. ``movie``, ``music``).
+
+    Returns:
+        The carrier format to persist.
+    """
+    new_category = FORMAT_ALIAS_TO_CATEGORY.get(new_type.strip().lower())
+    current = str(current_format or "").strip().lower()
+    if current in FORMAT_TO_CATEGORY and (new_category is None or FORMAT_TO_CATEGORY[current] == new_category):
+        return current
+    if new_category:
+        unknown = _CATEGORY_TO_UNKNOWN_FORMAT.get(new_category)
+        if unknown:
+            return unknown
+    return current or new_type
+
+
+def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) -> str:
+    """
+    Sync a type change into an entity meta dict, preserving the carrier format.
+
+    Sets ``type`` to the new content type and resolves ``format``/``Format``
+    via :func:`_resolve_carrier_format`.
+
+    Args:
+        meta: The entity meta dict to mutate.
+        current_format: The authoritative current carrier (e.g. the format column).
+        new_type: The new content type.
+
+    Returns:
+        The resolved carrier format.
+    """
+    carrier = _resolve_carrier_format(current_format or meta.get("format") or meta.get("Format"), new_type)
+    meta["type"] = new_type
+    meta["format"] = carrier
+    meta["Format"] = carrier
+    return carrier
+
+
 def update_frbr_entity_type(
     entity_class: Any,
     entity_id: int,
@@ -955,6 +1009,10 @@ def update_frbr_entity_type(
 ) -> Any:
     """
     Update the type of a FRBR entity and adapt parent/child entities to maintain consistency.
+
+    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations are preserved
+    when they stay valid for the new type; only invalid or type-like format
+    values degrade to the category's ``unknown_*`` placeholder.
     """
     entity = db.session.get(entity_class, entity_id)
     if not entity:
@@ -962,13 +1020,14 @@ def update_frbr_entity_type(
 
     if hasattr(entity, "meta"):
         current_meta = dict(entity.meta or {})
-        current_meta["type"] = new_type
-        current_meta["format"] = new_type
-        current_meta["Format"] = new_type
+        carrier = _sync_type_meta(
+            current_meta,
+            entity.format if hasattr(entity, "format") else None,
+            new_type,
+        )
         entity.meta = current_meta
-
-    if hasattr(entity, "format"):
-        entity.format = new_type
+        if hasattr(entity, "format"):
+            entity.format = carrier
 
     if entity_class == Manifestation:
         if entity.expression:
@@ -990,12 +1049,10 @@ def update_frbr_entity_type(
         child_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == entity.id)).scalars().all()
         for m in child_manifs:
             m_meta = dict(m.meta or {})
-            m_meta["type"] = new_type
-            m_meta["format"] = new_type
-            m_meta["Format"] = new_type
+            carrier = _sync_type_meta(m_meta, m.format, new_type)
             m.meta = m_meta
             if hasattr(m, "format"):
-                m.format = new_type
+                m.format = carrier
     elif entity_class == Work:
         w_meta = dict(entity.meta or {})
         w_meta["type"] = new_type
@@ -1008,12 +1065,10 @@ def update_frbr_entity_type(
             sub_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == sub_expr.id)).scalars().all()
             for m in sub_manifs:
                 m_meta = dict(m.meta or {})
-                m_meta["type"] = new_type
-                m_meta["format"] = new_type
-                m_meta["Format"] = new_type
+                carrier = _sync_type_meta(m_meta, m.format, new_type)
                 m.meta = m_meta
                 if hasattr(m, "format"):
-                    m.format = new_type
+                    m.format = carrier
 
     db.session.commit()
     return entity

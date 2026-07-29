@@ -41,7 +41,7 @@ vi.mock("@/lib/api/hooks", () => ({
 describe("FrbrEditor Component", () => {
   const mockFrbrTree = {
     work: { id: 1, title: "Dune", meta: { original_language: "en" } },
-    expression: { id: 2, work_id: 1, content_type: "text", language: "en", meta: {} },
+    expression: { id: 2, work_id: 1, content_type: "text", language: "en", kind: "live_performance", meta: {} },
     manifestation: {
       id: 3,
       expression_id: 2,
@@ -178,6 +178,42 @@ describe("FrbrEditor Component", () => {
           meta: expect.objectContaining({
             type: "Movie",
           }),
+        })
+      );
+    });
+  });
+
+  it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
+    render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Expression (F2)"));
+    });
+
+    // Dropdown renders with all valid kinds plus the empty Studio / Default option
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Studio / Default" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Live Performance" })).toBeInTheDocument();
+    });
+
+    // Pre-selects the current value (kind: "live_performance")
+    const kindSelect = screen.getByDisplayValue("Live Performance");
+    expect(kindSelect).toBeInTheDocument();
+
+    // Clear kind back to studio/default and submit
+    fireEvent.change(kindSelect, { target: { value: "" } });
+
+    const saveButton = screen.getByRole("button", { name: /Save Expression/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(adminApi.updateFrbrEntity).toHaveBeenCalledWith(
+        "expression",
+        2,
+        expect.objectContaining({
+          kind: "",
         })
       );
     });

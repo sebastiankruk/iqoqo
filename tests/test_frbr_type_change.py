@@ -15,7 +15,7 @@
 #
 import pytest
 
-from app.core.frbr_service import update_frbr_entity_type
+from app.core.frbr_service import update_expression, update_frbr_entity_type
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, Work, db
 
 
@@ -106,3 +106,84 @@ def test_type_change_user_request_acceptance(client, app, admin_headers):
 
         expr = db.session.get(Expression, expr_id)
         assert expr.content_type == "Video Game"
+
+
+def _make_manif(app, content_type, carrier):
+    """Build a Work → Expression → Manifestation chain with a carrier format."""
+    with app.app_context():
+        work = Work(title="Carrier Work", meta={"type": content_type}, sort_title="Carrier Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type=content_type)
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(
+            expression_id=expr.id,
+            format=carrier,
+            meta={"type": content_type, "format": carrier, "Format": carrier},
+        )
+        db.session.add(manif)
+        db.session.commit()
+        return manif.id, expr.id
+
+
+def test_type_change_preserves_matching_carrier(app):
+    """A carrier valid for the new type's category survives the type change."""
+    manif_id, _ = _make_manif(app, "video", "bluray")
+
+    updated = update_frbr_entity_type(Manifestation, manif_id, "movie")
+
+    assert updated.meta["type"] == "movie"
+    assert updated.format == "bluray"
+    assert updated.meta["format"] == "bluray"
+    assert updated.meta["Format"] == "bluray"
+
+
+def test_type_change_degrades_cross_category_carrier(app):
+    """A carrier from the old category degrades to the new unknown_* placeholder."""
+    manif_id, _ = _make_manif(app, "text", "book")
+
+    updated = update_frbr_entity_type(Manifestation, manif_id, "music")
+
+    assert updated.meta["type"] == "music"
+    assert updated.format == "unknown_audio"
+    assert updated.meta["format"] == "unknown_audio"
+    assert updated.meta["Format"] == "unknown_audio"
+
+
+def test_type_change_degrades_type_like_format_junk(app):
+    """Type-like junk in format fields never survives as a fake carrier."""
+    manif_id, _ = _make_manif(app, "video", "video")
+
+    updated = update_frbr_entity_type(Manifestation, manif_id, "movie")
+
+    assert updated.meta["type"] == "movie"
+    assert updated.format == "unknown_video"
+    assert updated.meta["format"] == "unknown_video"
+
+
+def test_expression_type_change_preserves_child_carriers(app):
+    """Downward propagation keeps carriers on all child Manifestations."""
+    manif_id, expr_id = _make_manif(app, "video", "bluray")
+
+    update_frbr_entity_type(Expression, expr_id, "movie")
+
+    with app.app_context():
+        manif = db.session.get(Manifestation, manif_id)
+        assert manif.meta["type"] == "movie"
+        assert manif.format == "bluray"
+        assert manif.meta["format"] == "bluray"
+
+
+def test_update_expression_content_type_preserves_child_carriers(app):
+    """update_expression(content_type=…) also keeps valid carriers on children."""
+    manif_id, expr_id = _make_manif(app, "music", "vinyl")
+
+    update_expression(expr_id, content_type="music")
+
+    with app.app_context():
+        manif = db.session.get(Manifestation, manif_id)
+        assert manif.meta["type"] == "music"
+        assert manif.format == "vinyl"
+        assert manif.meta["format"] == "vinyl"
+        assert manif.meta["Format"] == "vinyl"

@@ -161,8 +161,9 @@
     "movie": "Film",
     "music": "Muzyka",
     "game": "Gra",
-    "seriesSuffix": "{label} (seria)",
-    "cdAudio": "CD / audio"
+    "audiobook": "Audiobook",
+    "concert": "Koncert",
+    "seriesSuffix": "{label} (seria)"
   },
   "Collection": {
     "loading": "Ładowanie kolekcji...",

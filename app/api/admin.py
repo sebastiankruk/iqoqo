@@ -479,6 +479,7 @@ def get_frbr_tree(manif_id):
                         "id": expr.id,
                         "content_type": expr.content_type,
                         "language": expr.language,
+                        "kind": expr.kind,
                         "meta": sanitize_meta(expr.meta),
                         "work_id": expr.work_id,
                     }
@@ -521,13 +522,17 @@ def update_expression(expr_id):
     """Update an Expression entity."""
     data = request.json or {}
     try:
+        kind = data.get("kind") or None  # map "" (and explicit null) to None = studio/default
         expr = frbr_service.update_expression(
             expr_id,
             work_id=data.get("work_id"),
             content_type=data.get("content_type"),
             language=data.get("language"),
             meta=parse_meta(data.get("meta")),
+            kind=kind,
         )
+        if "kind" in data and kind is None:
+            expr = frbr_service.clear_expression_kind(expr_id)
         return jsonify({"success": True, "data": {"id": expr.id}})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 404
