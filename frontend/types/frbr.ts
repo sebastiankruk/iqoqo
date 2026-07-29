@@ -38,8 +38,17 @@ export interface Expression {
   content_type: string;
   language: string;
   format?: string;
+  kind?: string;
   meta?: Record<string, unknown>;
 }
+
+/**
+ * Controlled vocabulary for {@link Expression.kind} (mirrors `app.db.core.EXPRESSION_KINDS`).
+ *
+ * `live_performance` — a concert / gig / live-recorded realization of a Work.
+ * An absent/empty kind means a studio (ordinary) realization.
+ */
+export const EXPRESSION_KINDS = ["live_performance"] as const;
 
 import type { MediaFormat, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
 export * from "./taxonomy";

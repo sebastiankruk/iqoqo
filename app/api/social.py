@@ -335,8 +335,8 @@ def _validate_escalation_input(data: dict | None) -> tuple[dict | None, str | No
         return None, "Missing JSON payload"
 
     request_type = str(data.get("request_type", "correction")).strip().lower()
-    if request_type not in {"correction", "deletion"}:
-        return None, f"Invalid request_type '{request_type}'. Must be 'correction' or 'deletion'"
+    if request_type not in {"correction", "deletion", "change_type"}:
+        return None, f"Invalid request_type '{request_type}'. Must be 'correction', 'deletion' or 'change_type'"
 
     note_raw = data.get("note")
     note = _sanitize_text(str(note_raw)) if note_raw is not None else None
