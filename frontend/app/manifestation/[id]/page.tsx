@@ -23,6 +23,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { Button } from "@/components/ui/button";
 import type { CatalogEntry } from "@/types/frbr";
 import { Badge } from "@/components/ui/badge";
@@ -88,37 +89,18 @@ export default function ManifestationPage() {
   const childCovers = parts.map(p => p.cover_url).filter(Boolean) as string[];
 
   const format =
-    (manifestation.meta?.format as string | undefined) ||
-    (manifestation.meta?.Format as string | undefined) ||
-    (manifestation.meta?.type as string | undefined) ||
-    manifestation.content_type ||
-    "book";
+    (manifestation.meta?.format as string | undefined) || (manifestation.meta?.Format as string | undefined);
 
-  const rawContentType = (
-    manifestation.content_type ||
-    (manifestation.meta?.type as string) ||
-    (manifestation.meta?.format as string) ||
-    (manifestation.meta?.Format as string) ||
-    format ||
-    ""
-  ).toLowerCase();
+  const badge = resolveMediaBadge(
+    manifestation.content_type ?? (manifestation.meta?.type as string | undefined),
+    manifestation.expression_kind,
+    format
+  );
+  const isAudio = badge.isAudio;
 
-  const isAudio =
-    rawContentType === "audiobook" ||
-    rawContentType === "music" ||
-    rawContentType === "audio" ||
-    format.toLowerCase() === "cd" ||
-    format.toLowerCase() === "vinyl" ||
-    format.toLowerCase() === "audiobook_cd";
-
-  // Resolve special series label
-  let baseLabel = t("book");
-  if (rawContentType === "movie" || rawContentType === "video" || rawContentType === "film") baseLabel = t("movie");
-  else if (rawContentType === "music" || rawContentType === "audio") baseLabel = t("music");
-  else if (["board_game", "board game", "puzzle", "game", "video game", "software"].includes(rawContentType))
-    baseLabel = t("game");
-
-  const badgeLabel = isSeries ? t("seriesSuffix", { label: baseLabel }) : isAudio ? t("cdAudio") : baseLabel;
+  // Compose "Type[ / Kind][ / Format]" (e.g. "Movie / Concert / Blu-ray")
+  const composedLabel = composeMediaBadgeLabel(badge, key => t(key));
+  const badgeLabel = isSeries ? t("seriesSuffix", { label: composedLabel }) : composedLabel;
 
   const isBoardGame = manifestation.content_type === "board_game";
   const schemaType = isBoardGame ? "Game" : "Book";

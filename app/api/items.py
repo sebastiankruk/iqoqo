@@ -618,6 +618,7 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
             "id": expression.id,
             "content_type": expression.content_type,
             "language": expression.language,
+            "kind": expression.kind,
         }
 
         if expression.work:
@@ -698,6 +699,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                 "id": expression.id,
                 "content_type": expression.content_type,
                 "language": expression.language,
+                "kind": expression.kind,
             }
 
             if expression.work:

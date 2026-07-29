@@ -124,6 +124,10 @@ export interface CatalogEntry extends Manifestation {
   wishlist_item_id?: number | null;
   /** Expression content_type (e.g. "text", "music", "movie", "audiobook", "board_game", "puzzle"). */
   content_type?: string | null;
+  /** Expression kind (e.g. "live_performance" for concerts), if set. */
+  expression_kind?: string | null;
+  /** Convenience flag: true when the Expression is a live performance. */
+  is_live_performance?: boolean;
 }
 
 /**
@@ -155,7 +159,7 @@ export interface Item {
   genres?: string[];
   publisher?: string;
   manifestation_meta?: Record<string, unknown>;
-  expression?: Pick<Expression, "id" | "content_type" | "language">;
+  expression?: Pick<Expression, "id" | "content_type" | "language" | "kind">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
 }
 

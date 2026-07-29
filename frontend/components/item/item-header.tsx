@@ -19,10 +19,29 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
 
 import { DiscoveryPivot } from "./discovery-pivot";
+
+/**
+ * Static English labels for badge segments (this header is not localized).
+ *
+ * @param key - The badge segment key (book / movie / music / audiobook / game / concert)
+ * @returns The English display label for the segment
+ */
+const ITEM_HEADER_LABELS = (key: string): string =>
+  (
+    ({
+      book: "Book",
+      movie: "Movie",
+      music: "Music",
+      audiobook: "Audiobook",
+      game: "Game",
+      concert: "Concert",
+    }) as Record<string, string>
+  )[key] ?? key;
 
 interface ItemHeaderProps {
   item: Item;
@@ -55,30 +74,22 @@ export function ItemHeader({ item }: ItemHeaderProps) {
     (meta["cover_url"] as string | undefined) ||
     "/file.svg";
 
-  const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined) || "book";
+  const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined);
   const isAudio = isAudioMedia(format);
   const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
   const publisher =
     item.publisher || (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
   const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
 
-  // Resolve special series label
-  const rawContentType = (
-    item.expression?.content_type ||
-    (item.manifestation_meta?.type as string) ||
-    (item.manifestation_meta?.format as string) ||
-    (meta["type"] as string) ||
-    (meta["format"] as string) ||
-    "text"
-  ).toLowerCase();
+  // Compose "Type[ / Kind][ / Format]" (e.g. "Music / Vinyl", "Movie / Concert / Blu-ray")
+  const badge = resolveMediaBadge(
+    item.expression?.content_type ?? (item.manifestation_meta?.type as string | undefined),
+    item.expression?.kind,
+    format
+  );
+  const composedLabel = composeMediaBadgeLabel(badge, ITEM_HEADER_LABELS);
 
-  let baseLabel = "Book";
-  if (rawContentType === "movie" || rawContentType === "video" || rawContentType === "film") baseLabel = "Movie";
-  else if (rawContentType === "music" || rawContentType === "audio") baseLabel = "Music";
-  else if (["board_game", "board game", "puzzle", "game", "video game", "software"].includes(rawContentType))
-    baseLabel = "Game";
-
-  const badgeLabel = isSeries ? `${baseLabel} (Series)` : isAudio ? "CD / Audio" : baseLabel;
+  const badgeLabel = isSeries ? `${composedLabel} (Series)` : composedLabel;
 
   return (
     <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
@@ -104,7 +115,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
           >
-            {isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
+            {badge.isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
             {badgeLabel}
           </Badge>
         </div>
