@@ -486,4 +486,3 @@ describe("EscalationQueue Component", () => {
     expect(screen.getByText("Change Type")).toBeInTheDocument();
   });
 });
-

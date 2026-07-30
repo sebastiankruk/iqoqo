@@ -15,7 +15,6 @@
 //
 import { MEDIA_HIERARCHY, FORMAT_ALIAS_TO_CATEGORY } from "@/types/taxonomy";
 
-
 /** Type segment keys for the media badge (resolved via i18n in components). */
 export type MediaBadgeType = "book" | "movie" | "music" | "audiobook" | "game";
 

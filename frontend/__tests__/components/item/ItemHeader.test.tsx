@@ -90,4 +90,3 @@ describe("ItemHeader", () => {
     expect(screen.queryByText("Book")).not.toBeInTheDocument();
   });
 });
-

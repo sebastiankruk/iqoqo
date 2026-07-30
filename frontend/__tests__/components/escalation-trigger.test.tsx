@@ -388,4 +388,3 @@ describe("EscalationTrigger Component", () => {
     );
   });
 });
-

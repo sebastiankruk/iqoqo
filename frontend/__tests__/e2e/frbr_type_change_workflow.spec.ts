@@ -104,7 +104,7 @@ test.describe("FRBR Type Change Workflow E2E", () => {
     });
 
     let submittedPayload: Record<string, unknown> | null = null;
-    await page.route("**/api/escalations", async route => {
+    await page.route("**/api/escalations/**", async route => {
       if (route.request().method() === "POST") {
         submittedPayload = route.request().postDataJSON();
         await route.fulfill({
@@ -148,11 +148,9 @@ test.describe("FRBR Type Change Workflow E2E", () => {
     // Assert change_type request payload was dispatched correctly
     expect(submittedPayload).not.toBeNull();
     expect(submittedPayload).toMatchObject({
-      data: {
-        request_type: "change_type",
-        field_name: "type",
-        suggested_value: "movie",
-      },
+      request_type: "change_type",
+      field_name: "type",
+      suggested_value: "movie",
     });
   });
 
@@ -173,13 +171,7 @@ test.describe("FRBR Type Change Workflow E2E", () => {
             email: "custodian@iqoqo.local",
             display_name: "Dr. Custodian",
             roles: ["custodian"],
-            permissions: [
-              "read:metadata",
-              "write:metadata",
-              "escalate:resolve",
-              "delete:manifestation",
-              "delete:item",
-            ],
+            permissions: ["read:metadata", "write:metadata", "escalate:resolve", "delete:manifestation", "delete:item"],
           },
         }),
       });
@@ -226,8 +218,8 @@ test.describe("FRBR Type Change Workflow E2E", () => {
     });
 
     let resolvePayload: Record<string, unknown> | null = null;
-    await page.route("**/api/escalations/50/resolve", async route => {
-      if (route.request().method() === "POST") {
+    await page.route("**/api/escalations/50**", async route => {
+      if (route.request().method() === "PATCH") {
         resolvePayload = route.request().postDataJSON();
         await route.fulfill({
           status: 200,
