@@ -70,6 +70,10 @@ describe("FrbrEditor Component", () => {
   it("loads and renders the FRBR tree tabs", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("combobox"));
+
     await waitFor(() => {
       expect(screen.getByText("Work (F1)")).toBeInTheDocument();
       expect(screen.getByText("Expression (F2)")).toBeInTheDocument();
@@ -90,6 +94,9 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Work tab and displays correct data", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("combobox"));
     await waitFor(() => expect(screen.getByText("Work (F1)")).toBeInTheDocument());
 
     await act(async () => {
@@ -104,6 +111,9 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Expression tab", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("combobox"));
     await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
 
     await act(async () => {
@@ -119,6 +129,9 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Items tab", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("combobox"));
     await waitFor(() => expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument());
 
     await act(async () => {
@@ -139,7 +152,7 @@ describe("FrbrEditor Component", () => {
   it("submits updated manifestation data to the API", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
     const pubInput = screen.getByDisplayValue("Ace Books");
     fireEvent.change(pubInput, { target: { value: "Penguin" } });
@@ -162,7 +175,7 @@ describe("FrbrEditor Component", () => {
   it("submits updated manifestation type to the API", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
     const typeSelect = screen.getByDisplayValue("Book");
     fireEvent.change(typeSelect, { target: { value: "Movie" } });
@@ -186,6 +199,9 @@ describe("FrbrEditor Component", () => {
   it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("combobox"));
     await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
 
     await act(async () => {
@@ -233,7 +249,7 @@ describe("FrbrEditor Component", () => {
 
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
     const typeSelect = screen.getByDisplayValue("Book");
     fireEvent.change(typeSelect, { target: { value: "Movie" } });
