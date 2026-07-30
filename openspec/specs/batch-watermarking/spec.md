@@ -1,8 +1,11 @@
 # batch-watermarking Specification
 
 ## Purpose
+
 Specify batch cover watermarking execution, corner overlay application, and failure tracking circuit breakers.
+
 ## Requirements
+
 ### Requirement: Batch watermarking runs as a standalone CLI outside the request path
 
 The system SHALL provide a standalone batch watermarking entrypoint built on `app/utils/images.py` primitives, invocable from the command line (e.g. `python -m app.utils.images watermark-batch`), which processes existing stored cover art without running inside the web request lifecycle.
@@ -66,4 +69,3 @@ The batch watermarking documentation SHALL explicitly cover its integration with
 
 - **WHEN** an operator needs to apply watermarks to generated AI covers
 - **THEN** the documentation (e.g., in `docs/AI_COVERS.md` or `README.md`) clearly explains the appropriate CLI flags to use
-

@@ -1,8 +1,11 @@
 # Escalation Queue UI
 
 ## Purpose
+
 Specify custodian request escalation queues, permission request flows, and IDOR mitigation entity detail displays.
+
 ## Requirements
+
 ### Requirement: Escalation Queue Admin UI
 
 The system SHALL provide a frontend interface within the admin content page, labeled "User Requests", that allows users with `escalate:resolve` permission to view and manage pending escalation requests. To prevent IDOR (Insecure Direct Object Reference) manipulation confusion, the queue MUST clearly display all pending requests with requester name, explicit target entity details (including entity UUID and title/name), a clickable target entity link, field name, suggested value, note, and creation timestamp. For pending requests, the UI SHALL present all resolution actions ("Accept" / "Accept & Delete", "Reject", "Mark as Duplicate") as direct inline buttons on the card. Overflow dropdown menus MUST NOT be used for queue actions — all actions shall be directly visible to minimize interaction cost. The system SHALL also provide an expandable "Processed Requests" section, hidden by default, that lists previously resolved requests.
@@ -55,4 +58,3 @@ The system SHALL support fetching resolved escalation requests via the existing 
 
 - **WHEN** an authenticated user without `escalate:resolve` permission sends a GET to `/api/escalations/queue?status=accepted`
 - **THEN** the system SHALL return HTTP 403 with error `"Forbidden"`.
-

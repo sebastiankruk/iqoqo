@@ -1,8 +1,11 @@
 # ai-cover-cli-docs Specification
 
 ## Purpose
-TBD - created by archiving change release-0713-ux-docs-polish. Update Purpose after archive.
+
+Specify command-line interface options, circuit breakers, and operations for generating AI cover art and applying watermarks.
+
 ## Requirements
+
 ### Requirement: AI Cover Generation Documentation
 
 The system SHALL include comprehensive documentation for the AI Cover generation CLI tools, specifically `scripts/generate_ai_covers.py`. The documentation MUST detail all available operational flags including `--batch-all-unwatermarked`, `--dry-run`, `--watermark-only`, and `--force-retry`. Documentation SHALL be available in a dedicated `docs/AI_COVERS.md` file, summarized in `README.md`, and reflected in relevant `Makefile` targets.
@@ -16,4 +19,3 @@ The system SHALL include comprehensive documentation for the AI Cover generation
 
 - **WHEN** a developer uses `make help` or looks at the `Makefile`
 - **THEN** they see documented targets for AI cover generation that use the underlying script flags
-

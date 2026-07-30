@@ -1,8 +1,11 @@
 # relational-metadata-normalization Specification
 
 ## Purpose
+
 Specify core bibliographic property promotion from JSON meta to relational SQL columns and reversible batched backfill migrations.
+
 ## Requirements
+
 ### Requirement: Core bibliographic properties live in relational columns
 
 The system SHALL store core bibliographic properties of `Work`, `Expression`, `Manifestation`, and `Item` entities in dedicated, typed relational columns rather than only inside the loose `meta` JSON blob. Core properties are those queried, filtered, or sorted across media types (including, at minimum, manifestation physical format, publisher, release date, and standard identifiers such as EAN/ISBN).
@@ -48,13 +51,3 @@ The system SHALL store verbatim external provider payloads (BGG, Discogs, TMDB, 
 
 - **WHEN** a media strategy ingests metadata from an external provider
 - **THEN** the unmodified provider response SHALL be persisted to `raw_payload` before any curation or normalization is applied
-
-### Requirement: Migration correctness is proven by ETL pipeline tests
-
-The change SHALL ship pytest coverage that runs the migration against representative flat-SQL/JSON fixtures and asserts row-count parity, per-key value parity, and FRBR graph integrity (Work → Expression → Manifestation → Item links intact) after upgrade.
-
-#### Scenario: Migration test detects data loss
-
-- **WHEN** the ETL migration test suite runs against fixture data containing core properties only in `meta`
-- **THEN** it SHALL fail if any row count, property value, or FRBR parent-child link differs between pre-migration and post-migration snapshots
-

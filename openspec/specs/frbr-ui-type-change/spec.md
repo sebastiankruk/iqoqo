@@ -3,7 +3,9 @@
 ## Purpose
 
 Define FRBR entity editing UI layouts, level selection controls, searchable manifestation type comboboxes, and permission escalation flows.
+
 ## Requirements
+
 ### Requirement: Frontend Type Selector
 
 The system SHALL display a type selection input in the FRBR entity edit form (e.g., Manifestation editor). To prevent cognitive overload, the type selection input MUST use a searchable Combobox component (e.g., Shadcn `Command`) instead of a native `<select>` dropdown, allowing keyboard-first filtering and searchability of type options.
@@ -40,4 +42,3 @@ The system SHALL consolidate the FRBR level tabs (Work, Expression, Manifestatio
 
 - **WHEN** a user opens the FRBR editor
 - **THEN** they see a `Select` dropdown in the header to switch between Work, Expression, Manifestation, and Item views, keeping the header UI minimal
-
