@@ -38,6 +38,18 @@ vi.mock("@/lib/api/hooks", () => ({
   })),
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: ({ value, onValueChange, children }: any) => (
+    <select value={value} onChange={e => onValueChange(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: ({ children }: any) => children,
+  SelectValue: () => null,
+  SelectContent: ({ children }: any) => children,
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+}));
+
 describe("FrbrEditor Component", () => {
   const mockFrbrTree = {
     work: { id: 1, title: "Dune", meta: { original_language: "en" } },
@@ -49,34 +61,57 @@ describe("FrbrEditor Component", () => {
       upc: null,
       ean: null,
       publisher: "Ace Books",
-      publication_date: "1965-01-01",
+      publication_date: "1965-08-01",
+      format: null,
+      label: null,
+      barcode: null,
+      catalog_number: null,
       meta: { pages: "412" },
     },
-    items: [{ id: 10, status: "available", condition: "Like New", meta: {}, owner_id: "user-1" }],
+    items: [
+      { id: 10, manifestation_id: 3, condition: "like_new", status: "available", local_barcode: null, inventory_tag: null },
+    ],
   };
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(adminApi.getFrbrTree).mockResolvedValue(mockFrbrTree);
-    vi.mocked(adminApi.updateFrbrEntity).mockResolvedValue({ id: 1 });
+    vi.mocked(adminApi.getFrbrTree).mockResolvedValue({
+      data: mockFrbrTree as any,
+    });
+    vi.mocked(adminApi.updateFrbrEntity).mockResolvedValue({
+      data: { success: true },
+    });
   });
 
   it("renders loading state initially", () => {
     vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
     render(<FrbrEditor manifestationId={3} />);
-    expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
+    expect(screen.getByTestId("frbr-tree-skeleton")).toBeInTheDocument();
   });
 
-  const switchLevel = (container: HTMLElement, level: string) => {
-    const hiddenSelect = container.querySelector("select") as HTMLSelectElement;
-    fireEvent.change(hiddenSelect, { target: { value: level } });
-  };
+  it("renders error state on API failure", async () => {
+    vi.mocked(adminApi.getFrbrTree).mockRejectedValueOnce(new Error("Failed to load"));
+    render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Failed to load")).toBeInTheDocument();
+    });
+  });
+
+  it("does not render FRBR tree tabs while loading", () => {
+    vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
+    render(<FrbrEditor manifestationId={3} />);
+    expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
+  });
 
   it("loads and renders the FRBR tree level selector", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument();
+      expect(screen.getByText("Work (F1)")).toBeInTheDocument();
+      expect(screen.getByText("Expression (F2)")).toBeInTheDocument();
+      expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument();
+      expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument();
     });
   });
 
@@ -92,9 +127,10 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Work tab and displays correct data", async () => {
     const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
-    switchLevel(container, "work");
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "work" } });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Dune")).toBeInTheDocument();
@@ -104,9 +140,10 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Expression tab", async () => {
     const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
-    switchLevel(container, "expression");
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "expression" } });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Text (Book/Comic/Manga/Magazine)")).toBeInTheDocument();
@@ -117,9 +154,10 @@ describe("FrbrEditor Component", () => {
   it("allows switching to the Items tab", async () => {
     const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
-    switchLevel(container, "items");
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "items" } });
 
     await waitFor(() => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();
