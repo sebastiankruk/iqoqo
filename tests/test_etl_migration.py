@@ -202,8 +202,15 @@ class TestDriftVerificationHealthCheck:
             assert drift["format_drift"] == 1
             assert drift["total_drift"] >= 1
 
-    def test_health_check_endpoint_drift_param(self, client):
-        resp = client.get("/api/health?check_drift=1")
+    def test_health_check_endpoint_drift_param(self, client, monkeypatch):
+        # Unauthenticated request fails with 401
+        monkeypatch.setenv("DEPLOY_TOKEN", "secret-test-token")
+        resp_unauth = client.get("/api/health?check_drift=1")
+        assert resp_unauth.status_code == 401
+
+        # Authenticated request succeeds with 200
+        headers = {"X-Deploy-Token": "secret-test-token"}
+        resp = client.get("/api/health?check_drift=1", headers=headers)
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "ok"

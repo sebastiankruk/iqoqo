@@ -302,13 +302,35 @@ class DataManager:
         ``func.count()`` with JSONB operators to prevent OOM exhaustion
         on large catalogs.
         """
+        is_pg = db.engine.dialect.name == "postgresql"
+
+        if is_pg:
+            format_cond = [
+                Manifestation.meta.has_key("format"),  # noqa: W601
+                Manifestation.format != Manifestation.meta["format"].as_string(),
+            ]
+            label_cond = [
+                Manifestation.meta.has_key("label"),  # noqa: W601
+                Manifestation.label != Manifestation.meta["label"].as_string(),
+            ]
+            barcode_cond = [
+                Manifestation.meta.has_key("barcode"),  # noqa: W601
+                Manifestation.barcode != Manifestation.meta["barcode"].as_string(),
+            ]
+        else:
+            fmt_ext = func.json_extract(Manifestation.meta, "$.format")
+            format_cond = [fmt_ext.is_not(None), Manifestation.format != fmt_ext]
+            lbl_ext = func.json_extract(Manifestation.meta, "$.label")
+            label_cond = [lbl_ext.is_not(None), Manifestation.label != lbl_ext]
+            bar_ext = func.json_extract(Manifestation.meta, "$.barcode")
+            barcode_cond = [bar_ext.is_not(None), Manifestation.barcode != bar_ext]
+
         # Format Drift
         format_drift = (
             db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
             .filter(
                 Manifestation.meta.is_not(None),
-                Manifestation.meta.has_key("format"),  # noqa: W601 — SQLAlchemy JSONB operator
-                Manifestation.format != Manifestation.meta["format"].as_string(),
+                *format_cond,
             )
             .scalar()
             or 0
@@ -319,8 +341,7 @@ class DataManager:
             db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
             .filter(
                 Manifestation.meta.is_not(None),
-                Manifestation.meta.has_key("label"),  # noqa: W601 — SQLAlchemy JSONB operator
-                Manifestation.label != Manifestation.meta["label"].as_string(),
+                *label_cond,
             )
             .scalar()
             or 0
@@ -331,8 +352,7 @@ class DataManager:
             db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
             .filter(
                 Manifestation.meta.is_not(None),
-                Manifestation.meta.has_key("barcode"),  # noqa: W601 — SQLAlchemy JSONB operator
-                Manifestation.barcode != Manifestation.meta["barcode"].as_string(),
+                *barcode_cond,
             )
             .scalar()
             or 0

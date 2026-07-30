@@ -1046,7 +1046,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
-        <Select value={activeTab} onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}>
+        <Select
+          value={activeTab}
+          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+        >
           <SelectTrigger className="w-[200px] bg-background">
             <SelectValue placeholder="Select level" />
           </SelectTrigger>

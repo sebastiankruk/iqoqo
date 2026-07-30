@@ -488,10 +488,16 @@ export function EscalationQueue() {
                       <span className="font-semibold text-muted-foreground">Target Entity UUID / ID:</span>{" "}
                       {getTargetLabel(esc)}
                     </div>
-                    {((esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).target_title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name) && (
+                    {((esc as EscalationRequest & { target_title?: string; title?: string; name?: string })
+                      .target_title ||
+                      (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title ||
+                      (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name) && (
                       <div>
                         <span className="font-semibold text-muted-foreground">Target Entity Title/Name:</span>{" "}
-                        {(esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).target_title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name}
+                        {(esc as EscalationRequest & { target_title?: string; title?: string; name?: string })
+                          .target_title ||
+                          (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title ||
+                          (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name}
                       </div>
                     )}
                     <div>
