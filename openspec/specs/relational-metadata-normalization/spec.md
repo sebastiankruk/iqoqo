@@ -1,7 +1,7 @@
 # relational-metadata-normalization Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Specify core bibliographic property promotion from JSON meta to relational SQL columns and reversible batched backfill migrations.
 ## Requirements
 ### Requirement: Core bibliographic properties live in relational columns
 

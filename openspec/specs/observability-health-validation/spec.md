@@ -1,8 +1,7 @@
 # observability-health-validation Specification
 
 ## Purpose
-
-TBD - created by archiving change observability-docs-health-env-validation. Update Purpose after archive.
+Specify system health check endpoints, deploy token authentication for analytical queries, and SQL-level drift verification.
 
 ## Requirements
 

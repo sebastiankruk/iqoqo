@@ -1,7 +1,7 @@
 # hifi-audio-format-support Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Specify high-fidelity audio format classification, BluRay audio aliases, and music strategy carrier normalization.
 ## Requirements
 ### Requirement: BluRay HiFi Pure Audio is a canonical music format
 

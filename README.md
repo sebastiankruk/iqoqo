@@ -77,6 +77,12 @@ iqoqo provides comprehensive tools for managing your library's data and media as
 - **Artefact Management:** Backup or transfer cover art and generated images. See **[Importing Covers](docs/COVERS_SETUP.md#6-importing-covers-to-a-remote-iqoqo-instance)**.
 - **Seed Data:** Initialize your library with example books. See **[Quick Start Data](docs/INSTALL.md#quick-start-docker)**.
 
+## AI Cover Generation
+
+Automate the creation of missing covers using local or cloud LLMs (Ollama, OpenAI, Gemini) and apply watermarks to indicate AI origin. 
+
+See the **[AI Cover Generation Guide](docs/AI_COVERS.md)** for details on configuration, circuit breakers, and batch processing.
+
 ## 🎯 Roadmap
 
 - [x] Multi-user authentication and authorization

@@ -27,7 +27,7 @@ import {
   type FrbrSearchResult,
 } from "@/lib/api/admin";
 import { toast } from "sonner";
-import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2, Check } from "lucide-react";
 import Link from "next/link";
 import { useWorkParts } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
@@ -35,6 +35,9 @@ import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 interface MetaField {
   key: string;
@@ -631,6 +634,34 @@ function ManifestationEditor({
   const [type, setType] = useState(initialType);
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  const MANIFESTATION_TYPES = [
+    "Book",
+    "Comic Book",
+    "Manga",
+    "Board Game",
+    "Roleplaying Game",
+    "Card Game",
+    "Miniature Game",
+    "Movie",
+    "TV Show",
+    "Anime",
+    "Video Game",
+    "Music",
+    "Audiobook",
+    "Podcast",
+    "Software",
+    "Magazine",
+    "Journal",
+    "Newspaper",
+    "Zine",
+    "Artwork",
+    "Model",
+    "Figure",
+    "Merchandise",
+    "Other",
+  ];
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -654,37 +685,45 @@ function ManifestationEditor({
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label className="text-sm font-medium">Type</label>
-          <select
-            name="type"
-            value={type}
-            onChange={e => setType(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="Book">Book</option>
-            <option value="Comic Book">Comic Book</option>
-            <option value="Manga">Manga</option>
-            <option value="Board Game">Board Game</option>
-            <option value="Roleplaying Game">Roleplaying Game</option>
-            <option value="Card Game">Card Game</option>
-            <option value="Miniature Game">Miniature Game</option>
-            <option value="Movie">Movie</option>
-            <option value="TV Show">TV Show</option>
-            <option value="Anime">Anime</option>
-            <option value="Video Game">Video Game</option>
-            <option value="Music">Music</option>
-            <option value="Audiobook">Audiobook</option>
-            <option value="Podcast">Podcast</option>
-            <option value="Software">Software</option>
-            <option value="Magazine">Magazine</option>
-            <option value="Journal">Journal</option>
-            <option value="Newspaper">Newspaper</option>
-            <option value="Zine">Zine</option>
-            <option value="Artwork">Artwork</option>
-            <option value="Model">Model</option>
-            <option value="Figure">Figure</option>
-            <option value="Merchandise">Merchandise</option>
-            <option value="Other">Other</option>
-          </select>
+          <input type="hidden" name="type" value={type} />
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={popoverOpen}
+                className="flex h-10 w-full justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background font-normal"
+              >
+                {type || "Select type..."}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search type..." />
+                <CommandList>
+                  <CommandEmpty>No type found.</CommandEmpty>
+                  <CommandGroup>
+                    {MANIFESTATION_TYPES.map(t => (
+                      <CommandItem
+                        key={t}
+                        value={t}
+                        onSelect={currentValue => {
+                          // command sets value to lowercase for internal processing,
+                          // so we use original item t to retain case
+                          setType(t);
+                          setPopoverOpen(false);
+                        }}
+                      >
+                        <Check className={`mr-2 h-4 w-4 ${type === t ? "opacity-100" : "opacity-0"}`} />
+                        {t}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {isBookLike && (
@@ -1038,55 +1077,20 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b justify-between items-center">
-        <div className="flex">
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "work"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("work")}
-          >
-            Work (F1)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "expression"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("expression")}
-          >
-            Expression (F2)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "manifestation"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("manifestation")}
-          >
-            Manifestation (F3)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "items"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("items")}
-          >
-            Items (F5)
-          </button>
-        </div>
+      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
+        <Select value={activeTab} onValueChange={(value: any) => setActiveTab(value)}>
+          <SelectTrigger className="w-[200px] bg-background">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="work">Work (F1)</SelectItem>
+            <SelectItem value="expression">Expression (F2)</SelectItem>
+            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+            <SelectItem value="items">Items (F5)</SelectItem>
+          </SelectContent>
+        </Select>
         {onClose && (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="px-2">
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </Button>

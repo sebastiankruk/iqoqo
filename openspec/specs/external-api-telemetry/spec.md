@@ -1,8 +1,7 @@
 # external-api-telemetry Specification
 
 ## Purpose
-
-TBD - created by archiving change capture-allegro-user-agent-telemetry. Update Purpose after archive.
+Specify outbound HTTP request header logging, sensitive token redaction, and user agent telemetry standards.
 ## Requirements
 ### Requirement: Capture Outbound HTTP Headers in Telemetry
 

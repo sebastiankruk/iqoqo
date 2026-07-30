@@ -535,3 +535,13 @@ fix-physical-kinds: .venv/bin/activate
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/fix_physical_kinds.py $(ARGS); \
 	fi
+
+## AI Cover Automation
+generate-covers: ## Run AI cover generation batch for unwatermarked items
+	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked
+
+generate-covers-dry: ## Dry-run AI cover generation batch
+	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --dry-run
+
+watermark-covers: ## Apply watermarks to existing AI covers without regenerating
+	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --watermark-only

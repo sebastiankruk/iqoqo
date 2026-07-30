@@ -1,7 +1,7 @@
 # search-special-character-handling Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Define special character escaping, apostrophe canonicalization, and full-text search query parsing stability.
 ## Requirements
 ### Requirement: Apostrophe variants are canonicalized at indexing time
 

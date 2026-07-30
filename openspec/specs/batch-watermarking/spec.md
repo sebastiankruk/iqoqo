@@ -1,7 +1,7 @@
 # batch-watermarking Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Specify batch cover watermarking execution, corner overlay application, and failure tracking circuit breakers.
 ## Requirements
 ### Requirement: Batch watermarking runs as a standalone CLI outside the request path
 

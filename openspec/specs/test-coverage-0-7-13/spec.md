@@ -1,8 +1,7 @@
 # test-coverage-0-7-13 Specification
 
 ## Purpose
-
-TBD - created by archiving change test-coverage-0-7-13. Update Purpose after archive.
+Specify unit and integration test coverage for v0.7.13 features, escalation components, and format fallbacks.
 
 ## Requirements
 
