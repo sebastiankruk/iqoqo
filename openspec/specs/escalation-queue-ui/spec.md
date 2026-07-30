@@ -3,15 +3,14 @@
 ## Purpose
 Specify custodian request escalation queues, permission request flows, and IDOR mitigation entity detail displays.
 ## Requirements
-
 ### Requirement: Escalation Queue Admin UI
 
-The system SHALL provide a frontend interface within the admin content page, labeled "User Requests", that allows users with `escalate:resolve` permission to view and manage pending escalation requests. The queue MUST display all pending requests with requester name, clickable target entity link, field name, suggested value, note, and creation timestamp. For pending requests, the UI SHALL present all resolution actions ("Accept" / "Accept & Delete", "Reject", "Mark as Duplicate") as direct inline buttons on the card. Overflow dropdown menus MUST NOT be used for queue actions — all actions shall be directly visible to minimize interaction cost. The system SHALL also provide an expandable "Processed Requests" section, hidden by default, that lists previously resolved requests.
+The system SHALL provide a frontend interface within the admin content page, labeled "User Requests", that allows users with `escalate:resolve` permission to view and manage pending escalation requests. To prevent IDOR (Insecure Direct Object Reference) manipulation confusion, the queue MUST clearly display all pending requests with requester name, explicit target entity details (including entity UUID and title/name), a clickable target entity link, field name, suggested value, note, and creation timestamp. For pending requests, the UI SHALL present all resolution actions ("Accept" / "Accept & Delete", "Reject", "Mark as Duplicate") as direct inline buttons on the card. Overflow dropdown menus MUST NOT be used for queue actions — all actions shall be directly visible to minimize interaction cost. The system SHALL also provide an expandable "Processed Requests" section, hidden by default, that lists previously resolved requests.
 
 #### Scenario: Custodian views escalation queue in admin panel
 
 - **WHEN** an authenticated user with `escalate:resolve` permission navigates to the admin content page and selects the "User Requests" tab
-- **THEN** the system SHALL render a list of all pending escalation requests ordered by oldest first, showing requester display name, a clickable link to the target manifestation or item page, field name, suggested value, optional note, and creation timestamp.
+- **THEN** the system SHALL render a list of all pending escalation requests ordered by oldest first, showing requester display name, clear target entity details (UUID and title/name) alongside a clickable link to the target manifestation or item page, field name, suggested value, optional note, and creation timestamp.
 
 #### Scenario: Custodian clicks on target entity link in queue
 
@@ -56,3 +55,4 @@ The system SHALL support fetching resolved escalation requests via the existing 
 
 - **WHEN** an authenticated user without `escalate:resolve` permission sends a GET to `/api/escalations/queue?status=accepted`
 - **THEN** the system SHALL return HTTP 403 with error `"Forbidden"`.
+

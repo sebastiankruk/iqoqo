@@ -19,12 +19,12 @@ The system SHALL store core bibliographic properties of `Work`, `Expression`, `M
 
 ### Requirement: Reversible batched ETL migration backfills normalized columns
 
-The system SHALL provide a single Alembic migration revision that creates the new relational columns and indexes and backfills them from existing `meta` JSON data using server-side batched updates. The migration SHALL be reversible (downgrade drops the new columns without touching `meta`) and SHALL leave `meta` intact as a fallback read source.
+The system SHALL provide a single Alembic migration revision that creates the new relational columns and indexes and backfills them from existing `meta` JSON data. The upgrade SHALL execute updates in distinct chunks (e.g. using `LIMIT` and `OFFSET`) to avoid monolithic table locking on large Postgres databases, preventing deployment timeouts. The migration SHALL be reversible (downgrade drops the new columns without touching `meta`) and SHALL leave `meta` intact as a fallback read source.
 
 #### Scenario: Upgrade backfills existing rows
 
 - **WHEN** the migration upgrade runs against a database containing rows with core properties only in `meta`
-- **THEN** every such row SHALL have its core properties copied into the new relational columns with zero data loss
+- **THEN** every such row SHALL have its core properties copied into the new relational columns in small batches with zero data loss, without acquiring a monolithic table lock
 
 #### Scenario: Downgrade preserves meta data
 
@@ -57,3 +57,4 @@ The change SHALL ship pytest coverage that runs the migration against representa
 
 - **WHEN** the ETL migration test suite runs against fixture data containing core properties only in `meta`
 - **THEN** it SHALL fail if any row count, property value, or FRBR parent-child link differs between pre-migration and post-migration snapshots
+
