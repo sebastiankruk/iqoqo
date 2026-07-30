@@ -75,18 +75,16 @@ describe("FrbrEditor Component", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(adminApi.getFrbrTree).mockResolvedValue({
-      data: mockFrbrTree as any,
-    });
+    vi.mocked(adminApi.getFrbrTree).mockResolvedValue(mockFrbrTree as any);
     vi.mocked(adminApi.updateFrbrEntity).mockResolvedValue({
       data: { success: true },
-    });
+    } as any);
   });
 
   it("renders loading state initially", () => {
     vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
-    render(<FrbrEditor manifestationId={3} />);
-    expect(screen.getByTestId("frbr-tree-skeleton")).toBeInTheDocument();
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
   it("renders error state on API failure", async () => {
@@ -163,7 +161,7 @@ describe("FrbrEditor Component", () => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText(/Like New/));
+    fireEvent.click(screen.getByText(/like_new/i));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("available")).toBeInTheDocument();
@@ -222,7 +220,8 @@ describe("FrbrEditor Component", () => {
 
     await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
 
-    switchLevel(container, "expression");
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "expression" } });
 
     // Dropdown renders with all valid kinds plus the empty Studio / Default option
     await waitFor(() => {
