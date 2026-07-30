@@ -464,4 +464,26 @@ describe("EscalationQueue Component", () => {
     const link = screen.getByText(/Manifestation #42/i);
     expect(link.closest("a")).toHaveAttribute("href", "/admin/content?tab=metadata&manifestationId=42");
   });
+
+  it("renders RequestTypeBadge with 'Change Type' when request_type is change_type", () => {
+    const changeTypeRequest: EscalationRequest = {
+      ...mockPendingRequest,
+      id: 15,
+      request_type: "change_type",
+      field_name: "type",
+      suggested_value: "movie",
+    };
+
+    vi.mocked(escalationHooks.useEscalationQueue).mockReturnValue({
+      data: [changeTypeRequest],
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof escalationHooks.useEscalationQueue>);
+
+    render(<EscalationQueue />);
+
+    expect(screen.getByText("Change Type")).toBeInTheDocument();
+  });
 });
+

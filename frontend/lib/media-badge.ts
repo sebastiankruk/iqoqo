@@ -13,7 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { MEDIA_HIERARCHY } from "@/types/taxonomy";
+import { MEDIA_HIERARCHY, FORMAT_ALIAS_TO_CATEGORY } from "@/types/taxonomy";
+
 
 /** Type segment keys for the media badge (resolved via i18n in components). */
 export type MediaBadgeType = "book" | "movie" | "music" | "audiobook" | "game";
@@ -137,9 +138,10 @@ export function resolveMediaBadge(
   let typeKey: MediaBadgeType;
   if (ct) {
     typeKey = toTypeKey(ct);
-  } else if (f && FORMAT_CATEGORY[f]) {
-    // No content type — infer the type segment from the carrier's category.
-    typeKey = toTypeKey(FORMAT_CATEGORY[f]);
+  } else if (f && (FORMAT_CATEGORY[f] || FORMAT_ALIAS_TO_CATEGORY[f] || TYPE_LIKE_VALUES.has(f))) {
+    // No content type — infer the type segment from the carrier's category, alias or type-like value.
+    const resolvedCat = FORMAT_CATEGORY[f] || FORMAT_ALIAS_TO_CATEGORY[f] || f;
+    typeKey = toTypeKey(resolvedCat);
   } else {
     typeKey = "book";
   }

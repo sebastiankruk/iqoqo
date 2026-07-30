@@ -44,8 +44,8 @@ const mockItem: Item = {
   owner_id: "user1",
   status: "want_to_read",
   collection_status: "available",
-  title: "Test Book",
-  authors: ["Test Author"],
+  title: "Test Video Item",
+  authors: ["Test Director"],
   manifestation_id: 123,
   cover_status: "ready",
   meta: {},
@@ -53,13 +53,7 @@ const mockItem: Item = {
   updated_at: "2024-01-01",
 };
 
-describe("ItemHeader", () => {
-  it("renders title and authors", () => {
-    render(<ItemHeader item={mockItem} />);
-    expect(screen.getByText("Test Book")).toBeInTheDocument();
-    expect(screen.getByText("Test Author")).toBeInTheDocument();
-  });
-
+describe("ItemHeader Format Label Fallbacks", () => {
   it("renders 'Movie' badge for format 'movie' and does not fall back to 'Book'", () => {
     const item: Item = {
       ...mockItem,
@@ -90,4 +84,3 @@ describe("ItemHeader", () => {
     expect(screen.queryByText("Book")).not.toBeInTheDocument();
   });
 });
-

@@ -343,4 +343,49 @@ describe("EscalationTrigger Component", () => {
     // Should show the dialog button
     expect(screen.getByText("Ask custodians for help")).toBeInTheDocument();
   });
+
+  it("triggers change_type escalation payload when Entity Type is selected", async () => {
+    const user = userEvent.setup();
+    const mockMutate = vi.fn();
+
+    mockUseCreateEscalation.mockReturnValue({
+      mutate: mockMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof useCreateEscalation>);
+
+    mockUseProfile.mockReturnValue({
+      data: { id: "u1", email: "user@iqoqo.local", permissions: ["escalate:request"] },
+    } as unknown as ReturnType<typeof useProfile>);
+
+    mockUseMyEscalations.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useMyEscalations>);
+
+    render(<EscalationTrigger level="manifestation" targetId={123} />);
+
+    await user.click(screen.getByText("Ask custodians for help"));
+
+    const fieldSelect = screen.getByLabelText("Field to correct");
+    await user.selectOptions(fieldSelect, "type");
+
+    const suggestedInput = screen.getByPlaceholderText("Correct value");
+    await user.type(suggestedInput, "movie");
+
+    await user.click(screen.getByText("Submit Request"));
+
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: "manifestation",
+        targetId: 123,
+        data: expect.objectContaining({
+          request_type: "change_type",
+          field_name: "type",
+          suggested_value: "movie",
+        }),
+      }),
+      expect.anything()
+    );
+  });
 });
+
