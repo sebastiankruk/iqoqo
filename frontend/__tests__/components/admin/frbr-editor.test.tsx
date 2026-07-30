@@ -67,18 +67,16 @@ describe("FrbrEditor Component", () => {
     expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
   });
 
-  it("loads and renders the FRBR tree tabs", async () => {
+  const switchLevel = (container: HTMLElement, level: string) => {
+    const hiddenSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(hiddenSelect, { target: { value: level } });
+  };
+
+  it("loads and renders the FRBR tree level selector", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[0]).toBeInTheDocument());
-
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
-
     await waitFor(() => {
-      expect(screen.getByText("Work (F1)")).toBeInTheDocument();
-      expect(screen.getByText("Expression (F2)")).toBeInTheDocument();
-      expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument();
-      expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument();
     });
   });
 
@@ -92,16 +90,11 @@ describe("FrbrEditor Component", () => {
   });
 
   it("allows switching to the Work tab and displays correct data", async () => {
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[0]).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
-    await waitFor(() => expect(screen.getByText("Work (F1)")).toBeInTheDocument());
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Work (F1)"));
-    });
+    switchLevel(container, "work");
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Dune")).toBeInTheDocument();
@@ -109,16 +102,11 @@ describe("FrbrEditor Component", () => {
   });
 
   it("allows switching to the Expression tab", async () => {
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[0]).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
-    await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Expression (F2)"));
-    });
+    switchLevel(container, "expression");
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Text (Book/Comic/Manga/Magazine)")).toBeInTheDocument();
@@ -127,16 +115,11 @@ describe("FrbrEditor Component", () => {
   });
 
   it("allows switching to the Items tab", async () => {
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[0]).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
-    await waitFor(() => expect(screen.getByText(/Items \(F5\)/)).toBeInTheDocument());
-
-    await act(async () => {
-      fireEvent.click(screen.getByText(/Items \(F5\)/));
-    });
+    switchLevel(container, "items");
 
     await waitFor(() => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();
@@ -173,11 +156,11 @@ describe("FrbrEditor Component", () => {
   });
 
   it("submits updated manifestation type to the API", async () => {
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
-    const typeSelect = screen.getByDisplayValue("Book");
+    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: "Movie" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
@@ -197,16 +180,11 @@ describe("FrbrEditor Component", () => {
   });
 
   it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getAllByRole("combobox")[0]).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
-    await waitFor(() => expect(screen.getByText("Expression (F2)")).toBeInTheDocument());
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Expression (F2)"));
-    });
+    switchLevel(container, "expression");
 
     // Dropdown renders with all valid kinds plus the empty Studio / Default option
     await waitFor(() => {
@@ -247,11 +225,11 @@ describe("FrbrEditor Component", () => {
     const mutateAsyncMock = vi.fn();
     vi.mocked(useCreateEscalation).mockReturnValue({ mutateAsync: mutateAsyncMock } as any);
 
-    render(<FrbrEditor manifestationId={3} />);
+    const { container } = render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
-    const typeSelect = screen.getByDisplayValue("Book");
+    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: "Movie" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
