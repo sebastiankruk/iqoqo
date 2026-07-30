@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change frbr-ui-type-change. Update Purpose after archive.
+Define FRBR entity editing UI layouts, level selection controls, searchable manifestation type comboboxes, and permission escalation flows.
 
 ## Requirements
 

@@ -482,39 +482,38 @@ export function EscalationQueue() {
                       );
                     })()}
                   </div>
-                  {isDeletion ? (
-                    <div className="text-xs font-medium text-foreground bg-muted/30 p-2.5 rounded-md border border-border/50">
-                      <span className="text-xs font-semibold text-muted-foreground block mb-1">
-                        {t("reasonForDeletion")}:
-                      </span>
+
+                  <div className="text-xs space-y-1.5 mt-2 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                    <div>
+                      <span className="font-semibold text-muted-foreground">Target Entity UUID / ID:</span>{" "}
+                      {getTargetLabel(esc)}
+                    </div>
+                    {((esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).target_title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name) && (
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Target Entity Title/Name:</span>{" "}
+                        {(esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).target_title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title || (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name}
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-semibold text-muted-foreground">Requested change details:</span>{" "}
+                      {isDeletion ? (
+                        <span className="text-destructive font-semibold">Deletion</span>
+                      ) : (
+                        <span>
+                          Current: {esc.current_value || "—"} &rarr; Suggested: {esc.suggested_value}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-muted-foreground">Reason / note from requester:</span>{" "}
                       {esc.note || "—"}
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex items-baseline gap-2 text-xs">
-                        <span className="font-mono font-semibold text-primary">{esc.field_name}</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="font-mono text-foreground">{esc.suggested_value}</span>
-                      </div>
-                      {esc.current_value && (
-                        <p className="text-xs text-muted-foreground">
-                          <span className="line-through">{esc.current_value}</span>
-                        </p>
-                      )}
-                    </>
-                  )}
+                  </div>
                 </div>
                 <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
                   {esc.created_at ? formatDate(esc.created_at) : ""}
                 </span>
               </div>
-
-              {/* Note for correction requests */}
-              {!isDeletion && esc.note && (
-                <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2 italic border-l-2 border-primary/50">
-                  {esc.note}
-                </p>
-              )}
 
               {/* Resolve actions */}
               <ResolveActions request={esc} />

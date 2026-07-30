@@ -1,9 +1,7 @@
 # Escalation Queue UI
 
 ## Purpose
-
-Provide custodians and admins with a dedicated frontend interface to view and manage pending and resolved escalation requests directly from the admin content page.
-
+Specify custodian request escalation queues, permission request flows, and IDOR mitigation entity detail displays.
 ## Requirements
 
 ### Requirement: Escalation Queue Admin UI

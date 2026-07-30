@@ -27,7 +27,7 @@ import {
   type FrbrSearchResult,
 } from "@/lib/api/admin";
 import { toast } from "sonner";
-import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2, Check } from "lucide-react";
+import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useWorkParts } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
@@ -36,8 +36,6 @@ import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 interface MetaField {
   key: string;
@@ -634,7 +632,6 @@ function ManifestationEditor({
   const [type, setType] = useState(initialType);
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
-  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const MANIFESTATION_TYPES = [
     "Book",
@@ -686,44 +683,18 @@ function ManifestationEditor({
         <div className="col-span-2">
           <label className="text-sm font-medium">Type</label>
           <input type="hidden" name="type" value={type} />
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={popoverOpen}
-                className="flex h-10 w-full justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background font-normal"
-              >
-                {type || "Select type..."}
-                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search type..." />
-                <CommandList>
-                  <CommandEmpty>No type found.</CommandEmpty>
-                  <CommandGroup>
-                    {MANIFESTATION_TYPES.map(t => (
-                      <CommandItem
-                        key={t}
-                        value={t}
-                        onSelect={currentValue => {
-                          // command sets value to lowercase for internal processing,
-                          // so we use original item t to retain case
-                          setType(t);
-                          setPopoverOpen(false);
-                        }}
-                      >
-                        <Check className={`mr-2 h-4 w-4 ${type === t ? "opacity-100" : "opacity-0"}`} />
-                        {t}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <Select value={type} onValueChange={(val: string) => setType(val)}>
+            <SelectTrigger className="w-full bg-background">
+              <SelectValue placeholder="Select type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {MANIFESTATION_TYPES.map(t => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {isBookLike && (
@@ -1078,7 +1049,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
-        <Select value={activeTab} onValueChange={(value: any) => setActiveTab(value)}>
+        <Select value={activeTab} onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}>
           <SelectTrigger className="w-[200px] bg-background">
             <SelectValue placeholder="Select level" />
           </SelectTrigger>
