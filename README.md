@@ -79,7 +79,7 @@ iqoqo provides comprehensive tools for managing your library's data and media as
 
 ## AI Cover Generation
 
-Automate the creation of missing covers using local or cloud LLMs (Ollama, OpenAI, Gemini) and apply watermarks to indicate AI origin. 
+Automate the creation of missing covers using local or cloud LLMs (Ollama, OpenAI, Gemini) and apply watermarks to indicate AI origin.
 
 See the **[AI Cover Generation Guide](docs/AI_COVERS.md)** for details on configuration, circuit breakers, and batch processing.
 

@@ -682,7 +682,6 @@ function ManifestationEditor({
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label className="text-sm font-medium">Type</label>
-          <input type="hidden" name="type" value={type} />
           <Select value={type} onValueChange={(val: string) => setType(val)}>
             <SelectTrigger className="w-full bg-background">
               <SelectValue placeholder="Select type..." />
@@ -934,25 +933,8 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       const originalType = tree.manifestation.meta?.type as string;
       const typeChanged = data.type && data.type !== originalType;
 
-      const meta = transformFieldsToMeta(data.metaFields);
-      if (data.type && (!typeChanged || hasWriteMetadata)) {
-        meta.type = data.type;
-      } else if (originalType) {
-        meta.type = originalType;
-      }
-
-      await updateFrbrEntity("manifestation", tree.manifestation.id, {
-        isbn13: data.isbn13,
-        upc: data.upc,
-        ean: data.ean,
-        publisher: data.publisher,
-        publication_date: data.publication_date,
-        meta,
-      });
-      toast.success("Manifestation updated successfully");
-
-      if (typeChanged && !hasWriteMetadata) {
-        if (hasEscalateRequest) {
+      if (!hasWriteMetadata) {
+        if (typeChanged && hasEscalateRequest) {
           await createEscalation.mutateAsync({
             level: "manifestation",
             targetId: tree.manifestation.id,
@@ -966,10 +948,25 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           });
           toast.success("Type change requested via User Requests.");
         } else {
-          toast.error("You do not have permission to change the type or escalate requests.");
+          toast.error("You do not have permission to update metadata.");
         }
+        return;
       }
 
+      const meta = transformFieldsToMeta(data.metaFields);
+      if (data.type) {
+        meta.type = data.type;
+      }
+
+      await updateFrbrEntity("manifestation", tree.manifestation.id, {
+        isbn13: data.isbn13,
+        upc: data.upc,
+        ean: data.ean,
+        publisher: data.publisher,
+        publication_date: data.publication_date,
+        meta,
+      });
+      toast.success("Manifestation updated successfully");
       await fetchTree();
     } catch (err) {
       toast.error(`Failed to update manifestation: ${err instanceof Error ? err.message : "Unknown error"}`);
