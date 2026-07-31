@@ -1,7 +1,7 @@
 # concert-kind-ui Specification
 
 ## Purpose
-TBD - created by archiving change concert-kind-ui. Update Purpose after archive.
+Specify admin API and FRBR editor UI support for expression kind property selection.
 ## Requirements
 ### Requirement: Admin API forwards expression kind
 

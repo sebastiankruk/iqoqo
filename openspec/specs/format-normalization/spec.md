@@ -1,7 +1,7 @@
 # format-normalization Specification
 
 ## Purpose
-TBD - created by archiving change fix-physical-kind-format-values. Update Purpose after archive.
+Define format string resolution, custom format alias mappings, and unknown format fallback rules.
 ## Requirements
 ### Requirement: Format normalizer resolves non-canonical values at read-time
 

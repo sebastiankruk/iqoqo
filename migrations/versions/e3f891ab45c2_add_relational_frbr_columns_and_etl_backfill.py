@@ -107,61 +107,109 @@ def upgrade():
 
     if is_pg:
         # PostgreSQL native JSONB backfill
-        op.execute(
-            f"""
-            UPDATE {works_table}
-            SET sort_title = CASE
-                WHEN title ~* '^(the|a|an|ten|ta|to)\\s+' THEN regexp_replace(title, '^(the|a|an|ten|ta|to)\\s+', '', 'i')
-                ELSE title
-            END
-            WHERE sort_title IS NULL AND title IS NOT NULL;
-            """
-        )
-        op.execute(
-            f"""
-            UPDATE {manif_table}
-            SET format = COALESCE(meta->>'format', meta->>'video_format', meta->>'format_name'),
-                label = COALESCE(meta->>'label', meta->>'studio', meta->>'imprint', meta->>'publisher'),
-                barcode = COALESCE(meta->>'barcode', meta->>'identifier'),
-                catalog_number = COALESCE(meta->>'catalog_number', meta->>'catno', meta->>'sku')
-            WHERE meta IS NOT NULL;
-            """
-        )
+        chunk_size = 5000
+        offset = 0
+        while True:
+            result = bind.execute(
+                sa.text(f"""
+                    UPDATE {works_table}
+                    SET sort_title = CASE
+                        WHEN title ~* '^(the|a|an|ten|ta|to)\\s+' THEN regexp_replace(title, '^(the|a|an|ten|ta|to)\\s+', '', 'i')
+                        ELSE title
+                    END
+                    WHERE id IN (
+                        SELECT id FROM {works_table}
+                        WHERE sort_title IS NULL AND title IS NOT NULL
+                        ORDER BY id
+                        LIMIT :chunk_size OFFSET :offset
+                    )
+                """),
+                {"chunk_size": chunk_size, "offset": offset}
+            )
+            if result.rowcount == 0:
+                break
+            offset += chunk_size
+
+        offset = 0
+        while True:
+            result = bind.execute(
+                sa.text(f"""
+                    UPDATE {manif_table}
+                    SET format = COALESCE(meta->>'format', meta->>'video_format', meta->>'format_name'),
+                        label = COALESCE(meta->>'label', meta->>'studio', meta->>'imprint', meta->>'publisher'),
+                        barcode = COALESCE(meta->>'barcode', meta->>'identifier'),
+                        catalog_number = COALESCE(meta->>'catalog_number', meta->>'catno', meta->>'sku')
+                    WHERE id IN (
+                        SELECT id FROM {manif_table}
+                        WHERE meta IS NOT NULL
+                        ORDER BY id
+                        LIMIT :chunk_size OFFSET :offset
+                    )
+                """),
+                {"chunk_size": chunk_size, "offset": offset}
+            )
+            if result.rowcount == 0:
+                break
+            offset += chunk_size
     else:
         # SQLite dialect backfill
-        op.execute(
-            f"""
-            UPDATE {works_table}
-            SET sort_title = title
-            WHERE sort_title IS NULL AND title IS NOT NULL;
-            """
-        )
-        op.execute(
-            f"""
-            UPDATE {manif_table}
-            SET format = COALESCE(
-                    json_extract(meta, '$.format'),
-                    json_extract(meta, '$.video_format'),
-                    json_extract(meta, '$.format_name')
-                ),
-                label = COALESCE(
-                    json_extract(meta, '$.label'),
-                    json_extract(meta, '$.studio'),
-                    json_extract(meta, '$.imprint'),
-                    json_extract(meta, '$.publisher')
-                ),
-                barcode = COALESCE(
-                    json_extract(meta, '$.barcode'),
-                    json_extract(meta, '$.identifier')
-                ),
-                catalog_number = COALESCE(
-                    json_extract(meta, '$.catalog_number'),
-                    json_extract(meta, '$.catno'),
-                    json_extract(meta, '$.sku')
-                )
-            WHERE meta IS NOT NULL;
-            """
-        )
+        chunk_size = 5000
+        offset = 0
+        while True:
+            result = bind.execute(
+                sa.text(f"""
+                    UPDATE {works_table}
+                    SET sort_title = title
+                    WHERE id IN (
+                        SELECT id FROM {works_table}
+                        WHERE sort_title IS NULL AND title IS NOT NULL
+                        ORDER BY id
+                        LIMIT :chunk_size OFFSET :offset
+                    )
+                """),
+                {"chunk_size": chunk_size, "offset": offset}
+            )
+            if result.rowcount == 0:
+                break
+            offset += chunk_size
+
+        offset = 0
+        while True:
+            result = bind.execute(
+                sa.text(f"""
+                    UPDATE {manif_table}
+                    SET format = COALESCE(
+                            json_extract(meta, '$.format'),
+                            json_extract(meta, '$.video_format'),
+                            json_extract(meta, '$.format_name')
+                        ),
+                        label = COALESCE(
+                            json_extract(meta, '$.label'),
+                            json_extract(meta, '$.studio'),
+                            json_extract(meta, '$.imprint'),
+                            json_extract(meta, '$.publisher')
+                        ),
+                        barcode = COALESCE(
+                            json_extract(meta, '$.barcode'),
+                            json_extract(meta, '$.identifier')
+                        ),
+                        catalog_number = COALESCE(
+                            json_extract(meta, '$.catalog_number'),
+                            json_extract(meta, '$.catno'),
+                            json_extract(meta, '$.sku')
+                        )
+                    WHERE id IN (
+                        SELECT id FROM {manif_table}
+                        WHERE meta IS NOT NULL
+                        ORDER BY id
+                        LIMIT :chunk_size OFFSET :offset
+                    )
+                """),
+                {"chunk_size": chunk_size, "offset": offset}
+            )
+            if result.rowcount == 0:
+                break
+            offset += chunk_size
 
 
 def downgrade():

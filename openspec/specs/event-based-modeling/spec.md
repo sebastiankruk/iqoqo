@@ -1,7 +1,7 @@
 # event-based-modeling Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Specify shared FRBRoo event-contribution entities across media strategies and level-appropriate mapping.
 ## Requirements
 ### Requirement: FRBRoo event entities are shared across all media strategies
 

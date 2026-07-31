@@ -36,6 +36,7 @@ import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MetaField {
   key: string;
@@ -633,6 +634,33 @@ function ManifestationEditor({
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
+  const MANIFESTATION_TYPES = [
+    "Book",
+    "Comic Book",
+    "Manga",
+    "Board Game",
+    "Roleplaying Game",
+    "Card Game",
+    "Miniature Game",
+    "Movie",
+    "TV Show",
+    "Anime",
+    "Video Game",
+    "Music",
+    "Audiobook",
+    "Podcast",
+    "Software",
+    "Magazine",
+    "Journal",
+    "Newspaper",
+    "Zine",
+    "Artwork",
+    "Model",
+    "Figure",
+    "Merchandise",
+    "Other",
+  ];
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -659,25 +687,25 @@ function ManifestationEditor({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label htmlFor="type" className="text-sm font-medium">Type</label>
-          <select
-            id="type"
-            name="type"
-            value={type}
-            onChange={e => setType(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {!isValidFormat && <option value={type}>{type} (Legacy)</option>}
-            {Object.entries(MEDIA_HIERARCHY).map(([catId, cat]) => (
-              <optgroup key={catId} label={cat.label}>
-                {cat.formats.map(f => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <label className="text-sm font-medium">Type</label>
+          <Select value={type} onValueChange={(val: string) => setType(val)}>
+            <SelectTrigger className="w-full bg-background">
+              <SelectValue placeholder="Select type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {!isValidFormat && <SelectItem value={type}>{type} (Legacy)</SelectItem>}
+              {Object.entries(MEDIA_HIERARCHY).map(([catId, cat]) => (
+                <SelectGroup key={catId}>
+                  <SelectLabel>{cat.label}</SelectLabel>
+                  {cat.formats.map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {isBookLike && (
@@ -917,8 +945,8 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       const originalType = tree.manifestation.meta?.type as string;
       const typeChanged = data.type && data.type !== originalType;
 
-      if (typeChanged && !hasWriteMetadata) {
-        if (hasEscalateRequest) {
+      if (!hasWriteMetadata) {
+        if (typeChanged && hasEscalateRequest) {
           await createEscalation.mutateAsync({
             level: "manifestation",
             targetId: tree.manifestation.id,
@@ -931,14 +959,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             },
           });
           toast.success("Type change requested via User Requests.");
-          // We can still try to save other fields if the user has partial permissions,
-          // but if they don't have WRITE_METADATA, the backend will reject it anyway.
-          // In this flow, we just return after dispatching the request.
-          return;
         } else {
-          toast.error("You do not have permission to change the type or escalate requests.");
-          return;
+          toast.error("You do not have permission to update metadata.");
         }
+        return;
       }
 
       const meta = transformFieldsToMeta(data.metaFields);
@@ -1033,55 +1057,23 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b justify-between items-center">
-        <div className="flex">
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "work"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("work")}
-          >
-            Work (F1)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "expression"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("expression")}
-          >
-            Expression (F2)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "manifestation"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("manifestation")}
-          >
-            Manifestation (F3)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "items"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("items")}
-          >
-            Items (F5)
-          </button>
-        </div>
+      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
+        <Select
+          value={activeTab}
+          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+        >
+          <SelectTrigger className="w-[200px] bg-background">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="work">Work (F1)</SelectItem>
+            <SelectItem value="expression">Expression (F2)</SelectItem>
+            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+            <SelectItem value="items">Items (F5)</SelectItem>
+          </SelectContent>
+        </Select>
         {onClose && (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="px-2">
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </Button>
