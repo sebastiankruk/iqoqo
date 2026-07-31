@@ -23,7 +23,7 @@ Authlib>=1.6.9
 PyJWT>=2.12.0
 joserfc>=0.12.0
 pydantic>=2.6.0
-Flask-Limiter>=3.5.0
+Flask-Limiter>=4.1.1
 pytesseract>=0.3.10
 tenacity==8.*
 #~ opencv-python-headless==4.9.*
