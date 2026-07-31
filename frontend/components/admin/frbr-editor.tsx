@@ -676,12 +676,12 @@ function ManifestationEditor({
     await onSubmit(data);
   };
 
-  const textFormats = MEDIA_HIERARCHY.text.formats.map(f => f.id);
+  const textFormats: string[] = MEDIA_HIERARCHY.text.formats.map(f => f.id);
   const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
   const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
 
-  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap(cat => cat.formats);
-  const isValidFormat = allFormats.some(f => f.id === type);
+  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap((cat: any) => cat.formats);
+  const isValidFormat = allFormats.some((f: any) => f.id === type);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
