@@ -998,7 +998,7 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
         The resolved carrier format.
     """
     carrier = _resolve_carrier_format(current_format or meta.get("format") or meta.get("Format"), new_type)
-    meta["type"] = carrier
+    meta["type"] = new_type
     meta["format"] = carrier
     meta["Format"] = carrier
     return carrier
