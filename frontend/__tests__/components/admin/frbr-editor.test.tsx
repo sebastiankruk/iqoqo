@@ -47,6 +47,8 @@ vi.mock("@/components/ui/select", () => ({
   SelectTrigger: ({ children }: any) => children,
   SelectValue: () => null,
   SelectContent: ({ children }: any) => children,
+  SelectGroup: ({ children, ...props }: any) => <optgroup {...props}>{children}</optgroup>,
+  SelectLabel: ({ children }: any) => <option disabled>{children}</option>,
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }));
 
@@ -204,7 +206,7 @@ describe("FrbrEditor Component", () => {
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
     const typeSelect = container.querySelector("form select") as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+    fireEvent.change(typeSelect, { target: { value: "bluray_audio" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
     fireEvent.click(saveButton);
@@ -215,11 +217,28 @@ describe("FrbrEditor Component", () => {
         3,
         expect.objectContaining({
           meta: expect.objectContaining({
-            type: "Movie",
+            type: "bluray_audio",
           }),
         })
       );
     });
+  });
+
+  it("dropdown lists correctly map to the taxonomy structure", async () => {
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
+
+    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
+    const optGroups = typeSelect.querySelectorAll("optgroup");
+    expect(optGroups.length).toBeGreaterThan(0);
+
+    const labels = Array.from(typeSelect.querySelectorAll("option[disabled]")).map(o => o.textContent);
+    expect(labels).toContain("Text");
+    expect(labels).toContain("Music");
+
+    const musicOptions = Array.from(typeSelect.querySelectorAll("option")).filter(o => o.value === "bluray_audio");
+    expect(musicOptions.length).toBeGreaterThan(0);
   });
 
   it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
@@ -274,7 +293,7 @@ describe("FrbrEditor Component", () => {
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
 
     const typeSelect = container.querySelector("form select") as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+    fireEvent.change(typeSelect, { target: { value: "dvd" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
     fireEvent.click(saveButton);
@@ -287,7 +306,7 @@ describe("FrbrEditor Component", () => {
           data: expect.objectContaining({
             request_type: "change_type",
             field_name: "type",
-            suggested_value: "Movie",
+            suggested_value: "dvd",
           }),
         })
       );
