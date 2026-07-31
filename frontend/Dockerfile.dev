@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 # Development Dockerfile for Next.js frontend
-FROM node:22-alpine
+FROM node:25-alpine
 
 WORKDIR /app
 
