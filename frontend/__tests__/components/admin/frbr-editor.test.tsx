@@ -69,7 +69,14 @@ describe("FrbrEditor Component", () => {
       meta: { pages: "412" },
     },
     items: [
-      { id: 10, manifestation_id: 3, condition: "like_new", status: "available", local_barcode: null, inventory_tag: null },
+      {
+        id: 10,
+        manifestation_id: 3,
+        condition: "like_new",
+        status: "available",
+        local_barcode: null,
+        inventory_tag: null,
+      },
     ],
   };
 

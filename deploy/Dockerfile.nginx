@@ -12,7 +12,7 @@
 # this Dockerfile only adds the OTel module and overrides the main nginx.conf
 # to load it at startup.
 
-FROM nginx:1.27
+FROM nginx:1.31.3
 
 # Install the native OpenTelemetry module from the official nginx.org repo.
 # This also upgrades nginx to the latest version matching the module.
