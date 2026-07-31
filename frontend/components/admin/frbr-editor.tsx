@@ -634,33 +634,6 @@ function ManifestationEditor({
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
-  const MANIFESTATION_TYPES = [
-    "Book",
-    "Comic Book",
-    "Manga",
-    "Board Game",
-    "Roleplaying Game",
-    "Card Game",
-    "Miniature Game",
-    "Movie",
-    "TV Show",
-    "Anime",
-    "Video Game",
-    "Music",
-    "Audiobook",
-    "Podcast",
-    "Software",
-    "Magazine",
-    "Journal",
-    "Newspaper",
-    "Zine",
-    "Artwork",
-    "Model",
-    "Figure",
-    "Merchandise",
-    "Other",
-  ];
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -680,8 +653,8 @@ function ManifestationEditor({
   const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
   const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
 
-  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap((cat: any) => cat.formats);
-  const isValidFormat = allFormats.some((f: any) => f.id === type);
+  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap((cat: { formats: { id: string; label: string }[] }) => cat.formats);
+  const isValidFormat = allFormats.some((f: { id: string }) => f.id === type);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -879,6 +852,7 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
  */
 export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const [tree, setTree] = useState<FrbrTree | null>(null);
+  const [lastFetched, setLastFetched] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
@@ -896,6 +870,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     try {
       const data = await getFrbrTree(manifestationId);
       setTree(data);
+      setLastFetched(Date.now());
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load FRBR tree";
       setError(message);
@@ -1089,7 +1064,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           <CardContent>
             {tree.work ? (
               <>
-                <WorkEditor key={tree.work.id} tree={tree} onSubmit={handleWorkSubmit} />
+                <WorkEditor key={`${tree.work.id}-${lastFetched}`} tree={tree} onSubmit={handleWorkSubmit} />
                 <WorkPartsManager workId={tree.work.id} />
               </>
             ) : (
@@ -1107,7 +1082,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.expression ? (
-              <ExpressionEditor key={tree.expression.id} tree={tree} onSubmit={handleExpressionSubmit} />
+              <ExpressionEditor key={`${tree.expression.id}-${lastFetched}`} tree={tree} onSubmit={handleExpressionSubmit} />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
             )}
@@ -1131,7 +1106,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManifestationEditor key={tree.manifestation.id} tree={tree} onSubmit={handleManifestationSubmit} />
+            <ManifestationEditor key={`${tree.manifestation.id}-${lastFetched}`} tree={tree} onSubmit={handleManifestationSubmit} />
           </CardContent>
         </Card>
       )}
@@ -1220,7 +1195,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
                       </button>
                       {expandedItems.has(item.id) && (
                         <div className="p-4 pt-0 border-t bg-muted/20">
-                          <ItemEditor key={item.id} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
+                          <ItemEditor key={`${item.id}-${lastFetched}`} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
                         </div>
                       )}
                     </div>

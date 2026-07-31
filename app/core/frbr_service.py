@@ -865,12 +865,13 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         current_meta["type"] = format
         manif.meta = current_meta
         if manif.expression:
-            manif.expression.content_type = format
+            category = FORMAT_TO_CATEGORY.get(format) or FORMAT_ALIAS_TO_CATEGORY.get(format) or format
+            manif.expression.content_type = category
             if manif.expression.work:
                 w_meta = dict(manif.expression.work.meta or {})
-                w_meta["type"] = format
-                w_meta["format"] = format
-                w_meta["Format"] = format
+                w_meta["type"] = category
+                w_meta["format"] = category
+                w_meta["Format"] = category
                 manif.expression.work.meta = w_meta
     if label is not None:
         manif.label = label
@@ -890,12 +891,13 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
             current_meta["Format"] = new_type
             manif.format = new_type
             if manif.expression:
-                manif.expression.content_type = new_type
+                category = FORMAT_TO_CATEGORY.get(new_type) or FORMAT_ALIAS_TO_CATEGORY.get(new_type) or new_type
+                manif.expression.content_type = category
                 if manif.expression.work:
                     w_meta = dict(manif.expression.work.meta or {})
-                    w_meta["type"] = new_type
-                    w_meta["format"] = new_type
-                    w_meta["Format"] = new_type
+                    w_meta["type"] = category
+                    w_meta["format"] = category
+                    w_meta["Format"] = category
                     manif.expression.work.meta = w_meta
         manif.meta = current_meta
     db.session.commit()
@@ -984,7 +986,7 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
     """
     Sync a type change into an entity meta dict, preserving the carrier format.
 
-    Sets ``type`` to the new content type and resolves ``format``/``Format``
+    Sets ``type`` to the resolved carrier and resolves ``format``/``Format``
     via :func:`_resolve_carrier_format`.
 
     Args:
@@ -996,7 +998,7 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
         The resolved carrier format.
     """
     carrier = _resolve_carrier_format(current_format or meta.get("format") or meta.get("Format"), new_type)
-    meta["type"] = new_type
+    meta["type"] = carrier
     meta["format"] = carrier
     meta["Format"] = carrier
     return carrier
