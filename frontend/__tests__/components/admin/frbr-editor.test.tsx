@@ -165,7 +165,7 @@ describe("FrbrEditor Component", () => {
     await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
 
     const typeSelect = screen.getByDisplayValue("Book");
-    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+    fireEvent.change(typeSelect, { target: { value: "bluray_audio" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
     fireEvent.click(saveButton);
@@ -176,11 +176,30 @@ describe("FrbrEditor Component", () => {
         3,
         expect.objectContaining({
           meta: expect.objectContaining({
-            type: "Movie",
+            type: "bluray_audio",
           }),
         })
       );
     });
+  });
+
+  it("dropdown lists correctly map to the taxonomy structure", async () => {
+    render(<FrbrEditor manifestationId={3} />);
+
+    await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
+
+    const typeSelect = screen.getByRole("combobox", { name: "Type" });
+    const optGroups = typeSelect.querySelectorAll("optgroup");
+    expect(optGroups.length).toBeGreaterThan(0);
+
+    const labels = Array.from(optGroups).map(g => g.getAttribute("label"));
+    expect(labels).toContain("Text");
+    expect(labels).toContain("Music");
+
+    const musicGroup = Array.from(optGroups).find(g => g.getAttribute("label") === "Music");
+    expect(musicGroup).toBeDefined();
+    const options = Array.from(musicGroup!.querySelectorAll("option"));
+    expect(options.some(opt => opt.textContent === "Blu-ray Pure Audio" && opt.value === "bluray_audio")).toBe(true);
   });
 
   it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
@@ -236,7 +255,7 @@ describe("FrbrEditor Component", () => {
     await waitFor(() => expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument());
 
     const typeSelect = screen.getByDisplayValue("Book");
-    fireEvent.change(typeSelect, { target: { value: "Movie" } });
+    fireEvent.change(typeSelect, { target: { value: "dvd" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
     fireEvent.click(saveButton);
@@ -249,7 +268,7 @@ describe("FrbrEditor Component", () => {
           data: expect.objectContaining({
             request_type: "change_type",
             field_name: "type",
-            suggested_value: "Movie",
+            suggested_value: "dvd",
           }),
         })
       );

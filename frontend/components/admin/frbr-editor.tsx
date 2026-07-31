@@ -35,6 +35,7 @@ import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
+import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 
 interface MetaField {
   key: string;
@@ -627,7 +628,7 @@ function ManifestationEditor({
   tree: FrbrTree;
   onSubmit: (data: ManifestationFormData) => Promise<void>;
 }) {
-  const initialType = (tree.manifestation.meta?.type as string) || "Book";
+  const initialType = (tree.manifestation.meta?.type as string) || "book";
   const [type, setType] = useState(initialType);
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
@@ -647,43 +648,35 @@ function ManifestationEditor({
     await onSubmit(data);
   };
 
-  const isBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"].includes(type);
+  const textFormats = MEDIA_HIERARCHY.text.formats.map(f => f.id);
+  const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
+  const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
+
+  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap(cat => cat.formats);
+  const isValidFormat = allFormats.some(f => f.id === type);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className="text-sm font-medium">Type</label>
+          <label htmlFor="type" className="text-sm font-medium">Type</label>
           <select
+            id="type"
             name="type"
             value={type}
             onChange={e => setType(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <option value="Book">Book</option>
-            <option value="Comic Book">Comic Book</option>
-            <option value="Manga">Manga</option>
-            <option value="Board Game">Board Game</option>
-            <option value="Roleplaying Game">Roleplaying Game</option>
-            <option value="Card Game">Card Game</option>
-            <option value="Miniature Game">Miniature Game</option>
-            <option value="Movie">Movie</option>
-            <option value="TV Show">TV Show</option>
-            <option value="Anime">Anime</option>
-            <option value="Video Game">Video Game</option>
-            <option value="Music">Music</option>
-            <option value="Audiobook">Audiobook</option>
-            <option value="Podcast">Podcast</option>
-            <option value="Software">Software</option>
-            <option value="Magazine">Magazine</option>
-            <option value="Journal">Journal</option>
-            <option value="Newspaper">Newspaper</option>
-            <option value="Zine">Zine</option>
-            <option value="Artwork">Artwork</option>
-            <option value="Model">Model</option>
-            <option value="Figure">Figure</option>
-            <option value="Merchandise">Merchandise</option>
-            <option value="Other">Other</option>
+            {!isValidFormat && <option value={type}>{type} (Legacy)</option>}
+            {Object.entries(MEDIA_HIERARCHY).map(([catId, cat]) => (
+              <optgroup key={catId} label={cat.label}>
+                {cat.formats.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           </select>
         </div>
 
