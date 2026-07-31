@@ -35,7 +35,7 @@ import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
-import { MEDIA_HIERARCHY } from "@/types/taxonomy";
+import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MetaField {
@@ -653,8 +653,7 @@ function ManifestationEditor({
   const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
   const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
 
-  const allFormats = Object.values(MEDIA_HIERARCHY).flatMap((cat: { formats: { id: string; label: string }[] }) => cat.formats);
-  const isValidFormat = allFormats.some((f: { id: string }) => f.id === type);
+  const isValidFormat = (MEDIA_FORMATS as readonly string[]).includes(type);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
