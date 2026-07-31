@@ -297,30 +297,87 @@ class DataManager:
 
         Compares relational column values against historical ``meta`` JSON keys.
         Returns a dict summarizing any non-zero drift counts.
+
+        All drift computation is performed at the database level using
+        ``func.count()`` with JSONB operators to prevent OOM exhaustion
+        on large catalogs.
         """
-        drift = {
-            "format_drift": 0,
-            "label_drift": 0,
-            "barcode_drift": 0,
-            "sort_title_drift": 0,
-            "total_drift": 0,
+        is_pg = db.engine.dialect.name == "postgresql"
+
+        if is_pg:
+            format_cond = [
+                Manifestation.meta.has_key("format"),  # noqa: W601
+                Manifestation.format != Manifestation.meta["format"].as_string(),
+            ]
+            label_cond = [
+                Manifestation.meta.has_key("label"),  # noqa: W601
+                Manifestation.label != Manifestation.meta["label"].as_string(),
+            ]
+            barcode_cond = [
+                Manifestation.meta.has_key("barcode"),  # noqa: W601
+                Manifestation.barcode != Manifestation.meta["barcode"].as_string(),
+            ]
+        else:
+            fmt_ext = func.json_extract(Manifestation.meta, "$.format")
+            format_cond = [fmt_ext.is_not(None), Manifestation.format != fmt_ext]
+            lbl_ext = func.json_extract(Manifestation.meta, "$.label")
+            label_cond = [lbl_ext.is_not(None), Manifestation.label != lbl_ext]
+            bar_ext = func.json_extract(Manifestation.meta, "$.barcode")
+            barcode_cond = [bar_ext.is_not(None), Manifestation.barcode != bar_ext]
+
+        # Format Drift
+        format_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *format_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Label Drift
+        label_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *label_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Barcode Drift
+        barcode_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *barcode_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Sort Title Drift
+        sort_title_drift = (
+            db.session.query(func.count(Work.id))  # pylint: disable=not-callable
+            .filter(
+                Work.title.is_not(None),
+                Work.sort_title.is_(None),
+            )
+            .scalar()
+            or 0
+        )
+
+        total_drift = format_drift + label_drift + barcode_drift + sort_title_drift
+
+        return {
+            "format_drift": format_drift,
+            "label_drift": label_drift,
+            "barcode_drift": barcode_drift,
+            "sort_title_drift": sort_title_drift,
+            "total_drift": total_drift,
         }
-
-        for m in Manifestation.query.filter(Manifestation.meta.is_not(None)).all():
-            if m.meta:
-                if "format" in m.meta and m.meta["format"] and m.format != m.meta["format"]:
-                    drift["format_drift"] += 1
-                if "label" in m.meta and m.meta["label"] and m.label != m.meta["label"]:
-                    drift["label_drift"] += 1
-                if "barcode" in m.meta and m.meta["barcode"] and m.barcode != m.meta["barcode"]:
-                    drift["barcode_drift"] += 1
-
-        for w in Work.query.all():
-            if w.title and not w.sort_title:
-                drift["sort_title_drift"] += 1
-
-        drift["total_drift"] = drift["format_drift"] + drift["label_drift"] + drift["barcode_drift"] + drift["sort_title_drift"]
-        return drift
 
     @staticmethod
     def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:

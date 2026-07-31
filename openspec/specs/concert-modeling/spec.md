@@ -1,7 +1,7 @@
 # concert-modeling Specification
 
 ## Purpose
-TBD - created by archiving change concert-kind-ui. Update Purpose after archive.
+Define performance event expressions and concert audio/video recording metadata modeling.
 ## Requirements
 ### Requirement: Expression kind settable through UI and escalation
 

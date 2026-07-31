@@ -67,6 +67,7 @@ def process_batch(
     dry_run: bool = False,
     watermark_only: bool = False,
     user_id: str = "system_batch",
+    force_retry: bool = False,
 ) -> dict[str, Any]:
     """Batch process list of manifestations for AI cover generation and corner watermarking."""
     total = len(manifestations)
@@ -75,6 +76,13 @@ def process_batch(
     logger.info("Starting batch cover processing for %d manifestations (dry_run=%s)", total, dry_run)
 
     for idx, manif in enumerate(manifestations, start=1):
+        # Circuit breaker: skip items that have failed too many times
+        failed_attempts = (manif.meta or {}).get("failed_llm_attempts", 0)
+        if failed_attempts >= 3 and not force_retry:
+            stats["skipped"] += 1
+            logger.info("[%d/%d] Skipping manifestation %d: circuit breaker triggered (%d failures)", idx, total, manif.id, failed_attempts)
+            continue
+
         work_title = manif.expression.work.title if (manif.expression and manif.expression.work) else "Unknown Title"
         author_name = manif.meta.get("author") or manif.meta.get("artist") or ""
         format_type = manif.format or (manif.meta.get("format") if manif.meta else None)
@@ -126,6 +134,8 @@ def process_batch(
             meta = dict(manif.meta or {})
             meta["cover_url"] = img_path
             meta["cover_source"] = source
+            if force_retry:
+                meta["failed_llm_attempts"] = 0
             manif.meta = meta
             db.session.commit()
 
@@ -135,6 +145,11 @@ def process_batch(
         else:
             stats["failed"] += 1
             logger.warning("Failed to generate cover for manifestation %d", manif.id)
+            # Track failure for circuit breaker
+            meta = dict(manif.meta or {})
+            meta["failed_llm_attempts"] = meta.get("failed_llm_attempts", 0) + 1
+            manif.meta = meta
+            db.session.commit()
 
     logger.info("Batch completed: %s", stats)
     return stats
@@ -149,6 +164,9 @@ def main() -> None:
     )
     parser.add_argument("--watermark-only", action="store_true", help="Only watermark existing AI covers without invoking generation")
     parser.add_argument("--prompt-spec", type=str, default=None, help="Path to custom prompt specification markdown file")
+    parser.add_argument(
+        "--force-retry", action="store_true", help="Bypass the circuit breaker and retry all items regardless of failure count"
+    )
 
     args = parser.parse_args()
 
@@ -156,7 +174,7 @@ def main() -> None:
 
     with app.app_context():
         manifestations = get_unwatermarked_manifestations(limit=args.limit)
-        process_batch(manifestations, dry_run=args.dry_run, watermark_only=args.watermark_only)
+        process_batch(manifestations, dry_run=args.dry_run, watermark_only=args.watermark_only, force_retry=args.force_retry)
 
 
 if __name__ == "__main__":

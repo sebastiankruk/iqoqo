@@ -1,7 +1,7 @@
 # board-game-container-aggregation Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-13. Update Purpose after archive.
+Define BoardGameGeek metadata ingestion, board game container aggregation, and expansion linking rules.
 ## Requirements
 ### Requirement: Board games are modeled as FRBRoo F16 Container Works
 

@@ -35,6 +35,7 @@ import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MetaField {
   key: string;
@@ -632,6 +633,33 @@ function ManifestationEditor({
   const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
+  const MANIFESTATION_TYPES = [
+    "Book",
+    "Comic Book",
+    "Manga",
+    "Board Game",
+    "Roleplaying Game",
+    "Card Game",
+    "Miniature Game",
+    "Movie",
+    "TV Show",
+    "Anime",
+    "Video Game",
+    "Music",
+    "Audiobook",
+    "Podcast",
+    "Software",
+    "Magazine",
+    "Journal",
+    "Newspaper",
+    "Zine",
+    "Artwork",
+    "Model",
+    "Figure",
+    "Merchandise",
+    "Other",
+  ];
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -654,37 +682,18 @@ function ManifestationEditor({
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label className="text-sm font-medium">Type</label>
-          <select
-            name="type"
-            value={type}
-            onChange={e => setType(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="Book">Book</option>
-            <option value="Comic Book">Comic Book</option>
-            <option value="Manga">Manga</option>
-            <option value="Board Game">Board Game</option>
-            <option value="Roleplaying Game">Roleplaying Game</option>
-            <option value="Card Game">Card Game</option>
-            <option value="Miniature Game">Miniature Game</option>
-            <option value="Movie">Movie</option>
-            <option value="TV Show">TV Show</option>
-            <option value="Anime">Anime</option>
-            <option value="Video Game">Video Game</option>
-            <option value="Music">Music</option>
-            <option value="Audiobook">Audiobook</option>
-            <option value="Podcast">Podcast</option>
-            <option value="Software">Software</option>
-            <option value="Magazine">Magazine</option>
-            <option value="Journal">Journal</option>
-            <option value="Newspaper">Newspaper</option>
-            <option value="Zine">Zine</option>
-            <option value="Artwork">Artwork</option>
-            <option value="Model">Model</option>
-            <option value="Figure">Figure</option>
-            <option value="Merchandise">Merchandise</option>
-            <option value="Other">Other</option>
-          </select>
+          <Select value={type} onValueChange={(val: string) => setType(val)}>
+            <SelectTrigger className="w-full bg-background">
+              <SelectValue placeholder="Select type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {MANIFESTATION_TYPES.map(t => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {isBookLike && (
@@ -924,8 +933,8 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       const originalType = tree.manifestation.meta?.type as string;
       const typeChanged = data.type && data.type !== originalType;
 
-      if (typeChanged && !hasWriteMetadata) {
-        if (hasEscalateRequest) {
+      if (!hasWriteMetadata) {
+        if (typeChanged && hasEscalateRequest) {
           await createEscalation.mutateAsync({
             level: "manifestation",
             targetId: tree.manifestation.id,
@@ -938,14 +947,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             },
           });
           toast.success("Type change requested via User Requests.");
-          // We can still try to save other fields if the user has partial permissions,
-          // but if they don't have WRITE_METADATA, the backend will reject it anyway.
-          // In this flow, we just return after dispatching the request.
-          return;
         } else {
-          toast.error("You do not have permission to change the type or escalate requests.");
-          return;
+          toast.error("You do not have permission to update metadata.");
         }
+        return;
       }
 
       const meta = transformFieldsToMeta(data.metaFields);
@@ -1040,55 +1045,23 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b justify-between items-center">
-        <div className="flex">
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "work"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("work")}
-          >
-            Work (F1)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "expression"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("expression")}
-          >
-            Expression (F2)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "manifestation"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("manifestation")}
-          >
-            Manifestation (F3)
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "items"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("items")}
-          >
-            Items (F5)
-          </button>
-        </div>
+      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
+        <Select
+          value={activeTab}
+          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+        >
+          <SelectTrigger className="w-[200px] bg-background">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="work">Work (F1)</SelectItem>
+            <SelectItem value="expression">Expression (F2)</SelectItem>
+            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+            <SelectItem value="items">Items (F5)</SelectItem>
+          </SelectContent>
+        </Select>
         {onClose && (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="px-2">
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </Button>

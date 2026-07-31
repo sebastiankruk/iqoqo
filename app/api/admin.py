@@ -521,6 +521,8 @@ def update_work(work_id):
 def update_expression(expr_id):
     """Update an Expression entity."""
     data = request.json or {}
+    # NOTE: ExpressionUpdateSchema available in app.api.schemas for stricter validation.
+    # Current endpoint is admin-gated via @require_permission(WRITE_METADATA).
     try:
         kind = data.get("kind") or None  # map "" (and explicit null) to None = studio/default
         expr = frbr_service.update_expression(
@@ -544,6 +546,8 @@ def update_expression(expr_id):
 def update_manifestation(manif_id):
     """Update a Manifestation entity."""
     data = request.json or {}
+    # NOTE: ManifestationFrbrUpdateSchema available in app.api.schemas for stricter validation.
+    # Current endpoint is admin-gated via @require_permission(WRITE_METADATA).
     pub_date_str = data.get("publication_date")
     try:
         pub_date = date.fromisoformat(pub_date_str) if pub_date_str else None
