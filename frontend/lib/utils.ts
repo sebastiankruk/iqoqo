@@ -44,6 +44,7 @@ export function isAudioMedia(format: string | undefined): boolean {
     "audiobook",
     "cd-ep",
     "sacd",
+    "bluray_audio",
     "audiobook_cd",
     "unknown_audio",
   ]);
@@ -81,10 +82,14 @@ export function resolveApiUrl(path: string, isServer = false): string {
   // Server-side fetch requires an absolute URL.
   // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
   if (isServer) {
-    const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5002/api";
+    const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api";
     let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
     if (!cleanBase.startsWith("http")) {
-      cleanBase = `http://127.0.0.1:5002${cleanBase}`;
+      // In Docker, the host is usually 'web'. For local dev it's 127.0.0.1.
+      // Default to web:5000 if running in a typical docker setup without FLASK_API_URL.
+      // NEXT_PUBLIC_APP_VERSION is set in Docker builds via Dockerfile.prod args.
+      const defaultHost = process.env.NEXT_PUBLIC_APP_VERSION ? "http://web:5000" : "http://127.0.0.1:5000";
+      cleanBase = `${defaultHost}${cleanBase}`;
     }
     return `${cleanBase}${cleanPath}`;
   }

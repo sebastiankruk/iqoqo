@@ -31,6 +31,12 @@ import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, T
 import Link from "next/link";
 import { useWorkParts } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/hooks";
+import { PermissionName } from "@/lib/permissions";
+import { useCreateEscalation } from "@/lib/api/escalations";
+import { EXPRESSION_KINDS } from "@/types/frbr";
+import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MetaField {
   key: string;
@@ -57,16 +63,19 @@ interface FrbrEditorProps {
 
 interface WorkFormData {
   title: string;
+  type?: string;
   metaFields: MetaField[];
 }
 
 interface ExpressionFormData {
   content_type?: string;
   language?: string;
+  kind?: string;
   metaFields: MetaField[];
 }
 
 interface ManifestationFormData {
+  type?: string;
   isbn13?: string;
   upc?: string;
   ean?: string;
@@ -496,14 +505,19 @@ function ExpressionEditor({
   tree: FrbrTree;
   onSubmit: (data: ExpressionFormData) => Promise<void>;
 }) {
+  const initialType = tree.expression?.content_type ?? "";
+  const [type, setType] = useState(initialType);
+  const initialKind = tree.expression?.kind ?? "";
+  const [kind, setKind] = useState(initialKind);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: ExpressionFormData = {
-      content_type: formData.get("content_type") as string | undefined,
+      content_type: type,
       language: formData.get("language") as string | undefined,
+      kind,
       metaFields,
     };
     await onSubmit(data);
@@ -514,7 +528,36 @@ function ExpressionEditor({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium">Content Type</label>
-          <InputField name="content_type" defaultValue={tree.expression?.content_type ?? ""} />
+          <select
+            name="content_type"
+            value={type}
+            onChange={e => setType(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="text">Text (Book/Comic/Manga/Magazine)</option>
+            <option value="image">Image (Artwork)</option>
+            <option value="audio">Audio (Music/Audiobook/Podcast)</option>
+            <option value="video">Video (Movie/TV Show/Anime)</option>
+            <option value="software">Software (Video Game)</option>
+            <option value="object">Object (Board Game/Model/Merch)</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Kind</label>
+          <select
+            name="kind"
+            value={kind}
+            onChange={e => setKind(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="">Studio / Default</option>
+            {EXPRESSION_KINDS.map(k => (
+              <option key={k} value={k}>
+                {formatKeyForDisplay(k)}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="text-sm font-medium">Language</label>
@@ -586,12 +629,16 @@ function ManifestationEditor({
   tree: FrbrTree;
   onSubmit: (data: ManifestationFormData) => Promise<void>;
 }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.manifestation.meta));
+  const initialType = (tree.manifestation.meta?.type as string) || "book";
+  const [type, setType] = useState(initialType);
+  const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
+  const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: ManifestationFormData = {
+      type,
       isbn13: formData.get("isbn13") as string | undefined,
       upc: formData.get("upc") as string | undefined,
       ean: formData.get("ean") as string | undefined,
@@ -602,13 +649,43 @@ function ManifestationEditor({
     await onSubmit(data);
   };
 
+  const textFormats: string[] = MEDIA_HIERARCHY.text.formats.map(f => f.id);
+  const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
+  const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
+
+  const isValidFormat = (MEDIA_FORMATS as readonly string[]).includes(type);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-medium">ISBN-13</label>
-          <InputField name="isbn13" defaultValue={tree.manifestation.isbn13 ?? ""} />
+        <div className="col-span-2">
+          <label className="text-sm font-medium">Type</label>
+          <Select value={type} onValueChange={(val: string) => setType(val)}>
+            <SelectTrigger className="w-full bg-background">
+              <SelectValue placeholder="Select type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {!isValidFormat && <SelectItem value={type}>{type} (Legacy)</SelectItem>}
+              {Object.entries(MEDIA_HIERARCHY).map(([catId, cat]) => (
+                <SelectGroup key={catId}>
+                  <SelectLabel>{cat.label}</SelectLabel>
+                  {cat.formats.map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {isBookLike && (
+          <div>
+            <label className="text-sm font-medium">ISBN-13</label>
+            <InputField name="isbn13" defaultValue={tree.manifestation.isbn13 ?? ""} />
+          </div>
+        )}
         <div>
           <label className="text-sm font-medium">UPC</label>
           <InputField name="upc" defaultValue={tree.manifestation.upc ?? ""} />
@@ -769,14 +846,21 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
  *
  * @param props - Component properties
  * @param props.manifestationId - The manifestation ID to load
+ * @param props.onClose - Optional callback when the editor is closed
  * @returns FRBR editor JSX element
  */
-export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
+export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const [tree, setTree] = useState<FrbrTree | null>(null);
+  const [lastFetched, setLastFetched] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("manifestation");
+  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const { data: profile } = useProfile();
+  const createEscalation = useCreateEscalation();
+  const hasWriteMetadata = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
+  const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
+
   const [itemFilter, setItemFilter] = useState({ owner: "", status: "", condition: "" });
 
   const fetchTree = useCallback(async () => {
@@ -785,6 +869,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
     try {
       const data = await getFrbrTree(manifestationId);
       setTree(data);
+      setLastFetched(Date.now());
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load FRBR tree";
       setError(message);
@@ -818,6 +903,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
       await updateFrbrEntity("expression", tree.expression.id, {
         content_type: data.content_type,
         language: data.language,
+        kind: data.kind,
         meta,
       });
       toast.success("Expression updated successfully");
@@ -830,7 +916,34 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
   const handleManifestationSubmit = async (data: ManifestationFormData) => {
     if (!tree?.manifestation) return;
     try {
+      const originalType = tree.manifestation.meta?.type as string;
+      const typeChanged = data.type && data.type !== originalType;
+
+      if (!hasWriteMetadata) {
+        if (typeChanged && hasEscalateRequest) {
+          await createEscalation.mutateAsync({
+            level: "manifestation",
+            targetId: tree.manifestation.id,
+            data: {
+              request_type: "change_type",
+              field_name: "type",
+              current_value: originalType,
+              suggested_value: data.type ?? "",
+              note: "Type change suggested via editor",
+            },
+          });
+          toast.success("Type change requested via User Requests.");
+        } else {
+          toast.error("You do not have permission to update metadata.");
+        }
+        return;
+      }
+
       const meta = transformFieldsToMeta(data.metaFields);
+      if (data.type) {
+        meta.type = data.type;
+      }
+
       await updateFrbrEntity("manifestation", tree.manifestation.id, {
         isbn13: data.isbn13,
         upc: data.upc,
@@ -918,51 +1031,27 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b">
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "work"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("work")}
+      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
+        <Select
+          value={activeTab}
+          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
         >
-          Work (F1)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "expression"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("expression")}
-        >
-          Expression (F2)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "manifestation"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("manifestation")}
-        >
-          Manifestation (F3)
-        </button>
-        <button
-          type="button"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "items"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("items")}
-        >
-          Items (F5)
-        </button>
+          <SelectTrigger className="w-[200px] bg-background">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="work">Work (F1)</SelectItem>
+            <SelectItem value="expression">Expression (F2)</SelectItem>
+            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+            <SelectItem value="items">Items (F5)</SelectItem>
+          </SelectContent>
+        </Select>
+        {onClose && (
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        )}
       </div>
 
       {activeTab === "work" && (
@@ -974,7 +1063,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
           <CardContent>
             {tree.work ? (
               <>
-                <WorkEditor key={tree.work.id} tree={tree} onSubmit={handleWorkSubmit} />
+                <WorkEditor key={`${tree.work.id}-${lastFetched}`} tree={tree} onSubmit={handleWorkSubmit} />
                 <WorkPartsManager workId={tree.work.id} />
               </>
             ) : (
@@ -992,7 +1081,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.expression ? (
-              <ExpressionEditor key={tree.expression.id} tree={tree} onSubmit={handleExpressionSubmit} />
+              <ExpressionEditor key={`${tree.expression.id}-${lastFetched}`} tree={tree} onSubmit={handleExpressionSubmit} />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
             )}
@@ -1016,7 +1105,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManifestationEditor key={tree.manifestation.id} tree={tree} onSubmit={handleManifestationSubmit} />
+            <ManifestationEditor key={`${tree.manifestation.id}-${lastFetched}`} tree={tree} onSubmit={handleManifestationSubmit} />
           </CardContent>
         </Card>
       )}
@@ -1105,7 +1194,7 @@ export function FrbrEditor({ manifestationId }: FrbrEditorProps) {
                       </button>
                       {expandedItems.has(item.id) && (
                         <div className="p-4 pt-0 border-t bg-muted/20">
-                          <ItemEditor key={item.id} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
+                          <ItemEditor key={`${item.id}-${lastFetched}`} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
                         </div>
                       )}
                     </div>

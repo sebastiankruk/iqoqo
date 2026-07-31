@@ -59,4 +59,34 @@ describe("ItemHeader", () => {
     expect(screen.getByText("Test Book")).toBeInTheDocument();
     expect(screen.getByText("Test Author")).toBeInTheDocument();
   });
+
+  it("renders 'Movie' badge for format 'movie' and does not fall back to 'Book'", () => {
+    const item: Item = {
+      ...mockItem,
+      manifestation_meta: { format: "movie" },
+    };
+    render(<ItemHeader item={item} />);
+    expect(screen.getByText("Movie")).toBeInTheDocument();
+    expect(screen.queryByText("Book")).not.toBeInTheDocument();
+  });
+
+  it("renders 'Movie' badge for format 'film' and does not fall back to 'Book'", () => {
+    const item: Item = {
+      ...mockItem,
+      manifestation_meta: { format: "film" },
+    };
+    render(<ItemHeader item={item} />);
+    expect(screen.getByText("Movie")).toBeInTheDocument();
+    expect(screen.queryByText("Book")).not.toBeInTheDocument();
+  });
+
+  it("renders 'Movie' badge for format 'video' and does not fall back to 'Book'", () => {
+    const item: Item = {
+      ...mockItem,
+      manifestation_meta: { format: "video" },
+    };
+    render(<ItemHeader item={item} />);
+    expect(screen.getByText("Movie")).toBeInTheDocument();
+    expect(screen.queryByText("Book")).not.toBeInTheDocument();
+  });
 });

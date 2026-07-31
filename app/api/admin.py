@@ -479,6 +479,7 @@ def get_frbr_tree(manif_id):
                         "id": expr.id,
                         "content_type": expr.content_type,
                         "language": expr.language,
+                        "kind": expr.kind,
                         "meta": sanitize_meta(expr.meta),
                         "work_id": expr.work_id,
                     }
@@ -520,14 +521,20 @@ def update_work(work_id):
 def update_expression(expr_id):
     """Update an Expression entity."""
     data = request.json or {}
+    # NOTE: ExpressionUpdateSchema available in app.api.schemas for stricter validation.
+    # Current endpoint is admin-gated via @require_permission(WRITE_METADATA).
     try:
+        kind = data.get("kind") or None  # map "" (and explicit null) to None = studio/default
         expr = frbr_service.update_expression(
             expr_id,
             work_id=data.get("work_id"),
             content_type=data.get("content_type"),
             language=data.get("language"),
             meta=parse_meta(data.get("meta")),
+            kind=kind,
         )
+        if "kind" in data and kind is None:
+            expr = frbr_service.clear_expression_kind(expr_id)
         return jsonify({"success": True, "data": {"id": expr.id}})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 404
@@ -539,6 +546,8 @@ def update_expression(expr_id):
 def update_manifestation(manif_id):
     """Update a Manifestation entity."""
     data = request.json or {}
+    # NOTE: ManifestationFrbrUpdateSchema available in app.api.schemas for stricter validation.
+    # Current endpoint is admin-gated via @require_permission(WRITE_METADATA).
     pub_date_str = data.get("publication_date")
     try:
         pub_date = date.fromisoformat(pub_date_str) if pub_date_str else None

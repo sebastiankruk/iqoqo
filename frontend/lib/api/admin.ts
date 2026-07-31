@@ -240,6 +240,7 @@ export interface FrbrExpression {
   work_id: number;
   content_type: string;
   language: string;
+  kind?: string | null;
   meta: Record<string, unknown>;
 }
 
@@ -318,12 +319,13 @@ export async function updateFrbrWork(
  * @param data.work_id - Optional new work ID association
  * @param data.content_type - Optional new content type
  * @param data.language - Optional new language
+ * @param data.kind - Optional new expression kind (e.g. "live_performance"; empty string clears to studio/default)
  * @param data.meta - Optional new metadata
  * @returns The updated expression ID
  */
 export async function updateFrbrExpression(
   expressionId: number,
-  data: { work_id?: number; content_type?: string; language?: string; meta?: Record<string, unknown> }
+  data: { work_id?: number; content_type?: string; language?: string; kind?: string; meta?: Record<string, unknown> }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/expression/${expressionId}`, data);
   if (!res.data.success || !res.data.data) {
@@ -406,7 +408,13 @@ export async function updateFrbrEntity(
     case "expression":
       return updateFrbrExpression(
         id,
-        data as { work_id?: number; content_type?: string; language?: string; meta?: Record<string, unknown> }
+        data as {
+          work_id?: number;
+          content_type?: string;
+          language?: string;
+          kind?: string;
+          meta?: Record<string, unknown>;
+        }
       );
     case "manifestation":
       return updateFrbrManifestation(id, data as Parameters<typeof updateFrbrManifestation>[1]);

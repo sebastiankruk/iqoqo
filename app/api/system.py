@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import json
+import os
 from io import BytesIO
 
 from flask import g, jsonify, make_response, request, send_file, send_from_directory
@@ -79,7 +80,42 @@ def serve_gallery_image(filename: str):
 
 @api_bp.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "ok", "service": "iqoqo-api", "version": Config.VERSION, "api_version": "v1"})
+    """Health check endpoint.
+
+    Returns basic service health information.
+    Optionally checks for column/meta data drift when ``?check_drift=1``.
+
+    The drift check is an expensive analytical query and MUST be protected
+    by a valid ``X-Deploy-Token`` header to prevent unauthenticated DoS.
+    """
+    check_drift = request.args.get("check_drift", "false").lower() in ("1", "true", "yes")
+    drift_info = None
+    status = "ok"
+    status_code = 200
+
+    if check_drift:
+        # SECURITY: Prevent unauthenticated DoS via health endpoint
+        deploy_token = request.headers.get("X-Deploy-Token")
+        expected_token = getattr(Config, "DEPLOY_TOKEN", None) or os.environ.get("DEPLOY_TOKEN")
+
+        if not deploy_token or not expected_token or deploy_token != expected_token:
+            return jsonify({"error": "Unauthorized to perform drift check", "code": 401}), 401
+
+        drift_info = DataManager.verify_column_meta_drift()
+        if drift_info.get("total_drift", 0) > 0:
+            status = "degraded"
+            status_code = 500
+
+    payload = {
+        "status": status,
+        "service": "iqoqo-api",
+        "version": Config.VERSION,
+        "api_version": "v1",
+    }
+    if drift_info is not None:
+        payload["drift"] = drift_info
+
+    return jsonify(payload), status_code
 
 
 @api_bp.route("/config", methods=["GET"])

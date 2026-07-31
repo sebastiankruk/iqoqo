@@ -422,6 +422,8 @@ def get_expressions_catalog() -> Response:
             "expression_id": expr.id,
             "content_type": expr.content_type,
             "language": expr.language,
+            "kind": expr.kind,
+            "is_live_performance": expr.kind == "live_performance",
             "work_title": work_title,
             "creators": creators,
             "owned_manifestations": owned_manifestations,

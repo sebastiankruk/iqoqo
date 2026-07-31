@@ -22,7 +22,7 @@
 
 services:
   openobserve:
-    image: openobserve/openobserve:v0.14.5
+    image: openobserve/openobserve:v0.91.5
     container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-openobserve
     restart: unless-stopped
     ports:
@@ -40,7 +40,7 @@ services:
       - default
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.95.0
+    image: otel/opentelemetry-collector-contrib:0.157.0
     container_name: ${COMPOSE_PROJECT_NAME:-iqoqo}-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]

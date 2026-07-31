@@ -22,6 +22,35 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+#: MusicBrainz media ``format`` values (case-insensitive) that identify a
+#: Blu-ray Pure Audio carrier.  Mirrors
+#: :data:`app.strategies.audio.BLURAY_AUDIO_RAW_LABELS`.
+_BLURAY_AUDIO_FORMATS: frozenset[str] = frozenset(
+    {
+        "blu-ray",
+        "blu-ray audio",
+        "bd-a",
+        "blu-ray pure audio",
+    }
+)
+
+
+def _detect_media_format(release: dict) -> str:
+    """Return the canonical audio format for a MusicBrainz release.
+
+    Reads the release's ``media`` list and maps Blu-ray carriers to
+    ``bluray_audio``; otherwise falls back to the generic ``audio`` marker
+    (which the read-time normalizer resolves via ``shared/format_mappings.yaml``).
+    """
+    media = release.get("media") or []
+    for medium in media:
+        if not isinstance(medium, dict):
+            continue
+        fmt = medium.get("format")
+        if isinstance(fmt, str) and fmt.strip().lower() in _BLURAY_AUDIO_FORMATS:
+            return "bluray_audio"
+    return "audio"
+
 
 def fetch_audio_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from MusicBrainz.
@@ -65,8 +94,9 @@ def fetch_audio_metadata(barcode: str) -> dict | None:
             "author": artist,
             "publisher": publisher,
             "cover_url": cover_url,
-            "format": "audio",
+            "format": _detect_media_format(release),
             "language": "en",  # Defaulting, as MusicBrainz language tags are complex
+            "raw_payload": release,
         }
     except requests.RequestException as e:
         logger.error(f"Failed to fetch audio metadata for {barcode}: {e}")

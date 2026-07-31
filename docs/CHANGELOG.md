@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.13] - 2026-07-31
+
+### Added
+
+- **Blu-ray Pure Audio Format Expansion**: Added `bluray_audio` format under the `music` category in `shared/taxonomy.yaml` with normalizations for `Blu-ray Audio`, `BD-A`, `BluRay HiFi`, `Pure Audio Blu-ray`. Added strategy rules for music Work on BD carrier vs concert movie BD.
+- **Event-Based FRBRoo Modeling**: Integrated `expression.kind` (`live_performance`) for performance events. Concert ingest creates a Performance Event Expression with performers, venue, and date realized in video/audio manifestations.
+- **F16 Container Aggregation**: Added board game container aggregation service (`ContainerAggregation` table + API surface) mapping rulebooks and component parts as aggregated works.
+- **Relational FRBR Columns & Relational Promotion**: Promoted core `meta` keys to indexed relational columns on `Work` (`sort_title`), `Expression` (`raw_payload`), `Manifestation` (`format`, `label`, `barcode`, `catalog_number`, `raw_payload`), and `Item` (`raw_payload`). Added Alembic migration `e3f891ab45c2`.
+- **Verbatim Provider Payloads**: All 5 external metadata provider utilities (Discogs, MusicBrainz, TMDB, BGG, Allegro) now return `raw_payload` for audit trail preservation.
+- **Column-vs-Meta Health Check**: Added `DataManager.verify_column_meta_drift()` and updated `GET /api/health?check_drift=1` to fail deploy health on non-zero drift.
+- **Apostrophe & Metacharacter Sanitization**: Canonicalized apostrophes (`’`, `‘`, `ʼ` → `'`) across search vectors, search query sanitization, and parameterized ILIKE metacharacter escaping (`%`, `_`, `\`).
+- **Batch AI Cover Generation & Watermarking CLI**: Created `scripts/generate_ai_covers.py` supporting `--batch-all-unwatermarked`, `--dry-run`, `--limit`, and `--watermark-only`.
+- **Data Correction Script**: Created idempotent `scripts/fix_manifestation_1984.py` remapping manifestation `1984` to `movie`/`bluray`.
+
+### Changed
+
+- **Allegro User-Agent**: Made Allegro API User-Agent header dynamic using `get_allegro_user_agent()` formatted as `${Config.ALLEGRO_APP_NAME}/${Config.VERSION} (+https://iqoqo.cc)`.
+- **DataManager Export & Ingest**: `DataManager.export_all()` and `IngestService` read and output relational columns column-first with `meta` fallback.
+
 ## [0.7.12] - 2026-07-25
 
 ### Added

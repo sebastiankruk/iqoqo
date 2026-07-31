@@ -257,6 +257,36 @@ class ItemLendSchema(BaseModel):
         return _validate_uuid_str(v)
 
 
+class ExpressionUpdateSchema(BaseModel):
+    """Schema for expression metadata update via FRBR admin editor."""
+
+    model_config = ConfigDict(extra="allow")
+
+    work_id: int | None = None
+    content_type: str | None = None
+    language: str | None = None
+    kind: str | None = Field(default=None, max_length=50, description="Expression kind (e.g. live_performance)")
+    meta: dict[str, Any] | None = None
+
+
+class ManifestationFrbrUpdateSchema(BaseModel):
+    """Schema for manifestation FRBR admin editor updates with promoted relational fields."""
+
+    model_config = ConfigDict(extra="allow")
+
+    expression_id: int | None = None
+    isbn13: str | None = Field(default=None, max_length=20)
+    upc: str | None = Field(default=None, max_length=20)
+    ean: str | None = Field(default=None, max_length=20)
+    publisher: str | None = Field(default=None, max_length=500)
+    publication_date: str | None = None
+    format: str | None = Field(default=None, max_length=50, description="Carrier format (e.g. vinyl, cd, bluray)")
+    label: str | None = Field(default=None, max_length=500, description="Label or studio name")
+    barcode: str | None = Field(default=None, max_length=100, description="UPC/EAN barcode")
+    catalog_number: str | None = Field(default=None, max_length=100, description="Label catalog number")
+    meta: dict[str, Any] | None = None
+
+
 class ItemCollectionLinkSchema(BaseModel):
     """Schema for linking an item to a named collection."""
 

@@ -39,6 +39,13 @@ _CATALOG = "catalog." if _USE_PG else ""
 _INVENTORY = "inventory." if _USE_PG else ""
 
 
+def sanitize_search_query(q: str) -> str:
+    """Canonicalize apostrophe variants (’ ‘ ʼ -> ') and strip whitespace."""
+    if not q:
+        return ""
+    return q.translate(str.maketrans("’‘ʼ", "'''")).strip()
+
+
 class SearchService:
     @staticmethod
     def search_manifestations(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -57,6 +64,7 @@ class SearchService:
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
+        q = sanitize_search_query(q)
         if not q:
             return 0, []
 
@@ -101,6 +109,7 @@ class SearchService:
         publishers: list[str] | None = None,
     ) -> tuple[int, list[dict]]:
         """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
+        q = sanitize_search_query(q)
         if not q:
             return 0, []
 

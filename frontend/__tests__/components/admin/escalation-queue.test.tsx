@@ -166,9 +166,9 @@ describe("EscalationQueue Component", () => {
 
     expect(screen.getByTestId("escalation-queue")).toBeInTheDocument();
     expect(screen.getByText("Test User")).toBeInTheDocument();
-    expect(screen.getByText(/Manifestation #42/i)).toBeInTheDocument();
-    expect(screen.getByText("title")).toBeInTheDocument();
-    expect(screen.getByText("Correct Title")).toBeInTheDocument();
+    expect(screen.getAllByText(/Manifestation #42/i)[0]).toBeInTheDocument();
+    expect(screen.getByText(/Requested change details:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Correct Title/i)).toBeInTheDocument();
     expect(screen.getByText("Please fix")).toBeInTheDocument();
     expect(screen.getByText("Accept")).toBeInTheDocument();
     expect(screen.getByText("Reject")).toBeInTheDocument();
@@ -179,24 +179,24 @@ describe("EscalationQueue Component", () => {
     const workRequest: EscalationRequest = {
       ...mockPendingRequest,
       id: 2,
-      manifestation_id: undefined,
       work_id: 10,
+      manifestation_id: undefined,
     };
-    const exprRequest: EscalationRequest = {
+    const expressionRequest: EscalationRequest = {
       ...mockPendingRequest,
       id: 3,
-      manifestation_id: undefined,
       expression_id: 20,
+      manifestation_id: undefined,
     };
     const itemRequest: EscalationRequest = {
       ...mockPendingRequest,
       id: 4,
-      manifestation_id: undefined,
       item_id: 30,
+      manifestation_id: undefined,
     };
 
     vi.mocked(escalationHooks.useEscalationQueue).mockReturnValue({
-      data: [workRequest, exprRequest, itemRequest],
+      data: [workRequest, expressionRequest, itemRequest],
       isLoading: false,
       isError: false,
       error: null,
@@ -204,9 +204,9 @@ describe("EscalationQueue Component", () => {
 
     render(<EscalationQueue />);
 
-    expect(screen.getByText(/Work #10/i)).toBeInTheDocument();
-    expect(screen.getByText(/Expression #20/i)).toBeInTheDocument();
-    expect(screen.getByText(/Item #30/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Work #10/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/Expression #20/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/Item #30/i)[0]).toBeInTheDocument();
   });
 
   // ── 4.1 Error state ────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ describe("EscalationQueue Component", () => {
     render(<EscalationQueue />);
 
     // The deletion badge should be present with text-destructive styling
-    expect(screen.getByText("Deletion")).toBeInTheDocument();
+    expect(screen.getAllByText("Deletion")[0]).toBeInTheDocument();
   });
 
   // ── 4.8 Deletion accept button gated on permission ─────────────────────
@@ -461,7 +461,28 @@ describe("EscalationQueue Component", () => {
     render(<EscalationQueue />);
 
     // The target label should be a link to the admin editor
-    const link = screen.getByText(/Manifestation #42/i);
+    const link = screen.getAllByText(/Manifestation #42/i)[0];
     expect(link.closest("a")).toHaveAttribute("href", "/admin/content?tab=metadata&manifestationId=42");
+  });
+
+  it("renders RequestTypeBadge with 'Change Type' when request_type is change_type", () => {
+    const changeTypeRequest: EscalationRequest = {
+      ...mockPendingRequest,
+      id: 15,
+      request_type: "change_type",
+      field_name: "type",
+      suggested_value: "movie",
+    };
+
+    vi.mocked(escalationHooks.useEscalationQueue).mockReturnValue({
+      data: [changeTypeRequest],
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof escalationHooks.useEscalationQueue>);
+
+    render(<EscalationQueue />);
+
+    expect(screen.getByText("Change Type")).toBeInTheDocument();
   });
 });

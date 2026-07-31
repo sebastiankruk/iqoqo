@@ -24,10 +24,13 @@ _CONNECT_TIMEOUT: int = 3
 _READ_TIMEOUT: int = 7
 _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
 
-# Allegro requires a specific User-Agent format to avoid 403 EDGE_REQUEST_REJECTED errors:
-# ApplicationName/Version (+DocumentationURL)
-# ApplicationName is set via ALLEGRO_APP_NAME env var (iqoqo_cc, iqoqo_pre, iqoqo_dev).
-_USER_AGENT: str = f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
+
+def get_allegro_user_agent() -> str:
+    """Return Allegro User-Agent header string formatted per Allegro API specification.
+
+    Format: ``{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)``
+    """
+    return f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
 
 
 def get_allegro_token() -> str | None:
@@ -38,7 +41,7 @@ def get_allegro_token() -> str | None:
     if not client_id or not client_secret:
         return None
 
-    auth_headers = {"User-Agent": _USER_AGENT}
+    auth_headers = {"User-Agent": get_allegro_user_agent()}
 
     # Check for User Context token from Authorization Code flow first
     if os.path.isfile(_TOKEN_FILE):
@@ -103,7 +106,7 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.allegro.public.v1+json",
-        "User-Agent": _USER_AGENT,
+        "User-Agent": get_allegro_user_agent(),
     }
 
     try:
@@ -143,6 +146,7 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
                         "publisher": item.get("publication") and item.get("publication").get("publisher"),
                         "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
                         "source": "Allegro Catalog",
+                        "raw_payload": item,
                     }
         except requests.exceptions.RequestException:
             pass  # Fall back to Listing if Catalog fails
@@ -168,6 +172,7 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
                         "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
                         "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
                         "source": "Allegro Listing",
+                        "raw_payload": offer,
                     }
             elif response.status_code == 403:
                 logger.debug("Allegro Listing API returned 403; skipping fallback.")

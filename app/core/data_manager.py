@@ -71,7 +71,9 @@ class DataManager:
                 {
                     "id": work.id,
                     "title": work.title,
+                    "sort_title": work.sort_title or (work.meta.get("sort_title") if work.meta else None),
                     "meta": work.meta,
+                    "raw_payload": work.raw_payload,
                 }
             )
 
@@ -83,7 +85,9 @@ class DataManager:
                     "work_id": expr.work_id,
                     "content_type": expr.content_type,
                     "language": expr.language,
+                    "kind": expr.kind or (expr.meta.get("kind") if expr.meta else None),
                     "meta": expr.meta,
+                    "raw_payload": expr.raw_payload,
                 }
             )
 
@@ -96,10 +100,15 @@ class DataManager:
                     "isbn13": manif.isbn13,
                     "upc": manif.upc,
                     "ean": manif.ean,
-                    "publisher": manif.publisher,
+                    "publisher": manif.publisher or (manif.meta.get("publisher") if manif.meta else None),
                     "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
                     "cover_url": manif.cover_url,
+                    "format": manif.format or (manif.meta.get("format") if manif.meta else None),
+                    "label": manif.label or (manif.meta.get("label") if manif.meta else None),
+                    "barcode": manif.barcode or (manif.meta.get("barcode") if manif.meta else None),
+                    "catalog_number": manif.catalog_number or (manif.meta.get("catalog_number") if manif.meta else None),
                     "meta": manif.meta,
+                    "raw_payload": manif.raw_payload,
                 }
             )
 
@@ -115,6 +124,7 @@ class DataManager:
                     "condition": item.condition,
                     "added_at": item.added_at.isoformat() if item.added_at else None,
                     "meta": item.meta,
+                    "raw_payload": item.raw_payload,
                 }
             )
 
@@ -279,6 +289,95 @@ class DataManager:
         Expression.query.delete()
         Work.query.delete()
         db.session.commit()
+
+    @staticmethod
+    def verify_column_meta_drift() -> dict[str, Any]:
+        """
+        Post-migration verification query health check.
+
+        Compares relational column values against historical ``meta`` JSON keys.
+        Returns a dict summarizing any non-zero drift counts.
+
+        All drift computation is performed at the database level using
+        ``func.count()`` with JSONB operators to prevent OOM exhaustion
+        on large catalogs.
+        """
+        is_pg = db.engine.dialect.name == "postgresql"
+
+        if is_pg:
+            format_cond = [
+                Manifestation.meta.has_key("format"),  # noqa: W601
+                Manifestation.format != Manifestation.meta["format"].as_string(),
+            ]
+            label_cond = [
+                Manifestation.meta.has_key("label"),  # noqa: W601
+                Manifestation.label != Manifestation.meta["label"].as_string(),
+            ]
+            barcode_cond = [
+                Manifestation.meta.has_key("barcode"),  # noqa: W601
+                Manifestation.barcode != Manifestation.meta["barcode"].as_string(),
+            ]
+        else:
+            fmt_ext = func.json_extract(Manifestation.meta, "$.format")
+            format_cond = [fmt_ext.is_not(None), Manifestation.format != fmt_ext]
+            lbl_ext = func.json_extract(Manifestation.meta, "$.label")
+            label_cond = [lbl_ext.is_not(None), Manifestation.label != lbl_ext]
+            bar_ext = func.json_extract(Manifestation.meta, "$.barcode")
+            barcode_cond = [bar_ext.is_not(None), Manifestation.barcode != bar_ext]
+
+        # Format Drift
+        format_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *format_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Label Drift
+        label_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *label_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Barcode Drift
+        barcode_drift = (
+            db.session.query(func.count(Manifestation.id))  # pylint: disable=not-callable
+            .filter(
+                Manifestation.meta.is_not(None),
+                *barcode_cond,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Sort Title Drift
+        sort_title_drift = (
+            db.session.query(func.count(Work.id))  # pylint: disable=not-callable
+            .filter(
+                Work.title.is_not(None),
+                Work.sort_title.is_(None),
+            )
+            .scalar()
+            or 0
+        )
+
+        total_drift = format_drift + label_drift + barcode_drift + sort_title_drift
+
+        return {
+            "format_drift": format_drift,
+            "label_drift": label_drift,
+            "barcode_drift": barcode_drift,
+            "sort_title_drift": sort_title_drift,
+            "total_drift": total_drift,
+        }
 
     @staticmethod
     def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:

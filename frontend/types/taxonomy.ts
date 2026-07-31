@@ -34,6 +34,7 @@ export const MEDIA_FORMATS = [
   "cassette",
   "minidisc",
   "cd_dvd_combo",
+  "bluray_audio",
   "unknown_audio",
   "dvd",
   "bluray",
@@ -149,6 +150,10 @@ export const MEDIA_HIERARCHY = {
       {
         id: "cd_dvd_combo",
         label: "CD + DVD Edition",
+      },
+      {
+        id: "bluray_audio",
+        label: "Blu-ray Pure Audio",
       },
       {
         id: "unknown_audio",
@@ -299,6 +304,7 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   cassette: "music",
   minidisc: "music",
   cd_dvd_combo: "music",
+  bluray_audio: "music",
   unknown_audio: "music",
   dvd: "movie",
   bluray: "movie",
@@ -324,6 +330,10 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   audio: "music",
   sound: "music",
   lp: "music",
+  "blu-ray audio": "music",
+  "bd-a": "music",
+  "bluray hifi": "music",
+  "pure audio blu-ray": "music",
   video: "movie",
   "moving image": "movie",
   game: "board_game",

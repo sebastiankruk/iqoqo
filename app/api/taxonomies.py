@@ -122,9 +122,24 @@ def get_taxonomies() -> Response | tuple[Response, int]:
         )
         w_ids = [r[0] for r in work_ids_query]
 
+        # 5. Expression kinds (e.g. live_performance) — lets the UI distinguish
+        # concerts from studio releases without genre-tag abuse.
+        expression_kinds_query = (
+            db.session.query(Expression.kind)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .filter(
+                Expression.kind.isnot(None),
+                Item.id.in_(db.session.query(item_ids_subq.c.id)),
+            )
+            .distinct()
+            .all()
+        )
+
         tags = sorted([t[0] for t in tags_query if t[0]])
         collections = sorted([c[0] for c in collections_query if c[0]])
         publishers = sorted([p[0].strip() for p in publishers_query if p[0] and p[0].strip()])
+        expression_kinds = sorted([k[0] for k in expression_kinds_query if k[0]])
 
         genres_set: set[str] = set()
         if w_ids:
@@ -149,6 +164,7 @@ def get_taxonomies() -> Response | tuple[Response, int]:
                     "genres": genres,
                     "collections": collections,
                     "publishers": publishers,
+                    "expression_kinds": expression_kinds,
                 },
             }
         )

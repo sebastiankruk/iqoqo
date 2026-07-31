@@ -161,8 +161,9 @@
     "movie": "Film",
     "music": "Muzyka",
     "game": "Gra",
-    "seriesSuffix": "{label} (seria)",
-    "cdAudio": "CD / audio"
+    "audiobook": "Audiobook",
+    "concert": "Koncert",
+    "seriesSuffix": "{label} (seria)"
   },
   "Collection": {
     "loading": "Ładowanie kolekcji...",
@@ -257,6 +258,7 @@
     "fmt_sacd": "SACD",
     "fmt_minidisc": "MiniDisc",
     "fmt_cd_dvd_combo": "Edycja CD + DVD",
+    "fmt_bluray_audio": "Blu-ray Pure Audio",
     "fmt_4k_uhd": "4K UHD",
     "fmt_vcd": "Video CD (VCD)",
     "fmt_vhs": "VHS",
