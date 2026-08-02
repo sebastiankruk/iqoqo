@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine # Locked to match docker-compose.yml
+        image: postgres:18-alpine # Locked to match docker-compose.yml
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -202,7 +202,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

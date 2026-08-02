@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PostgreSQL 16 → 18 Migration Script**: Added `deploy/migrate-postgres-16-to-18.sh` for safe major-version database upgrades across `dev`, `preview`, and `prod` stacks. Uses a standalone temporary container to dump v16 data regardless of `docker-compose.yml` state, backs up the old volume, and restores into v18. Includes `--dry-run` support and rollback documentation.
+- **Database Upgrade Guide**: Added `docs/UPGRADE_POSTGRES_18.md` with step-by-step instructions for all deployment environments.
+
 ### Changed
+
+- **PostgreSQL**: Upgraded from `16-alpine` to `18-alpine` in `docker-compose.yml` and CI workflows.
+- **Redis**: Upgraded from `7-alpine` to `8-alpine` in `docker-compose.yml`.
 
 ### Fixed
 
