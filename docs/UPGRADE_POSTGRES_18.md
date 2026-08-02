@@ -25,7 +25,7 @@ safely by:
 ## Supported Stacks
 
 | Stack | `COMPOSE_PROJECT_NAME` | Volume Name |
-|-------|------------------------|-------------|
+| ----- | ---------------------- | ----------- |
 | `dev` | `iqoqo-dev` | `iqoqo-dev_postgres_data` |
 | `preview` | `iqoqo-preview` | `iqoqo-preview_postgres_data` |
 | `prod` | `iqoqo` | `iqoqo_postgres_data` |
