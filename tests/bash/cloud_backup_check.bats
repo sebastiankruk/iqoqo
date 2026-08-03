@@ -67,8 +67,11 @@ teardown() {
 }
 
 @test "cloud_backup_check.sh fails when cron file is missing" {
-  # Should report fail on cron job and exit with non-zero
-  run bash scripts/cloud_backup_check.sh my-remote
+  TEMP_CHECK_SCRIPT="${TEST_TEMP_DIR}/check_missing_cron.sh"
+  cp scripts/cloud_backup_check.sh "${TEMP_CHECK_SCRIPT}"
+  sed -i.bak "s|/etc/cron.d/iqoqo-backup|${TEST_TEMP_DIR}/nonexistent-cron|g" "${TEMP_CHECK_SCRIPT}"
+
+  run bash "${TEMP_CHECK_SCRIPT}" my-remote
   [ "$status" -ne 0 ]
   [[ "$output" =~ "[FAIL] Cron job: not installed" ]]
 }

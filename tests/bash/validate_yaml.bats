@@ -28,19 +28,19 @@ teardown() {
 
 @test "validate_yaml.py exits 0 for valid YAML" {
   echo "key: value" > "${TEST_DIR}/valid.yaml"
-  run python scripts/validate_yaml.py
+  run python3 scripts/validate_yaml.py
   # The default validates shared/format_mappings.yaml which should be valid
   [ "$status" -eq 0 ]
 }
 
 @test "validate_yaml.py exits 1 for malformed YAML file" {
   printf 'key: value\n[[invalid yaml syntax\n' > "${TEST_DIR}/bad.yaml"
-  run python scripts/validate_yaml.py "${TEST_DIR}/bad.yaml"
+  run python3 scripts/validate_yaml.py "${TEST_DIR}/bad.yaml"
   [ "$status" -eq 1 ]
 }
 
 @test "validate_yaml.py exits 1 for missing file" {
-  run python -c "
+  run python3 -c "
 import sys
 sys.path.insert(0, 'scripts')
 from validate_yaml import validate_yaml

@@ -23,7 +23,21 @@ echo "-----------------------------------"
 
 # Extract version using Python (matching your new CI pipeline)
 echo "📦 Extracting version from pyproject.toml..."
-VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+PYTHON_BIN="python3"
+if [ -x ".venv/bin/python" ]; then
+    PYTHON_BIN=".venv/bin/python"
+fi
+VERSION=$($PYTHON_BIN -c "
+try:
+    import tomllib
+    with open('pyproject.toml', 'rb') as f:
+        print(tomllib.load(f)['project']['version'])
+except Exception:
+    import re
+    with open('pyproject.toml') as f:
+        m = re.search(r'version\s*=\s*\"([^\"]+)\"', f.read())
+        print(m.group(1) if m else '0.0.0')
+")
 echo "📌 Version found: v$VERSION"
 echo ""
 

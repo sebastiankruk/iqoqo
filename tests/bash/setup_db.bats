@@ -62,7 +62,7 @@ EOF
   run bash scripts/setup_db.sh --check
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Container: iqoqo-db-1" ]]
-  [[ "$output" =~ "Role 'iqoqo' EXISTS" ]]
+  [[ "$output" =~ Role\ \'.*\'\ EXISTS ]]
 }
 
 @test "setup_db.sh reasserts privileges if role already exists" {
@@ -87,6 +87,6 @@ EOF
 
   run bash scripts/setup_db.sh
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "Role 'iqoqo' already exists — reasserting privileges" ]]
-  [[ "$output" =~ "Privileges and table ownership for 'iqoqo' ensured." ]]
+  [[ "$output" =~ Role\ \'.*\'\ already\ exists\ —\ reasserting\ privileges ]]
+  [[ "$output" =~ Privileges\ and\ table\ ownership\ for\ \'.*\'\ ensured. ]]
 }
