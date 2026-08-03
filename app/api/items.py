@@ -1649,6 +1649,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     import os
     import xml.etree.ElementTree as ET
 
+    import defusedxml.ElementTree as SafeET
     import qrcode
     from flask import send_file
 
@@ -1713,7 +1714,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
             with open(logo_path, encoding="utf-8") as f:
                 logo_svg = f.read()
 
-            root_logo = ET.fromstring(logo_svg)
+            root_logo = SafeET.fromstring(logo_svg)
             path_el_logo = None
             for el in root_logo.iter():
                 if el.tag.endswith("path"):
@@ -1768,7 +1769,7 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
 
         import re
 
-        root_logo = ET.fromstring(logo_svg)
+        root_logo = SafeET.fromstring(logo_svg)
         path_el_logo = None
         for el in root_logo.iter():
             if el.tag.endswith("path"):

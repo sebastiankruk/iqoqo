@@ -36,7 +36,15 @@ import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface MetaField {
   key: string;
@@ -1081,7 +1089,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.expression ? (
-              <ExpressionEditor key={`${tree.expression.id}-${lastFetched}`} tree={tree} onSubmit={handleExpressionSubmit} />
+              <ExpressionEditor
+                key={`${tree.expression.id}-${lastFetched}`}
+                tree={tree}
+                onSubmit={handleExpressionSubmit}
+              />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
             )}
@@ -1105,7 +1117,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManifestationEditor key={`${tree.manifestation.id}-${lastFetched}`} tree={tree} onSubmit={handleManifestationSubmit} />
+            <ManifestationEditor
+              key={`${tree.manifestation.id}-${lastFetched}`}
+              tree={tree}
+              onSubmit={handleManifestationSubmit}
+            />
           </CardContent>
         </Card>
       )}
@@ -1194,7 +1210,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
                       </button>
                       {expandedItems.has(item.id) && (
                         <div className="p-4 pt-0 border-t bg-muted/20">
-                          <ItemEditor key={`${item.id}-${lastFetched}`} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
+                          <ItemEditor
+                            key={`${item.id}-${lastFetched}`}
+                            item={item}
+                            onSubmit={data => handleItemSubmit(data, item.id)}
+                          />
                         </div>
                       )}
                     </div>

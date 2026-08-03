@@ -137,9 +137,10 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
                 assert path == "/static/covers/9780553380163_ol_orig.jpg"
                 assert source == "api_openlibrary"
                 assert (tmp_path / "9780553380163_ol_orig.jpg").exists()
-                # Verify URL
-                args, _ = mock_requests_get.call_args
-                assert "covers.openlibrary.org" in args[0]
+                # Verify URL / Host header
+                args, kwargs = mock_requests_get.call_args
+                host_header = kwargs.get("headers", {}).get("Host", "")
+                assert "covers.openlibrary.org" in args[0] or host_header == "covers.openlibrary.org"
 
 
 def test_fetch_external_api_cover_failure(mock_requests_get):

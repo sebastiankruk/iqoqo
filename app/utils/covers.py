@@ -15,12 +15,9 @@
 #
 import hashlib
 import io
-import ipaddress
 import logging
 import os
-import socket
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
@@ -31,6 +28,7 @@ from app.core.tasks import submit_task
 from app.core.telemetry import record_outbound_telemetry
 from app.db import db
 from app.db.models import Manifestation
+from app.utils.http_client import SSRFError, is_safe_url, safe_get
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.isbn import canonicalize_isbn
 from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
@@ -52,34 +50,6 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
-
-
-def is_safe_url(url: str) -> bool:
-    """Validates that a given URL is safe for server-side downloading to prevent SSRF.
-
-    Blocks URLs pointing to private, loopback, or link-local IP addresses.
-    """
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-
-        # Resolve the hostname to an IP to check against private/loopback blocks
-        ip_info = socket.getaddrinfo(hostname, None)
-        for result in ip_info:
-            ip_str = result[4][0]
-            ip_obj = ipaddress.ip_address(ip_str)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
-                logger.warning("SSRF Attempt Blocked: Hostname %s resolved to restricted IP %s.", hostname, ip_str)
-                return False
-        return True
-    except (OSError, ValueError, socket.gaierror) as e:
-        logger.error("URL validation failed for %s: %s", url, e)
-        return False
 
 
 def add_source_badge(filepath: str, source: str):
@@ -241,7 +211,7 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         record_outbound_telemetry(source_name or "DirectURL", headers, url=url)
-        with requests.get(url, stream=True, timeout=10, headers=headers) as response:
+        with safe_get(url, stream=True, timeout=10, headers=headers) as response:
             if response.status_code == 200:
                 # Fast fail on known bad sizes if header is present
                 try:
@@ -273,6 +243,8 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
                         filepath = os.path.join(COVERS_DIR, filename)
                         optimize_and_save_image(content, filepath)
                         res = f"{Config.COVERS_BASE_URL}/{filename}", source_name
+    except SSRFError as exc:
+        logger.warning("SSRF blocked for %s: %s", url, exc)
     except (requests.RequestException, OSError, ValueError, TypeError) as e:
         logger.error(f"Error fetching direct URL {url}: {e}")
     return res

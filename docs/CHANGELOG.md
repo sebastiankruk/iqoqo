@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **PostgreSQL 16 → 18 Migration Script**: Added `deploy/migrate-postgres-16-to-18.sh` for safe major-version database upgrades across `dev`, `preview`, and `prod` stacks. Uses a standalone temporary container to dump v16 data regardless of `docker-compose.yml` state, backs up the old volume, and restores into v18. Includes `--dry-run` support and rollback documentation.
 - **Database Upgrade Guide**: Added `docs/UPGRADE_POSTGRES_18.md` with step-by-step instructions for all deployment environments.
+- **SSRF-Safe HTTP Client**: Added `app/utils/http_client.py` wrapper for external resource fetching with pre-connection DNS resolution, restricted IP network blocking (localhost, RFC 1918, link-local, AWS metadata 169.254.169.254), and Host header preservation against DNS rebinding.
+- **XXE Prevention**: Integrated `defusedxml` across XML parsing utilities (`app/utils/bgg.py`, `app/api/items.py`) to safely parse untrusted XML and prevent XML External Entity (XXE) and Billion Laughs DoS attacks.
+
+### Security
+
+- **Critical Vulnerability Eradication**: Patched SSRF in image downloading and external metadata fetching, and XXE DoS in BGG and SVG QR code parsing.
 
 ### Changed
 

@@ -25,9 +25,9 @@ layer over the library's objects. Migration to `boardgamegeek2` is tracked for a
 
 import logging
 import os
-import xml.etree.ElementTree as ET
 from typing import Any
 
+import defusedxml.ElementTree as ET
 import requests
 
 logger = logging.getLogger(__name__)

@@ -11,6 +11,7 @@ celery[redis]==5.6.*
 redis==5.*
 psycopg2-binary==2.9.*
 requests
+defusedxml>=0.7.1
 rdflib==7.*
 python-dotenv
 flask-sqlalchemy
