@@ -21,9 +21,9 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 
 import logging
 import os
+import subprocess
 from collections.abc import Callable
 
-import boto3
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
@@ -159,11 +159,11 @@ def shutdown_executor() -> None:
 
 
 class BackupManager:
-    """Helper class to manage backups in local storage (synced to Dropbox via rclone) and S3 Glacier."""
+    """Helper class to manage backups in local storage and remote cloud via rclone."""
 
-    def __init__(self, backup_dir: str = "/data/backups", s3_bucket: str = "iqoqo-glacier-archives"):
+    def __init__(self, backup_dir: str = "/data/backups", rclone_remote: str = "iqoqo-backup"):
         self.backup_dir = backup_dir
-        self.s3_bucket = s3_bucket
+        self.rclone_remote = rclone_remote
 
     def list_backups(self) -> list[str]:
         """Mockable method to list backups."""
@@ -178,10 +178,13 @@ class BackupManager:
             os.remove(file_path)
 
     def upload_to_glacier(self, filename: str) -> None:
-        """Uploads a file to AWS S3 Glacier."""
-        s3 = boto3.client("s3")
+        """Uploads a file to long-term storage via rclone proxy."""
         file_path = os.path.join(self.backup_dir, filename)
-        s3.upload_file(file_path, self.s3_bucket, filename, ExtraArgs={"StorageClass": "GLACIER"})
+        try:
+            subprocess.run(["rclone", "copy", file_path, f"{self.rclone_remote}:archives"], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error("rclone upload failed: %s", e.stderr)
+            raise RuntimeError(f"Backup sync failed: {e.stderr}") from e
 
 
 @celery.task(bind=True)
