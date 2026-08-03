@@ -19,7 +19,8 @@ echo "Concurrency: $CONCURRENCY"
 
 # Generate URLs
 URLS_FILE=$(mktemp)
-for i in $(seq 1 "$NUM_REQUESTS"); do
+# shellcheck disable=SC2034
+for _ in $(seq 1 "$NUM_REQUESTS"); do
     echo "$URL" >> "$URLS_FILE"
 done
 
