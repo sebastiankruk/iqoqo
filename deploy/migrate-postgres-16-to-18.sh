@@ -211,6 +211,7 @@ dump_v16() {
     -e POSTGRES_USER="$PG_USER" \
     -e POSTGRES_PASSWORD="$PG_PASSWORD" \
     -e POSTGRES_DB="$PG_DB" \
+    -e PGDATA="$PG_DATA_DIR" \
     "$OLD_PG_IMAGE" >/dev/null
 
   # Wait for postgres to be ready
@@ -276,6 +277,7 @@ restore_v18() {
     -e POSTGRES_USER="$PG_USER" \
     -e POSTGRES_PASSWORD="$PG_PASSWORD" \
     -e POSTGRES_DB="$PG_DB" \
+    -e PGDATA="$PG_DATA_DIR" \
     "$NEW_PG_IMAGE" >/dev/null
 
   # Wait for postgres to be ready
