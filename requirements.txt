@@ -13,6 +13,7 @@ psycopg2-binary==2.9.*
 requests
 defusedxml>=0.7.1
 rdflib==7.*
+boto3
 python-dotenv
 flask-sqlalchemy
 flask-migrate

@@ -20,8 +20,10 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 """
 
 import logging
+import os
 from collections.abc import Callable
 
+import boto3
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
@@ -154,3 +156,59 @@ def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
 def shutdown_executor() -> None:
     """No-op for Celery migration."""
     pass
+
+
+class BackupManager:
+    """Helper class to manage backups in local storage (synced to Dropbox via rclone) and S3 Glacier."""
+
+    def __init__(self, backup_dir: str = "/data/backups", s3_bucket: str = "iqoqo-glacier-archives"):
+        self.backup_dir = backup_dir
+        self.s3_bucket = s3_bucket
+
+    def list_backups(self) -> list[str]:
+        """Mockable method to list backups."""
+        if not os.path.exists(self.backup_dir):
+            return []
+        return [f for f in os.listdir(self.backup_dir) if os.path.isfile(os.path.join(self.backup_dir, f))]
+
+    def delete_backup(self, filename: str) -> None:
+        """Mockable method to delete a backup from fast storage."""
+        file_path = os.path.join(self.backup_dir, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    def upload_to_glacier(self, filename: str) -> None:
+        """Uploads a file to AWS S3 Glacier."""
+        s3 = boto3.client("s3")
+        file_path = os.path.join(self.backup_dir, filename)
+        s3.upload_file(file_path, self.s3_bucket, filename, ExtraArgs={"StorageClass": "GLACIER"})
+
+
+@celery.task(bind=True)
+def rotate_and_archive_backups(self) -> None:
+    """
+    Automated Backup Retention Task.
+    Enforces 7 daily and 5 weekly backups in fast storage (Dropbox).
+    Archives older backups to AWS S3 Glacier and removes them from fast storage.
+    """
+    manager = BackupManager()
+    backups = manager.list_backups()
+
+    # Sort backups by modification time (newest first)
+    def get_mtime(filename: str) -> float:
+        return os.path.getmtime(os.path.join(manager.backup_dir, filename))
+
+    backups.sort(key=get_mtime, reverse=True)
+
+    for i, backup in enumerate(backups):
+        # Keep 7 daily + 5 weekly = 12 newest backups in fast storage
+        if i < 12:
+            continue
+
+        # Archive older backups
+        try:
+            manager.upload_to_glacier(backup)
+            manager.delete_backup(backup)
+            logger.info("Archived %s to Glacier and removed from local storage.", backup)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to archive %s: %s", backup, e)

@@ -36,8 +36,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application's code into the container
 COPY . .
 
-# Fix ownership
-RUN chown -R appuser:appuser /usr/src/app
+# Fix ownership for app, log, and tmp directories
+RUN chown -R appuser:appuser /usr/src/app /tmp /var/log
 
 # Inject version
 ARG APP_VERSION=dev
