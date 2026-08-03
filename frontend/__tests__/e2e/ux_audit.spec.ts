@@ -18,16 +18,15 @@ import { test, expect } from "@playwright/test";
 import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("UX/UI Audit Workflow", () => {
-  // 1. Audit public landing page of dev.iqoqo.cc
+  // 1. Audit public landing page
   test("Audit dev.iqoqo.cc landing page button density and CTAs", async ({ page }) => {
-    console.log("=== NAVIGATING TO DEV.IQOQO.CC ===");
+    const targetUrl = process.env.AUDIT_EXTERNAL_URL || "/";
+    console.log(`=== NAVIGATING TO LANDING PAGE (${targetUrl}) ===`);
     try {
-      await page.goto("https://dev.iqoqo.cc", { timeout: 8000 });
-      await page.waitForLoadState("networkidle");
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
     } catch {
-      console.warn("⚠️ dev.iqoqo.cc is not reachable. Falling back to local landing page.");
-      await page.goto("/", { timeout: 15000 });
-      await page.waitForLoadState("networkidle");
+      console.warn(`⚠️ ${targetUrl} is not reachable. Falling back to local landing page.`);
+      await page.goto("/", { waitUntil: "domcontentloaded", timeout: 15000 });
     }
 
     // Take screenshot of landing page
@@ -128,7 +127,7 @@ test.describe("UX/UI Audit Workflow", () => {
 
     test("Audit Dashboard button density and navigation actions", async ({ page }) => {
       await page.goto("/");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       // Capture screenshot of authenticated dashboard
       await page.screenshot({ path: "../.context/notes/images/ux_dashboard.png", fullPage: true });
@@ -204,7 +203,7 @@ test.describe("UX/UI Audit Workflow", () => {
       );
 
       await page.goto("/scan");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       // Screenshot 1: Scan Page initial view
       await page.screenshot({ path: "../.context/notes/images/ux_scan_page.png" });
@@ -246,7 +245,7 @@ test.describe("UX/UI Audit Workflow", () => {
       test("Audit mobile landing page & authenticated dashboard", async ({ page }) => {
         console.log("=== NAVIGATING TO MOBILE DASHBOARD ===");
         await page.goto("/");
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("domcontentloaded");
 
         // Take screenshot of mobile dashboard
         await page.screenshot({ path: "../.context/notes/images/ux_mobile_dashboard.png" });
@@ -288,7 +287,7 @@ test.describe("UX/UI Audit Workflow", () => {
 
         console.log("=== NAVIGATING TO MOBILE COLLECTION ===");
         await page.goto("/collection");
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("domcontentloaded");
 
         // Take initial mobile collection page screenshot
         await page.screenshot({ path: "../.context/notes/images/ux_mobile_collection.png" });
@@ -316,7 +315,7 @@ test.describe("UX/UI Audit Workflow", () => {
       test("Measure mobile scan viewfinder and bottom sheet layout", async ({ page }) => {
         console.log("=== NAVIGATING TO MOBILE SCAN PAGE ===");
         await page.goto("/scan");
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("domcontentloaded");
 
         // Mobile scan page screenshot
         await page.screenshot({ path: "../.context/notes/images/ux_mobile_scan.png" });
