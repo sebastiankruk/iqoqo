@@ -141,12 +141,17 @@ def create_app(config_class=Config, config_override=None):
     init_celery(app)
 
     # Initialize Limiter
+    # Initialize Cache
+    from app.core.cache import cache
     from app.core.limiter import limiter
 
     redis_url = app.config.get("REDIS_URL")
     if redis_url:
         app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
+        app.config.setdefault("CACHE_TYPE", "RedisCache")
+        app.config.setdefault("CACHE_REDIS_URL", redis_url)
     limiter.init_app(app)
+    cache.init_app(app)
 
     from app.api.docs import docs_bp
     from app.api.lending import lending_bp

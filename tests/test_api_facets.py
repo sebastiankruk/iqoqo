@@ -242,3 +242,28 @@ class TestCrossFRBRMultiFilter:
         # Should parse comma-separated values correctly
         data = resp.json
         assert data is not None
+
+    def test_faceted_stats_caching(self, client, normal_user_headers, app):
+        """Test that /api/stats/facets caches its response and doesn't hit DB on subsequent requests."""
+        from unittest.mock import patch
+
+        with app.app_context():
+            from app.core.cache import cache
+
+            cache.clear()
+
+        with patch("app.api.system.DataManager.get_faceted_stats", return_value={"mock": "data"}) as mock_get_stats:
+            # First request
+            resp1 = client.get("/api/stats/facets?scope=user", headers=normal_user_headers)
+            assert resp1.status_code == 200
+            assert mock_get_stats.call_count == 1
+
+            # Second request with same params
+            resp2 = client.get("/api/stats/facets?scope=user", headers=normal_user_headers)
+            assert resp2.status_code == 200
+            assert mock_get_stats.call_count == 1
+
+            # Third request with different params
+            resp3 = client.get("/api/stats/facets?scope=global", headers=normal_user_headers)
+            assert resp3.status_code == 200
+            assert mock_get_stats.call_count == 2

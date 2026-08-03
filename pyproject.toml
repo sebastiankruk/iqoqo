@@ -19,6 +19,8 @@ dependencies = [
     "flask-migrate",
     "celery[redis]",
     "redis",
+    "flask-limiter",
+    "Flask-Caching",
 ]
 
 [project.optional-dependencies]

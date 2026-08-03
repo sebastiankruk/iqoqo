@@ -26,6 +26,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import admin_required, optional_auth, require_auth
 from app.api.filters import parse_csv_param
 from app.config import Config
+from app.core.cache import cache
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
 from app.db.models import Item, Manifestation, User, Work, db
@@ -148,9 +149,15 @@ def get_dashboard_stats():
     return jsonify({"success": True, "data": stats, "error": None})
 
 
+def make_facets_cache_key():
+    user_id = getattr(g, "user_id", "anon")
+    return f"stats_facets:{user_id}:{request.full_path}"
+
+
 @api_bp.route("/stats/facets", methods=["GET"])
 @optional_auth
 @limiter.limit("60 per minute")
+@cache.cached(timeout=300, key_prefix=make_facets_cache_key)  # type: ignore[arg-type]
 def get_faceted_stats():
     """Return cross-filtered per-facet counts for the faceted navigation sidebar.
 
