@@ -15,7 +15,7 @@ rdflib==7.*
 python-dotenv
 flask-sqlalchemy
 flask-migrate
-Pillow>=10.0.0
+Pillow>=12.3.0
 qrcode>=8.0
 openai>=1.10.0
 google-genai>=1.65.0
