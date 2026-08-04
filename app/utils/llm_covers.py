@@ -111,7 +111,7 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
         from app.utils.images import optimize_image_to_bytes
 
         return optimize_image_to_bytes(image_data)
-    filename = f"{identifier}_cover.jpg"
+    filename = f"{identifier}_{suffix}.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
 
@@ -355,15 +355,21 @@ def fetch_llm_cover(
     if remote and not return_bytes:
         import subprocess
 
-        filename = f"{identifier}_cover.jpg"
-        local_file = os.path.join(COVERS_DIR, filename)
-        try:
-            res = subprocess.run(["rclone", "copyto", f"{remote}:covers/{filename}", local_file], capture_output=True, text=True, check=False)
-            if res.returncode == 0 and os.path.exists(local_file):
-                logger.info("Pulled cover from global cache: %s", filename)
-                return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("Failed to check rclone cache: %s", e)
+        for sfx in ("dalle", "gemini", "localsd", "cover"):
+            filename = f"{identifier}_{sfx}.jpg"
+            local_file = os.path.join(COVERS_DIR, filename)
+            try:
+                res = subprocess.run(
+                    ["rclone", "copyto", f"{remote}:covers/{filename}", local_file],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.returncode == 0 and os.path.exists(local_file):
+                    logger.info("Pulled cover from global cache: %s", filename)
+                    return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to check rclone cache: %s", e)
     # 1. Local (Free)
     result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
     if result:
