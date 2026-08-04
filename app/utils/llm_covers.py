@@ -111,9 +111,19 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
         from app.utils.images import optimize_image_to_bytes
 
         return optimize_image_to_bytes(image_data)
-    filename = f"{identifier}_{suffix}.jpg"
+    filename = f"{identifier}_cover.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
+
+    remote = os.environ.get("RCLONE_COVERS_REMOTE")
+    if remote:
+        import subprocess
+
+        try:
+            subprocess.run(["rclone", "copyto", filepath, f"{remote}:covers/{filename}"], check=False)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to push to rclone cache: %s", e)
+
     return f"{Config.COVERS_BASE_URL}/{filename}"
 
 
@@ -308,6 +318,7 @@ def generate_cover_local(
 
             if return_bytes:
                 from app.utils.images import add_text_overlay_bytes
+
                 assert isinstance(path, bytes)
                 path = add_text_overlay_bytes(path, overlay_title, author)
             else:
@@ -339,6 +350,20 @@ def fetch_llm_cover(
     return_bytes: bool = False,
 ) -> tuple[str | bytes, str] | None:
     """Orchestrates LLM generation tiers. Returns (path_or_bytes, source) tuple on success."""
+    # 0. Global Cache (rclone)
+    remote = os.environ.get("RCLONE_COVERS_REMOTE")
+    if remote and not return_bytes:
+        import subprocess
+
+        filename = f"{identifier}_cover.jpg"
+        local_file = os.path.join(COVERS_DIR, filename)
+        try:
+            res = subprocess.run(["rclone", "copyto", f"{remote}:covers/{filename}", local_file], capture_output=True, text=True, check=False)
+            if res.returncode == 0 and os.path.exists(local_file):
+                logger.info("Pulled cover from global cache: %s", filename)
+                return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to check rclone cache: %s", e)
     # 1. Local (Free)
     result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
     if result:

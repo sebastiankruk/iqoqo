@@ -24,12 +24,9 @@ import logging
 import os
 from typing import Any, cast
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-
 from app.config import Config
 from app.db.models import Manifestation, db
-from app.utils.llm_covers import apply_corner_watermark, apply_corner_watermark_bytes, fetch_llm_cover
+from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -78,16 +75,8 @@ def process_batch(
 
     logger.info("Starting batch cover processing for %d manifestations (dry_run=%s)", total, dry_run)
 
-    bucket_name = os.environ.get("S3_BUCKET_NAME")
-    s3_client = None
-    if bucket_name:
-        s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-            region_name=os.environ.get("AWS_REGION_NAME", "us-east-1"),
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-        )
+    if os.environ.get("RCLONE_COVERS_REMOTE"):
+        logger.info("Using rclone global cache for covers")
 
     for idx, manif in enumerate(manifestations, start=1):
         # Circuit breaker: skip items that have failed too many times
@@ -128,8 +117,6 @@ def process_batch(
         # AI Cover Generation path
         identifier = str(manif.barcode or manif.isbn13 or manif.id)
 
-        return_bytes = s3_client is not None
-
         result = fetch_llm_cover(
             identifier=identifier,
             title=work_title,
@@ -137,44 +124,19 @@ def process_batch(
             user_id=user_id,
             format_type=format_type,
             allow_cloud_llm=True,
-            return_bytes=return_bytes,
+            return_bytes=False,
         )
 
         if result:
             img_data, source = result
 
-            if return_bytes:
-                # Memory flow for S3 upload
-                assert isinstance(img_data, bytes)
-                if os.path.isfile(DEFAULT_WATERMARK_ICON_PATH):
-                    img_data = apply_corner_watermark_bytes(img_data, DEFAULT_WATERMARK_ICON_PATH)
-                    source = f"{source}_watermarked"
-
-                filename = f"{identifier}_cover.jpg"
-                try:
-                    assert s3_client is not None
-                    s3_client.put_object(Bucket=bucket_name, Key=f"covers/{filename}", Body=img_data, ContentType="image/jpeg")
-                    endpoint = os.environ.get("AWS_ENDPOINT_URL", f"https://{bucket_name}.s3.amazonaws.com")
-                    if endpoint.startswith("https://s3"):
-                        img_path = f"https://{bucket_name}.s3.amazonaws.com/covers/{filename}"
-                    else:
-                        img_path = f"{endpoint}/{bucket_name}/covers/{filename}"
-                except (BotoCoreError, ClientError) as e:
-                    logger.error("Failed to upload cover for manifestation %d to S3: %s", manif.id, e)
-                    stats["failed"] += 1
-                    meta = dict(manif.meta or {})
-                    meta["failed_llm_attempts"] = meta.get("failed_llm_attempts", 0) + 1
-                    manif.meta = meta
-                    db.session.commit()
-                    continue
-            else:
-                # Disk flow
-                assert isinstance(img_data, str)
-                img_path = img_data
-                if os.path.isfile(DEFAULT_WATERMARK_ICON_PATH):
-                    local_file = os.path.join(Config.BASE_DIR, "app", "static", "covers", os.path.basename(img_path))
-                    apply_corner_watermark(local_file, DEFAULT_WATERMARK_ICON_PATH, local_file)
-                    source = f"{source}_watermarked"
+            # Disk flow
+            assert isinstance(img_data, str)
+            img_path = img_data
+            if os.path.isfile(DEFAULT_WATERMARK_ICON_PATH):
+                local_file = os.path.join(Config.BASE_DIR, "app", "static", "covers", os.path.basename(img_path))
+                apply_corner_watermark(local_file, DEFAULT_WATERMARK_ICON_PATH, local_file)
+                source = f"{source}_watermarked"
 
             manif.cover_url = img_path
             meta = dict(manif.meta or {})
