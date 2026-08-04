@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-RCLONE_REMOTE="${1:-iqoqo-backup}"
+RCLONE_REMOTE="${1:-${RCLONE_REMOTE_FAST:-iqoqo-backup}}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/tmp/iqoqo_backup_${TIMESTAMP}"
 ARCHIVE="${BACKUP_DIR}.tar.gz"

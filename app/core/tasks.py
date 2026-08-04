@@ -27,6 +27,7 @@ from collections.abc import Callable
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
+from app.config import Config
 from app.core.celery_app import celery
 
 logger = logging.getLogger(__name__)
@@ -161,9 +162,10 @@ def shutdown_executor() -> None:
 class BackupManager:
     """Helper class to manage backups in local storage and remote cloud via rclone."""
 
-    def __init__(self, backup_dir: str = "/data/backups", rclone_remote: str = "iqoqo-backup"):
+    def __init__(self, backup_dir: str = "/data/backups", rclone_remote_fast: str | None = None, rclone_remote_archive: str | None = None):
         self.backup_dir = backup_dir
-        self.rclone_remote = rclone_remote
+        self.rclone_remote_fast = rclone_remote_fast or getattr(Config, "RCLONE_REMOTE_FAST", "iqoqo-backup")
+        self.rclone_remote_archive = rclone_remote_archive or getattr(Config, "RCLONE_REMOTE_ARCHIVE", "iqoqo-glacier")
 
     def list_backups(self) -> list[str]:
         """Mockable method to list backups."""
@@ -181,7 +183,9 @@ class BackupManager:
         """Uploads a file to long-term storage via rclone proxy."""
         file_path = os.path.join(self.backup_dir, filename)
         try:
-            subprocess.run(["rclone", "copy", file_path, f"{self.rclone_remote}:archives"], check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["rclone", "copy", file_path, f"{self.rclone_remote_archive}:archives"], check=True, capture_output=True, text=True
+            )
         except subprocess.CalledProcessError as e:
             logger.error("rclone upload failed: %s", e.stderr)
             raise RuntimeError(f"Backup sync failed: {e.stderr}") from e
