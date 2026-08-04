@@ -485,7 +485,7 @@ def process_cover_pipeline(
             format_type = manifestation.meta.get("format") if manifestation.meta else None
 
             try:
-                result = fetch_llm_cover(
+                llm_result = fetch_llm_cover(
                     identifier,
                     title,
                     author,
@@ -495,8 +495,9 @@ def process_cover_pipeline(
                     format_type=format_type,
                     allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
                 )
-                if result:
-                    local_cover_url, source = result
+                if llm_result:
+                    assert isinstance(llm_result[0], str)
+                    local_cover_url, source = llm_result[0], llm_result[1]
             except (RuntimeError, ValueError, KeyError, AttributeError, TypeError, OSError) as e:
                 logger.exception("LLM cover generation failed for %s: %s", identifier, e)
 

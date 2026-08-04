@@ -102,13 +102,14 @@ def upgrade():
     # -----------------------------------------------------------------------
     # Backfill logic
     # -----------------------------------------------------------------------
+    import time
     works_table = f"{cat_schema}.works" if cat_schema else "works"
     manif_table = f"{cat_schema}.manifestations" if cat_schema else "manifestations"
 
     if is_pg:
         # PostgreSQL native JSONB backfill
-        chunk_size = 5000
-        offset = 0
+        chunk_size = 1000
+        last_id = 0
         while True:
             result = bind.execute(
                 sa.text(f"""
@@ -119,18 +120,21 @@ def upgrade():
                     END
                     WHERE id IN (
                         SELECT id FROM {works_table}
-                        WHERE sort_title IS NULL AND title IS NOT NULL
+                        WHERE id > :last_id AND sort_title IS NULL AND title IS NOT NULL
                         ORDER BY id
-                        LIMIT :chunk_size OFFSET :offset
+                        LIMIT :chunk_size
                     )
+                    RETURNING id
                 """),
-                {"chunk_size": chunk_size, "offset": offset}
+                {"chunk_size": chunk_size, "last_id": last_id}
             )
-            if result.rowcount == 0:
+            rows = result.fetchall()
+            if not rows:
                 break
-            offset += chunk_size
+            last_id = max(row[0] for row in rows)
+            time.sleep(0.1)
 
-        offset = 0
+        last_id = 0
         while True:
             result = bind.execute(
                 sa.text(f"""
@@ -141,20 +145,23 @@ def upgrade():
                         catalog_number = COALESCE(meta->>'catalog_number', meta->>'catno', meta->>'sku')
                     WHERE id IN (
                         SELECT id FROM {manif_table}
-                        WHERE meta IS NOT NULL
+                        WHERE id > :last_id AND meta IS NOT NULL
                         ORDER BY id
-                        LIMIT :chunk_size OFFSET :offset
+                        LIMIT :chunk_size
                     )
+                    RETURNING id
                 """),
-                {"chunk_size": chunk_size, "offset": offset}
+                {"chunk_size": chunk_size, "last_id": last_id}
             )
-            if result.rowcount == 0:
+            rows = result.fetchall()
+            if not rows:
                 break
-            offset += chunk_size
+            last_id = max(row[0] for row in rows)
+            time.sleep(0.1)
     else:
         # SQLite dialect backfill
-        chunk_size = 5000
-        offset = 0
+        chunk_size = 1000
+        last_id = 0
         while True:
             result = bind.execute(
                 sa.text(f"""
@@ -162,18 +169,21 @@ def upgrade():
                     SET sort_title = title
                     WHERE id IN (
                         SELECT id FROM {works_table}
-                        WHERE sort_title IS NULL AND title IS NOT NULL
+                        WHERE id > :last_id AND sort_title IS NULL AND title IS NOT NULL
                         ORDER BY id
-                        LIMIT :chunk_size OFFSET :offset
+                        LIMIT :chunk_size
                     )
+                    RETURNING id
                 """),
-                {"chunk_size": chunk_size, "offset": offset}
+                {"chunk_size": chunk_size, "last_id": last_id}
             )
-            if result.rowcount == 0:
+            rows = result.fetchall()
+            if not rows:
                 break
-            offset += chunk_size
+            last_id = max(row[0] for row in rows)
+            time.sleep(0.1)
 
-        offset = 0
+        last_id = 0
         while True:
             result = bind.execute(
                 sa.text(f"""
@@ -200,16 +210,19 @@ def upgrade():
                         )
                     WHERE id IN (
                         SELECT id FROM {manif_table}
-                        WHERE meta IS NOT NULL
+                        WHERE id > :last_id AND meta IS NOT NULL
                         ORDER BY id
-                        LIMIT :chunk_size OFFSET :offset
+                        LIMIT :chunk_size
                     )
+                    RETURNING id
                 """),
-                {"chunk_size": chunk_size, "offset": offset}
+                {"chunk_size": chunk_size, "last_id": last_id}
             )
-            if result.rowcount == 0:
+            rows = result.fetchall()
+            if not rows:
                 break
-            offset += chunk_size
+            last_id = max(row[0] for row in rows)
+            time.sleep(0.1)
 
 
 def downgrade():

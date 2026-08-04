@@ -23,6 +23,8 @@
 
 import re
 
+import pytest
+
 from app.api.filters import escape_ilike_term
 from app.config import Config
 from app.core.frbr_service import create_expression, create_manifestation, create_work
@@ -49,6 +51,30 @@ class TestApostropheAndSanitization:
             total, ids = SearchService.search_manifestations("Ocean’s Eleven", limit=10, offset=0)
             assert total == 1
             assert manif.id in ids
+
+
+class TestFTSResilience:
+    @pytest.mark.parametrize(
+        "malicious_payload",
+        [
+            "%; DROP TABLE works; --",
+            "' OR 1=1 --",
+            '" OR ""="',
+            "admin' --",
+            "UNION SELECT NULL, NULL, NULL--",
+            "'; EXEC xp_cmdshell('dir'); --",
+            "\\'; DROP TABLE expressions; --",
+            "Robert'); DROP TABLE students;--",
+        ],
+    )
+    def test_search_service_resists_sql_injection(self, app, malicious_payload):
+        with app.app_context():
+            try:
+                total, ids = SearchService.search_manifestations(malicious_payload, limit=10, offset=0)
+                assert isinstance(total, int)
+                assert isinstance(ids, list)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                pytest.fail(f"FTS Search failed with exception on payload {malicious_payload}: {e}")
 
 
 class TestAllegroUserAgentFormat:

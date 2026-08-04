@@ -31,7 +31,15 @@ import logging
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+from opentelemetry import metrics
+
 logger = logging.getLogger(__name__)
+
+meter = metrics.get_meter("iqoqo.app")
+mapping_parse_failures_total = meter.create_counter(
+    name="mapping_parse_failures_total",
+    description="Number of format mapping parse or validation failures",
+)
 
 
 def request_hook(span: Any, environ: dict) -> None:
