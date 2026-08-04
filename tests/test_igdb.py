@@ -21,6 +21,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from app.utils.igdb import fetch_game_metadata, get_igdb_token
 
@@ -124,3 +125,27 @@ def test_fetch_game_metadata_no_results(mock_post, mock_get_token):
 
     meta = fetch_game_metadata("NonexistentGame12345")
     assert meta is None
+
+
+@patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})
+@patch("app.utils.igdb.requests.post")
+def test_get_igdb_token_auth_failure(mock_post):
+    """Test Twitch API authentication failure."""
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("401 Unauthorized")
+    mock_post.return_value = mock_resp
+
+    token = get_igdb_token()
+    assert token is None
+
+
+@patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})
+@patch("app.utils.igdb.get_igdb_token", return_value="mocked_token")
+@patch("app.utils.igdb.requests.post")
+def test_fetch_game_metadata_network_error(mock_post, mock_get_token):
+    """Test fetching game metadata handling network errors."""
+    mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
+
+    meta = fetch_game_metadata("Witcher 3")
+    assert meta is None
+

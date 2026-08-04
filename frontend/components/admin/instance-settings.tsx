@@ -134,6 +134,8 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  const [allegroAuthStatus, setAllegroAuthStatus] = useState<string>("");
+  const [allegroAuthUrl, setAllegroAuthUrl] = useState<string | null>(null);
 
   const settingsList = SETTING_GROUPS[category] || [];
 
@@ -210,6 +212,72 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     return { value: String(setting || ""), source: "missing" };
   };
 
+  const startAllegroAuth = async () => {
+    setAllegroAuthStatus("Initiating...");
+    setAllegroAuthUrl(null);
+    try {
+      const idSetting = settings["ALLEGRO_CLIENT_ID"];
+      const secretSetting = settings["ALLEGRO_CLIENT_SECRET"];
+      const idVal =
+        idSetting !== undefined && (typeof idSetting === "string" ? idSetting : (idSetting as any).value) !== undefined
+          ? typeof idSetting === "string"
+            ? idSetting
+            : (idSetting as any).value
+          : getSettingValue("ALLEGRO_CLIENT_ID").value;
+      const secretVal =
+        secretSetting !== undefined &&
+        (typeof secretSetting === "string" ? secretSetting : (secretSetting as any).value) !== undefined
+          ? typeof secretSetting === "string"
+            ? secretSetting
+            : (secretSetting as any).value
+          : getSettingValue("ALLEGRO_CLIENT_SECRET").value;
+
+      const res = await fetch("/api/auth/allegro/device-flow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: idVal, client_secret: secretVal }),
+      });
+      if (!res.ok) throw new Error("Failed to start device flow");
+      const data = await res.json();
+
+      const verificationUrl = data.verification_uri_complete || data.verification_uri;
+      setAllegroAuthUrl(verificationUrl);
+      setAllegroAuthStatus("Waiting for authorization...");
+
+      if (verificationUrl) {
+        window.open(verificationUrl, "_blank");
+      }
+
+      const interval = data.interval ? parseInt(data.interval) * 1000 : 5000;
+      let expires = data.expires_in ? parseInt(data.expires_in) : 600;
+
+      const poll = async () => {
+        if (expires <= 0) {
+          setAllegroAuthStatus("Authorization expired. Try again.");
+          return;
+        }
+        const pollRes = await fetch("/api/auth/allegro/device-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: idVal, client_secret: secretVal, device_code: data.device_code }),
+        });
+
+        if (pollRes.status === 200) {
+          setAllegroAuthStatus("Allegro authorized successfully!");
+        } else if (pollRes.status === 202) {
+          expires -= interval / 1000;
+          setTimeout(poll, interval);
+        } else {
+          setAllegroAuthStatus("Authorization failed.");
+        }
+      };
+
+      setTimeout(poll, interval);
+    } catch (e) {
+      setAllegroAuthStatus("Error: " + String(e));
+    }
+  };
+
   if (loading) {
     return <Loader2 className="animate-spin h-6 w-6 text-muted-foreground my-10 mx-auto" />;
   }
@@ -270,6 +338,29 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
             </CardWrapper>
           );
         })}
+
+        <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 flex-1">
+            <h3 className="text-lg font-medium tracking-tight">Allegro Authorization</h3>
+            <p className="text-sm text-muted-foreground mt-1">Connect your Allegro account for metadata lookup.</p>
+            <div className="mt-5 flex flex-col gap-4">
+              <Button onClick={startAllegroAuth} variant="secondary" className="w-fit">
+                Authorize Allegro
+              </Button>
+              {allegroAuthStatus && <p className="text-sm font-medium">{allegroAuthStatus}</p>}
+              {allegroAuthUrl && (
+                <p className="text-sm text-muted-foreground">
+                  If a new tab didn't open,{" "}
+                  <a href={allegroAuthUrl} target="_blank" rel="noreferrer" className="text-blue-500 underline">
+                    click here
+                  </a>{" "}
+                  to authorize.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {saved && <p className="text-sm text-green-500">Settings saved successfully</p>}
       </div>
     );

@@ -62,6 +62,12 @@ echo "Starting Allegro API OAuth handshake..."
 echo "  Stack:    ${STACK:-dev}"
 echo "  Env file: ${ENV_FILE}"
 
+echo "=========================================================================================="
+echo "WARNING: This script is deprecated."
+echo "You can now authorize Allegro directly from the iqoqo Instance Settings UI."
+echo "=========================================================================================="
+
+
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "Error: Environment file $ENV_FILE not found" >&2
     exit 1
