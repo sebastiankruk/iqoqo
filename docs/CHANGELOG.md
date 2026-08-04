@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **PostgreSQL 16 → 18 Migration Script**: Added `deploy/migrate-postgres-16-to-18.sh` for safe major-version database upgrades across `dev`, `preview`, and `prod` stacks. Uses a standalone temporary container to dump v16 data regardless of `docker-compose.yml` state, backs up the old volume, and restores into v18. Includes `--dry-run` support and rollback documentation.
 - **Database Upgrade Guide**: Added `docs/UPGRADE_POSTGRES_18.md` with step-by-step instructions for all deployment environments.
+- **Multi-Tier Rclone Cloud Backups & S3 Glacier Guide**: Updated `docs/BACKUPS.md` detailing daily backups (`RCLONE_REMOTE_FAST`), AWS S3 Glacier cold archiving (`RCLONE_REMOTE_ARCHIVE`), and shared AI cover caching (`RCLONE_COVERS_REMOTE`).
 - **SSRF-Safe HTTP Client**: Added `app/utils/http_client.py` wrapper for external resource fetching with pre-connection DNS resolution, restricted IP network blocking (localhost, RFC 1918, link-local, AWS metadata 169.254.169.254), and Host header preservation against DNS rebinding.
 - **XXE Prevention**: Integrated `defusedxml` across XML parsing utilities (`app/utils/bgg.py`, `app/api/items.py`) to safely parse untrusted XML and prevent XML External Entity (XXE) and Billion Laughs DoS attacks.
+- **Mapping Fragility Monitoring**: Added `mapping_parse_failures_total` OTel counter in `app/core/telemetry.py` to track invalid or missing format mappings in `shared/format_mappings.yaml`.
+- **FTS Resilience Testing**: Added parameterized SQL injection chaos test suite to `tests/test_core_fixes.py`.
 
 ### Security
 
@@ -20,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Stateless AI Covers & Volume Mounts**: Replaced `boto3` direct S3 image uploading with mounted Docker volume storage (`app/static/covers/`) and optional `rclone`-based global S3 caching (`RCLONE_COVERS_REMOTE`), avoiding AWS bandwidth costs and keeping containers lightweight.
+- **Multi-Stage Dockerfile**: Optimized backend `Dockerfile` to a multi-stage build, shrinking container footprint under 500MB.
+- **Zero-Downtime Alembic Migration**: Updated `e3f891ab45c2` backfill loop to iterate by Primary Key in 1,000-row chunks with `time.sleep(0.1)` yields.
 - **PostgreSQL**: Upgraded from `16-alpine` to `18-alpine` in `docker-compose.yml` and CI workflows.
 - **Redis**: Upgraded from `7-alpine` to `8-alpine` in `docker-compose.yml`.
 
