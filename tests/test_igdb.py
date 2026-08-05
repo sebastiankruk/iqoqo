@@ -148,4 +148,3 @@ def test_fetch_game_metadata_network_error(mock_post, mock_get_token):
 
     meta = fetch_game_metadata("Witcher 3")
     assert meta is None
-

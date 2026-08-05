@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -48,7 +48,7 @@ def initiate_device_flow(client_id: str, client_secret: str) -> dict[str, Any]:
         timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
     )
     response.raise_for_status()
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 def exchange_device_token(device_code: str, client_id: str, client_secret: str) -> dict[str, Any]:
@@ -70,7 +70,7 @@ def exchange_device_token(device_code: str, client_id: str, client_secret: str) 
         tokens = response.json()
         with open(_TOKEN_FILE, "w", encoding="utf-8") as f:
             json.dump(tokens, f)
-        return tokens
+        return cast(dict[str, Any], tokens)
 
     # If not ok, it might be authorization_pending, slow_down, expired_token, etc.
     try:
@@ -78,7 +78,7 @@ def exchange_device_token(device_code: str, client_id: str, client_secret: str) 
     except json.JSONDecodeError:
         response.raise_for_status()
 
-    return err
+    return cast(dict[str, Any], err)
 
 
 def get_allegro_token() -> str | None:

@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 import jwt as pyjwt
+import requests
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, current_app, jsonify, redirect, request, session
@@ -237,7 +238,7 @@ def allegro_device_flow():
     try:
         flow_data = initiate_device_flow(client_id, client_secret)
         return jsonify(flow_data), 200
-    except Exception as e:
+    except (requests.RequestException, OSError, ValueError) as e:
         logger.error("Failed to initiate Allegro device flow: %s", e, exc_info=True)
         return jsonify({"error": "Failed to initiate device flow"}), 500
 
@@ -260,6 +261,6 @@ def allegro_device_token():
 
         err = token_data.get("error", "")
         return jsonify({"status": "pending", "error": err, "details": token_data}), 202
-    except Exception as e:
+    except (requests.RequestException, OSError, ValueError) as e:
         logger.error("Failed to exchange Allegro device token: %s", e, exc_info=True)
         return jsonify({"error": "Failed to exchange device token"}), 500
