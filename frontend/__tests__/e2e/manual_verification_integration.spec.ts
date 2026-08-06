@@ -370,21 +370,17 @@ test.describe("Manual Verification Integration E2E", () => {
       });
     });
 
-    await page.goto("/admin/settings?tab=instance");
+    await page.goto("/admin/settings");
     await page.waitForLoadState("networkidle");
 
     // Check Maintenance Mode is visible and toggleable
     await expect(page.getByText("Maintenance Mode")).toBeVisible();
     const maintenanceSelect = page.locator("select").first();
     await maintenanceSelect.selectOption("true");
-    await page.getByRole("button", { name: "Save" }).first().click();
+    await page.getByRole("button", { name: "Save Changes" }).first().click();
 
     // Check saved state
-    await expect(page.getByText(/Settings saved successfully/i)).toBeVisible();
-
-    // Toggle API keys subtab
-    await page.goto("/admin/settings?tab=apikeys");
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/Saved settings for/i)).toBeVisible();
 
     // Check API Key input is masked (starts with ***)
     const apiKeyContainer = page.locator("div.bg-card").filter({ hasText: "Google Books API Key" });
