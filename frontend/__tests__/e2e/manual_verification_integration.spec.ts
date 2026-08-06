@@ -370,7 +370,7 @@ test.describe("Manual Verification Integration E2E", () => {
       });
     });
 
-    await page.goto("/admin/settings");
+    await page.goto("/admin/settings?tab=instance");
     await page.waitForLoadState("networkidle");
 
     // Check Maintenance Mode is visible and toggleable
@@ -381,6 +381,9 @@ test.describe("Manual Verification Integration E2E", () => {
 
     // Check saved state
     await expect(page.getByText(/Saved settings for/i)).toBeVisible();
+
+    await page.goto("/admin/settings?tab=apikeys");
+    await page.waitForLoadState("networkidle");
 
     // Check API Key input is masked (starts with ***)
     const apiKeyContainer = page.locator("div.bg-card").filter({ hasText: "Google Books API Key" });
