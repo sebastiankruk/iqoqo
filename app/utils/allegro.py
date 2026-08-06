@@ -83,8 +83,10 @@ def exchange_device_token(device_code: str, client_id: str, client_secret: str) 
 
 def get_allegro_token() -> str | None:
     """Authenticate with Allegro using User Context (if available) or Client Credentials flow."""
-    client_id = os.getenv("ALLEGRO_CLIENT_ID")
-    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET")
+    from app.db.models import InstanceSettings
+
+    client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
+    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
 
     if not client_id or not client_secret:
         return None

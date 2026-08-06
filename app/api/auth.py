@@ -28,7 +28,8 @@ from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from app.db.models import Role, TokenBlocklist, User, db
+from app.config import Config
+from app.db.models import InstanceSettings, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 
 logger = logging.getLogger(__name__)
@@ -232,11 +233,22 @@ def allegro_device_flow():
     client_id = data.get("client_id")
     client_secret = data.get("client_secret")
 
+    if not client_id or str(client_id).startswith("***"):
+        client_id = (
+            InstanceSettings.get_value("ALLEGRO_CLIENT_ID") or getattr(Config, "ALLEGRO_CLIENT_ID", None) or os.getenv("ALLEGRO_CLIENT_ID")
+        )
+    if not client_secret or str(client_secret).startswith("***"):
+        client_secret = (
+            InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+            or getattr(Config, "ALLEGRO_CLIENT_SECRET", None)
+            or os.getenv("ALLEGRO_CLIENT_SECRET")
+        )
+
     if not client_id or not client_secret:
         return jsonify({"error": "client_id and client_secret are required"}), 400
 
     try:
-        flow_data = initiate_device_flow(client_id, client_secret)
+        flow_data = initiate_device_flow(str(client_id), str(client_secret))
         return jsonify(flow_data), 200
     except (requests.RequestException, OSError, ValueError) as e:
         logger.error("Failed to initiate Allegro device flow: %s", e, exc_info=True)
@@ -251,11 +263,22 @@ def allegro_device_token():
     client_secret = data.get("client_secret")
     device_code = data.get("device_code")
 
+    if not client_id or str(client_id).startswith("***"):
+        client_id = (
+            InstanceSettings.get_value("ALLEGRO_CLIENT_ID") or getattr(Config, "ALLEGRO_CLIENT_ID", None) or os.getenv("ALLEGRO_CLIENT_ID")
+        )
+    if not client_secret or str(client_secret).startswith("***"):
+        client_secret = (
+            InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+            or getattr(Config, "ALLEGRO_CLIENT_SECRET", None)
+            or os.getenv("ALLEGRO_CLIENT_SECRET")
+        )
+
     if not client_id or not client_secret or not device_code:
         return jsonify({"error": "client_id, client_secret, and device_code are required"}), 400
 
     try:
-        token_data = exchange_device_token(device_code, client_id, client_secret)
+        token_data = exchange_device_token(str(device_code), str(client_id), str(client_secret))
         if "access_token" in token_data:
             return jsonify({"status": "success", "message": "Allegro authorized successfully"}), 200
 

@@ -32,11 +32,23 @@ _TOKEN_FILE: str = os.path.join(os.path.dirname(__file__), "..", "..", ".igdb_to
 
 def get_igdb_token() -> str | None:
     """Obtains a client credentials OAuth token from Twitch and caches it locally."""
-    client_id = os.getenv("IGDB_CLIENT_ID")
-    client_secret = os.getenv("IGDB_CLIENT_SECRET")
+    from app.db.models import InstanceSettings
+
+    client_id = (
+        os.getenv("IGDB_CLIENT_ID")
+        or os.getenv("TWITCH_CLIENT_ID")
+        or InstanceSettings.get_value("IGDB_CLIENT_ID")
+        or InstanceSettings.get_value("TWITCH_CLIENT_ID")
+    )
+    client_secret = (
+        os.getenv("IGDB_CLIENT_SECRET")
+        or os.getenv("TWITCH_CLIENT_SECRET")
+        or InstanceSettings.get_value("IGDB_CLIENT_SECRET")
+        or InstanceSettings.get_value("TWITCH_CLIENT_SECRET")
+    )
 
     if not client_id or not client_secret:
-        logger.warning("IGDB_CLIENT_ID or IGDB_CLIENT_SECRET not set in environment.")
+        logger.warning("IGDB / Twitch Client ID or Secret not set in environment or database.")
         return None
 
     # Try loading cached token first
