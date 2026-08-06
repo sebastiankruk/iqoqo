@@ -1,61 +1,79 @@
 Flask==3.1.3
 Flask-CORS==6.0.*
 Flask-APScheduler==1.13.1
-gunicorn==22.0.*
+gunicorn==26.0.*
 
 # API Documentation
 apispec==6.10.*
 apispec-webframeworks==1.2.*
 
+# Async tasks & caching
 celery[redis]==5.6.*
 redis==5.*
 psycopg2-binary==2.9.*
 requests
+defusedxml>=0.7.1
 rdflib==7.*
+boto3
 python-dotenv
 flask-sqlalchemy
 flask-migrate
-Pillow>=10.0.0
-qrcode>=8.0
+Pillow>=12.3.0
+qrcode>=8.2
 openai>=2.51.0
-google-genai>=1.65.0
-Authlib>=1.6.9
-PyJWT>=2.12.0
-joserfc>=0.12.0
+google-genai>=2.16.0
+Authlib>=1.7.2
+PyJWT>=2.13.0
+joserfc>=1.7.4
 pydantic>=2.13.4
-Flask-Limiter>=3.5.0
-pytesseract>=0.3.10
-tenacity==8.*
+Flask-Limiter>=4.1.1
+Flask-Caching>=2.1.0
+pytesseract>=0.3.13
+tenacity==9.*
 #~ opencv-python-headless==4.9.*
 #~ numpy==1.26.*
 
-# OpenTelemetry Distributed Tracing
-opentelemetry-distro
-opentelemetry-exporter-otlp
+# OpenTelemetry Observability (Telemetry / Metrics / Tracing)
+# Layer 1: Core OTel API & SDK
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-semantic-conventions
+
+# Layer 2: Protocol Exporters (gRPC & HTTP OTLP to OpenObserve / Jaeger)
+opentelemetry-exporter-otlp-proto-grpc
+opentelemetry-exporter-otlp-proto-http
+
+# Layer 3: Framework & HTTP Auto-Instrumentation
 opentelemetry-instrumentation-flask
 opentelemetry-instrumentation-wsgi
-opentelemetry-instrumentation-logging
-opentelemetry-instrumentation-celery
+opentelemetry-instrumentation-requests
+
+# Layer 4: Storage & Task Queue Auto-Instrumentation
 opentelemetry-instrumentation-sqlalchemy
 opentelemetry-instrumentation-redis
-opentelemetry-instrumentation-requests
+opentelemetry-instrumentation-celery
+
+# Layer 5: Logging Auto-Instrumentation
+opentelemetry-instrumentation-logging
+
+# Layer 6: Meta-Distro (Auto-discovery helper)
+opentelemetry-distro
+
 # Layer 7: LLM telemetry — auto-instruments openai SDK calls with token usage, prompt payloads, latency
 opentelemetry-instrumentation-openai
+
+imagehash==4.3.2
+PyYAML==6.0.3
 
 # Testing
 pytest
 testcontainers[postgresql]
-
-# Code Quality & Development Tools
 black
 ruff
 isort
 mypy
 pylint
 types-requests  # Type stubs for mypy
-imagehash==4.3.2
-
-PyYAML==6.0.3
 types-PyYAML
 
 # boardgamegeek2>=1.3  # Optional: future migration from raw XML API (see app/utils/bgg.py)
