@@ -1,6 +1,6 @@
 {
   "name": "iqoqo",
-  "version": "0.7.14",
+  "version": "0.7.13",
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {
@@ -11,9 +11,9 @@
     "bats": "^1.13.0",
     "eslint": "^10.8.0",
     "markdownlint-cli2": "^0.23.2",
-    "prettier": "^3.9.6",
-    "stylelint": "^17.14.1",
-    "stylelint-config-standard": "^40.0.0"
+    "prettier": "^3.2.4",
+    "stylelint": "^16.2.0",
+    "stylelint-config-standard": "^36.0.0"
   },
   "overrides": {
     "js-yaml": "^4.2.0"
