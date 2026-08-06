@@ -115,6 +115,19 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
             out: Image.Image = transposed_img.convert("RGB")
             out.thumbnail((1024, 1024))
             out.save(filepath, "JPEG", quality=85)
+
+        remote = os.environ.get("RCLONE_COVERS_REMOTE")
+        if remote and "/covers/" in filepath:
+            try:
+                import subprocess
+
+                from app.utils.rclone_utils import get_rclone_target
+
+                filename = os.path.basename(filepath)
+                target = get_rclone_target(remote, "covers", filename)
+                subprocess.run(["rclone", "copyto", filepath, target], check=False)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to push cover to rclone cache: %s", e)
     except (OSError, ValueError):
         logger.exception("Error optimizing image")
         raise

@@ -15,6 +15,7 @@
 #
 import os
 from io import BytesIO
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -636,3 +637,33 @@ def test_generate_fallback_cover_design_elements(tmp_path):
             # Check that footer text region has non-background pixels
             footer_region = pixels[height - 85 : height - 50, int(width * 0.25) : int(width * 0.75), :]
             assert footer_region.size > 0, "Footer text region should exist"
+
+
+def test_save_image_rclone_target(tmp_path: Any) -> None:
+    """Verifies save_image constructs rclone targets correctly for remote specs with and without buckets."""
+    from app.utils.llm_covers import save_image
+
+    fake_bytes = b"fake_image_bytes"
+    with patch("app.utils.llm_covers.COVERS_DIR", str(tmp_path)):
+        with patch("app.utils.llm_covers.optimize_and_save_image"):
+            with patch("subprocess.run") as mock_run:
+                # Test 1: Simple remote spec
+                with patch.dict("os.environ", {"RCLONE_COVERS_REMOTE": "iqoqo-covers"}):
+                    save_image(fake_bytes, "test_id", "cover")
+                    mock_run.assert_called_with(
+                        ["rclone", "copyto", os.path.join(str(tmp_path), "test_id_cover.jpg"), "iqoqo-covers:covers/test_id_cover.jpg"],
+                        check=False,
+                    )
+
+                # Test 2: Remote spec with bucket name
+                with patch.dict("os.environ", {"RCLONE_COVERS_REMOTE": "iqoqo-covers:iqoqo-covers"}):
+                    save_image(fake_bytes, "test_id2", "cover")
+                    mock_run.assert_called_with(
+                        [
+                            "rclone",
+                            "copyto",
+                            os.path.join(str(tmp_path), "test_id2_cover.jpg"),
+                            "iqoqo-covers:iqoqo-covers/test_id2_cover.jpg",
+                        ],
+                        check=False,
+                    )

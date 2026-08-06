@@ -29,6 +29,7 @@ from kombu.exceptions import KombuError
 
 from app.config import Config
 from app.core.celery_app import celery
+from app.utils.rclone_utils import get_rclone_target
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +184,9 @@ class BackupManager:
         """Uploads a file to long-term storage via rclone proxy."""
         file_path = os.path.join(self.backup_dir, filename)
         try:
-            subprocess.run(
-                ["rclone", "copy", file_path, f"{self.rclone_remote_archive}:archives"], check=True, capture_output=True, text=True
-            )
+            remote_archive = str(self.rclone_remote_archive or "iqoqo-glacier")
+            target = get_rclone_target(remote_archive, "archives")
+            subprocess.run(["rclone", "copy", file_path, target], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             logger.error("rclone upload failed: %s", e.stderr)
             raise RuntimeError(f"Backup sync failed: {e.stderr}") from e

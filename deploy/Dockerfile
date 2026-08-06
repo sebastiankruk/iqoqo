@@ -42,6 +42,7 @@ WORKDIR /usr/src/app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    rclone \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy site-packages from builder

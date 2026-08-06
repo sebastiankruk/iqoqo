@@ -29,6 +29,7 @@ from app.core.permissions import PermissionName
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
+from app.utils.rclone_utils import get_rclone_target
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,8 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
         import subprocess
 
         try:
-            subprocess.run(["rclone", "copyto", filepath, f"{remote}:covers/{filename}"], check=False)
+            target = get_rclone_target(remote, "covers", filename)
+            subprocess.run(["rclone", "copyto", filepath, target], check=False)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("Failed to push to rclone cache: %s", e)
 
@@ -359,8 +361,9 @@ def fetch_llm_cover(
             filename = f"{identifier}_{sfx}.jpg"
             local_file = os.path.join(COVERS_DIR, filename)
             try:
+                target = get_rclone_target(remote, "covers", filename)
                 res = subprocess.run(
-                    ["rclone", "copyto", f"{remote}:covers/{filename}", local_file],
+                    ["rclone", "copyto", target, local_file],
                     capture_output=True,
                     text=True,
                     check=False,

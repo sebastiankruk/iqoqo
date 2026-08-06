@@ -76,3 +76,17 @@ EOF
   [[ "$output" =~ "RCLONE_CALLED_WITH: copy" ]]
   [[ "$output" =~ "custom-remote-name:iqoqo_backups" ]]
 }
+
+@test "cloud_backup.sh respects full remote:bucket target syntax" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/rclone"
+#!/bin/bash
+echo "RCLONE_CALLED_WITH: $*"
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/rclone"
+
+  run bash scripts/cloud_backup.sh "custom-remote:custom-bucket"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "RCLONE_CALLED_WITH: copy" ]]
+  [[ "$output" =~ "custom-remote:custom-bucket" ]]
+}
