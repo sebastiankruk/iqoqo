@@ -190,6 +190,7 @@ class ScanBarcodeSchema(BaseModel):
     policy: str | None = "inventory"
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
+    meta: dict[str, Any] | None = None
 
     @field_validator("policy")
     @classmethod

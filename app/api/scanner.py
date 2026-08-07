@@ -229,7 +229,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
             candidates.extend(fetch_google_books_candidates(query))
 
-        if len(candidates) > 1:
+        if len(candidates) >= 1:
             response_data = copy.deepcopy(candidates[0])
             response_data["candidates"] = candidates
             response_data["identifier"] = query
@@ -622,8 +622,8 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
     if manifestation_id:
         manifestation = db.session.get(Manifestation, manifestation_id)
 
-    if not manifestation and barcode:
-        manifestation = _find_locally(barcode)
+    if not manifestation and (barcode or payload.meta):
+        manifestation = _find_locally(barcode) if barcode else None
         if not manifestation:
             try:
                 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
@@ -640,8 +640,12 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
                     if meta:
                         manifestation = IngestService.ingest_from_meta(meta)
 
+                if not manifestation and payload.meta:
+                    manifestation = IngestService.ingest_from_meta(payload.meta)
+
                 if not manifestation and barcode:
                     manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
+
                 is_new_manifestation = True
 
             except (ValueError, ConnectionError, KeyError, AttributeError, TypeError, OSError, RuntimeError) as e:

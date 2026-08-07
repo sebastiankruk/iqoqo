@@ -212,13 +212,14 @@ def fetch_google_books_candidates(query: str, max_results: int = 5) -> list[dict
         List of normalised metadata dicts, possibly empty.
     """
     api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results}"
+    url = "https://www.googleapis.com/books/v1/volumes"
+    params: dict[str, Any] = {"q": query, "maxResults": max_results}
     if api_key:
-        url += f"&key={api_key}"
+        params["key"] = api_key
 
     try:
         session = _make_session()
-        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        response = session.get(url, params=params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         data = response.json()
     except (requests.RequestException, ValueError) as exc:

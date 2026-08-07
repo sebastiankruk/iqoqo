@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Google Books Title Lookup Disambiguation**: Fixed a bug where scanning by title would only show a single candidate or bypass disambiguation entirely. The URL encoding in `fetch_google_books_candidates` was corrected, and the length check for candidates was fixed.
+- **Missing Cover / Metadata on Added Items**: Fixed an issue where adding an item via title lookup would perform a secondary search using a fallback barcode, resulting in a loss of the original cover and ISBN data. The scanner API now respects the metadata payload forwarded by the `SuccessCard` component.
+- **Cover Refetch Task Server Error & Infinite Polling**: Resolved a `TypeError` in the celery task scheduler where `user_id` was passed both positionally and as a keyword argument, preventing the cover refetch task from starting. Additionally, updated `get_cover_status` to return `200 OK` on task failure, breaking the frontend out of an infinite polling loop that caused the UI to show a perpetual waiting indicator.
+
 ## [0.7.13] - 2026-07-31
 
 ### Added

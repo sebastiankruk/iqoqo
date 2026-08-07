@@ -113,6 +113,14 @@ def test_get_cover_status_polling(client, normal_user_headers):
         assert response.status_code == 200
         assert response.get_json()["data"]["status"] == "ready"
 
+    # Test 4: With task_id FAILED
+    with patch("app.core.tasks.get_task_result", return_value={"status": "failed", "error": "Something went wrong"}):
+        response = client.get(f"/api/manifestations/{manif_id}/cover-status?task_id=t3", headers=normal_user_headers)
+        assert response.status_code == 200
+        assert response.get_json()["success"] is False
+        assert response.get_json()["data"]["status"] == "failed"
+        assert response.get_json()["error"] == "Something went wrong"
+
 
 # --- Phase 4: Bug B6-deep — UPC/EAN cover resolution ---
 

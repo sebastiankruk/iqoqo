@@ -571,10 +571,10 @@ def start_cover_processing(
         title,
         author,
         llm_permissions or {},
-        user_id,
-        user_image_path,
-        description,
-        genre,
+        user_id=user_id,
+        user_image_path=user_image_path,
+        description=description,
+        genre=genre,
     )
 
 

@@ -279,3 +279,21 @@ class TestFetchIsbnMetadata:
             result = fetch_isbn_metadata("9780553380163")
 
         assert result is None
+
+@patch("app.utils.isbn._make_session")
+def test_fetch_google_books_candidates_url_encoding(mock_session):
+    mock_get = MagicMock()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"items": []}
+    mock_get.return_value = mock_response
+    mock_session.return_value.get = mock_get
+
+    fetch_google_books_candidates("Jaś i Małgosia", max_results=5)
+    
+    # Verify that requests.get was called with correct params dictionary
+    mock_get.assert_called_once()
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.googleapis.com/books/v1/volumes"
+    assert "params" in kwargs
+    assert kwargs["params"]["q"] == "Jaś i Małgosia"
+    assert kwargs["params"]["maxResults"] == 5

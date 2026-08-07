@@ -99,7 +99,7 @@ export function SuccessCard({
   const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
   const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
   const machineIdentifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? String(meta.discogs_id) : "";
-  const isMissingID = !machineIdentifier && !meta.manifestation_id;
+  const isMissingID = !machineIdentifier && !meta.manifestation_id && !meta.data_source;
 
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};
   const directors: string[] = Array.isArray(meta.directors)
@@ -155,6 +155,7 @@ export function SuccessCard({
         format: format,
         collection_status: payload_collection_status,
         policy: policy,
+        meta: meta.data_source ? meta : undefined,
       });
 
       const responseData = res.data;

@@ -850,6 +850,12 @@ def get_cover_status(manifestation_id: int):
             200,
         )
 
+    if status == "failed":
+        return (
+            jsonify({"success": False, "data": {"status": status}, "error": result.get("error") or "Cover processing failed"}),
+            200,
+        )
+
     return (
         jsonify(
             {
