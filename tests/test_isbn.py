@@ -289,7 +289,7 @@ def test_fetch_google_books_candidates_url_encoding(mock_session):
     mock_session.return_value.get = mock_get
 
     fetch_google_books_candidates("Jaś i Małgosia", max_results=5)
-    
+
     # Verify that requests.get was called with correct params dictionary
     mock_get.assert_called_once()
     args, kwargs = mock_get.call_args

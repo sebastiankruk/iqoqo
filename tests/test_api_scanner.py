@@ -594,7 +594,7 @@ def test_record_scan_telemetry_truncation(app):
 def test_scan_barcode_with_meta_payload(client, normal_user_headers, app):
     """Test that scanning a barcode falls back to the provided meta payload if present."""
     from app.db.models import Manifestation, db
-    
+
     payload = {
         "barcode": "9781234567890",
         "format": "book",
@@ -608,12 +608,12 @@ def test_scan_barcode_with_meta_payload(client, normal_user_headers, app):
             "cover_url": "https://meta.jpg"
         }
     }
-    
+
     response = client.post("/api/scan", json=payload, headers=normal_user_headers)
-    
+
     assert response.status_code == 201
     assert response.json["success"] is True
-    
+
     with app.app_context():
         manifestation = Manifestation.query.filter_by(barcode="9781234567890").first()
         assert manifestation is not None

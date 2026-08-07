@@ -171,16 +171,21 @@ def safe_get(
 
     # Rewrite the URL to connect directly to the resolved IP, adding the
     # original hostname as the Host header to avoid DNS rebinding.
-    port = parsed.port
-    if port:
-        netloc = f"{resolved_ip}:{port}"
-    else:
-        netloc = resolved_ip
-
-    rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-
     merged_headers = dict(headers or {})
-    merged_headers.setdefault("Host", hostname)
+    
+    if parsed.scheme == "https":
+        # HTTPS is naturally protected against DNS rebinding to internal services 
+        # by TLS certificate validation. We use the original URL to avoid SSL IP mismatch.
+        rewritten_url = url
+    else:
+        port = parsed.port
+        if port:
+            netloc = f"{resolved_ip}:{port}"
+        else:
+            netloc = resolved_ip
+
+        rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        merged_headers.setdefault("Host", hostname)
 
     return requests.get(
         rewritten_url,
