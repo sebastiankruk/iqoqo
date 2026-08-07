@@ -172,9 +172,9 @@ def safe_get(
     # Rewrite the URL to connect directly to the resolved IP, adding the
     # original hostname as the Host header to avoid DNS rebinding.
     merged_headers = dict(headers or {})
-    
+
     if parsed.scheme == "https":
-        # HTTPS is naturally protected against DNS rebinding to internal services 
+        # HTTPS is naturally protected against DNS rebinding to internal services
         # by TLS certificate validation. We use the original URL to avoid SSL IP mismatch.
         rewritten_url = url
     else:
