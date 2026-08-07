@@ -145,7 +145,7 @@ class TestSafeGet:
         mock_response.status_code = 200
         mock_get.return_value = mock_response
 
-        result = safe_get("https://example.com/image.jpg", headers={"User-Agent": "test"})
+        result = safe_get("http://example.com/image.jpg", headers={"User-Agent": "test"})
 
         assert result.status_code == 200
         # Verify the request was rewritten to use the resolved IP
@@ -206,7 +206,7 @@ class TestSafeGet:
         ]
         mock_get.return_value = MagicMock(status_code=200)
 
-        safe_get("https://www.google.com/path")
+        safe_get("http://www.google.com/path")
 
         call_args = mock_get.call_args
         assert call_args[1]["headers"]["Host"] == "www.google.com"
@@ -220,7 +220,7 @@ class TestSafeGet:
         ]
         mock_get.return_value = MagicMock(status_code=200)
 
-        safe_get("https://example.com/path", headers={"Host": "custom-host.com"})
+        safe_get("http://example.com/path", headers={"Host": "custom-host.com"})
 
         call_args = mock_get.call_args
         assert call_args[1]["headers"]["Host"] == "custom-host.com"
@@ -234,7 +234,24 @@ class TestSafeGet:
         ]
         mock_get.return_value = MagicMock(status_code=200)
 
-        safe_get("https://example.com:8443/path")
+        safe_get("http://example.com:8080/path")
 
         call_args = mock_get.call_args
-        assert "93.184.216.34:8443" in call_args[0][0]
+        assert "93.184.216.34:8080" in call_args[0][0]
+
+    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_https_not_rewritten(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """HTTPS URLs must not be rewritten to IP addresses to avoid SSL certificate mismatch."""
+        mock_getaddrinfo.return_value = [
+            (2, 1, 6, "", ("93.184.216.34", 0)),
+        ]
+        mock_get.return_value = MagicMock(status_code=200)
+
+        safe_get("https://example.com/path")
+
+        call_args = mock_get.call_args
+        # URL should be unchanged
+        assert call_args[0][0] == "https://example.com/path"
+        # No extra Host header should be injected since we didn't rewrite
+        assert "Host" not in call_args[1].get("headers", {})
