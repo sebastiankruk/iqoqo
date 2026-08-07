@@ -186,7 +186,7 @@ class BackupManager:
         try:
             remote_archive = str(self.rclone_remote_archive or "iqoqo-glacier")
             target = get_rclone_target(remote_archive, "archives")
-            subprocess.run(["rclone", "copy", file_path, target], check=True, capture_output=True, text=True)
+            subprocess.run(["rclone", "copy", file_path, target, "--s3-no-check-bucket"], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             logger.error("rclone upload failed: %s", e.stderr)
             raise RuntimeError(f"Backup sync failed: {e.stderr}") from e

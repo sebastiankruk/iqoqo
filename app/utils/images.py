@@ -125,7 +125,7 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
 
                 filename = os.path.basename(filepath)
                 target = get_rclone_target(remote, "covers", filename)
-                subprocess.run(["rclone", "copyto", filepath, target], check=False)
+                subprocess.run(["rclone", "copyto", filepath, target, "--s3-no-check-bucket"], check=False)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.warning("Failed to push cover to rclone cache: %s", e)
     except (OSError, ValueError):

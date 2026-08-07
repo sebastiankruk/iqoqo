@@ -122,7 +122,7 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
 
         try:
             target = get_rclone_target(remote, "covers", filename)
-            subprocess.run(["rclone", "copyto", filepath, target], check=False)
+            subprocess.run(["rclone", "copyto", filepath, target, "--s3-no-check-bucket"], check=False)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("Failed to push to rclone cache: %s", e)
 
@@ -363,7 +363,7 @@ def fetch_llm_cover(
             try:
                 target = get_rclone_target(remote, "covers", filename)
                 res = subprocess.run(
-                    ["rclone", "copyto", target, local_file],
+                    ["rclone", "copyto", target, local_file, "--s3-no-check-bucket"],
                     capture_output=True,
                     text=True,
                     check=False,
