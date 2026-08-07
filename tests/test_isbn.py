@@ -280,6 +280,7 @@ class TestFetchIsbnMetadata:
 
         assert result is None
 
+
 @patch("app.utils.isbn._make_session")
 def test_fetch_google_books_candidates_url_encoding(mock_session):
     mock_get = MagicMock()

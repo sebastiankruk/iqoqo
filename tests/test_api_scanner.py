@@ -605,8 +605,8 @@ def test_scan_barcode_with_meta_payload(client, normal_user_headers, app):
             "author": "Author From Meta",
             "format": "book",
             "barcode": "9781234567890",
-            "cover_url": "https://meta.jpg"
-        }
+            "cover_url": "https://meta.jpg",
+        },
     }
 
     response = client.post("/api/scan", json=payload, headers=normal_user_headers)

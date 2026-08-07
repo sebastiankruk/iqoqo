@@ -651,7 +651,13 @@ def test_save_image_rclone_target(tmp_path: Any) -> None:
                 with patch.dict("os.environ", {"RCLONE_COVERS_REMOTE": "iqoqo-covers"}):
                     save_image(fake_bytes, "test_id", "cover")
                     mock_run.assert_called_with(
-                        ["rclone", "copyto", os.path.join(str(tmp_path), "test_id_cover.jpg"), "iqoqo-covers:covers/test_id_cover.jpg", "--s3-no-check-bucket"],
+                        [
+                            "rclone",
+                            "copyto",
+                            os.path.join(str(tmp_path), "test_id_cover.jpg"),
+                            "iqoqo-covers:covers/test_id_cover.jpg",
+                            "--s3-no-check-bucket",
+                        ],
                         check=False,
                     )
 
