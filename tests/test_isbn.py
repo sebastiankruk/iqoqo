@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from app.utils.isbn import _lookup_google_books, _lookup_open_library, canonicalize_isbn, fetch_isbn_metadata
+from app.utils.isbn import _lookup_google_books, _lookup_open_library, canonicalize_isbn, fetch_google_books_candidates, fetch_isbn_metadata
 
 # ---------------------------------------------------------------------------
 # Helpers

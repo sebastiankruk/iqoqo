@@ -69,6 +69,9 @@ def _record_scan_telemetry(
 ) -> None:
     """Helper to persist a scan-lookup record safely."""
     try:
+        if barcode and len(barcode) > 50:
+            barcode = barcode[:47] + "..."
+
         # Create a savepoint to prevent rollback of outer transactions
         with db.session.begin_nested():
             telemetry = ScanTelemetry(
@@ -215,19 +218,25 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
     barcode = query if not is_barcode else canonical_id
 
-    # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
-    if not is_barcode and (category_hint == "music" or format_hint in (None, "")):
-        discogs_results = fetch_discogs_candidates(query)
-        if len(discogs_results) > 1:
-            response_data = copy.deepcopy(discogs_results[0])
-            response_data["candidates"] = discogs_results
+    # For non-barcode text queries, fetch candidates based on format
+    if not is_barcode:
+        candidates = []
+        if category_hint == "music" or format_hint in (None, ""):
+            candidates.extend(fetch_discogs_candidates(query))
+
+        if category_hint == "book" or format_hint in (None, ""):
+            from app.utils.isbn import fetch_google_books_candidates
+
+            candidates.extend(fetch_google_books_candidates(query))
+
+        if len(candidates) > 1:
+            response_data = copy.deepcopy(candidates[0])
+            response_data["candidates"] = candidates
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
-            response_data["data_source"] = "discogs"
-            for candidate in discogs_results:
-                candidate["data_source"] = "discogs"
-            _record_scan_telemetry(query, format_hint, "discogs", "success")
+            response_data["data_source"] = response_data.get("data_source", "search")
+            _record_scan_telemetry(query, format_hint, "search", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
 
     # Leverage the Strategy Pattern for format-specific metadata lookups

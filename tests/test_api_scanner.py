@@ -572,3 +572,20 @@ def test_lookup_barcode_game_igdb_fallback(mock_igdb, mock_bgg, mock_resolve, cl
     assert response.json["data"]["data_source"] == "igdb"
     mock_bgg.assert_called_once()
     assert mock_igdb.call_args_list[0] == call("The Witcher 3")
+
+
+def test_record_scan_telemetry_truncation(app):
+    """Test that long barcodes are truncated to 50 characters to prevent DataError."""
+    from app.api.scanner import _record_scan_telemetry
+    from app.db.settings import ScanTelemetry, db
+
+    long_barcode = "This is a very long title that simulates a user typing a full book title instead of scanning an ISBN and it exceeds fifty characters"
+
+    with app.app_context():
+        _record_scan_telemetry(barcode=long_barcode, format_hint="book", provider="google_books", status="success")
+
+        # Verify it was inserted and truncated
+        record = ScanTelemetry.query.order_by(ScanTelemetry.id.desc()).first()
+        assert record is not None
+        assert len(record.barcode) <= 50
+        assert record.barcode == long_barcode[:47] + "..."

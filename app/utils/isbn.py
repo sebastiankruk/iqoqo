@@ -201,6 +201,81 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
     return metadata
 
 
+def fetch_google_books_candidates(query: str, max_results: int = 5) -> list[dict]:
+    """Search Google Books by text query and return candidates.
+
+    Args:
+        query: Free-text search term (e.g. title).
+        max_results: Maximum number of results to return.
+
+    Returns:
+        List of normalised metadata dicts, possibly empty.
+    """
+    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results}"
+    if api_key:
+        url += f"&key={api_key}"
+
+    try:
+        session = _make_session()
+        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.debug("Google Books request failed for %s: %s", query, exc)
+        return []
+
+    if not data.get("totalItems") or not data.get("items"):
+        return []
+
+    def __normalize_list_field(info: dict, field: str):
+        raw_value = info.get(field)
+        if isinstance(raw_value, list):
+            return [str(v).strip() for v in raw_value if v and str(v).strip()]
+        if isinstance(raw_value, str):
+            return [str(v).strip() for v in raw_value.strip().split(",") if v and str(v).strip()] if raw_value.strip() else []
+        return []
+
+    results = []
+    for item in data["items"]:
+        info = item.get("volumeInfo", {})
+        title = info.get("title", "").strip()
+        if not title:
+            continue
+
+        raw_description = info.get("description")
+        description = raw_description.strip() if isinstance(raw_description, str) else ""
+
+        # Get ISBN if present
+        isbn = None
+        for identifier in info.get("industryIdentifiers", []):
+            if identifier.get("type") in ("ISBN_13", "ISBN_10"):
+                isbn = canonicalize_isbn(identifier.get("identifier", ""))
+                if isbn:
+                    break
+
+        metadata = dict(info)
+        metadata.update(
+            {
+                "Title": title,
+                "Authors": __normalize_list_field(info, "authors"),
+                "Description": description,
+                "Categories": __normalize_list_field(info, "categories"),
+                "Source": "Google Books",
+                "barcode": isbn,
+                "data_source": "google_books",
+            }
+        )
+
+        # Add cover url mapping for frontend consistency
+        if "imageLinks" in info and isinstance(info["imageLinks"], dict):
+            metadata["cover_url"] = info["imageLinks"].get("thumbnail") or info["imageLinks"].get("smallThumbnail")
+
+        results.append(metadata)
+
+    return results
+
+
 def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
     """Fetch metadata from the Open Library Books API.
 

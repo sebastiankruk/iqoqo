@@ -55,6 +55,31 @@ def test_regenerate_cover_returns_task_id(client, admin_headers):
         assert data["data"]["task_id"] == "fake-task-id"
 
 
+def test_regenerate_cover_empty_authors(client, admin_headers):
+    """Verify that regenerating a cover does not crash with IndexError when authors list is empty."""
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with client.application.app_context():
+        work = Work(title="Regen Empty Authors", meta={"authors": []})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="3333333333333")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    with patch("app.api.manifestations.start_cover_processing", return_value="fake-task-id"):
+        response = client.post(f"/api/manifestations/{manif_id}/regenerate-cover", headers=admin_headers)
+        assert response.status_code == 202
+
+        # Test refetch cover too
+        response_refetch = client.post(f"/api/manifestations/{manif_id}/refetch-cover", headers=admin_headers)
+        assert response_refetch.status_code == 202
+
+
 def test_get_cover_status_polling(client, normal_user_headers):
     from app.db.models import Expression, Manifestation, Work, db
 
