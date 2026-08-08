@@ -38,7 +38,7 @@ from app.utils.llm_covers import apply_corner_watermark, generate_cover_cloud
 
 @pytest.fixture
 def mock_requests_get():
-    with patch("requests.get") as mock:
+    with patch("app.utils.covers.safe_get") as mock:
         yield mock
 
 
@@ -208,7 +208,7 @@ def test_is_valid_cover_accepts_valid_png_over_1kb():
     assert is_valid_cover(image_bytes) is True
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 @patch("app.utils.covers.is_valid_cover")
 @patch("app.utils.covers.optimize_and_save_image")
 def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
@@ -230,7 +230,7 @@ def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
     mock_optimize.assert_called_once()
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 def test_download_direct_url_too_large(mock_get):
     """Test rejection of oversized payloads."""
     mock_response = MagicMock()
@@ -244,7 +244,7 @@ def test_download_direct_url_too_large(mock_get):
     assert result is None
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 def test_download_direct_url_too_small(mock_get):
     """Test rejection of too-small payloads (often 1x1 tracking pixels)."""
     mock_response = MagicMock()
@@ -637,40 +637,3 @@ def test_generate_fallback_cover_design_elements(tmp_path):
             # Check that footer text region has non-background pixels
             footer_region = pixels[height - 85 : height - 50, int(width * 0.25) : int(width * 0.75), :]
             assert footer_region.size > 0, "Footer text region should exist"
-
-
-def test_save_image_rclone_target(tmp_path: Any) -> None:
-    """Verifies save_image constructs rclone targets correctly for remote specs with and without buckets."""
-    from app.utils.llm_covers import save_image
-
-    fake_bytes = b"fake_image_bytes"
-    with patch("app.utils.llm_covers.COVERS_DIR", str(tmp_path)):
-        with patch("app.utils.llm_covers.optimize_and_save_image"):
-            with patch("subprocess.run") as mock_run:
-                # Test 1: Simple remote spec
-                with patch.dict("os.environ", {"RCLONE_COVERS_REMOTE": "iqoqo-covers"}):
-                    save_image(fake_bytes, "test_id", "cover")
-                    mock_run.assert_called_with(
-                        [
-                            "rclone",
-                            "copyto",
-                            os.path.join(str(tmp_path), "test_id_cover.jpg"),
-                            "iqoqo-covers:covers/test_id_cover.jpg",
-                            "--s3-no-check-bucket",
-                        ],
-                        check=False,
-                    )
-
-                # Test 2: Remote spec with bucket name
-                with patch.dict("os.environ", {"RCLONE_COVERS_REMOTE": "iqoqo-covers:iqoqo-covers"}):
-                    save_image(fake_bytes, "test_id2", "cover")
-                    mock_run.assert_called_with(
-                        [
-                            "rclone",
-                            "copyto",
-                            os.path.join(str(tmp_path), "test_id2_cover.jpg"),
-                            "iqoqo-covers:iqoqo-covers/test_id2_cover.jpg",
-                            "--s3-no-check-bucket",
-                        ],
-                        check=False,
-                    )

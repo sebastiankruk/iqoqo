@@ -575,20 +575,19 @@ def test_lookup_barcode_game_igdb_fallback(mock_igdb, mock_bgg, mock_resolve, cl
 
 
 def test_record_scan_telemetry_truncation(app):
-    """Test that long barcodes are truncated to 50 characters to prevent DataError."""
+    """Test that extremely long barcodes (>128 chars) are dropped to prevent DataError."""
     from app.api.scanner import _record_scan_telemetry
-    from app.db.settings import ScanTelemetry, db
+    from app.db.settings import ScanTelemetry
 
-    long_barcode = "This is a very long title that simulates a user typing a full book title instead of scanning an ISBN and it exceeds fifty characters"
+    long_barcode = "This is a very long title that simulates a user typing a full book title instead of scanning an ISBN and it exceeds one hundred and twenty eight characters to trigger the truncation limit in the new behavior"
 
     with app.app_context():
+        initial_count = ScanTelemetry.query.count()
         _record_scan_telemetry(barcode=long_barcode, format_hint="book", provider="google_books", status="success")
 
-        # Verify it was inserted and truncated
-        record = ScanTelemetry.query.order_by(ScanTelemetry.id.desc()).first()
-        assert record is not None
-        assert len(record.barcode) <= 50
-        assert record.barcode == long_barcode[:47] + "..."
+        # Verify it was NOT inserted
+        final_count = ScanTelemetry.query.count()
+        assert final_count == initial_count
 
 
 def test_scan_barcode_with_meta_payload(client, normal_user_headers, app):

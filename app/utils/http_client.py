@@ -239,7 +239,7 @@ def safe_get(
             allow_redirects=False,
         )
 
-        if response.is_redirect:
+        if getattr(response, "is_redirect", False) is True:
             if hop >= max_redirects:
                 raise SSRFError("Too many redirects")
             next_url = response.headers.get("location")

@@ -21,6 +21,7 @@
 import os
 
 import pytest
+from sqlalchemy import select
 
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
@@ -150,9 +151,11 @@ def admin_headers(app):
         db.session.flush()
 
         # Create admin role
-        admin_role = Role(name="admin")
-        admin_role.permissions.extend(perms)
-        db.session.add(admin_role)
+        admin_role = db.session.scalar(select(Role).where(Role.name == "admin"))
+        if not admin_role:
+            admin_role = Role(name="admin")
+            admin_role.permissions.extend(perms)
+            db.session.add(admin_role)
 
         # Create admin user
         admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")

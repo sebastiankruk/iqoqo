@@ -71,7 +71,7 @@ def _record_scan_telemetry(
     try:
         if barcode and len(barcode) > 128:
             current_app.logger.warning("Barcode too long (%d chars), skipping telemetry", len(barcode))
-            barcode = None
+            return
 
         # Create a savepoint to prevent rollback of outer transactions
         with db.session.begin_nested():

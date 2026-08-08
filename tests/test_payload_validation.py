@@ -127,13 +127,13 @@ def test_admin_required_refactored(client, app):
 
 def test_lookup_rate_limit(app_with_limiter, normal_user_headers):
     client = app_with_limiter.test_client()
-    # Hit it 10 times (limit is 10 per minute)
-    for _ in range(10):
+    # Hit it 30 times (limit is 30 per minute)
+    for _ in range(30):
         response = client.get("/api/lookup/123", headers=normal_user_headers)
         # We accept 200 or 404 (not found) as long as it is not 429 (rate limited)
         assert response.status_code in (200, 404)
 
-    # 11th should fail
+    # 31st should fail
     response = client.get("/api/lookup/123", headers=normal_user_headers)
     assert response.status_code == 429
 
