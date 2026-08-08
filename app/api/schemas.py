@@ -183,7 +183,7 @@ class ManifestationUpdateSchema(BaseModel):
 class ScanBarcodeSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    barcode: str | None = None
+    barcode: str | None = Field(default=None, max_length=128)
     manifestation_id: int | None = None
     format: str | None = None
     collection_status: str | None = "available"

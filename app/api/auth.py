@@ -28,6 +28,7 @@ from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from app.api.decorators import admin_required
 from app.config import Config
 from app.db.models import InstanceSettings, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
@@ -227,6 +228,7 @@ def logout():
 
 
 @auth_bp.route("/allegro/device-flow", methods=["POST"])
+@admin_required
 def allegro_device_flow():
     """Initiate Allegro Device Code flow."""
     data = request.get_json() or {}
@@ -256,6 +258,7 @@ def allegro_device_flow():
 
 
 @auth_bp.route("/allegro/device-token", methods=["POST"])
+@admin_required
 def allegro_device_token():
     """Poll Allegro for the token using the device code."""
     data = request.get_json() or {}

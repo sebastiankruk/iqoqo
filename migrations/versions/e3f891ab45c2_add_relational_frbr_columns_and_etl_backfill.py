@@ -102,7 +102,6 @@ def upgrade():
     # -----------------------------------------------------------------------
     # Backfill logic
     # -----------------------------------------------------------------------
-    import time
     works_table = f"{cat_schema}.works" if cat_schema else "works"
     manif_table = f"{cat_schema}.manifestations" if cat_schema else "manifestations"
 
@@ -132,7 +131,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            time.sleep(0.1)
+
 
         last_id = 0
         while True:
@@ -157,7 +156,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            time.sleep(0.1)
+
     else:
         # SQLite dialect backfill
         chunk_size = 1000
@@ -181,7 +180,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            time.sleep(0.1)
+
 
         last_id = 0
         while True:
@@ -222,7 +221,6 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            time.sleep(0.1)
 
 
 def downgrade():

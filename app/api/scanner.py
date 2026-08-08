@@ -69,8 +69,9 @@ def _record_scan_telemetry(
 ) -> None:
     """Helper to persist a scan-lookup record safely."""
     try:
-        if barcode and len(barcode) > 50:
-            barcode = barcode[:47] + "..."
+        if barcode and len(barcode) > 128:
+            current_app.logger.warning("Barcode too long (%d chars), skipping telemetry", len(barcode))
+            barcode = None
 
         # Create a savepoint to prevent rollback of outer transactions
         with db.session.begin_nested():
@@ -150,9 +151,15 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
-@limiter.limit("10 per minute", override_defaults=True)
+@limiter.limit("30 per minute", override_defaults=True)
 def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
+    # Enforce query length cap to prevent upstream API quota exhaustion
+    MAX_QUERY_LENGTH = 128
+    query = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", query)  # Strip control characters
+    if len(query) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Query too long (max {MAX_QUERY_LENGTH} characters)"}), 400
+
     format_hint = request.args.get("format")
 
     # Heuristic: if query has spaces or no digits, treat as name and hash it

@@ -267,3 +267,24 @@ class TestCrossFRBRMultiFilter:
             resp3 = client.get("/api/stats/facets?scope=global", headers=normal_user_headers)
             assert resp3.status_code == 200
             assert mock_get_stats.call_count == 2
+
+    def test_faceted_stats_cache_key_normalized(self, client, normal_user_headers, app):
+        """Test that reordered query params produce the same cache key (no fragmentation)."""
+        from unittest.mock import patch
+
+        with app.app_context():
+            from app.core.cache import cache
+
+            cache.clear()
+
+        with patch("app.api.system.DataManager.get_faceted_stats", return_value={"mock": "data"}) as mock_get_stats:
+            # Request with params in order: scope=user, view=items
+            resp1 = client.get("/api/stats/facets?scope=user&view=items", headers=normal_user_headers)
+            assert resp1.status_code == 200
+            assert mock_get_stats.call_count == 1
+
+            # Same params, reversed order: view=items, scope=user
+            resp2 = client.get("/api/stats/facets?view=items&scope=user", headers=normal_user_headers)
+            assert resp2.status_code == 200
+            # Should hit the cache — same logical request
+            assert mock_get_stats.call_count == 1, "Reordered params should produce same cache key"

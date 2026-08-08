@@ -355,7 +355,7 @@ export function CameraCapture({
 
   return (
     <div
-      className={`w-full ${className ?? ""} ${
+      className={`w-full relative ${className ?? ""} ${
         isDesktopMode
           ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " +
             (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
@@ -370,6 +370,16 @@ export function CameraCapture({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
+      {uploading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-background/80 backdrop-blur-sm">
+          <div className="relative flex items-center justify-center mb-4">
+            <div className="absolute h-12 w-12 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
+            <div className="h-8 w-8 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
+          </div>
+          <p className="animate-pulse text-sm font-medium text-foreground">Processing image...</p>
+        </div>
+      )}
+
       {inputNode}
 
       {isDesktopMode ? (

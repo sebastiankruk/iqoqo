@@ -26,9 +26,12 @@ by connecting directly to the resolved IP while preserving the original
 import ipaddress
 import logging
 import socket
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.connection import HTTPSConnection
+from urllib3.connectionpool import HTTPSConnectionPool
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +116,38 @@ def is_safe_url(url: str) -> bool:
         return False
 
 
+class PinningHTTPSConnection(HTTPSConnection):
+    """HTTPS connection that connects to a specific pinned IP but keeps original SNI."""
+
+    def __init__(self, *args, **kwargs):
+        self.pinned_ip = kwargs.pop("pinned_ip", None)
+        super().__init__(*args, **kwargs)
+
+    def _new_conn(self):
+        original_host = self.host
+        if self.pinned_ip:
+            self.host = self.pinned_ip
+        try:
+            return super()._new_conn()
+        finally:
+            self.host = original_host
+
+
+class SSRFProtectionAdapter(HTTPAdapter):
+    """Adapter that forces HTTPS connections to use a pinned IP address."""
+
+    def __init__(self, pinned_ip: str, *args, **kwargs):
+        self.pinned_ip = pinned_ip
+        super().__init__(*args, **kwargs)
+
+    def get_connection(self, url, proxies=None):
+        conn = super().get_connection(url, proxies)
+        if isinstance(conn, HTTPSConnectionPool):
+            conn.ConnectionCls = PinningHTTPSConnection
+            conn.conn_kw["pinned_ip"] = self.pinned_ip
+        return conn
+
+
 def safe_get(
     url: str,
     *,
@@ -120,12 +155,15 @@ def safe_get(
     params: dict[str, str] | None = None,
     timeout: int | float | tuple[int | float, int | float] = 10,
     stream: bool = False,
+    max_redirects: int = 5,
 ) -> requests.Response:
     """Perform an SSRF-safe HTTP GET request.
 
     Resolves the hostname to an IP address, validates it against restricted
     ranges, and makes the request directly to the resolved IP with the original
-    ``Host`` header to prevent DNS rebinding.
+    ``Host`` header (for HTTP) or via socket-level IP pinning (for HTTPS)
+    to prevent DNS rebinding. Follows redirects safely up to max_redirects by
+    re-resolving and re-validating the target on each hop.
 
     Args:
         url: Target URL.
@@ -133,65 +171,82 @@ def safe_get(
         params: Optional query parameters.
         timeout: Request timeout (seconds or (connect, read) tuple).
         stream: Whether to stream the response body.
+        max_redirects: Maximum number of redirects to follow safely.
 
     Returns:
         :class:`requests.Response` object.
 
     Raises:
-        SSRFError: If the target resolves to a restricted IP address.
+        SSRFError: If the target resolves to a restricted IP address or too many redirects.
         requests.RequestException: On network errors.
     """
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise SSRFError(f"Unsupported scheme: {parsed.scheme}")
+    current_url = url
+    session = requests.Session()
 
-    hostname = parsed.hostname
-    if not hostname:
-        raise SSRFError("Missing hostname in URL")
+    for hop in range(max_redirects + 1):
+        parsed = urlparse(current_url)
+        if parsed.scheme not in ("http", "https"):
+            raise SSRFError(f"Unsupported scheme: {parsed.scheme}")
 
-    # Resolve hostname to IP *before* connecting.
-    try:
-        addr_results = socket.getaddrinfo(hostname, None)
-    except (socket.gaierror, OSError) as exc:
-        raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+        hostname = parsed.hostname
+        if not hostname:
+            raise SSRFError("Missing hostname in URL")
 
-    if not addr_results:
-        raise SSRFError(f"DNS resolution returned no results for {hostname}")
+        # Resolve hostname to IP *before* connecting.
+        try:
+            addr_results = socket.getaddrinfo(hostname, None)
+        except (socket.gaierror, OSError) as exc:
+            raise SSRFError(f"DNS resolution failed for {hostname}") from exc
 
-    # Validate ALL resolved IPs — block if any are restricted.
-    resolved_ip: str | None = None
-    for result in addr_results:
-        ip_str = str(result[4][0])
-        if is_ip_blocked(ip_str):
-            raise SSRFError(f"Blocked: {hostname} resolved to restricted IP {ip_str}")
-        if resolved_ip is None:
-            resolved_ip = ip_str
+        if not addr_results:
+            raise SSRFError(f"DNS resolution returned no results for {hostname}")
 
-    assert resolved_ip is not None  # guaranteed by non-empty addr_results  # noqa: S101
+        # Validate ALL resolved IPs — block if any are restricted.
+        resolved_ip: str | None = None
+        for result in addr_results:
+            ip_str = str(result[4][0])
+            if is_ip_blocked(ip_str):
+                raise SSRFError(f"Blocked: {hostname} resolved to restricted IP {ip_str}")
+            if resolved_ip is None:
+                resolved_ip = ip_str
 
-    # Rewrite the URL to connect directly to the resolved IP, adding the
-    # original hostname as the Host header to avoid DNS rebinding.
-    merged_headers = dict(headers or {})
+        assert resolved_ip is not None  # guaranteed by non-empty addr_results  # noqa: S101
 
-    if parsed.scheme == "https":
-        # HTTPS is naturally protected against DNS rebinding to internal services
-        # by TLS certificate validation. We use the original URL to avoid SSL IP mismatch.
-        rewritten_url = url
-    else:
-        port = parsed.port
-        if port:
-            netloc = f"{resolved_ip}:{port}"
+        merged_headers = dict(headers or {})
+        request_params = params if hop == 0 else None
+
+        if parsed.scheme == "https":
+            rewritten_url = current_url
+            adapter = SSRFProtectionAdapter(pinned_ip=resolved_ip)
+            session.mount("https://", adapter)
         else:
-            netloc = resolved_ip
+            port = parsed.port
+            if port:
+                netloc = f"{resolved_ip}:{port}"
+            else:
+                netloc = resolved_ip
 
-        rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-        merged_headers.setdefault("Host", hostname)
+            rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+            merged_headers.setdefault("Host", hostname)
 
-    return requests.get(
-        rewritten_url,
-        headers=merged_headers,
-        params=params,
-        timeout=timeout,
-        stream=stream,
-        verify=True,
-    )
+        response = session.get(
+            rewritten_url,
+            headers=merged_headers,
+            params=request_params,
+            timeout=timeout,
+            stream=stream,
+            verify=True,
+            allow_redirects=False,
+        )
+
+        if response.is_redirect:
+            if hop >= max_redirects:
+                raise SSRFError("Too many redirects")
+            next_url = response.headers.get("location")
+            if not next_url:
+                raise SSRFError("Redirect missing location header")
+            current_url = urljoin(current_url, next_url)
+        else:
+            return response
+
+    raise SSRFError("Too many redirects")

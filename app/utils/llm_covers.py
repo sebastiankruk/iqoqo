@@ -116,16 +116,6 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
 
-    remote = os.environ.get("RCLONE_COVERS_REMOTE")
-    if remote:
-        import subprocess
-
-        try:
-            target = get_rclone_target(remote, "covers", filename)
-            subprocess.run(["rclone", "copyto", filepath, target, "--s3-no-check-bucket"], check=False)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("Failed to push to rclone cache: %s", e)
-
     return f"{Config.COVERS_BASE_URL}/{filename}"
 
 

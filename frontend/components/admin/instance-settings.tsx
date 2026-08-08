@@ -442,6 +442,8 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   };
 
   if (showApiKeys && category === "external_apis") {
+    const allItems = API_SERVICE_GROUPS.flatMap(g => g.items);
+
     return (
       <div className="flex flex-col gap-8">
         {savedMessage && (
@@ -451,75 +453,79 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
           </div>
         )}
 
-        {API_SERVICE_GROUPS.map(group => {
-          const isAllegro = group.id === "allegro";
-
-          return (
-            <CardWrapper
-              key={group.id}
-              title={group.title}
-              description={group.description}
-              saving={savingKey === group.id}
-              onSave={() => handleSaveKeys(group.items, group.id)}
-              extraFooterContent={
-                isAllegro ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={startAllegroAuth}
-                    disabled={isAuthorizingAllegro}
-                  >
-                    {isAuthorizingAllegro ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                    )}
-                    Authorize Allegro Account
-                  </Button>
-                ) : null
-              }
+        <CardWrapper
+          title="External APIs"
+          description="Configure external API client credentials and integrations."
+          saving={savingKey === "all_apis"}
+          onSave={() => handleSaveKeys(allItems, "all_apis")}
+          extraFooterContent={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startAllegroAuth}
+              disabled={isAuthorizingAllegro}
             >
-              <div className="flex flex-col gap-4">
-                {group.items.map(s => renderInputField(s))}
-                {isAllegro && (allegroAuthStatus || allegroAuthUrl) && (
-                  <div className="mt-2 p-3 rounded-lg border border-border dark:border-white/10 bg-muted/30 text-sm flex flex-col gap-2">
-                    {allegroAuthStatus && (
-                      <div className="flex items-center gap-2 font-medium">
-                        {allegroAuthStatus.includes("Error") || allegroAuthStatus.includes("failed") ? (
-                          <AlertCircle className="h-4 w-4 text-destructive" />
-                        ) : allegroAuthStatus.includes("successfully") ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                        )}
-                        <span>{allegroAuthStatus}</span>
-                      </div>
-                    )}
-                    {allegroAuthUrl && (
-                      <p className="text-xs text-muted-foreground">
-                        If browser window did not open automatically,{" "}
-                        <a
-                          href={allegroAuthUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary underline font-medium inline-flex items-center gap-1"
-                        >
-                          click here to authorize on Allegro <ExternalLink className="h-3 w-3 inline" />
-                        </a>
-                      </p>
-                    )}
+              {isAuthorizingAllegro ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
+              Authorize Allegro Account
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-6">
+            {API_SERVICE_GROUPS.map(group => {
+              const isAllegro = group.id === "allegro";
+
+              return (
+                <div key={group.id} className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">{group.title}</h4>
+                    <p className="text-sm text-muted-foreground">{group.description}</p>
                   </div>
-                )}
-              </div>
-            </CardWrapper>
-          );
-        })}
+                  <div className="flex flex-col gap-4">{group.items.map(s => renderInputField(s))}</div>
+                  {isAllegro && (allegroAuthStatus || allegroAuthUrl) && (
+                    <div className="mt-2 p-3 rounded-lg border border-border dark:border-white/10 bg-muted/30 text-sm flex flex-col gap-2">
+                      {allegroAuthStatus && (
+                        <div className="flex items-center gap-2 font-medium">
+                          {allegroAuthStatus.includes("Error") || allegroAuthStatus.includes("failed") ? (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          ) : allegroAuthStatus.includes("successfully") ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          )}
+                          <span>{allegroAuthStatus}</span>
+                        </div>
+                      )}
+                      {allegroAuthUrl && (
+                        <p className="text-xs text-muted-foreground">
+                          If browser window did not open automatically,{" "}
+                          <a
+                            href={allegroAuthUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline font-medium inline-flex items-center gap-1"
+                          >
+                            click here to authorize on Allegro <ExternalLink className="h-3 w-3 inline" />
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardWrapper>
       </div>
     );
   }
 
   const defaultList = SETTING_GROUPS[category] || [];
+  const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1).replace("_", " ");
   return (
     <div className="flex flex-col gap-8">
       {savedMessage && (
@@ -529,42 +535,46 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
         </div>
       )}
 
-      {defaultList.map(s => {
-        const { value, source } = getSettingValue(s.key);
-        const badge = getSourceBadge(source);
+      <CardWrapper
+        title={`${categoryTitle} Settings`}
+        description={`Manage settings for ${categoryTitle.toLowerCase()}.`}
+        saving={savingKey === category}
+        onSave={() => handleSaveKeys(defaultList, category)}
+      >
+        <div className="flex flex-col gap-6">
+          {defaultList.map(s => {
+            const { value, source } = getSettingValue(s.key);
+            const badge = getSourceBadge(source);
 
-        return (
-          <CardWrapper
-            key={s.key}
-            title={s.label}
-            description=""
-            saving={savingKey === s.key}
-            onSave={() => handleSaveKeys([s], s.key)}
-          >
-            <div className="flex items-center gap-3">
-              {s.type === "boolean" ? (
-                <select
-                  className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={String(value).toLowerCase() === "true" ? "true" : "false"}
-                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={value}
-                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                  placeholder={s.placeholder}
-                />
-              )}
-              <span className={`text-xs px-2 py-1 rounded font-mono ${badge.className}`}>{badge.label}</span>
-            </div>
-          </CardWrapper>
-        );
-      })}
+            return (
+              <div key={s.key} className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">{s.label}</label>
+                <div className="flex items-center gap-3">
+                  {s.type === "boolean" ? (
+                    <select
+                      className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={String(value).toLowerCase() === "true" ? "true" : "false"}
+                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                    >
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={value}
+                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                      placeholder={s.placeholder}
+                    />
+                  )}
+                  <span className={`text-xs px-2 py-1 rounded font-mono ${badge.className}`}>{badge.label}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardWrapper>
     </div>
   );
 }

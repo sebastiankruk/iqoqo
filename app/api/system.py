@@ -150,8 +150,17 @@ def get_dashboard_stats():
 
 
 def make_facets_cache_key():
+    """Generate a deterministic cache key for faceted stats.
+
+    Normalizes query parameter ordering to prevent Redis cache key
+    fragmentation (e.g., ``?a=1&b=2`` and ``?b=2&a=1`` produce the same key).
+    """
+    from urllib.parse import parse_qsl, urlencode, urlparse
+
     user_id = getattr(g, "user_id", "anon")
-    return f"stats_facets:{user_id}:{request.full_path}"
+    parsed = urlparse(request.full_path)
+    sorted_params = urlencode(sorted(parse_qsl(parsed.query)))
+    return f"stats_facets:{user_id}:{parsed.path}?{sorted_params}"
 
 
 @api_bp.route("/stats/facets", methods=["GET"])

@@ -134,7 +134,7 @@ class TestIsSafeUrl:
 class TestSafeGet:
     """Tests for the safe_get SSRF-safe HTTP GET wrapper."""
 
-    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.requests.Session.get")
     @patch("app.utils.http_client.socket.getaddrinfo")
     def test_successful_public_request(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
         """Requests to public IPs should succeed and pass through the Host header."""
@@ -197,7 +197,7 @@ class TestSafeGet:
         with pytest.raises(SSRFError, match="DNS resolution failed"):
             safe_get("http://nonexistent.example.com/image.jpg")
 
-    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.requests.Session.get")
     @patch("app.utils.http_client.socket.getaddrinfo")
     def test_preserves_original_host_header(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
         """The original hostname must be sent as the Host header to prevent TLS/vhost issues."""
@@ -211,7 +211,7 @@ class TestSafeGet:
         call_args = mock_get.call_args
         assert call_args[1]["headers"]["Host"] == "www.google.com"
 
-    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.requests.Session.get")
     @patch("app.utils.http_client.socket.getaddrinfo")
     def test_does_not_override_existing_host_header(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
         """If a Host header is already set, safe_get should not override it."""
@@ -225,7 +225,7 @@ class TestSafeGet:
         call_args = mock_get.call_args
         assert call_args[1]["headers"]["Host"] == "custom-host.com"
 
-    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.requests.Session.get")
     @patch("app.utils.http_client.socket.getaddrinfo")
     def test_port_preserved_in_rewritten_url(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
         """Port numbers must be preserved when rewriting the URL to use the resolved IP."""
@@ -239,7 +239,7 @@ class TestSafeGet:
         call_args = mock_get.call_args
         assert "93.184.216.34:8080" in call_args[0][0]
 
-    @patch("app.utils.http_client.requests.get")
+    @patch("app.utils.http_client.requests.Session.get")
     @patch("app.utils.http_client.socket.getaddrinfo")
     def test_https_not_rewritten(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
         """HTTPS URLs must not be rewritten to IP addresses to avoid SSL certificate mismatch."""
@@ -255,3 +255,66 @@ class TestSafeGet:
         assert call_args[0][0] == "https://example.com/path"
         # No extra Host header should be injected since we didn't rewrite
         assert "Host" not in call_args[1].get("headers", {})
+
+    @patch("app.utils.http_client.requests.Session.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_follows_safe_redirects(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """safe_get should follow redirects to safe IPs."""
+        # 1st request -> public, 2nd request -> public
+        mock_getaddrinfo.side_effect = [
+            [(2, 1, 6, "", ("93.184.216.34", 0))],
+            [(2, 1, 6, "", ("142.250.80.46", 0))],
+        ]
+
+        mock_redirect = MagicMock()
+        mock_redirect.is_redirect = True
+        mock_redirect.headers = {"location": "http://other.com/target"}
+
+        mock_final = MagicMock()
+        mock_final.is_redirect = False
+        mock_final.status_code = 200
+
+        mock_get.side_effect = [mock_redirect, mock_final]
+
+        result = safe_get("http://example.com/start")
+
+        assert result.status_code == 200
+        assert mock_get.call_count == 2
+        # First call to 93.184.216.34
+        assert "93.184.216.34" in mock_get.call_args_list[0][0][0]
+        # Second call to 142.250.80.46
+        assert "142.250.80.46" in mock_get.call_args_list[1][0][0]
+
+    @patch("app.utils.http_client.requests.Session.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_blocks_redirect_to_restricted_ip(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """safe_get must block redirects that resolve to a restricted IP."""
+        mock_getaddrinfo.side_effect = [
+            [(2, 1, 6, "", ("93.184.216.34", 0))],
+            [(2, 1, 6, "", ("127.0.0.1", 0))],
+        ]
+
+        mock_redirect = MagicMock()
+        mock_redirect.is_redirect = True
+        mock_redirect.headers = {"location": "http://localhost/admin"}
+        mock_get.return_value = mock_redirect
+
+        with pytest.raises(SSRFError, match="restricted IP"):
+            safe_get("http://example.com/start")
+
+    @patch("app.utils.http_client.requests.Session.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_too_many_redirects(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """safe_get must abort after max_redirects."""
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+        mock_redirect = MagicMock()
+        mock_redirect.is_redirect = True
+        mock_redirect.headers = {"location": "http://example.com/loop"}
+        mock_get.return_value = mock_redirect
+
+        with pytest.raises(SSRFError, match="Too many redirects"):
+            safe_get("http://example.com/start", max_redirects=2)
+
+        # 3 calls total: hop 0, hop 1, hop 2
+        assert mock_get.call_count == 3
