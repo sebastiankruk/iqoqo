@@ -14,6 +14,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+from unittest.mock import patch
+
 import pytest
 
 from app.db.models import Role, TokenBlocklist, User, db
@@ -145,14 +147,10 @@ class TestBarcodePreviewQueryValidation:
         data = resp.get_json()
         assert "too long" in data.get("error", "").lower()
 
-    from unittest.mock import patch
-
-    @patch("app.utils.isbn.requests.get")
-    def test_normal_query_accepted(self, mock_get, client, admin_headers):
+    @patch("app.strategies.default.fetch_isbn_metadata", return_value=None)
+    @patch("app.utils.isbn._make_session")
+    def test_normal_query_accepted(self, mock_session, mock_fetch_isbn, client, admin_headers):
         """A normal-length query should not be rejected for length."""
-        mock_get.return_value.status_code = 404
-        mock_get.return_value.json.return_value = {"items": []}
-
         resp = client.get("/api/lookup/978-0-123456-47-2", headers=admin_headers)
         # Assuming the system handles it, it might return 200 or 404 (not found).
         # We just want to ensure it doesn't return 400 Bad Request.

@@ -108,10 +108,12 @@ def app_with_limiter(app):
     limiter.enabled = True
     # Re-init to pick up config
     limiter.init_app(app)
+    limiter.reset()
 
     yield app
 
     # Restore state
+    limiter.reset()
     limiter.enabled = False
     app.config["RATELIMIT_ENABLED"] = False
 
@@ -132,6 +134,9 @@ def test_admin_required_refactored(client, app):
 
 
 def test_lookup_rate_limit(app_with_limiter, normal_user_headers):
+    from app.core.limiter import limiter
+
+    limiter.reset()
     client = app_with_limiter.test_client()
     # Hit it 30 times (limit is 30 per minute)
     for _ in range(30):
