@@ -145,8 +145,15 @@ class TestBarcodePreviewQueryValidation:
         data = resp.get_json()
         assert "too long" in data.get("error", "").lower()
 
-    def test_normal_query_accepted(self, client, admin_headers):
+    from unittest.mock import patch
+
+    @patch("app.utils.isbn.requests.get")
+    def test_normal_query_accepted(self, mock_get, client, admin_headers):
         """A normal-length query should not be rejected for length."""
+        mock_get.return_value.status_code = 404
+        mock_get.return_value.json.return_value = {"items": []}
+        
         resp = client.get("/api/lookup/978-0-123456-47-2", headers=admin_headers)
-        # Should not be 400 (may be 404 or 200 depending on DB state)
-        assert resp.status_code != 400
+        # Assuming the system handles it, it might return 200 or 404 (not found).
+        # We just want to ensure it doesn't return 400 Bad Request.
+        assert resp.status_code in (200, 404)

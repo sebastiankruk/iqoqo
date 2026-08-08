@@ -105,9 +105,15 @@ def app_with_limiter(app):
 
     app.config["RATELIMIT_ENABLED"] = True
     app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
     # Re-init to pick up config
     limiter.init_app(app)
-    return app
+    
+    yield app
+    
+    # Restore state
+    limiter.enabled = False
+    app.config["RATELIMIT_ENABLED"] = False
 
 
 def test_admin_required_refactored(client, app):
