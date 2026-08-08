@@ -108,9 +108,9 @@ def app_with_limiter(app):
     limiter.enabled = True
     # Re-init to pick up config
     limiter.init_app(app)
-    
+
     yield app
-    
+
     # Restore state
     limiter.enabled = False
     app.config["RATELIMIT_ENABLED"] = False

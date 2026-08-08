@@ -128,7 +128,7 @@ class PinningHTTPSConnection(HTTPSConnection):
         if self.pinned_ip:
             self.host = self.pinned_ip
         try:
-            return super()._new_conn()
+            return super()._new_conn()  # pylint: disable=no-member  # urllib3 HTTPSConnection internal method
         finally:
             self.host = original_host
 
