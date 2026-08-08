@@ -136,8 +136,23 @@ def test_admin_required_refactored(client, app):
     assert "Admin privileges required" in response.json["error"]
 
 
-def test_lookup_rate_limit(app_with_limiter, normal_user_headers):
+def test_lookup_rate_limit(app_with_limiter, normal_user_headers, monkeypatch):
     from app.core.limiter import limiter
+
+    # The `/api/lookup` endpoint performs real external metadata lookups
+    # (Discogs, MusicBrainz, UPC, TMDB, BGG) that can hang for 10+ seconds per
+    # request in CI. If the 30 allowed requests span a fixed-window minute
+    # boundary, the 31st request never breaches the limit and the test fails
+    # flakily. Mock the lookup strategy so every request completes instantly
+    # and the rate limiting behavior is tested deterministically.
+    class _InstantLookupStrategy:
+        def lookup(self, barcode: str, query: str | None = None):
+            return None, None
+
+    monkeypatch.setattr(
+        "app.api.scanner.LookupStrategyFactory.get_strategy",
+        lambda category_hint: _InstantLookupStrategy(),
+    )
 
     limiter.reset()
     client = app_with_limiter.test_client()
