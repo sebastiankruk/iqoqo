@@ -108,12 +108,14 @@ def app_with_limiter(app):
     limiter.enabled = True
     limiter._enabled = True
     limiter.init_app(app)
-    limiter.reset()
+    if hasattr(limiter, "_storage") and limiter._storage:
+        limiter._storage.reset()
 
     yield app
 
     # Restore state
-    limiter.reset()
+    if hasattr(limiter, "_storage") and limiter._storage:
+        limiter._storage.reset()
     limiter.enabled = False
     limiter._enabled = False
     app.config["RATELIMIT_ENABLED"] = False
