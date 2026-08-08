@@ -7,6 +7,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    settings: {
+      react: {
+        version: '19.0',
+      },
+    },
     plugins: {
       jsdoc,
     },

@@ -151,6 +151,18 @@ const SETTING_GROUPS = {
   ],
 };
 
+/**
+ * Wrapper component for instance settings cards.
+ *
+ * @param props Component props.
+ * @param props.title Card title.
+ * @param props.description Card description.
+ * @param props.onSave Save callback.
+ * @param props.saving Whether saving is in progress.
+ * @param props.children Card body content.
+ * @param props.extraFooterContent Optional footer elements.
+ * @returns CardWrapper element.
+ */
 function CardWrapper({
   title,
   description,
@@ -187,6 +199,14 @@ function CardWrapper({
   );
 }
 
+/**
+ * Instance settings page component.
+ *
+ * @param props Component props.
+ * @param props.category Settings category tab.
+ * @param props.showApiKeys Whether API keys are shown.
+ * @returns InstanceSettings element.
+ */
 export function InstanceSettings({ category = "external_apis", showApiKeys = false }: InstanceSettingsProps) {
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
@@ -199,13 +219,25 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (showApiKeys && category !== "external_apis") {
-      setLoading(false);
-      return;
+      Promise.resolve().then(() => {
+        if (isMounted) setLoading(false);
+      });
+      return () => {
+        isMounted = false;
+      };
     }
     getInstanceSettings(category)
-      .then(data => setSettings(data as InstanceSettingsData))
-      .finally(() => setLoading(false));
+      .then(data => {
+        if (isMounted) setSettings(data as InstanceSettingsData);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [category, showApiKeys]);
 
   const handleSaveKeys = async (keysToSave: SettingItem[], groupId: string) => {
@@ -283,20 +315,16 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
       const idSetting = settings["ALLEGRO_CLIENT_ID"];
       const secretSetting = settings["ALLEGRO_CLIENT_SECRET"];
 
-      let idVal =
-        idSetting !== undefined && (typeof idSetting === "string" ? idSetting : (idSetting as any)?.value) !== undefined
-          ? typeof idSetting === "string"
-            ? idSetting
-            : (idSetting as any).value
-          : getSettingValue("ALLEGRO_CLIENT_ID").value;
+      const extractSettingStr = (s: SettingValue | string | boolean | null | undefined): string | undefined => {
+        if (typeof s === "string") return s;
+        if (s && typeof s === "object" && "value" in s && s.value !== null && s.value !== undefined) {
+          return String(s.value);
+        }
+        return undefined;
+      };
 
-      let secretVal =
-        secretSetting !== undefined &&
-        (typeof secretSetting === "string" ? secretSetting : (secretSetting as any)?.value) !== undefined
-          ? typeof secretSetting === "string"
-            ? secretSetting
-            : (secretSetting as any).value
-          : getSettingValue("ALLEGRO_CLIENT_SECRET").value;
+      let idVal = extractSettingStr(idSetting) ?? getSettingValue("ALLEGRO_CLIENT_ID").value;
+      let secretVal = extractSettingStr(secretSetting) ?? getSettingValue("ALLEGRO_CLIENT_SECRET").value;
 
       if (revealedKeys.has("ALLEGRO_CLIENT_ID") && revealedValues["ALLEGRO_CLIENT_ID"]) {
         idVal = revealedValues["ALLEGRO_CLIENT_ID"];
