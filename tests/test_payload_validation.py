@@ -106,7 +106,7 @@ def app_with_limiter(app):
     app.config["RATELIMIT_ENABLED"] = True
     app.config["RATELIMIT_STORAGE_URI"] = "memory://"
     limiter.enabled = True
-    # Re-init to pick up config
+    limiter._enabled = True
     limiter.init_app(app)
     limiter.reset()
 
@@ -115,6 +115,7 @@ def app_with_limiter(app):
     # Restore state
     limiter.reset()
     limiter.enabled = False
+    limiter._enabled = False
     app.config["RATELIMIT_ENABLED"] = False
 
 
