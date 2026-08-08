@@ -24,10 +24,10 @@ test.describe("UX/UI Audit Workflow", () => {
     const targetUrl = process.env.AUDIT_EXTERNAL_URL || "/";
     console.log(`=== NAVIGATING TO LANDING PAGE (${targetUrl}) ===`);
     try {
-      await page.goto(targetUrl, { waitUntil: "networkidle", timeout: 15000 });
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
     } catch {
       console.warn(`⚠️ ${targetUrl} is not reachable. Falling back to local landing page.`);
-      await page.goto("/", { waitUntil: "networkidle", timeout: 15000 });
+      await page.goto("/", { waitUntil: "domcontentloaded", timeout: 15000 });
     }
 
     // Take screenshot of landing page

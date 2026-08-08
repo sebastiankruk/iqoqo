@@ -386,7 +386,9 @@ test.describe("Manual Verification Integration E2E", () => {
     await page.waitForLoadState("networkidle");
 
     // Check API Key input is masked (starts with ***)
-    const apiKeyContainer = page.locator("div.flex.flex-col").filter({ hasText: "Google Books API Key" }).first();
+    const apiKeyContainer = page
+      .locator("div")
+      .filter({ has: page.locator("label", { hasText: "Google Books API Key" }) });
     const apiKeyInput = apiKeyContainer.locator("input");
     await expect(apiKeyInput).toHaveValue(/^\*\*\*/);
 
