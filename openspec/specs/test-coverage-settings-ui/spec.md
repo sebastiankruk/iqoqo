@@ -15,4 +15,3 @@ The system SHALL have comprehensive `Vitest` frontend component tests for the `I
 
 - **WHEN** a user fills out the Twitch credentials section
 - **THEN** appropriate input validations (required fields, format checks) are enforced and mock submissions succeed
-

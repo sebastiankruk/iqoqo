@@ -14,5 +14,4 @@ The system SHALL have comprehensive `pytest` test suites validating the Redis ca
 #### Scenario: Validate API Rate Limiting Thresholds
 
 - **WHEN** an IP exceeds the allowed burst threshold in DoS rate limiting configs
-- **THEN** the system must return a HTTP 429 Too Many Requests response
-
+- THEN the system must return a HTTP 429 Too Many Requests response

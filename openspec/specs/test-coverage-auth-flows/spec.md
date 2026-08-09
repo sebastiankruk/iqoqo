@@ -15,4 +15,3 @@ The system SHALL cover the Allegro device flow and Twitch API integrations with 
 
 - **WHEN** the administrator interacts with Twitch linking in settings
 - **THEN** the workflow correctly processes mock Twitch API verify endpoints without timing out in CI
-

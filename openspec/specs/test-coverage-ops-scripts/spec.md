@@ -15,4 +15,3 @@ The system SHALL include a `bats` test suite for `scripts/load_test_facets.sh` t
 
 - **WHEN** the script is executed without required URL/Token parameters
 - **THEN** it outputs an error message and exits with a non-zero exit code
-
