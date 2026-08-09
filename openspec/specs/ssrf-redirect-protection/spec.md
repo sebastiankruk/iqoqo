@@ -3,7 +3,9 @@
 ## Purpose
 
 Prevent SSRF redirect chain exploits and enforce socket-level IP pinning.
+
 ## Requirements
+
 ### Requirement: SSRF redirect chain prevention
 
 The system SHALL disable automatic HTTP redirects in `safe_get()` and implement a manual redirect loop capped at 5 hops. On each redirect hop, the system SHALL re-resolve DNS and re-validate all resolved IPs against `_BLOCKED_NETWORKS` before following the `Location` header.
@@ -49,4 +51,3 @@ The system SHALL enforce `str()` coercion on both `current_url` and `next_url` a
 
 - **WHEN** an external URL returns a redirect response where `response.headers.get("location")` yields a non-string type (e.g., bytes or mock object)
 - **THEN** the system SHALL coerce the value to a string via `str()` before passing to `urljoin()`, preventing a `TypeError` crash in the Celery worker
-

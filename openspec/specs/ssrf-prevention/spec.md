@@ -3,7 +3,9 @@
 ## Purpose
 
 Prevent Server-Side Request Forgery (SSRF) attacks when the system fetches external resources based on user-supplied or external URLs.
+
 ## Requirements
+
 ### Requirement: Prevent SSRF on External Fetches
 
 The system MUST ensure that all requests to external resources (e.g., fetching images or API data based on user-supplied or external URLs) do not target restricted IP ranges (localhost, RFC 1918, AWS metadata).
@@ -36,4 +38,3 @@ The system SHALL enforce an explicit timeout on all `socket.getaddrinfo()` calls
 
 - **WHEN** the system attempts to resolve a hostname via `socket.getaddrinfo()` and the DNS server does not respond within 5 seconds
 - **THEN** the system SHALL raise an `SSRFError` with a descriptive message indicating DNS resolution timeout, and the Celery worker thread SHALL NOT remain blocked
-
