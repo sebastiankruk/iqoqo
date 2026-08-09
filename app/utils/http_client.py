@@ -23,6 +23,7 @@ by connecting directly to the resolved IP while preserving the original
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import concurrent.futures
 import ipaddress
 import logging
 import socket
@@ -51,6 +52,18 @@ _BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
 
 class SSRFError(Exception):
     """Raised when a request targets a restricted IP range."""
+
+
+def _resolve_with_timeout(hostname: str, timeout: float = 5.0) -> list:
+    """Executes DNS resolution in a separate thread to enforce a strict timeout."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(socket.getaddrinfo, hostname, None)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as exc:
+            raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
+        except (socket.gaierror, OSError) as exc:
+            raise SSRFError(f"DNS resolution failed for {hostname}") from exc
 
 
 def is_ip_blocked(ip_str: str) -> bool:
@@ -100,7 +113,8 @@ def is_safe_url(url: str) -> bool:
         if not hostname:
             return False
 
-        ip_info = socket.getaddrinfo(hostname, None)
+        ip_info = _resolve_with_timeout(hostname, timeout=5.0)
+
         for result in ip_info:
             ip_str = str(result[4][0])
             if is_ip_blocked(ip_str):
@@ -111,7 +125,7 @@ def is_safe_url(url: str) -> bool:
                 )
                 return False
         return True
-    except (OSError, ValueError, socket.gaierror) as exc:
+    except (SSRFError, ValueError) as exc:
         logger.error("URL validation failed for %s: %s", url, exc)
         return False
 
@@ -192,11 +206,8 @@ def safe_get(
         if not hostname:
             raise SSRFError("Missing hostname in URL")
 
-        # Resolve hostname to IP *before* connecting.
-        try:
-            addr_results = socket.getaddrinfo(hostname, None)
-        except (socket.gaierror, OSError) as exc:
-            raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+        # Resolve hostname to IP *before* connecting with isolated timeout thread
+        addr_results = _resolve_with_timeout(hostname, timeout=5.0)
 
         if not addr_results:
             raise SSRFError(f"DNS resolution returned no results for {hostname}")
@@ -245,7 +256,7 @@ def safe_get(
             next_url = response.headers.get("location")
             if not next_url:
                 raise SSRFError("Redirect missing location header")
-            current_url = urljoin(current_url, next_url)
+            current_url = urljoin(str(current_url), str(next_url))
         else:
             return response
 

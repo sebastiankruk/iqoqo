@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **Critical Vulnerability Eradication**: Patched SSRF in image downloading and external metadata fetching, and XXE DoS in BGG and SVG QR code parsing.
+- **Rclone Command Injection Prevention**: Hardened `subprocess.run()` calls in `app/core/tasks.py`, `app/utils/images.py`, and `app/utils/llm_covers.py` by placing flags before the POSIX `--` end-of-options delimiter to prevent path-based option injection.
+- **DNS Resolution Timeout**: Wrapped `socket.getaddrinfo()` in `app/utils/http_client.py` with explicit 5-second timeouts to prevent Celery worker thread starvation during SSRF validation of hanging DNS servers.
+- **SSRF Redirect Type Safety**: Enforced `str()` coercion on redirect location header URLs in `safe_get()` (`app/utils/http_client.py`) to prevent `TypeError` DoS crashes on non-string redirect headers.
 
 ### Changed
 
@@ -34,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Google Books Title Lookup Disambiguation**: Fixed a bug where scanning by title would only show a single candidate or bypass disambiguation entirely. The URL encoding in `fetch_google_books_candidates` was corrected, and the length check for candidates was fixed.
 - **Missing Cover / Metadata on Added Items**: Fixed an issue where adding an item via title lookup would perform a secondary search using a fallback barcode, resulting in a loss of the original cover and ISBN data. The scanner API now respects the metadata payload forwarded by the `SuccessCard` component.
 - **Cover Refetch Task Server Error & Infinite Polling**: Resolved a `TypeError` in the celery task scheduler where `user_id` was passed both positionally and as a keyword argument, preventing the cover refetch task from starting. Additionally, updated `get_cover_status` to return `200 OK` on task failure, breaking the frontend out of an infinite polling loop that caused the UI to show a perpetual waiting indicator.
+- **Scanner Telemetry Audit Blind Spot**: Replaced silent telemetry drop for barcodes exceeding 128 characters with auditable rejection recording (`status='rejected_oversized'`) and truncated barcode logging in `app/api/scanner.py`.
 
 ## [0.7.13] - 2026-07-31
 

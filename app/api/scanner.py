@@ -69,17 +69,20 @@ def _record_scan_telemetry(
 ) -> None:
     """Helper to persist a scan-lookup record safely."""
     try:
+        effective_barcode = barcode
+        effective_status = status
         if barcode and len(barcode) > 128:
-            current_app.logger.warning("Barcode too long (%d chars), skipping telemetry", len(barcode))
-            return
+            current_app.logger.warning("Barcode too long (%d chars), recording truncated telemetry", len(barcode))
+            effective_barcode = f"{barcode[:120]}...({len(barcode)})"
+            effective_status = "rejected_oversized"
 
         # Create a savepoint to prevent rollback of outer transactions
         with db.session.begin_nested():
             telemetry = ScanTelemetry(
-                barcode=barcode,
+                barcode=effective_barcode,
                 format_hint=format_hint,
                 provider=provider,
-                status=status,
+                status=effective_status,
                 manifestation_id=manifestation_id,
                 raw_request_url=raw_request_url,
             )
