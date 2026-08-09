@@ -100,7 +100,13 @@ def is_safe_url(url: str) -> bool:
         if not hostname:
             return False
 
-        ip_info = socket.getaddrinfo(hostname, None)
+        old_timeout = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(5)
+            ip_info = socket.getaddrinfo(hostname, None)
+        finally:
+            socket.setdefaulttimeout(old_timeout)
+
         for result in ip_info:
             ip_str = str(result[4][0])
             if is_ip_blocked(ip_str):
@@ -111,7 +117,7 @@ def is_safe_url(url: str) -> bool:
                 )
                 return False
         return True
-    except (OSError, ValueError, socket.gaierror) as exc:
+    except (TimeoutError, OSError, ValueError, socket.gaierror) as exc:
         logger.error("URL validation failed for %s: %s", url, exc)
         return False
 
@@ -192,11 +198,17 @@ def safe_get(
         if not hostname:
             raise SSRFError("Missing hostname in URL")
 
-        # Resolve hostname to IP *before* connecting.
+        # Resolve hostname to IP *before* connecting with explicit timeout.
+        old_timeout = socket.getdefaulttimeout()
         try:
+            socket.setdefaulttimeout(5)
             addr_results = socket.getaddrinfo(hostname, None)
+        except TimeoutError as exc:
+            raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
         except (socket.gaierror, OSError) as exc:
             raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+        finally:
+            socket.setdefaulttimeout(old_timeout)
 
         if not addr_results:
             raise SSRFError(f"DNS resolution returned no results for {hostname}")
@@ -245,7 +257,7 @@ def safe_get(
             next_url = response.headers.get("location")
             if not next_url:
                 raise SSRFError("Redirect missing location header")
-            current_url = urljoin(current_url, next_url)
+            current_url = urljoin(str(current_url), str(next_url))
         else:
             return response
 

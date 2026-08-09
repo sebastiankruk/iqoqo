@@ -353,7 +353,7 @@ def fetch_llm_cover(
             try:
                 target = get_rclone_target(remote, "covers", filename)
                 res = subprocess.run(
-                    ["rclone", "copyto", target, local_file, "--s3-no-check-bucket"],
+                    ["rclone", "copyto", "--s3-no-check-bucket", "--", target, local_file],
                     capture_output=True,
                     text=True,
                     check=False,
