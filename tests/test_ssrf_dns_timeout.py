@@ -15,7 +15,7 @@
 
 """Tests for SSRF DNS resolution timeout enforcement."""
 
-import socket
+import concurrent.futures
 from unittest.mock import patch
 
 import pytest
@@ -25,12 +25,12 @@ from app.utils.http_client import SSRFError, is_safe_url, safe_get
 
 def test_is_safe_url_dns_timeout() -> None:
     """Verifies that is_safe_url returns False when DNS resolution times out."""
-    with patch("socket.getaddrinfo", side_effect=TimeoutError("DNS timed out")):
+    with patch("concurrent.futures.Future.result", side_effect=concurrent.futures.TimeoutError("DNS timed out")):
         assert is_safe_url("http://hanging-dns.example.com/") is False
 
 
 def test_safe_get_dns_timeout() -> None:
     """Verifies that safe_get raises SSRFError when DNS resolution times out."""
-    with patch("socket.getaddrinfo", side_effect=TimeoutError("DNS timed out")):
+    with patch("concurrent.futures.Future.result", side_effect=concurrent.futures.TimeoutError("DNS timed out")):
         with pytest.raises(SSRFError, match="timed out"):
             safe_get("http://hanging-dns.example.com/")
