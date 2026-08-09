@@ -386,14 +386,14 @@ test.describe("Manual Verification Integration E2E", () => {
     await page.waitForLoadState("networkidle");
 
     // Check API Key input is masked (starts with ***)
-    const apiKeyContainer = page
-      .locator("div")
-      .filter({ has: page.locator("label", { hasText: "Google Books API Key" }) });
-    const apiKeyInput = apiKeyContainer.locator("input");
+    // Anchor on the field label and scope to its direct parent (the field
+    // wrapper), which contains exactly one input and one reveal button.
+    const apiKeyField = page.locator("label", { hasText: "Google Books API Key" }).locator("xpath=..");
+    const apiKeyInput = apiKeyField.locator("input");
     await expect(apiKeyInput).toHaveValue(/^\*\*\*/);
 
     // Click "eye" icon to reveal
-    const revealBtn = apiKeyContainer.locator("button").first();
+    const revealBtn = apiKeyField.locator("button");
     await revealBtn.click();
 
     // Check that fully revealed key is visible
