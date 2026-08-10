@@ -108,6 +108,18 @@ test.describe("Manual Verification Integration E2E", () => {
         }),
       });
     });
+
+    // 5. Mock Allegro auth endpoints to prevent device flow polling hangs in CI
+    await page.route("**/api/auth/allegro/**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { status: "authenticated", device_code: "mock-device-code" },
+        }),
+      });
+    });
   });
 
   test("Profile Setup, Visibility & Taken Username Conflict", async ({ page }) => {

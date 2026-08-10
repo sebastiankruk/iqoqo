@@ -21,14 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Critical Vulnerability Eradication**: Patched SSRF in image downloading and external metadata fetching, and XXE DoS in BGG and SVG QR code parsing.
 - **Rclone Command Injection Prevention**: Hardened `subprocess.run()` calls in `app/core/tasks.py`, `app/utils/images.py`, and `app/utils/llm_covers.py` by placing flags before the POSIX `--` end-of-options delimiter to prevent path-based option injection.
-- **DNS Resolution Timeout**: Wrapped `socket.getaddrinfo()` in `app/utils/http_client.py` with explicit 5-second timeouts to prevent Celery worker thread starvation during SSRF validation of hanging DNS servers.
+- **DNS Resolution Timeout Thread Safety**: Refactored `_resolve_with_timeout` in `app/utils/http_client.py` to replace `ThreadPoolExecutor` context manager with explicit `executor.shutdown(wait=False)` to prevent Celery worker thread starvation DoS.
 - **SSRF Redirect Type Safety**: Enforced `str()` coercion on redirect location header URLs in `safe_get()` (`app/utils/http_client.py`) to prevent `TypeError` DoS crashes on non-string redirect headers.
 
 ### Changed
 
-- **Stateless AI Covers & Volume Mounts**: Replaced `boto3` direct S3 image uploading with mounted Docker volume storage (`app/static/covers/`) and optional `rclone`-based global S3 caching (`RCLONE_COVERS_REMOTE`), avoiding AWS bandwidth costs and keeping containers lightweight.
-- **Multi-Stage Dockerfile**: Optimized backend `Dockerfile` to a multi-stage build, shrinking container footprint under 500MB.
-- **Zero-Downtime Alembic Migration**: Updated `e3f891ab45c2` backfill loop to iterate by Primary Key in 1,000-row chunks with `time.sleep(0.1)` yields.
+- **Zero-Downtime Alembic Migration**: Updated `e3f891ab45c2` backfill loop to iterate by Primary Key in 1,000-row chunks with explicit `COMMIT` releases per batch on PostgreSQL to prevent row lock accumulation.
+- **Host Volume Mount Directory Pre-creation**: Updated `Makefile` `start` target to pre-create `$(HOME)/.config/rclone` before Docker Compose execution, preventing root-owned directory creation.
+- **E2E Playwright Mocking**: Added route interception for `/api/auth/allegro/**` in `frontend/__tests__/e2e/manual_verification_integration.spec.ts` to prevent CI test hangs during Allegro device flow polling.
 - **PostgreSQL**: Upgraded from `16-alpine` to `18-alpine` in `docker-compose.yml` and CI workflows.
 - **Redis**: Upgraded from `7-alpine` to `8-alpine` in `docker-compose.yml`.
 

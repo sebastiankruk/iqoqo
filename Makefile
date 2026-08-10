@@ -195,6 +195,7 @@ clone:
 	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
 start:
+	@mkdir -p $(HOME)/.config/rclone
 	@echo "Starting $(MODE) environment..."
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 
