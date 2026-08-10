@@ -13,6 +13,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+# ---------------------------------------------------------------------------
+# Dependabot configuration policy for iQoQo
+#
+# Background / rationale:
+#   iQoQo is developed in release branches (e.g. release/0.7.x). We never merge
+#   feature/dependency work directly into `main` except for release cut-offs.
+#   Dependabot version-update PRs (and, where enabled, security-update PRs)
+#   can only target the repository default branch (`main`), so every update
+#   PR previously required manual re-targeting to the active release branch
+#   -- pure busywork that produced a continuous pile of noise and conflicts.
+#
+# Decision (2026-08-10):
+#   * Version-update PR creation is DISABLED (`open-pull-requests-limit: 0`).
+#   * Dependabot security-fix PR creation is DISABLED at the repo level
+#     (Settings -> Security -> Dependabot -> automated-security-fixes).
+#   * Dependabot SECURITY ALERTS remain ENABLED and are the single source of
+#     truth for dependency fixes. Before releasing, run:
+#         .github/tools/get_alerts.sh
+#     which writes the current open alerts (severity, patched versions,
+#     manifest paths) to `.alerts.json` for planning and manual patching.
+#
+# To perform updates for a new release:
+#   * Create/modify the release branch, then temporarily set
+#     open-pull-requests-limit back to a non-zero value OR simply run
+#     the equivalent `npm update`/`pip` upgrade steps by hand and commit
+#     directly to the release branch. The latter is the preferred flow
+#     because it avoids Dependabot re-targeting entirely.
+# ---------------------------------------------------------------------------
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -20,54 +48,40 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
-    groups:
-      python-security:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    # 0 disables version-update PRs; security alerts stay active.
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
-    groups:
-      npm-runtime-minor:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "docker"
     directory: "/deploy"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
