@@ -131,7 +131,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-
+            bind.execute(sa.text("COMMIT"))
 
         last_id = 0
         while True:
@@ -150,12 +150,13 @@ def upgrade():
                     )
                     RETURNING id
                 """),
-                {"chunk_size": chunk_size, "last_id": last_id}
+                {"chunk_size": chunk_size, "last_id": last_id},
             )
             rows = result.fetchall()
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
+            bind.execute(sa.text("COMMIT"))
 
     else:
         # SQLite dialect backfill

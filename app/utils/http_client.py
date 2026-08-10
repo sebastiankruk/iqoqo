@@ -56,14 +56,16 @@ class SSRFError(Exception):
 
 def _resolve_with_timeout(hostname: str, timeout: float = 5.0) -> list:
     """Executes DNS resolution in a separate thread to enforce a strict timeout."""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(socket.getaddrinfo, hostname, None)
-        try:
-            return future.result(timeout=timeout)
-        except concurrent.futures.TimeoutError as exc:
-            raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
-        except (socket.gaierror, OSError) as exc:
-            raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(socket.getaddrinfo, hostname, None)
+    try:
+        return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError as exc:
+        raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
+    except (socket.gaierror, OSError) as exc:
+        raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+    finally:
+        executor.shutdown(wait=False)
 
 
 def is_ip_blocked(ip_str: str) -> bool:
