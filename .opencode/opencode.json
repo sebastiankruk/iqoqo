@@ -4,12 +4,12 @@
     "../.agents/rules/iqoqo-standards.md"
   ],
   "plugin": [
-    "opencode-ignore"
+    "opencode-ignore",
+    ".opencode/plugins/graphify.js"
   ],
   "permission": {
     "external_directory": {},
     "edit": {},
-
     "bash": {
       "cat *.env*": "deny",
       "printenv*": "deny",

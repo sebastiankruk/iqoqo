@@ -77,9 +77,6 @@ frontend/.next-e2e/
 # External services
 .allegro_token.json
 
-frontend/test_output.txt
-
-
 # Mobile apps
 frontend/android/*
 frontend/ios/*
@@ -87,3 +84,6 @@ frontend/ios/*
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# AI tools
+graphify-out
