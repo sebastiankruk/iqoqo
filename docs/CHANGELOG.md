@@ -5,12 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.14] - 2026-08-08
-
-### Fixed
-
-- **Scanner Cache Discard for Corrupted Manifestations**: Updated `lookup_barcode_preview` in `app/api/scanner.py` to discard database cache hits if normalized manifestation metadata resolves to "Unknown Title" with no author. Automatically falls through to external metadata providers (Google Books, Open Library) to fetch rich metadata while preserving existing manifestation IDs.
-- **Transient Provider Retry**: Added outcome-based transient failure retry logic to `fetch_isbn_metadata` (`app/utils/isbn.py`) for Google Books and Open Library fallbacks.
+## [0.7.14] - 2026-08-13
 
 ### Added
 
@@ -43,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Missing Cover / Metadata on Added Items**: Fixed an issue where adding an item via title lookup would perform a secondary search using a fallback barcode, resulting in a loss of the original cover and ISBN data. The scanner API now respects the metadata payload forwarded by the `SuccessCard` component.
 - **Cover Refetch Task Server Error & Infinite Polling**: Resolved a `TypeError` in the celery task scheduler where `user_id` was passed both positionally and as a keyword argument, preventing the cover refetch task from starting. Additionally, updated `get_cover_status` to return `200 OK` on task failure, breaking the frontend out of an infinite polling loop that caused the UI to show a perpetual waiting indicator.
 - **Scanner Telemetry Audit Blind Spot**: Replaced silent telemetry drop for barcodes exceeding 128 characters with auditable rejection recording (`status='rejected_oversized'`) and truncated barcode logging in `app/api/scanner.py`.
+- **Scanner Cache Discard for Corrupted Manifestations**: Updated `lookup_barcode_preview` in `app/api/scanner.py` to discard database cache hits if normalized manifestation metadata resolves to "Unknown Title" with no author. Automatically falls through to external metadata providers (Google Books, Open Library) to fetch rich metadata while preserving existing manifestation IDs.
+- **Transient Provider Retry**: Added outcome-based transient failure retry logic to `fetch_isbn_metadata` (`app/utils/isbn.py`) for Google Books and Open Library fallbacks.
 
 ## [0.7.13] - 2026-07-31
 
