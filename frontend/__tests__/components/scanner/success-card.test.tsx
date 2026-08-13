@@ -69,7 +69,7 @@ describe("SuccessCard", () => {
       back: vi.fn(),
       forward: vi.fn(),
       refresh: vi.fn(),
-    } as ReturnType<typeof useRouter>);
+    } as unknown as ReturnType<typeof useRouter>);
   });
 
   it("displays the item title from meta", () => {
