@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define safeguards for data validation, cache consistency, and reliable migration backfills.
+
+## Requirements
 
 ### Requirement: Barcode validation without silent truncation
 The system SHALL NOT silently truncate barcode strings in `_record_scan_telemetry`. Instead, barcodes exceeding 128 characters SHALL be rejected at the Pydantic schema validation layer (`ScanBarcodeSchema`) with a descriptive error.
@@ -31,3 +35,12 @@ The Alembic migration `e3f891ab45c2` SHALL NOT include artificial `time.sleep()`
 
 - **WHEN** `flask db upgrade` runs on a database with 50k+ items
 - **THEN** the migration SHALL complete without artificial sleep delays that risk Docker health check timeouts
+
+### Requirement: Migration backfill releases locks after each batch
+The PostgreSQL execution path of migration `e3f891ab45c2` SHALL commit each completed backfill batch before processing the next batch, releasing transaction locks without waiting for the entire migration to finish.
+
+#### Scenario: Large backfill processes independent committed batches
+
+- **WHEN** migration `e3f891ab45c2` processes multiple batches on PostgreSQL
+- **THEN** the migration SHALL issue a commit after each completed batch
+- **AND** a later batch failure SHALL leave previously committed batches durable and allow the migration to resume safely
