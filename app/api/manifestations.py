@@ -711,7 +711,7 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
 
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
-    author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
+    author = (work.meta.get("authors") or ["Unknown"])[0] if work and work.meta else "Unknown"
     identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
@@ -760,7 +760,7 @@ def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
 
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
-    author = work.meta.get("authors", ["Unknown"])[0] if work and work.meta else "Unknown"
+    author = (work.meta.get("authors") or ["Unknown"])[0] if work and work.meta else "Unknown"
     identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
@@ -847,6 +847,12 @@ def get_cover_status(manifestation_id: int):
                     "error": None,
                 }
             ),
+            200,
+        )
+
+    if status == "failed":
+        return (
+            jsonify({"success": False, "data": {"status": status}, "error": result.get("error") or "Cover processing failed"}),
             200,
         )
 

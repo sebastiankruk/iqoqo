@@ -69,13 +69,20 @@ def _record_scan_telemetry(
 ) -> None:
     """Helper to persist a scan-lookup record safely."""
     try:
+        effective_barcode = barcode
+        effective_status = status
+        if barcode and len(barcode) > 128:
+            current_app.logger.warning("Barcode too long (%d chars), recording truncated telemetry", len(barcode))
+            effective_barcode = f"{barcode[:120]}...({len(barcode)})"
+            effective_status = "rejected_oversized"
+
         # Create a savepoint to prevent rollback of outer transactions
         with db.session.begin_nested():
             telemetry = ScanTelemetry(
-                barcode=barcode,
+                barcode=effective_barcode,
                 format_hint=format_hint,
                 provider=provider,
-                status=status,
+                status=effective_status,
                 manifestation_id=manifestation_id,
                 raw_request_url=raw_request_url,
             )
@@ -147,9 +154,15 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
 @api_bp.route("/lookup/<query>", methods=["GET"])
 @require_auth
-@limiter.limit("10 per minute", override_defaults=True)
+@limiter.limit("30 per minute", override_defaults=True)
 def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     """Generic identifier lookup for preview (barcode, ISBN, or name hash)."""
+    # Enforce query length cap to prevent upstream API quota exhaustion
+    MAX_QUERY_LENGTH = 128
+    query = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", query)  # Strip control characters
+    if len(query) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Query too long (max {MAX_QUERY_LENGTH} characters)"}), 400
+
     format_hint = request.args.get("format")
 
     # Heuristic: if query has spaces or no digits, treat as name and hash it
@@ -190,6 +203,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 if not m.meta:
                     continue
                 cand = dict(m.meta)
+                cand = _normalize_preview_meta(cand, format_hint)
                 cand["manifestation_id"] = m.id
                 cand["already_in_db"] = True
                 cand["already_in_collection"] = m.id in owned_ids
@@ -197,37 +211,50 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 candidates.append(cand)
 
         data = dict(manifestation.meta)
-        data["manifestation_id"] = manifestation.id
-        data["already_in_db"] = True
-        # Show the original human-readable query, not the internal hash
-        data["identifier"] = query
-        if candidates:
-            data["candidates"] = candidates
+        data = _normalize_preview_meta(data, format_hint)
 
-        # Check if user owns it
-        user_id = getattr(g, "user_id", None)
-        item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
-        data["already_in_collection"] = item is not None
-        data["item_id"] = item.id if item else None
+        # If the DB metadata is hopelessly broken (legacy ingest bug),
+        # pretend we didn't find it so we can re-fetch rich data from external APIs.
+        if data.get("title") == "Unknown Title" and not data.get("author"):
+            manifestation = None
+        else:
+            data["manifestation_id"] = manifestation.id
+            data["already_in_db"] = True
+            # Show the original human-readable query, not the internal hash
+            data["identifier"] = query
+            if candidates:
+                data["candidates"] = candidates
 
-        _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
-        return jsonify({"success": True, "data": data, "error": None}), 200
+            # Check if user owns it
+            user_id = getattr(g, "user_id", None)
+            item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
+            data["already_in_collection"] = item is not None
+            data["item_id"] = item.id if item else None
+
+            _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
+            return jsonify({"success": True, "data": data, "error": None}), 200
 
     barcode = query if not is_barcode else canonical_id
 
-    # For non-barcode text queries on audio/unspecified format, fetch multiple Discogs candidates
-    if not is_barcode and (category_hint == "music" or format_hint in (None, "")):
-        discogs_results = fetch_discogs_candidates(query)
-        if len(discogs_results) > 1:
-            response_data = copy.deepcopy(discogs_results[0])
-            response_data["candidates"] = discogs_results
+    # For non-barcode text queries, fetch candidates based on format
+    if not is_barcode:
+        candidates = []
+        if category_hint == "music" or format_hint in (None, ""):
+            candidates.extend(fetch_discogs_candidates(query))
+
+        if category_hint == "book" or format_hint in (None, ""):
+            from app.utils.isbn import fetch_google_books_candidates
+
+            candidates.extend(fetch_google_books_candidates(query))
+
+        if len(candidates) >= 1:
+            response_data = copy.deepcopy(candidates[0])
+            response_data["candidates"] = candidates
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
-            response_data["data_source"] = "discogs"
-            for candidate in discogs_results:
-                candidate["data_source"] = "discogs"
-            _record_scan_telemetry(query, format_hint, "discogs", "success")
+            response_data["data_source"] = response_data.get("data_source", "search")
+            _record_scan_telemetry(query, format_hint, "search", "success")
             return jsonify({"success": True, "data": response_data, "error": None}), 200
 
     # Leverage the Strategy Pattern for format-specific metadata lookups
@@ -613,8 +640,8 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
     if manifestation_id:
         manifestation = db.session.get(Manifestation, manifestation_id)
 
-    if not manifestation and barcode:
-        manifestation = _find_locally(barcode)
+    if not manifestation and (barcode or payload.meta):
+        manifestation = _find_locally(barcode) if barcode else None
         if not manifestation:
             try:
                 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
@@ -631,8 +658,12 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
                     if meta:
                         manifestation = IngestService.ingest_from_meta(meta)
 
+                if not manifestation and payload.meta:
+                    manifestation = IngestService.ingest_from_meta(payload.meta)
+
                 if not manifestation and barcode:
                     manifestation = _ingest_by_hint(barcode, category_hint, format_hint)
+
                 is_new_manifestation = True
 
             except (ValueError, ConnectionError, KeyError, AttributeError, TypeError, OSError, RuntimeError) as e:

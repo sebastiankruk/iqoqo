@@ -75,6 +75,9 @@ def process_batch(
 
     logger.info("Starting batch cover processing for %d manifestations (dry_run=%s)", total, dry_run)
 
+    if os.environ.get("RCLONE_COVERS_REMOTE"):
+        logger.info("Using rclone global cache for covers")
+
     for idx, manif in enumerate(manifestations, start=1):
         # Circuit breaker: skip items that have failed too many times
         failed_attempts = (manif.meta or {}).get("failed_llm_attempts", 0)
@@ -113,6 +116,7 @@ def process_batch(
 
         # AI Cover Generation path
         identifier = str(manif.barcode or manif.isbn13 or manif.id)
+
         result = fetch_llm_cover(
             identifier=identifier,
             title=work_title,
@@ -120,11 +124,15 @@ def process_batch(
             user_id=user_id,
             format_type=format_type,
             allow_cloud_llm=True,
+            return_bytes=False,
         )
 
         if result:
-            img_path, source = result
-            # Apply watermark if watermark image exists
+            img_data, source = result
+
+            # Disk flow
+            assert isinstance(img_data, str)
+            img_path = img_data
             if os.path.isfile(DEFAULT_WATERMARK_ICON_PATH):
                 local_file = os.path.join(Config.BASE_DIR, "app", "static", "covers", os.path.basename(img_path))
                 apply_corner_watermark(local_file, DEFAULT_WATERMARK_ICON_PATH, local_file)

@@ -837,6 +837,7 @@ make lint-markdown  # markdownlint
 - See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development guidelines and coding standards.
 - See **[ARCHITECTURE.md](ARCHITECTURE.md)** to understand the FRBR hierarchy and data model.
 - See **[COVERS_SETUP.md](COVERS_SETUP.md)** for advanced cover art and vision configuration.
+- See **[UPGRADE_POSTGRES_18.md](UPGRADE_POSTGRES_18.md)** for PostgreSQL 16 → 18 migration instructions.
 - Check **[docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)** for the FRBR ontology structure.
 
 The application will be available at `http://127.0.0.1:5000`.

@@ -18,16 +18,16 @@ import { test, expect } from "@playwright/test";
 import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("UX/UI Audit Workflow", () => {
-  // 1. Audit public landing page of dev.iqoqo.cc
+  // 1. Audit public landing page
   test("Audit dev.iqoqo.cc landing page button density and CTAs", async ({ page }) => {
-    console.log("=== NAVIGATING TO DEV.IQOQO.CC ===");
+    await page.route("**/*.jpg", route => route.fulfill({ body: Buffer.from("") }));
+    const targetUrl = process.env.AUDIT_EXTERNAL_URL || "/";
+    console.log(`=== NAVIGATING TO LANDING PAGE (${targetUrl}) ===`);
     try {
-      await page.goto("https://dev.iqoqo.cc", { timeout: 8000 });
-      await page.waitForLoadState("networkidle");
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
     } catch {
-      console.warn("⚠️ dev.iqoqo.cc is not reachable. Falling back to local landing page.");
-      await page.goto("/", { timeout: 15000 });
-      await page.waitForLoadState("networkidle");
+      console.warn(`⚠️ ${targetUrl} is not reachable. Falling back to local landing page.`);
+      await page.goto("/", { waitUntil: "domcontentloaded", timeout: 15000 });
     }
 
     // Take screenshot of landing page
@@ -60,6 +60,7 @@ test.describe("UX/UI Audit Workflow", () => {
   // 2. Audit local dashboard (mocked authentication)
   test.describe("Authenticated UX Audit (Mocked Local Server)", () => {
     test.beforeEach(async ({ page }) => {
+      await page.route("**/*.jpg", route => route.fulfill({ body: Buffer.from("") }));
       await page.addInitScript(() => {
         window.localStorage.setItem("iqoqo-cookie-consent", "true");
       });

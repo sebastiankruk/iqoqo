@@ -13,7 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-from app.core.tasks import get_task_result, submit_task
+from unittest.mock import MagicMock, patch
+
+from app.core.tasks import BackupManager, get_task_result, rotate_and_archive_backups, submit_task
 
 
 def dummy_task(x, y):
@@ -66,3 +68,32 @@ def test_get_task_result_not_found():
     result = get_task_result("non_existent_id")
     # Celery PENDING state for non-existent tasks by default
     assert result["status"] == "pending"
+
+
+@patch("app.core.tasks.BackupManager")
+def test_rotate_and_archive_backups(mock_manager_class):
+    mock_manager = MagicMock()
+    mock_manager_class.return_value = mock_manager
+
+    # Create 15 mock backups
+    mock_manager.list_backups.return_value = [f"backup_{i}.tar.gz" for i in range(15)]
+    mock_manager.backup_dir = "/tmp/mock_backups"
+
+    # Mock mtime so backup_0 is newest and backup_14 is oldest
+    def mock_getmtime(path):
+        filename = path.split("/")[-1]
+        i = int(filename.split("_")[1].split(".")[0])
+        return 1000.0 - i
+
+    with patch("os.path.getmtime", side_effect=mock_getmtime):
+        rotate_and_archive_backups()  # pylint: disable=no-value-for-parameter
+
+    # Expect 15 - 12 = 3 backups to be archived
+    assert mock_manager.upload_to_glacier.call_count == 3
+    assert mock_manager.delete_backup.call_count == 3
+
+    # Check that the oldest ones were archived
+    archived_files = [call[0][0] for call in mock_manager.upload_to_glacier.call_args_list]
+    assert "backup_12.tar.gz" in archived_files
+    assert "backup_13.tar.gz" in archived_files
+    assert "backup_14.tar.gz" in archived_files

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iqoqo"
-version = "0.7.13"
+version = "0.7.14"
 description = "Library of Everything - FRBR-compliant personal collection manager"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -13,12 +13,15 @@ dependencies = [
     "psycopg2-binary==2.9.*",
     "rdflib==7.*",
     "requests==2.*",
+    "boto3",
     "python-dotenv",
     "gunicorn",
     "flask-sqlalchemy",
     "flask-migrate",
     "celery[redis]",
     "redis",
+    "flask-limiter",
+    "Flask-Caching",
 ]
 
 [project.optional-dependencies]

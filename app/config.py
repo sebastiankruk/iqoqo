@@ -119,6 +119,10 @@ class Config:
     # Max words to display on the generated cover overlay (0 = no limit)
     LLM_TITLE_MAX_WORDS = _get_int_env("LLM_TITLE_MAX_WORDS", 12)
 
+    # Backup Configuration
+    RCLONE_REMOTE_FAST = os.environ.get("RCLONE_REMOTE_FAST", "iqoqo-backup")
+    RCLONE_REMOTE_ARCHIVE = os.environ.get("RCLONE_REMOTE_ARCHIVE", "iqoqo-glacier")
+
     # Background scheduler (cover cleanup watchdog)
     SCHEDULER_AUTOSTART = os.environ.get("SCHEDULER_AUTOSTART", "false").lower() in {"true", "1", "yes"}
     RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "true").lower() in {"true", "1", "yes"}

@@ -14,6 +14,23 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 # Use an official Python runtime as a parent image
+FROM python:3.14-slim AS builder
+
+WORKDIR /usr/src/app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file into the container at /usr/src/app
+COPY requirements.txt ./
+
+# Strip out testing and dev dependencies from requirements.txt to save space
+RUN sed -i '/# Testing/,$d' requirements.txt && \
+    pip install --user --no-cache-dir -r requirements.txt
+
+# --- Runtime Stage ---
 FROM python:3.14-slim
 
 # Create a non-root user
@@ -22,22 +39,23 @@ RUN useradd -m -s /bin/bash appuser
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Install system dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    rclone \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file into the container at /usr/src/app
-COPY requirements.txt ./
+# Copy site-packages from builder
+COPY --chown=appuser:appuser --from=builder /root/.local /home/appuser/.local
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Add .local/bin to PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 
-# Copy the rest of the application's code into the container
-COPY . .
-
-# Fix ownership
-RUN chown -R appuser:appuser /usr/src/app
+# Copy only the necessary application code into the container
+COPY --chown=appuser:appuser app app/
+COPY --chown=appuser:appuser migrations migrations/
+COPY --chown=appuser:appuser scripts scripts/
+COPY --chown=appuser:appuser run.py wsgi.py ./
 
 # Inject version
 ARG APP_VERSION=dev

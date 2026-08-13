@@ -105,9 +105,20 @@ def app_with_limiter(app):
 
     app.config["RATELIMIT_ENABLED"] = True
     app.config["RATELIMIT_STORAGE_URI"] = "memory://"
-    # Re-init to pick up config
+    limiter.enabled = True
+    limiter._enabled = True
     limiter.init_app(app)
-    return app
+    if hasattr(limiter, "_storage") and limiter._storage:
+        limiter._storage.reset()
+
+    yield app
+
+    # Restore state
+    if hasattr(limiter, "_storage") and limiter._storage:
+        limiter._storage.reset()
+    limiter.enabled = False
+    limiter._enabled = False
+    app.config["RATELIMIT_ENABLED"] = False
 
 
 def test_admin_required_refactored(client, app):
@@ -125,15 +136,33 @@ def test_admin_required_refactored(client, app):
     assert "Admin privileges required" in response.json["error"]
 
 
-def test_lookup_rate_limit(app_with_limiter, normal_user_headers):
+def test_lookup_rate_limit(app_with_limiter, normal_user_headers, monkeypatch):
+    from app.core.limiter import limiter
+
+    # The `/api/lookup` endpoint performs real external metadata lookups
+    # (Discogs, MusicBrainz, UPC, TMDB, BGG) that can hang for 10+ seconds per
+    # request in CI. If the 30 allowed requests span a fixed-window minute
+    # boundary, the 31st request never breaches the limit and the test fails
+    # flakily. Mock the lookup strategy so every request completes instantly
+    # and the rate limiting behavior is tested deterministically.
+    class _InstantLookupStrategy:
+        def lookup(self, barcode: str, query: str | None = None):
+            return None, None
+
+    monkeypatch.setattr(
+        "app.api.scanner.LookupStrategyFactory.get_strategy",
+        lambda category_hint: _InstantLookupStrategy(),
+    )
+
+    limiter.reset()
     client = app_with_limiter.test_client()
-    # Hit it 10 times (limit is 10 per minute)
-    for _ in range(10):
+    # Hit it 30 times (limit is 30 per minute)
+    for _ in range(30):
         response = client.get("/api/lookup/123", headers=normal_user_headers)
         # We accept 200 or 404 (not found) as long as it is not 429 (rate limited)
         assert response.status_code in (200, 404)
 
-    # 11th should fail
+    # 31st should fail
     response = client.get("/api/lookup/123", headers=normal_user_headers)
     assert response.status_code == 429
 

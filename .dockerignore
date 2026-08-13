@@ -1,0 +1,46 @@
+.git
+.gitignore
+.venv
+venv
+env/
+node_modules
+frontend
+resources
+tests
+openspec
+docs
+
+# Environments & Secrets (CRITICAL)
+.env
+.env.*
+docker-compose.override.yml
+*.pem
+*.key
+*.crt
+
+# IDE, Agents & Tools
+.gemini
+.agent
+.agents
+.devcontainer
+.vscode
+.pids
+.context
+
+# Caches
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+# Data & Exports
+exports
+scratch
+data
+app/static/covers
+app/static/uploads
+app/static/gallery
+
+# Archives & Dumps
+*.sql
+*.zip
+*.tar.gz

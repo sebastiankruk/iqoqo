@@ -29,6 +29,7 @@ from app.core.permissions import PermissionName
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
+from app.utils.rclone_utils import get_rclone_target
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +106,16 @@ def record_telemetry(
         db.session.rollback()
 
 
-def save_image(image_data: bytes, identifier: str, suffix: str) -> str:
-    """Helper to save binary image data to disk."""
+def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bool = False) -> str | bytes:
+    """Helper to save binary image data to disk or return optimized bytes."""
+    if return_bytes:
+        from app.utils.images import optimize_image_to_bytes
+
+        return optimize_image_to_bytes(image_data)
     filename = f"{identifier}_{suffix}.jpg"
     filepath = os.path.join(COVERS_DIR, filename)
     optimize_and_save_image(image_data, filepath)
+
     return f"{Config.COVERS_BASE_URL}/{filename}"
 
 
@@ -124,9 +130,16 @@ def build_context(description: str, genre: str) -> str:
 
 
 def generate_cover_cloud(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
-) -> tuple[str, str] | None:
-    """Tier 3: OpenAI DALL-E 3. Returns (path, source) tuple on success."""
+    identifier: str,
+    title: str,
+    author: str,
+    user_id: str,
+    description: str = "",
+    genre: str = "",
+    format_type: str | None = None,
+    return_bytes: bool = False,
+) -> tuple[str | bytes, str] | None:
+    """Tier 3: OpenAI DALL-E 3. Returns (path_or_bytes, source) tuple on success."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
@@ -167,7 +180,7 @@ def generate_cover_cloud(
         img_response = requests.get(image_url, timeout=30)
 
         if img_response.status_code == 200:
-            path = save_image(img_response.content, identifier, "dalle")
+            path = save_image(img_response.content, identifier, "dalle", return_bytes=return_bytes)
             duration = time.time() - start_time
             record_telemetry("openai", user_id, duration, "cover_generation")
             return path, "llm_openai"
@@ -181,9 +194,16 @@ def generate_cover_cloud(
 
 
 def generate_cover_gemini(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
-) -> tuple[str, str] | None:
-    """Tier 3: Google Imagen via Gemini API. Returns (path, source) tuple on success."""
+    identifier: str,
+    title: str,
+    author: str,
+    user_id: str,
+    description: str = "",
+    genre: str = "",
+    format_type: str | None = None,
+    return_bytes: bool = False,
+) -> tuple[str | bytes, str] | None:
+    """Tier 3: Google Imagen via Gemini API. Returns (path_or_bytes, source) tuple on success."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -218,7 +238,7 @@ def generate_cover_gemini(
             if candidate.content and candidate.content.parts:
                 inline_data = candidate.content.parts[0].inline_data
                 if inline_data and inline_data.data:
-                    path = save_image(inline_data.data, identifier, "gemini")
+                    path = save_image(inline_data.data, identifier, "gemini", return_bytes=return_bytes)
                     duration = time.time() - start_time
                     record_telemetry("gemini", user_id, duration, "cover_generation")
                     return path, "llm_gemini"
@@ -236,9 +256,16 @@ def generate_cover_gemini(
 
 
 def generate_cover_local(
-    identifier: str, title: str, author: str, user_id: str, description: str = "", genre: str = "", format_type: str | None = None
-) -> tuple[str, str] | None:
-    """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path, source) tuple on success."""
+    identifier: str,
+    title: str,
+    author: str,
+    user_id: str,
+    description: str = "",
+    genre: str = "",
+    format_type: str | None = None,
+    return_bytes: bool = False,
+) -> tuple[str | bytes, str] | None:
+    """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path_or_bytes, source) tuple on success."""
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
         return None
@@ -273,10 +300,7 @@ def generate_cover_local(
         if response.status_code == 200:
             r = response.json()
             image_data = base64.b64decode(r["images"][0])
-            path = save_image(image_data, identifier, "localsd")
-
-            # Overlay typography - potentially trimmed for visual clarity
-            full_path = os.path.join(COVERS_DIR, os.path.basename(path))
+            path = save_image(image_data, identifier, "localsd", return_bytes=return_bytes)
 
             overlay_title = title
             if Config.LLM_TITLE_MAX_WORDS > 0:
@@ -284,7 +308,15 @@ def generate_cover_local(
                 if len(words) > Config.LLM_TITLE_MAX_WORDS:
                     overlay_title = " ".join(words[: Config.LLM_TITLE_MAX_WORDS]) + "..."
 
-            add_text_overlay(full_path, overlay_title, author)
+            if return_bytes:
+                from app.utils.images import add_text_overlay_bytes
+
+                assert isinstance(path, bytes)
+                path = add_text_overlay_bytes(path, overlay_title, author)
+            else:
+                assert isinstance(path, str)
+                full_path = os.path.join(COVERS_DIR, os.path.basename(path))
+                add_text_overlay(full_path, overlay_title, author)
 
             duration = time.time() - start_time
             record_telemetry("local", user_id, duration, "cover_generation")
@@ -307,10 +339,32 @@ def fetch_llm_cover(
     genre: str = "",
     format_type: str | None = None,
     allow_cloud_llm: bool = False,
-) -> tuple[str, str] | None:
-    """Orchestrates LLM generation tiers. Returns (path, source) tuple on success."""
+    return_bytes: bool = False,
+) -> tuple[str | bytes, str] | None:
+    """Orchestrates LLM generation tiers. Returns (path_or_bytes, source) tuple on success."""
+    # 0. Global Cache (rclone)
+    remote = os.environ.get("RCLONE_COVERS_REMOTE")
+    if remote and not return_bytes:
+        import subprocess
+
+        for sfx in ("dalle", "gemini", "localsd", "cover"):
+            filename = f"{identifier}_{sfx}.jpg"
+            local_file = os.path.join(COVERS_DIR, filename)
+            try:
+                target = get_rclone_target(remote, "covers", filename)
+                res = subprocess.run(
+                    ["rclone", "copyto", "--s3-no-check-bucket", "--", target, local_file],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if res.returncode == 0 and os.path.exists(local_file):
+                    logger.info("Pulled cover from global cache: %s", filename)
+                    return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to check rclone cache: %s", e)
     # 1. Local (Free)
-    result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type)
+    result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
     if result:
         return result
 
@@ -327,12 +381,12 @@ def fetch_llm_cover(
         return None
 
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(identifier, title, author, user_id, description, genre, format_type)
+        result = generate_cover_gemini(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(identifier, title, author, user_id, description, genre, format_type)
+        return generate_cover_cloud(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
 
     return None
 
@@ -390,3 +444,40 @@ def apply_corner_watermark(gen_image_path: str, watermark_path: str, output_path
     except (OSError, ValueError, AttributeError, RuntimeError) as e:
         logger.error("Failed to apply corner watermark to GenAI layout %s: %s", gen_image_path, e)
         return gen_image_path
+
+
+def apply_corner_watermark_bytes(gen_image_bytes: bytes, watermark_path: str, opacity: float = 0.45) -> bytes:
+    import io
+
+    try:
+        with Image.open(io.BytesIO(gen_image_bytes)) as base_file:
+            base_img = base_file.convert("RGBA")
+
+            with Image.open(watermark_path) as wm_file:
+                watermark = wm_file.convert("RGBA")
+
+                base_width, base_height = base_img.size
+                wm_width, wm_height = watermark.size
+                scale = (base_width * 0.15) / wm_width
+                new_size = (max(int(wm_width * scale), 1), max(int(wm_height * scale), 1))
+
+                watermark = watermark.resize(new_size, Image.Resampling.LANCZOS)
+                alpha = watermark.split()[3]
+                alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+                watermark.putalpha(alpha)
+
+                padding = 15
+                x = base_width - new_size[0] - padding
+                y = base_height - new_size[1] - padding
+
+                transparent_layer = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
+                transparent_layer.paste(watermark, (x, y), watermark)
+
+                watermarked_img = Image.alpha_composite(base_img, transparent_layer)
+
+                buf = io.BytesIO()
+                watermarked_img.convert("RGB").save(buf, format="JPEG", quality=95)
+                return buf.getvalue()
+    except (OSError, ValueError, AttributeError, RuntimeError) as e:
+        logger.error("Failed to apply corner watermark in memory: %s", e)
+        return gen_image_bytes

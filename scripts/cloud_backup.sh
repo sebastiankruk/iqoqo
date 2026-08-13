@@ -17,7 +17,14 @@
 
 set -euo pipefail
 
-RCLONE_REMOTE="${1:-iqoqo-backup}"
+if [ -f "$(dirname "$0")/../.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$(dirname "$0")/../.env"
+    set +a
+fi
+
+RCLONE_REMOTE="${1:-${RCLONE_REMOTE_FAST:-iqoqo-backup}}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/tmp/iqoqo_backup_${TIMESTAMP}"
 ARCHIVE="${BACKUP_DIR}.tar.gz"
@@ -27,11 +34,16 @@ echo "🗄️  Starting iQoQo backup (remote: ${RCLONE_REMOTE})..."
 mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump PostgreSQL
-echo "📦 Dumping PostgreSQL database..."
 DB_DUMP_FILE="${BACKUP_DIR}/db_dump_${TIMESTAMP}.sql"
-docker compose -f docker-compose.yml exec -T db \
-    pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" \
-    > "${DB_DUMP_FILE}"
+DB_CONTAINER=$(docker ps --filter "name=db" --format "{{.Names}}" | head -1)
+if [ -n "${DB_CONTAINER}" ]; then
+    docker exec -i "${DB_CONTAINER}" pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" > "${DB_DUMP_FILE}"
+else
+    COMPOSE_SPEC="${COMPOSE_FILE:-docker-compose.yml}"
+    docker compose -f "${COMPOSE_SPEC}" exec -T db \
+        pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" \
+        > "${DB_DUMP_FILE}"
+fi
 
 # Guard against a silent partial/empty dump (e.g. auth failure inside the
 # container, or the db service restarting mid-dump) slipping through as a
@@ -59,8 +71,14 @@ tar -czf "${ARCHIVE}" -C /tmp "iqoqo_backup_${TIMESTAMP}"
 
 # 4. Sync to cloud
 echo "☁️  Syncing to ${RCLONE_REMOTE}..."
-if rclone copy "${ARCHIVE}" "${RCLONE_REMOTE}:iqoqo_backups"; then
-    echo "✅ Backup synced → ${RCLONE_REMOTE}:iqoqo_backups"
+if [[ "${RCLONE_REMOTE}" == *":"* ]]; then
+    RCLONE_TARGET="${RCLONE_REMOTE}"
+else
+    RCLONE_TARGET="${RCLONE_REMOTE}:iqoqo_backups"
+fi
+
+if rclone copy "${ARCHIVE}" "${RCLONE_TARGET}" --s3-no-check-bucket; then
+    echo "✅ Backup synced → ${RCLONE_TARGET}"
 else
     echo "❌ Cloud sync failed! Archive preserved at: ${ARCHIVE}" >&2
     exit 1

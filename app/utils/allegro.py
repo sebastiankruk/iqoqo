@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -24,6 +24,10 @@ _CONNECT_TIMEOUT: int = 3
 _READ_TIMEOUT: int = 7
 _TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
 
+DEVICE_AUTH_URL = "https://allegro.pl/auth/oauth/device"
+TOKEN_URL = "https://allegro.pl/auth/oauth/token"
+GRANT_TYPE_DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
+
 
 def get_allegro_user_agent() -> str:
     """Return Allegro User-Agent header string formatted per Allegro API specification.
@@ -33,10 +37,56 @@ def get_allegro_user_agent() -> str:
     return f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
 
 
+def initiate_device_flow(client_id: str, client_secret: str) -> dict[str, Any]:
+    """Initiate Allegro Device Code flow."""
+    auth_headers = {"User-Agent": get_allegro_user_agent()}
+    response = requests.post(
+        DEVICE_AUTH_URL,
+        data={"client_id": client_id},
+        auth=(client_id, client_secret),
+        headers=auth_headers,
+        timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+    )
+    response.raise_for_status()
+    return cast(dict[str, Any], response.json())
+
+
+def exchange_device_token(device_code: str, client_id: str, client_secret: str) -> dict[str, Any]:
+    """Attempt to exchange the device code for a token. Returns the JSON response."""
+    auth_headers = {"User-Agent": get_allegro_user_agent()}
+    response = requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": GRANT_TYPE_DEVICE,
+            "device_code": device_code,
+            "client_id": client_id,
+        },
+        auth=(client_id, client_secret),
+        headers=auth_headers,
+        timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+    )
+
+    if response.ok:
+        tokens = response.json()
+        with open(_TOKEN_FILE, "w", encoding="utf-8") as f:
+            json.dump(tokens, f)
+        return cast(dict[str, Any], tokens)
+
+    # If not ok, it might be authorization_pending, slow_down, expired_token, etc.
+    try:
+        err = response.json()
+    except json.JSONDecodeError:
+        response.raise_for_status()
+
+    return cast(dict[str, Any], err)
+
+
 def get_allegro_token() -> str | None:
     """Authenticate with Allegro using User Context (if available) or Client Credentials flow."""
-    client_id = os.getenv("ALLEGRO_CLIENT_ID")
-    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET")
+    from app.db.models import InstanceSettings
+
+    client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
+    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
 
     if not client_id or not client_secret:
         return None

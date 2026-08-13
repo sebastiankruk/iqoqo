@@ -42,6 +42,9 @@ Typical usage::
 import logging
 import os
 import re
+import time
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 import requests
@@ -49,6 +52,30 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Provider outcome representation
+# ---------------------------------------------------------------------------
+
+
+class ISBNProviderOutcomeStatus(StrEnum):
+    """Status classification for an external ISBN provider attempt."""
+
+    SUCCESS = "success"
+    NO_RESULT = "no_result"
+    TRANSIENT_FAILURE = "transient_failure"
+
+
+@dataclass
+class ISBNProviderOutcome:
+    """Internal outcome model for external ISBN metadata queries."""
+
+    status: ISBNProviderOutcomeStatus
+    metadata: dict[str, Any] | None = None
+    provider: str = ""
+    error_detail: str | None = None
+
 
 # ---------------------------------------------------------------------------
 # HTTP session configuration
@@ -134,18 +161,15 @@ def canonicalize_isbn(raw: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
-    """Fetch metadata from the Google Books API.
-
-    Uses the public (unauthenticated) ``volumes`` endpoint which does not
-    require an API key for low-volume lookups.
+def _lookup_google_books_outcome(isbn: str) -> ISBNProviderOutcome:
+    """Fetch metadata outcome from the Google Books API without leaking secrets.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
 
     Returns:
-        ``{"Title": str, "Authors": list[str]}`` on success, ``None``
-        if the API returns no results or the request fails.
+        :class:`ISBNProviderOutcome` indicating success, definitive no-result,
+        or transient failure.
     """
     api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
@@ -157,20 +181,44 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
         response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         data = response.json()
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        safe_msg = f"HTTP {status_code}" if status_code else "HTTPError"
+        logger.warning("Google Books request returned HTTP status %s for ISBN %s", safe_msg, isbn)
+        if status_code in (429, 500, 502, 503, 504) or (status_code and status_code >= 500):
+            return ISBNProviderOutcome(
+                status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+                provider="google_books",
+                error_detail=safe_msg,
+            )
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="google_books",
+            error_detail=safe_msg,
+        )
     except (requests.RequestException, ValueError) as exc:
-        logger.debug("Google Books request failed for %s: %s", isbn, exc)
-        if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
-            raise
-        return None
+        safe_exc = re.sub(r"key=[^&]+", "key=[REDACTED]", str(exc))
+        logger.warning("Google Books request failed for ISBN %s: %s", isbn, safe_exc)
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="google_books",
+            error_detail=safe_exc,
+        )
 
     if not data.get("totalItems") or not data.get("items"):
         logger.debug("Google Books: no results for %s", isbn)
-        return None
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="google_books",
+        )
 
     info = data["items"][0].get("volumeInfo", {})
     title = info.get("title", "").strip()
     if not title:
-        return None
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="google_books",
+        )
 
     # Normalize optional fields to guard against null / unexpected types.
     raw_description = info.get("description")
@@ -198,11 +246,18 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
             "Source": "Google Books",
         }
     )
-    return metadata
+    return ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata=metadata,
+        provider="google_books",
+    )
 
 
-def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
-    """Fetch metadata from the Open Library Books API.
+def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
+    """Fetch metadata from the Google Books API.
+
+    Uses the public (unauthenticated) ``volumes`` endpoint which does not
+    require an API key for low-volume lookups.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
@@ -211,26 +266,140 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
         ``{"Title": str, "Authors": list[str]}`` on success, ``None``
         if the API returns no results or the request fails.
     """
+    outcome = _lookup_google_books_outcome(isbn)
+    return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
+
+
+def fetch_google_books_candidates(query: str, max_results: int = 5) -> list[dict]:
+    """Search Google Books by text query and return candidates.
+
+    Args:
+        query: Free-text search term (e.g. title).
+        max_results: Maximum number of results to return.
+
+    Returns:
+        List of normalised metadata dicts, possibly empty.
+    """
+    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    url = "https://www.googleapis.com/books/v1/volumes"
+    params: dict[str, Any] = {"q": query, "maxResults": max_results}
+    if api_key:
+        params["key"] = api_key
+
+    try:
+        session = _make_session()
+        response = session.get(url, params=params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        safe_exc = re.sub(r"key=[^&]+", "key=[REDACTED]", str(exc))
+        logger.debug("Google Books request failed for %s: %s", query, safe_exc)
+        return []
+
+    if not data.get("totalItems") or not data.get("items"):
+        return []
+
+    def __normalize_list_field(info: dict, field: str):
+        raw_value = info.get(field)
+        if isinstance(raw_value, list):
+            return [str(v).strip() for v in raw_value if v and str(v).strip()]
+        if isinstance(raw_value, str):
+            return [str(v).strip() for v in raw_value.strip().split(",") if v and str(v).strip()] if raw_value.strip() else []
+        return []
+
+    results = []
+    for item in data["items"]:
+        info = item.get("volumeInfo", {})
+        title = info.get("title", "").strip()
+        if not title:
+            continue
+
+        raw_description = info.get("description")
+        description = raw_description.strip() if isinstance(raw_description, str) else ""
+
+        # Get ISBN if present
+        isbn = None
+        for identifier in info.get("industryIdentifiers", []):
+            if identifier.get("type") in ("ISBN_13", "ISBN_10"):
+                isbn = canonicalize_isbn(identifier.get("identifier", ""))
+                if isbn:
+                    break
+
+        metadata = dict(info)
+        metadata.update(
+            {
+                "Title": title,
+                "Authors": __normalize_list_field(info, "authors"),
+                "Description": description,
+                "Categories": __normalize_list_field(info, "categories"),
+                "Source": "Google Books",
+                "barcode": isbn,
+                "data_source": "google_books",
+            }
+        )
+
+        # Add cover url mapping for frontend consistency
+        if "imageLinks" in info and isinstance(info["imageLinks"], dict):
+            metadata["cover_url"] = info["imageLinks"].get("thumbnail") or info["imageLinks"].get("smallThumbnail")
+
+        results.append(metadata)
+
+    return results
+
+
+def _lookup_open_library_outcome(isbn: str) -> ISBNProviderOutcome:
+    """Fetch metadata outcome from the Open Library Books API.
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.
+
+    Returns:
+        :class:`ISBNProviderOutcome` indicating success, definitive no-result,
+        or transient failure.
+    """
     url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
     try:
         session = _make_session()
         response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         data = response.json()
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        safe_msg = f"HTTP {status_code}" if status_code else "HTTPError"
+        logger.warning("Open Library request returned HTTP status %s for ISBN %s", safe_msg, isbn)
+        if status_code in (429, 500, 502, 503, 504) or (status_code and status_code >= 500):
+            return ISBNProviderOutcome(
+                status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+                provider="open_library",
+                error_detail=safe_msg,
+            )
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+            error_detail=safe_msg,
+        )
     except (requests.RequestException, ValueError) as exc:
-        logger.debug("Open Library request failed for %s: %s", isbn, exc)
-        if isinstance(exc, requests.HTTPError) and exc.response is not None and exc.response.status_code == 429:
-            raise
-        return None
+        logger.warning("Open Library request failed for ISBN %s: %s", isbn, exc)
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="open_library",
+            error_detail=str(exc),
+        )
 
     if not data:
         logger.debug("Open Library: no results for %s", isbn)
-        return None
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+        )
 
     book = next(iter(data.values()))
     title = book.get("title", "").strip()
     if not title:
-        return None
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+        )
 
     authors = [a.get("name", "") for a in book.get("authors", []) if a.get("name")]
 
@@ -242,10 +411,6 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
     categories = [s.get("name", "") for s in book.get("subjects", []) if s.get("name")]
 
     # Clone raw data and add standard keys.
-    # The raw OL response contains ``authors`` and ``subjects`` as lists of
-    # *dicts* (e.g. ``[{"name": "…", "url": "…"}]``).  These must NOT leak
-    # downstream — we delete the raw keys and replace them with the canonical
-    # capitalized ``Authors`` and ``Categories`` which hold plain strings.
     metadata = dict(book)
     metadata.pop("authors", None)
     metadata.pop("subjects", None)
@@ -258,7 +423,25 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
             "Source": "Open Library",
         }
     )
-    return metadata
+    return ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata=metadata,
+        provider="open_library",
+    )
+
+
+def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
+    """Fetch metadata from the Open Library Books API.
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.
+
+    Returns:
+        ``{"Title": str, "Authors": list[str]}`` on success, ``None``
+        if the API returns no results or the request fails.
+    """
+    outcome = _lookup_open_library_outcome(isbn)
+    return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
 
 
 # ---------------------------------------------------------------------------
@@ -266,33 +449,57 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 
-def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
+def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0) -> dict[str, Any] | None:
     """Look up book metadata for *isbn* from external sources.
 
-    Tries Google Books first; falls back to Open Library if Google Books
-    returns no results.  Both sources are queried with the shared retry
-    policy and generous timeouts (see module constants).
+    Tries Google Books first. If Google Books fails transiently (e.g. 429/5xx),
+    immediately attempts Open Library. If Open Library has no metadata, retries
+    Google Books once after a short delay (*retry_delay*).
 
     Args:
-        isbn: A canonical 13-digit ISBN string.  Use
-              :func:`canonicalize_isbn` to obtain one from raw user input
-              before calling this function.
+        isbn: A canonical 13-digit ISBN string. Use :func:`canonicalize_isbn` to
+              obtain one from raw user input before calling this function.
+        retry_delay: Delay in seconds before a single Google Books retry when
+                     Google Books initially failed transiently and Open Library
+                     had no result. Defaults to 1.0.
 
     Returns:
         A dict containing standard keys (Title, Authors, Description, Categories)
-        plus the full raw metadata payload from the provider.
+        plus the full raw metadata payload from the provider, or ``None``.
     """
-    metadata = _lookup_google_books(isbn)
-    if metadata:
+    google_outcome = _lookup_google_books_outcome(isbn)
+    if google_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
         logger.info("ISBN %s resolved via Google Books", isbn)
-        return metadata
+        return google_outcome.metadata
 
-    logger.debug("Falling back to Open Library for ISBN %s", isbn)
+    if google_outcome.status == ISBNProviderOutcomeStatus.NO_RESULT:
+        logger.debug("Google Books returned no results for ISBN %s, checking Open Library", isbn)
+        ol_outcome = _lookup_open_library_outcome(isbn)
+        if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
+            logger.info("ISBN %s resolved via Open Library", isbn)
+            return ol_outcome.metadata
+        logger.warning("No metadata found for ISBN %s from Google Books or Open Library", isbn)
+        return None
 
-    metadata = _lookup_open_library(isbn)
-    if metadata:
-        logger.info("ISBN %s resolved via Open Library", isbn)
-        return metadata
+    # Google Books returned transient_failure
+    logger.warning("Google Books transient failure for ISBN %s; attempting Open Library immediately", isbn)
+    ol_outcome = _lookup_open_library_outcome(isbn)
+    if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
+        logger.info("ISBN %s resolved via Open Library after Google Books transient failure", isbn)
+        return ol_outcome.metadata
 
-    logger.warning("No metadata found for ISBN %s from any upstream source", isbn)
+    # Open Library has no result (or also failed transiently), and Google Books failed transiently on first attempt
+    logger.warning(
+        "Open Library had no metadata for ISBN %s after Google Books transient failure; retrying Google Books once",
+        isbn,
+    )
+    if retry_delay > 0:
+        time.sleep(retry_delay)
+
+    retry_google_outcome = _lookup_google_books_outcome(isbn)
+    if retry_google_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
+        logger.info("ISBN %s resolved via Google Books retry", isbn)
+        return retry_google_outcome.metadata
+
+    logger.warning("No metadata found for ISBN %s from any upstream source after retry", isbn)
     return None

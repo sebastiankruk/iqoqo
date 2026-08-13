@@ -15,6 +15,7 @@
 #
 import os
 from io import BytesIO
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,7 +38,7 @@ from app.utils.llm_covers import apply_corner_watermark, generate_cover_cloud
 
 @pytest.fixture
 def mock_requests_get():
-    with patch("requests.get") as mock:
+    with patch("app.utils.covers.safe_get") as mock:
         yield mock
 
 
@@ -137,9 +138,10 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
                 assert path == "/static/covers/9780553380163_ol_orig.jpg"
                 assert source == "api_openlibrary"
                 assert (tmp_path / "9780553380163_ol_orig.jpg").exists()
-                # Verify URL
-                args, _ = mock_requests_get.call_args
-                assert "covers.openlibrary.org" in args[0]
+                # Verify URL / Host header
+                args, kwargs = mock_requests_get.call_args
+                host_header = kwargs.get("headers", {}).get("Host", "")
+                assert "covers.openlibrary.org" in args[0] or host_header == "covers.openlibrary.org"
 
 
 def test_fetch_external_api_cover_failure(mock_requests_get):
@@ -206,7 +208,7 @@ def test_is_valid_cover_accepts_valid_png_over_1kb():
     assert is_valid_cover(image_bytes) is True
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 @patch("app.utils.covers.is_valid_cover")
 @patch("app.utils.covers.optimize_and_save_image")
 def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
@@ -228,7 +230,7 @@ def test_download_direct_url_success(mock_optimize, mock_is_valid, mock_get):
     mock_optimize.assert_called_once()
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 def test_download_direct_url_too_large(mock_get):
     """Test rejection of oversized payloads."""
     mock_response = MagicMock()
@@ -242,7 +244,7 @@ def test_download_direct_url_too_large(mock_get):
     assert result is None
 
 
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 def test_download_direct_url_too_small(mock_get):
     """Test rejection of too-small payloads (often 1x1 tracking pixels)."""
     mock_response = MagicMock()

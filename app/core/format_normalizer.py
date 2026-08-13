@@ -26,6 +26,7 @@ from pathlib import Path
 import yaml
 
 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, MediaFormat
+from app.core.telemetry import mapping_parse_failures_total
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,12 @@ class FormatNormalizer:
                 data = yaml.safe_load(fh)
         except yaml.YAMLError as exc:
             logger.warning("Failed to parse format_mappings.yaml: %s", exc)
+            mapping_parse_failures_total.add(1, {"reason": "yaml_error"})
             return
 
         if not isinstance(data, dict):
             logger.warning("format_mappings.yaml is not a dict; ignoring")
+            mapping_parse_failures_total.add(1, {"reason": "not_dict"})
             return
 
         normalizations = data.get("format_normalizations")
@@ -108,6 +111,7 @@ class FormatNormalizer:
                     key,
                     target_str,
                 )
+                mapping_parse_failures_total.add(1, {"reason": "invalid_format", "target": target_str})
                 continue
 
             # Store lowercase key for case-insensitive lookup

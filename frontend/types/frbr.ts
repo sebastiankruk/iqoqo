@@ -248,6 +248,7 @@ export interface DashboardStats {
 export interface IsbnMeta {
   Title: string;
   Authors: string[];
+  data_source?: string;
   title?: string;
   author?: string;
   authors?: string[];

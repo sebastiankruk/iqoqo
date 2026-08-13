@@ -18,7 +18,7 @@
 import { useState, useEffect } from "react";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
-import { Loader2, Eye, EyeOff, Save } from "lucide-react";
+import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface InstanceSettingsProps {
   category?: "external_apis" | "federation" | "affiliate" | "internal";
@@ -34,32 +34,103 @@ interface InstanceSettingsData {
   [key: string]: SettingValue | string | boolean | null;
 }
 
+interface SettingItem {
+  key: string;
+  label: string;
+  type: "api" | "text" | "boolean";
+  placeholder: string;
+  description?: string;
+}
+
+interface SettingGroup {
+  id: string;
+  title: string;
+  description: string;
+  items: SettingItem[];
+}
+
+const API_SERVICE_GROUPS: SettingGroup[] = [
+  {
+    id: "allegro",
+    title: "Allegro Integration",
+    description:
+      "Configure Allegro API client credentials and authorize account access for Polish book & media catalog lookups.",
+    items: [
+      { key: "ALLEGRO_CLIENT_ID", label: "Allegro Client ID", type: "api", placeholder: "Enter Allegro Client ID" },
+      {
+        key: "ALLEGRO_CLIENT_SECRET",
+        label: "Allegro Client Secret",
+        type: "api",
+        placeholder: "Enter Allegro Client Secret",
+      },
+    ],
+  },
+  {
+    id: "twitch_igdb",
+    title: "Twitch / IGDB Video Games API",
+    description:
+      "Configure Twitch Developer Application credentials to enable Internet Game Database (IGDB) artwork and game metadata lookup.",
+    items: [
+      { key: "TWITCH_CLIENT_ID", label: "Twitch / IGDB Client ID", type: "api", placeholder: "Enter Twitch Client ID" },
+      {
+        key: "TWITCH_CLIENT_SECRET",
+        label: "Twitch / IGDB Client Secret",
+        type: "api",
+        placeholder: "Enter Twitch Client Secret",
+      },
+    ],
+  },
+  {
+    id: "google",
+    title: "Google Services",
+    description: "Configure Google Books API for ISBN metadata and Google Gemini API for AI features.",
+    items: [
+      {
+        key: "GOOGLE_BOOKS_API_KEY",
+        label: "Google Books API Key",
+        type: "api",
+        placeholder: "Enter Google Books API key",
+      },
+      {
+        key: "GEMINI_API_KEY",
+        label: "Google Gemini API Key",
+        type: "api",
+        placeholder: "Enter Google Gemini API key",
+      },
+    ],
+  },
+  {
+    id: "media_databases",
+    title: "Media & Catalog Databases",
+    description: "External APIs for music, movies, board games, and barcode lookups.",
+    items: [
+      { key: "DISCOGS_USER_TOKEN", label: "Discogs User Token", type: "api", placeholder: "Enter Discogs token" },
+      { key: "TMDB_API_KEY", label: "TMDB API Key", type: "api", placeholder: "Enter TMDB API key" },
+      { key: "BGG_API_TOKEN", label: "BoardGameGeek Token", type: "api", placeholder: "Enter BGG token" },
+      {
+        key: "UPC_DATABASE_ORG_KEY",
+        label: "UPC Database API Key",
+        type: "api",
+        placeholder: "Enter UPC Database key",
+      },
+    ],
+  },
+  {
+    id: "ai_image",
+    title: "AI & Cover Generation",
+    description: "Configure LLM providers and local image generation services.",
+    items: [
+      { key: "OPENAI_API_KEY", label: "OpenAI API Key", type: "api", placeholder: "Enter OpenAI API key" },
+      { key: "LOCAL_SD_URL", label: "Local Stable Diffusion URL", type: "text", placeholder: "http://localhost:7860" },
+    ],
+  },
+];
+
 const SETTING_GROUPS = {
-  external_apis: [
-    { key: "GOOGLE_BOOKS_API_KEY", label: "Google Books API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "DISCOGS_USER_TOKEN", label: "Discogs User Token", type: "api" as const, placeholder: "Enter token" },
-    { key: "TMDB_API_KEY", label: "TMDB API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "BGG_API_TOKEN", label: "BGG API Token", type: "api" as const, placeholder: "Enter token" },
-    { key: "OPENAI_API_KEY", label: "OpenAI API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "GEMINI_API_KEY", label: "Google Gemini API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "UPC_DATABASE_ORG_KEY", label: "UPC Database API Key", type: "api" as const, placeholder: "Enter API key" },
-    { key: "ALLEGRO_CLIENT_ID", label: "Allegro Client ID", type: "api" as const, placeholder: "Enter client ID" },
-    {
-      key: "ALLEGRO_CLIENT_SECRET",
-      label: "Allegro Client Secret",
-      type: "api" as const,
-      placeholder: "Enter client secret",
-    },
-    {
-      key: "LOCAL_SD_URL",
-      label: "Local Stable Diffusion URL",
-      type: "text" as const,
-      placeholder: "http://localhost:7860",
-    },
-  ],
+  external_apis: API_SERVICE_GROUPS.flatMap(g => g.items),
   federation: [
     { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
-    { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const },
+    { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const, placeholder: "" },
   ],
   affiliate: [
     { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
@@ -75,43 +146,53 @@ const SETTING_GROUPS = {
       key: "MAINTENANCE_MODE",
       label: "Maintenance Mode",
       type: "boolean" as const,
+      placeholder: "",
     },
   ],
 };
 
 /**
- * Card wrapper for settings sections.
+ * Wrapper component for instance settings cards.
  *
- * @param props - Card wrapper properties
- * @param props.title - Card title
- * @param props.description - Card description
- * @param props.onSave - Save button handler
- * @param props.children - Card body content
- * @returns Card wrapper component
+ * @param props Component props.
+ * @param props.title Card title.
+ * @param props.description Card description.
+ * @param props.onSave Save callback.
+ * @param props.saving Whether saving is in progress.
+ * @param props.children Card body content.
+ * @param props.extraFooterContent Optional footer elements.
+ * @returns CardWrapper element.
  */
 function CardWrapper({
   title,
   description,
   onSave,
+  saving = false,
   children,
+  extraFooterContent,
 }: {
   title: string;
   description: string;
   onSave: () => void;
+  saving?: boolean;
   children: React.ReactNode;
+  extraFooterContent?: React.ReactNode;
 }) {
   return (
     <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
       <div className="p-6 flex-1">
-        <h3 className="text-lg font-medium tracking-tight">{title}</h3>
+        <h3 className="text-lg font-medium tracking-tight flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-muted-foreground" />
+          {title}
+        </h3>
         <p className="text-sm text-muted-foreground mt-1">{description}</p>
-        <div className="mt-5">{children}</div>
+        <div className="mt-5 space-y-4">{children}</div>
       </div>
       <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground"></p>
-        <Button size="sm" onClick={onSave}>
-          <Save className="h-4 w-4 mr-2" />
-          Save
+        <div>{extraFooterContent}</div>
+        <Button size="sm" onClick={onSave} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          Save Changes
         </Button>
       </div>
     </div>
@@ -119,41 +200,52 @@ function CardWrapper({
 }
 
 /**
- * Instance settings component for managing global configuration.
+ * Instance settings page component.
  *
- * @param props - Component props
- * @param props.category - Settings category (external_apis, federation, affiliate, internal)
- * @param props.showApiKeys - Whether to show API keys interface
- * @returns The instance settings component
+ * @param props Component props.
+ * @param props.category Settings category tab.
+ * @param props.showApiKeys Whether API keys are shown.
+ * @returns InstanceSettings element.
  */
 export function InstanceSettings({ category = "external_apis", showApiKeys = false }: InstanceSettingsProps) {
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
-
-  const settingsList = SETTING_GROUPS[category] || [];
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [allegroAuthStatus, setAllegroAuthStatus] = useState<string>("");
+  const [allegroAuthUrl, setAllegroAuthUrl] = useState<string | null>(null);
+  const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (showApiKeys && category !== "external_apis") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(false);
-      return;
+      Promise.resolve().then(() => {
+        if (isMounted) setLoading(false);
+      });
+      return () => {
+        isMounted = false;
+      };
     }
     getInstanceSettings(category)
-      .then(data => setSettings(data as InstanceSettingsData))
-      .finally(() => setLoading(false));
+      .then(data => {
+        if (isMounted) setSettings(data as InstanceSettingsData);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [category, showApiKeys]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setSaved(false);
+  const handleSaveKeys = async (keysToSave: SettingItem[], groupId: string) => {
+    setSavingKey(groupId);
+    setSavedMessage(null);
     try {
       const toSave: Record<string, unknown> = {};
-      for (const s of settingsList) {
+      for (const s of keysToSave) {
         const setting = settings[s.key];
         let val: string | boolean = "";
         if (setting && typeof setting === "object" && "value" in setting) {
@@ -163,6 +255,11 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
         } else if (typeof setting === "string") {
           val = setting;
         }
+
+        if (revealedKeys.has(s.key) && revealedValues[s.key] !== undefined) {
+          val = revealedValues[s.key];
+        }
+
         if (s.type === "boolean") {
           toSave[s.key] = val === true || val === "true";
         } else {
@@ -170,12 +267,12 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
         }
       }
       await updateInstanceSettings(toSave, category);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setSavedMessage(`Saved settings for ${groupId}`);
+      setTimeout(() => setSavedMessage(null), 3000);
     } catch (e) {
       console.error("Failed to save settings", e);
     } finally {
-      setSaving(false);
+      setSavingKey(null);
     }
   };
 
@@ -210,6 +307,86 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     return { value: String(setting || ""), source: "missing" };
   };
 
+  const startAllegroAuth = async () => {
+    setAllegroAuthStatus("Initiating device flow...");
+    setAllegroAuthUrl(null);
+    setIsAuthorizingAllegro(true);
+    try {
+      const idSetting = settings["ALLEGRO_CLIENT_ID"];
+      const secretSetting = settings["ALLEGRO_CLIENT_SECRET"];
+
+      const extractSettingStr = (s: SettingValue | string | boolean | null | undefined): string | undefined => {
+        if (typeof s === "string") return s;
+        if (s && typeof s === "object" && "value" in s && s.value !== null && s.value !== undefined) {
+          return String(s.value);
+        }
+        return undefined;
+      };
+
+      let idVal = extractSettingStr(idSetting) ?? getSettingValue("ALLEGRO_CLIENT_ID").value;
+      let secretVal = extractSettingStr(secretSetting) ?? getSettingValue("ALLEGRO_CLIENT_SECRET").value;
+
+      if (revealedKeys.has("ALLEGRO_CLIENT_ID") && revealedValues["ALLEGRO_CLIENT_ID"]) {
+        idVal = revealedValues["ALLEGRO_CLIENT_ID"];
+      }
+      if (revealedKeys.has("ALLEGRO_CLIENT_SECRET") && revealedValues["ALLEGRO_CLIENT_SECRET"]) {
+        secretVal = revealedValues["ALLEGRO_CLIENT_SECRET"];
+      }
+
+      const res = await fetch("/api/auth/allegro/device-flow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: idVal, client_secret: secretVal }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to start device flow");
+      }
+      const data = await res.json();
+
+      const verificationUrl = data.verification_uri_complete || data.verification_uri;
+      const userCode = data.user_code;
+      setAllegroAuthUrl(verificationUrl);
+      setAllegroAuthStatus(`Authorize code: ${userCode || ""}. Waiting for confirmation...`);
+
+      if (verificationUrl) {
+        window.open(verificationUrl, "_blank");
+      }
+
+      const interval = data.interval ? parseInt(data.interval) * 1000 : 5000;
+      let expires = data.expires_in ? parseInt(data.expires_in) : 600;
+
+      const poll = async () => {
+        if (expires <= 0) {
+          setAllegroAuthStatus("Authorization expired. Please try again.");
+          setIsAuthorizingAllegro(false);
+          return;
+        }
+        const pollRes = await fetch("/api/auth/allegro/device-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: idVal, client_secret: secretVal, device_code: data.device_code }),
+        });
+
+        if (pollRes.status === 200) {
+          setAllegroAuthStatus("Allegro authorized successfully!");
+          setIsAuthorizingAllegro(false);
+        } else if (pollRes.status === 202) {
+          expires -= interval / 1000;
+          setTimeout(poll, interval);
+        } else {
+          setAllegroAuthStatus("Authorization failed or denied.");
+          setIsAuthorizingAllegro(false);
+        }
+      };
+
+      setTimeout(poll, interval);
+    } catch (e) {
+      setAllegroAuthStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+      setIsAuthorizingAllegro(false);
+    }
+  };
+
   if (loading) {
     return <Loader2 className="animate-spin h-6 w-6 text-muted-foreground my-10 mx-auto" />;
   }
@@ -222,100 +399,182 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     return { label: "—", className: "bg-muted text-muted-foreground" };
   };
 
+  const renderInputField = (s: SettingItem) => {
+    const { value, source } = getSettingValue(s.key);
+    const isMasked = s.type === "api" && value.startsWith("***");
+    const isRevealed = revealedKeys.has(s.key);
+    const badge = getSourceBadge(source);
+
+    return (
+      <div key={s.key} className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">{s.label}</label>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              autoComplete="off"
+              className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
+              value={isRevealed ? revealedValues[s.key] || value : value}
+              onChange={e => {
+                const newVal = e.target.value;
+                if (isRevealed) {
+                  setRevealedValues({ ...revealedValues, [s.key]: newVal });
+                }
+                setSettings({ ...settings, [s.key]: newVal });
+              }}
+              placeholder={s.placeholder}
+            />
+            {(isMasked || source !== "missing") && (
+              <button
+                type="button"
+                onClick={() => toggleReveal(s.key)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                title={isRevealed ? "Hide value" : "Reveal stored value"}
+              >
+                {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            )}
+          </div>
+          <span className={`text-xs px-2 py-1 rounded font-mono ${badge.className}`}>{badge.label}</span>
+        </div>
+      </div>
+    );
+  };
+
   if (showApiKeys && category === "external_apis") {
-    const apiSettings = SETTING_GROUPS.external_apis;
+    const allItems = API_SERVICE_GROUPS.flatMap(g => g.items);
+
     return (
       <div className="flex flex-col gap-8">
-        {apiSettings.map(s => {
-          const { value, source } = getSettingValue(s.key);
-          const isMasked = s.type === "api" && value.startsWith("***");
-          const isRevealed = revealedKeys.has(s.key);
-          const badge = getSourceBadge(source);
+        {savedMessage && (
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-sm flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            {savedMessage}
+          </div>
+        )}
 
-          return (
-            <CardWrapper
-              key={s.key}
-              title={s.label}
-              description={`Configure your ${s.label.toLowerCase()}`}
-              onSave={handleSave}
+        <CardWrapper
+          title="External APIs"
+          description="Configure external API client credentials and integrations."
+          saving={savingKey === "all_apis"}
+          onSave={() => handleSaveKeys(allItems, "all_apis")}
+          extraFooterContent={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startAllegroAuth}
+              disabled={isAuthorizingAllegro}
             >
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
-                    value={isRevealed ? revealedValues[s.key] || value : value}
-                    onChange={e => {
-                      const newVal = e.target.value;
-                      if (isRevealed) {
-                        setRevealedValues({ ...revealedValues, [s.key]: newVal });
-                      }
-                      setSettings({ ...settings, [s.key]: newVal });
-                    }}
-                    placeholder={s.placeholder}
-                  />
-                  {(isMasked || source !== "missing") && (
-                    <button
-                      type="button"
-                      onClick={() => toggleReveal(s.key)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+              {isAuthorizingAllegro ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
+              Authorize Allegro Account
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-6">
+            {API_SERVICE_GROUPS.map(group => {
+              const isAllegro = group.id === "allegro";
+
+              return (
+                <div key={group.id} className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">{group.title}</h4>
+                    <p className="text-sm text-muted-foreground">{group.description}</p>
+                  </div>
+                  <div className="flex flex-col gap-4">{group.items.map(s => renderInputField(s))}</div>
+                  {isAllegro && (allegroAuthStatus || allegroAuthUrl) && (
+                    <div className="mt-2 p-3 rounded-lg border border-border dark:border-white/10 bg-muted/30 text-sm flex flex-col gap-2">
+                      {allegroAuthStatus && (
+                        <div className="flex items-center gap-2 font-medium">
+                          {allegroAuthStatus.includes("Error") || allegroAuthStatus.includes("failed") ? (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          ) : allegroAuthStatus.includes("successfully") ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          )}
+                          <span>{allegroAuthStatus}</span>
+                        </div>
+                      )}
+                      {allegroAuthUrl && (
+                        <p className="text-xs text-muted-foreground">
+                          If browser window did not open automatically,{" "}
+                          <a
+                            href={allegroAuthUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline font-medium inline-flex items-center gap-1"
+                          >
+                            click here to authorize on Allegro <ExternalLink className="h-3 w-3 inline" />
+                          </a>
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-                <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
-              </div>
-            </CardWrapper>
-          );
-        })}
-        {saved && <p className="text-sm text-green-500">Settings saved successfully</p>}
+              );
+            })}
+          </div>
+        </CardWrapper>
       </div>
     );
   }
 
+  const defaultList = SETTING_GROUPS[category] || [];
+  const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1).replace("_", " ");
   return (
     <div className="flex flex-col gap-8">
-      {settingsList.map(s => {
-        if (s.type === "boolean") {
-          const { value, source } = getSettingValue(s.key);
-          const badge = getSourceBadge(source);
-          return (
-            <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
-              <div className="flex items-center gap-3">
-                <select
-                  className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={String(value).toLowerCase() === "true" ? "true" : "false"}
-                  onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-                <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
-              </div>
-            </CardWrapper>
-          );
-        }
+      {savedMessage && (
+        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-sm flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" />
+          {savedMessage}
+        </div>
+      )}
 
-        const { value, source } = getSettingValue(s.key);
-        const badge = getSourceBadge(source);
-        return (
-          <CardWrapper key={s.key} title={s.label} description={""} onSave={handleSave}>
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={value}
-                onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                placeholder={s.placeholder}
-              />
-              <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>{badge.label}</span>
-            </div>
-          </CardWrapper>
-        );
-      })}
-      {saved && <p className="text-sm text-green-500">Settings saved successfully</p>}
+      <CardWrapper
+        title={`${categoryTitle} Settings`}
+        description={`Manage settings for ${categoryTitle.toLowerCase()}.`}
+        saving={savingKey === category}
+        onSave={() => handleSaveKeys(defaultList, category)}
+      >
+        <div className="flex flex-col gap-6">
+          {defaultList.map(s => {
+            const { value, source } = getSettingValue(s.key);
+            const badge = getSourceBadge(source);
+
+            return (
+              <div key={s.key} className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">{s.label}</label>
+                <div className="flex items-center gap-3">
+                  {s.type === "boolean" ? (
+                    <select
+                      className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={String(value).toLowerCase() === "true" ? "true" : "false"}
+                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                    >
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={value}
+                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                      placeholder={s.placeholder}
+                    />
+                  )}
+                  <span className={`text-xs px-2 py-1 rounded font-mono ${badge.className}`}>{badge.label}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardWrapper>
     </div>
   );
 }

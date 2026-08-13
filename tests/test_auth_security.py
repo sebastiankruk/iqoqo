@@ -14,6 +14,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+from unittest.mock import patch
+
 import pytest
 
 from app.db.models import Role, TokenBlocklist, User, db
@@ -98,3 +100,58 @@ def test_admin_required_rejects_revoked_token(app, client):
     admin_resp = client.delete("/api/items/1", headers=headers)
     assert admin_resp.status_code == 401
     assert b"Token revoked" in admin_resp.data
+
+
+class TestAllegroDeviceFlowAdminOnly:
+    """Allegro device-flow endpoints must require admin privileges."""
+
+    def test_device_flow_unauthenticated(self, client):
+        """Unauthenticated POST to /api/auth/allegro/device-flow returns 401/403."""
+        resp = client.post("/api/auth/allegro/device-flow", json={})
+        assert resp.status_code in (401, 403), f"Expected 401/403, got {resp.status_code}"
+
+    def test_device_token_unauthenticated(self, client):
+        """Unauthenticated POST to /api/auth/allegro/device-token returns 401/403."""
+        resp = client.post("/api/auth/allegro/device-token", json={})
+        assert resp.status_code in (401, 403), f"Expected 401/403, got {resp.status_code}"
+
+    def test_device_flow_normal_user_forbidden(self, client):
+        """Non-admin user POST to /api/auth/allegro/device-flow returns 403."""
+        client.post("/api/auth/register", json={"email": "regular@iqoqo.local", "password": "password123"})
+        login_resp = client.post("/api/auth/login", json={"email": "regular@iqoqo.local", "password": "password123"})
+        token = login_resp.get_json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        resp = client.post("/api/auth/allegro/device-flow", json={}, headers=headers)
+        assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
+
+    def test_device_token_normal_user_forbidden(self, client):
+        """Non-admin user POST to /api/auth/allegro/device-token returns 403."""
+        client.post("/api/auth/register", json={"email": "regular2@iqoqo.local", "password": "password123"})
+        login_resp = client.post("/api/auth/login", json={"email": "regular2@iqoqo.local", "password": "password123"})
+        token = login_resp.get_json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        resp = client.post("/api/auth/allegro/device-token", json={}, headers=headers)
+        assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
+
+
+class TestBarcodePreviewQueryValidation:
+    """Barcode preview endpoint should enforce query length limits."""
+
+    def test_oversized_query_rejected(self, client, admin_headers):
+        """Query strings exceeding 128 characters should return 400."""
+        long_query = "X" * 200
+        resp = client.get(f"/api/lookup/{long_query}", headers=admin_headers)
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "too long" in data.get("error", "").lower()
+
+    @patch("app.strategies.default.fetch_isbn_metadata", return_value=None)
+    @patch("app.utils.isbn._make_session")
+    def test_normal_query_accepted(self, mock_session, mock_fetch_isbn, client, admin_headers):
+        """A normal-length query should not be rejected for length."""
+        resp = client.get("/api/lookup/978-0-123456-47-2", headers=admin_headers)
+        # Assuming the system handles it, it might return 200 or 404 (not found).
+        # We just want to ensure it doesn't return 400 Bad Request.
+        assert resp.status_code in (200, 404)

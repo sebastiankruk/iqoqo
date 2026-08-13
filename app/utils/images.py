@@ -92,6 +92,20 @@ def is_valid_cover(image_bytes: bytes) -> bool:
         return False
 
 
+def optimize_image_to_bytes(image_bytes: bytes) -> bytes:
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as raw_img:
+            transposed_img = ImageOps.exif_transpose(raw_img)
+            out: Image.Image = transposed_img.convert("RGB")
+            out.thumbnail((1024, 1024))
+            buf = io.BytesIO()
+            out.save(buf, format="JPEG", quality=85)
+            return buf.getvalue()
+    except (OSError, ValueError):
+        logger.exception("Error optimizing image")
+        raise
+
+
 def optimize_and_save_image(image_bytes: bytes, filepath: str):
     """Converts image to JPEG, fixes EXIF, resizes to max 1024x1024."""
     try:
@@ -101,9 +115,138 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
             out: Image.Image = transposed_img.convert("RGB")
             out.thumbnail((1024, 1024))
             out.save(filepath, "JPEG", quality=85)
+
+        remote = os.environ.get("RCLONE_COVERS_REMOTE")
+        if remote and "/covers/" in filepath:
+            try:
+                import subprocess
+
+                from app.utils.rclone_utils import get_rclone_target
+
+                filename = os.path.basename(filepath)
+                target = get_rclone_target(remote, "covers", filename)
+                subprocess.run(["rclone", "copyto", "--s3-no-check-bucket", "--", filepath, target], check=False)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to push cover to rclone cache: %s", e)
     except (OSError, ValueError):
         logger.exception("Error optimizing image")
         raise
+
+
+def add_text_overlay_bytes(
+    image_bytes: bytes,
+    title: str,
+    author: str,
+    branding: str = "iQoQo",
+    font_path: str = "arial.ttf",
+) -> bytes:
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as raw_img:
+            transposed_img = ImageOps.exif_transpose(raw_img)
+            converted: Image.Image = transposed_img.convert("RGB")
+            draw = ImageDraw.Draw(converted)
+            width, height = converted.size
+
+            max_text_width = int(width * 0.90)
+            title_box = (height * 0.60, height * 0.75)
+            author_box = (height * 0.80, height * 0.90)
+            branding_box = (height * 0.95, height * 1.0)
+
+            valid_font_path: str | None = font_path
+            try:
+                ImageFont.truetype(font_path, 10)
+            except OSError:
+                fallbacks = [
+                    "Arial.ttf",
+                    "/Library/Fonts/Arial.ttf",
+                    "/System/Library/Fonts/Supplemental/Arial.ttf",
+                    "DejaVuSans.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                ]
+                for fb in fallbacks:
+                    try:
+                        ImageFont.truetype(fb, 10)
+                        valid_font_path = fb
+                        break
+                    except OSError:
+                        continue
+                else:
+                    logger.warning(f"Font '{font_path}' not found. Using default.")
+                    valid_font_path = None
+
+            def draw_text_in_box(text, y_range, size_ratio):
+                y_start, y_end = y_range
+                box_height = y_end - y_start
+                font_size = int(height * size_ratio)
+                min_font_size = 10
+                selected_font = None
+                final_lines = []
+                final_line_height = 0
+
+                while font_size >= min_font_size:
+                    if valid_font_path:
+                        font = ImageFont.truetype(valid_font_path, font_size)
+                    else:
+                        font = ImageFont.load_default()
+                        if font_size != int(height * size_ratio):
+                            selected_font = font
+                            break
+
+                    avg_char_width = font.getlength("x") or 10
+                    chars_per_line = int(max_text_width / avg_char_width)
+                    chars_per_line = max(chars_per_line, 1)
+
+                    lines = textwrap.wrap(text, width=chars_per_line)
+                    bbox = font.getbbox("Ay")
+                    line_height = (bbox[3] - bbox[1]) * 1.2
+                    total_height = line_height * len(lines)
+
+                    if total_height <= box_height:
+                        selected_font = font
+                        final_lines = lines
+                        final_line_height = line_height
+                        break
+                    font_size -= 2
+
+                if selected_font is None:
+                    if valid_font_path:
+                        selected_font = ImageFont.truetype(valid_font_path, min_font_size)
+                    else:
+                        selected_font = ImageFont.load_default()
+                    avg_char_width = selected_font.getlength("x") or 10
+                    chars_per_line = int(max_text_width / avg_char_width)
+                    chars_per_line = max(chars_per_line, 1)
+                    final_lines = textwrap.wrap(text, width=chars_per_line)
+                    bbox = selected_font.getbbox("Ay")
+                    final_line_height = (bbox[3] - bbox[1]) * 1.2
+
+                total_text_height = final_line_height * len(final_lines)
+                current_y = y_start + (box_height - total_text_height) / 2
+
+                for line in final_lines:
+                    line_bbox = draw.textbbox((0, 0), line, font=selected_font)
+                    text_width = line_bbox[2] - line_bbox[0]
+                    x = (width - text_width) / 2
+                    draw.text(
+                        (x, current_y),
+                        line,
+                        font=selected_font,
+                        fill="white",
+                        stroke_width=2,
+                        stroke_fill="black",
+                    )
+                    current_y += final_line_height
+
+            draw_text_in_box(title, title_box, 0.10)
+            draw_text_in_box(author, author_box, 0.06)
+            draw_text_in_box(branding, branding_box, 0.03)
+
+            buf = io.BytesIO()
+            converted.save(buf, format="JPEG", quality=85)
+            return buf.getvalue()
+    except (OSError, ValueError) as e:
+        logger.error(f"Error adding text overlay: {e}")
+        return image_bytes
 
 
 def add_text_overlay(

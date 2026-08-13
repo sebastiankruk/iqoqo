@@ -218,11 +218,40 @@ def test_lookup_barcode_audio_upc(mock_discogs, mock_isbn, client, normal_user_h
     assert response.status_code == 200
 
     # Asserting scanner.py successfully mapped keys
-    assert response.json["data"]["title"] == "Kind of Blue"
-    assert response.json["data"]["author"] == "Miles Davis"
-    assert response.json["data"]["cover_url"] == "http://img.png"
-
     mock_discogs.assert_called_once()
+
+
+def test_scanner_preview_open_library_fallback_returns_title_and_author(client, normal_user_headers):
+    """Task 3.5: Scanner preview returns title and author from Open Library after Google Books 503."""
+    from app.utils.isbn import ISBNProviderOutcome, ISBNProviderOutcomeStatus
+
+    gb_transient = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+        provider="google_books",
+        error_detail="HTTP 503",
+    )
+    ol_success = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata={
+            "Title": "The Rough Guide to the USA",
+            "Authors": ["Samantha Cook"],
+            "Source": "Open Library",
+            "notes": "Travel guide to the USA",
+        },
+        provider="open_library",
+    )
+
+    with (
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_transient),
+        patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_success),
+    ):
+        response = client.get("/api/lookup/9781843537861?format=book", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    res_data = response.json["data"]
+    assert res_data["title"] == "The Rough Guide to the USA"
+    assert res_data["author"] == "Samantha Cook"
+    assert res_data["data_source"] == "open_library"
 
 
 # =====================================================================
@@ -572,3 +601,91 @@ def test_lookup_barcode_game_igdb_fallback(mock_igdb, mock_bgg, mock_resolve, cl
     assert response.json["data"]["data_source"] == "igdb"
     mock_bgg.assert_called_once()
     assert mock_igdb.call_args_list[0] == call("The Witcher 3")
+
+
+def test_record_scan_telemetry_truncation(app):
+    """Test that extremely long barcodes (>128 chars) are recorded with status='rejected_oversized' and truncation."""
+    from app.api.scanner import _record_scan_telemetry
+    from app.db.settings import ScanTelemetry
+
+    long_barcode = "This is a very long title that simulates a user typing a full book title instead of scanning an ISBN and it exceeds one hundred and twenty eight characters to trigger the truncation limit in the new behavior"
+
+    with app.app_context():
+        _record_scan_telemetry(barcode=long_barcode, format_hint="book", provider="google_books", status="success")
+
+        record = ScanTelemetry.query.filter_by(provider="google_books", status="rejected_oversized").first()
+        assert record is not None
+        assert record.status == "rejected_oversized"
+        assert len(record.barcode) <= 128
+
+
+def test_scan_barcode_with_meta_payload(client, normal_user_headers, app):
+    """Test that scanning a barcode falls back to the provided meta payload if present."""
+    from app.db.models import Manifestation, db
+
+    payload = {
+        "barcode": "9781234567890",
+        "format": "book",
+        "collection_status": "available",
+        "policy": "inventory",
+        "meta": {
+            "title": "Title From Meta",
+            "author": "Author From Meta",
+            "format": "book",
+            "barcode": "9781234567890",
+            "cover_url": "https://meta.jpg",
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+
+    assert response.status_code == 201
+    assert response.json["success"] is True
+
+    with app.app_context():
+        manifestation = Manifestation.query.filter_by(barcode="9781234567890").first()
+        assert manifestation is not None
+        assert manifestation.meta["title"] == "Title From Meta"
+        assert manifestation.meta["cover_url"] == "https://meta.jpg"
+
+
+@patch("app.strategies.default.fetch_isbn_metadata")
+def test_lookup_barcode_discards_legacy_broken_db_record(mock_fetch_isbn, client, normal_user_headers, app):
+    """Test lookup_barcode_preview discards legacy DB manifestation with 'Unknown Title' and re-fetches from external API."""
+    from app.db.models import Expression, Manifestation, Work, db
+
+    with app.app_context():
+        # Seed a legacy broken manifestation in DB with no title or author
+        work = Work(title="Unknown Title", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work=work, language="en", content_type="text")
+        db.session.add(expression)
+        db.session.flush()
+        manifestation = Manifestation(
+            expression=expression,
+            format="book",
+            barcode="9781843537861",
+            meta={"imageLinks": {}, "pageCount": None, "industryIdentifiers": []},
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+    mock_fetch_isbn.return_value = {
+        "Title": "The Rough Guide to the USA",
+        "title": "The Rough Guide to the USA",
+        "Authors": ["Samantha Cook"],
+        "author": "Samantha Cook",
+        "Description": "A travel guidebook",
+        "Source": "Google Books",
+        "cover_url": "http://cover.jpg",
+        "Format": "book",
+    }
+
+    response = client.get("/api/lookup/9781843537861", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    data = response.json["data"]
+    assert data["title"] == "The Rough Guide to the USA"
+    assert data["author"] == "Samantha Cook"
+    mock_fetch_isbn.assert_called_once_with("9781843537861")

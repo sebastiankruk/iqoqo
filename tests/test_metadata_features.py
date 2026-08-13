@@ -58,17 +58,22 @@ def test_build_context():
     assert "Theme/Description" in ctx
 
 
-@patch("app.utils.isbn._lookup_google_books")
-def test_fetch_isbn_metadata_rich(mock_gb):
+@patch("app.utils.isbn._lookup_google_books_outcome")
+def test_fetch_isbn_metadata_rich(mock_gb_outcome):
     """Test that fetch_isbn_metadata returns rich metadata."""
-    mock_gb.return_value = {
-        "Title": "Test Book",
-        "Authors": ["Test Author"],
-        "Description": "A test description",
-        "Categories": ["Fiction"],
-        "Source": "Google Books",
-        "publisher": "Test Pub",
-    }
+    from app.utils.isbn import ISBNProviderOutcome, ISBNProviderOutcomeStatus
+
+    mock_gb_outcome.return_value = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata={
+            "Title": "Test Book",
+            "Authors": ["Test Author"],
+            "Description": "A test description",
+            "Categories": ["Fiction"],
+            "Source": "Google Books",
+            "publisher": "Test Pub",
+        },
+    )
 
     meta = fetch_isbn_metadata("9780000000000")
     assert meta["Description"] == "A test description"

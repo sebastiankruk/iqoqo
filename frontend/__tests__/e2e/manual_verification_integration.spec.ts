@@ -108,6 +108,18 @@ test.describe("Manual Verification Integration E2E", () => {
         }),
       });
     });
+
+    // 5. Mock Allegro auth endpoints to prevent device flow polling hangs in CI
+    await page.route("**/api/auth/allegro/**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { status: "authenticated", device_code: "mock-device-code" },
+        }),
+      });
+    });
   });
 
   test("Profile Setup, Visibility & Taken Username Conflict", async ({ page }) => {
@@ -377,22 +389,23 @@ test.describe("Manual Verification Integration E2E", () => {
     await expect(page.getByText("Maintenance Mode")).toBeVisible();
     const maintenanceSelect = page.locator("select").first();
     await maintenanceSelect.selectOption("true");
-    await page.getByRole("button", { name: "Save" }).first().click();
+    await page.getByRole("button", { name: "Save Changes" }).first().click();
 
     // Check saved state
-    await expect(page.getByText(/Settings saved successfully/i)).toBeVisible();
+    await expect(page.getByText(/Saved settings for/i)).toBeVisible();
 
-    // Toggle API keys subtab
     await page.goto("/admin/settings?tab=apikeys");
     await page.waitForLoadState("networkidle");
 
     // Check API Key input is masked (starts with ***)
-    const apiKeyContainer = page.locator("div.bg-card").filter({ hasText: "Google Books API Key" });
-    const apiKeyInput = apiKeyContainer.locator("input").first();
+    // Anchor on the field label and scope to its direct parent (the field
+    // wrapper), which contains exactly one input and one reveal button.
+    const apiKeyField = page.locator("label", { hasText: "Google Books API Key" }).locator("xpath=..");
+    const apiKeyInput = apiKeyField.locator("input");
     await expect(apiKeyInput).toHaveValue(/^\*\*\*/);
 
     // Click "eye" icon to reveal
-    const revealBtn = apiKeyContainer.locator("button").first();
+    const revealBtn = apiKeyField.locator("button");
     await revealBtn.click();
 
     // Check that fully revealed key is visible

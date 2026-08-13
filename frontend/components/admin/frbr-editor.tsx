@@ -27,7 +27,19 @@ import {
   type FrbrSearchResult,
 } from "@/lib/api/admin";
 import { toast } from "sonner";
-import { Loader2, Plus, Save, RotateCcw, X, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Save,
+  RotateCcw,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  MoreVertical,
+  ArrowUpRight,
+} from "lucide-react";
 import Link from "next/link";
 import { useWorkParts } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
@@ -36,7 +48,21 @@ import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MetaField {
   key: string;
@@ -295,10 +321,33 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
           Add Field
         </Button>
       </div>
-      <Button type="submit">
-        <Save className="w-4 h-4 mr-2" />
-        Save Work
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit">
+          <Save className="w-4 h-4 mr-2" />
+          Save Work
+        </Button>
+        <Button type="button" variant="outline">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Child
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" type="button">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Escalate
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </form>
   );
 }
@@ -606,10 +655,33 @@ function ExpressionEditor({
           Add Field
         </Button>
       </div>
-      <Button type="submit">
-        <Save className="w-4 h-4 mr-2" />
-        Save Expression
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit">
+          <Save className="w-4 h-4 mr-2" />
+          Save Expression
+        </Button>
+        <Button type="button" variant="outline">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Child
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" type="button">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Escalate
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </form>
   );
 }
@@ -749,10 +821,33 @@ function ManifestationEditor({
           Add Field
         </Button>
       </div>
-      <Button type="submit">
-        <Save className="w-4 h-4 mr-2" />
-        Save Manifestation
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit">
+          <Save className="w-4 h-4 mr-2" />
+          Save Manifestation
+        </Button>
+        <Button type="button" variant="outline">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Child
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" type="button">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Escalate
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </form>
   );
 }
@@ -833,10 +928,33 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
           Add Field
         </Button>
       </div>
-      <Button type="submit">
-        <Save className="w-4 h-4 mr-2" />
-        Save Item
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit">
+          <Save className="w-4 h-4 mr-2" />
+          Save Item
+        </Button>
+        <Button type="button" variant="outline">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Child
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" type="button">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Escalate
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </form>
   );
 }
@@ -1081,7 +1199,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.expression ? (
-              <ExpressionEditor key={`${tree.expression.id}-${lastFetched}`} tree={tree} onSubmit={handleExpressionSubmit} />
+              <ExpressionEditor
+                key={`${tree.expression.id}-${lastFetched}`}
+                tree={tree}
+                onSubmit={handleExpressionSubmit}
+              />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
             )}
@@ -1105,7 +1227,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             <CardDescription>The physical embodiment (F3 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManifestationEditor key={`${tree.manifestation.id}-${lastFetched}`} tree={tree} onSubmit={handleManifestationSubmit} />
+            <ManifestationEditor
+              key={`${tree.manifestation.id}-${lastFetched}`}
+              tree={tree}
+              onSubmit={handleManifestationSubmit}
+            />
           </CardContent>
         </Card>
       )}
@@ -1194,7 +1320,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
                       </button>
                       {expandedItems.has(item.id) && (
                         <div className="p-4 pt-0 border-t bg-muted/20">
-                          <ItemEditor key={`${item.id}-${lastFetched}`} item={item} onSubmit={data => handleItemSubmit(data, item.id)} />
+                          <ItemEditor
+                            key={`${item.id}-${lastFetched}`}
+                            item={item}
+                            onSubmit={data => handleItemSubmit(data, item.id)}
+                          />
                         </div>
                       )}
                     </div>

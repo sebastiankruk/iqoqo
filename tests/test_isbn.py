@@ -23,7 +23,17 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from app.utils.isbn import _lookup_google_books, _lookup_open_library, canonicalize_isbn, fetch_isbn_metadata
+from app.utils.isbn import (
+    ISBNProviderOutcome,
+    ISBNProviderOutcomeStatus,
+    _lookup_google_books,
+    _lookup_google_books_outcome,
+    _lookup_open_library,
+    _lookup_open_library_outcome,
+    canonicalize_isbn,
+    fetch_google_books_candidates,
+    fetch_isbn_metadata,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -250,9 +260,14 @@ class TestFetchIsbnMetadata:
 
     def test_google_books_hit_is_returned_directly(self):
         expected = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        gb_success = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.SUCCESS,
+            metadata=expected,
+            provider="google_books",
+        )
         with (
-            patch("app.utils.isbn._lookup_google_books", return_value=expected) as mock_gb,
-            patch("app.utils.isbn._lookup_open_library") as mock_ol,
+            patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_success) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome") as mock_ol,
         ):
             result = fetch_isbn_metadata("9780553380163")
 
@@ -262,20 +277,187 @@ class TestFetchIsbnMetadata:
 
     def test_falls_back_to_open_library_when_google_books_returns_none(self):
         expected = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        gb_no_result = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="google_books",
+        )
+        ol_success = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.SUCCESS,
+            metadata=expected,
+            provider="open_library",
+        )
         with (
-            patch("app.utils.isbn._lookup_google_books", return_value=None),
-            patch("app.utils.isbn._lookup_open_library", return_value=expected) as mock_ol,
+            patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_no_result) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_success) as mock_ol,
         ):
             result = fetch_isbn_metadata("9780553380163")
 
         assert result == expected
+        mock_gb.assert_called_once_with("9780553380163")
         mock_ol.assert_called_once_with("9780553380163")
 
     def test_returns_none_when_both_sources_fail(self):
         with (
-            patch("app.utils.isbn._lookup_google_books", return_value=None),
-            patch("app.utils.isbn._lookup_open_library", return_value=None),
+            patch("app.utils.isbn._lookup_google_books_outcome") as mock_gb_outcome,
+            patch("app.utils.isbn._lookup_open_library_outcome") as mock_ol_outcome,
         ):
+            mock_gb_outcome.return_value = MagicMock(status="no_result", metadata=None)
+            mock_ol_outcome.return_value = MagicMock(status="no_result", metadata=None)
             result = fetch_isbn_metadata("9780553380163")
 
         assert result is None
+
+    def test_google_transient_failure_falls_back_to_open_library(self):
+        """Task 3.1: Google 429/503 fallback to Open Library (The Rough Guide to the USA)."""
+        ol_meta = {
+            "Title": "The Rough Guide to the USA",
+            "Authors": ["Samantha Cook"],
+            "Source": "Open Library",
+        }
+        gb_transient = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="google_books",
+            error_detail="HTTP 503",
+        )
+        ol_success = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.SUCCESS,
+            metadata=ol_meta,
+            provider="open_library",
+        )
+
+        with (
+            patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_transient) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_success) as mock_ol,
+        ):
+            result = fetch_isbn_metadata("9781843537861", retry_delay=0)
+
+        assert result == ol_meta
+        assert result["Title"] == "The Rough Guide to the USA"
+        assert result["Source"] == "Open Library"
+        mock_gb.assert_called_once_with("9781843537861")
+        mock_ol.assert_called_once_with("9781843537861")
+
+    def test_google_definitive_no_result_does_not_retry_google(self):
+        """Task 3.2: Google returns successful empty result; verify Google is NOT retried."""
+        gb_no_result = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="google_books",
+        )
+        ol_no_result = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+        )
+
+        with (
+            patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_no_result) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_no_result) as mock_ol,
+        ):
+            result = fetch_isbn_metadata("9780553380163", retry_delay=0)
+
+        assert result is None
+        # Google should be queried exactly once (no retry on definitive no_result)
+        assert mock_gb.call_count == 1
+        mock_ol.assert_called_once_with("9780553380163")
+
+    def test_google_transient_open_library_empty_google_retry_succeeds(self):
+        """Task 3.3: Google fails transiently, OL has no result, single Google retry succeeds."""
+        gb_transient = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="google_books",
+            error_detail="HTTP 429",
+        )
+        ol_no_result = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+        )
+        gb_success = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.SUCCESS,
+            metadata={"Title": "Retry Success Book", "Authors": ["Jane Doe"], "Source": "Google Books"},
+            provider="google_books",
+        )
+
+        with (
+            patch("app.utils.isbn._lookup_google_books_outcome", side_effect=[gb_transient, gb_success]) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_no_result) as mock_ol,
+        ):
+            result = fetch_isbn_metadata("9780553380163", retry_delay=0)
+
+        assert result is not None
+        assert result["Title"] == "Retry Success Book"
+        assert mock_gb.call_count == 2
+        mock_ol.assert_called_once_with("9780553380163")
+
+    def test_both_google_attempts_fail_and_chain_continues(self):
+        """Task 3.4: Both Google attempts fail transiently, returns None so strategy continues downstream."""
+        gb_transient = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="google_books",
+            error_detail="HTTP 500",
+        )
+        ol_no_result = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="open_library",
+        )
+
+        with (
+            patch("app.utils.isbn._lookup_google_books_outcome", side_effect=[gb_transient, gb_transient]) as mock_gb,
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_no_result) as mock_ol,
+        ):
+            result = fetch_isbn_metadata("9780553380163", retry_delay=0)
+
+        assert result is None
+        assert mock_gb.call_count == 2
+        mock_ol.assert_called_once_with("9780553380163")
+
+        # Verify BookLookupStrategy moves to Allegro when fetch_isbn_metadata returns None
+        from app.strategies.book import BookLookupStrategy
+
+        strategy = BookLookupStrategy()
+        with (
+            patch("app.strategies.book.fetch_isbn_metadata", return_value=None),
+            patch("app.strategies.book.fetch_allegro_metadata") as mock_allegro,
+        ):
+            mock_allegro.return_value = {"Title": "Allegro Book", "Source": "Allegro"}
+            meta, provider = strategy.lookup("9780553380163")
+
+        assert meta is not None
+        assert provider == "allegro"
+        assert meta["data_source"] == "allegro"
+
+
+def test_google_books_outcome_scrubs_api_key_in_logs():
+    """Verify that Google Books HTTP/request error handling redacts API keys."""
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.raise_for_status.side_effect = requests.HTTPError("429 Too Many Requests", response=mock_response)
+
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
+
+    with (
+        patch.dict("os.environ", {"GOOGLE_BOOKS_API_KEY": "SECRET_KEY_12345"}),
+        patch("app.utils.isbn._make_session", return_value=mock_session),
+    ):
+        outcome = _lookup_google_books_outcome("9780553380163")
+
+    assert outcome.status == ISBNProviderOutcomeStatus.TRANSIENT_FAILURE
+    assert outcome.error_detail == "HTTP 429"
+
+
+@patch("app.utils.isbn._make_session")
+def test_fetch_google_books_candidates_url_encoding(mock_session):
+    mock_get = MagicMock()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"items": []}
+    mock_get.return_value = mock_response
+    mock_session.return_value.get = mock_get
+
+    fetch_google_books_candidates("Jaś i Małgosia", max_results=5)
+
+    # Verify that requests.get was called with correct params dictionary
+    mock_get.assert_called_once()
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.googleapis.com/books/v1/volumes"
+    assert "params" in kwargs
+    assert kwargs["params"]["q"] == "Jaś i Małgosia"
+    assert kwargs["params"]["maxResults"] == 5

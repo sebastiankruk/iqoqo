@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.14] - 2026-08-13
+
+### Added
+
+- **PostgreSQL 16 → 18 Migration Script**: Added `deploy/migrate-postgres-16-to-18.sh` for safe major-version database upgrades across `dev`, `preview`, and `prod` stacks. Uses a standalone temporary container to dump v16 data regardless of `docker-compose.yml` state, backs up the old volume, and restores into v18. Includes `--dry-run` support and rollback documentation.
+- **Database Upgrade Guide**: Added `docs/UPGRADE_POSTGRES_18.md` with step-by-step instructions for all deployment environments.
+- **Multi-Tier Rclone Cloud Backups & S3 Glacier Guide**: Updated `docs/BACKUPS.md` detailing daily backups (`RCLONE_REMOTE_FAST`), AWS S3 Glacier cold archiving (`RCLONE_REMOTE_ARCHIVE`), and shared AI cover caching (`RCLONE_COVERS_REMOTE`).
+- **SSRF-Safe HTTP Client**: Added `app/utils/http_client.py` wrapper for external resource fetching with pre-connection DNS resolution, restricted IP network blocking (localhost, RFC 1918, link-local, AWS metadata 169.254.169.254), and Host header preservation against DNS rebinding.
+- **XXE Prevention**: Integrated `defusedxml` across XML parsing utilities (`app/utils/bgg.py`, `app/api/items.py`) to safely parse untrusted XML and prevent XML External Entity (XXE) and Billion Laughs DoS attacks.
+- **Mapping Fragility Monitoring**: Added `mapping_parse_failures_total` OTel counter in `app/core/telemetry.py` to track invalid or missing format mappings in `shared/format_mappings.yaml`.
+- **FTS Resilience Testing**: Added parameterized SQL injection chaos test suite to `tests/test_core_fixes.py`.
+
+### Security
+
+- **Critical Vulnerability Eradication**: Patched SSRF in image downloading and external metadata fetching, and XXE DoS in BGG and SVG QR code parsing.
+- **Rclone Command Injection Prevention**: Hardened `subprocess.run()` calls in `app/core/tasks.py`, `app/utils/images.py`, and `app/utils/llm_covers.py` by placing flags before the POSIX `--` end-of-options delimiter to prevent path-based option injection.
+- **DNS Resolution Timeout Thread Safety**: Refactored `_resolve_with_timeout` in `app/utils/http_client.py` to replace `ThreadPoolExecutor` context manager with explicit `executor.shutdown(wait=False)` to prevent Celery worker thread starvation DoS.
+- **SSRF Redirect Type Safety**: Enforced `str()` coercion on redirect location header URLs in `safe_get()` (`app/utils/http_client.py`) to prevent `TypeError` DoS crashes on non-string redirect headers.
+
+### Changed
+
+- **Zero-Downtime Alembic Migration**: Updated `e3f891ab45c2` backfill loop to iterate by Primary Key in 1,000-row chunks with explicit `COMMIT` releases per batch on PostgreSQL to prevent row lock accumulation.
+- **Host Volume Mount Directory Pre-creation**: Updated `Makefile` `start` target to pre-create `$(HOME)/.config/rclone` before Docker Compose execution, preventing root-owned directory creation.
+- **E2E Playwright Mocking**: Added route interception for `/api/auth/allegro/**` in `frontend/__tests__/e2e/manual_verification_integration.spec.ts` to prevent CI test hangs during Allegro device flow polling.
+- **PostgreSQL**: Upgraded from `16-alpine` to `18-alpine` in `docker-compose.yml` and CI workflows.
+- **Redis**: Upgraded from `7-alpine` to `8-alpine` in `docker-compose.yml`.
+
+### Fixed
+
+- **Google Books Title Lookup Disambiguation**: Fixed a bug where scanning by title would only show a single candidate or bypass disambiguation entirely. The URL encoding in `fetch_google_books_candidates` was corrected, and the length check for candidates was fixed.
+- **Missing Cover / Metadata on Added Items**: Fixed an issue where adding an item via title lookup would perform a secondary search using a fallback barcode, resulting in a loss of the original cover and ISBN data. The scanner API now respects the metadata payload forwarded by the `SuccessCard` component.
+- **Cover Refetch Task Server Error & Infinite Polling**: Resolved a `TypeError` in the celery task scheduler where `user_id` was passed both positionally and as a keyword argument, preventing the cover refetch task from starting. Additionally, updated `get_cover_status` to return `200 OK` on task failure, breaking the frontend out of an infinite polling loop that caused the UI to show a perpetual waiting indicator.
+- **Scanner Telemetry Audit Blind Spot**: Replaced silent telemetry drop for barcodes exceeding 128 characters with auditable rejection recording (`status='rejected_oversized'`) and truncated barcode logging in `app/api/scanner.py`.
+- **Scanner Cache Discard for Corrupted Manifestations**: Updated `lookup_barcode_preview` in `app/api/scanner.py` to discard database cache hits if normalized manifestation metadata resolves to "Unknown Title" with no author. Automatically falls through to external metadata providers (Google Books, Open Library) to fetch rich metadata while preserving existing manifestation IDs.
+- **Transient Provider Retry**: Added outcome-based transient failure retry logic to `fetch_isbn_metadata` (`app/utils/isbn.py`) for Google Books and Open Library fallbacks.
+
 ## [0.7.13] - 2026-07-31
 
 ### Added
