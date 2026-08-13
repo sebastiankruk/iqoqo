@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.14] - 2026-08-08
 
+### Fixed
+
+- **Scanner Cache Discard for Corrupted Manifestations**: Updated `lookup_barcode_preview` in `app/api/scanner.py` to discard database cache hits if normalized manifestation metadata resolves to "Unknown Title" with no author. Automatically falls through to external metadata providers (Google Books, Open Library) to fetch rich metadata while preserving existing manifestation IDs.
+- **Transient Provider Retry**: Added outcome-based transient failure retry logic to `fetch_isbn_metadata` (`app/utils/isbn.py`) for Google Books and Open Library fallbacks.
+
 ### Added
 
 - **PostgreSQL 16 → 18 Migration Script**: Added `deploy/migrate-postgres-16-to-18.sh` for safe major-version database upgrades across `dev`, `preview`, and `prod` stacks. Uses a standalone temporary container to dump v16 data regardless of `docker-compose.yml` state, backs up the old volume, and restores into v18. Includes `--dry-run` support and rollback documentation.

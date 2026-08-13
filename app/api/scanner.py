@@ -203,6 +203,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 if not m.meta:
                     continue
                 cand = dict(m.meta)
+                cand = _normalize_preview_meta(cand, format_hint)
                 cand["manifestation_id"] = m.id
                 cand["already_in_db"] = True
                 cand["already_in_collection"] = m.id in owned_ids
@@ -210,21 +211,28 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 candidates.append(cand)
 
         data = dict(manifestation.meta)
-        data["manifestation_id"] = manifestation.id
-        data["already_in_db"] = True
-        # Show the original human-readable query, not the internal hash
-        data["identifier"] = query
-        if candidates:
-            data["candidates"] = candidates
+        data = _normalize_preview_meta(data, format_hint)
 
-        # Check if user owns it
-        user_id = getattr(g, "user_id", None)
-        item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
-        data["already_in_collection"] = item is not None
-        data["item_id"] = item.id if item else None
+        # If the DB metadata is hopelessly broken (legacy ingest bug),
+        # pretend we didn't find it so we can re-fetch rich data from external APIs.
+        if data.get("title") == "Unknown Title" and not data.get("author"):
+            manifestation = None
+        else:
+            data["manifestation_id"] = manifestation.id
+            data["already_in_db"] = True
+            # Show the original human-readable query, not the internal hash
+            data["identifier"] = query
+            if candidates:
+                data["candidates"] = candidates
 
-        _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
-        return jsonify({"success": True, "data": data, "error": None}), 200
+            # Check if user owns it
+            user_id = getattr(g, "user_id", None)
+            item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
+            data["already_in_collection"] = item is not None
+            data["item_id"] = item.id if item else None
+
+            _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
+            return jsonify({"success": True, "data": data, "error": None}), 200
 
     barcode = query if not is_barcode else canonical_id
 
