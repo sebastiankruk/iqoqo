@@ -14,6 +14,11 @@ Talk like caveman
 - **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation or notes to sync the persistent graph:
   `mempalace mine .context/notes/` (or the specific file modified)
 
+### 🕸️ CodeGraph CLI Dependency Mapping Directive
+- **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
+- **Pre-Refactor Tracing (OpenSpec Explore)**: During the OpenSpec `explore` phase or before modifying cross-cutting entities (e.g., SQLAlchemy ORM models, Flask scanner API routes, React hooks), run an on-demand CLI query to map symbol dependencies:
+  `codegraph impact <SymbolName>` (or `codegraph graph <path/to/file.py>`)
+- **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 # iqoqo Global Project Rules
 
