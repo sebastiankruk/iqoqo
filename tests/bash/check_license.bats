@@ -80,3 +80,33 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" =~ "All source files contain the correct license header" ]]
 }
+
+@test "check_license.sh skips files in excluded paths" {
+  mkdir -p ".opencode/plugins"
+  mkdir -p "frontend/public"
+
+  cat << 'EOF' > ".opencode/plugins/test_plugin.js"
+// third party plugin without copyright header
+console.log("hello");
+EOF
+
+  cat << 'EOF' > "frontend/public/test_asset.js"
+// public asset without copyright header
+console.log("public");
+EOF
+
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/git"
+#!/bin/bash
+if [[ "$1" == "ls-files" ]]; then
+  echo "${TEST_TEMP_DIR}/file_ok.py"
+  echo ".opencode/plugins/test_plugin.js"
+  echo "frontend/public/test_asset.js"
+fi
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/git"
+
+  run bash scripts/check_license.sh
+  rm -f ".opencode/plugins/test_plugin.js" "frontend/public/test_asset.js"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "All source files contain the correct license header" ]]
+}
