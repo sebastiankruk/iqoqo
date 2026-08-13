@@ -25,7 +25,13 @@ The system architecture includes:
 * **Storage Tier:** PostgreSQL database using strictly separated schemas for environment partitioning and performance-tuned tables handling indexing optimizations (`tsvector`).
 * **Asynchronous Caching & Queues:** Highly available Redis memory architectures backing distributed worker processes powered by Celery.
 * **Automation & Cloud Sync:** Automated shell scripts executing atomic database dumps paired with compressed tarball asset packaging dispatched securely to S3-compatible cloud storage layers.
-* Current version **0.7.0**, targeting **0.8.0** (Federation & Semantic Web) and **0.9.0** (AI/YOLO).
+## Current State
+
+We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
+
+## Upcoming (v0.7.15 & Beyond)
+
+Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
 
 ## Operational Standards & Security Hardening
 
@@ -68,7 +74,8 @@ The system architecture includes:
 
 ### 6. Milestone Targets
 
-* **Current Baseline/Target (v0.7.0):** Stabilize production pipelines around multi-tiered Docker containers, S3 data synchronization, traffic rate-limiting, and automated pipeline image builds.
+* **Current Baseline/Target (v0.7.14):** Stabilize production pipelines around PostgreSQL 18, Redis 8, multi-tiered Docker containers, S3 Glacier cold archiving, traffic rate-limiting, and automated pipeline image builds.
+* **Immediate Target (v0.7.15):** Support dashboard metric scope isolation, responsive layout rendering, and scanner visual waiting states.
 * **Horizon Targets (v0.8.0):** Prepare proxy profiles and traffic routers for ActivityPub data federation networks.
 * **Future Horizon (v0.9.0):** Design computational infrastructure scalability to back discrete hardware resources for YOLO image processing jobs.
 

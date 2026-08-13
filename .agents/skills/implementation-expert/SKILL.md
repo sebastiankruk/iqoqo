@@ -16,11 +16,11 @@ The project is built on top of the FRBR/FRBRoo ontology. The tech stack consists
 
 ## Current State
 
-We have successfully released **v0.7.0**. The system fully supports the ingestion and indexing of Books, Music, Video, and Board Games using external metadata APIs via strict Strategy patterns, rate limiters, and S3 cloud backups. In our v0.7.0 release, we successfully implemented **Social, Discovery & Organization** core features: collection and wishlist sharing, hidden tags, granular taxonomies, and advanced lending tracking workflows.
+We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
 
-## Upcoming (v0.8.0 & Beyond)
+## Upcoming (v0.7.15 & Beyond)
 
-Our immediate goal for **v0.8.0** is **Federation & Semantic Web Integration**. We are focusing on ActivityPub integration to architecture a federated iqoqo network, and the deep semantic exposure of public catalog profiles as Linked Open Data (RDF / JSON-LD). Subsequent milestones involve advanced AI features like YOLO "Magic Shelf" scanning (**v0.9.0**).
+Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
 
 ## Core System Requirements
 
@@ -51,29 +51,32 @@ This skill governs codebase changes. It handles provided code OR generates requi
 ## Implementation Workflow
 
 ### Phase 1: Planning (If no code provided, provided code is incomplete or misaligned)
+
 - **Explore**: Search `app/api/`, `app/core/`, `app/db/`, and `frontend/components/` for similar patterns.
 - **Draft**: Create incremental snippets (patches) matching explored patterns.
 - **Markers**: Use `Add to {path} after {context}:` to define insertion points.
 
 ### Phase 2: Execution
+
 - **Apply**: Use `replace_file_content` or `multi_replace_file_content` for snippets or full files.
 - **QA**: Run `make lint` and `make test`. If fail, fix code until green.
 - **Cleanup**: Auto-fix lints with `ruff check --fix` or `black` without changing logic.
 - **Git**: Conclude with `git add` and `git commit` using Conventional Commits.
 
-
 ### Phase 3: Linting and Testing
+
 - **Linting**: `make lint` should not produce errors
 - **Test** `make test` should pass.
 
 ### Phase 4: Human verification
+
 - **Plan**: Provide plan for manual verification of changes introduced in this batch
 - **Context**: Use development notes and roadmap documents (in `.context/notes/`) to highlight what needs to be verified
 - **Update**: When human confirms all tests pass - you can tick corresponding checkboxes in development plan and roadmap documents to mark them as completed. If something is missing - ask human for clarification before continuing.
 - **CHANGELOG**: Update CHANGELOG.md to reflect introduced changes; use current version number.
 
-
 ## Copyright Header
+
 ```python
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #

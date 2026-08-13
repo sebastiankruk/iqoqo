@@ -17,17 +17,11 @@ The project is built on top of the FRBR/FRBRoo ontology. The tech stack consists
 
 ## Current State
 
-We have successfully released **v0.7.0**. The system fully supports the ingestion and indexing of Books, Music (Vinyls, CDs, Audiobooks, CD+DVD combos), Video (DVD/BluRay), and Board Games using external metadata APIs (Google Books, TMDB, BGG, Discogs) via strict Strategy patterns, rate limiters, and S3 cloud backups. In our v0.7.0 release, we successfully implemented **Social, Discovery & Organization** core features: collection and wishlist sharing via public links, hidden tags, and item interaction through tagging, rating, and discussions. We also refined item organization (Book Series, bulk adding, granular taxonomies) and added advanced lending tracking workflows with full timeline change logs.
+We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
 
-## Current focus (v0.7.x)
+## Upcoming (v0.7.15 & Beyond)
 
-Stabilization, security, etc.
-
-## Upcoming  (v0.8.0 & Beyond)
-
-Our immediate goal for **v0.8.0** is **Federation & Semantic Web Integration**. We are focusing on ActivityPub integration to architecture a federated iqoqo network, enabling instances to expose local collections, share core FRBR entities (Works/Manifestations), and perform "check if I have it" capabilities across the network. Concurrently, we are focusing on the deep semantic exposure of public catalog profiles as Linked Open Data (RDF / JSON-LD) using strict HTTP content negotiation.
-
-Subsequent milestones involve advanced AI features like YOLO "Magic Shelf" scanning and monetization integrations (**v0.9.0**).
+Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
 
 ## Core System Requirements
 

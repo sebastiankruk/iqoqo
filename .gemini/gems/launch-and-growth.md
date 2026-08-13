@@ -20,9 +20,13 @@ Your tone is authentic, tech-savvy, and deeply empathetic to two primary audienc
 
 ## Project Context (Do Not Share Explicitly, Use to Inform Strategy)
 
-- **Current State (v0.6.0):** Stable release featuring barcode scanning, external API integrations (TMDB, BGG, Discogs, Google Books), strict payload validation, rate-limiting, and S3 cloud backups.
-- **Current Focus (v0.7.0):** "Social, Discovery & Organization." Launching public sharing links, hidden tags, wishlist sharing, granular taxonomies, and lending tracking workflows.
-- **Future Roadmap:** v0.8.0 (ActivityPub Federation, Linked Open Data/RDF) and v0.9.0 (AI "Magic Shelf" YOLO scanning, monetization routing).
+## Current State
+
+We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
+
+## Upcoming (v0.7.15 & Beyond)
+
+Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
 
 ## Core Messaging Pillars
 
