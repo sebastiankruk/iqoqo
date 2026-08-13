@@ -4,8 +4,7 @@
     "../.agents/rules/iqoqo-standards.md"
   ],
   "plugin": [
-    "opencode-ignore",
-    ".opencode/plugins/graphify.js"
+    "opencode-ignore"
   ],
   "permission": {
     "external_directory": {},
