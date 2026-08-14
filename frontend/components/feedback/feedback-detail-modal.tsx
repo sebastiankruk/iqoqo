@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
+import { resolveApiUrl } from "@/lib/utils";
 import {
   AlertCircle,
   Bug,
@@ -226,22 +227,26 @@ export function FeedbackDetailModal({
                 Attachments ({item.attachments.length})
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {item.attachments.map((url, idx) => (
-                  <a
-                    key={idx}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative aspect-video rounded-md border border-border overflow-hidden bg-muted/40 hover:ring-2 hover:ring-primary transition-all"
-                  >
-                    <Image
-                      src={url}
-                      alt={`Attachment ${idx + 1}`}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-200"
-                    />
-                  </a>
-                ))}
+                {item.attachments.map((url, idx) => {
+                  const resolvedUrl = resolveApiUrl(url);
+                  return (
+                    <a
+                      key={idx}
+                      href={resolvedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative aspect-video rounded-md border border-border overflow-hidden bg-muted/40 hover:ring-2 hover:ring-primary transition-all"
+                    >
+                      <Image
+                        src={resolvedUrl}
+                        alt={`Attachment ${idx + 1}`}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -118,4 +118,25 @@ describe("FeedbackDetailModal", () => {
       expect(onUpdated).toHaveBeenCalled();
     });
   });
+
+  it("renders image attachments when provided", () => {
+    const itemWithAttachments = {
+      ...mockItem,
+      attachments: ["/static/gallery/feedback-screenshot1.jpg", "/static/gallery/feedback-screenshot2.jpg"],
+    };
+
+    render(
+      <FeedbackDetailModal
+        item={itemWithAttachments}
+        open={true}
+        onOpenChange={vi.fn()}
+        isAdmin={false}
+        currentUserId="user-123"
+      />
+    );
+
+    expect(screen.getByText("Attachments (2)")).toBeInTheDocument();
+    const images = screen.getAllByRole("img");
+    expect(images.length).toBeGreaterThanOrEqual(2);
+  });
 });
