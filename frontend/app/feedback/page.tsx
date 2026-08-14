@@ -18,6 +18,8 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { apiClient } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/hooks";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
+import { Footer } from "@/components/dashboard/footer";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
 import { FeedbackDetailModal, type FeedbackItemDetail } from "@/components/feedback/feedback-detail-modal";
 import {
@@ -154,8 +156,9 @@ export default function FeedbackPage() {
   const hasActiveFilters = Boolean(statusFilter || typeFilter || searchQuery);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <Navbar />
+      <main className="flex-1 mx-auto max-w-7xl w-full px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-6">
           <div>
@@ -442,6 +445,8 @@ export default function FeedbackPage() {
           </section>
         </div>
       </main>
+
+      <Footer />
 
       {/* Creation Modal */}
       <FeedbackModal open={createModalOpen} onOpenChange={setCreateModalOpen} onSuccess={() => void fetchTickets()} />

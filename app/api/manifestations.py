@@ -62,7 +62,8 @@ def get_manifestations() -> tuple[Response, int]:
     genres_list = parse_csv_param(genres_filter)
     publishers_list = parse_csv_param(publishers_filter)
     statuses_list = parse_csv_param(statuses_filter)
-    ownership_list = [value for value in parse_csv_param(ownership_filter) if value in {"owned", "not_owned"}]
+    raw_ownership = parse_csv_param(ownership_filter)
+    ownership_list = [value for value in raw_ownership if value in {"owned", "not_owned"}] if raw_ownership else None
 
     try:
         page = int(page_param)
