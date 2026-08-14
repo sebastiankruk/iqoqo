@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-"""Tests for Manifestation ownership facet filtering."""
+"""Tests for FRBR Ownership facet filtering across Works, Expressions, and Manifestations."""
 
 import jwt
 import pytest
@@ -30,24 +30,32 @@ def ownership_setup(app):
         db.session.add(user)
         db.session.flush()
 
-        work = Work(title="Ownership Test Work")
-        db.session.add(work)
+        # Work 1 (Owned): Has an owned manifestation
+        work_owned = Work(title="Owned Work Alpha")
+        db.session.add(work_owned)
         db.session.flush()
 
-        expr = Expression(work_id=work.id, content_type="text", language="en")
-        db.session.add(expr)
+        expr_owned = Expression(work_id=work_owned.id, content_type="text", language="en")
+        db.session.add(expr_owned)
         db.session.flush()
 
-        # Manifestation 1: Owned by user
-        m_owned = Manifestation(expression_id=expr.id, isbn13="9780000000001", meta={})
+        m_owned = Manifestation(expression_id=expr_owned.id, isbn13="9780000000001", meta={"format": "Paperback"})
         db.session.add(m_owned)
         db.session.flush()
 
         item = Item(manifestation_id=m_owned.id, owner_id=user.id, status="available")
         db.session.add(item)
 
-        # Manifestation 2: Not owned by user
-        m_not_owned = Manifestation(expression_id=expr.id, isbn13="9780000000002", meta={})
+        # Work 2 (Not Owned): Has no owned item
+        work_unowned = Work(title="Unowned Work Beta")
+        db.session.add(work_unowned)
+        db.session.flush()
+
+        expr_unowned = Expression(work_id=work_unowned.id, content_type="text", language="en")
+        db.session.add(expr_unowned)
+        db.session.flush()
+
+        m_not_owned = Manifestation(expression_id=expr_unowned.id, isbn13="9780000000002", meta={"format": "Hardcover"})
         db.session.add(m_not_owned)
 
         db.session.commit()
@@ -56,6 +64,10 @@ def ownership_setup(app):
         return {
             "user_id": str(user.id),
             "headers": {"Authorization": f"Bearer {token}"},
+            "owned_work_id": work_owned.id,
+            "unowned_work_id": work_unowned.id,
+            "owned_expr_id": expr_owned.id,
+            "unowned_expr_id": expr_unowned.id,
             "owned_m_id": m_owned.id,
             "not_owned_m_id": m_not_owned.id,
         }
@@ -95,3 +107,51 @@ def test_manifestations_filter_by_both(client, ownership_setup):
     ids = [item["id"] for item in resp.json["data"]]
     assert ownership_setup["owned_m_id"] in ids
     assert ownership_setup["not_owned_m_id"] in ids
+
+
+def test_works_shelf_filter_by_ownership(client, ownership_setup):
+    """Verify /works/shelf responds correctly to ownership filters."""
+    # Default returns both
+    resp_all = client.get("/api/works/shelf", headers=ownership_setup["headers"])
+    assert resp_all.status_code == 200
+    work_ids_all = [w["work_id"] for w in resp_all.json["data"]]
+    assert ownership_setup["owned_work_id"] in work_ids_all
+    assert ownership_setup["unowned_work_id"] in work_ids_all
+
+    # Owned filter
+    resp_owned = client.get("/api/works/shelf?ownership=owned", headers=ownership_setup["headers"])
+    assert resp_owned.status_code == 200
+    work_ids_owned = [w["work_id"] for w in resp_owned.json["data"]]
+    assert ownership_setup["owned_work_id"] in work_ids_owned
+    assert ownership_setup["unowned_work_id"] not in work_ids_owned
+
+    # Not owned filter
+    resp_unowned = client.get("/api/works/shelf?ownership=not_owned", headers=ownership_setup["headers"])
+    assert resp_unowned.status_code == 200
+    work_ids_unowned = [w["work_id"] for w in resp_unowned.json["data"]]
+    assert ownership_setup["owned_work_id"] not in work_ids_unowned
+    assert ownership_setup["unowned_work_id"] in work_ids_unowned
+
+
+def test_expressions_shelf_filter_by_ownership(client, ownership_setup):
+    """Verify /expressions/shelf responds correctly to ownership filters."""
+    # Default returns both
+    resp_all = client.get("/api/expressions/shelf", headers=ownership_setup["headers"])
+    assert resp_all.status_code == 200
+    expr_ids_all = [e["expression_id"] for e in resp_all.json["data"]]
+    assert ownership_setup["owned_expr_id"] in expr_ids_all
+    assert ownership_setup["unowned_expr_id"] in expr_ids_all
+
+    # Owned filter
+    resp_owned = client.get("/api/expressions/shelf?ownership=owned", headers=ownership_setup["headers"])
+    assert resp_owned.status_code == 200
+    expr_ids_owned = [e["expression_id"] for e in resp_owned.json["data"]]
+    assert ownership_setup["owned_expr_id"] in expr_ids_owned
+    assert ownership_setup["unowned_expr_id"] not in expr_ids_owned
+
+    # Not owned filter
+    resp_unowned = client.get("/api/expressions/shelf?ownership=not_owned", headers=ownership_setup["headers"])
+    assert resp_unowned.status_code == 200
+    expr_ids_unowned = [e["expression_id"] for e in resp_unowned.json["data"]]
+    assert ownership_setup["owned_expr_id"] not in expr_ids_unowned
+    assert ownership_setup["unowned_expr_id"] in expr_ids_unowned

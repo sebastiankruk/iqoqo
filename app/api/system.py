@@ -188,6 +188,7 @@ def get_faceted_stats():
     genres_str = request.args.get("genres")
     publishers_str = request.args.get("publishers")
     statuses_str = request.args.get("statuses")
+    ownership_str = request.args.get("ownership")
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
@@ -202,6 +203,8 @@ def get_faceted_stats():
     genres_list = parse_csv_param(genres_str)
     publishers_list = parse_csv_param(publishers_str)
     statuses_list = parse_csv_param(statuses_str)
+    raw_ownership = parse_csv_param(ownership_str)
+    ownership_list = [v for v in raw_ownership if v in {"owned", "not_owned"}] if raw_ownership else None
 
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,
@@ -216,6 +219,7 @@ def get_faceted_stats():
         missing_cover=missing_cover,
         missing_id=missing_id,
         view=view,
+        ownership=ownership_list,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 

@@ -49,7 +49,7 @@ vi.mock("next-intl", () => ({
           publicProfile: "Public Profile",
           profileSettings: "Profile Settings",
           manageCollections: "Manage Collections",
-          myHelpRequests: "My Help Requests",
+          helpAndFeedback: "Help & Feedback",
           adminConfiguration: "Admin Configuration",
           logOut: "Log out",
           home: "Home",
@@ -81,8 +81,6 @@ vi.mock("@/lib/api/escalations", () => ({
   useCreateEscalation: vi.fn(),
   useEscalationQueue: vi.fn(),
 }));
-
-import { useMyEscalations } from "@/lib/api/escalations";
 
 describe("Navbar", () => {
   beforeEach(() => {
@@ -175,76 +173,21 @@ describe("Navbar Auth State", () => {
     expect(await screen.findByText("Admin Configuration")).toBeInTheDocument();
   });
 
-  // ── 6.5 My Help Requests link with pending badge ──────────────────────
-  it("shows My Help Requests link with pending count badge", async () => {
+  // ── 6.5 Help & Feedback link in user menu ──────────────────────
+  it("shows Help & Feedback link in user menu", async () => {
     const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "user@example.com", display_name: "User", roles: ["user"] },
       isLoading: false,
     });
 
-    vi.mocked(useMyEscalations).mockReturnValue({
-      data: [
-        { id: 1, status: "pending" },
-        { id: 2, status: "pending" },
-      ],
-      isLoading: false,
-    } as unknown as ReturnType<typeof useMyEscalations>);
-
     render(<Navbar />);
 
     const avatarBtn = screen.getByLabelText("User menu");
     await user.click(avatarBtn);
 
-    expect(await screen.findByText("My Help Requests")).toBeInTheDocument();
-    // Badge with count "2" should be present
-    expect(screen.getByText("2")).toBeInTheDocument();
-  });
-
-  // ── 6.6 My Help Requests link no badge when zero ──────────────────────
-  it("shows My Help Requests link without badge when zero pending", async () => {
-    const user = userEvent.setup();
-    (useProfile as Mock).mockReturnValue({
-      data: { email: "user@example.com", display_name: "User", roles: ["user"] },
-      isLoading: false,
-    });
-
-    vi.mocked(useMyEscalations).mockReturnValue({
-      data: [],
-      isLoading: false,
-    } as unknown as ReturnType<typeof useMyEscalations>);
-
-    render(<Navbar />);
-
-    const avatarBtn = screen.getByLabelText("User menu");
-    await user.click(avatarBtn);
-
-    expect(await screen.findByText("My Help Requests")).toBeInTheDocument();
-    // No badge number should be present
-    expect(screen.queryByText(/^\d+$/)).toBeNull();
-  });
-
-  // ── 6.7 My Help Requests link href ─────────────────────────────────────
-  it("My Help Requests link points to correct URL", async () => {
-    const user = userEvent.setup();
-    (useProfile as Mock).mockReturnValue({
-      data: { email: "user@example.com", display_name: "User", roles: ["user"] },
-      isLoading: false,
-    });
-
-    vi.mocked(useMyEscalations).mockReturnValue({
-      data: [],
-      isLoading: false,
-    } as unknown as ReturnType<typeof useMyEscalations>);
-
-    render(<Navbar />);
-
-    const avatarBtn = screen.getByLabelText("User menu");
-    await user.click(avatarBtn);
-
-    expect(await screen.findByText("My Help Requests")).toBeInTheDocument();
-    // Find the link element wrapping "My Help Requests"
-    const helpLink = screen.getByText("My Help Requests").closest("a");
-    expect(helpLink).toHaveAttribute("href", "/admin/settings?tab=profile#help-requests");
+    expect(await screen.findByText("Help & Feedback")).toBeInTheDocument();
+    const helpLink = screen.getByText("Help & Feedback").closest("a");
+    expect(helpLink).toHaveAttribute("href", "/feedback");
   });
 });

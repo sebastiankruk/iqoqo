@@ -335,7 +335,8 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     statusFilters.length > 0 ? statusFilters : undefined,
-    formatFilters.length > 0 ? formatFilters : undefined
+    formatFilters.length > 0 ? formatFilters : undefined,
+    ownershipFilters.length > 0 ? ownershipFilters : undefined
   );
   const {
     data: exprsData,
@@ -353,7 +354,8 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     statusFilters.length > 0 ? statusFilters : undefined,
-    formatFilters.length > 0 ? formatFilters : undefined
+    formatFilters.length > 0 ? formatFilters : undefined,
+    ownershipFilters.length > 0 ? ownershipFilters : undefined
   );
 
   const filtersForFacets = useMemo(() => {

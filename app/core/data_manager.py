@@ -527,6 +527,7 @@ class DataManager:
         missing_cover: bool = False,
         missing_id: bool = False,
         target_entity: str = "items",
+        ownership: list[str] | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -666,6 +667,32 @@ class DataManager:
             status_conds = [Item.status.in_(statuses), Item.collection_status.in_(statuses)]
             base_query = base_query.where(or_(*status_conds))
 
+        if ownership and owner_id and target_entity in ("works", "expressions", "manifestations"):
+            ownership_conds: list[Any] = []
+            if target_entity == "works":
+                owned_exists = (
+                    select(Item.id)
+                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .where(Expression.work_id == Work.id, Item.owner_id == owner_id)
+                    .exists()
+                )
+            elif target_entity == "expressions":
+                owned_exists = (
+                    select(Item.id)
+                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                    .where(Manifestation.expression_id == Expression.id, Item.owner_id == owner_id)
+                    .exists()
+                )
+            else:  # manifestations
+                owned_exists = select(Item.id).where(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id).exists()
+            if "owned" in ownership:
+                ownership_conds.append(owned_exists)
+            if "not_owned" in ownership:
+                ownership_conds.append(~owned_exists)
+            if ownership_conds:
+                base_query = base_query.where(or_(*ownership_conds))
+
         return base_query.subquery()
 
     @staticmethod
@@ -683,6 +710,7 @@ class DataManager:
         missing_cover: bool = False,
         missing_id: bool = False,
         view: str = "items",
+        ownership: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return cross-filtered per-facet counts for sidebar faceted navigation.
 
@@ -784,6 +812,7 @@ class DataManager:
                 missing_cover=missing_cover,
                 missing_id=missing_id,
                 target_entity=target_entity,
+                ownership=ownership,
             )
 
         cat_subq = _subq(exclude_category=True)

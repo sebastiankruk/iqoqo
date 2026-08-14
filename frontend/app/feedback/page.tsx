@@ -15,7 +15,8 @@
 //
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/hooks";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -76,26 +77,22 @@ export default function FeedbackPage() {
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
 
-  const [items, setItems] = useState<FeedbackItemDetail[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pagination, setPagination] = useState<PaginationData>({
-    page: 1,
-    per_page: 15,
-    total: 0,
-    pages: 1,
-  });
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<FeedbackItemDetail | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
-    try {
+  const {
+    data: feedbackData,
+    isLoading: loading,
+    refetch: fetchTickets,
+  } = useQuery({
+    queryKey: ["feedback", statusFilter, typeFilter, currentPage],
+    queryFn: async () => {
       const response = await apiClient.get<{
         data: FeedbackItemDetail[];
         pagination?: PaginationData;
@@ -107,28 +104,20 @@ export default function FeedbackPage() {
           per_page: 15,
         },
       });
+      return response.data;
+    },
+  });
 
-      setItems(response.data.data);
-      if (response.data.pagination) {
-        setPagination(response.data.pagination);
-      } else {
-        setPagination({
-          page: 1,
-          per_page: 15,
-          total: response.data.data.length,
-          pages: 1,
-        });
-      }
-    } catch (err) {
-      console.error("Failed to load feedback tickets:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, typeFilter, currentPage]);
-
-  useEffect(() => {
-    void fetchTickets();
-  }, [fetchTickets]);
+  const items = useMemo(() => feedbackData?.data ?? [], [feedbackData]);
+  const pagination: PaginationData = useMemo(() => {
+    if (feedbackData?.pagination) return feedbackData.pagination;
+    return {
+      page: 1,
+      per_page: 15,
+      total: feedbackData?.data?.length ?? 0,
+      pages: 1,
+    };
+  }, [feedbackData]);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
