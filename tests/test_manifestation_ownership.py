@@ -39,7 +39,7 @@ def ownership_setup(app):
         db.session.flush()
 
         # Manifestation 1: Owned by user
-        m_owned = Manifestation(expression_id=expr.id, title="Owned Book", isbn13="9780000000001", meta={})
+        m_owned = Manifestation(expression_id=expr.id, isbn13="9780000000001", meta={})
         db.session.add(m_owned)
         db.session.flush()
 
@@ -47,7 +47,7 @@ def ownership_setup(app):
         db.session.add(item)
 
         # Manifestation 2: Not owned by user
-        m_not_owned = Manifestation(expression_id=expr.id, title="Not Owned Book", isbn13="9780000000002", meta={})
+        m_not_owned = Manifestation(expression_id=expr.id, isbn13="9780000000002", meta={})
         db.session.add(m_not_owned)
 
         db.session.commit()
