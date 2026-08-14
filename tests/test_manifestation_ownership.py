@@ -65,7 +65,7 @@ def test_manifestations_default_returns_both_owned_and_not_owned(client, ownersh
     """By default (no ownership filter), GET /api/manifestations must return all items (both owned and unowned)."""
     resp = client.get("/api/manifestations?page=1&limit=20", headers=ownership_setup["headers"])
     assert resp.status_code == 200
-    ids = [item["id"] for item in resp.json["data"]["items"]]
+    ids = [item["id"] for item in resp.json["data"]]
     assert ownership_setup["owned_m_id"] in ids
     assert ownership_setup["not_owned_m_id"] in ids
 
@@ -74,7 +74,7 @@ def test_manifestations_filter_by_owned(client, ownership_setup):
     """When ownership=owned is passed, only owned manifestations are returned."""
     resp = client.get("/api/manifestations?page=1&limit=20&ownership=owned", headers=ownership_setup["headers"])
     assert resp.status_code == 200
-    ids = [item["id"] for item in resp.json["data"]["items"]]
+    ids = [item["id"] for item in resp.json["data"]]
     assert ownership_setup["owned_m_id"] in ids
     assert ownership_setup["not_owned_m_id"] not in ids
 
@@ -83,7 +83,7 @@ def test_manifestations_filter_by_not_owned(client, ownership_setup):
     """When ownership=not_owned is passed, only unowned manifestations are returned."""
     resp = client.get("/api/manifestations?page=1&limit=20&ownership=not_owned", headers=ownership_setup["headers"])
     assert resp.status_code == 200
-    ids = [item["id"] for item in resp.json["data"]["items"]]
+    ids = [item["id"] for item in resp.json["data"]]
     assert ownership_setup["owned_m_id"] not in ids
     assert ownership_setup["not_owned_m_id"] in ids
 
@@ -92,6 +92,6 @@ def test_manifestations_filter_by_both(client, ownership_setup):
     """When ownership=owned,not_owned is passed, both are returned."""
     resp = client.get("/api/manifestations?page=1&limit=20&ownership=owned,not_owned", headers=ownership_setup["headers"])
     assert resp.status_code == 200
-    ids = [item["id"] for item in resp.json["data"]["items"]]
+    ids = [item["id"] for item in resp.json["data"]]
     assert ownership_setup["owned_m_id"] in ids
     assert ownership_setup["not_owned_m_id"] in ids
