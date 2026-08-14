@@ -182,6 +182,7 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
     description = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), nullable=False, default="new", index=True)
     attachments = db.Column(JSONB if _USE_PG else db.JSON, nullable=False, default=list)
+    comments = db.Column(JSONB if _USE_PG else db.JSON, nullable=False, default=list)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
@@ -193,10 +194,13 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
             "id": self.id,
             "user_id": str(self.user_id),
             "user_display_name": self.user.display_name if self.user else "Anonymous",
+            "user_email": self.user.email if self.user else None,
             "feedback_type": self.feedback_type,
             "description": self.description,
             "status": self.status,
             "attachments": self.attachments or [],
+            "comments": self.comments or [],
+            "comments_count": len(self.comments or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -360,13 +364,7 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
             or (
                 "manifestation"
                 if self.manifestation_id
-                else "item"
-                if self.item_id
-                else "work"
-                if self.work_id
-                else "expression"
-                if self.expression_id
-                else None
+                else "item" if self.item_id else "work" if self.work_id else "expression" if self.expression_id else None
             ),
             "field_name": self.field_name,
             "current_value": self.current_value,

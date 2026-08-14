@@ -25,6 +25,7 @@ def upgrade():
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("status", sa.String(20), server_default="new", nullable=False),
         sa.Column("attachments", sa.JSON(), nullable=False),
+        sa.Column("comments", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["auth.users.id"], ondelete="CASCADE"),

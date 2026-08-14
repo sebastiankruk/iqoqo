@@ -246,20 +246,9 @@ export function Navbar() {
                     >
                       <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setFeedbackOpen(true)}
-                      className="cursor-pointer rounded-md py-2 px-3 text-sm"
-                    >
-                      <HelpCircle className="mr-2 h-4 w-4" /> Send feedback
-                    </DropdownMenuItem>
                     <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                       <Link href="/feedback">
-                        <Check className="mr-2 h-4 w-4" /> Feedback tickets
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                      <Link href="/admin/settings?tab=profile#help-requests">
-                        <HelpCircle className="mr-2 h-4 w-4" /> {t("myHelpRequests")}
+                        <HelpCircle className="mr-2 h-4 w-4" /> {t("helpAndFeedback")}
                         {pendingCount > 0 && (
                           <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {pendingCount}
