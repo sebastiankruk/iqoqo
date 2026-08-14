@@ -105,7 +105,8 @@ export const queryKeys = {
     collections?: string[],
     genres?: string[],
     publishers?: string[],
-    statuses?: string[]
+    statuses?: string[],
+    ownership?: string[]
   ) =>
     [
       "manifestations",
@@ -119,6 +120,7 @@ export const queryKeys = {
       genres?.join(",") ?? "",
       publishers?.join(",") ?? "",
       statuses?.join(",") ?? "",
+      ownership?.join(",") ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   worksShelf: (
@@ -424,6 +426,7 @@ export function useManifestations(
  * @param genres - Optional genres filter
  * @param publishers - Optional publishers filter
  * @param statuses - Optional statuses filter
+ * @param ownership - Optional ownership filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
  */
 export function useInfiniteManifestations(
@@ -438,7 +441,8 @@ export function useInfiniteManifestations(
   collections?: string[],
   genres?: string[],
   publishers?: string[],
-  statuses?: string[]
+  statuses?: string[],
+  ownership?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -452,11 +456,13 @@ export function useInfiniteManifestations(
         collections,
         genres,
         publishers,
-        statuses
+        statuses,
+        ownership
       ),
       "infinite",
       missingCover,
       missingId,
+      ownership,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -471,6 +477,7 @@ export function useInfiniteManifestations(
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },

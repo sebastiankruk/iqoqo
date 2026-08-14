@@ -321,6 +321,18 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
+      {isLoggedIn && (
+        <AccordionSection title="Ownership">
+          <SearchableFacet
+            options={["owned", "not_owned"]}
+            activeFilters={activeFilters}
+            type="ownership"
+            onToggle={option => onToggleFilter({ type: "ownership", value: option })}
+            counts={{ owned: 0, not_owned: 0 }}
+          />
+        </AccordionSection>
+      )}
+
       {isLoggedIn &&
         taxonomies?.collections &&
         taxonomies.collections.some(

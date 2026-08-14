@@ -33,7 +33,7 @@ function getFormatLabel(formatId: string): string | undefined {
 }
 
 /** Filter type */
-export type FilterType = "status" | "category" | "format" | "tag" | "collection" | "genre" | "publisher";
+export type FilterType = "status" | "category" | "format" | "tag" | "collection" | "genre" | "publisher" | "ownership";
 
 /** Active filter */
 export interface ActiveFilter {
@@ -89,6 +89,7 @@ export function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "collection") return `Collection: ${filter.value}`;
   if (filter.type === "genre") return `Genre: ${filter.value}`;
   if (filter.type === "publisher") return `Publisher: ${filter.value}`;
+  if (filter.type === "ownership") return `Ownership: ${filter.value === "owned" ? "Owned" : "Not Owned"}`;
   return filter.value;
 }
 
