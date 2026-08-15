@@ -132,6 +132,7 @@ describe("FeedbackDetailModal", () => {
         onOpenChange={vi.fn()}
         isAdmin={false}
         currentUserId="user-123"
+        onUpdated={vi.fn()}
       />
     );
 

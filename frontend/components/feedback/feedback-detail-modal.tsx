@@ -68,7 +68,7 @@ interface FeedbackDetailModalProps {
   onOpenChange: (open: boolean) => void;
   isAdmin: boolean;
   currentUserId?: string;
-  onUpdated: () => void;
+  onUpdated?: () => void;
 }
 
 const statusColorMap: Record<string, { bg: string; text: string; border: string; label: string }> = {
@@ -135,7 +135,7 @@ export function FeedbackDetailModal({
     try {
       await apiClient.patch(`/feedback/${item.id}`, { status: statusToSet });
       setSelectedStatus(statusToSet);
-      onUpdated();
+      onUpdated?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status.");
     } finally {
@@ -151,7 +151,7 @@ export function FeedbackDetailModal({
     try {
       await apiClient.patch(`/feedback/${item.id}`, { comment: newComment.trim() });
       setNewComment("");
-      onUpdated();
+      onUpdated?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add comment.");
     } finally {
