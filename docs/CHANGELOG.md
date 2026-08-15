@@ -5,13 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.15] - TBD
+## [0.7.15] - 2026-08-15
 
 ### Added
 
+- **In-App Feedback & Bug Reporting Flow**: Native feedback submission dialog accessible from user profile dropdown with screenshot attachment support, request type categorization, and rate-limiting protection.
+- **Dedicated Feedback Management Dashboard**: Full-page `/feedback` interface with left-side status/type filters, pagination, interactive detail modals, and role-based access control (`tickets:admin` vs `tickets:creator`).
+- **Ownership Facet Navigation**: Dedicated "Ownership" facet with "Owned" and "Not Owned" options for Manifestations, Expressions, and Works.
+- **E2E Playwright UX Hotfix Tests**: End-to-end browser tests verifying ownership filter empty state defaults and feedback submission workflow.
+
 ### Changed
 
+- **Single Help & Feedback Entry**: Consolidated user profile dropdown entries into a unified "Help & Feedback" link.
+- **Nginx Static Attachment Proxying**: Configured direct `/static/gallery/` and `/api/static/gallery/` location blocks for instant static media resolution.
+
 ### Fixed
+
+- **Filter Drawer Empty State Default**: Fixed ownership facet so unselected state defaults to displaying all catalog records without empty state regressions.
+- **Feedback Page Navigation**: Embedded standard `Navbar` and `Footer` in `/feedback` page to prevent navigation dead-ends.
+- **Feedback Detail Modal Optional Event Callback**: Made `onUpdated` prop optional in `FeedbackDetailModal` to prevent TypeScript compilation errors.
 
 ## [0.7.14] - 2026-08-13
 
