@@ -76,6 +76,7 @@ def test_init_auth_roles_permissions(app):
             "llm_generate:metadata",
             "llm_generate:cover",
             "escalate:request",
+            "tickets:creator",
         }
 
         missing_user = expected_user_perms - user_perms
