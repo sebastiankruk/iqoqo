@@ -17,7 +17,7 @@
 
 from alembic import op
 
-revision = "20260814_add_comments_column_to_feedback"
+revision = "20260814_feedback_comments"
 down_revision = "20260813_add_feedback_items"
 branch_labels = None
 depends_on = None
