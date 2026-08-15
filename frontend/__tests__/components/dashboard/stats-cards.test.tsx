@@ -19,7 +19,7 @@
  * useStats is mocked so we can control loading, error, and data states
  * without running real HTTP requests.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/api/hooks", () => ({
@@ -38,6 +38,7 @@ const FULL_STATS = {
   lent_items: 3,
   to_read: 10,
   items_reading: 5,
+  borrowed_items: 2,
   works: 30,
   expressions: 31,
   manifestations: 40,
@@ -46,6 +47,7 @@ const FULL_STATS = {
   items_lent: 3,
   items_lost: 0,
   items_wish_list: 10,
+  items_reading_count: 5,
   items_read: 0,
 };
 
@@ -54,7 +56,7 @@ describe("StatsCards", () => {
     vi.clearAllMocks();
   });
 
-  it("renders five stat card labels", () => {
+  it("renders five top stat card labels by default", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
     render(<StatsCards />);
     expect(screen.getByText("Items")).toBeInTheDocument();
@@ -86,7 +88,7 @@ describe("StatsCards", () => {
     mockUseStats.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useStats>);
     render(<StatsCards />);
     const dashes = screen.getAllByText("—");
-    // One dash per stat card
+    // One dash per stat card (5 top cards)
     expect(dashes).toHaveLength(5);
   });
 
@@ -116,5 +118,44 @@ describe("StatsCards", () => {
     expect(links[1]).toHaveAttribute("href", "/collection?statuses=reading");
     expect(links[2]).toHaveAttribute("href", "/collection?statuses=wish_list");
     expect(links[3]).toHaveAttribute("href", "/collection?statuses=lent");
+    expect(links[4]).toHaveAttribute("href", "/collection?statuses=borrowed");
+  });
+
+  it("toggles between Top Tiles and Stats Tiles views", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    render(<StatsCards />);
+
+    const statsTilesBtn = screen.getByRole("button", { name: "Stats Tiles" });
+    fireEvent.click(statsTilesBtn);
+
+    expect(screen.getByText("Works")).toBeInTheDocument();
+    expect(screen.getByText("Expressions")).toBeInTheDocument();
+    expect(screen.getByText("Editions")).toBeInTheDocument();
+    expect(screen.getByText("Intellectual creations")).toBeInTheDocument();
+
+    const topTilesBtn = screen.getByRole("button", { name: "Top Tiles" });
+    fireEvent.click(topTilesBtn);
+
+    expect(screen.getByText("Lent Out")).toBeInTheDocument();
+    expect(screen.getByText("Reading")).toBeInTheDocument();
+  });
+
+  it("toggles between Personal and Global scope", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    render(<StatsCards />);
+
+    expect(mockUseStats).toHaveBeenCalledWith("personal");
+
+    const globalBtn = screen.getByRole("button", { name: /global/i });
+    fireEvent.click(globalBtn);
+
+    expect(mockUseStats).toHaveBeenCalledWith("global");
+  });
+
+  it("applies overflow-x-auto and flex-nowrap classes for mobile horizontal scrolling", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    const { container } = render(<StatsCards />);
+    const scrollContainer = container.querySelector(".overflow-x-auto.flex-nowrap");
+    expect(scrollContainer).toBeInTheDocument();
   });
 });

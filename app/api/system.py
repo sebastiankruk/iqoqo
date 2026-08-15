@@ -145,7 +145,9 @@ def get_config():
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():
-    stats = DataManager.get_stats(owner_id=getattr(g, "user_id", None))
+    scope = request.args.get("scope", "personal")
+    owner_id = getattr(g, "user_id", None) if scope != "global" else None
+    stats = DataManager.get_stats(owner_id=owner_id)
     return jsonify({"success": True, "data": stats, "error": None})
 
 

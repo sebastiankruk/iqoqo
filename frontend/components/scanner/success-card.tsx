@@ -193,7 +193,7 @@ export function SuccessCard({
         queryClient.invalidateQueries({ queryKey: ["items"] }),
         queryClient.invalidateQueries({ queryKey: ["worksShelf"] }),
         queryClient.invalidateQueries({ queryKey: ["expressionsShelf"] }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats() }),
       ]);
 
       if (collectionStatus === "wish_list" && data.manifestation_id) {

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dashboard Scope & View Toggles**: Introduced interactive view toggle between standard Top Tiles and FRBR Stats Tiles (Works, Expressions, Editions, Items), along with a Personal vs Global repository scope toggle.
+- **Mobile Responsive Metric Tiles**: Enabled single-line horizontal scrolling with `overflow-x-auto flex-nowrap` for top metric tiles on mobile viewports.
+- **Backend Query Scoping**: Added `scope` query parameter support (`?scope=personal|global`) to `/api/stats` and `/api/profile/insights/*`, ensuring proper `UserWorkIntent` joins for personal inventory vs global catalog aggregates.
 - **In-App Feedback & Bug Reporting Flow**: Native feedback submission dialog accessible from user profile dropdown with screenshot attachment support, request type categorization, and rate-limiting protection.
 - **Dedicated Feedback Management Dashboard**: Full-page `/feedback` interface with left-side status/type filters, pagination, interactive detail modals, and role-based access control (`tickets:admin` vs `tickets:creator`).
 - **Ownership Facet Navigation**: Dedicated "Ownership" facet with "Owned" and "Not Owned" options for Manifestations, Expressions, and Works.
