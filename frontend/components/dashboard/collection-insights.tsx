@@ -27,11 +27,18 @@ import { BarChart3 } from "lucide-react";
  *
  * @param {object} [props] - Component props
  * @param {boolean} [props.showTitle=true] - Whether to render section heading
+ * @param {"personal" | "global"} [props.scope="personal"] - Data scope
  * @returns {JSX.Element | null} Component JSX
  */
-export function CollectionInsights({ showTitle = true }: { showTitle?: boolean } = {}) {
+export function CollectionInsights({
+  showTitle = true,
+  scope = "personal",
+}: {
+  showTitle?: boolean;
+  scope?: "personal" | "global";
+} = {}) {
   const t = useTranslations("CollectionInsights");
-  const { data: stats } = useStats();
+  const { data: stats } = useStats(scope);
 
   if (stats && stats.total_items === 0) {
     return null;
@@ -48,10 +55,10 @@ export function CollectionInsights({ showTitle = true }: { showTitle?: boolean }
 
       <div className="flex gap-6 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-1 lg:grid-cols-2 sm:pb-0 sm:overflow-visible">
         <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
-          <VelocityChart />
+          <VelocityChart scope={scope} />
         </div>
         <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
-          <TypeDistributionChart />
+          <TypeDistributionChart scope={scope} />
         </div>
       </div>
     </section>

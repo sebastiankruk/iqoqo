@@ -24,11 +24,13 @@ import { TrendingUp, AlertCircle } from "lucide-react";
 /**
  * Renders a bar chart representing monthly item acquisition velocity.
  *
- * @returns Component JSX
+ * @param {object} [props] - Component props
+ * @param {"personal" | "global"} [props.scope="personal"] - Data scope
+ * @returns {JSX.Element} Component JSX
  */
-export function VelocityChart() {
+export function VelocityChart({ scope = "personal" }: { scope?: "personal" | "global" } = {}) {
   const t = useTranslations("CollectionInsights");
-  const { data: velocityData, isLoading, isError } = useVelocityInsights();
+  const { data: velocityData, isLoading, isError } = useVelocityInsights(scope);
 
   if (isLoading) {
     return (

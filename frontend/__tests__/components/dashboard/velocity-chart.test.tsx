@@ -89,4 +89,12 @@ describe("VelocityChart", () => {
     // Chart section should still render even with empty data
     expect(screen.getByTestId("velocity-chart")).toBeInTheDocument();
   });
+
+  it("passes scope prop to useVelocityInsights hook", () => {
+    mockUseVelocity.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useVelocityInsights
+    >);
+    render(<VelocityChart scope="global" />);
+    expect(mockUseVelocity).toHaveBeenCalledWith("global");
+  });
 });

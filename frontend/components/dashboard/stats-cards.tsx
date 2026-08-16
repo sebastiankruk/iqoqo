@@ -184,7 +184,7 @@ export function StatsCards() {
           ))}
         </div>
       ) : (
-        <CollectionInsights showTitle={false} />
+        <CollectionInsights showTitle={false} scope={scope} />
       )}
     </section>
   );

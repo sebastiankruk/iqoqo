@@ -31,7 +31,11 @@ vi.mock("@/lib/api/hooks", () => ({
 }));
 
 vi.mock("@/components/dashboard/collection-insights", () => ({
-  CollectionInsights: () => <div data-testid="mock-collection-insights">Collection Insights Mock</div>,
+  CollectionInsights: ({ scope }: { scope?: string }) => (
+    <div data-testid="mock-collection-insights" data-scope={scope}>
+      Collection Insights Mock
+    </div>
+  ),
 }));
 
 import { useStats } from "@/lib/api/hooks";
@@ -187,5 +191,23 @@ describe("StatsCards", () => {
     const { container } = render(<StatsCards />);
     const scrollContainer = container.querySelector(".overflow-x-auto.flex-nowrap");
     expect(scrollContainer).toBeInTheDocument();
+  });
+
+  it("passes active scope prop to CollectionInsights in insights view", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+
+    const insightsBtn = screen.getByRole("button", { name: "Insights" });
+    fireEvent.click(insightsBtn);
+
+    const insightsMock = screen.getByTestId("mock-collection-insights");
+    expect(insightsMock).toHaveAttribute("data-scope", "personal");
+
+    const globalBtn = screen.getByRole("button", { name: /global/i });
+    fireEvent.click(globalBtn);
+
+    expect(insightsMock).toHaveAttribute("data-scope", "global");
   });
 });
