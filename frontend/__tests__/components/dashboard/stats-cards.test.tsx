@@ -26,6 +26,12 @@ vi.mock("@/lib/api/hooks", () => ({
   useStats: vi.fn(),
   useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useVelocityInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useDistributionInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+}));
+
+vi.mock("@/components/dashboard/collection-insights", () => ({
+  CollectionInsights: () => <div data-testid="mock-collection-insights">Collection Insights Mock</div>,
 }));
 
 import { useStats } from "@/lib/api/hooks";
@@ -56,10 +62,12 @@ describe("StatsCards", () => {
     vi.clearAllMocks();
   });
 
-  it("renders five top stat card labels by default", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+  it("renders five top stat card labels by default in personal scope", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
-    expect(screen.getByText("Items")).toBeInTheDocument();
+    expect(screen.getByText("My Items")).toBeInTheDocument();
     expect(screen.getByText("Lent Out")).toBeInTheDocument();
     expect(screen.getByText("On Wish List")).toBeInTheDocument();
     expect(screen.getByText("Reading")).toBeInTheDocument();
@@ -67,7 +75,9 @@ describe("StatsCards", () => {
   });
 
   it("displays numeric values when data is loaded", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -76,7 +86,9 @@ describe("StatsCards", () => {
   });
 
   it("does not show numeric values while loading", () => {
-    mockUseStats.mockReturnValue({ data: undefined, isLoading: true, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: undefined, isLoading: true, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.queryByText("42")).not.toBeInTheDocument();
     expect(screen.queryByText("3")).not.toBeInTheDocument();
@@ -85,7 +97,9 @@ describe("StatsCards", () => {
   });
 
   it("shows em-dash placeholders when the API returns an error", () => {
-    mockUseStats.mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     const dashes = screen.getAllByText("—");
     // One dash per stat card (5 top cards)
@@ -93,13 +107,17 @@ describe("StatsCards", () => {
   });
 
   it("is wrapped in a landmark section for accessibility", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByRole("region", { name: /collection statistics/i })).toBeInTheDocument();
   });
 
   it("shows descriptive subtitles below each value", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByText("Total in collection")).toBeInTheDocument();
     expect(screen.getByText("Currently with friends")).toBeInTheDocument();
@@ -108,7 +126,9 @@ describe("StatsCards", () => {
   });
 
   it("renders links with the correct URLs for filtering collections", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
 
     const links = screen.getAllByRole("link");
@@ -121,39 +141,49 @@ describe("StatsCards", () => {
     expect(links[4]).toHaveAttribute("href", "/collection?statuses=borrowed");
   });
 
-  it("toggles between Top Tiles and Stats Tiles views", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+  it("toggles between Stats and Insights views", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
 
-    const statsTilesBtn = screen.getByRole("button", { name: "Stats Tiles" });
-    fireEvent.click(statsTilesBtn);
+    const insightsBtn = screen.getByRole("button", { name: "Insights" });
+    fireEvent.click(insightsBtn);
 
-    expect(screen.getByText("Works")).toBeInTheDocument();
-    expect(screen.getByText("Expressions")).toBeInTheDocument();
-    expect(screen.getByText("Editions")).toBeInTheDocument();
-    expect(screen.getByText("Intellectual creations")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-collection-insights")).toBeInTheDocument();
+    expect(screen.queryByText("My Items")).not.toBeInTheDocument();
 
-    const topTilesBtn = screen.getByRole("button", { name: "Top Tiles" });
-    fireEvent.click(topTilesBtn);
+    const statsBtn = screen.getByRole("button", { name: "Stats" });
+    fireEvent.click(statsBtn);
 
-    expect(screen.getByText("Lent Out")).toBeInTheDocument();
+    expect(screen.getByText("My Items")).toBeInTheDocument();
     expect(screen.getByText("Reading")).toBeInTheDocument();
   });
 
-  it("toggles between Personal and Global scope", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+  it("toggles between Personal and Global scope with dynamic labels", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
 
     expect(mockUseStats).toHaveBeenCalledWith("personal");
+    expect(screen.getByText("My Items")).toBeInTheDocument();
+    expect(screen.getByText("Reading")).toBeInTheDocument();
+    expect(screen.getByText("On Wish List")).toBeInTheDocument();
 
     const globalBtn = screen.getByRole("button", { name: /global/i });
     fireEvent.click(globalBtn);
 
     expect(mockUseStats).toHaveBeenCalledWith("global");
+    expect(screen.getByText("All Items")).toBeInTheDocument();
+    expect(screen.getByText("Being Read")).toBeInTheDocument();
+    expect(screen.getByText("On Wish Lists")).toBeInTheDocument();
   });
 
   it("applies overflow-x-auto and flex-nowrap classes for mobile horizontal scrolling", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     const { container } = render(<StatsCards />);
     const scrollContainer = container.querySelector(".overflow-x-auto.flex-nowrap");
     expect(scrollContainer).toBeInTheDocument();

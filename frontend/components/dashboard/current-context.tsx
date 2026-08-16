@@ -97,9 +97,11 @@ export function CurrentContext() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-1 lg:grid-cols-2 sm:pb-0 sm:overflow-visible">
             {wishListItems.map(item => (
-              <ItemCard key={item.id} item={item} variant="horizontal" />
+              <div key={item.id} className="min-w-[280px] shrink-0 sm:min-w-0 sm:shrink">
+                <ItemCard item={item} variant="horizontal" />
+              </div>
             ))}
           </div>
         </section>

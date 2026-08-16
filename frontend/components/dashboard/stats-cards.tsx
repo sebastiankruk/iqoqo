@@ -16,51 +16,52 @@
 "use client";
 
 import { useState } from "react";
-import { BookMarked, BookOpen, Globe, HandHelping, Layers, Library, Target, User } from "lucide-react";
+import { BookMarked, BookOpen, Globe, HandHelping, Target, User } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { CollectionInsights } from "./collection-insights";
 
 /**
- * Top-row stat cards pulled from the Flask /api/stats endpoint with view and scope toggles.
+ * Top-row stat cards pulled from the Flask /api/stats endpoint with view (Stats / Insights) and scope (Personal / Global) toggles.
  *
  * @returns {JSX.Element} The component
  */
 export function StatsCards() {
   const t = useTranslations("StatsCards");
-  const [viewMode, setViewMode] = useState<"top" | "stats">("top");
+  const [viewMode, setViewMode] = useState<"stats" | "insights">("stats");
   const [scope, setScope] = useState<"personal" | "global">("personal");
   const { data: stats, isLoading, isError } = useStats(scope);
 
   const topCards = [
     {
-      label: t("items"),
+      label: scope === "global" ? t("itemsGlobal") : t("items"),
       value: stats?.total_items ?? 0,
       icon: BookOpen,
       borderColor: "border-l-primary",
       iconBg: "bg-primary/8",
       iconColor: "text-primary",
-      description: t("itemsDesc"),
+      description: scope === "global" ? t("itemsDescGlobal") : t("itemsDesc"),
       href: "/collection",
     },
     {
-      label: t("reading"),
+      label: scope === "global" ? t("readingGlobal") : t("reading"),
       value: stats?.items_reading ?? 0,
       icon: BookMarked,
       borderColor: "border-l-green-500",
       iconBg: "bg-green-500/10",
       iconColor: "text-green-600",
-      description: t("readingDesc"),
+      description: scope === "global" ? t("readingDescGlobal") : t("readingDesc"),
       href: "/collection?statuses=reading",
     },
     {
-      label: t("wishList"),
+      label: scope === "global" ? t("wishListGlobal") : t("wishList"),
       value: stats?.to_read ?? 0,
       icon: Target,
       borderColor: "border-l-chart-3",
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
-      description: t("wishListDesc"),
+      description: scope === "global" ? t("wishListDescGlobal") : t("wishListDesc"),
       href: "/collection?statuses=wish_list",
     },
     {
@@ -85,51 +86,6 @@ export function StatsCards() {
     },
   ];
 
-  const statsCards = [
-    {
-      label: t("works"),
-      value: stats?.works ?? 0,
-      icon: BookOpen,
-      borderColor: "border-l-indigo-500",
-      iconBg: "bg-indigo-500/10",
-      iconColor: "text-indigo-600",
-      description: t("worksDesc"),
-      href: "/collection?view=works",
-    },
-    {
-      label: t("expressions"),
-      value: stats?.expressions ?? 0,
-      icon: Layers,
-      borderColor: "border-l-blue-500",
-      iconBg: "bg-blue-500/10",
-      iconColor: "text-blue-600",
-      description: t("expressionsDesc"),
-      href: "/collection?view=expressions",
-    },
-    {
-      label: t("manifestations"),
-      value: stats?.manifestations ?? 0,
-      icon: Library,
-      borderColor: "border-l-purple-500",
-      iconBg: "bg-purple-500/10",
-      iconColor: "text-purple-600",
-      description: t("manifestationsDesc"),
-      href: "/collection?view=manifestations",
-    },
-    {
-      label: t("itemsFrbr"),
-      value: stats?.items ?? stats?.total_items ?? 0,
-      icon: BookMarked,
-      borderColor: "border-l-primary",
-      iconBg: "bg-primary/8",
-      iconColor: "text-primary",
-      description: t("itemsFrbrDesc"),
-      href: "/collection?view=items",
-    },
-  ];
-
-  const cards = viewMode === "top" ? topCards : statsCards;
-
   return (
     <section aria-label={t("ariaLabel")} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -138,18 +94,6 @@ export function StatsCards() {
           role="group"
           aria-label={t("viewLabel")}
         >
-          <button
-            type="button"
-            onClick={() => setViewMode("top")}
-            aria-pressed={viewMode === "top"}
-            className={`rounded-md px-3 py-1.5 transition-all ${
-              viewMode === "top"
-                ? "bg-card text-foreground shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t("viewTop")}
-          </button>
           <button
             type="button"
             onClick={() => setViewMode("stats")}
@@ -161,6 +105,18 @@ export function StatsCards() {
             }`}
           >
             {t("viewStats")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("insights")}
+            aria-pressed={viewMode === "insights"}
+            className={`rounded-md px-3 py-1.5 transition-all ${
+              viewMode === "insights"
+                ? "bg-card text-foreground shadow-xs font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("viewInsights")}
           </button>
         </div>
 
@@ -198,38 +154,38 @@ export function StatsCards() {
         </div>
       </div>
 
-      <div
-        className={`flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-2 ${
-          cards.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-5"
-        } sm:pb-0 sm:overflow-visible`}
-      >
-        {cards.map(stat => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className={`group relative min-w-[220px] shrink-0 sm:min-w-0 sm:shrink overflow-hidden rounded-xl border-l-4 ${stat.borderColor} bg-card p-5 shadow-sm transition-shadow hover:shadow-md block`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                <p className="mt-1 font-serif text-3xl font-bold tracking-tight text-card-foreground">
-                  {isLoading ? (
-                    <span className="inline-block h-9 w-16 animate-pulse rounded bg-muted" />
-                  ) : isError ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    stat.value.toLocaleString()
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{stat.description}</p>
+      {viewMode === "stats" ? (
+        <div className="flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:pb-0 sm:overflow-visible">
+          {topCards.map(stat => (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className={`group relative min-w-[220px] shrink-0 sm:min-w-0 sm:shrink overflow-hidden rounded-xl border-l-4 ${stat.borderColor} bg-card p-5 shadow-sm transition-shadow hover:shadow-md block`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                  <p className="mt-1 font-serif text-3xl font-bold tracking-tight text-card-foreground">
+                    {isLoading ? (
+                      <span className="inline-block h-9 w-16 animate-pulse rounded bg-muted" />
+                    ) : isError ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      stat.value.toLocaleString()
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{stat.description}</p>
+                </div>
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.iconBg}`}>
+                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+                </div>
               </div>
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.iconBg}`}>
-                <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <CollectionInsights showTitle={false} />
+      )}
     </section>
   );
 }
