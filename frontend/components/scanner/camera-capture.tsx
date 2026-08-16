@@ -175,13 +175,17 @@ export function CameraCapture({
   }, []);
 
   const startPolling = async (taskId: string) => {
-    const maxRetries = 30; // 30 retries * 2s = 60s max
+    const maxRetries = 15; // 15 retries * 1s = 15s max timeout
     const { apiClient: pollClient } = await import("@/lib/api/client");
 
     for (let i = 0; i < maxRetries; i++) {
       try {
         const response = await pollClient.get<ApiEnvelope<ExtractedMetadata | { status: string }>>(
-          `/vision/extract/${taskId}`
+          `/vision/extract/${taskId}`,
+          {
+            signal:
+              typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(5000) : undefined,
+          }
         );
         const env = response.data;
 
@@ -208,8 +212,8 @@ export function CameraCapture({
         // For transient network errors, continue retrying
       }
 
-      // Wait 2 seconds before next poll
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait 1 second before next poll
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     throw new Error("Task timed out. Please try again or enter manually.");
   };
@@ -250,6 +254,8 @@ export function CameraCapture({
 
         const response = await apiClient.post<ApiEnvelope<{ task_id: string }>>(`/vision/extract`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
+          signal:
+            typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(10000) : undefined,
         });
 
         const envelope = response.data;
@@ -371,12 +377,16 @@ export function CameraCapture({
       onDrop={handleDrop}
     >
       {uploading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-background/80 backdrop-blur-sm">
+        <div
+          data-testid="scanner-uploading-overlay"
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-background/90 backdrop-blur-sm p-4 text-center"
+        >
           <div className="relative flex items-center justify-center mb-4">
-            <div className="absolute h-12 w-12 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
-            <div className="h-8 w-8 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
+            <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
+            <div className="h-10 w-10 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
           </div>
-          <p className="animate-pulse text-sm font-medium text-foreground">Processing image...</p>
+          <p className="animate-pulse text-sm font-semibold text-foreground">Processing image...</p>
+          <p className="text-xs text-muted-foreground mt-1">Extracting details via vision API</p>
         </div>
       )}
 

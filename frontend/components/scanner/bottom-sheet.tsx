@@ -176,19 +176,31 @@ export function BottomSheet({
         const formatParam = formatToApiParam(format);
         const encodedQuery = encodeURIComponent(query);
         const url = formatParam ? `/lookup/${encodedQuery}?format=${formatParam}` : `/lookup/${encodedQuery}`;
-        const data = await apiFetch<IsbnMeta>(url);
+
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error("Lookup timed out. Switching to manual entry.")), 10000);
+        });
+
+        const data = await Promise.race([apiFetch<IsbnMeta>(url), timeoutPromise]).finally(() => {
+          if (timeoutId) clearTimeout(timeoutId);
+        });
+
         onFound(query, data);
       } catch (e: unknown) {
-        if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
-          setError(e.message);
-        } else {
-          setError("Could not look up this item. Please try again.");
+        const errorMessage =
+          e && typeof e === "object" && "message" in e && typeof e.message === "string"
+            ? e.message
+            : "Could not look up this item. Please try again.";
+        setError(errorMessage);
+        if (onShowManualForm) {
+          onShowManualForm(query);
         }
       } finally {
         setIsSearching(false);
       }
     },
-    [onFound, format]
+    [onFound, format, onShowManualForm]
   );
 
   /* ── Start camera + ZXing scan loop ── */
@@ -314,7 +326,21 @@ export function BottomSheet({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 relative">
+        {isSearching && (
+          <div
+            data-testid="scanner-searching-overlay"
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-t-2xl bg-background/90 backdrop-blur-sm p-6 text-center"
+          >
+            <div className="relative flex items-center justify-center mb-4">
+              <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
+              <div className="h-10 w-10 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
+            </div>
+            <p className="animate-pulse text-sm font-semibold text-foreground">Searching catalog...</p>
+            <p className="text-xs text-muted-foreground mt-1">Looking up barcode {lastSearchedBarcode}</p>
+          </div>
+        )}
+
         {error && (
           <div className="flex w-full flex-col gap-3">
             <p className="text-center text-xs text-destructive">{error}</p>
