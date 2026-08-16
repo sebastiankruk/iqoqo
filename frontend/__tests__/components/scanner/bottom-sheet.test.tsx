@@ -106,4 +106,25 @@ describe("BottomSheet", () => {
     fireEvent.click(manualEntryBtn);
     expect(onShowManualForm).toHaveBeenCalled();
   });
+
+  it("automatically calls onShowManualForm when manual search lookup fails", async () => {
+    const { apiFetch } = await import("@/lib/api/client");
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error("Lookup failed"));
+
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
+
+    // Switch to manual tab
+    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
+
+    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
+    fireEvent.change(input, { target: { value: "9781234567890" } });
+
+    const form = input.closest("form");
+    if (form) {
+      fireEvent.submit(form);
+    }
+
+    await screen.findByText("Lookup failed");
+    expect(onShowManualForm).toHaveBeenCalledWith("9781234567890");
+  });
 });

@@ -197,4 +197,27 @@ describe("CameraCapture", () => {
       expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
     });
   });
+
+  it("calls onExtractionFailure when vision extraction fails", async () => {
+    setupCamera(false);
+    const onExtractionFailure = vi.fn();
+    vi.mocked(apiClient.post).mockRejectedValue(new Error("Vision network error"));
+
+    render(<CameraCapture mode="vision" label="Scan Book" onExtractionFailure={onExtractionFailure} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
+    });
+
+    const file = new File(["dummy"], "cover.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    if (input) {
+      fireEvent.change(input, { target: { files: [file] } });
+    }
+
+    await waitFor(() => {
+      expect(onExtractionFailure).toHaveBeenCalled();
+    });
+  });
 });
