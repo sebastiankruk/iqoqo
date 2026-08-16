@@ -162,4 +162,29 @@ describe("CollectionInsights", () => {
     // Section should render even on error (stats undefined means it doesn't return null)
     expect(screen.getByTestId("collection-insights")).toBeInTheDocument();
   });
+
+  it("passes scope prop to useStats and child charts", () => {
+    mockUseStats.mockReturnValue({
+      data: { total_items: 10 },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useStats>);
+
+    mockUseVelocity.mockReturnValue({
+      data: [{ month: "2026-01", count: 2 }],
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useVelocityInsights>);
+
+    mockUseDistribution.mockReturnValue({
+      data: { by_type: [{ type: "text", count: 2 }], by_format: [{ format: "book", count: 2 }] },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useDistributionInsights>);
+
+    render(<CollectionInsights scope="global" />);
+    expect(mockUseStats).toHaveBeenCalledWith("global");
+    expect(mockUseVelocity).toHaveBeenCalledWith("global");
+    expect(mockUseDistribution).toHaveBeenCalledWith("global");
+  });
 });

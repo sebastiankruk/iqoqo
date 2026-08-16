@@ -226,24 +226,28 @@ def update_profile_settings():
 @profile_bp.route("/insights/velocity", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_insights_velocity():
-    """Returns acquisition velocity data for the authenticated user."""
+    """Returns acquisition velocity data for the authenticated user or globally."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
     from app.core.data_manager import get_velocity_stats
 
-    data = get_velocity_stats(user_id)
+    scope = request.args.get("scope", "personal")
+    owner_id = user_id if scope != "global" else None
+    data = get_velocity_stats(owner_id)
     return jsonify({"success": True, "data": data})
 
 
 @profile_bp.route("/insights/distribution", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_insights_distribution():
-    """Returns media type and format distribution data for the authenticated user."""
+    """Returns media type and format distribution data for the authenticated user or globally."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
     from app.core.data_manager import get_distribution_stats
 
-    data = get_distribution_stats(user_id)
+    scope = request.args.get("scope", "personal")
+    owner_id = user_id if scope != "global" else None
+    data = get_distribution_stats(owner_id)
     return jsonify({"success": True, "data": data})

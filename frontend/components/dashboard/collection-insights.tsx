@@ -25,26 +25,41 @@ import { BarChart3 } from "lucide-react";
 /**
  * Renders the collector insights section with velocity and distribution charts.
  *
- * @returns Component JSX
+ * @param {object} [props] - Component props
+ * @param {boolean} [props.showTitle=true] - Whether to render section heading
+ * @param {"personal" | "global"} [props.scope="personal"] - Data scope
+ * @returns {JSX.Element | null} Component JSX
  */
-export function CollectionInsights() {
+export function CollectionInsights({
+  showTitle = true,
+  scope = "personal",
+}: {
+  showTitle?: boolean;
+  scope?: "personal" | "global";
+} = {}) {
   const t = useTranslations("CollectionInsights");
-  const { data: stats } = useStats();
+  const { data: stats } = useStats(scope);
 
   if (stats && stats.total_items === 0) {
     return null;
   }
 
   return (
-    <section data-testid="collection-insights" className="mt-8 space-y-4">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold tracking-tight text-foreground">{t("title")}</h2>
-      </div>
+    <section data-testid="collection-insights" className={showTitle ? "mt-8 space-y-4" : "space-y-4"}>
+      {showTitle && (
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold tracking-tight text-foreground">{t("title")}</h2>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <VelocityChart />
-        <TypeDistributionChart />
+      <div className="flex gap-6 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-1 lg:grid-cols-2 sm:pb-0 sm:overflow-visible">
+        <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
+          <VelocityChart scope={scope} />
+        </div>
+        <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
+          <TypeDistributionChart scope={scope} />
+        </div>
       </div>
     </section>
   );

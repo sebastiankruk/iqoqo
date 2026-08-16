@@ -36,8 +36,11 @@ import type {
 export const queryKeys = {
   /**
    * Query key for dashboard statistics.
+   *
+   * @param scope - Data scope ('personal' | 'global')
+   * @returns The query key for dashboard statistics.
    */
-  stats: ["stats"] as const,
+  stats: (scope?: "personal" | "global") => (scope ? (["stats", scope] as const) : (["stats"] as const)),
   /**
    * Query key for items.
    *
@@ -193,12 +196,13 @@ export function useAppConfig() {
 /**
  * Custom hook to fetch dashboard statistics.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns {import('@tanstack/react-query').UseQueryResult<DashboardStats>} Query result
  */
-export function useStats() {
+export function useStats(scope: "personal" | "global" = "personal") {
   return useQuery({
-    queryKey: queryKeys.stats,
-    queryFn: () => apiFetch<DashboardStats>("/stats"),
+    queryKey: queryKeys.stats(scope),
+    queryFn: () => apiFetch<DashboardStats>(`/stats?scope=${scope}`),
     staleTime: 30_000,
   });
 }
@@ -867,7 +871,7 @@ export function useAddItem() {
       throw new Error("Either isbn or manifestation_id must be provided");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
       qc.invalidateQueries({ queryKey: ["worksShelf"] });
       qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
@@ -919,7 +923,7 @@ export function useAddManualItem() {
       return res.data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
@@ -958,7 +962,7 @@ export function useDeleteItem() {
       return id;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
@@ -1211,7 +1215,7 @@ export function useSetWorkIntent() {
     },
     onSuccess: (_, variables) => {
       void qc.invalidateQueries({ queryKey: ["workIntent", variables.workId] });
-      void qc.invalidateQueries({ queryKey: queryKeys.stats });
+      void qc.invalidateQueries({ queryKey: queryKeys.stats() });
       void qc.invalidateQueries({ queryKey: ["items"] });
       void qc.invalidateQueries({ queryKey: ["worksShelf"] });
       void qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
@@ -1443,12 +1447,13 @@ export function useResolveLoan() {
 /**
  * Custom hook to fetch acquisition velocity insights.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns Query result
  */
-export function useVelocityInsights() {
+export function useVelocityInsights(scope: "personal" | "global" = "personal") {
   return useQuery<VelocityPoint[]>({
-    queryKey: ["insights", "velocity"],
-    queryFn: getVelocityInsights,
+    queryKey: ["insights", "velocity", scope],
+    queryFn: () => getVelocityInsights(scope),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -1456,12 +1461,13 @@ export function useVelocityInsights() {
 /**
  * Custom hook to fetch distribution insights (content types & formats).
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns Query result
  */
-export function useDistributionInsights() {
+export function useDistributionInsights(scope: "personal" | "global" = "personal") {
   return useQuery<InsightsData>({
-    queryKey: ["insights", "distribution"],
-    queryFn: getDistributionInsights,
+    queryKey: ["insights", "distribution", scope],
+    queryFn: () => getDistributionInsights(scope),
     staleTime: 5 * 60 * 1000,
   });
 }
