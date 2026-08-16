@@ -61,6 +61,18 @@ def fix_alembic_version():
         print("  Executing: ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
         cur.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
 
+        # Reconcile renamed migration revision identifiers
+        migration_rename_map = {
+            "20260814_add_comments_column_to_feedback": "20260814_feedback_comments",
+        }
+        for old_rev, new_rev in migration_rename_map.items():
+            cur.execute(
+                "UPDATE alembic_version SET version_num = %s WHERE version_num = %s;",
+                (new_rev, old_rev),
+            )
+            if cur.rowcount > 0:
+                print(f"  Reconciled legacy migration identifier: {old_rev} -> {new_rev}")
+
         print("✅ Fix applied successfully!")
 
         cur.close()
