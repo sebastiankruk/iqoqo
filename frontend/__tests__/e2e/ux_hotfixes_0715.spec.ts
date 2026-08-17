@@ -176,6 +176,5 @@ test.describe("v0.7.15 UX Hotfixes", () => {
     await page.getByRole("button", { name: /global/i }).click();
     await expect(page.getByText("All Items")).toBeVisible();
     await expect(page.getByText("99").first()).toBeVisible();
-
   });
 });

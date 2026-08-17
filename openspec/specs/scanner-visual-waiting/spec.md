@@ -1,7 +1,7 @@
 # scanner-visual-waiting Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-15-scanner-ux. Update Purpose after archive.
+This specification defines the animated visual feedback shown to users during asynchronous scanner API lookups, including the escape mechanism for cancelling in-progress searches.
 
 ## Requirements
 

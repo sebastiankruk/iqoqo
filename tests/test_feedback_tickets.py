@@ -166,3 +166,82 @@ def test_ticket_status_lifecycle_and_comments(client, feedback_setup, app):
     resp = client.patch(f"/api/feedback/{ticket_id}", json={"status": "closed"}, headers=u1_headers)
     assert resp.status_code == 200
     assert resp.json["data"]["status"] == "closed"
+
+
+def test_feedback_closed_ticket_comment_rejected(client, feedback_setup, app):
+    """Commenting on a closed ticket is rejected with HTTP 400."""
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+
+    # Create and close ticket
+    submit = client.post(
+        "/api/feedback",
+        data={"type": "bug", "description": "Issue with search filter"},
+        headers=u1_headers,
+    )
+    ticket_id = submit.json["data"]["id"]
+    client.patch(f"/api/feedback/{ticket_id}", json={"status": "closed"}, headers=u1_headers)
+
+    # Attempt to comment on closed ticket
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"comment": "Adding comment to closed ticket"},
+        headers=u1_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["error"] == "Cannot add comments to a closed ticket"
+
+
+def test_feedback_pagination_clamping(client, feedback_setup, app):
+    """Negative page and excessive per_page parameters are clamped safely."""
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+
+    resp = client.get("/api/feedback?page=-1&per_page=500", headers=admin_headers)
+    assert resp.status_code == 200
+    pagination = resp.json["pagination"]
+    assert pagination["page"] == 1
+    assert pagination["per_page"] == 100
+
+
+def test_feedback_upload_count_cap(client, feedback_setup, app):
+    """Submitting more than 5 screenshots is rejected with HTTP 400."""
+    from io import BytesIO
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+
+    screenshots = [(BytesIO(png_bytes), f"shot_{i}.png") for i in range(6)]
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Exceeded attachment limit test",
+            "screenshots": screenshots,
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert resp.json["error"] == "Maximum 5 screenshots allowed per ticket"
+
+
+def test_feedback_get_rate_limiting(client, feedback_setup, app):
+    """GET /api/feedback rejects requests beyond 60/minute when rate limiting is enabled."""
+    from app.core.limiter import limiter
+
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    try:
+        admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+        responses = [client.get("/api/feedback", headers=admin_headers) for _ in range(61)]
+        assert [r.status_code for r in responses[:60]] == [200] * 60
+        assert responses[60].status_code == 429
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False

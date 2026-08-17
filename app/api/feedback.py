@@ -61,9 +61,13 @@ def submit_feedback() -> tuple[Response, int] | Response:
     if not description or len(description) > 20_000:
         return jsonify({"success": False, "error": "description is required and must be at most 20000 characters"}), 400
 
+    uploads = request.files.getlist("screenshots")
+    if len(uploads) > 5:
+        return jsonify({"success": False, "error": "Maximum 5 screenshots allowed per ticket"}), 400
+
     attachments: list[str] = []
     try:
-        for upload in request.files.getlist("screenshots"):
+        for upload in uploads:
             validate_upload_file(upload, max_size_bytes=10 * 1024 * 1024)
             attachments.append(save_upload_image(upload, subfolder="gallery", filename=f"feedback-{uuid.uuid4().hex}.jpg"))
     except ValueError as exc:
@@ -77,6 +81,7 @@ def submit_feedback() -> tuple[Response, int] | Response:
 
 @api_bp.route("/feedback", methods=["GET"])
 @require_auth
+@limiter.limit("60 per minute")
 def list_feedback() -> tuple[Response, int] | Response:
     """List the current user's tickets, or all tickets for administrators."""
     user = db.session.get(User, g.user_id)
@@ -107,8 +112,8 @@ def list_feedback() -> tuple[Response, int] | Response:
             return jsonify({"success": False, "error": "Invalid feedback status"}), 400
         stmt = stmt.where(FeedbackItem.status == status)
 
-    page = request.args.get("page", 1, type=int)
-    per_page = min(request.args.get("per_page", 20, type=int), 100)
+    page = max(1, request.args.get("page", 1, type=int))
+    per_page = max(1, min(request.args.get("per_page", 20, type=int), 100))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())  # pylint: disable=not-callable
     total = db.session.execute(count_stmt).scalar_one()
@@ -132,6 +137,7 @@ def list_feedback() -> tuple[Response, int] | Response:
 
 @api_bp.route("/feedback/<int:feedback_id>", methods=["GET"])
 @require_auth
+@limiter.limit("60 per minute")
 def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     """Retrieve details for a single feedback ticket."""
     user = db.session.get(User, g.user_id)
@@ -148,6 +154,7 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
 
 @api_bp.route("/feedback/<int:feedback_id>", methods=["PATCH"])
 @require_auth
+@limiter.limit("30 per minute")
 def update_feedback(feedback_id: int) -> tuple[Response, int] | Response:
     """Update a ticket's lifecycle status or add a comment."""
     user = db.session.get(User, g.user_id)
@@ -173,6 +180,8 @@ def update_feedback(feedback_id: int) -> tuple[Response, int] | Response:
         item.status = new_status
 
     if comment_text:
+        if item.status == "closed":
+            return jsonify({"success": False, "error": "Cannot add comments to a closed ticket"}), 400
         comment_entry: dict[str, Any] = {
             "id": uuid.uuid4().hex,
             "user_id": str(g.user_id),

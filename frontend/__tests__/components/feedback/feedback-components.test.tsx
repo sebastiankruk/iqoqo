@@ -183,5 +183,6 @@ describe("FeedbackDetailModal", () => {
     expect(screen.getByText("Attachments (2)")).toBeInTheDocument();
     const images = screen.getAllByRole("img");
     expect(images.length).toBeGreaterThanOrEqual(2);
+    expect(images[0]).toHaveClass("object-contain");
   });
 });

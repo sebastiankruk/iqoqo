@@ -1,7 +1,7 @@
 # scanner-error-fallback Specification
 
 ## Purpose
-TBD - created by archiving change release-0-7-15-scanner-ux. Update Purpose after archive.
+This specification defines the graceful degradation path from automated scanner lookups to manual barcode entry when API responses fail or time out.
 
 ## Requirements
 

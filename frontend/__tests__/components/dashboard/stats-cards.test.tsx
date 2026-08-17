@@ -188,9 +188,9 @@ describe("StatsCards", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
       typeof useStats
     >);
-    const { container } = render(<StatsCards />);
-    const scrollContainer = container.querySelector(".overflow-x-auto.flex-nowrap");
-    expect(scrollContainer).toBeInTheDocument();
+    render(<StatsCards />);
+    const scrollContainer = screen.getByTestId("stats-scroll-container");
+    expect(scrollContainer).toHaveClass("overflow-x-auto", "flex-nowrap");
   });
 
   it("passes active scope prop to CollectionInsights in insights view", () => {

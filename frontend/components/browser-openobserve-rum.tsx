@@ -63,9 +63,7 @@ export function BrowserOpenObserveRum(): null {
         const insecureHTTP = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP !== "false";
         const apiVersion = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION ?? "v1";
         const defaultPrivacyLevel = (process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL ?? "allow") as
-          | "allow"
-          | "mask-user-input"
-          | "mask";
+          "allow" | "mask-user-input" | "mask";
 
         openobserveRum.init({
           applicationId,
