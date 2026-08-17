@@ -31,6 +31,7 @@ vi.mock("@/lib/api/client", () => ({
 describe("FeedbackModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(apiClient.post).mockReset();
   });
 
   it("submits feedback and transitions to success state with Close button", async () => {
@@ -62,6 +63,49 @@ describe("FeedbackModal", () => {
     });
 
     expect(screen.queryByPlaceholderText("Describe the issue or idea...")).not.toBeInTheDocument();
+  });
+
+  it("keeps submission disabled until a description is entered", () => {
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Submit feedback" })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText("Describe the issue or idea..."), {
+      target: { value: "A useful report" },
+    });
+    expect(screen.getByRole("button", { name: "Submit feedback" })).toBeEnabled();
+  });
+
+  it("sends the selected type and screenshot in multipart form data", async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } } as any);
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "feature_request" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe the issue or idea..."), {
+      target: { value: "Please add keyboard shortcuts" },
+    });
+    const file = new File(["image"], "screen.png", { type: "image/png" });
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
+    const form = vi.mocked(apiClient.post).mock.calls[0][1] as FormData;
+    expect(form.get("type")).toBe("feature_request");
+    expect(form.get("description")).toBe("Please add keyboard shortcuts");
+    expect(form.get("screenshots")).toEqual(file);
+  });
+
+  it("shows the API error and remains in the form state", async () => {
+    vi.mocked(apiClient.post).mockRejectedValueOnce(new Error("Upload failed"));
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("Describe the issue or idea..."), {
+      target: { value: "A report that cannot be uploaded" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    expect(await screen.findByText("Upload failed")).toBeInTheDocument();
+    expect(screen.getByText("Send feedback")).toBeInTheDocument();
   });
 });
 

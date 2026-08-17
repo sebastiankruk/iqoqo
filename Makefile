@@ -250,7 +250,7 @@ lint-css:
 
 lint-markdown:
 	@echo "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#context"
+	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#context" "#graphify-out"
 
 validate-yaml: .venv/bin/activate
 	@echo "Checking YAML configuration files..."

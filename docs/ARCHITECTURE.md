@@ -275,8 +275,29 @@ iqoqo provides multi-dimensional faceted search and aggregated statistics via `D
 - **Cross-FRBR Filtering**: Queries cross FRBR boundaries using optimized SQL subqueries. Filters applied at the Manifestation level (e.g., format, publisher) or Item level (e.g., status, condition) filter aggregate counts across the Work and Expression tiers without cross-join inflation.
 - **FRBR-Level Count Distinctions**: Facet aggregations accurately distinguish between overall catalog counts, total Work items, unique Manifestations, and user-owned physical Items.
 - **Multi-Select Facet Logic**: Facets enforce `AND` logic across distinct facet fields (e.g., `content_type=text AND status=available`) and `OR` logic within multiple selections of the same facet field (e.g., `format=Hardcover OR format=Paperback`).
+- **Ownership Facet Navigation**: Dedicated "Ownership" facet enables filtering entities by `owned` vs `not_owned` status across the FRBR hierarchy:
+  - _Item tier_: Direct physical ownership by user ID (`Item.owner_id == user_id`).
+  - _Manifestation tier_: Whether user owns at least one physical item copy of that manifestation.
+  - _Expression tier_: Whether user owns an item realizing that expression.
+  - _Work tier_: Whether user owns any item under any expression of that work. Inverse `not_owned` selects items where the user has zero physical holdings in that subtree.
 - **Publisher Metadata Extraction**: Publisher facets extract publisher strings across both relational fields and JSON metadata blobs using SQL `func.coalesce(Manifestation.publisher, Manifestation.meta['publisher'].as_string())` `# pylint: disable=not-callable` to ensure full coverage.
 - **Public Facet Endpoint**: Statistics and facet counts are exposed via `/api/stats/facets` protected by `@optional_auth`, allowing public visitors to filter public collection views.
+
+## 📊 Dashboard Query Scoping & Metric Aggregations
+
+To support clear differentiation between personal libraries and the collective repository, dashboard endpoints support query scoping:
+
+- **`scope=personal` (default)**: Restricts summary counts (`/api/stats`), reading velocity (`/api/profile/insights/velocity`), and media distribution (`/api/profile/insights/distribution`) to entities associated with the authenticated user's physical items or `UserWorkIntent` wishlist entries.
+- **`scope=global`**: Computes system-wide catalog aggregates across all public/registered items and manifestations, useful for exploring the complete institutional collection.
+
+## 💬 In-App Feedback & User Ticket Architecture
+
+iqoqo includes a native in-app feedback and bug tracking mechanism (`/api/feedback` and `/feedback` UI):
+
+- **Feedback Ingestion**: Authenticated users can submit bug reports, feature requests, or general feedback with optional screenshot attachments (`multipart/form-data` stored securely under `/static/gallery/`).
+- **Role-Based Access Control (RBAC)**:
+  - `tickets:creator`: Granted to standard `user` role to submit tickets and manage/close their own submissions.
+  - `tickets:admin`: Granted to `admin` role to review all user submissions, update lifecycle statuses (`new`, `in_progress`, `resolved`, `closed`), and post custodian resolution notes.
 
 ## 🛠️ Implementation Guidelines
 
@@ -553,7 +574,7 @@ in `frontend/`.
 ### Technology Stack
 
 | Layer        | Technology                             | Notes                          |
-|--------------|----------------------------------------|--------------------------------|
+| ------------ | -------------------------------------- | ------------------------------ |
 | Framework    | Next.js 16 (App Router)                | SSR + RSC hybrid               |
 | Language     | TypeScript 5                           | Strict mode                    |
 | Styling      | Tailwind CSS v4                        | CSS-based `@theme` config      |
@@ -569,7 +590,7 @@ All design tokens live in `frontend/app/globals.css` as CSS custom properties ma
 into Tailwind v4 via `@theme inline`.
 
 | Token                | Value                           | Usage                  |
-|----------------------|---------------------------------|------------------------|
+| -------------------- | ------------------------------- | ---------------------- |
 | `--color-primary`    | Deep Indigo `hsl(210 29% 24%)`  | Nav, headings, CTA     |
 | `--color-accent`     | Library Clay `hsl(24 100% 41%)` | Accent, badges         |
 | `--color-background` | Warm Paper `hsl(43 50% 98%)`    | Page background        |
@@ -637,7 +658,7 @@ definition is `ITEM_STATUSES` in `app/db/core.py`; the TypeScript mirror is
 enforced by `tests/test_ontology.py`.
 
 | Status           | Meaning                            | Media |
-|------------------|------------------------------------|-------|
+| ---------------- | ---------------------------------- | ----- |
 | `available`      | On your shelf, ready to use        | All   |
 | `lent`           | Lent to a friend                   | All   |
 | `lost`           | Cannot be located                  | All   |
@@ -656,7 +677,7 @@ enforced by `tests/test_ontology.py`.
 Tables are split across PostgreSQL schemas:
 
 | Schema      | Tables                                                             |
-|-------------|--------------------------------------------------------------------|
+| ----------- | ------------------------------------------------------------------ |
 | `auth`      | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, |
 |             | `token_blocklist`, `user_consents`                                 |
 | `catalog`   | `works`, `expressions`, `manifestations`, `contributors`,          |
@@ -671,7 +692,7 @@ Tables are split across PostgreSQL schemas:
 Model classes are split into domain-focused modules under `app/db/`:
 
 | File          | Contents                                                                 |
-|---------------|--------------------------------------------------------------------------|
+| ------------- | ------------------------------------------------------------------------ |
 | `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`          |
 | `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`           |
 | `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, |
@@ -709,7 +730,7 @@ Valid `ExpressionContribution.role` values: `performer`, `conductor`, `narrator`
 Audio-specific keys that **may** be stored in `Manifestation.meta`:
 
 | Key               | Type    | Description                                                   |
-|-------------------|---------|---------------------------------------------------------------|
+| ----------------- | ------- | ------------------------------------------------------------- |
 | `catalog_number`  | string  | Record-label catalog number (e.g. `"ECM 1064"`)               |
 | `pressing_number` | string  | Specific pressing identifier                                  |
 | `matrix_number`   | string  | Vinyl run-out groove / lacquer ID                             |

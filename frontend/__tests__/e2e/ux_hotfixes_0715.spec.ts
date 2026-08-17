@@ -149,4 +149,35 @@ test.describe("v0.7.15 UX Hotfixes", () => {
     // The modal should close and the new ticket should be in the list
     await expect(page.getByText("This is a test bug report")).toBeVisible({ timeout: 5000 });
   });
+
+  test("dashboard toggles request personal and global aggregates", async ({ page }) => {
+    await page.route("**/api/stats?scope=*", async route => {
+      const scope = new URL(route.request().url()).searchParams.get("scope");
+      const totalItems = scope === "global" ? 99 : 2;
+      await route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            total_items: totalItems,
+            items_reading: 1,
+            to_read: 1,
+            lent_items: 0,
+            borrowed_items: 0,
+          },
+        },
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByText("My Items")).toBeVisible();
+    await expect(page.getByText("2").first()).toBeVisible();
+
+    await page.getByRole("button", { name: /global/i }).click();
+    await expect(page.getByText("All Items")).toBeVisible();
+    await expect(page.getByText("99").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Insights" }).click();
+    await expect(page.getByTestId("collection-insights")).toBeVisible();
+  });
 });
