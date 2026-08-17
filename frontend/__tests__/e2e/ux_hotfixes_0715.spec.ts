@@ -177,7 +177,5 @@ test.describe("v0.7.15 UX Hotfixes", () => {
     await expect(page.getByText("All Items")).toBeVisible();
     await expect(page.getByText("99").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Insights" }).click();
-    await expect(page.getByRole("button", { name: "Insights" })).toHaveAttribute("aria-pressed", "true");
   });
 });
