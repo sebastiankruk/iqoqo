@@ -107,7 +107,7 @@ test.describe("Feedback & Ticket Lifecycle (v0.7.15)", () => {
 
     // 2. Verify Ticket Tile Rendering
     await expect(page.getByText("Add keyboard navigation shortcuts for catalog inspection")).toBeVisible();
-    await expect(page.getByText("Feature Request")).toBeVisible();
+    await expect(page.getByText("feature request", { exact: true })).toBeVisible();
 
     // 3. Filter by keyword
     const searchInput = page.getByPlaceholder("Filter by keyword...");
