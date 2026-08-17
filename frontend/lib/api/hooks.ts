@@ -36,8 +36,11 @@ import type {
 export const queryKeys = {
   /**
    * Query key for dashboard statistics.
+   *
+   * @param scope - Data scope ('personal' | 'global')
+   * @returns The query key for dashboard statistics.
    */
-  stats: ["stats"] as const,
+  stats: (scope?: "personal" | "global") => (scope ? (["stats", scope] as const) : (["stats"] as const)),
   /**
    * Query key for items.
    *
@@ -105,7 +108,8 @@ export const queryKeys = {
     collections?: string[],
     genres?: string[],
     publishers?: string[],
-    statuses?: string[]
+    statuses?: string[],
+    ownership?: string[]
   ) =>
     [
       "manifestations",
@@ -119,6 +123,7 @@ export const queryKeys = {
       genres?.join(",") ?? "",
       publishers?.join(",") ?? "",
       statuses?.join(",") ?? "",
+      ownership?.join(",") ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   worksShelf: (
@@ -129,7 +134,8 @@ export const queryKeys = {
     genres?: string[],
     publishers?: string[],
     statuses?: string[],
-    formats?: string[]
+    formats?: string[],
+    ownership?: string[]
   ) =>
     [
       "works",
@@ -142,6 +148,7 @@ export const queryKeys = {
       publishers?.join(",") ?? "",
       statuses?.join(",") ?? "",
       formats?.join(",") ?? "",
+      ownership?.join(",") ?? "",
     ] as const,
   expressionsShelf: (
     query?: string,
@@ -151,7 +158,8 @@ export const queryKeys = {
     genres?: string[],
     publishers?: string[],
     statuses?: string[],
-    formats?: string[]
+    formats?: string[],
+    ownership?: string[]
   ) =>
     [
       "expressions",
@@ -164,6 +172,7 @@ export const queryKeys = {
       publishers?.join(",") ?? "",
       statuses?.join(",") ?? "",
       formats?.join(",") ?? "",
+      ownership?.join(",") ?? "",
     ] as const,
   workParts: (id: number) => ["workParts", id] as const,
   config: ["config"] as const,
@@ -187,12 +196,13 @@ export function useAppConfig() {
 /**
  * Custom hook to fetch dashboard statistics.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns {import('@tanstack/react-query').UseQueryResult<DashboardStats>} Query result
  */
-export function useStats() {
+export function useStats(scope: "personal" | "global" = "personal") {
   return useQuery({
-    queryKey: queryKeys.stats,
-    queryFn: () => apiFetch<DashboardStats>("/stats"),
+    queryKey: queryKeys.stats(scope),
+    queryFn: () => apiFetch<DashboardStats>(`/stats?scope=${scope}`),
     staleTime: 30_000,
   });
 }
@@ -424,6 +434,7 @@ export function useManifestations(
  * @param genres - Optional genres filter
  * @param publishers - Optional publishers filter
  * @param statuses - Optional statuses filter
+ * @param ownership - Optional ownership filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<CatalogEntry[]>>} Infinite query result
  */
 export function useInfiniteManifestations(
@@ -438,7 +449,8 @@ export function useInfiniteManifestations(
   collections?: string[],
   genres?: string[],
   publishers?: string[],
-  statuses?: string[]
+  statuses?: string[],
+  ownership?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -452,11 +464,13 @@ export function useInfiniteManifestations(
         collections,
         genres,
         publishers,
-        statuses
+        statuses,
+        ownership
       ),
       "infinite",
       missingCover,
       missingId,
+      ownership,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -471,6 +485,7 @@ export function useInfiniteManifestations(
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
@@ -515,6 +530,9 @@ export function useManifestation(id: number) {
  * @param collections - Optional collections filter.
  * @param genres - Optional genres filter.
  * @param publishers - Optional publishers filter.
+ * @param statuses - Optional statuses filter.
+ * @param formats - Optional formats filter.
+ * @param ownership - Optional ownership filter.
  * @returns The query result containing the works shelf entries.
  */
 export function useWorksShelf(
@@ -524,10 +542,23 @@ export function useWorksShelf(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  statuses?: string[],
+  formats?: string[],
+  ownership?: string[]
 ) {
   return useQuery({
-    queryKey: queryKeys.worksShelf(query, category, tags, collections, genres, publishers),
+    queryKey: queryKeys.worksShelf(
+      query,
+      category,
+      tags,
+      collections,
+      genres,
+      publishers,
+      statuses,
+      formats,
+      ownership
+    ),
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (query && query.length > 0) params.q = query;
@@ -536,6 +567,9 @@ export function useWorksShelf(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (formats && formats.length > 0) params.formats = formats.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
       return res.data;
     },
@@ -557,6 +591,7 @@ export function useWorksShelf(
  * @param publishers - Publishers filter
  * @param statuses - Statuses filter
  * @param formats - Formats filter
+ * @param ownership - Ownership filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<WorkShelfEntry[]>>} Infinite query result
  */
 export function useInfiniteWorksShelf(
@@ -569,11 +604,12 @@ export function useInfiniteWorksShelf(
   genres?: string[],
   publishers?: string[],
   statuses?: string[],
-  formats?: string[]
+  formats?: string[],
+  ownership?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
-      ...queryKeys.worksShelf(query, category, tags, collections, genres, publishers, statuses, formats),
+      ...queryKeys.worksShelf(query, category, tags, collections, genres, publishers, statuses, formats, ownership),
       "infinite",
     ],
     initialPageParam: 0,
@@ -587,6 +623,7 @@ export function useInfiniteWorksShelf(
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
       if (formats && formats.length > 0) params.formats = formats.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<WorkShelfEntry[]>>("/works/shelf", { params });
       return res.data;
     },
@@ -612,6 +649,9 @@ export function useInfiniteWorksShelf(
  * @param collections - Optional collections filter.
  * @param genres - Optional genres filter.
  * @param publishers - Optional publishers filter.
+ * @param statuses - Optional statuses filter.
+ * @param formats - Optional formats filter.
+ * @param ownership - Optional ownership filter.
  * @returns The query result containing the expressions shelf entries.
  */
 export function useExpressionsShelf(
@@ -621,10 +661,23 @@ export function useExpressionsShelf(
   tags?: string[],
   collections?: string[],
   genres?: string[],
-  publishers?: string[]
+  publishers?: string[],
+  statuses?: string[],
+  formats?: string[],
+  ownership?: string[]
 ) {
   return useQuery({
-    queryKey: queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers),
+    queryKey: queryKeys.expressionsShelf(
+      query,
+      category,
+      tags,
+      collections,
+      genres,
+      publishers,
+      statuses,
+      formats,
+      ownership
+    ),
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (query && query.length > 0) params.q = query;
@@ -633,6 +686,9 @@ export function useExpressionsShelf(
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
+      if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
+      if (formats && formats.length > 0) params.formats = formats.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
     },
@@ -654,6 +710,7 @@ export function useExpressionsShelf(
  * @param publishers - Publishers filter
  * @param statuses - Statuses filter
  * @param formats - Formats filter
+ * @param ownership - Ownership filter
  * @returns {import('@tanstack/react-query').UseInfiniteQueryResult<ApiResponse<ExpressionShelfEntry[]>>} Infinite query result
  */
 export function useInfiniteExpressionsShelf(
@@ -666,11 +723,22 @@ export function useInfiniteExpressionsShelf(
   genres?: string[],
   publishers?: string[],
   statuses?: string[],
-  formats?: string[]
+  formats?: string[],
+  ownership?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
-      ...queryKeys.expressionsShelf(query, category, tags, collections, genres, publishers, statuses, formats),
+      ...queryKeys.expressionsShelf(
+        query,
+        category,
+        tags,
+        collections,
+        genres,
+        publishers,
+        statuses,
+        formats,
+        ownership
+      ),
       "infinite",
     ],
     initialPageParam: 0,
@@ -684,6 +752,7 @@ export function useInfiniteExpressionsShelf(
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
       if (formats && formats.length > 0) params.formats = formats.join(",");
+      if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
       const res = await apiClient.get<ApiResponse<ExpressionShelfEntry[]>>("/expressions/shelf", { params });
       return res.data;
     },
@@ -802,7 +871,7 @@ export function useAddItem() {
       throw new Error("Either isbn or manifestation_id must be provided");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
       qc.invalidateQueries({ queryKey: ["worksShelf"] });
       qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
@@ -854,7 +923,7 @@ export function useAddManualItem() {
       return res.data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
@@ -893,7 +962,7 @@ export function useDeleteItem() {
       return id;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.stats });
+      qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
     },
   });
@@ -1146,7 +1215,7 @@ export function useSetWorkIntent() {
     },
     onSuccess: (_, variables) => {
       void qc.invalidateQueries({ queryKey: ["workIntent", variables.workId] });
-      void qc.invalidateQueries({ queryKey: queryKeys.stats });
+      void qc.invalidateQueries({ queryKey: queryKeys.stats() });
       void qc.invalidateQueries({ queryKey: ["items"] });
       void qc.invalidateQueries({ queryKey: ["worksShelf"] });
       void qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
@@ -1378,12 +1447,13 @@ export function useResolveLoan() {
 /**
  * Custom hook to fetch acquisition velocity insights.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns Query result
  */
-export function useVelocityInsights() {
+export function useVelocityInsights(scope: "personal" | "global" = "personal") {
   return useQuery<VelocityPoint[]>({
-    queryKey: ["insights", "velocity"],
-    queryFn: getVelocityInsights,
+    queryKey: ["insights", "velocity", scope],
+    queryFn: () => getVelocityInsights(scope),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -1391,12 +1461,13 @@ export function useVelocityInsights() {
 /**
  * Custom hook to fetch distribution insights (content types & formats).
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns Query result
  */
-export function useDistributionInsights() {
+export function useDistributionInsights(scope: "personal" | "global" = "personal") {
   return useQuery<InsightsData>({
-    queryKey: ["insights", "distribution"],
-    queryFn: getDistributionInsights,
+    queryKey: ["insights", "distribution", scope],
+    queryFn: () => getDistributionInsights(scope),
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter, apply_statuses_filter
+from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, db
 
@@ -46,6 +46,7 @@ def get_works_catalog() -> Response:
     publishers_filter = request.args.get("publishers")
     statuses_filter = request.args.get("statuses")
     formats_filter = request.args.get("formats")
+    ownership_filter = request.args.get("ownership")
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
@@ -53,6 +54,8 @@ def get_works_catalog() -> Response:
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
     statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
     formats_list = [f.strip() for f in formats_filter.split(",") if f.strip()] if formats_filter else None
+    raw_ownership = parse_csv_param(ownership_filter)
+    ownership_list = [v for v in raw_ownership if v in {"owned", "not_owned"}] if raw_ownership is not None else None
 
     limit_arg = request.args.get("limit")
     limit = int(limit_arg) if limit_arg is not None else 1000
@@ -134,6 +137,22 @@ def get_works_catalog() -> Response:
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
+
+    if ownership_list and user_id:
+        ownership_conditions = []
+        owned_exists = (
+            db.session.query(Item.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .filter(Expression.work_id == Work.id, Item.owner_id == user_id)
+            .exists()
+        )
+        if "owned" in ownership_list:
+            ownership_conditions.append(owned_exists)
+        if "not_owned" in ownership_list:
+            ownership_conditions.append(~owned_exists)
+        if ownership_conditions:
+            base_query = base_query.filter(db.or_(*ownership_conditions))
 
     # Get the total count of distinct works matching the filters
     total_count = base_query.with_entities(Work.id).distinct().count()
@@ -258,6 +277,7 @@ def get_expressions_catalog() -> Response:
     publishers_filter = request.args.get("publishers")
     statuses_filter = request.args.get("statuses")
     formats_filter = request.args.get("formats")
+    ownership_filter = request.args.get("ownership")
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
@@ -265,6 +285,8 @@ def get_expressions_catalog() -> Response:
     publishers_list = [p.strip() for p in publishers_filter.split(",") if p.strip()] if publishers_filter else None
     statuses_list = [s.strip() for s in statuses_filter.split(",") if s.strip()] if statuses_filter else None
     formats_list = [f.strip() for f in formats_filter.split(",") if f.strip()] if formats_filter else None
+    raw_ownership = parse_csv_param(ownership_filter)
+    ownership_list = [v for v in raw_ownership if v in {"owned", "not_owned"}] if raw_ownership is not None else None
 
     limit_arg = request.args.get("limit")
     limit = int(limit_arg) if limit_arg is not None else 1000
@@ -346,6 +368,21 @@ def get_expressions_catalog() -> Response:
 
     if formats_list:
         base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(formats_list))
+
+    if ownership_list and user_id:
+        ownership_conditions = []
+        owned_exists = (
+            db.session.query(Item.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .filter(Manifestation.expression_id == Expression.id, Item.owner_id == user_id)
+            .exists()
+        )
+        if "owned" in ownership_list:
+            ownership_conditions.append(owned_exists)
+        if "not_owned" in ownership_list:
+            ownership_conditions.append(~owned_exists)
+        if ownership_conditions:
+            base_query = base_query.filter(db.or_(*ownership_conditions))
 
     # Base query for distinct expression IDs
     base_expr_query = base_query.with_entities(Expression.id).distinct()

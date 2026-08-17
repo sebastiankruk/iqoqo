@@ -19,13 +19,23 @@
  * useStats is mocked so we can control loading, error, and data states
  * without running real HTTP requests.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/api/hooks", () => ({
   useStats: vi.fn(),
   useManifestations: vi.fn(),
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useVelocityInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useDistributionInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+}));
+
+vi.mock("@/components/dashboard/collection-insights", () => ({
+  CollectionInsights: ({ scope }: { scope?: string }) => (
+    <div data-testid="mock-collection-insights" data-scope={scope}>
+      Collection Insights Mock
+    </div>
+  ),
 }));
 
 import { useStats } from "@/lib/api/hooks";
@@ -38,6 +48,7 @@ const FULL_STATS = {
   lent_items: 3,
   to_read: 10,
   items_reading: 5,
+  borrowed_items: 2,
   works: 30,
   expressions: 31,
   manifestations: 40,
@@ -46,6 +57,7 @@ const FULL_STATS = {
   items_lent: 3,
   items_lost: 0,
   items_wish_list: 10,
+  items_reading_count: 5,
   items_read: 0,
 };
 
@@ -54,10 +66,12 @@ describe("StatsCards", () => {
     vi.clearAllMocks();
   });
 
-  it("renders five stat card labels", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+  it("renders five top stat card labels by default in personal scope", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
-    expect(screen.getByText("Items")).toBeInTheDocument();
+    expect(screen.getByText("My Items")).toBeInTheDocument();
     expect(screen.getByText("Lent Out")).toBeInTheDocument();
     expect(screen.getByText("On Wish List")).toBeInTheDocument();
     expect(screen.getByText("Reading")).toBeInTheDocument();
@@ -65,7 +79,9 @@ describe("StatsCards", () => {
   });
 
   it("displays numeric values when data is loaded", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -74,7 +90,9 @@ describe("StatsCards", () => {
   });
 
   it("does not show numeric values while loading", () => {
-    mockUseStats.mockReturnValue({ data: undefined, isLoading: true, isError: false } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: undefined, isLoading: true, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.queryByText("42")).not.toBeInTheDocument();
     expect(screen.queryByText("3")).not.toBeInTheDocument();
@@ -83,21 +101,27 @@ describe("StatsCards", () => {
   });
 
   it("shows em-dash placeholders when the API returns an error", () => {
-    mockUseStats.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     const dashes = screen.getAllByText("—");
-    // One dash per stat card
+    // One dash per stat card (5 top cards)
     expect(dashes).toHaveLength(5);
   });
 
   it("is wrapped in a landmark section for accessibility", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByRole("region", { name: /collection statistics/i })).toBeInTheDocument();
   });
 
   it("shows descriptive subtitles below each value", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
     expect(screen.getByText("Total in collection")).toBeInTheDocument();
     expect(screen.getByText("Currently with friends")).toBeInTheDocument();
@@ -106,7 +130,9 @@ describe("StatsCards", () => {
   });
 
   it("renders links with the correct URLs for filtering collections", () => {
-    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as ReturnType<typeof useStats>);
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
     render(<StatsCards />);
 
     const links = screen.getAllByRole("link");
@@ -116,5 +142,72 @@ describe("StatsCards", () => {
     expect(links[1]).toHaveAttribute("href", "/collection?statuses=reading");
     expect(links[2]).toHaveAttribute("href", "/collection?statuses=wish_list");
     expect(links[3]).toHaveAttribute("href", "/collection?statuses=lent");
+    expect(links[4]).toHaveAttribute("href", "/collection?statuses=borrowed");
+  });
+
+  it("toggles between Stats and Insights views", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+
+    const insightsBtn = screen.getByRole("button", { name: "Insights" });
+    fireEvent.click(insightsBtn);
+
+    expect(screen.getByTestId("mock-collection-insights")).toBeInTheDocument();
+    expect(screen.queryByText("My Items")).not.toBeInTheDocument();
+
+    const statsBtn = screen.getByRole("button", { name: "Stats" });
+    fireEvent.click(statsBtn);
+
+    expect(screen.getByText("My Items")).toBeInTheDocument();
+    expect(screen.getByText("Reading")).toBeInTheDocument();
+  });
+
+  it("toggles between Personal and Global scope with dynamic labels", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+
+    expect(mockUseStats).toHaveBeenCalledWith("personal");
+    expect(screen.getByText("My Items")).toBeInTheDocument();
+    expect(screen.getByText("Reading")).toBeInTheDocument();
+    expect(screen.getByText("On Wish List")).toBeInTheDocument();
+
+    const globalBtn = screen.getByRole("button", { name: /global/i });
+    fireEvent.click(globalBtn);
+
+    expect(mockUseStats).toHaveBeenCalledWith("global");
+    expect(screen.getByText("All Items")).toBeInTheDocument();
+    expect(screen.getByText("Being Read")).toBeInTheDocument();
+    expect(screen.getByText("On Wish Lists")).toBeInTheDocument();
+  });
+
+  it("applies overflow-x-auto and flex-nowrap classes for mobile horizontal scrolling", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+    const scrollContainer = screen.getByTestId("stats-scroll-container");
+    expect(scrollContainer).toHaveClass("overflow-x-auto", "flex-nowrap");
+  });
+
+  it("passes active scope prop to CollectionInsights in insights view", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+
+    const insightsBtn = screen.getByRole("button", { name: "Insights" });
+    fireEvent.click(insightsBtn);
+
+    const insightsMock = screen.getByTestId("mock-collection-insights");
+    expect(insightsMock).toHaveAttribute("data-scope", "personal");
+
+    const globalBtn = screen.getByRole("button", { name: /global/i });
+    fireEvent.click(globalBtn);
+
+    expect(insightsMock).toHaveAttribute("data-scope", "global");
   });
 });

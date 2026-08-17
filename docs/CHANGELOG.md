@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.15] - 2026-08-17
+
+### Added
+
+- **Dashboard Scope & View Toggles**: Introduced interactive view toggle between standard Top Tiles and FRBR Stats Tiles (Works, Expressions, Editions, Items), along with a Personal vs Global repository scope toggle.
+- **Mobile Responsive Metric Tiles**: Enabled single-line horizontal scrolling with `overflow-x-auto flex-nowrap` for top metric tiles on mobile viewports.
+- **Backend Query Scoping**: Added `scope` query parameter support (`?scope=personal|global`) to `/api/stats` and `/api/profile/insights/*`, ensuring proper `UserWorkIntent` joins for personal inventory vs global catalog aggregates.
+- **In-App Feedback & Bug Reporting Flow**: Native feedback submission dialog accessible from user profile dropdown with screenshot attachment support, request type categorization, and rate-limiting protection.
+- **Dedicated Feedback Management Dashboard**: Full-page `/feedback` interface with left-side status/type filters, pagination, interactive detail modals, and role-based access control (`tickets:admin` vs `tickets:creator`).
+- **Ownership Facet Navigation**: Dedicated "Ownership" facet with "Owned" and "Not Owned" options for Manifestations, Expressions, and Works.
+- **E2E Playwright UX Hotfix Tests**: End-to-end browser tests verifying ownership filter empty state defaults and feedback submission workflow.
+
+### Changed
+
+- **Single Help & Feedback Entry**: Consolidated user profile dropdown entries into a unified "Help & Feedback" link.
+- **Nginx Static Attachment Proxying**: Configured direct `/static/gallery/` and `/api/static/gallery/` location blocks for instant static media resolution.
+- **Nginx Reverse Proxy Body Size**: Increased `client_max_body_size` to `50M` in `deploy/nginx.conf` to accommodate multi-file feedback screenshots (up to 5 files at 10MB each); custom proxy deployments should update their client body size accordingly.
+
+### Fixed
+
+- **Filter Drawer Empty State Default**: Fixed ownership facet so unselected state defaults to displaying all catalog records without empty state regressions.
+- **Feedback Page Navigation**: Embedded standard `Navbar` and `Footer` in `/feedback` page to prevent navigation dead-ends.
+- **Feedback Detail Modal Optional Event Callback**: Made `onUpdated` prop optional in `FeedbackDetailModal` to prevent TypeScript compilation errors.
+
 ## [0.7.14] - 2026-08-13
 
 ### Added

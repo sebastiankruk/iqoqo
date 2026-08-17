@@ -55,6 +55,7 @@ import {
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
+import { FeedbackModal } from "@/components/feedback/feedback-modal";
 
 /**
  * Sticky top navigation bar – "Modern Athenaeum" style.
@@ -72,6 +73,7 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false);
   const queryClient = useQueryClient();
   const [manageCollOpen, setManageCollOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const { setTheme, theme } = useTheme();
   const locale = useLocale();
@@ -245,8 +247,8 @@ export function Navbar() {
                       <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                      <Link href="/admin/settings?tab=profile#help-requests">
-                        <HelpCircle className="mr-2 h-4 w-4" /> {t("myHelpRequests")}
+                      <Link href="/feedback">
+                        <HelpCircle className="mr-2 h-4 w-4" /> {t("helpAndFeedback")}
                         {pendingCount > 0 && (
                           <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {pendingCount}
@@ -342,6 +344,7 @@ export function Navbar() {
           </div>
         </div>
         <ManageCollectionsModal isOpen={manageCollOpen} onClose={() => setManageCollOpen(false)} />
+        <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       </nav>
 
       {/* Mobile Bottom Navigation Bar */}

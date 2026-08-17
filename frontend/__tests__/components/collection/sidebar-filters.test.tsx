@@ -377,4 +377,27 @@ describe("SidebarFilters — unauthenticated users", () => {
     expect(screen.queryByText("Collection Status")).not.toBeInTheDocument();
     expect(screen.queryByText("Progress")).not.toBeInTheDocument();
   });
+
+  it("shows Ownership facet when logged in and viewMode is manifestations", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} viewMode="manifestations" />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Ownership")).toBeInTheDocument();
+    expect(screen.getByText("Owned")).toBeInTheDocument();
+    expect(screen.getByText("Not Owned")).toBeInTheDocument();
+  });
+
+  it("hides Ownership facet when viewMode is items", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} viewMode="items" />
+      </QueryClientProvider>
+    );
+
+    expect(screen.queryByText("Ownership")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not Owned")).not.toBeInTheDocument();
+  });
 });

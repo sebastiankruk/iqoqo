@@ -9,7 +9,6 @@
   "permission": {
     "external_directory": {},
     "edit": {},
-
     "bash": {
       "cat *.env*": "deny",
       "printenv*": "deny",

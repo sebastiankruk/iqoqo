@@ -22,6 +22,9 @@ LICENSE_SIGNATURE="GNU Affero General Public License"
 # File extensions to check (add or remove as needed)
 EXTENSIONS=("*.ts" "*.tsx" "*.js" "*.py" "*.java" "*.go" "*.rs" "*.cpp" "*.c" "*.h" "*.sh" "*.yaml" "*.yml" "Dockerfile*" "Makefile*" "*.css" "*.svg")
 
+# Excluded path patterns (e.g. third-party plugins, public static assets)
+EXCLUDE_PATTERNS=("frontend/public/*" ".opencode/*" "*/.opencode/*")
+
 echo "Checking source files for license headers..."
 FAILED=0
 
@@ -32,12 +35,25 @@ while IFS= read -r file; do
         continue
     fi
 
+    # Skip excluded path patterns
+    EXCLUDED=0
+    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+        # shellcheck disable=SC2053
+        if [[ "$file" == $pattern ]]; then
+            EXCLUDED=1
+            break
+        fi
+    done
+    if [ $EXCLUDED -eq 1 ]; then
+        continue
+    fi
+
     # Check if file matches any extension pattern
     MATCH=0
     filename=$(basename "$file")
     for ext in "${EXTENSIONS[@]}"; do
         # shellcheck disable=SC2053
-        if [[ "$filename" == $ext ]] && [[ "$file" != frontend/public/* ]]; then
+        if [[ "$filename" == $ext ]]; then
             MATCH=1
             break
         fi

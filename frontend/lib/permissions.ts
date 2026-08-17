@@ -38,6 +38,8 @@ export enum PermissionName {
   REFETCH_METADATA = "refetch:metadata",
   REFETCH_COVER = "refetch:cover",
   REGENERATE_COVER = "regenerate:cover",
+  TICKETS_ADMIN = "tickets:admin",
+  TICKETS_CREATOR = "tickets:creator",
   UPDATE_ITEM = "update:item",
   UPLOAD_COVER = "upload:cover",
   WRITE_ITEM = "write:item",

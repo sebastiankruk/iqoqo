@@ -242,6 +242,7 @@ import { useTaxonomies } from "@/lib/api/hooks";
  * @param root0.genreCounts - The counts for genres
  * @param root0.publisherCounts - The counts for publishers
  * @param root0.borrowedCount - The number of borrowed items in the collection
+ * @param root0.viewMode - The current view mode ("items" | "manifestations" | "works" | "expressions")
  * @returns {JSX.Element} The component
  */
 export function SidebarFilters({
@@ -252,6 +253,7 @@ export function SidebarFilters({
   categoryCounts = {},
   isLoggedIn = false,
   isCurator = false,
+  viewMode,
   missingCover = false,
   onChangeMissingCover,
   onChangeMissingId,
@@ -320,6 +322,38 @@ export function SidebarFilters({
           })}
         </div>
       </AccordionSection>
+
+      {isLoggedIn && viewMode !== "items" && (
+        <AccordionSection title="Ownership">
+          <div className="flex flex-col gap-1">
+            {[
+              { value: "owned", label: "Owned" },
+              { value: "not_owned", label: "Not Owned" },
+            ].map(opt => {
+              const active = isActive(activeFilters, "ownership", opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${
+                    active
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "ownership", value: opt.value })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{opt.label}</span>
+                  {active && <Check className="h-3 w-3 text-primary" />}
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
 
       {isLoggedIn &&
         taxonomies?.collections &&

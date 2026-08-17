@@ -8,7 +8,7 @@
     "publicProfile": "Public Profile",
     "profileSettings": "Profile Settings",
     "manageCollections": "Manage Collections",
-    "myHelpRequests": "My Help Requests",
+    "helpAndFeedback": "Help & Feedback",
     "adminConfiguration": "Admin Configuration",
     "logOut": "Log out",
     "home": "Home",
@@ -38,15 +38,27 @@
   },
   "StatsCards": {
     "items": "My Items",
+    "itemsGlobal": "All Items",
     "itemsDesc": "Total in collection",
+    "itemsDescGlobal": "Total in repository",
     "reading": "Reading",
+    "readingGlobal": "Being Read",
     "readingDesc": "Currently active reads",
+    "readingDescGlobal": "Being read by users",
     "wishList": "On Wish List",
+    "wishListGlobal": "On Wish Lists",
     "wishListDesc": "On your list",
+    "wishListDescGlobal": "On user wish lists",
     "lentOut": "Lent Out",
     "lentOutDesc": "Currently with friends",
     "borrowed": "Borrowed",
     "borrowedDesc": "Borrowed from others",
+    "viewStats": "Stats",
+    "viewInsights": "Insights",
+    "scopePersonal": "Personal",
+    "scopeGlobal": "Global",
+    "viewLabel": "View mode",
+    "scopeLabel": "Scope",
     "ariaLabel": "Collection statistics"
   },
   "CurrentContext": {
@@ -369,5 +381,8 @@
     "failedToSubmit": "Failed to submit escalation request",
     "custodianNote": "Custodian note",
     "suggested": "Suggested"
+  },
+  "Scanner": {
+    "skipAndEnterManually": "Skip and enter manually"
   }
 }

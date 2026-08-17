@@ -107,6 +107,7 @@ function CollectionContent() {
   const initialCollections = searchParams?.get("collections") || "";
   const initialGenres = searchParams?.get("genres") || "";
   const initialPublishers = searchParams?.get("publishers") || "";
+  const initialOwnership = searchParams?.get("ownership") || "";
 
   const initialCategories = searchParams?.get("category") || "";
   const initialFormats = searchParams?.get("format") || "";
@@ -119,6 +120,7 @@ function CollectionContent() {
     ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
     ...(initialCategories ? initialCategories.split(",").map(s => ({ type: "category" as const, value: s })) : []),
     ...(initialFormats ? initialFormats.split(",").map(s => ({ type: "format" as const, value: s })) : []),
+    ...(initialOwnership ? initialOwnership.split(",").map(s => ({ type: "ownership" as const, value: s })) : []),
   ];
 
   const initialViewMode = (searchParams?.get("view") || "items") as
@@ -221,6 +223,10 @@ function CollectionContent() {
     () => activeFilters.filter(f => f.type === "publisher").map(f => f.value),
     [activeFilters]
   );
+  const ownershipFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "ownership").map(f => f.value),
+    [activeFilters]
+  );
 
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
@@ -234,6 +240,7 @@ function CollectionContent() {
     if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
     if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
     if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
+    if (ownershipFilters.length > 0) params.set("ownership", ownershipFilters.join(","));
     if (categoryFilters.length > 0) params.set("category", categoryFilters.join(","));
     if (formatFilters.length > 0) params.set("format", formatFilters.join(","));
 
@@ -253,6 +260,7 @@ function CollectionContent() {
     collectionFilters,
     genreFilters,
     publisherFilters,
+    ownershipFilters,
     appliedQuery,
     viewMode,
     isLoggedIn,
@@ -307,7 +315,8 @@ function CollectionContent() {
     collectionFilters,
     genreFilters,
     publisherFilters,
-    statusFilters
+    statusFilters,
+    ownershipFilters
   );
 
   const {
@@ -326,7 +335,8 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     statusFilters.length > 0 ? statusFilters : undefined,
-    formatFilters.length > 0 ? formatFilters : undefined
+    formatFilters.length > 0 ? formatFilters : undefined,
+    ownershipFilters.length > 0 ? ownershipFilters : undefined
   );
   const {
     data: exprsData,
@@ -344,7 +354,8 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     statusFilters.length > 0 ? statusFilters : undefined,
-    formatFilters.length > 0 ? formatFilters : undefined
+    formatFilters.length > 0 ? formatFilters : undefined,
+    ownershipFilters.length > 0 ? ownershipFilters : undefined
   );
 
   const filtersForFacets = useMemo(() => {
@@ -355,6 +366,7 @@ function CollectionContent() {
     if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
     if (genreFilters.length > 0) f.genres = genreFilters.join(",");
     if (publisherFilters.length > 0) f.publishers = publisherFilters.join(",");
+    if (ownershipFilters.length > 0) f.ownership = ownershipFilters.join(",");
     if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
@@ -369,6 +381,7 @@ function CollectionContent() {
     collectionFilters,
     genreFilters,
     publisherFilters,
+    ownershipFilters,
     statusFilters,
     isBorrowedFilterActive,
     missingCoverOnly,

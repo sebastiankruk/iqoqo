@@ -18,19 +18,21 @@ import { apiFetch } from "@/lib/api/client";
 import type { VelocityPoint, InsightsData } from "@/types/insights";
 
 /**
- * Fetch monthly item acquisition velocity for the authenticated user.
+ * Fetch monthly item acquisition velocity for the authenticated user or globally.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns {Promise<VelocityPoint[]>} Array of monthly counts
  */
-export async function getVelocityInsights(): Promise<VelocityPoint[]> {
-  return apiFetch<VelocityPoint[]>("/profile/insights/velocity");
+export async function getVelocityInsights(scope: "personal" | "global" = "personal"): Promise<VelocityPoint[]> {
+  return apiFetch<VelocityPoint[]>(`/profile/insights/velocity?scope=${scope}`);
 }
 
 /**
- * Fetch collection distribution by content_type and format for the authenticated user.
+ * Fetch collection distribution by content_type and format for the authenticated user or globally.
  *
+ * @param scope - Data scope ('personal' | 'global')
  * @returns {Promise<InsightsData>} Distribution data
  */
-export async function getDistributionInsights(): Promise<InsightsData> {
-  return apiFetch<InsightsData>("/profile/insights/distribution");
+export async function getDistributionInsights(scope: "personal" | "global" = "personal"): Promise<InsightsData> {
+  return apiFetch<InsightsData>(`/profile/insights/distribution?scope=${scope}`);
 }

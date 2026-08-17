@@ -430,6 +430,13 @@ class DataManager:
                 ).scalar()
                 or 0
             )
+        else:
+            borrowed_count = (
+                db.session.execute(
+                    select(func.count(Item.id)).where(Item.lent_to_user_id.isnot(None))  # pylint: disable=not-callable
+                ).scalar()
+                or 0
+            )
 
         status_counts: dict[str, int] = dict.fromkeys(ITEM_STATUSES, 0)
         total = 0
@@ -527,6 +534,7 @@ class DataManager:
         missing_cover: bool = False,
         missing_id: bool = False,
         target_entity: str = "items",
+        ownership: list[str] | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -666,6 +674,32 @@ class DataManager:
             status_conds = [Item.status.in_(statuses), Item.collection_status.in_(statuses)]
             base_query = base_query.where(or_(*status_conds))
 
+        if ownership and owner_id and target_entity in ("works", "expressions", "manifestations"):
+            ownership_conds: list[Any] = []
+            if target_entity == "works":
+                owned_exists = (
+                    select(Item.id)
+                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .where(Expression.work_id == Work.id, Item.owner_id == owner_id)
+                    .exists()
+                )
+            elif target_entity == "expressions":
+                owned_exists = (
+                    select(Item.id)
+                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                    .where(Manifestation.expression_id == Expression.id, Item.owner_id == owner_id)
+                    .exists()
+                )
+            else:  # manifestations
+                owned_exists = select(Item.id).where(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id).exists()
+            if "owned" in ownership:
+                ownership_conds.append(owned_exists)
+            if "not_owned" in ownership:
+                ownership_conds.append(~owned_exists)
+            if ownership_conds:
+                base_query = base_query.where(or_(*ownership_conds))
+
         return base_query.subquery()
 
     @staticmethod
@@ -683,6 +717,7 @@ class DataManager:
         missing_cover: bool = False,
         missing_id: bool = False,
         view: str = "items",
+        ownership: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return cross-filtered per-facet counts for sidebar faceted navigation.
 
@@ -784,6 +819,7 @@ class DataManager:
                 missing_cover=missing_cover,
                 missing_id=missing_id,
                 target_entity=target_entity,
+                ownership=ownership,
             )
 
         cat_subq = _subq(exclude_category=True)
@@ -1170,16 +1206,17 @@ class DataManager:
         }
 
 
-def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
-    """Returns monthly item acquisition count for the last 12 months for a given user."""
-    owner_val: Any
-    if isinstance(owner_id, str):
-        try:
-            owner_val = uuid.UUID(owner_id)
-        except ValueError:
+def get_velocity_stats(owner_id: Any = None) -> list[dict[str, Any]]:
+    """Returns monthly item acquisition count for the last 12 months for a given user or globally."""
+    owner_val: Any = None
+    if owner_id is not None:
+        if isinstance(owner_id, str):
+            try:
+                owner_val = uuid.UUID(owner_id)
+            except ValueError:
+                owner_val = owner_id
+        else:
             owner_val = owner_id
-    else:
-        owner_val = owner_id
 
     now = datetime.now(UTC)
     months = []
@@ -1200,9 +1237,13 @@ def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
     else:
         month_expr = func.to_char(func.date_trunc("month", Item.added_at), "YYYY-MM")
 
+    where_clauses = [Item.added_at >= cutoff_date]
+    if owner_val is not None:
+        where_clauses.append(Item.owner_id == owner_val)
+
     stmt = (
         select(month_expr.label("month"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
-        .where(Item.owner_id == owner_val, Item.added_at >= cutoff_date)
+        .where(*where_clauses)
         .group_by(month_expr)
     )
 
@@ -1212,24 +1253,26 @@ def get_velocity_stats(owner_id: Any) -> list[dict[str, Any]]:
     return [{"month": m, "count": count_map.get(m, 0)} for m in months]
 
 
-def get_distribution_stats(owner_id: Any) -> dict[str, list[dict[str, Any]]]:
-    """Returns collection items breakdown by content_type and physical format for a given user."""
-    owner_val: Any
-    if isinstance(owner_id, str):
-        try:
-            owner_val = uuid.UUID(owner_id)
-        except ValueError:
+def get_distribution_stats(owner_id: Any = None) -> dict[str, list[dict[str, Any]]]:
+    """Returns collection items breakdown by content_type and physical format for a given user or globally."""
+    owner_val: Any = None
+    if owner_id is not None:
+        if isinstance(owner_id, str):
+            try:
+                owner_val = uuid.UUID(owner_id)
+            except ValueError:
+                owner_val = owner_id
+        else:
             owner_val = owner_id
-    else:
-        owner_val = owner_id
 
+    type_where = [Item.owner_id == owner_val] if owner_val is not None else []
     # 1. By type (Expression.content_type)
     stmt_type = (
         select(Expression.content_type.label("type"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
         .select_from(Item)
         .join(Manifestation, Item.manifestation_id == Manifestation.id)
         .join(Expression, Manifestation.expression_id == Expression.id)
-        .where(Item.owner_id == owner_val)
+        .where(*type_where)
         .group_by(Expression.content_type)
     )
     type_results = db.session.execute(stmt_type).all()
@@ -1241,7 +1284,7 @@ def get_distribution_stats(owner_id: Any) -> dict[str, list[dict[str, Any]]]:
         select(format_expr.label("format"), func.count(Item.id).label("count"))  # pylint: disable=not-callable
         .select_from(Item)
         .join(Manifestation, Item.manifestation_id == Manifestation.id)
-        .where(Item.owner_id == owner_val)
+        .where(*type_where)
         .group_by(format_expr)
     )
     format_results = db.session.execute(stmt_format).all()

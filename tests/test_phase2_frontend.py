@@ -204,6 +204,29 @@ class TestStatsEndpoint:
         assert data["lent_items"] == 1
         assert data["to_read"] == 1
 
+    def test_stats_scope_parameter(self, client, populated_library, auth_headers):
+        """Stats should accept scope=personal and scope=global query parameters."""
+        resp_personal = client.get("/api/stats?scope=personal", headers=auth_headers)
+        assert resp_personal.status_code == 200
+        data_personal = resp_personal.get_json()["data"]
+        assert data_personal["total_items"] == 3
+
+        resp_global = client.get("/api/stats?scope=global", headers=auth_headers)
+        assert resp_global.status_code == 200
+        data_global = resp_global.get_json()["data"]
+        assert data_global["total_items"] >= 3
+        assert "works" in data_global
+
+    def test_insights_scope_parameter(self, client, populated_library, auth_headers):
+        """Insights endpoints should accept scope=personal and scope=global query parameters."""
+        resp_vel = client.get("/api/profile/insights/velocity?scope=global", headers=auth_headers)
+        assert resp_vel.status_code == 200
+        assert resp_vel.get_json()["success"] is True
+
+        resp_dist = client.get("/api/profile/insights/distribution?scope=global", headers=auth_headers)
+        assert resp_dist.status_code == 200
+        assert resp_dist.get_json()["success"] is True
+
 
 # ===========================================================================
 # GET /api/items endpoint – shape expected by the collection grid

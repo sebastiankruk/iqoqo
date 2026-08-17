@@ -55,12 +55,15 @@ def get_manifestations() -> tuple[Response, int]:
     genres_filter = request.args.get("genres")
     publishers_filter = request.args.get("publishers")
     statuses_filter = request.args.get("statuses")
+    ownership_filter = request.args.get("ownership")
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
     genres_list = parse_csv_param(genres_filter)
     publishers_list = parse_csv_param(publishers_filter)
     statuses_list = parse_csv_param(statuses_filter)
+    raw_ownership = parse_csv_param(ownership_filter)
+    ownership_list = [value for value in raw_ownership if value in {"owned", "not_owned"}] if raw_ownership else None
 
     try:
         page = int(page_param)
@@ -89,6 +92,7 @@ def get_manifestations() -> tuple[Response, int]:
             genres=genres_list,
             publishers=publishers_list,
             statuses=statuses_list,
+            ownership=ownership_list,
             user_id=user_id,
         )
 
@@ -140,6 +144,15 @@ def get_manifestations() -> tuple[Response, int]:
 
         # Apply taxonomy filters
         has_item_joined = False
+        if ownership_list and user_id:
+            ownership_conditions = []
+            owned_exists = db.session.query(Item.id).filter(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id).exists()
+            if "owned" in ownership_list:
+                ownership_conditions.append(owned_exists)
+            if "not_owned" in ownership_list:
+                ownership_conditions.append(~owned_exists)
+            if ownership_conditions:
+                query = query.filter(db.or_(*ownership_conditions))
         if tags_list:
             if not has_item_joined:
                 query = query.join(Item, Manifestation.id == Item.manifestation_id)

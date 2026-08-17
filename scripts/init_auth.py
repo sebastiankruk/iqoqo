@@ -107,6 +107,7 @@ def run_init_auth(app: Flask | None = None) -> None:
             PermissionName.LLM_GENERATE_METADATA.value,
             PermissionName.LLM_GENERATE_COVER.value,
             PermissionName.ESCALATE_REQUEST.value,
+            PermissionName.TICKETS_CREATOR.value,
         }
         user_role.permissions = [p for p in all_perms if p.name in user_perm_names]
 

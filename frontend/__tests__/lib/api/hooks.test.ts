@@ -144,8 +144,8 @@ describe("queryKeys advanced views", () => {
 
   it("produces stable keys for works and expressions shelves", async () => {
     const { queryKeys } = await import("@/lib/api/hooks");
-    expect(queryKeys.worksShelf()).toEqual(["works", "shelf", "", "", "", "", "", "", "", ""]);
-    expect(queryKeys.expressionsShelf()).toEqual(["expressions", "shelf", "", "", "", "", "", "", "", ""]);
+    expect(queryKeys.worksShelf()).toEqual(["works", "shelf", "", "", "", "", "", "", "", "", ""]);
+    expect(queryKeys.expressionsShelf()).toEqual(["expressions", "shelf", "", "", "", "", "", "", "", "", ""]);
   });
 
   it("produces stable keys for work parts with id", async () => {

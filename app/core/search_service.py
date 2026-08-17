@@ -61,6 +61,7 @@ class SearchService:
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
         statuses: list[str] | None = None,
+        ownership: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
@@ -68,7 +69,7 @@ class SearchService:
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses):
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses or ownership):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
@@ -88,6 +89,7 @@ class SearchService:
             genres=genres,
             publishers=publishers,
             statuses=statuses,
+            ownership=ownership,
             user_id=user_id,
         )
 
@@ -219,6 +221,7 @@ class SearchService:
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
         statuses: list[str] | None = None,
+        ownership: list[str] | None = None,
         user_id: Any = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
@@ -228,6 +231,15 @@ class SearchService:
             .join(Work, Expression.work_id == Work.id)
             .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
         )
+        if ownership and user_id:
+            ownership_conditions = []
+            owned_exists = db.session.query(Item.id).filter(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id).exists()
+            if "owned" in ownership:
+                ownership_conditions.append(owned_exists)
+            if "not_owned" in ownership:
+                ownership_conditions.append(~owned_exists)
+            if ownership_conditions:
+                base_query = base_query.filter(db.or_(*ownership_conditions))
         if category:
             base_query = base_query.filter(Expression.content_type.in_(category))
         if format_filter:

@@ -18,7 +18,6 @@
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { StatsCards } from "@/components/dashboard/stats-cards";
-import { CollectionInsights } from "@/components/dashboard/collection-insights";
 import { CurrentContext } from "@/components/dashboard/current-context";
 import { FreshArrivals } from "@/components/dashboard/fresh-arrivals";
 import { Hero } from "@/components/landing/hero";
@@ -57,7 +56,6 @@ export default function DashboardPage() {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">{t("collectionGrowing")}</p>
             <StatsCards />
-            <CollectionInsights />
             <CurrentContext />
             <section>
               <FreshArrivals />

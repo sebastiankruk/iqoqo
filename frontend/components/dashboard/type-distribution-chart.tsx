@@ -35,11 +35,13 @@ const COLORS = [
 /**
  * Renders a pie/donut chart representing collection distribution by type or format.
  *
- * @returns Component JSX
+ * @param {object} [props] - Component props
+ * @param {"personal" | "global"} [props.scope="personal"] - Data scope
+ * @returns {JSX.Element} Component JSX
  */
-export function TypeDistributionChart() {
+export function TypeDistributionChart({ scope = "personal" }: { scope?: "personal" | "global" } = {}) {
   const t = useTranslations("CollectionInsights");
-  const { data: distributionData, isLoading, isError } = useDistributionInsights();
+  const { data: distributionData, isLoading, isError } = useDistributionInsights(scope);
   const [activeTab, setActiveTab] = React.useState<"type" | "format">("type");
 
   if (isLoading) {

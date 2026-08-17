@@ -159,4 +159,35 @@ test.describe("Scanner Workflow", () => {
       await page.waitForTimeout(200);
     }
   });
+
+  test("simulates API timeout/failure and verifies graceful fallback to manual entry", async ({ page }) => {
+    const timeoutBarcode = "9781234567890";
+
+    // Simulate failure / timeout for barcode lookup
+    await page.route(`**/api/lookup/${timeoutBarcode}**`, async route => {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await route.abort("timedout");
+    });
+
+    // Navigate to scanner page
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+
+    // Switch to manual search tab
+    const manualTab = page.getByTestId("scanner-tab-manual");
+    await expect(manualTab).toBeVisible();
+    await manualTab.click();
+
+    // Fill barcode and trigger search
+    const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
+    await input.fill(timeoutBarcode);
+    await page.keyboard.press("Enter");
+
+    // Verify graceful fallback: manual entry form opens and pre-fills identifier
+    const manualFormHeading = page.getByText("Manual Item Entry");
+    await expect(manualFormHeading).toBeVisible({ timeout: 10000 });
+
+    const identifierInput = page.locator("#manual-identifier");
+    await expect(identifierInput).toHaveValue(timeoutBarcode);
+  });
 });

@@ -106,4 +106,14 @@ describe("TypeDistributionChart", () => {
     expect(screen.getByTestId("type-distribution-chart")).toBeInTheDocument();
     expect(screen.getByText("No collection items cataloged yet.")).toBeInTheDocument();
   });
+
+  it("passes scope prop to useDistributionInsights hook", () => {
+    mockUseDistribution.mockReturnValue({
+      data: { by_type: [], by_format: [] },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useDistributionInsights>);
+    render(<TypeDistributionChart scope="global" />);
+    expect(mockUseDistribution).toHaveBeenCalledWith("global");
+  });
 });
