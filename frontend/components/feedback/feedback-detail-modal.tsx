@@ -235,14 +235,14 @@ export function FeedbackDetailModal({
                       href={resolvedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group relative aspect-video rounded-md border border-border overflow-hidden bg-muted/40 hover:ring-2 hover:ring-primary transition-all"
+                      className="group relative h-32 w-full rounded-md border border-border overflow-hidden bg-muted/40 hover:ring-2 hover:ring-primary transition-all flex items-center justify-center"
                     >
                       <Image
                         src={resolvedUrl}
                         alt={`Attachment ${idx + 1}`}
                         fill
                         unoptimized
-                        className="object-cover group-hover:scale-105 transition-transform duration-200"
+                        className="object-contain group-hover:scale-105 transition-transform duration-200"
                       />
                     </a>
                   );

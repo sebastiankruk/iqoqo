@@ -155,7 +155,10 @@ export function StatsCards() {
       </div>
 
       {viewMode === "stats" ? (
-        <div className="flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:pb-0 sm:overflow-visible">
+        <div
+          data-testid="stats-scroll-container"
+          className="flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:pb-0 sm:overflow-visible"
+        >
           {topCards.map(stat => (
             <Link
               key={stat.label}

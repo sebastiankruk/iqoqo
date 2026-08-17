@@ -381,5 +381,8 @@
     "failedToSubmit": "Nie udało się wysłać prośby",
     "custodianNote": "Notatka kustosza",
     "suggested": "Sugerowane"
+  },
+  "Scanner": {
+    "skipAndEnterManually": "Pomiń i wprowadź ręcznie"
   }
 }

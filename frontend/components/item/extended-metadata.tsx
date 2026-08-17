@@ -84,8 +84,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
   const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
 
   const trackList = meta["track_list"] as
-    | Array<{ position: string; title: string; duration_seconds: number }>
-    | undefined;
+    Array<{ position: string; title: string; duration_seconds: number }> | undefined;
 
   const hiddenKeys = new Set([
     "title",

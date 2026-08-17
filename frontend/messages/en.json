@@ -381,5 +381,8 @@
     "failedToSubmit": "Failed to submit escalation request",
     "custodianNote": "Custodian note",
     "suggested": "Suggested"
+  },
+  "Scanner": {
+    "skipAndEnterManually": "Skip and enter manually"
   }
 }

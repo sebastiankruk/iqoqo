@@ -127,4 +127,30 @@ describe("BottomSheet", () => {
     await screen.findByText("Lookup failed");
     expect(onShowManualForm).toHaveBeenCalledWith("9781234567890");
   });
+
+  it("renders skip button in searching overlay and invokes onShowManualForm on click", async () => {
+    const { apiFetch } = await import("@/lib/api/client");
+    vi.mocked(apiFetch).mockReturnValueOnce(new Promise(() => {}));
+
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
+
+    // Switch to manual tab and submit search
+    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
+    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
+    fireEvent.change(input, { target: { value: "9780140449136" } });
+    const form = input.closest("form");
+    if (form) {
+      fireEvent.submit(form);
+    }
+
+    // Searching overlay should be visible
+    expect(screen.getByTestId("scanner-searching-overlay")).toBeInTheDocument();
+    const skipBtn = screen.getByTestId("scanner-skip-manual-button");
+    expect(skipBtn).toBeInTheDocument();
+    expect(skipBtn).toHaveTextContent("Skip and enter manually");
+
+    // Clicking skip should trigger onShowManualForm with the searched barcode
+    fireEvent.click(skipBtn);
+    expect(onShowManualForm).toHaveBeenCalledWith("9780140449136");
+  });
 });

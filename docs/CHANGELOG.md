@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Single Help & Feedback Entry**: Consolidated user profile dropdown entries into a unified "Help & Feedback" link.
 - **Nginx Static Attachment Proxying**: Configured direct `/static/gallery/` and `/api/static/gallery/` location blocks for instant static media resolution.
+- **Nginx Reverse Proxy Body Size**: Increased `client_max_body_size` to `50M` in `deploy/nginx.conf` to accommodate multi-file feedback screenshots (up to 5 files at 10MB each); custom proxy deployments should update their client body size accordingly.
 
 ### Fixed
 

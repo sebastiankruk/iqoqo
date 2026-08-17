@@ -337,7 +337,15 @@ export function BottomSheet({
               <div className="h-10 w-10 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
             </div>
             <p className="animate-pulse text-sm font-semibold text-foreground">Searching catalog...</p>
-            <p className="text-xs text-muted-foreground mt-1">Looking up barcode {lastSearchedBarcode}</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-4">Looking up barcode {lastSearchedBarcode}</p>
+            <button
+              type="button"
+              data-testid="scanner-skip-manual-button"
+              onClick={() => onShowManualForm?.(lastSearchedBarcode)}
+              className="text-xs text-muted-foreground underline hover:text-foreground transition-colors cursor-pointer"
+            >
+              Skip and enter manually
+            </button>
           </div>
         )}
 
