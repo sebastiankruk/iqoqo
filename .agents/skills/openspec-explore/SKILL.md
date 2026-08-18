@@ -124,7 +124,7 @@ If the user mentions a change or you detect one is relevant:
 3. **Offer to capture when decisions are made**
 
    | Insight Type               | Where to Capture             |
-   |----------------------------|------------------------------|
+   | -------------------------- | ---------------------------- |
    | New requirement discovered | `specs/<capability>/spec.md` |
    | Requirement changed        | `specs/<capability>/spec.md` |
    | Design decision made       | `design.md`                  |
@@ -213,7 +213,7 @@ You: [reads codebase]
 **User is stuck mid-implementation:**
 
 ```
-User: /opsx-explore add-auth-system
+User: /opsx:explore add-auth-system
       The OAuth integration is more complex than expected
 
 You: [reads change artifacts]
