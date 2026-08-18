@@ -432,7 +432,7 @@ def _parse_scan_payload(req) -> tuple[ScanBarcodeSchema | None, Response | tuple
                 {
                     "success": False,
                     "error": "Invalid payload",
-                    "details": str(e) if isinstance(e, TypeError) else e.errors(),
+                    "details": str(e),
                 }
             ),
             400,

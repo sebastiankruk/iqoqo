@@ -31,7 +31,7 @@ from sqlalchemy.exc import SQLAlchemyError  # noqa: E402
 
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
-from app.db.models import Expression, Item, Manifestation, Role, SharedCollection, User, Work  # noqa: E402
+from app.db.models import Expression, InstanceSettings, Item, Manifestation, Role, SharedCollection, User, Work  # noqa: E402
 from app.utils.covers import COVERS_DIR, add_center_watermark  # noqa: E402
 from app.utils.llm_covers import apply_corner_watermark  # noqa: E402
 
@@ -409,6 +409,20 @@ def seed_e2e_data():
             db.session.add(esc)
             db.session.commit()
             print("E2E escalation seed data created successfully")
+
+        # ── Allegro Instance Settings for E2E device flow tests ────────────
+        for k, v in [
+            ("ALLEGRO_CLIENT_ID", "mock_allegro_client_id_12345"),
+            ("ALLEGRO_CLIENT_SECRET", "mock_allegro_client_secret_67890"),
+        ]:
+            setting = db.session.execute(db.select(InstanceSettings).filter_by(key=k)).scalar_one_or_none()
+            if not setting:
+                setting = InstanceSettings(key=k, value=v)
+                db.session.add(setting)
+            else:
+                setting.value = v
+        db.session.commit()
+        print("E2E Allegro instance settings seeded successfully")
 
 
 if __name__ == "__main__":
