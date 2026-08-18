@@ -33,6 +33,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
 import { Button, ButtonVariant } from "@/components/ui/button";
 import { MediaFormat } from "@/types/frbr";
@@ -133,7 +134,7 @@ export function CameraCapture({
   onExtractionFailure,
   className,
   capture = "environment",
-  label = "Snap Cover",
+  label,
   icon,
   confirmTitle,
   confirmMessage,
@@ -143,6 +144,7 @@ export function CameraCapture({
   inline,
   source,
 }: CameraCaptureProps) {
+  const t = useTranslations("scanner");
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -215,7 +217,7 @@ export function CameraCapture({
       // Wait 1 second before next poll
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    throw new Error("Task timed out. Please try again or enter manually.");
+    throw new Error(t("cameraCapture.taskTimedOut"));
   };
 
   const processFile = async (file: File) => {
@@ -264,12 +266,12 @@ export function CameraCapture({
           const result = await startPolling(envelope.data.task_id);
           if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
-          toast.error(envelope.error ?? "Vision extraction submission failed");
+          toast.error(envelope.error ?? t("cameraCapture.visionSubmissionFailed"));
           if (onExtractionFailure) onExtractionFailure();
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to process cover image";
+      const message = error instanceof Error ? error.message : t("cameraCapture.processImageFailed");
       toast.error(message);
       console.error("Failed to process cover image", error);
       if (onExtractionFailure) onExtractionFailure();
@@ -291,7 +293,7 @@ export function CameraCapture({
     if (file && file.type.startsWith("image/")) {
       processFile(file);
     } else {
-      toast.error("Please drop a valid image file.");
+      toast.error(t("cameraCapture.invalidImageFile"));
     }
   };
 
@@ -330,8 +332,8 @@ export function CameraCapture({
           <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirmAction}>Continue</AlertDialogAction>
+          <AlertDialogCancel>{t("cameraCapture.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmAction}>{t("cameraCapture.continue")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -345,12 +347,12 @@ export function CameraCapture({
           {uploading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
+              {t("cameraCapture.processing")}
             </>
           ) : (
             <>
               {icon || <Camera className="mr-2 h-4 w-4" />}
-              {label}
+              {label ?? t("cameraCapture.snapCover")}
             </>
           )}
         </Button>
@@ -385,8 +387,8 @@ export function CameraCapture({
             <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
             <div className="h-10 w-10 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
           </div>
-          <p className="animate-pulse text-sm font-semibold text-foreground">Processing image...</p>
-          <p className="text-xs text-muted-foreground mt-1">Extracting details via vision API</p>
+          <p className="animate-pulse text-sm font-semibold text-foreground">{t("cameraCapture.processingImage")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("cameraCapture.extractingDetails")}</p>
         </div>
       )}
 
@@ -398,16 +400,16 @@ export function CameraCapture({
             className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`}
           />
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">Drag & Drop cover image here</p>
-            <p className="text-xs text-muted-foreground">or click to browse files</p>
+            <p className="text-sm font-medium">{t("cameraCapture.dragDropCover")}</p>
+            <p className="text-xs text-muted-foreground">{t("cameraCapture.orBrowse")}</p>
           </div>
           <Button onClick={handleClick} disabled={uploading} className="mt-2">
             {uploading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("cameraCapture.processing")}
               </>
             ) : (
-              "Browse Files"
+              t("cameraCapture.browseFiles")
             )}
           </Button>
         </div>
@@ -422,12 +424,12 @@ export function CameraCapture({
             {uploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                {t("cameraCapture.processing")}
               </>
             ) : (
               <>
                 {icon || <Camera className="mr-2 h-4 w-4" />}
-                {label}
+                {label ?? t("cameraCapture.snapCover")}
               </>
             )}
           </Button>

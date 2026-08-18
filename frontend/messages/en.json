@@ -384,5 +384,43 @@
   },
   "Scanner": {
     "skipAndEnterManually": "Skip and enter manually"
+  },
+  "scanner": {
+    "cameraCapture": {
+      "snapCover": "Snap Cover",
+      "taskTimedOut": "Task timed out. Please try again or enter manually.",
+      "visionSubmissionFailed": "Vision extraction submission failed",
+      "processImageFailed": "Failed to process cover image",
+      "invalidImageFile": "Please drop a valid image file.",
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "processing": "Processing...",
+      "processingImage": "Processing image...",
+      "extractingDetails": "Extracting details via vision API",
+      "dragDropCover": "Drag & Drop cover image here",
+      "orBrowse": "or click to browse files",
+      "browseFiles": "Browse Files"
+    },
+    "bottomSheet": {
+      "barcodeTab": "Barcode",
+      "snapCoverTab": "Snap Cover",
+      "manualSearchTab": "Manual Search",
+      "searchingCatalog": "Searching catalog...",
+      "lookingUpBarcode": "Looking up barcode {barcode}",
+      "skipAndEnterManually": "Skip and enter manually",
+      "enterManually": "Enter Manually",
+      "startCamera": "Start camera",
+      "scanning": "Scanning – point at barcode",
+      "tapToStartCamera": "Tap to start camera",
+      "uploadFromGallery": "Upload from Gallery",
+      "manualSearchPlaceholder": "ISBN, UPC, Discogs ID, or Artist – Title…",
+      "lookingUp": "Looking up…",
+      "manualSearchHint": "Enter barcode, Discogs Release ID, or Artist – Title",
+      "manualEntryForm": "Manual Entry Form",
+      "invalidBarcode": "Please enter a valid barcode (8-13 characters).",
+      "lookupTimedOut": "Lookup timed out. Switching to manual entry.",
+      "lookupFailed": "Could not look up this item. Please try again.",
+      "cameraUnavailable": "Camera unavailable"
+    }
   }
 }
