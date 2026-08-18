@@ -46,6 +46,7 @@ import { apiClient } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
+import { useBoardgameMechanics } from "@/lib/api/boardgame";
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
 import {
@@ -90,6 +91,7 @@ interface FrbrEditorProps {
 interface WorkFormData {
   title: string;
   type?: string;
+  mechanics?: string[];
   metaFields: MetaField[];
 }
 
@@ -107,6 +109,7 @@ interface ManifestationFormData {
   ean?: string;
   publisher?: string;
   publication_date?: string;
+  mechanics?: string[];
   metaFields: MetaField[];
 }
 
@@ -180,6 +183,89 @@ function InputField({
       required={required}
       className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     />
+  );
+}
+
+/**
+ * Multi-select board game mechanics using the controlled vocabulary.
+ *
+ * @param props - Component props.
+ * @param props.value - Currently selected mechanic ids.
+ * @param props.onChange - Callback when selection changes.
+ * @returns Mechanics selector JSX element.
+ */
+function MechanicSelector({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const { data: mechanics = [], isLoading } = useBoardgameMechanics();
+  const [open, setOpen] = useState(false);
+
+  const toggle = (id: string) => {
+    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id]);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-medium">Mechanics</div>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="outline" size="sm" className="w-full justify-start h-auto py-1.5">
+            {value.length === 0 ? (
+              <span className="text-muted-foreground">Select mechanics…</span>
+            ) : (
+              <span className="truncate">{value.length} selected</span>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-72 max-h-80 overflow-auto">
+          {isLoading ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
+          ) : mechanics.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No mechanics available</div>
+          ) : (
+            mechanics.map(m => (
+              <DropdownMenuItem
+                key={m.id}
+                onSelect={e => {
+                  e.preventDefault();
+                  toggle(m.id);
+                }}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  readOnly
+                  checked={value.includes(m.id)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">{m.name}</span>
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {value.map(id => {
+            const name = mechanics.find(m => m.id === id)?.name ?? id;
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded"
+              >
+                {name}
+                <button
+                  type="button"
+                  onClick={() => toggle(id)}
+                  className="text-secondary-foreground/70 hover:text-secondary-foreground"
+                  aria-label={`Remove ${name}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -261,13 +347,23 @@ function EditableKeyField({ value, onChange }: EditableKeyFieldProps) {
  * @returns Work editor JSX element
  */
 function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkFormData) => Promise<void> }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.work?.meta));
+  const rawMeta = tree.work?.meta ?? {};
+  const initialMechanics = Array.isArray(rawMeta.mechanics)
+    ? rawMeta.mechanics.filter((v): v is string => typeof v === "string")
+    : [];
+  const [mechanics, setMechanics] = useState<string[]>(initialMechanics);
+  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
+    transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
+  );
+  const workType = typeof rawMeta.type === "string" ? rawMeta.type.toLowerCase() : "";
+  const isBoardGameLike = ["boardgame", "board_game", "three-dimensional object"].includes(workType);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data: WorkFormData = {
       title: formData.get("title") as string,
+      mechanics,
       metaFields,
     };
     await onSubmit(data);
@@ -279,6 +375,11 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
         <label className="text-sm font-medium">Title</label>
         <InputField name="title" defaultValue={tree.work?.title ?? ""} required />
       </div>
+      {isBoardGameLike && (
+        <div>
+          <MechanicSelector value={mechanics} onChange={setMechanics} />
+        </div>
+      )}
       <div className="space-y-2">
         <h4 className="font-medium text-sm text-muted-foreground">Dynamic Metadata</h4>
         {metaFields.map((field, index) => (
@@ -703,7 +804,14 @@ function ManifestationEditor({
 }) {
   const initialType = (tree.manifestation.meta?.type as string) || "book";
   const [type, setType] = useState(initialType);
-  const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(f => f.key !== "type");
+  const rawMeta = tree.manifestation.meta ?? {};
+  const initialMechanics = Array.isArray(rawMeta.mechanics)
+    ? rawMeta.mechanics.filter((v): v is string => typeof v === "string")
+    : [];
+  const [mechanics, setMechanics] = useState<string[]>(initialMechanics);
+  const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(
+    f => f.key !== "type" && f.key !== "mechanics"
+  );
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -718,7 +826,7 @@ function ManifestationEditor({
       publication_date: formData.get("publication_date") as string | undefined,
       metaFields,
     };
-    await onSubmit(data);
+    await onSubmit({ ...data, mechanics });
   };
 
   const textFormats: string[] = MEDIA_HIERARCHY.text.formats.map(f => f.id);
@@ -726,6 +834,7 @@ function ManifestationEditor({
   const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
 
   const isValidFormat = (MEDIA_FORMATS as readonly string[]).includes(type);
+  const isBoardGameLike = ["boardgame", "board_game", "three-dimensional object"].includes(type.toLowerCase());
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -751,6 +860,12 @@ function ManifestationEditor({
             </SelectContent>
           </Select>
         </div>
+
+        {isBoardGameLike && (
+          <div className="col-span-2">
+            <MechanicSelector value={mechanics} onChange={setMechanics} />
+          </div>
+        )}
 
         {isBookLike && (
           <div>
@@ -1006,6 +1121,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     if (!tree?.work) return;
     try {
       const meta = transformFieldsToMeta(data.metaFields);
+      if (data.mechanics) {
+        meta.mechanics = data.mechanics;
+      }
       await updateFrbrEntity("work", tree.work.id, { title: data.title, meta });
       toast.success("Work updated successfully");
       await fetchTree();
@@ -1060,6 +1178,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       const meta = transformFieldsToMeta(data.metaFields);
       if (data.type) {
         meta.type = data.type;
+      }
+      if (data.mechanics) {
+        meta.mechanics = data.mechanics;
       }
 
       await updateFrbrEntity("manifestation", tree.manifestation.id, {

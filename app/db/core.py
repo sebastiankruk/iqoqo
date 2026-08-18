@@ -78,6 +78,10 @@ ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 EXPRESSION_KINDS: tuple[str, ...] = ("live_performance",)
 EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 
+#: Controlled vocabulary for :attr:`WorkExpansionLink.link_type`.
+WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
+WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
+
 
 class Work(db.Model):  # type: ignore[name-defined]
     """
@@ -147,6 +151,86 @@ class Work(db.Model):  # type: ignore[name-defined]
         foreign_keys="WorkPart.part_work_id",
         backref=db.backref("part", lazy="joined"),
         lazy="selectin",
+    )
+    expansions = db.relationship(
+        "WorkExpansionLink",
+        foreign_keys="WorkExpansionLink.base_work_id",
+        back_populates="base_work",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    base_game = db.relationship(
+        "WorkExpansionLink",
+        foreign_keys="WorkExpansionLink.expansion_work_id",
+        back_populates="expansion_work",
+        uselist=False,
+    )
+
+
+class WorkExpansionLink(db.Model):  # type: ignore[name-defined]
+    """
+    Reified association linking a base board game Work to an expansion Work.
+
+    Mirrors the iqoqo ontology: ``iqoqo:is_expansion_of`` /
+    ``iqoqo:has_expansion``.
+    """
+
+    __tablename__ = "work_expansion_links"
+    __table_args__ = (
+        db.Index("ix_work_expansion_links_base_work_id", "base_work_id"),
+        db.Index("ix_work_expansion_links_expansion_work_id", "expansion_work_id"),
+        {"schema": _CATALOG},
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    base_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    expansion_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    link_type = db.Column(
+        db.String(50),
+        nullable=False,
+        default=WORK_LINK_TYPE_IS_EXPANSION_OF,
+    )
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    base_work = db.relationship(
+        "Work",
+        foreign_keys=[base_work_id],
+        back_populates="expansions",
+    )
+    expansion_work = db.relationship(
+        "Work",
+        foreign_keys=[expansion_work_id],
+        back_populates="base_game",
+    )
+
+
+class BoardgameMechanic(db.Model):  # type: ignore[name-defined]
+    """
+    Controlled vocabulary for board game mechanics sourced from BoardGameGeek.
+    """
+
+    __tablename__ = "boardgame_mechanics"
+    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+
+    id = db.Column(db.String(100), primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    bgg_id = db.Column(db.String(50), nullable=True, index=True)
+    last_updated = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
     )
 
 

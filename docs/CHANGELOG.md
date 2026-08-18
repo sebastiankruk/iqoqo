@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Scanner i18n E2E Verification**: Added browser-based end-to-end test verifying that scanner UI strings (tab labels, manual search placeholder) switch correctly between English and Polish.
+- **FRBR Work Expansion Links & Ontology**: Added backend support for FRBR F15 Complex Work decomposition via `work_expansion_links`, including `expansion_of` / `has_expansion` links, an `Expansion` work category, and SHACL validation preventing expansion Works from being aggregated into F16 Container Works.
+- **Board Game Mechanics Vocabulary**: Introduced a canonical `boardgame_mechanics` taxonomy, seedable JSON (`data/bgg_mechanics.json`), Alembic migration, API endpoints (`/api/taxonomies/boardgame-mechanics`), and a reusable `MechanicBadge` component.
+- **Feedback Escalation Target Entity**: Extended feedback tickets with a `target_entity` JSONB field and escalation rule so user-reported catalog issues can be linked to specific FRBR records.
 
 ### Changed
 

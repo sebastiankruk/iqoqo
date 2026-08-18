@@ -326,6 +326,21 @@ export type FacetStatsResponse = {
   borrowed_count?: number;
 };
 
+/** Controlled board game mechanic vocabulary entry. */
+export interface BoardgameMechanic {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+/** Enriched target entity details returned with escalation requests. */
+export interface EscalationTargetEntity {
+  id: number;
+  title: string;
+  type: "Work" | "Expression" | "Manifestation" | "Item";
+  current_state: string;
+}
+
 /** Custodian metadata escalation request */
 export interface EscalationRequest {
   id: number;
@@ -338,6 +353,7 @@ export interface EscalationRequest {
   manifestation_id?: number | null;
   item_id?: number | null;
   target_type?: string | null;
+  target_entity?: EscalationTargetEntity | null;
   field_name: string;
   current_value?: string | null;
   suggested_value: string;

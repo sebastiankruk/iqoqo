@@ -15,8 +15,10 @@
 #
 # iqoqo custom ontology
 @prefix : <https://iqoqo.org/ontology#> .
+@prefix iqoqo: <https://iqoqo.org/ontology#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
 
 : a owl:Ontology ;
@@ -136,3 +138,58 @@
     rdfs:range :MediaCategory ;
     rdfs:label "applicableToCategory" ;
     rdfs:comment "Links a progress status to the media category it applies to." .
+
+# ---------------------------------------------------------------------------
+# Work-to-Work link vocabulary (Board Game Expansions)
+# ---------------------------------------------------------------------------
+
+iqoqo:is_expansion_of a owl:ObjectProperty ;
+    rdfs:label "is expansion of" ;
+    rdfs:comment "Relates an expansion F1_Work to the base game F1_Work it expands." ;
+    rdfs:domain iqoqo:Work ;
+    rdfs:range iqoqo:Work ;
+    owl:inverseOf iqoqo:has_expansion .
+
+iqoqo:has_expansion a owl:ObjectProperty ;
+    rdfs:label "has expansion" ;
+    rdfs:comment "Inverse of iqoqo:is_expansion_of." .
+
+iqoqo:WorkExpansionLink a owl:Class ;
+    rdfs:label "Work Expansion Link" ;
+    rdfs:comment "Reified association table (work_expansion_links) linking a base Work to an expansion Work with a typed link." .
+
+iqoqo:baseWork a owl:ObjectProperty ;
+    rdfs:label "base work" ;
+    rdfs:comment "The base game Work in a WorkExpansionLink." ;
+    rdfs:domain iqoqo:WorkExpansionLink ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:expansionWork a owl:ObjectProperty ;
+    rdfs:label "expansion work" ;
+    rdfs:comment "The expansion Work in a WorkExpansionLink." ;
+    rdfs:domain iqoqo:WorkExpansionLink ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:link_type a owl:DatatypeProperty ;
+    rdfs:label "link type" ;
+    rdfs:comment "Type of Work-to-Work link; initial value is 'is_expansion_of'." ;
+    rdfs:domain iqoqo:WorkExpansionLink ;
+    rdfs:range xsd:string .
+
+iqoqo:containerWork a owl:ObjectProperty ;
+    rdfs:label "container work" ;
+    rdfs:comment "The F16 Container Work that aggregates a Work or Item." ;
+    rdfs:domain iqoqo:ContainerAggregation ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:aggregatedWork a owl:ObjectProperty ;
+    rdfs:label "aggregated work" ;
+    rdfs:comment "The Work aggregated by a ContainerAggregation (F16)." ;
+    rdfs:domain iqoqo:ContainerAggregation ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:aggregatedItem a owl:ObjectProperty ;
+    rdfs:label "aggregated item" ;
+    rdfs:comment "The Item aggregated by a ContainerAggregation (F16)." ;
+    rdfs:domain iqoqo:ContainerAggregation ;
+    rdfs:range iqoqo:Item .

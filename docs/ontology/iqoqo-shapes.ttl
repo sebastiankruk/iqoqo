@@ -1,0 +1,44 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# iqoqo SHACL shapes
+@prefix iqoqo: <https://iqoqo.org/ontology#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+iqoqo: a sh:Ontology ;
+    rdfs:label "iqoqo SHACL Shapes" ;
+    rdfs:comment "SHACL constraints for the iqoqo FRBR ontology." .
+
+# ---------------------------------------------------------------------------
+# Board Game Expansion constraint
+# An F1_Work linked as an expansion must not be aggregated into an F16
+# Container Work (represented by iqoqo:ContainerAggregation rows).
+# ---------------------------------------------------------------------------
+
+iqoqo:ExpansionWorkShape a sh:NodeShape ;
+    sh:targetSubjectsOf iqoqo:is_expansion_of ;
+    sh:name "Expansion Work not in Container Work" ;
+    sh:description """An F1_Work that is the subject of iqoqo:is_expansion_of
+(i.e., the expansion) must not be aggregated as a Work component into an
+FRBRoo F16 Container Work.""" ;
+    sh:message "Expansion Work must not be aggregated into an F16 Container Work." ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path [ sh:inversePath iqoqo:aggregatedWork ] ;
+        sh:class iqoqo:ContainerAggregation ;
+        sh:maxCount 0 ;
+        sh:message "Expansion Work must not be aggregated into an F16 Container Work." ;
+    ] .

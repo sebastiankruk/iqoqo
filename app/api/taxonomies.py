@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
-from app.db.core import Expression, Item, ItemTag, Manifestation, Tag, UserCollection, Work, db
+from app.db.core import BoardgameMechanic, Expression, Item, ItemTag, Manifestation, Tag, UserCollection, Work, db
 
 
 @api_bp.route("/taxonomies", methods=["GET"])
@@ -173,3 +173,28 @@ def get_taxonomies() -> Response | tuple[Response, int]:
 
         logging.getLogger(__name__).error(f"Error fetching taxonomies: {e}")
         return jsonify({"success": False, "error": "Failed to load taxonomies"}), 500
+
+
+@api_bp.route("/boardgame/mechanics", methods=["GET"])
+@require_auth
+def get_boardgame_mechanics() -> Response | tuple[Response, int]:
+    """Return the controlled vocabulary of board game mechanics."""
+    try:
+        mechanics = (
+            db.session.execute(
+                db.select(BoardgameMechanic.id, BoardgameMechanic.name, BoardgameMechanic.description).order_by(BoardgameMechanic.name)
+            )
+            .mappings()
+            .all()
+        )
+        return jsonify(
+            {
+                "success": True,
+                "data": [{"id": m["id"], "name": m["name"], "description": m["description"]} for m in mechanics],
+            }
+        )
+    except SQLAlchemyError as e:
+        import logging
+
+        logging.getLogger(__name__).error(f"Error fetching board game mechanics: {e}")
+        return jsonify({"success": False, "error": "Failed to load mechanics"}), 500

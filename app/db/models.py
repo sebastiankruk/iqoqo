@@ -45,6 +45,7 @@ from app.db.core import (  # noqa: F401
     COLLECTION_STATUSES,
     ITEM_STATUSES,
     PROGRESS_STATUSES,
+    BoardgameMechanic,
     EntityAuditLog,
     Expression,
     ImageScan,
@@ -61,6 +62,7 @@ from app.db.core import (  # noqa: F401
     UserCollectionItem,
     UserWorkIntent,
     Work,
+    WorkExpansionLink,
 )
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401
 from app.db.lending import LoanRequest  # noqa: F401
