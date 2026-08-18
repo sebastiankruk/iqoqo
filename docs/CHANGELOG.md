@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Scanner i18n E2E Verification**: Added browser-based end-to-end test verifying that scanner UI strings (tab labels, manual search placeholder) switch correctly between English and Polish.
+
 ### Changed
 
 ### Fixed
