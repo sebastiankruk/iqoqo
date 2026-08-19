@@ -22,7 +22,7 @@ from pathlib import Path
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260818_add_expansion_links_and_mechanics"
+revision = "20260818_add_expansion_links"
 down_revision = "20260814_feedback_comments"
 branch_labels = None
 depends_on = None
