@@ -41,6 +41,7 @@ node_modules/
 # Data - exclude personal data exports but keep seed examples
 data/*.json
 !data/seed_example.json
+!data/bgg_mechanics.json
 iqoqo_backup*.*
 exports/*
 
