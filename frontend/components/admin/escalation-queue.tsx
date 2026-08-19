@@ -97,6 +97,8 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
   const { data: profile } = useProfile();
   const t = useTranslations("HelpRequests");
 
+  const targetId = esc.work_id ?? esc.expression_id ?? esc.manifestation_id ?? esc.item_id ?? undefined;
+
   const isDeletionRequest = esc.request_type === "deletion" || !esc.field_name;
 
   const canAcceptDeletion = () => {
@@ -122,6 +124,7 @@ function ResolveActions({ request: esc }: { request: EscalationRequest }) {
         data: {
           status,
           resolution_note: resolutionNote.trim() || undefined,
+          target_id: targetId,
         },
       },
       {
@@ -484,20 +487,27 @@ export function EscalationQueue() {
                   </div>
 
                   <div className="text-xs space-y-1.5 mt-2 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                    <div>
-                      <span className="font-semibold text-muted-foreground">Target Entity UUID / ID:</span>{" "}
-                      {getTargetLabel(esc)}
-                    </div>
-                    {((esc as EscalationRequest & { target_title?: string; title?: string; name?: string })
-                      .target_title ||
-                      (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title ||
-                      (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name) && (
+                    {esc.target_entity ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <span className="font-semibold text-muted-foreground">Target title:</span>{" "}
+                          {esc.target_entity.title}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-muted-foreground">Type:</span> {esc.target_entity.type}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-muted-foreground">ID:</span> #{esc.target_entity.id}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-muted-foreground">Current state:</span>{" "}
+                          {esc.target_entity.current_state}
+                        </div>
+                      </div>
+                    ) : (
                       <div>
-                        <span className="font-semibold text-muted-foreground">Target Entity Title/Name:</span>{" "}
-                        {(esc as EscalationRequest & { target_title?: string; title?: string; name?: string })
-                          .target_title ||
-                          (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).title ||
-                          (esc as EscalationRequest & { target_title?: string; title?: string; name?: string }).name}
+                        <span className="font-semibold text-muted-foreground">Target Entity ID:</span>{" "}
+                        {getTargetLabel(esc)}
                       </div>
                     )}
                     <div>

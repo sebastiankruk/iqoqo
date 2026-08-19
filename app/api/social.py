@@ -71,6 +71,47 @@ def _verify_target_exists(level: str, target_id: int) -> bool:
     return False
 
 
+def _resolve_target_entity(escalation: EscalationRequest) -> dict[str, Any] | None:
+    """Build a target_entity dict for an escalation request."""
+    if escalation.work_id is not None:
+        entity = db.session.get(Work, escalation.work_id)
+        if entity is not None:
+            return {
+                "id": entity.id,
+                "title": entity.title,
+                "type": "Work",
+                "current_state": (entity.meta or {}).get("type") or "work",
+            }
+    if escalation.expression_id is not None:
+        entity = db.session.get(Expression, escalation.expression_id)
+        if entity is not None:
+            return {
+                "id": entity.id,
+                "title": entity.work.title if entity.work else f"Expression {entity.id}",
+                "type": "Expression",
+                "current_state": entity.kind or entity.content_type or "expression",
+            }
+    if escalation.manifestation_id is not None:
+        entity = db.session.get(Manifestation, escalation.manifestation_id)
+        if entity is not None:
+            return {
+                "id": entity.id,
+                "title": entity.title,
+                "type": "Manifestation",
+                "current_state": entity.format or (entity.meta or {}).get("format") or "manifestation",
+            }
+    if escalation.item_id is not None:
+        entity = db.session.get(Item, escalation.item_id)
+        if entity is not None:
+            return {
+                "id": entity.id,
+                "title": entity.title if hasattr(entity, "title") and entity.title else f"Item {entity.id}",
+                "type": "Item",
+                "current_state": entity.status,
+            }
+    return None
+
+
 @api_bp.route("/feedback/<string:level>/<int:target_id>", methods=["GET"])
 def get_social_feedback(level: str, target_id: int) -> Response | tuple[Response, int]:
     """
@@ -425,9 +466,24 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
 
-    stmt = select(EscalationRequest).where(EscalationRequest.user_id == user_id).order_by(EscalationRequest.created_at.desc())
+    stmt = (
+        select(EscalationRequest)
+        .options(
+            selectinload(EscalationRequest.work),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.expression),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.manifestation),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.item),  # type: ignore[arg-type]
+        )
+        .where(EscalationRequest.user_id == user_id)
+        .order_by(EscalationRequest.created_at.desc())
+    )
     requests = db.session.scalars(stmt).all()
-    return jsonify({"success": True, "data": [req.to_dict() for req in requests]})
+    return jsonify(
+        {
+            "success": True,
+            "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+        }
+    )
 
 
 @api_bp.route("/escalations/queue", methods=["GET"])
@@ -454,12 +510,50 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
 
     stmt = (
         select(EscalationRequest)
-        .options(selectinload(EscalationRequest.user), selectinload(EscalationRequest.resolver))  # type: ignore[arg-type]
+        .options(
+            selectinload(EscalationRequest.user),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.resolver),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.work),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.expression),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.manifestation),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.item),  # type: ignore[arg-type]
+        )
         .where(EscalationRequest.status.in_(statuses))
         .order_by(EscalationRequest.created_at.desc())
     )
     requests = db.session.scalars(stmt).all()
-    return jsonify({"success": True, "data": [req.to_dict() for req in requests]})
+    return jsonify(
+        {
+            "success": True,
+            "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+        }
+    )
+
+
+@api_bp.route("/escalations/<int:escalation_id>", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.ESCALATE_RESOLVE)
+def get_escalation_request(escalation_id: int) -> Response | tuple[Response, int]:
+    """Fetch a single escalation request with enriched target entity details."""
+    stmt = (
+        select(EscalationRequest)
+        .options(
+            selectinload(EscalationRequest.user),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.resolver),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.work),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.expression),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.manifestation),  # type: ignore[arg-type]
+            selectinload(EscalationRequest.item),  # type: ignore[arg-type]
+        )
+        .where(EscalationRequest.id == escalation_id)
+    )
+    escalation = db.session.execute(stmt).scalar_one_or_none()
+    if escalation is None:
+        return jsonify({"error": "Escalation request not found", "code": 404}), 404
+
+    data = escalation.to_dict()
+    data["target_entity"] = _resolve_target_entity(escalation)
+    return jsonify({"success": True, "data": data})
 
 
 def _delete_manifestation_target(escalation: EscalationRequest, user: User | None) -> tuple[Response, int] | None:
@@ -535,7 +629,10 @@ def _validate_resolution_payload(data: dict) -> tuple[str | None, str | None, st
     return str(new_status), resolution_note, None
 
 
-def _handle_type_change_acceptance(escalation: EscalationRequest) -> tuple[Response, int] | None:
+def _handle_type_change_acceptance(
+    escalation: EscalationRequest,
+    requested_target_id: int | None = None,
+) -> tuple[Response, int] | None:
     if escalation.manifestation_id:
         entity_class = Manifestation
         entity_id = escalation.manifestation_id
@@ -551,6 +648,9 @@ def _handle_type_change_acceptance(escalation: EscalationRequest) -> tuple[Respo
     else:
         return jsonify({"error": "No target entity for type change", "code": 400}), 400
 
+    if requested_target_id is not None and requested_target_id != entity_id:
+        return jsonify({"error": "Target entity ID in approval does not match escalation request", "code": 400}), 400
+
     try:
         update_frbr_entity_type(entity_class, entity_id, escalation.suggested_value)
     except ValueError as e:
@@ -565,9 +665,6 @@ def _handle_type_change_acceptance(escalation: EscalationRequest) -> tuple[Respo
 def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response, int]:
     """Resolve an escalation request (status: accepted, rejected, duplicate)."""
     user_id = getattr(g, "user_id", None)
-    if not user_id:
-        return jsonify({"error": "Unauthorized", "code": 401}), 401
-
     data = request.get_json(silent=True) or {}
     new_status, resolution_note, err_msg = _validate_resolution_payload(data)
     if err_msg or not new_status:
@@ -581,12 +678,19 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
         if not escalation:
             return jsonify({"error": "Escalation request not found", "code": 404}), 404
 
+        requested_target_id = data.get("target_id")
+        if requested_target_id is not None:
+            try:
+                requested_target_id = int(requested_target_id)
+            except (TypeError, ValueError):
+                return jsonify({"error": "target_id must be an integer", "code": 400}), 400
+
         err_resp = None
         if new_status == "accepted":
             if escalation.request_type == "deletion":
                 err_resp = _handle_deletion_acceptance(escalation, user, user_id)
             elif escalation.request_type == "change_type":
-                err_resp = _handle_type_change_acceptance(escalation)
+                err_resp = _handle_type_change_acceptance(escalation, requested_target_id)
 
         if err_resp:
             return err_resp

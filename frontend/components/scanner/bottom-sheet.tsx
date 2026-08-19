@@ -20,14 +20,9 @@ import { Camera, Search, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { ScanFormat } from "@/types/taxonomy";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import { useTranslations } from "next-intl";
 
-const TABS = [
-  { id: "barcode", label: "Barcode" },
-  { id: "cover", label: "Snap Cover" },
-  { id: "manual", label: "Manual Search" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+type TabId = "barcode" | "cover" | "manual";
 
 /** Props for BottomSheet component */
 interface BottomSheetProps {
@@ -71,6 +66,12 @@ export function BottomSheet({
   torchOn = false,
   onTorchCapabilityFound,
 }: BottomSheetProps) {
+  const t = useTranslations("scanner");
+  const tabs = [
+    { id: "barcode", label: t("bottomSheet.barcodeTab") },
+    { id: "cover", label: t("bottomSheet.snapCoverTab") },
+    { id: "manual", label: t("bottomSheet.manualSearchTab") },
+  ] as const;
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
   const formatToApiParam = (fmt?: string): string => {
@@ -157,7 +158,7 @@ export function BottomSheet({
         const isValidBarcode = /^\d{8,13}[\dX]?$/.test(query);
 
         if (!isValidBarcode) {
-          setError("Please enter a valid barcode (8-13 characters).");
+          setError(t("bottomSheet.invalidBarcode"));
           return;
         }
       } else {
@@ -179,7 +180,7 @@ export function BottomSheet({
 
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error("Lookup timed out. Switching to manual entry.")), 10000);
+          timeoutId = setTimeout(() => reject(new Error(t("bottomSheet.lookupTimedOut"))), 10000);
         });
 
         const data = await Promise.race([apiFetch<IsbnMeta>(url), timeoutPromise]).finally(() => {
@@ -191,7 +192,7 @@ export function BottomSheet({
         const errorMessage =
           e && typeof e === "object" && "message" in e && typeof e.message === "string"
             ? e.message
-            : "Could not look up this item. Please try again.";
+            : t("bottomSheet.lookupFailed");
         setError(errorMessage);
         if (onShowManualForm) {
           onShowManualForm(query);
@@ -200,7 +201,7 @@ export function BottomSheet({
         setIsSearching(false);
       }
     },
-    [onFound, format, onShowManualForm]
+    [onFound, format, onShowManualForm, t]
   );
 
   /* ── Start camera + ZXing scan loop ── */
@@ -278,10 +279,10 @@ export function BottomSheet({
 
       rafRef.current = requestAnimationFrame(scan);
     } catch (e) {
-      setError((e as Error).message ?? "Camera unavailable");
+      setError((e as Error).message ?? t("bottomSheet.cameraUnavailable"));
       stopScanner();
     }
-  }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange, onTorchCapabilityFound]);
+  }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange, onTorchCapabilityFound, t]);
 
   useEffect(() => {
     if (activeTab === "manual") {
@@ -309,7 +310,7 @@ export function BottomSheet({
       </div>
       <div className="flex justify-center px-6">
         <div className="inline-flex rounded-xl bg-secondary p-1">
-          {TABS.map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab.id}
               data-testid={`scanner-tab-${tab.id}`}
@@ -336,15 +337,17 @@ export function BottomSheet({
               <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
               <div className="h-10 w-10 rounded-full border-4 border-primary border-b-transparent animate-[spin_1s_linear_infinite_reverse]" />
             </div>
-            <p className="animate-pulse text-sm font-semibold text-foreground">Searching catalog...</p>
-            <p className="text-xs text-muted-foreground mt-1 mb-4">Looking up barcode {lastSearchedBarcode}</p>
+            <p className="animate-pulse text-sm font-semibold text-foreground">{t("bottomSheet.searchingCatalog")}</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              {t("bottomSheet.lookingUpBarcode", { barcode: lastSearchedBarcode })}
+            </p>
             <button
               type="button"
               data-testid="scanner-skip-manual-button"
               onClick={() => onShowManualForm?.(lastSearchedBarcode)}
               className="text-xs text-muted-foreground underline hover:text-foreground transition-colors cursor-pointer"
             >
-              Skip and enter manually
+              {t("bottomSheet.skipAndEnterManually")}
             </button>
           </div>
         )}
@@ -357,7 +360,7 @@ export function BottomSheet({
               onClick={() => onShowManualForm?.(lastSearchedBarcode)}
               className="w-full rounded-xl bg-secondary px-4 py-2 text-sm font-semibold shadow-sm hover:bg-secondary/80"
             >
-              Enter Manually
+              {t("bottomSheet.enterManually")}
             </button>
           </div>
         )}
@@ -367,7 +370,7 @@ export function BottomSheet({
             <div className="relative flex w-full items-center justify-center">
               <button
                 data-testid="start-camera-button"
-                aria-label="Start camera"
+                aria-label={t("bottomSheet.startCamera")}
                 onClick={scannerActive ? undefined : startScanner}
                 disabled={isSearching}
                 className="group relative flex items-center justify-center"
@@ -380,7 +383,7 @@ export function BottomSheet({
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {scannerActive ? "Scanning – point at barcode" : "Tap to start camera"}
+              {scannerActive ? t("bottomSheet.scanning") : t("bottomSheet.tapToStartCamera")}
             </p>
           </div>
         )}
@@ -390,7 +393,7 @@ export function BottomSheet({
             {/* Primary action: camera (opens native picker on mobile) */}
             <CameraCapture
               capture="environment"
-              label="Snap Cover"
+              label={t("bottomSheet.snapCoverTab")}
               icon={<Camera className="mr-2 h-5 w-5" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
@@ -401,7 +404,7 @@ export function BottomSheet({
             {/* Secondary: gallery-only upload */}
             <CameraCapture
               capture={false}
-              label="Upload from Gallery"
+              label={t("bottomSheet.uploadFromGallery")}
               icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
@@ -421,7 +424,7 @@ export function BottomSheet({
                   type="text"
                   value={manualIsbn}
                   onChange={e => setManualIsbn(e.target.value)}
-                  placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"
+                  placeholder={t("bottomSheet.manualSearchPlaceholder")}
                   className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
                 />
                 <button
@@ -434,7 +437,7 @@ export function BottomSheet({
               </div>
             </form>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {isSearching ? "Looking up…" : "Enter barcode, Discogs Release ID, or Artist – Title"}
+              {isSearching ? t("bottomSheet.lookingUp") : t("bottomSheet.manualSearchHint")}
             </p>
             <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
               <button
@@ -442,7 +445,7 @@ export function BottomSheet({
                 onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
                 className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
               >
-                Manual Entry Form
+                {t("bottomSheet.manualEntryForm")}
               </button>
             </div>
           </div>

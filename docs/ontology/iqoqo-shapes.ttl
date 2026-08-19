@@ -1,0 +1,142 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# iqoqo SHACL shapes
+#
+# This file is the canonical home for machine-checkable constraints over the
+# iqoqo FRBR ontology (see iqoqo.ttl for the OWL vocabulary).  Constraints
+# accumulate here as the ontology grows; each shape mirrors a runtime guard
+# in app/core/ontology_validation.py.
+@prefix iqoqo: <https://iqoqo.org/ontology#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
+
+iqoqo: a sh:Ontology ;
+    rdfs:label "iqoqo SHACL Shapes" ;
+    rdfs:comment "SHACL constraints for the iqoqo FRBR ontology." .
+
+# ---------------------------------------------------------------------------
+# Work
+# Every iqoqo Work is an FRBRoo F1_Work (abstract intellectual creation).
+# ---------------------------------------------------------------------------
+
+iqoqo:WorkShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Work ;
+    sh:name "Work is FRBRoo F1_Work" ;
+    sh:description "Every iqoqo Work is an FRBRoo F1_Work." ;
+    sh:class frbroo:F1_Work .
+
+# ---------------------------------------------------------------------------
+# Work-to-Work expansion links
+# A reified iqoqo:WorkExpansionLink must point at two distinct Works and use
+# a controlled link type.  Mirrors runtime guard in
+# app/core/ontology_validation.py.
+# ---------------------------------------------------------------------------
+
+iqoqo:WorkExpansionLinkShape a sh:NodeShape ;
+    sh:targetClass iqoqo:WorkExpansionLink ;
+    sh:name "Work Expansion Link shape" ;
+    sh:description "A WorkExpansionLink reifies iqoqo:is_expansion_of between two distinct F1 Works and must use a controlled link type." ;
+    sh:property [
+        sh:path iqoqo:baseWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "A WorkExpansionLink must have exactly one baseWork pointing to a Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:expansionWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "A WorkExpansionLink must have exactly one expansionWork pointing to a Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:link_type ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "is_expansion_of" ) ;
+        sh:message "link_type must be one of the controlled lexicon: is_expansion_of." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "baseWork and expansionWork must be different Works; a Work cannot be its own expansion." ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this iqoqo:baseWork ?base .
+                $this iqoqo:expansionWork ?expansion .
+                FILTER(?base = ?expansion)
+            }
+        """ ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# F16 Container Aggregation
+# An aggregation (box set, board game box) must reference exactly one
+# container Work, aggregate only Works as Work components and only Items as
+# Item components, and contain at least one aggregate.
+# ---------------------------------------------------------------------------
+
+iqoqo:ContainerAggregationShape a sh:NodeShape ;
+    sh:targetClass iqoqo:ContainerAggregation ;
+    sh:name "F16 Container Aggregation shape" ;
+    sh:description "An F16 Container Work aggregation references exactly one container Work and at least one aggregated Work or Item; Works aggregate only Works, Items only Items." ;
+    sh:property [
+        sh:path iqoqo:containerWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "A ContainerAggregation must reference exactly one containerWork of type Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:aggregatedWork ;
+        sh:class iqoqo:Work ;
+        sh:message "aggregatedWork must be of type Work (F1_Work level), never an Expression, Manifestation, or Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:aggregatedItem ;
+        sh:class iqoqo:Item ;
+        sh:message "aggregatedItem must be of type Item (F5_Item level)." ;
+    ] ;
+    sh:or (
+        [ sh:property [ sh:path iqoqo:aggregatedWork ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path iqoqo:aggregatedItem ; sh:minCount 1 ] ]
+    ) .
+
+# ---------------------------------------------------------------------------
+# Board Game Expansion constraint
+# An F1_Work linked as an expansion must not be aggregated into an F16
+# Container Work (represented by iqoqo:ContainerAggregation rows).
+# Mirrors runtime guard validate_work_not_expansion_aggregated.
+# ---------------------------------------------------------------------------
+
+iqoqo:ExpansionWorkShape a sh:NodeShape ;
+    sh:targetSubjectsOf iqoqo:is_expansion_of ;
+    sh:name "Expansion Work not in Container Work" ;
+    sh:description """An F1_Work that is the subject of iqoqo:is_expansion_of
+(i.e., the expansion) must not be aggregated as a Work component into an
+FRBRoo F16 Container Work.""" ;
+    sh:message "Expansion Work must not be aggregated into an F16 Container Work." ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path [ sh:inversePath iqoqo:aggregatedWork ] ;
+        sh:class iqoqo:ContainerAggregation ;
+        sh:maxCount 0 ;
+        sh:message "Expansion Work must not be aggregated into an F16 Container Work." ;
+    ] .

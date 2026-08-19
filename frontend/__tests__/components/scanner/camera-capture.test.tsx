@@ -7,7 +7,39 @@
 
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import enMessages from "@/messages/en.json";
+import plMessages from "@/messages/pl.json";
+
+const cameraCaptureKeys = [
+  "snapCover",
+  "taskTimedOut",
+  "visionSubmissionFailed",
+  "processImageFailed",
+  "invalidImageFile",
+  "cancel",
+  "continue",
+  "processing",
+  "processingImage",
+  "extractingDetails",
+  "dragDropCover",
+  "orBrowse",
+  "browseFiles",
+] as const;
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) =>
+    ({
+      "cameraCapture.snapCover": "Snap Cover",
+      "cameraCapture.dragDropCover": "Drag & Drop cover image here",
+      "cameraCapture.orBrowse": "or click to browse files",
+      "cameraCapture.browseFiles": "Browse Files",
+      "cameraCapture.cancel": "Cancel",
+      "cameraCapture.continue": "Continue",
+    })[key] ?? key,
+}));
 
 // Mocks at top level
 vi.mock("@/lib/api/client", () => ({
@@ -37,6 +69,38 @@ describe("CameraCapture", () => {
       },
     });
   };
+
+  it("has complete English and Polish camera-capture translations", () => {
+    for (const key of cameraCaptureKeys) {
+      expect(enMessages.scanner.cameraCapture[key]).toBeTruthy();
+      expect(plMessages.scanner.cameraCapture[key]).toBeTruthy();
+    }
+  });
+
+  it("keeps user-visible English strings out of scanner JSX", () => {
+    const componentSources = [
+      readFileSync(path.resolve(process.cwd(), "components/scanner/camera-capture.tsx"), "utf8"),
+      readFileSync(path.resolve(process.cwd(), "components/scanner/bottom-sheet.tsx"), "utf8"),
+    ];
+    const extractedStrings = [
+      "Snap Cover",
+      "Drag & Drop cover image here",
+      "Browse Files",
+      "Processing image...",
+      "Extracting details via vision API",
+      "Barcode",
+      "Manual Search",
+      "Searching catalog...",
+      "Start camera",
+      "Manual Entry Form",
+    ];
+
+    for (const source of componentSources) {
+      for (const string of extractedStrings) {
+        expect(source).not.toContain(`>${string}<`);
+      }
+    }
+  });
 
   it("renders standard camera button when video inputs are present", async () => {
     setupCamera(true);
