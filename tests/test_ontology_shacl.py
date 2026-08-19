@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -43,12 +44,15 @@ def _load_ontology_graph() -> Graph:
 
 
 def _validate(data: Graph) -> tuple[bool, Graph, str]:
-    return pyshacl.validate(
-        data_graph=data,
-        shacl_graph=_load_shapes_graph(),
-        ont_graph=_load_ontology_graph(),
-        inference="rdfs",
-        abort_on_first=False,
+    return cast(
+        "tuple[bool, Graph, str]",
+        pyshacl.validate(
+            data_graph=data,
+            shacl_graph=_load_shapes_graph(),
+            ont_graph=_load_ontology_graph(),
+            inference="rdfs",
+            abort_on_first=False,
+        ),
     )
 
 
