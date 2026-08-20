@@ -17,6 +17,9 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
+    # 0. Ensure schema exists
+    op.execute('CREATE SCHEMA IF NOT EXISTS social')
+
     # 1. Move table to social schema
     op.execute('ALTER TABLE inventory.feedback_items SET SCHEMA social')
 
@@ -39,7 +42,7 @@ def upgrade():
     op.create_index(op.f('ix_social_feedback_comments_feedback_item_id'), 'feedback_comments', ['feedback_item_id'], unique=False, schema='social')
     op.create_index(op.f('ix_social_feedback_comments_user_id'), 'feedback_comments', ['user_id'], unique=False, schema='social')
 
-    # 3. Migrate JSONB data
+    # 3. Migrate JSON data
     op.execute("""
         INSERT INTO social.feedback_comments (feedback_item_id, user_id, comment_text, created_at)
         SELECT 
@@ -48,8 +51,8 @@ def upgrade():
             c->>'comment' as comment_text,
             (c->>'created_at')::timestamp as created_at
         FROM social.feedback_items i,
-        jsonb_array_elements(i.comments) as c
-        WHERE i.comments IS NOT NULL AND jsonb_typeof(i.comments) = 'array'
+        jsonb_array_elements(i.comments::jsonb) as c
+        WHERE i.comments IS NOT NULL AND jsonb_typeof(i.comments::jsonb) = 'array'
     """)
 
     # 4. Drop comments column from feedback_items

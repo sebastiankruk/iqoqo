@@ -300,7 +300,6 @@ def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
     # Override Celery task to run synchronously
     from app.core.tasks import upload_feedback_screenshot
 
-
     def mock_apply_async(*args, **kwargs):
         upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
 
@@ -360,7 +359,6 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
     # Override Celery task to run synchronously
     from app.core.tasks import upload_feedback_screenshot
 
-
     def mock_apply_async(*args, **kwargs):
         upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
 
@@ -396,22 +394,25 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
     img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
     assert img_resp.status_code == 404
 
+
 def test_feedback_schema_migration(app):
     """Test that feedback_items and feedback_comments are in social schema."""
     from sqlalchemy import text
 
-
     with app.app_context():
         # Check if tables exist in the social schema
-        result = db.session.execute(text(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
-            "AND table_name IN ('feedback_items', 'feedback_comments')"
-        )).fetchall()
+        result = db.session.execute(
+            text(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
+                "AND table_name IN ('feedback_items', 'feedback_comments')"
+            )
+        ).fetchall()
 
         tables = [row[0] for row in result]
 
         # Test environment uses postgres so schema should be social
         import os
+
         if os.environ.get("DATABASE_URL_TEST", "").startswith("postgresql"):
             assert "feedback_items" in tables
             assert "feedback_comments" in tables

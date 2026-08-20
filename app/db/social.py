@@ -218,9 +218,14 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
-
     user = db.relationship("User", backref=db.backref("feedback_items", cascade="all, delete-orphan", lazy="dynamic"))
-    comments = db.relationship("FeedbackComment", backref="feedback_item", cascade="all, delete-orphan", lazy="dynamic", order_by="FeedbackComment.created_at.asc()")
+    comments = db.relationship(
+        "FeedbackComment",
+        backref="feedback_item",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+        order_by="FeedbackComment.created_at.asc()",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize a feedback ticket for the API."""
