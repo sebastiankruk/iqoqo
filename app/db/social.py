@@ -37,6 +37,9 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 _CATALOG: str | None = "catalog" if _USE_PG else None
 _CATALOG_PFX: str = f"{_CATALOG}." if _CATALOG else ""
 
+_SOCIAL: str | None = "social" if _USE_PG else None
+_SOCIAL_PFX: str = f"{_SOCIAL}." if _SOCIAL else ""
+
 
 class SharedCollection(db.Model):  # type: ignore[name-defined]
     """
@@ -159,6 +162,36 @@ class SocialFeedback(db.Model):  # type: ignore[name-defined]
         }
 
 
+class FeedbackComment(db.Model):  # type: ignore[name-defined]
+    """A comment on a feedback item."""
+
+    __tablename__ = "feedback_comments"
+    __table_args__ = ({"schema": _SOCIAL},) if _SOCIAL else ()
+
+    id = db.Column(db.Integer, primary_key=True)
+    feedback_item_id = db.Column(
+        db.Integer, db.ForeignKey(f"{_SOCIAL_PFX}feedback_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    comment_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    user = db.relationship("User", backref=db.backref("feedback_comments", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize a feedback comment for the API."""
+        return {
+            "id": self.id,
+            "feedback_item_id": self.feedback_item_id,
+            "user_id": str(self.user_id),
+            "user_display_name": self.user.display_name if self.user else "Anonymous",
+            "user_username": self.user.public_username if self.user else None,
+            "user_avatar_url": self.user.avatar_url if self.user else None,
+            "comment": self.comment_text,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class FeedbackItem(db.Model):  # type: ignore[name-defined]
     """A locally managed user feedback or bug report."""
 
@@ -167,9 +200,9 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
         (
             db.CheckConstraint("feedback_type IN ('feature_request', 'bug')", name="chk_feedback_item_type"),
             db.CheckConstraint("status IN ('new', 'accepted', 'in_progress', 'in_validation', 'closed')", name="chk_feedback_item_status"),
-            {"schema": _INVENTORY},
+            {"schema": _SOCIAL},
         )
-        if _INVENTORY
+        if _SOCIAL
         else (
             db.CheckConstraint("feedback_type IN ('feature_request', 'bug')", name="chk_feedback_item_type"),
             db.CheckConstraint("status IN ('new', 'accepted', 'in_progress', 'in_validation', 'closed')", name="chk_feedback_item_status"),
@@ -182,11 +215,12 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
     description = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), nullable=False, default="new", index=True)
     attachments = db.Column(JSONB if _USE_PG else db.JSON, nullable=False, default=list)
-    comments = db.Column(JSONB if _USE_PG else db.JSON, nullable=False, default=list)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
+
     user = db.relationship("User", backref=db.backref("feedback_items", cascade="all, delete-orphan", lazy="dynamic"))
+    comments = db.relationship("FeedbackComment", backref="feedback_item", cascade="all, delete-orphan", lazy="dynamic", order_by="FeedbackComment.created_at.asc()")
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize a feedback ticket for the API."""
@@ -199,8 +233,8 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
             "description": self.description,
             "status": self.status,
             "attachments": self.attachments or [],
-            "comments": self.comments or [],
-            "comments_count": len(self.comments or []),
+            "comments": [c.to_dict() for c in self.comments] if getattr(self, "comments", None) is not None else [],  # type: ignore[attr-defined, no-any-return]
+            "comments_count": self.comments.count() if getattr(self, "comments", None) is not None else 0,  # type: ignore[attr-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

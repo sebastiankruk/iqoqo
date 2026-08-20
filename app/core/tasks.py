@@ -220,3 +220,20 @@ def rotate_and_archive_backups(self) -> None:
             logger.info("Archived %s to Glacier and removed from local storage.", backup)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to archive %s: %s", backup, e)
+
+
+@celery.task(bind=True)
+def upload_feedback_screenshot(self, local_path: str, filename: str) -> None:
+    """Uploads a feedback screenshot via rclone to RCLONE_FEEDBACK_REMOTE."""
+    rclone_remote = getattr(Config, "RCLONE_FEEDBACK_REMOTE", None) or os.environ.get("RCLONE_FEEDBACK_REMOTE")
+    if not rclone_remote:
+        logger.info("RCLONE_FEEDBACK_REMOTE not configured, skipping remote upload.")
+        return
+
+    try:
+        target = get_rclone_target(rclone_remote, "feedback", filename)
+        subprocess.run(["rclone", "copyto", "--", local_path, target], check=True, capture_output=True, text=True)
+        logger.info("Successfully uploaded feedback screenshot %s to rclone remote.", filename)
+    except subprocess.CalledProcessError as e:
+        logger.error("rclone copyto failed for feedback screenshot %s: %s", filename, e.stderr)
+        raise RuntimeError(f"Feedback screenshot upload failed: {e.stderr}") from e

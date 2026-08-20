@@ -15,19 +15,24 @@
 #
 """Feedback submission and local ticket management endpoints."""
 
+import os
+import subprocess
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, g, jsonify, request
+from flask import Response, g, jsonify, request, send_from_directory
 from sqlalchemy import desc, func, select
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
-from app.db.models import FeedbackItem, User, db
+from app.core.tasks import upload_feedback_screenshot
+from app.db.models import FeedbackComment, FeedbackItem, User, db
+from app.utils.covers import GALLERY_DIR
 from app.utils.images import save_upload_image, validate_upload_file
+from app.utils.rclone_utils import get_rclone_target
 
 _TYPES = {"feature_request", "bug"}
 _STATUSES = {"new", "accepted", "in_progress", "in_validation", "closed"}
@@ -69,7 +74,14 @@ def submit_feedback() -> tuple[Response, int] | Response:
     try:
         for upload in uploads:
             validate_upload_file(upload, max_size_bytes=10 * 1024 * 1024)
-            attachments.append(save_upload_image(upload, subfolder="gallery", filename=f"feedback-{uuid.uuid4().hex}.jpg"))
+            filename = f"feedback-{uuid.uuid4().hex}.jpg"
+            # save_upload_image returns /static/gallery/...
+            _ = save_upload_image(upload, subfolder="gallery", filename=filename)
+            attachments.append(filename)
+
+            # Trigger Celery task
+            local_path = os.path.join(GALLERY_DIR, filename)
+            upload_feedback_screenshot.apply_async(args=[local_path, filename], kwargs={"user_id": g.user_id})
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -77,6 +89,26 @@ def submit_feedback() -> tuple[Response, int] | Response:
     db.session.add(item)
     db.session.commit()
     return jsonify({"success": True, "data": item.to_dict()}), 201
+
+
+@api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
+@require_auth
+def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
+    """Retrieve a feedback screenshot from local storage or rclone remote."""
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        return send_from_directory(GALLERY_DIR, filename)
+
+    rclone_remote = os.environ.get("RCLONE_FEEDBACK_REMOTE")
+    if not rclone_remote:
+        return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
+
+    target = get_rclone_target(rclone_remote, "feedback", filename)
+    try:
+        result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True)
+        return Response(result.stdout, mimetype="image/jpeg")
+    except subprocess.CalledProcessError:
+        return jsonify({"success": False, "error": "Screenshot not found"}), 404
 
 
 @api_bp.route("/feedback", methods=["GET"])
@@ -121,10 +153,17 @@ def list_feedback() -> tuple[Response, int] | Response:
     stmt = stmt.order_by(desc(FeedbackItem.created_at)).offset((page - 1) * per_page).limit(per_page)
     items = db.session.execute(stmt).scalars().all()
 
+    def _format_item(i: FeedbackItem) -> dict[str, Any]:
+        d = i.to_dict()
+        d["attachments"] = [
+            f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])
+        ]
+        return d
+
     return jsonify(
         {
             "success": True,
-            "data": [item.to_dict() for item in items],
+            "data": [_format_item(item) for item in items],
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -149,7 +188,9 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     if not is_admin and item.user_id != g.user_id:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    return jsonify({"success": True, "data": item.to_dict()})
+    d = item.to_dict()
+    d["attachments"] = [f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
+    return jsonify({"success": True, "data": d})
 
 
 @api_bp.route("/feedback/<int:feedback_id>", methods=["PATCH"])
@@ -182,15 +223,13 @@ def update_feedback(feedback_id: int) -> tuple[Response, int] | Response:
     if comment_text:
         if item.status == "closed":
             return jsonify({"success": False, "error": "Cannot add comments to a closed ticket"}), 400
-        comment_entry: dict[str, Any] = {
-            "id": uuid.uuid4().hex,
-            "user_id": str(g.user_id),
-            "user_display_name": user.display_name if user else "User",
-            "comment": comment_text,
-            "created_at": datetime.now(UTC).isoformat(),
-        }
-        item.comments = list(item.comments or []) + [comment_entry]
+
+        new_comment = FeedbackComment(feedback_item_id=item.id, user_id=g.user_id, comment_text=comment_text, created_at=datetime.now(UTC))
+        db.session.add(new_comment)
 
     item.updated_at = datetime.now(UTC)
     db.session.commit()
-    return jsonify({"success": True, "data": item.to_dict()})
+
+    d = item.to_dict()
+    d["attachments"] = [f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
+    return jsonify({"success": True, "data": d})

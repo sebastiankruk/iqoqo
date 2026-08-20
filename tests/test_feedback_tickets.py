@@ -245,3 +245,173 @@ def test_feedback_get_rate_limiting(client, feedback_setup, app):
         limiter.enabled = False
         limiter._enabled = False
         app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_concurrent_comment_addition(client, feedback_setup, app):
+    """Test that concurrent comment additions do not overwrite each other (no race condition)."""
+    import threading
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+
+    # Create a ticket
+    submit = client.post(
+        "/api/feedback",
+        data={"type": "bug", "description": "Concurrency test"},
+        headers=u1_headers,
+    )
+    ticket_id = submit.json["data"]["id"]
+
+    def add_comment(idx):
+        with app.test_client() as c:
+            c.patch(
+                f"/api/feedback/{ticket_id}",
+                json={"comment": f"Comment {idx}"},
+                headers=u1_headers,
+            )
+
+    threads = []
+    for i in range(10):
+        t = threading.Thread(target=add_comment, args=(i,))
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    # Verify all comments are present
+    resp = client.get(f"/api/feedback/{ticket_id}", headers=u1_headers)
+    assert resp.status_code == 200
+    assert len(resp.json["data"]["comments"]) == 10
+
+
+def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
+    """Test that screenshots trigger Celery task and resolve remotely if configured."""
+    import os
+    from io import BytesIO
+    from unittest.mock import MagicMock
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+
+    mock_subprocess_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+    monkeypatch.setenv("RCLONE_FEEDBACK_REMOTE", "test_remote:feedback")
+
+    # Override Celery task to run synchronously
+    from app.core.tasks import upload_feedback_screenshot
+
+
+    def mock_apply_async(*args, **kwargs):
+        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
+
+    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
+
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Rclone test",
+            "screenshots": (BytesIO(png_bytes), "test.png"),
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+
+    # Assert rclone was called
+    mock_subprocess_run.assert_called_once()
+    args = mock_subprocess_run.call_args[0][0]
+    assert "rclone" in args
+    assert "copyto" in args
+    assert any("test_remote:feedback" in a for a in args)
+
+    # Test retrieval from remote
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    mock_subprocess_run_cat = MagicMock()
+    mock_subprocess_run_cat.return_value.stdout = b"fakeimage"
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run_cat)
+
+    # Need to remove local file to trigger rclone fallback
+    from app.utils.covers import GALLERY_DIR
+
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert img_resp.status_code == 200
+    assert img_resp.data == b"fakeimage"
+    mock_subprocess_run_cat.assert_called_once()
+    assert "cat" in mock_subprocess_run_cat.call_args[0][0]
+
+
+def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
+    """Test fallback when rclone is not configured."""
+    import os
+    from io import BytesIO
+    from unittest.mock import MagicMock
+
+    monkeypatch.delenv("RCLONE_FEEDBACK_REMOTE", raising=False)
+
+    mock_subprocess_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+    # Override Celery task to run synchronously
+    from app.core.tasks import upload_feedback_screenshot
+
+
+    def mock_apply_async(*args, **kwargs):
+        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
+
+    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Fallback test",
+            "screenshots": (BytesIO(png_bytes), "test2.png"),
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+
+    # Subprocess shouldn't be called because RCLONE_FEEDBACK_REMOTE is missing
+    mock_subprocess_run.assert_not_called()
+
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    # Remove local file to test retrieval failure
+    from app.utils.covers import GALLERY_DIR
+
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert img_resp.status_code == 404
+
+def test_feedback_schema_migration(app):
+    """Test that feedback_items and feedback_comments are in social schema."""
+    from sqlalchemy import text
+
+
+    with app.app_context():
+        # Check if tables exist in the social schema
+        result = db.session.execute(text(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
+            "AND table_name IN ('feedback_items', 'feedback_comments')"
+        )).fetchall()
+
+        tables = [row[0] for row in result]
+
+        # Test environment uses postgres so schema should be social
+        import os
+        if os.environ.get("DATABASE_URL_TEST", "").startswith("postgresql"):
+            assert "feedback_items" in tables
+            assert "feedback_comments" in tables

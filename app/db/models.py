@@ -69,7 +69,7 @@ from app.db.lending import LoanRequest  # noqa: F401
 from app.db.puzzle import MANIFESTATION_PUZZLE_META_KEYS  # noqa: F401
 from app.db.roadmap import ReadingRoadmap, RoadmapItem  # noqa: F401
 from app.db.settings import InstanceSettings, LLMTelemetry, ScanTelemetry  # noqa: F401
-from app.db.social import EscalationRequest, FeedbackItem, SharedCollection, SocialFeedback, SocialNote  # noqa: F401
+from app.db.social import EscalationRequest, FeedbackComment, FeedbackItem, SharedCollection, SocialFeedback, SocialNote  # noqa: F401
 from app.db.video import (  # noqa: F401
     EXPRESSION_VIDEO_ROLES,
     MANIFESTATION_VIDEO_META_KEYS,
