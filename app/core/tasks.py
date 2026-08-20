@@ -223,7 +223,7 @@ def rotate_and_archive_backups(self) -> None:
 
 
 @celery.task(bind=True)
-def upload_feedback_screenshot(self, local_path: str, filename: str) -> None:
+def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: object) -> None:
     """Uploads a feedback screenshot via rclone to RCLONE_FEEDBACK_REMOTE."""
     rclone_remote = getattr(Config, "RCLONE_FEEDBACK_REMOTE", None) or os.environ.get("RCLONE_FEEDBACK_REMOTE")
     if not rclone_remote:

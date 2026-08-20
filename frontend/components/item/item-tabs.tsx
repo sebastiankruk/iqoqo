@@ -193,10 +193,7 @@ function ReviewsTab({ item }: { item: Item }) {
 
   // Default to the first subtab that has a valid targetId (items may lack work/expression)
   const firstAvailableLevel = (subtabs.find(s => !!s.targetId)?.id ?? "manifestation") as
-    | "work"
-    | "expression"
-    | "manifestation"
-    | "item";
+    "work" | "expression" | "manifestation" | "item";
   const [activeLevel, setActiveLevel] = useState<"work" | "expression" | "manifestation" | "item">(firstAvailableLevel);
 
   return (

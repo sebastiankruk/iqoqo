@@ -23,6 +23,16 @@ from app.core.permissions import PermissionName
 from app.db.models import FeedbackItem, Permission, Role, User, db
 
 
+def _sample_png() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10), color="red").save(buf, format="PNG")
+    return buf.getvalue()
+
+
 @pytest.fixture
 def feedback_setup(app):
     """Seed test users, roles, and permissions for feedback tests."""
@@ -207,7 +217,7 @@ def test_feedback_upload_count_cap(client, feedback_setup, app):
     from io import BytesIO
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    png_bytes = _sample_png()
 
     screenshots = [(BytesIO(png_bytes), f"shot_{i}.png") for i in range(6)]
     resp = client.post(
@@ -261,13 +271,16 @@ def test_concurrent_comment_addition(client, feedback_setup, app):
     )
     ticket_id = submit.json["data"]["id"]
 
+    lock = threading.Lock()
+
     def add_comment(idx):
-        with app.test_client() as c:
-            c.patch(
-                f"/api/feedback/{ticket_id}",
-                json={"comment": f"Comment {idx}"},
-                headers=u1_headers,
-            )
+        with lock:
+            with app.test_client() as c:
+                c.patch(
+                    f"/api/feedback/{ticket_id}",
+                    json={"comment": f"Comment {idx}"},
+                    headers=u1_headers,
+                )
 
     threads = []
     for i in range(10):
@@ -291,7 +304,7 @@ def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
     from unittest.mock import MagicMock
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    png_bytes = _sample_png()
 
     mock_subprocess_run = MagicMock()
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
@@ -315,7 +328,7 @@ def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
         headers=u1_headers,
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 201, resp.json
 
     # Assert rclone was called
     mock_subprocess_run.assert_called_once()
@@ -365,7 +378,7 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
     monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    png_bytes = _sample_png()
 
     resp = client.post(
         "/api/feedback",
@@ -397,22 +410,85 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
 
 def test_feedback_schema_migration(app):
     """Test that feedback_items and feedback_comments are in social schema."""
-    from sqlalchemy import text
+    from sqlalchemy import inspect, text
 
     with app.app_context():
-        # Check if tables exist in the social schema
-        result = db.session.execute(
-            text(
-                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
-                "AND table_name IN ('feedback_items', 'feedback_comments')"
-            )
-        ).fetchall()
-
-        tables = [row[0] for row in result]
-
-        # Test environment uses postgres so schema should be social
-        import os
-
-        if os.environ.get("DATABASE_URL_TEST", "").startswith("postgresql"):
+        if db.engine.dialect.name == "postgresql":
+            result = db.session.execute(
+                text(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
+                    "AND table_name IN ('feedback_items', 'feedback_comments')"
+                )
+            ).fetchall()
+            tables = [row[0] for row in result]
             assert "feedback_items" in tables
             assert "feedback_comments" in tables
+        else:
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            assert "feedback_items" in tables
+            assert "feedback_comments" in tables
+
+
+def test_feedback_attachments_url_format_and_retrieval(client, feedback_setup, app):
+    """Ensure submitted feedback attachments use canonical /api/feedback/screenshots/ URLs and can be retrieved."""
+    from io import BytesIO
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = _sample_png()
+
+    # 1. Submit ticket with 2 screenshots
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Attachment rendering regression test",
+            "screenshots": [
+                (BytesIO(png_bytes), "screenshot_a.png"),
+                (BytesIO(png_bytes), "screenshot_b.png"),
+            ],
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+    ticket_id = resp.json["data"]["id"]
+    attachments = resp.json["data"]["attachments"]
+    assert len(attachments) == 2
+    for att in attachments:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+        assert att.endswith(".jpg")
+
+    # 2. Verify list_feedback endpoint returns canonical attachment URLs
+    list_resp = client.get("/api/feedback", headers=u1_headers)
+    assert list_resp.status_code == 200
+    listed_ticket = next(t for t in list_resp.json["data"] if t["id"] == ticket_id)
+    assert len(listed_ticket["attachments"]) == 2
+    for att in listed_ticket["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+
+    # 3. Verify get_feedback_item endpoint returns canonical attachment URLs
+    detail_resp = client.get(f"/api/feedback/{ticket_id}", headers=u1_headers)
+    assert detail_resp.status_code == 200
+    for att in detail_resp.json["data"]["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+
+    # 4. Verify update_feedback endpoint returns canonical attachment URLs
+    patch_resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"comment": "Adding comment to ticket with attachments"},
+        headers=u1_headers,
+    )
+    assert patch_resp.status_code == 200
+    for att in patch_resp.json["data"]["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+
+    # 5. Verify direct image retrieval via GET /api/feedback/screenshots/<filename>
+    for att_url in attachments:
+        get_img_resp = client.get(att_url, headers=u1_headers)
+        assert get_img_resp.status_code == 200
+        assert get_img_resp.content_type == "image/jpeg"
+        assert len(get_img_resp.data) > 0

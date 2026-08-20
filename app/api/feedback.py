@@ -81,14 +81,21 @@ def submit_feedback() -> tuple[Response, int] | Response:
 
             # Trigger Celery task
             local_path = os.path.join(GALLERY_DIR, filename)
-            upload_feedback_screenshot.apply_async(args=[local_path, filename], kwargs={"user_id": g.user_id})
+            upload_feedback_screenshot.apply_async(args=[local_path, filename])
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
     item = FeedbackItem(user_id=g.user_id, feedback_type=feedback_type, description=description, attachments=attachments)
     db.session.add(item)
     db.session.commit()
-    return jsonify({"success": True, "data": item.to_dict()}), 201
+    return jsonify({"success": True, "data": _format_feedback_item(item)}), 201
+
+
+def _format_feedback_item(item: FeedbackItem) -> dict[str, Any]:
+    """Format a FeedbackItem dictionary with canonical API screenshot paths."""
+    d = item.to_dict()
+    d["attachments"] = [f"/api/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
+    return d
 
 
 @api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
@@ -153,17 +160,10 @@ def list_feedback() -> tuple[Response, int] | Response:
     stmt = stmt.order_by(desc(FeedbackItem.created_at)).offset((page - 1) * per_page).limit(per_page)
     items = db.session.execute(stmt).scalars().all()
 
-    def _format_item(i: FeedbackItem) -> dict[str, Any]:
-        d = i.to_dict()
-        d["attachments"] = [
-            f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])
-        ]
-        return d
-
     return jsonify(
         {
             "success": True,
-            "data": [_format_item(item) for item in items],
+            "data": [_format_feedback_item(item) for item in items],
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -188,9 +188,7 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     if not is_admin and item.user_id != g.user_id:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    d = item.to_dict()
-    d["attachments"] = [f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
-    return jsonify({"success": True, "data": d})
+    return jsonify({"success": True, "data": _format_feedback_item(item)})
 
 
 @api_bp.route("/feedback/<int:feedback_id>", methods=["PATCH"])
@@ -230,6 +228,4 @@ def update_feedback(feedback_id: int) -> tuple[Response, int] | Response:
     item.updated_at = datetime.now(UTC)
     db.session.commit()
 
-    d = item.to_dict()
-    d["attachments"] = [f"/api/v1/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
-    return jsonify({"success": True, "data": d})
+    return jsonify({"success": True, "data": _format_feedback_item(item)})

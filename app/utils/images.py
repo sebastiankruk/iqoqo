@@ -399,6 +399,7 @@ def save_upload_image(file, subfolder: str = "gallery", filename: str | None = N
     if not target_filename:
         raise ValueError("Invalid filename")
 
+    os.makedirs(base_dir, exist_ok=True)
     filepath = os.path.join(base_dir, target_filename)
 
     # Save and optimize.
