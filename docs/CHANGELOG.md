@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.16] - TBD
+## [0.7.16] - 2026-08-21
 
 ### Added
 
@@ -13,10 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FRBR Work Expansion Links & Ontology**: Added backend support for FRBR F15 Complex Work decomposition via `work_expansion_links`, including `expansion_of` / `has_expansion` links, an `Expansion` work category, and SHACL validation preventing expansion Works from being aggregated into F16 Container Works.
 - **Board Game Mechanics Vocabulary**: Introduced a canonical `boardgame_mechanics` taxonomy, seedable JSON (`data/bgg_mechanics.json`), Alembic migration, API endpoints (`/api/taxonomies/boardgame-mechanics`), and a reusable `MechanicBadge` component.
 - **Feedback Escalation Target Entity**: Extended feedback tickets with a `target_entity` JSONB field and escalation rule so user-reported catalog issues can be linked to specific FRBR records.
+- **Allegro Device Flow E2E Tests**: Added comprehensive Playwright E2E tests for `/allegro/device-flow` mocking external Allegro API network contracts.
+- **Rclone Pre-Start Configuration Check**: Automatic directory creation check for `${HOME}/.config/rclone` in container entrypoints to prevent silent backup failures.
 
 ### Changed
 
+- **Dashboard Scope Toggle UX**: Replaced the pill-button scope toggle with a minimalist icon-toggle next to the section heading, reducing viewport button density.
+- **Feedback Page Mobile Filter Drawer**: Wrapped feedback page mobile filter sidebar in a collapsible drawer to eliminate vertical scrolling past filter controls.
+- **Feedback Schema Validation**: Standardized `PATCH /api/feedback/<id>` endpoint using Marshmallow schema validation for robust input sanitation.
+- **Feedback Comment Relational Normalization**: Normalized comments into a separate relational table and migrated `feedback_items` to the `social` database schema.
+- **Incremental Alembic Migrations**: Refactored migration `e3f891ab45c2` to execute explicit transaction commits after each batch update loop to immediately release row locks.
+
 ### Fixed
+
+- **Subprocess Command Injection Hardening**: Added POSIX `--` end-of-options delimiters to all rclone `subprocess.run` invocations across tasks, image processing, and LLM covers.
+- **Scanner Telemetry Oversized Barcode Rejection**: Auditable rejection recording (`status='rejected_oversized'`) with barcode length warnings instead of silent returns.
+- **HTTP Client Resilience**: Enforced explicit timeouts on DNS address lookups and type coercion on URLs to prevent DoS crashes.
 
 ## [0.7.15] - 2026-08-17
 
