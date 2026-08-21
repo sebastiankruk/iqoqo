@@ -173,8 +173,14 @@ test.describe("v0.7.15 UX Hotfixes", () => {
     await expect(page.getByText("My Items")).toBeVisible();
     await expect(page.getByText("2").first()).toBeVisible();
 
-    await page.getByRole("button", { name: /global/i }).click();
+    // Initially Personal scope: click the icon-toggle to switch to Global scope
+    await page.getByRole("button", { name: /personal/i }).click();
     await expect(page.getByText("All Items")).toBeVisible();
     await expect(page.getByText("99").first()).toBeVisible();
+
+    // Click again (now labelled Global) to switch back to Personal scope
+    await page.getByRole("button", { name: /global/i }).click();
+    await expect(page.getByText("My Items")).toBeVisible();
+    await expect(page.getByText("2").first()).toBeVisible();
   });
 });
