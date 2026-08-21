@@ -15,19 +15,26 @@
 #
 """Feedback submission and local ticket management endpoints."""
 
+import os
+import subprocess
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, g, jsonify, request
+from flask import Response, g, jsonify, request, send_from_directory
+from pydantic import ValidationError
 from sqlalchemy import desc, func, select
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
+from app.api.schemas import FeedbackUpdateSchema
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
-from app.db.models import FeedbackItem, User, db
+from app.core.tasks import upload_feedback_screenshot
+from app.db.models import FeedbackComment, FeedbackItem, User, db
+from app.utils.covers import GALLERY_DIR
 from app.utils.images import save_upload_image, validate_upload_file
+from app.utils.rclone_utils import get_rclone_target
 
 _TYPES = {"feature_request", "bug"}
 _STATUSES = {"new", "accepted", "in_progress", "in_validation", "closed"}
@@ -69,14 +76,48 @@ def submit_feedback() -> tuple[Response, int] | Response:
     try:
         for upload in uploads:
             validate_upload_file(upload, max_size_bytes=10 * 1024 * 1024)
-            attachments.append(save_upload_image(upload, subfolder="gallery", filename=f"feedback-{uuid.uuid4().hex}.jpg"))
+            filename = f"feedback-{uuid.uuid4().hex}.jpg"
+            # save_upload_image returns /static/gallery/...
+            _ = save_upload_image(upload, subfolder="gallery", filename=filename)
+            attachments.append(filename)
+
+            # Trigger Celery task
+            local_path = os.path.join(GALLERY_DIR, filename)
+            upload_feedback_screenshot.apply_async(args=[local_path, filename])
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
     item = FeedbackItem(user_id=g.user_id, feedback_type=feedback_type, description=description, attachments=attachments)
     db.session.add(item)
     db.session.commit()
-    return jsonify({"success": True, "data": item.to_dict()}), 201
+    return jsonify({"success": True, "data": _format_feedback_item(item)}), 201
+
+
+def _format_feedback_item(item: FeedbackItem) -> dict[str, Any]:
+    """Format a FeedbackItem dictionary with canonical API screenshot paths."""
+    d = item.to_dict()
+    d["attachments"] = [f"/api/feedback/screenshots/{att}" if not att.startswith("/") else att for att in (d.get("attachments") or [])]
+    return d
+
+
+@api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
+@require_auth
+def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
+    """Retrieve a feedback screenshot from local storage or rclone remote."""
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        return send_from_directory(GALLERY_DIR, filename)
+
+    rclone_remote = os.environ.get("RCLONE_FEEDBACK_REMOTE")
+    if not rclone_remote:
+        return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
+
+    target = get_rclone_target(rclone_remote, "feedback", filename)
+    try:
+        result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True)
+        return Response(result.stdout, mimetype="image/jpeg")
+    except subprocess.CalledProcessError:
+        return jsonify({"success": False, "error": "Screenshot not found"}), 404
 
 
 @api_bp.route("/feedback", methods=["GET"])
@@ -124,7 +165,7 @@ def list_feedback() -> tuple[Response, int] | Response:
     return jsonify(
         {
             "success": True,
-            "data": [item.to_dict() for item in items],
+            "data": [_format_feedback_item(item) for item in items],
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -149,7 +190,22 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     if not is_admin and item.user_id != g.user_id:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    return jsonify({"success": True, "data": item.to_dict()})
+    return jsonify({"success": True, "data": _format_feedback_item(item)})
+
+
+def _validate_feedback_patch_permissions(
+    data: FeedbackUpdateSchema, is_admin: bool, is_owner: bool, item_status: str
+) -> tuple[str, int] | None:
+    """Validate user permissions and status transition constraints for feedback patch."""
+    if data.status is not None and not is_admin and data.status != "closed":
+        return "Creators may only close their tickets", 403
+    if data.feedback_type is not None and not is_admin:
+        return "Only admins can change feedback type", 403
+    if data.description is not None and not is_admin and not is_owner:
+        return "Forbidden", 403
+    if data.comment and data.comment.strip() and item_status == "closed":
+        return "Cannot add comments to a closed ticket", 400
+    return None
 
 
 @api_bp.route("/feedback/<int:feedback_id>", methods=["PATCH"])
@@ -168,29 +224,38 @@ def update_feedback(feedback_id: int) -> tuple[Response, int] | Response:
     if not is_admin and not is_owner:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
-    body = request.get_json(silent=True) or {}
-    new_status = body.get("status")
-    comment_text = body.get("comment", "").strip() if isinstance(body.get("comment"), str) else ""
+    body = request.get_json(silent=True)
+    if body is None or not isinstance(body, dict):
+        return jsonify({"success": False, "error": "Invalid or missing JSON payload"}), 400
 
-    if new_status is not None:
-        if new_status not in _STATUSES:
-            return jsonify({"success": False, "error": "Invalid feedback status"}), 400
-        if not is_admin and new_status != "closed":
-            return jsonify({"success": False, "error": "Creators may only close their tickets"}), 403
-        item.status = new_status
+    try:
+        data = FeedbackUpdateSchema.model_validate(body)
+    except ValidationError as exc:
+        formatted_errors = [
+            {"loc": err.get("loc", ()), "msg": err.get("msg", ""), "type": err.get("type", "")} for err in exc.errors(include_url=False)
+        ]
+        return jsonify({"success": False, "error": formatted_errors}), 400
 
-    if comment_text:
-        if item.status == "closed":
-            return jsonify({"success": False, "error": "Cannot add comments to a closed ticket"}), 400
-        comment_entry: dict[str, Any] = {
-            "id": uuid.uuid4().hex,
-            "user_id": str(g.user_id),
-            "user_display_name": user.display_name if user else "User",
-            "comment": comment_text,
-            "created_at": datetime.now(UTC).isoformat(),
-        }
-        item.comments = list(item.comments or []) + [comment_entry]
+    perm_err = _validate_feedback_patch_permissions(data, is_admin, is_owner, item.status)
+    if perm_err:
+        return jsonify({"success": False, "error": perm_err[0]}), perm_err[1]
+
+    if data.status is not None:
+        item.status = data.status
+    if data.feedback_type is not None:
+        item.feedback_type = data.feedback_type
+    if data.description is not None:
+        item.description = data.description
+
+    if data.comment:
+        comment_text = data.comment.strip()
+        if comment_text:
+            new_comment = FeedbackComment(
+                feedback_item_id=item.id, user_id=g.user_id, comment_text=comment_text, created_at=datetime.now(UTC)
+            )
+            db.session.add(new_comment)
 
     item.updated_at = datetime.now(UTC)
     db.session.commit()
-    return jsonify({"success": True, "data": item.to_dict()})
+
+    return jsonify({"success": True, "data": _format_feedback_item(item)})

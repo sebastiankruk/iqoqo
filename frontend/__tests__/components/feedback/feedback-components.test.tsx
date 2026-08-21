@@ -185,4 +185,29 @@ describe("FeedbackDetailModal", () => {
     expect(images.length).toBeGreaterThanOrEqual(2);
     expect(images[0]).toHaveClass("object-contain");
   });
+
+  it("resolves and renders attachments with canonical /api/feedback/screenshots/ paths", () => {
+    const itemWithApiAttachments = {
+      ...mockItem,
+      attachments: ["/api/feedback/screenshots/feedback-sample1.jpg", "feedback-sample2.jpg"],
+    };
+
+    render(
+      <FeedbackDetailModal
+        item={itemWithApiAttachments}
+        open={true}
+        onOpenChange={vi.fn()}
+        isAdmin={false}
+        currentUserId="user-123"
+        onUpdated={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Attachments (2)")).toBeInTheDocument();
+    const images = screen.getAllByRole("img");
+    expect(images.length).toBeGreaterThanOrEqual(2);
+    expect(images[0]).toHaveAttribute("src", "/api/feedback/screenshots/feedback-sample1.jpg");
+    const links = screen.getAllByRole("link");
+    expect(links.some(l => l.getAttribute("href")?.includes("feedback-sample1.jpg"))).toBe(true);
+  });
 });

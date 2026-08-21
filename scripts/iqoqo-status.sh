@@ -383,6 +383,9 @@ except FileNotFoundError:
     pass
 print(count)
 " 2>/dev/null || echo "0")
+    if [[ ! "$gunicorn_workers" =~ ^[0-9]+$ ]]; then
+        gunicorn_workers=0
+    fi
     if [[ "$gunicorn_workers" -ge 2 ]]; then
         check "Gunicorn" pass "${gunicorn_workers} worker processes"
     elif [[ "$gunicorn_workers" -eq 0 ]]; then

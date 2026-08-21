@@ -164,7 +164,7 @@ describe("StatsCards", () => {
     expect(screen.getByText("Reading")).toBeInTheDocument();
   });
 
-  it("toggles between Personal and Global scope with dynamic labels", () => {
+  it("toggles between Personal and Global scope with dynamic labels via icon-toggle", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
       typeof useStats
     >);
@@ -175,13 +175,28 @@ describe("StatsCards", () => {
     expect(screen.getByText("Reading")).toBeInTheDocument();
     expect(screen.getByText("On Wish List")).toBeInTheDocument();
 
-    const globalBtn = screen.getByRole("button", { name: /global/i });
-    fireEvent.click(globalBtn);
+    const scopeToggle = screen.getByRole("button", { name: "Personal" });
+    expect(scopeToggle).toHaveAttribute("title", "Personal");
+    fireEvent.click(scopeToggle);
 
     expect(mockUseStats).toHaveBeenCalledWith("global");
     expect(screen.getByText("All Items")).toBeInTheDocument();
     expect(screen.getByText("Being Read")).toBeInTheDocument();
     expect(screen.getByText("On Wish Lists")).toBeInTheDocument();
+
+    const globalToggle = screen.getByRole("button", { name: "Global" });
+    expect(globalToggle).toHaveAttribute("title", "Global");
+  });
+
+  it("verifies button count in header controls stays <= 4", () => {
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
+      typeof useStats
+    >);
+    render(<StatsCards />);
+    const buttons = screen.getAllByRole("button");
+    // Stats button, Insights button, and Scope icon-toggle = 3 buttons (<= 4)
+    expect(buttons.length).toBeLessThanOrEqual(4);
+    expect(buttons).toHaveLength(3);
   });
 
   it("applies overflow-x-auto and flex-nowrap classes for mobile horizontal scrolling", () => {
@@ -205,8 +220,8 @@ describe("StatsCards", () => {
     const insightsMock = screen.getByTestId("mock-collection-insights");
     expect(insightsMock).toHaveAttribute("data-scope", "personal");
 
-    const globalBtn = screen.getByRole("button", { name: /global/i });
-    fireEvent.click(globalBtn);
+    const scopeToggle = screen.getByRole("button", { name: "Personal" });
+    fireEvent.click(scopeToggle);
 
     expect(insightsMock).toHaveAttribute("data-scope", "global");
   });
