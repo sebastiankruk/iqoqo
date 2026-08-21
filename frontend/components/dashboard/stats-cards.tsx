@@ -20,6 +20,7 @@ import { BookMarked, BookOpen, Globe, HandHelping, Target, User } from "lucide-r
 import { useStats } from "@/lib/api/hooks";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Toggle } from "@/components/ui/toggle";
 import { CollectionInsights } from "./collection-insights";
 
 /**
@@ -120,37 +121,18 @@ export function StatsCards() {
           </button>
         </div>
 
-        <div
-          className="flex items-center gap-1 rounded-lg bg-muted/60 p-1 text-xs font-medium"
-          role="group"
-          aria-label={t("scopeLabel")}
-        >
-          <button
-            type="button"
-            onClick={() => setScope("personal")}
-            aria-pressed={scope === "personal"}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-all ${
-              scope === "personal"
-                ? "bg-card text-foreground shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+        <div className="flex items-center gap-1">
+          <Toggle
+            aria-label={scope === "personal" ? t("scopePersonal") : t("scopeGlobal")}
+            title={scope === "personal" ? t("scopePersonal") : t("scopeGlobal")}
+            pressed={scope === "global"}
+            onPressedChange={pressed => setScope(pressed ? "global" : "personal")}
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground border-border/80"
           >
-            <User className="h-3.5 w-3.5" />
-            {t("scopePersonal")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope("global")}
-            aria-pressed={scope === "global"}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-all ${
-              scope === "global"
-                ? "bg-card text-foreground shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5" />
-            {t("scopeGlobal")}
-          </button>
+            {scope === "personal" ? <User className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+          </Toggle>
         </div>
       </div>
 

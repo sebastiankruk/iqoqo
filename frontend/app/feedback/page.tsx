@@ -23,6 +23,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
 import { FeedbackDetailModal, type FeedbackItemDetail } from "@/components/feedback/feedback-detail-modal";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   Bug,
   Lightbulb,
@@ -85,6 +86,7 @@ export default function FeedbackPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<FeedbackItemDetail | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const {
     data: feedbackData,
@@ -144,6 +146,135 @@ export default function FeedbackPage() {
 
   const hasActiveFilters = Boolean(statusFilter || typeFilter || searchQuery);
 
+  const renderFilterControls = (isMobile = false) => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-serif text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          <SlidersHorizontal className="h-4 w-4" />
+          Filters
+        </h2>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset
+          </button>
+        )}
+      </div>
+
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Filter by keyword..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+
+      {/* Type filter */}
+      <div className="space-y-2 border-t border-border pt-4">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Request Type</label>
+        <div className="space-y-1">
+          {[
+            { value: "", label: "All Types" },
+            { value: "bug", label: "Bugs", icon: Bug },
+            { value: "feature_request", label: "Feature Requests", icon: Lightbulb },
+          ].map(opt => {
+            const active = typeFilter === opt.value;
+            const Icon = opt.icon;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setTypeFilter(opt.value);
+                  setCurrentPage(1);
+                  if (isMobile) setMobileFiltersOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                {Icon && <Icon className="h-3.5 w-3.5" />}
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Status filter */}
+      <div className="space-y-2 border-t border-border pt-4">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
+        <div className="space-y-1">
+          {[
+            { value: "", label: "All Statuses" },
+            { value: "new", label: "New" },
+            { value: "accepted", label: "Accepted" },
+            { value: "in_progress", label: "In Progress" },
+            { value: "in_validation", label: "In Validation" },
+            { value: "closed", label: "Closed" },
+          ].map(opt => {
+            const active = statusFilter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(opt.value);
+                  setCurrentPage(1);
+                  if (isMobile) setMobileFiltersOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                <span>{opt.label}</span>
+                {opt.value && (
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      opt.value === "new"
+                        ? "bg-blue-500"
+                        : opt.value === "accepted"
+                          ? "bg-purple-500"
+                          : opt.value === "in_progress"
+                            ? "bg-amber-500"
+                            : opt.value === "in_validation"
+                              ? "bg-emerald-500"
+                              : "bg-muted-foreground"
+                    }`}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {isMobile && (
+        <div className="pt-2 border-t border-border">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(false)}
+            className="w-full rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            Apply Filters
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Navbar />
@@ -166,128 +297,41 @@ export default function FeedbackPage() {
           </button>
         </div>
 
+        {/* Mobile Filter Drawer Trigger */}
+        <div className="md:hidden flex items-center justify-between">
+          <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                data-testid="mobile-filters-trigger"
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-xs hover:bg-muted transition-colors"
+              >
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <span>Filters</span>
+                {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-primary" />}
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl p-6">
+              <SheetHeader className="pb-2">
+                <SheetTitle className="sr-only">Filters</SheetTitle>
+                <SheetDescription className="sr-only">Filter feedback tickets</SheetDescription>
+              </SheetHeader>
+              {renderFilterControls(true)}
+            </SheetContent>
+          </Sheet>
+        </div>
+
         {/* Layout Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Left Sidebar Filters */}
-          <aside className="lg:col-span-1 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          {/* Desktop Left Sidebar Filters */}
+          <aside className="hidden md:block md:col-span-1 space-y-6">
             <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 font-serif text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters
-                </h2>
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Reset
-                  </button>
-                )}
-              </div>
-
-              {/* Search input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Filter by keyword..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              {/* Type filter */}
-              <div className="space-y-2 border-t border-border pt-4">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Request Type
-                </label>
-                <div className="space-y-1">
-                  {[
-                    { value: "", label: "All Types" },
-                    { value: "bug", label: "Bugs", icon: Bug },
-                    { value: "feature_request", label: "Feature Requests", icon: Lightbulb },
-                  ].map(opt => {
-                    const active = typeFilter === opt.value;
-                    const Icon = opt.icon;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setTypeFilter(opt.value);
-                          setCurrentPage(1);
-                        }}
-                        className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                          active
-                            ? "bg-primary/10 text-primary font-semibold"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                        }`}
-                      >
-                        {Icon && <Icon className="h-3.5 w-3.5" />}
-                        <span>{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Status filter */}
-              <div className="space-y-2 border-t border-border pt-4">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
-                <div className="space-y-1">
-                  {[
-                    { value: "", label: "All Statuses" },
-                    { value: "new", label: "New" },
-                    { value: "accepted", label: "Accepted" },
-                    { value: "in_progress", label: "In Progress" },
-                    { value: "in_validation", label: "In Validation" },
-                    { value: "closed", label: "Closed" },
-                  ].map(opt => {
-                    const active = statusFilter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setStatusFilter(opt.value);
-                          setCurrentPage(1);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                          active
-                            ? "bg-primary/10 text-primary font-semibold"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {opt.value && (
-                          <span
-                            className={`h-2 w-2 rounded-full ${
-                              opt.value === "new"
-                                ? "bg-blue-500"
-                                : opt.value === "accepted"
-                                  ? "bg-purple-500"
-                                  : opt.value === "in_progress"
-                                    ? "bg-amber-500"
-                                    : opt.value === "in_validation"
-                                      ? "bg-emerald-500"
-                                      : "bg-muted-foreground"
-                            }`}
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {renderFilterControls(false)}
             </div>
           </aside>
 
           {/* Right Ticket List Area */}
-          <section className="lg:col-span-3 space-y-4">
+          <section className="md:col-span-3 space-y-4">
             <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
               <span>
                 Showing {filteredItems.length} {filteredItems.length === 1 ? "ticket" : "tickets"}

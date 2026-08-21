@@ -492,3 +492,65 @@ def test_feedback_attachments_url_format_and_retrieval(client, feedback_setup, a
         assert get_img_resp.status_code == 200
         assert get_img_resp.content_type == "image/jpeg"
         assert len(get_img_resp.data) > 0
+
+
+def test_feedback_patch_schema_validation(client, feedback_setup, app):
+    """Test schema validation for PATCH /api/feedback/<id> with valid, invalid, unknown, and empty payloads."""
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+
+    # Create ticket
+    submit = client.post(
+        "/api/feedback",
+        data={"type": "bug", "description": "Validation test ticket"},
+        headers=admin_headers,
+    )
+    assert submit.status_code == 201
+    ticket_id = submit.json["data"]["id"]
+
+    # 1. Valid update with description, feedback_type, and status
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"description": "Updated ticket description", "feedback_type": "feature_request", "status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json["data"]["description"] == "Updated ticket description"
+    assert resp.json["data"]["feedback_type"] == "feature_request"
+    assert resp.json["data"]["status"] == "accepted"
+
+    # 2. Empty JSON body -> 400 with validation error
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+
+    # 3. Payload with unknown/extra fields -> 400 with field-level validation errors
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"status": "in_progress", "unknown_field": "disallowed_value"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+    assert any("unknown_field" in str(err) or "extra_forbidden" in str(err) for err in resp.json["error"])
+
+    # 4. Payload with invalid status value -> 400
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"status": "nonexistent_status"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+
+    # 5. Payload with invalid feedback_type -> 400
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"feedback_type": "invalid_type"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
