@@ -74,9 +74,13 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     await expect(roadmapItems.nth(1)).toContainText("Distributed Systems: Principles and Paradigms");
 
     // Trigger mutation sequence reordering to assert spatial repositioning arithmetic execution
+    const reorderResponsePromise = page.waitForResponse(
+      (res) => res.url().includes("/position") && res.request().method() === "PATCH"
+    );
     await roadmapItems.nth(1).hover();
     const moveUpButton = roadmapItems.nth(1).locator('[data-testid="move-up-btn"]');
     await moveUpButton.click();
+    await reorderResponsePromise;
 
     // Assert DOM restructuring mirrors successful transactional order shift mutation execution
     await expect(roadmapItems.nth(0)).toContainText("Distributed Systems: Principles and Paradigms");
