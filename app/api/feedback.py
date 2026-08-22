@@ -24,6 +24,7 @@ from typing import Any
 from flask import Response, g, jsonify, request, send_from_directory
 from pydantic import ValidationError
 from sqlalchemy import desc, func, select
+from werkzeug.utils import secure_filename
 
 from app.api.core import api_bp
 from app.api.decorators import require_auth
@@ -100,19 +101,41 @@ def _format_feedback_item(item: FeedbackItem) -> dict[str, Any]:
     return d
 
 
+def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
+    """Validate that the authenticated user can access the given screenshot."""
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 401
+
+    if not _can_admin_tickets(user):
+        stmt = select(FeedbackItem).where(FeedbackItem.user_id == g.user_id)
+        user_items = db.session.execute(stmt).scalars().all()
+        if not any(filename in (item.attachments or []) for item in user_items):
+            return jsonify({"success": False, "error": "Forbidden"}), 403
+    return None
+
+
 @api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     """Retrieve a feedback screenshot from local storage or rclone remote."""
-    local_path = os.path.join(GALLERY_DIR, filename)
+    safe_name = secure_filename(filename)
+    if not safe_name:
+        return jsonify({"success": False, "error": "Invalid filename"}), 400
+
+    access_err = _validate_screenshot_access(safe_name)
+    if access_err:
+        return access_err
+
+    local_path = os.path.join(GALLERY_DIR, safe_name)
     if os.path.exists(local_path):
-        return send_from_directory(GALLERY_DIR, filename)
+        return send_from_directory(GALLERY_DIR, safe_name)
 
     rclone_remote = os.environ.get("RCLONE_FEEDBACK_REMOTE")
     if not rclone_remote:
         return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
 
-    target = get_rclone_target(rclone_remote, "feedback", filename)
+    target = get_rclone_target(rclone_remote, "feedback", safe_name)
     try:
         result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True)
         return Response(result.stdout, mimetype="image/jpeg")

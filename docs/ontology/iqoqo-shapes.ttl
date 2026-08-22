@@ -140,3 +140,30 @@ FRBRoo F16 Container Work.""" ;
         sh:maxCount 0 ;
         sh:message "Expansion Work must not be aggregated into an F16 Container Work." ;
     ] .
+# ---------------------------------------------------------------------------
+# Boardgame Mechanic
+# ---------------------------------------------------------------------------
+
+iqoqo:BoardgameMechanicShape a sh:NodeShape ;
+    sh:targetClass iqoqo:BoardgameMechanic ;
+    sh:name "Boardgame Mechanic shape" ;
+    sh:description "A boardgame mechanic is a SKOS Concept." ;
+    sh:property [
+        sh:path [ sh:inversePath iqoqo:has_mechanic ] ;
+        sh:class iqoqo:Work ;
+        sh:message "A boardgame mechanic is associated with Works." ;
+    ] .
+
+# ---------------------------------------------------------------------------
+# Feedback Comment
+# ---------------------------------------------------------------------------
+
+iqoqo:FeedbackItemShape a sh:NodeShape ;
+    sh:targetClass iqoqo:FeedbackItem ;
+    sh:name "Feedback Item shape" ;
+    sh:description "A feedback ticket is a SIOC Thread." .
+
+iqoqo:FeedbackCommentShape a sh:NodeShape ;
+    sh:targetClass iqoqo:FeedbackComment ;
+    sh:name "Feedback Comment shape" ;
+    sh:description "A feedback comment is a SIOC Post." .

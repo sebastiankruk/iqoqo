@@ -27,5 +27,9 @@ set -e
 # `mkdir -p` is idempotent: a no-op when the directory (or bind-mount)
 # already exists, so this is safe to run on every container start.
 mkdir -p "${HOME}/.config/rclone"
+chmod 0700 "${HOME}/.config/rclone"
+if [ -f "${HOME}/.config/rclone/rclone.conf" ]; then
+  chmod 0600 "${HOME}/.config/rclone/rclone.conf"
+fi
 
 exec "$@"

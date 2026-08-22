@@ -71,6 +71,9 @@ EXPOSE 5000
 # Define environment variable
 ENV FLASK_APP=run.py
 
+# Set HOME before switching users
+ENV HOME=/home/appuser
+
 # Switch to non-root user
 USER appuser
 

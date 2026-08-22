@@ -223,7 +223,7 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
         "FeedbackComment",
         backref="feedback_item",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="selectin",
         order_by="FeedbackComment.created_at.asc()",
     )
 
@@ -239,7 +239,7 @@ class FeedbackItem(db.Model):  # type: ignore[name-defined]
             "status": self.status,
             "attachments": self.attachments or [],
             "comments": [c.to_dict() for c in self.comments] if getattr(self, "comments", None) is not None else [],  # type: ignore[attr-defined, no-any-return]
-            "comments_count": self.comments.count() if getattr(self, "comments", None) is not None else 0,  # type: ignore[attr-defined]
+            "comments_count": len(self.comments) if getattr(self, "comments", None) is not None else 0,  # type: ignore[attr-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
