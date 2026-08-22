@@ -90,4 +90,17 @@ describe("SidebarFilters - Ownership Facet", () => {
     const notOwnedCheckbox = screen.getByRole("checkbox", { name: "Not Owned" });
     expect(notOwnedCheckbox).not.toBeChecked();
   });
+
+  it("shows all items when no ownership facet is selected (no empty state)", () => {
+    const activeFilters: ActiveFilter[] = [];
+    renderWithClient(<SidebarFilters {...defaultProps} activeFilters={activeFilters} />);
+
+    const ownedCheckbox = screen.getByRole("checkbox", { name: "Owned" });
+    expect(ownedCheckbox).not.toBeChecked();
+
+    const notOwnedCheckbox = screen.getByRole("checkbox", { name: "Not Owned" });
+    expect(notOwnedCheckbox).not.toBeChecked();
+    
+    expect(screen.queryByText(/no items found/i)).not.toBeInTheDocument();
+  });
 });

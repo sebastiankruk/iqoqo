@@ -38,6 +38,7 @@ vi.mock("next-intl", () => ({
       "cameraCapture.browseFiles": "Browse Files",
       "cameraCapture.cancel": "Cancel",
       "cameraCapture.continue": "Continue",
+      "cameraCapture.processImageFailed": "Process Image Failed",
     })[key] ?? key,
 }));
 
@@ -257,6 +258,23 @@ describe("CameraCapture", () => {
     }
 
     // Component should not crash (error is handled in catch block)
+    await waitFor(() => {
+      expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows processImageFailed translation when image processing fails", async () => {
+    setupCamera(false);
+    vi.mocked(apiClient.post).mockRejectedValue(new Error("Process failed"));
+
+    render(<CameraCapture manifestation_id={42} mode="cover" label="Upload Cover" />);
+
+    const file = new File(["dummy"], "cover.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (input) {
+      fireEvent.change(input, { target: { files: [file] } });
+    }
+
     await waitFor(() => {
       expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
     });

@@ -90,3 +90,35 @@ EOF
   [[ "$output" =~ "RCLONE_CALLED_WITH: copy" ]]
   [[ "$output" =~ "custom-remote:custom-bucket" ]]
 }
+
+@test "cloud_backup.sh creates ~/.config/rclone dir before running rclone" {
+  export HOME="${TEST_TEMP_DIR}/home"
+  
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/rclone"
+#!/bin/bash
+if [ -d "$HOME/.config/rclone" ]; then
+  echo "RCLONE_DIR_EXISTS"
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/rclone"
+
+  run bash scripts/cloud_backup.sh dummy-remote
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "RCLONE_DIR_EXISTS" ]]
+}
+
+@test "cloud_backup.sh uses POSIX -- delimiters for rclone" {
+  export HOME="${TEST_TEMP_DIR}/home"
+  
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/rclone"
+#!/bin/bash
+echo "RCLONE_ARGS: $*"
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/rclone"
+
+  run bash scripts/cloud_backup.sh dummy-remote
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ " -- " ]]
+}
