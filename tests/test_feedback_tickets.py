@@ -106,6 +106,7 @@ def test_submit_and_list_feedback_rbac(client, feedback_setup, app):
         data={"type": "bug", "description": "Found a visual bug on sidebar"},
         headers=u1_headers,
     )
+    print(resp.json)
     assert resp.status_code == 201
     u1_ticket_id = resp.json["data"]["id"]
     assert resp.json["data"]["status"] == "new"
@@ -116,6 +117,7 @@ def test_submit_and_list_feedback_rbac(client, feedback_setup, app):
         data={"type": "feature_request", "description": "Add dark mode toggle in footer"},
         headers=u2_headers,
     )
+    print(resp.json)
     assert resp.status_code == 201
     u2_ticket_id = resp.json["data"]["id"]
 
@@ -328,6 +330,7 @@ def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
         headers=u1_headers,
         content_type="multipart/form-data",
     )
+    print(resp.json)
     assert resp.status_code == 201, resp.json
 
     # Assert rclone was called
@@ -390,6 +393,7 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
         headers=u1_headers,
         content_type="multipart/form-data",
     )
+    print(resp.json)
     assert resp.status_code == 201
 
     # Subprocess shouldn't be called because RCLONE_FEEDBACK_REMOTE is missing
@@ -451,6 +455,7 @@ def test_feedback_attachments_url_format_and_retrieval(client, feedback_setup, a
         headers=u1_headers,
         content_type="multipart/form-data",
     )
+    print(resp.json)
     assert resp.status_code == 201
     ticket_id = resp.json["data"]["id"]
     attachments = resp.json["data"]["attachments"]
@@ -554,3 +559,46 @@ def test_feedback_patch_schema_validation(client, feedback_setup, app):
     )
     assert resp.status_code == 400
     assert resp.json["success"] is False
+
+
+def test_feedback_screenshot_idor_protection(client, feedback_setup, app):
+    """Ensure users cannot access screenshots belonging to other users' tickets."""
+    import io
+
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+
+    # User 1 submits a ticket with a screenshot
+    png_bytes = _sample_png()
+    resp = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "subject": "User 1 Secret Ticket",
+            "description": "This is private",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "secret.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    print(resp.json)
+    assert resp.status_code == 201
+    ticket_data = resp.json["data"]
+
+    # Extract the filename from the URL returned
+    attachment_url = ticket_data["attachments"][0]
+    filename = attachment_url.split("/")[-1]
+
+    # 1. User 1 can access their own screenshot
+    resp_u1 = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert resp_u1.status_code == 200
+
+    # 2. User 2 CANNOT access User 1's screenshot (IDOR protection)
+    resp_u2 = client.get(f"/api/feedback/screenshots/{filename}", headers=u2_headers)
+    assert resp_u2.status_code in (403, 404)  # It returns 403 or 404 based on implementation
+
+    # 3. Admin CAN access User 1's screenshot
+    resp_admin = client.get(f"/api/feedback/screenshots/{filename}", headers=admin_headers)
+    assert resp_admin.status_code == 200
