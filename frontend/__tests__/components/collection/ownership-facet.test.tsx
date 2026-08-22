@@ -100,7 +100,7 @@ describe("SidebarFilters - Ownership Facet", () => {
 
     const notOwnedCheckbox = screen.getByRole("checkbox", { name: "Not Owned" });
     expect(notOwnedCheckbox).not.toBeChecked();
-    
+
     expect(screen.queryByText(/no items found/i)).not.toBeInTheDocument();
   });
 });

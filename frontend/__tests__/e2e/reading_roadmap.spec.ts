@@ -53,14 +53,18 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     // Inject items into the newly configured track instance
     // First Item: Ingesting a conceptual work node
     await page.click('[data-testid="add-to-roadmap-btn"]');
-    await page.fill('input[data-testid="item-search-input"]', "Designing Data-Intensive Applications");
-    await page.click('[data-testid="select-item-0"]');
+    const searchInput = page.locator('input[data-testid="item-search-input"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("Designing Data-Intensive Applications");
+    await page.locator('[data-testid="select-item-0"]').click();
     await page.click('[data-testid="confirm-add-item"]');
+    await expect(page.locator('[data-testid="roadmap-item-card"]')).toHaveCount(1);
 
     // Second Item: Ingesting a sequential manifestation node
     await page.click('[data-testid="add-to-roadmap-btn"]');
-    await page.fill('input[data-testid="item-search-input"]', "Distributed Systems: Principles and Paradigms");
-    await page.click('[data-testid="select-item-0"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("Distributed Systems: Principles and Paradigms");
+    await page.locator('[data-testid="select-item-0"]').click();
     await page.click('[data-testid="confirm-add-item"]');
 
     // Verify tracking sequence list layout hierarchy
@@ -80,6 +84,9 @@ test.describe("Reading Roadmap E2E Workflow", () => {
 
     // Persist verification through hard reload cycle bounds to ensure DB sync
     await page.reload();
-    await expect(roadmapItems.nth(0)).toContainText("Distributed Systems: Principles and Paradigms");
+    await expect(page.locator("h2", { hasText: "Distributed Systems Mastery 2026" })).toBeVisible();
+    await expect(page.locator('[data-testid="roadmap-item-card"]').nth(0)).toContainText(
+      "Distributed Systems: Principles and Paradigms"
+    );
   });
 });
