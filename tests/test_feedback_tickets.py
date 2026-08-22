@@ -565,7 +565,6 @@ def test_feedback_screenshot_idor_protection(client, feedback_setup, app):
     """Ensure users cannot access screenshots belonging to other users' tickets."""
     import io
 
-
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
     u2_headers = _auth_headers(app, feedback_setup["user2_id"])
     admin_headers = _auth_headers(app, feedback_setup["admin_id"])
