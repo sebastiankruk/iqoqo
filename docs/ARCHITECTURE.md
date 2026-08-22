@@ -676,33 +676,36 @@ enforced by `tests/test_ontology.py`.
 
 Tables are split across PostgreSQL schemas:
 
-| Schema      | Tables                                                             |
-| ----------- | ------------------------------------------------------------------ |
-| `auth`      | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, |
-|             | `token_blocklist`, `user_consents`                                 |
-| `catalog`   | `works`, `expressions`, `manifestations`, `contributors`,          |
-|             | `work_contributions`, `expression_contributions`,                  |
-|             | `manifestation_contributions`, `work_parts`,                       |
-|             | `container_aggregations`, `instance_settings`                      |
-| `inventory` | `items`, `llm_telemetry`                                           |
-| `public`    | `alembic_version`                                                  |
+| Schema      | Tables                                                                    |
+| ----------- | ------------------------------------------------------------------------- |
+| `auth`      | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`,        |
+|             | `token_blocklist`, `user_consents`                                        |
+| `catalog`   | `works`, `expressions`, `manifestations`, `contributors`,                 |
+|             | `work_contributions`, `expression_contributions`,                         |
+|             | `manifestation_contributions`, `work_parts`,                              |
+|             | `work_expansion_links`, `boardgame_mechanics`,                            |
+|             | `container_aggregations`, `instance_settings`                             |
+| `inventory` | `items`, `llm_telemetry`, `shared_collections`, `shared_collection_items` |
+| `social`    | `feedback_items`, `feedback_comments`, `escalation_requests`              |
+| `public`    | `alembic_version`                                                         |
 
 ### Model File Structure
 
 Model classes are split into domain-focused modules under `app/db/`:
 
-| File          | Contents                                                                 |
-| ------------- | ------------------------------------------------------------------------ |
-| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`          |
-| `core.py`     | `Work`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`           |
-| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, |
-|               | `MANIFESTATION_AUDIO_META_KEYS`                                          |
-| `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`             |
-| `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                   |
-| `history.py`  | `ItemCustodyEvent` (append-only physical possession tracking),           |
-|               | `EntityAuditLog` (Work/Expression/Manifestation curation logs)           |
-| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                       |
-| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work      |
+| File          | Contents                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`                                           |
+| `core.py`     | `Work`, `WorkExpansionLink`, `BoardgameMechanic`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`  |
+| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`,                                  |
+|               | `MANIFESTATION_AUDIO_META_KEYS`                                                                           |
+| `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`                                              |
+| `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                                                    |
+| `social.py`   | `SharedCollection`, `FeedbackItem`, `FeedbackComment`, `EscalationRequest`                                |
+| `history.py`  | `ItemCustodyEvent` (append-only physical possession tracking),                                            |
+|               | `EntityAuditLog` (Work/Expression/Manifestation curation logs)                                            |
+| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                                                        |
+| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work                                       |
 
 ### Item Custody & Entity Audit Logs
 
@@ -710,6 +713,25 @@ To maintain strict ontological separation between physical item possession and c
 
 - **`ItemCustodyEvent`** (`inventory` schema): Append-only audit log tracking physical Item tier transfers, location changes, lending events, and condition alterations.
 - **`EntityAuditLog`** (`catalog` schema): Tracks editorial curation, metadata updates, deduplication merges, and schema migrations at the Work, Expression, and Manifestation tiers.
+
+### Board Game Expansions (F15 Complex Work Decomposition)
+
+Starting in **v0.7.16**, board game expansions are modeled as distinct `F1_Work` entities linked to their base game via `work_expansion_links`:
+
+```text
+Base Game (Work)  ←── WorkExpansionLink (is_expansion_of) ──  Expansion (Work)
+```
+
+- **Ontology Alignment**: Reifies `iqoqo:is_expansion_of` and its inverse `iqoqo:has_expansion` in `docs/ontology/iqoqo.ttl`.
+- **SHACL Integrity Guard**: Defined in `docs/ontology/iqoqo-shapes.ttl` and enforced at runtime via `validate_work_not_expansion_aggregated()`. A Work linked as an expansion cannot be aggregated as a component into an F16 Container Work box (`container_aggregations`).
+
+### Board Game Mechanics Taxonomy
+
+Board game mechanics use a canonical controlled vocabulary backed by `boardgame_mechanics` in the `catalog` schema:
+
+- **Data Source**: Seedable canonical JSON located at `data/bgg_mechanics.json`.
+- **API Endpoint**: `GET /api/taxonomies/boardgame-mechanics` returns the structured list of mechanics.
+- **Frontend Component**: Rendered uniformly via the `MechanicBadge` component.
 
 ### Audio / Music Metadata (FRBRoo Event-Based)
 
@@ -800,3 +822,9 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 - **Token-Based Access**: Shared collections operate via unique `share_token` URLs, granting read-only access to specific filtered items without exposing account details.
 - **Simplified Navigation**: When viewing a shared collection, the frontend renders a simplified top navbar without personal collection navigation or administrative controls.
 - **Hidden Action Buttons**: Interactive item controls (edit, delete, status toggle, tag modification) are hidden for unauthenticated viewers of shared links.
+
+### 6. Feedback & Escalation Subsystem (v0.7.15 - v0.7.16)
+
+- **Dedicated Social Schema**: Feedback models (`FeedbackItem`, `FeedbackComment`) reside in PostgreSQL `social` schema with relational normalization for thread comments.
+- **FRBR Target Entity Linkage**: `FeedbackItem.target_entity` (JSONB) links user bug reports directly to specific FRBR entities (`{"entity_type": "manifestation", "entity_id": 123}`), bridging user feedback with custodian escalation queues.
+- **Cloud Attachment Sync**: Feedback attachments support asynchronous upload via `rclone copyto --` using the `RCLONE_FEEDBACK_REMOTE` environment variable with seamless local storage fallback.

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Feedback Screenshot Rclone Storage**: Added asynchronous cloud upload of feedback screenshot attachments via `rclone copyto` using `RCLONE_FEEDBACK_REMOTE` with graceful fallback to local volume storage.
+- **Scanner Translations (i18n)**: Added comprehensive Polish and English translation strings across `frontend/messages/en.json` and `frontend/messages/pl.json` for scanner tabs, camera capture, and manual search.
 - **Scanner i18n E2E Verification**: Added browser-based end-to-end test verifying that scanner UI strings (tab labels, manual search placeholder) switch correctly between English and Polish.
 - **FRBR Work Expansion Links & Ontology**: Added backend support for FRBR F15 Complex Work decomposition via `work_expansion_links`, including `expansion_of` / `has_expansion` links, an `Expansion` work category, and SHACL validation preventing expansion Works from being aggregated into F16 Container Works.
 - **Board Game Mechanics Vocabulary**: Introduced a canonical `boardgame_mechanics` taxonomy, seedable JSON (`data/bgg_mechanics.json`), Alembic migration, API endpoints (`/api/taxonomies/boardgame-mechanics`), and a reusable `MechanicBadge` component.
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Feedback Schema Validation**: Standardized `PATCH /api/feedback/<id>` endpoint using Marshmallow schema validation for robust input sanitation.
 - **Feedback Comment Relational Normalization**: Normalized comments into a separate relational table and migrated `feedback_items` to the `social` database schema.
 - **Incremental Alembic Migrations**: Refactored migration `e3f891ab45c2` to execute explicit transaction commits after each batch update loop to immediately release row locks.
+- **OpenSpec CLI Syntax Normalization**: Updated command nomenclature across skills and workflows to use colon-delimited syntax.
 
 ### Fixed
 
