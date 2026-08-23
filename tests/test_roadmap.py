@@ -100,6 +100,7 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
         item3_id = item3.id
         item1_id = item1.id
         item2_id = item2.id
+        roadmap_id = roadmap.id
 
     # Move item 3 to position 1
     response = client.patch(
@@ -122,6 +123,14 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
         assert i3.position == 1
         assert i1.position == 2
         assert i2.position == 3
+
+    # Verify that GET endpoint returns items serialized in sorted order
+    get_res = client.get("/api/v1/roadmaps", headers=normal_user_headers)
+    assert get_res.status_code == 200
+    roadmaps_data = get_res.get_json()
+    reorder_roadmap = next((r for r in roadmaps_data if r["id"] == roadmap_id), None)
+    assert reorder_roadmap is not None
+    assert [item["id"] for item in reorder_roadmap["items"]] == [item3_id, item1_id, item2_id]
 
 
 def test_roadmap_cascade_deletion(app) -> None:

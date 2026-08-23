@@ -51,6 +51,7 @@ export function RoadmapView() {
   const { data: searchResults } = useManifestations(1, 5, searchQuery, searchQuery.trim().length >= 2);
 
   const activeRoadmap = roadmaps.find(r => r.id === (activeRoadmapId ?? roadmaps[0]?.id));
+  const sortedItems = activeRoadmap?.items ? [...activeRoadmap.items].sort((a, b) => a.position - b.position) : [];
 
   const handleCreateRoadmap = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,7 +294,7 @@ export function RoadmapView() {
                 </CardHeader>
 
                 <CardContent className="pt-6">
-                  {activeRoadmap.items.length === 0 ? (
+                  {sortedItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
                       <p className="text-sm font-medium text-foreground">This roadmap is empty.</p>
@@ -303,7 +304,7 @@ export function RoadmapView() {
                     </div>
                   ) : (
                     <div className="relative border-l border-border/80 pl-6 ml-4 space-y-6">
-                      {activeRoadmap.items.map((item, idx) => (
+                      {sortedItems.map((item, idx) => (
                         <div
                           key={item.id}
                           data-testid="roadmap-item-card"
@@ -343,7 +344,7 @@ export function RoadmapView() {
                               variant="ghost"
                               size="icon"
                               data-testid="move-down-btn"
-                              disabled={idx === activeRoadmap.items.length - 1}
+                              disabled={idx === sortedItems.length - 1}
                               onClick={() => handleReorder(item.id, item.position, "down")}
                               title="Move Down"
                               className="h-8 w-8"
