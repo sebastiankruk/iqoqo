@@ -294,3 +294,34 @@ class ItemCollectionLinkSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     collection_id: int = Field(..., gt=0, description="ID of the collection to link the item to")
+
+
+class FeedbackUpdateSchema(BaseModel):
+    """Schema for updating a feedback ticket."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str | None = Field(default=None, description="Updated status of the ticket")
+    feedback_type: str | None = Field(default=None, description="Updated feedback type")
+    description: str | None = Field(default=None, min_length=1, max_length=20000, description="Updated description")
+    comment: str | None = Field(default=None, description="Comment text to add to the ticket")
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"new", "accepted", "in_progress", "in_validation", "closed"}:
+            raise ValueError(f"Invalid status: {v}. Must be one of new, accepted, in_progress, in_validation, closed")
+        return v
+
+    @field_validator("feedback_type")
+    @classmethod
+    def validate_feedback_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"feature_request", "bug"}:
+            raise ValueError(f"Invalid feedback_type: {v}. Must be one of feature_request, bug")
+        return v
+
+    @model_validator(mode="after")
+    def check_at_least_one_field(self) -> "FeedbackUpdateSchema":
+        if self.status is None and self.feedback_type is None and self.description is None and self.comment is None:
+            raise ValueError("No valid fields provided for update")
+        return self

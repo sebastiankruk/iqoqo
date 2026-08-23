@@ -57,6 +57,10 @@ COPY --chown=appuser:appuser migrations migrations/
 COPY --chown=appuser:appuser scripts scripts/
 COPY --chown=appuser:appuser run.py wsgi.py ./
 
+# Copy the container entrypoint (pre-start checks, e.g. rclone config dir)
+COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+
 # Inject version
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
@@ -67,8 +71,16 @@ EXPOSE 5000
 # Define environment variable
 ENV FLASK_APP=run.py
 
+# Set HOME before switching users
+ENV HOME=/home/appuser
+
 # Switch to non-root user
 USER appuser
+
+# Run pre-start checks (rclone config dir) before any container command.
+# Compose `command:` overrides replace CMD, not ENTRYPOINT, so web and
+# worker services both pass through this entrypoint.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Run the command to start the server
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "run:app"]

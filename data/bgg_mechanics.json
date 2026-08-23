@@ -1,0 +1,152 @@
+[
+  {
+    "id": "acting",
+    "name": "Acting",
+    "description": "Players must perform or mime clues for other players.",
+    "bgg_id": "2045"
+  },
+  {
+    "id": "action_points",
+    "name": "Action Points",
+    "description": "Players receive a limited number of action points each turn to spend on various actions.",
+    "bgg_id": "2001"
+  },
+  {
+    "id": "area_control",
+    "name": "Area Control / Area Influence",
+    "description": "Players compete to control regions of the board for points or benefits.",
+    "bgg_id": "2006"
+  },
+  {
+    "id": "area_majority",
+    "name": "Area Majority",
+    "description": "Influence is scored proportionally based on the amount of presence in an area.",
+    "bgg_id": "2080"
+  },
+  {
+    "id": "auction",
+    "name": "Auction/Bidding",
+    "description": "Players bid resources to acquire items, actions, or turn order.",
+    "bgg_id": "2002"
+  },
+  {
+    "id": "card_drafting",
+    "name": "Card Drafting",
+    "description": "Players pick cards from a shared pool to build their hand or tableau.",
+    "bgg_id": "2003"
+  },
+  {
+    "id": "cooperative",
+    "name": "Cooperative Game",
+    "description": "Players work together against the game system to achieve a common goal.",
+    "bgg_id": "2023"
+  },
+  {
+    "id": "deck_building",
+    "name": "Deck Building",
+    "description": "Players start with a small deck and acquire cards to improve it over the game.",
+    "bgg_id": "2664"
+  },
+  {
+    "id": "dice_rolling",
+    "name": "Dice Rolling",
+    "description": "Dice are rolled to determine outcomes or generate resources.",
+    "bgg_id": "2072"
+  },
+  {
+    "id": "drafting",
+    "name": "Drafting",
+    "description": "Players select items from a set before passing the remainder to opponents.",
+    "bgg_id": "2866"
+  },
+  {
+    "id": "engine_building",
+    "name": "Engine Building",
+    "description": "Players construct combinations of abilities that generate increasingly powerful effects.",
+    "bgg_id": "2689"
+  },
+  {
+    "id": "hand_management",
+    "name": "Hand Management",
+    "description": "The strategic use and timing of cards held by a player.",
+    "bgg_id": "2040"
+  },
+  {
+    "id": "hidden_movement",
+    "name": "Hidden Movement",
+    "description": "One or more players move pieces secretly while others try to deduce their location.",
+    "bgg_id": "2016"
+  },
+  {
+    "id": "hidden_roles",
+    "name": "Hidden Roles",
+    "description": "Players have secret identities that affect their objectives and allegiances.",
+    "bgg_id": "2019"
+  },
+  {
+    "id": "modular_board",
+    "name": "Modular Board",
+    "description": "The board is composed of tiles or pieces that vary from game to game.",
+    "bgg_id": "2011"
+  },
+  {
+    "id": "pattern_building",
+    "name": "Pattern Building",
+    "description": "Players arrange components to form specific shapes or patterns.",
+    "bgg_id": "2048"
+  },
+  {
+    "id": "push_your_luck",
+    "name": "Push Your Luck",
+    "description": "Players repeatedly risk accumulated gains for the chance of greater rewards.",
+    "bgg_id": "2661"
+  },
+  {
+    "id": "role_playing",
+    "name": "Role Playing",
+    "description": "Players assume characters and make decisions from their perspective.",
+    "bgg_id": "2028"
+  },
+  {
+    "id": "route_building",
+    "name": "Route Building",
+    "description": "Players create networks of roads, rails, or connections between locations.",
+    "bgg_id": "2078"
+  },
+  {
+    "id": "set_collection",
+    "name": "Set Collection",
+    "description": "Players gather groups of related items to score points or unlock abilities.",
+    "bgg_id": "2004"
+  },
+  {
+    "id": "simultaneous_action",
+    "name": "Simultaneous Action Selection",
+    "description": "Players choose actions privately and reveal them at the same time.",
+    "bgg_id": "2020"
+  },
+  {
+    "id": "solo",
+    "name": "Solo / Solitaire Game",
+    "description": "The game can be played by a single player against automated systems or scenarios.",
+    "bgg_id": "2819"
+  },
+  {
+    "id": "storytelling",
+    "name": "Storytelling",
+    "description": "Narrative creation and shared fiction are central to gameplay.",
+    "bgg_id": "2027"
+  },
+  {
+    "id": "tile_placement",
+    "name": "Tile Placement",
+    "description": "Players place tiles onto the board, often forming a growing landscape.",
+    "bgg_id": "2053"
+  },
+  {
+    "id": "worker_placement",
+    "name": "Worker Placement",
+    "description": "Players place worker tokens on board spaces to claim actions or resources.",
+    "bgg_id": "2082"
+  }
+]

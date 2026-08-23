@@ -23,9 +23,23 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 from sqlalchemy import select
 
+from app.core.ontology_validation import (
+    validate_container_not_linked_as_expansion,
+    validate_work_not_expansion_aggregated,
+)
 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
-from app.db.core import EXPRESSION_KIND_LIVE_PERFORMANCE, EXPRESSION_KINDS, Expression, Item, Manifestation, Work
+from app.db.core import (
+    EXPRESSION_KIND_LIVE_PERFORMANCE,
+    EXPRESSION_KINDS,
+    WORK_LINK_TYPE_IS_EXPANSION_OF,
+    WORK_LINK_TYPES,
+    Expression,
+    Item,
+    Manifestation,
+    Work,
+    WorkExpansionLink,
+)
 from app.db.models import db
 from app.db.video import ManifestationContribution
 
@@ -437,6 +451,9 @@ def add_container_component(
             "Exactly one of aggregated_work_id (rulebook Work) or aggregated_item_id (physical component Item) must be provided."
         )
 
+    if aggregated_work_id is not None:
+        validate_work_not_expansion_aggregated(aggregated_work_id)
+
     aggregated_type = "work" if aggregated_work_id is not None else "item"
     agg = ContainerAggregation(
         container_work_id=container_work_id,
@@ -449,6 +466,57 @@ def add_container_component(
     db.session.add(agg)
     db.session.commit()
     return agg
+
+
+def link_expansion_to_base(
+    base_work_id: int,
+    expansion_work_id: int,
+    link_type: str = WORK_LINK_TYPE_IS_EXPANSION_OF,
+) -> WorkExpansionLink:
+    """
+    Reify an expansion relationship between two F1 Works.
+
+    Creates a :class:`~app.db.core.WorkExpansionLink` row and enforces the
+    SHACL constraint that an expansion Work must not be aggregated into an F16
+    Container Work.
+
+    Args:
+        base_work_id: ID of the base game Work.
+        expansion_work_id: ID of the expansion Work.
+        link_type: Controlled link type (default ``is_expansion_of``).
+
+    Returns:
+        The created or existing :class:`~app.db.core.WorkExpansionLink`.
+
+    Raises:
+        ValueError: If *link_type* is unknown or the ontology guard fires.
+    """
+    if link_type not in WORK_LINK_TYPES:
+        raise ValueError(f"Invalid work link type {link_type!r}; must be one of {WORK_LINK_TYPES}")
+
+    validate_container_not_linked_as_expansion(expansion_work_id)
+    validate_work_not_expansion_aggregated(expansion_work_id)
+
+    existing: WorkExpansionLink | None = (
+        WorkExpansionLink.query.filter_by(
+            base_work_id=base_work_id,
+            expansion_work_id=expansion_work_id,
+            link_type=link_type,
+        )
+        .order_by(WorkExpansionLink.id.asc())
+        .first()
+    )
+    if existing is not None:
+        return existing
+
+    link = WorkExpansionLink(
+        base_work_id=base_work_id,
+        expansion_work_id=expansion_work_id,
+        link_type=link_type,
+    )
+    db.session.add(link)
+    db.session.commit()
+    return link
 
 
 def get_or_create_rulebook_work(container_work: Work, title: str | None = None) -> Work:

@@ -75,5 +75,6 @@ mypy
 pylint
 types-requests  # Type stubs for mypy
 types-PyYAML
+pyshacl  # SHACL validation tests for ontology constraints
 
 # boardgamegeek2>=1.3  # Optional: future migration from raw XML API (see app/utils/bgg.py)

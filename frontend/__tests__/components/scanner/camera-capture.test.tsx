@@ -7,7 +7,40 @@
 
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { CameraCapture } from "@/components/scanner/camera-capture";
+import enMessages from "@/messages/en.json";
+import plMessages from "@/messages/pl.json";
+
+const cameraCaptureKeys = [
+  "snapCover",
+  "taskTimedOut",
+  "visionSubmissionFailed",
+  "processImageFailed",
+  "invalidImageFile",
+  "cancel",
+  "continue",
+  "processing",
+  "processingImage",
+  "extractingDetails",
+  "dragDropCover",
+  "orBrowse",
+  "browseFiles",
+] as const;
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) =>
+    ({
+      "cameraCapture.snapCover": "Snap Cover",
+      "cameraCapture.dragDropCover": "Drag & Drop cover image here",
+      "cameraCapture.orBrowse": "or click to browse files",
+      "cameraCapture.browseFiles": "Browse Files",
+      "cameraCapture.cancel": "Cancel",
+      "cameraCapture.continue": "Continue",
+      "cameraCapture.processImageFailed": "Process Image Failed",
+    })[key] ?? key,
+}));
 
 // Mocks at top level
 vi.mock("@/lib/api/client", () => ({
@@ -37,6 +70,38 @@ describe("CameraCapture", () => {
       },
     });
   };
+
+  it("has complete English and Polish camera-capture translations", () => {
+    for (const key of cameraCaptureKeys) {
+      expect(enMessages.scanner.cameraCapture[key]).toBeTruthy();
+      expect(plMessages.scanner.cameraCapture[key]).toBeTruthy();
+    }
+  });
+
+  it("keeps user-visible English strings out of scanner JSX", () => {
+    const componentSources = [
+      readFileSync(path.resolve(process.cwd(), "components/scanner/camera-capture.tsx"), "utf8"),
+      readFileSync(path.resolve(process.cwd(), "components/scanner/bottom-sheet.tsx"), "utf8"),
+    ];
+    const extractedStrings = [
+      "Snap Cover",
+      "Drag & Drop cover image here",
+      "Browse Files",
+      "Processing image...",
+      "Extracting details via vision API",
+      "Barcode",
+      "Manual Search",
+      "Searching catalog...",
+      "Start camera",
+      "Manual Entry Form",
+    ];
+
+    for (const source of componentSources) {
+      for (const string of extractedStrings) {
+        expect(source).not.toContain(`>${string}<`);
+      }
+    }
+  });
 
   it("renders standard camera button when video inputs are present", async () => {
     setupCamera(true);
@@ -193,6 +258,23 @@ describe("CameraCapture", () => {
     }
 
     // Component should not crash (error is handled in catch block)
+    await waitFor(() => {
+      expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows processImageFailed translation when image processing fails", async () => {
+    setupCamera(false);
+    vi.mocked(apiClient.post).mockRejectedValue(new Error("Process failed"));
+
+    render(<CameraCapture manifestation_id={42} mode="cover" label="Upload Cover" />);
+
+    const file = new File(["dummy"], "cover.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (input) {
+      fireEvent.change(input, { target: { files: [file] } });
+    }
+
     await waitFor(() => {
       expect(screen.getByText(/Drag & Drop cover image here/i)).toBeInTheDocument();
     });

@@ -384,5 +384,43 @@
   },
   "Scanner": {
     "skipAndEnterManually": "Pomiń i wprowadź ręcznie"
+  },
+  "scanner": {
+    "cameraCapture": {
+      "snapCover": "Zrób zdjęcie okładki",
+      "taskTimedOut": "Upłynął limit czasu. Spróbuj ponownie lub wprowadź dane ręcznie.",
+      "visionSubmissionFailed": "Nie udało się wysłać obrazu do analizy",
+      "processImageFailed": "Nie udało się przetworzyć obrazu okładki",
+      "invalidImageFile": "Upuść prawidłowy plik obrazu.",
+      "cancel": "Anuluj",
+      "continue": "Dalej",
+      "processing": "Przetwarzanie...",
+      "processingImage": "Przetwarzanie obrazu...",
+      "extractingDetails": "Wyodrębnianie szczegółów przez API analizy obrazu",
+      "dragDropCover": "Przeciągnij i upuść tutaj obraz okładki",
+      "orBrowse": "lub kliknij, aby przeglądać pliki",
+      "browseFiles": "Przeglądaj pliki"
+    },
+    "bottomSheet": {
+      "barcodeTab": "Kod kreskowy",
+      "snapCoverTab": "Zrób zdjęcie okładki",
+      "manualSearchTab": "Wyszukiwanie ręczne",
+      "searchingCatalog": "Wyszukiwanie w katalogu...",
+      "lookingUpBarcode": "Wyszukiwanie kodu kreskowego {barcode}",
+      "skipAndEnterManually": "Pomiń i wprowadź ręcznie",
+      "enterManually": "Wprowadź ręcznie",
+      "startCamera": "Uruchom aparat",
+      "scanning": "Skanowanie – skieruj aparat na kod kreskowy",
+      "tapToStartCamera": "Dotknij, aby uruchomić aparat",
+      "uploadFromGallery": "Prześlij z galerii",
+      "manualSearchPlaceholder": "ISBN, UPC, identyfikator Discogs lub wykonawca – tytuł…",
+      "lookingUp": "Wyszukiwanie…",
+      "manualSearchHint": "Wprowadź kod kreskowy, identyfikator wydania Discogs lub wykonawcę – tytuł",
+      "manualEntryForm": "Formularz ręcznego wprowadzania",
+      "invalidBarcode": "Wprowadź prawidłowy kod kreskowy (8–13 znaków).",
+      "lookupTimedOut": "Upłynął limit czasu wyszukiwania. Przejście do ręcznego wprowadzania.",
+      "lookupFailed": "Nie udało się znaleźć tej pozycji. Spróbuj ponownie.",
+      "cameraUnavailable": "Aparat jest niedostępny"
+    }
   }
 }

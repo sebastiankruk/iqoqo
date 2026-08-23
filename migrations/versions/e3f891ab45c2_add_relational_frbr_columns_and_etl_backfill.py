@@ -11,6 +11,8 @@ Normalizes core bibliographic properties into typed relational columns:
 - inventory.items: raw_payload
 
 Includes server-side batched backfill from ``meta`` JSON into the new columns.
+Each backfill batch is committed explicitly (incremental lock release), and
+already-processed rows are skipped so a re-run after a crash is idempotent.
 Reversible downgrade drops columns and indexes without modifying ``meta``.
 """
 
@@ -29,6 +31,7 @@ Reversible downgrade drops columns and indexes without modifying ``meta``.
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
+import os
 import re
 
 import sqlalchemy as sa
@@ -42,6 +45,10 @@ depends_on = None
 
 _CATALOG_SCHEMA = "catalog"
 _INVENTORY_SCHEMA = "inventory"
+
+# Rows updated per backfill batch before an explicit commit releases row locks.
+# Configurable via the MIGRATION_BACKFILL_BATCH_SIZE environment variable.
+_BACKFILL_BATCH_SIZE = int(os.environ.get("MIGRATION_BACKFILL_BATCH_SIZE", "500"))
 
 
 def _is_pg(bind) -> bool:
@@ -107,7 +114,7 @@ def upgrade():
 
     if is_pg:
         # PostgreSQL native JSONB backfill
-        chunk_size = 1000
+        chunk_size = _BACKFILL_BATCH_SIZE
         last_id = 0
         while True:
             result = bind.execute(
@@ -131,7 +138,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            bind.execute(sa.text("COMMIT"))
+            bind.commit()
 
         last_id = 0
         while True:
@@ -145,6 +152,7 @@ def upgrade():
                     WHERE id IN (
                         SELECT id FROM {manif_table}
                         WHERE id > :last_id AND meta IS NOT NULL
+                            AND format IS NULL AND label IS NULL AND barcode IS NULL AND catalog_number IS NULL
                         ORDER BY id
                         LIMIT :chunk_size
                     )
@@ -156,11 +164,11 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
-            bind.execute(sa.text("COMMIT"))
+            bind.commit()
 
     else:
         # SQLite dialect backfill
-        chunk_size = 1000
+        chunk_size = _BACKFILL_BATCH_SIZE
         last_id = 0
         while True:
             result = bind.execute(
@@ -181,6 +189,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
+            bind.commit()
 
 
         last_id = 0
@@ -211,6 +220,7 @@ def upgrade():
                     WHERE id IN (
                         SELECT id FROM {manif_table}
                         WHERE id > :last_id AND meta IS NOT NULL
+                            AND format IS NULL AND label IS NULL AND barcode IS NULL AND catalog_number IS NULL
                         ORDER BY id
                         LIMIT :chunk_size
                     )
@@ -222,6 +232,7 @@ def upgrade():
             if not rows:
                 break
             last_id = max(row[0] for row in rows)
+            bind.commit()
 
 
 def downgrade():

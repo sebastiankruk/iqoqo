@@ -63,6 +63,14 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
                     sys.exit(1)
                 raise
 
+        # Pre-create schemas if running against PostgreSQL
+        if db.engine.dialect.name == "postgresql":
+            from sqlalchemy import text
+
+            for schema_name in ("auth", "catalog", "inventory", "social"):
+                db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
+            db.session.commit()
+
         # Create all tables
         print("Creating database tables...")
         db.create_all()

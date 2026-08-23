@@ -6,6 +6,7 @@
 // (at your option) any later version.
 //
 import { test, expect } from "@playwright/test";
+import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Internationalization (i18n) & Localization", () => {
   test.beforeEach(async ({ page }) => {
@@ -62,5 +63,81 @@ test.describe("Internationalization (i18n) & Localization", () => {
     const cookies = await page.context().cookies();
     const localeCookie = cookies.find(c => c.name === "NEXT_LOCALE");
     expect(localeCookie?.value).toBe("en");
+  });
+
+  test("should translate scanner UI strings between English and Polish", async ({ page }) => {
+    // The scanner page is full-screen and does not include the language toggle;
+    // switch locale on the home page and then verify the translated scanner UI.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+    await page
+      .context()
+      .addCookies([{ name: "iqoqo_session", value: "mock-session-i18n-scanner", domain: "localhost", path: "/" }]);
+
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "i18n-scanner-user-id",
+            email: "i18n-scanner@iqoqo.local",
+            display_name: "i18n Scanner User",
+            permissions: ["upload:cover", "update:item", "write:metadata"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: packageJson.version },
+        }),
+      });
+    });
+
+    // Verify default English scanner strings
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Barcode");
+    await expect(page.getByTestId("scanner-tab-cover")).toContainText("Snap Cover");
+    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Manual Search");
+    await page.getByTestId("scanner-tab-manual").click();
+    await expect(page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…")).toBeVisible();
+
+    // Switch to Polish from the home page
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /toggle language/i }).click();
+    await page.getByRole("menuitem", { name: "Polski" }).click();
+    await expect(page.getByPlaceholder("Szukaj w swojej kolekcji...")).toBeVisible();
+
+    // Verify Polish scanner strings
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Kod kreskowy");
+    await expect(page.getByTestId("scanner-tab-cover")).toContainText("Zrób zdjęcie okładki");
+    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Wyszukiwanie ręczne");
+    await page.getByTestId("scanner-tab-manual").click();
+    await expect(page.getByPlaceholder("ISBN, UPC, identyfikator Discogs lub wykonawca – tytuł…")).toBeVisible();
+
+    // Switch back to English and verify the scanner UI updates
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /toggle language/i }).click();
+    await page.getByRole("menuitem", { name: "English" }).click();
+    await expect(page.getByPlaceholder("Search your collection...")).toBeVisible();
+
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Barcode");
+    await expect(page.getByTestId("scanner-tab-cover")).toContainText("Snap Cover");
+    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Manual Search");
   });
 });

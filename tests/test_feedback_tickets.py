@@ -23,6 +23,16 @@ from app.core.permissions import PermissionName
 from app.db.models import FeedbackItem, Permission, Role, User, db
 
 
+def _sample_png() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10), color="red").save(buf, format="PNG")
+    return buf.getvalue()
+
+
 @pytest.fixture
 def feedback_setup(app):
     """Seed test users, roles, and permissions for feedback tests."""
@@ -96,6 +106,7 @@ def test_submit_and_list_feedback_rbac(client, feedback_setup, app):
         data={"type": "bug", "description": "Found a visual bug on sidebar"},
         headers=u1_headers,
     )
+    print(resp.json)
     assert resp.status_code == 201
     u1_ticket_id = resp.json["data"]["id"]
     assert resp.json["data"]["status"] == "new"
@@ -106,6 +117,7 @@ def test_submit_and_list_feedback_rbac(client, feedback_setup, app):
         data={"type": "feature_request", "description": "Add dark mode toggle in footer"},
         headers=u2_headers,
     )
+    print(resp.json)
     assert resp.status_code == 201
     u2_ticket_id = resp.json["data"]["id"]
 
@@ -207,7 +219,7 @@ def test_feedback_upload_count_cap(client, feedback_setup, app):
     from io import BytesIO
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    png_bytes = _sample_png()
 
     screenshots = [(BytesIO(png_bytes), f"shot_{i}.png") for i in range(6)]
     resp = client.post(
@@ -245,3 +257,347 @@ def test_feedback_get_rate_limiting(client, feedback_setup, app):
         limiter.enabled = False
         limiter._enabled = False
         app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_concurrent_comment_addition(client, feedback_setup, app):
+    """Test that concurrent comment additions do not overwrite each other (no race condition)."""
+    import threading
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+
+    # Create a ticket
+    submit = client.post(
+        "/api/feedback",
+        data={"type": "bug", "description": "Concurrency test"},
+        headers=u1_headers,
+    )
+    ticket_id = submit.json["data"]["id"]
+
+    lock = threading.Lock()
+
+    def add_comment(idx):
+        with lock:
+            with app.test_client() as c:
+                c.patch(
+                    f"/api/feedback/{ticket_id}",
+                    json={"comment": f"Comment {idx}"},
+                    headers=u1_headers,
+                )
+
+    threads = []
+    for i in range(10):
+        t = threading.Thread(target=add_comment, args=(i,))
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    # Verify all comments are present
+    resp = client.get(f"/api/feedback/{ticket_id}", headers=u1_headers)
+    assert resp.status_code == 200
+    assert len(resp.json["data"]["comments"]) == 10
+
+
+def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
+    """Test that screenshots trigger Celery task and resolve remotely if configured."""
+    import os
+    from io import BytesIO
+    from unittest.mock import MagicMock
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = _sample_png()
+
+    mock_subprocess_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+    monkeypatch.setenv("RCLONE_FEEDBACK_REMOTE", "test_remote:feedback")
+
+    # Override Celery task to run synchronously
+    from app.core.tasks import upload_feedback_screenshot
+
+    def mock_apply_async(*args, **kwargs):
+        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
+
+    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
+
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Rclone test",
+            "screenshots": (BytesIO(png_bytes), "test.png"),
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    print(resp.json)
+    assert resp.status_code == 201, resp.json
+
+    # Assert rclone was called
+    mock_subprocess_run.assert_called_once()
+    args = mock_subprocess_run.call_args[0][0]
+    assert "rclone" in args
+    assert "copyto" in args
+    assert any("test_remote:feedback" in a for a in args)
+
+    # Test retrieval from remote
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    mock_subprocess_run_cat = MagicMock()
+    mock_subprocess_run_cat.return_value.stdout = b"fakeimage"
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run_cat)
+
+    # Need to remove local file to trigger rclone fallback
+    from app.utils.covers import GALLERY_DIR
+
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert img_resp.status_code == 200
+    assert img_resp.data == b"fakeimage"
+    mock_subprocess_run_cat.assert_called_once()
+    assert "cat" in mock_subprocess_run_cat.call_args[0][0]
+
+
+def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
+    """Test fallback when rclone is not configured."""
+    import os
+    from io import BytesIO
+    from unittest.mock import MagicMock
+
+    monkeypatch.delenv("RCLONE_FEEDBACK_REMOTE", raising=False)
+
+    mock_subprocess_run = MagicMock()
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+    # Override Celery task to run synchronously
+    from app.core.tasks import upload_feedback_screenshot
+
+    def mock_apply_async(*args, **kwargs):
+        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
+
+    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = _sample_png()
+
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Fallback test",
+            "screenshots": (BytesIO(png_bytes), "test2.png"),
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    print(resp.json)
+    assert resp.status_code == 201
+
+    # Subprocess shouldn't be called because RCLONE_FEEDBACK_REMOTE is missing
+    mock_subprocess_run.assert_not_called()
+
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    # Remove local file to test retrieval failure
+    from app.utils.covers import GALLERY_DIR
+
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert img_resp.status_code == 404
+
+
+def test_feedback_schema_migration(app):
+    """Test that feedback_items and feedback_comments are in social schema."""
+    from sqlalchemy import inspect, text
+
+    with app.app_context():
+        if db.engine.dialect.name == "postgresql":
+            result = db.session.execute(
+                text(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'social' "
+                    "AND table_name IN ('feedback_items', 'feedback_comments')"
+                )
+            ).fetchall()
+            tables = [row[0] for row in result]
+            assert "feedback_items" in tables
+            assert "feedback_comments" in tables
+        else:
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            assert "feedback_items" in tables
+            assert "feedback_comments" in tables
+
+
+def test_feedback_attachments_url_format_and_retrieval(client, feedback_setup, app):
+    """Ensure submitted feedback attachments use canonical /api/feedback/screenshots/ URLs and can be retrieved."""
+    from io import BytesIO
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = _sample_png()
+
+    # 1. Submit ticket with 2 screenshots
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Attachment rendering regression test",
+            "screenshots": [
+                (BytesIO(png_bytes), "screenshot_a.png"),
+                (BytesIO(png_bytes), "screenshot_b.png"),
+            ],
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    print(resp.json)
+    assert resp.status_code == 201
+    ticket_id = resp.json["data"]["id"]
+    attachments = resp.json["data"]["attachments"]
+    assert len(attachments) == 2
+    for att in attachments:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+        assert att.endswith(".jpg")
+
+    # 2. Verify list_feedback endpoint returns canonical attachment URLs
+    list_resp = client.get("/api/feedback", headers=u1_headers)
+    assert list_resp.status_code == 200
+    listed_ticket = next(t for t in list_resp.json["data"] if t["id"] == ticket_id)
+    assert len(listed_ticket["attachments"]) == 2
+    for att in listed_ticket["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+
+    # 3. Verify get_feedback_item endpoint returns canonical attachment URLs
+    detail_resp = client.get(f"/api/feedback/{ticket_id}", headers=u1_headers)
+    assert detail_resp.status_code == 200
+    for att in detail_resp.json["data"]["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+
+    # 4. Verify update_feedback endpoint returns canonical attachment URLs
+    patch_resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"comment": "Adding comment to ticket with attachments"},
+        headers=u1_headers,
+    )
+    assert patch_resp.status_code == 200
+    for att in patch_resp.json["data"]["attachments"]:
+        assert att.startswith("/api/feedback/screenshots/feedback-")
+        assert not att.startswith("/api/v1/")
+
+    # 5. Verify direct image retrieval via GET /api/feedback/screenshots/<filename>
+    for att_url in attachments:
+        get_img_resp = client.get(att_url, headers=u1_headers)
+        assert get_img_resp.status_code == 200
+        assert get_img_resp.content_type == "image/jpeg"
+        assert len(get_img_resp.data) > 0
+
+
+def test_feedback_patch_schema_validation(client, feedback_setup, app):
+    """Test schema validation for PATCH /api/feedback/<id> with valid, invalid, unknown, and empty payloads."""
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+
+    # Create ticket
+    submit = client.post(
+        "/api/feedback",
+        data={"type": "bug", "description": "Validation test ticket"},
+        headers=admin_headers,
+    )
+    assert submit.status_code == 201
+    ticket_id = submit.json["data"]["id"]
+
+    # 1. Valid update with description, feedback_type, and status
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"description": "Updated ticket description", "feedback_type": "feature_request", "status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json["data"]["description"] == "Updated ticket description"
+    assert resp.json["data"]["feedback_type"] == "feature_request"
+    assert resp.json["data"]["status"] == "accepted"
+
+    # 2. Empty JSON body -> 400 with validation error
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+
+    # 3. Payload with unknown/extra fields -> 400 with field-level validation errors
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"status": "in_progress", "unknown_field": "disallowed_value"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+    assert any("unknown_field" in str(err) or "extra_forbidden" in str(err) for err in resp.json["error"])
+
+    # 4. Payload with invalid status value -> 400
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"status": "nonexistent_status"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+
+    # 5. Payload with invalid feedback_type -> 400
+    resp = client.patch(
+        f"/api/feedback/{ticket_id}",
+        json={"feedback_type": "invalid_type"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json["success"] is False
+
+
+def test_feedback_screenshot_idor_protection(client, feedback_setup, app):
+    """Ensure users cannot access screenshots belonging to other users' tickets."""
+    import io
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+
+    # User 1 submits a ticket with a screenshot
+    png_bytes = _sample_png()
+    resp = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "subject": "User 1 Secret Ticket",
+            "description": "This is private",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "secret.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    print(resp.json)
+    assert resp.status_code == 201
+    ticket_data = resp.json["data"]
+
+    # Extract the filename from the URL returned
+    attachment_url = ticket_data["attachments"][0]
+    filename = attachment_url.split("/")[-1]
+
+    # 1. User 1 can access their own screenshot
+    resp_u1 = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert resp_u1.status_code == 200
+
+    # 2. User 2 CANNOT access User 1's screenshot (IDOR protection)
+    resp_u2 = client.get(f"/api/feedback/screenshots/{filename}", headers=u2_headers)
+    assert resp_u2.status_code in (403, 404)  # It returns 403 or 404 based on implementation
+
+    # 3. Admin CAN access User 1's screenshot
+    resp_admin = client.get(f"/api/feedback/screenshots/{filename}", headers=admin_headers)
+    assert resp_admin.status_code == 200

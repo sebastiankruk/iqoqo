@@ -83,7 +83,7 @@ class ReadingRoadmap(db.Model):  # type: ignore[name-defined]
             "description": self.description,
             "is_public": self.is_public,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "items": [item.to_dict() for item in items_list],
+            "items": [item.to_dict() for item in sorted(items_list, key=lambda x: x.position)],
         }
 
 

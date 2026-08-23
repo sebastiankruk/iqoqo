@@ -12,6 +12,19 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Subprocess & Network Hardening (August 2026)
+
+#### Subprocess Command Injection Prevention
+
+- **POSIX Option Delimiters**: Enforced `--` end-of-options delimiters in all `subprocess.run()` invocations calling `rclone` across background tasks, cover image processing, and LLM utilities (`app/core/tasks.py`, `app/utils/images.py`, `app/utils/llm_covers.py`), eliminating argument injection vulnerabilities from user-controlled paths or filenames.
+
+#### Network & SSRF Resilience
+
+- **SSRF-Safe HTTP Client**: Integrated `app/utils/http_client.py` for fetching external assets, blocking private and link-local IP ranges (RFC 1918, localhost, AWS metadata `169.254.169.254`).
+- **Thread-Safe DNS Resolution**: Refactored DNS resolution timeouts (`_resolve_with_timeout`) with unblocked executor shutdowns (`executor.shutdown(wait=False)`) to prevent Celery worker thread starvation DoS.
+- **Redirect URL Type Coercion**: Enforced strict string coercion on redirect `Location` headers in `safe_get()` to avoid `TypeError` denial-of-service crashes.
+- **XXE Prevention**: Enforced `defusedxml` across XML parsers (`app/utils/bgg.py`, `app/api/items.py`) to block entity expansion and external entity retrieval attacks.
+
 ### Resolved Vulnerabilities (February 2026)
 
 #### Python Dependencies

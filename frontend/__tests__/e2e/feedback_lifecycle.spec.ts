@@ -127,4 +127,92 @@ test.describe("Feedback & Ticket Lifecycle (v0.7.15)", () => {
     await expect(detailDialog).toBeVisible();
     await expect(detailDialog.getByText("Ticket #1")).toBeVisible();
   });
+
+  test("renders screenshot attachments and interacts with ticket detail modal", async ({ page }) => {
+    const mockTicketsWithAttachments = [
+      {
+        id: 2,
+        user_id: "user-alpha",
+        user_display_name: "Alpha User",
+        user_email: "alpha@iqoqo.local",
+        feedback_type: "bug",
+        description: "Visual glitch when uploading album art",
+        status: "new",
+        attachments: ["/api/feedback/screenshots/feedback-screenshot-test1.jpg"],
+        comments: [],
+        comments_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    // Mock GET /api/feedback
+    await page.route("**/api/feedback?*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: mockTicketsWithAttachments,
+          pagination: { page: 1, per_page: 15, total: 1, pages: 1 },
+        }),
+      });
+    });
+
+    // Mock GET /api/feedback/2
+    await page.route("**/api/feedback/2", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: mockTicketsWithAttachments[0],
+        }),
+      });
+    });
+
+    // Mock screenshot endpoint GET /api/feedback/screenshots/*
+    await page.route("**/api/feedback/screenshots/*", async route => {
+      // Return a 1x1 transparent PNG
+      const pngBuffer = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64"
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "image/jpeg",
+        body: pngBuffer,
+      });
+    });
+
+    // Navigate to /feedback
+    await page.goto("/feedback");
+    await page.waitForLoadState("networkidle");
+
+    // 1. Verify Attachment Count Badge on Ticket List Card
+    await expect(page.getByText("Visual glitch when uploading album art")).toBeVisible();
+    await expect(page.getByText("1", { exact: true })).toBeVisible();
+
+    // 2. Open Ticket Detail Modal
+    await page.getByText("Visual glitch when uploading album art").click();
+    const detailDialog = page.getByRole("dialog");
+    await expect(detailDialog).toBeVisible();
+    await expect(detailDialog.getByText("Ticket #2")).toBeVisible();
+
+    // 3. Verify Attachments Section and Image in Modal
+    await expect(detailDialog.getByText("Attachments (1)")).toBeVisible();
+    const attachmentImage = detailDialog.getByRole("img", { name: "Attachment 1" });
+    await expect(attachmentImage).toBeVisible();
+    await expect(attachmentImage).toHaveAttribute(
+      "src",
+      /.*\/api\/feedback\/screenshots\/feedback-screenshot-test1\.jpg/
+    );
+
+    // 4. Verify Attachment Link
+    const attachmentLink = detailDialog.getByRole("link");
+    await expect(attachmentLink).toHaveAttribute(
+      "href",
+      /.*\/api\/feedback\/screenshots\/feedback-screenshot-test1\.jpg/
+    );
+  });
 });

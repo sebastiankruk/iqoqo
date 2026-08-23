@@ -21,11 +21,12 @@ edge cases safely.
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import concurrent.futures
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.utils.http_client import SSRFError, is_ip_blocked, is_safe_url, safe_get
+from app.utils.http_client import SSRFError, _resolve_with_timeout, is_ip_blocked, is_safe_url, safe_get
 
 # ---------------------------------------------------------------------------
 # is_ip_blocked
@@ -318,3 +319,175 @@ class TestSafeGet:
 
         # 3 calls total: hop 0, hop 1, hop 2
         assert mock_get.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# _resolve_with_timeout — DNS timeout enforcement (v0716 hardening)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveWithTimeout:
+    """Tests for the ``_resolve_with_timeout`` DNS timeout guard.
+
+    Defense documented for auditors: ``socket.getaddrinfo()`` has no native
+    timeout, so a stalling DNS resolver could pin worker threads and starve
+    the pool (DNS-based thread starvation).  ``_resolve_with_timeout`` runs
+    the lookup in a single-worker ``ThreadPoolExecutor`` and enforces a hard
+    5-second ceiling via ``Future.result(timeout=...)`` (http_client.py:57-68).
+    """
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_fast_resolution_returns_results(self, mock_getaddrinfo: MagicMock) -> None:
+        """A hostname resolving within the timeout must return the getaddrinfo results."""
+        expected = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        mock_getaddrinfo.return_value = expected
+
+        assert _resolve_with_timeout("example.com", timeout=5.0) == expected
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_slow_resolution_raises_ssrf_error(self, mock_getaddrinfo: MagicMock) -> None:
+        """A stalled lookup must raise SSRFError with a "DNS resolution timed out" message.
+
+        ``Future.result`` is mocked to raise ``concurrent.futures.TimeoutError``
+        immediately, so the test never actually sleeps through the 5-second window.
+        The mocked getaddrinfo returns instantly so the abandoned worker thread
+        completes harmlessly.
+        """
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+        with patch("concurrent.futures.Future.result", side_effect=concurrent.futures.TimeoutError("DNS timed out")):
+            with pytest.raises(SSRFError, match="DNS resolution timed out"):
+                _resolve_with_timeout("hanging-dns.example.com", timeout=5.0)
+
+
+# ---------------------------------------------------------------------------
+# safe_get redirect loop — str() coercion (v0716 hardening)
+# ---------------------------------------------------------------------------
+
+
+class _LocationHeader:
+    """Non-str object carrying a redirect target; ``__str__`` returns the URL."""
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class TestSafeGetRedirectStrCoercion:
+    """Tests for the ``str()`` coercion defense in the ``safe_get`` redirect loop.
+
+    Defense documented for auditors: ``urljoin()`` raises ``TypeError`` when
+    given non-str arguments, turning a crafted redirect response into a
+    denial of service.  http_client.py:261 coerces both operands —
+    ``urljoin(str(current_url), str(next_url))`` — so any object with a
+    ``__str__`` (or a bytes value) is handled without crashing.
+    """
+
+    @patch("app.utils.http_client.requests.Session.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_redirect_location_object_coerced(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """A non-str location header object must be coerced via ``str()`` and followed correctly."""
+        mock_getaddrinfo.side_effect = [
+            [(2, 1, 6, "", ("93.184.216.34", 0))],
+            [(2, 1, 6, "", ("142.250.80.46", 0))],
+        ]
+
+        mock_redirect = MagicMock()
+        mock_redirect.is_redirect = True
+        mock_redirect.headers = {"location": _LocationHeader("http://other.com/target")}
+
+        mock_final = MagicMock()
+        mock_final.is_redirect = False
+        mock_final.status_code = 200
+
+        mock_get.side_effect = [mock_redirect, mock_final]
+
+        result = safe_get("http://example.com/start")
+
+        assert result is mock_final
+        assert mock_get.call_count == 2
+        # The coerced redirect target was followed to its own resolved IP.
+        assert "142.250.80.46" in mock_get.call_args_list[1][0][0]
+
+    @patch("app.utils.http_client.requests.Session.get")
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_redirect_location_bytes_does_not_raise_typeerror(self, mock_getaddrinfo: MagicMock, mock_get: MagicMock) -> None:
+        """A bytes location header must not raise ``TypeError`` from ``urljoin`` (TypeError DoS defense).
+
+        ``str(b"...")`` yields a harmless relative reference that re-joins onto
+        the current host; the request completes instead of crashing the worker.
+        """
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+        mock_redirect = MagicMock()
+        mock_redirect.is_redirect = True
+        mock_redirect.headers = {"location": b"http://other.com/target"}
+
+        mock_final = MagicMock()
+        mock_final.is_redirect = False
+        mock_final.status_code = 200
+
+        mock_get.side_effect = [mock_redirect, mock_final]
+
+        result = safe_get("http://example.com/start")
+
+        assert result is mock_final
+        assert mock_get.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# ThreadPoolExecutor lifecycle — shutdown(wait=False) (v0716 hardening)
+# ---------------------------------------------------------------------------
+
+
+class TestExecutorShutdownLifecycle:
+    """Tests for the ``executor.shutdown(wait=False)`` lifecycle defense.
+
+    Defense documented for auditors: ``_resolve_with_timeout`` abandons the
+    worker thread when DNS stalls.  Calling ``shutdown(wait=False)`` in the
+    ``finally`` block (http_client.py:67-68) releases the executor without
+    blocking on the hung thread, preventing starvation under repeated
+    timeouts.  The spy below wraps the real ``ThreadPoolExecutor.shutdown``
+    and records the ``wait`` argument it receives.
+    """
+
+    @staticmethod
+    def _spy_shutdown():
+        """Return a (spy, recorded_wait_args) pair wrapping the real ThreadPoolExecutor.shutdown."""
+        real_shutdown = concurrent.futures.ThreadPoolExecutor.shutdown
+        recorded_waits: list[bool] = []
+
+        def spy_shutdown(self, wait=True, **kwargs):
+            recorded_waits.append(wait)
+            return real_shutdown(self, wait=wait, **kwargs)
+
+        return spy_shutdown, recorded_waits
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_shutdown_wait_false_after_successful_resolution(self, mock_getaddrinfo: MagicMock) -> None:
+        """After a successful lookup the executor must be shut down with ``wait=False``."""
+        expected = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        mock_getaddrinfo.return_value = expected
+        spy_shutdown, recorded_waits = self._spy_shutdown()
+
+        with patch.object(concurrent.futures.ThreadPoolExecutor, "shutdown", spy_shutdown):
+            result = _resolve_with_timeout("example.com", timeout=5.0)
+
+        assert result == expected
+        assert recorded_waits == [False]
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_shutdown_wait_false_after_timeout(self, mock_getaddrinfo: MagicMock) -> None:
+        """On timeout the ``finally`` block must shut the executor down with ``wait=False``
+        *before* the SSRFError propagates to the caller."""
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        spy_shutdown, recorded_waits = self._spy_shutdown()
+
+        with patch.object(concurrent.futures.ThreadPoolExecutor, "shutdown", spy_shutdown):
+            with patch("concurrent.futures.Future.result", side_effect=concurrent.futures.TimeoutError("DNS timed out")):
+                with pytest.raises(SSRFError, match="DNS resolution timed out"):
+                    _resolve_with_timeout("hanging-dns.example.com", timeout=5.0)
+
+        assert recorded_waits == [False]

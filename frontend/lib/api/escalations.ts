@@ -81,6 +81,7 @@ export async function getEscalationQueue(status = "pending"): Promise<Escalation
  * @param data - The resolution status and optional resolution note.
  * @param data.status - Status transition ('accepted', 'rejected', 'duplicate').
  * @param data.resolution_note - Custodian note explaining resolution (optional).
+ * @param data.target_id - Target entity ID to validate against the escalation (optional).
  * @returns The updated EscalationRequest.
  */
 export async function resolveEscalation(
@@ -88,6 +89,7 @@ export async function resolveEscalation(
   data: {
     status: "accepted" | "rejected" | "duplicate";
     resolution_note?: string;
+    target_id?: number;
   }
 ) {
   const res = await apiClient.patch<{ success: boolean; data: EscalationRequest }>(
@@ -185,6 +187,7 @@ export function useResolveEscalation() {
       data: {
         status: "accepted" | "rejected" | "duplicate";
         resolution_note?: string;
+        target_id?: number;
       };
     }) => resolveEscalation(escalationId, data),
     onSuccess: () => {

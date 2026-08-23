@@ -77,7 +77,8 @@ else
     RCLONE_TARGET="${RCLONE_REMOTE}:iqoqo_backups"
 fi
 
-if rclone copy "${ARCHIVE}" "${RCLONE_TARGET}" --s3-no-check-bucket; then
+mkdir -p ~/.config/rclone
+if rclone copy --s3-no-check-bucket -- "${ARCHIVE}" "${RCLONE_TARGET}"; then
     echo "✅ Backup synced → ${RCLONE_TARGET}"
 else
     echo "❌ Cloud sync failed! Archive preserved at: ${ARCHIVE}" >&2

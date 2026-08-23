@@ -100,6 +100,7 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
         item3_id = item3.id
         item1_id = item1.id
         item2_id = item2.id
+        roadmap_id = roadmap.id
 
     # Move item 3 to position 1
     response = client.patch(
@@ -122,6 +123,14 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
         assert i3.position == 1
         assert i1.position == 2
         assert i2.position == 3
+
+    # Verify that GET endpoint returns items serialized in sorted order
+    get_res = client.get("/api/v1/roadmaps", headers=normal_user_headers)
+    assert get_res.status_code == 200
+    roadmaps_data = get_res.get_json()
+    reorder_roadmap = next((r for r in roadmaps_data if r["id"] == roadmap_id), None)
+    assert reorder_roadmap is not None
+    assert [item["id"] for item in reorder_roadmap["items"]] == [item3_id, item1_id, item2_id]
 
 
 def test_roadmap_cascade_deletion(app) -> None:
@@ -146,5 +155,29 @@ def test_roadmap_cascade_deletion(app) -> None:
         db.session.delete(roadmap)
         db.session.commit()
 
+        assert db.session.get(ReadingRoadmap, roadmap_id) is None
+        assert db.session.get(RoadmapItem, item_id) is None
+
+
+def test_delete_roadmap_endpoint(client, normal_user_headers, app) -> None:
+    """Verify that DELETE /api/v1/roadmaps/<id> successfully removes the roadmap and items."""
+    with app.app_context():
+        user = db.session.execute(select(User).filter_by(email="test_user@iqoqo.local")).scalar_one()
+        roadmap = ReadingRoadmap(user_id=user.id, title="To Be Deleted")
+        db.session.add(roadmap)
+        db.session.commit()
+
+        item = RoadmapItem(roadmap_id=roadmap.id, work_id=301, position=1)
+        db.session.add(item)
+        db.session.commit()
+
+        roadmap_id = roadmap.id
+        item_id = item.id
+
+    res = client.delete(f"/api/v1/roadmaps/{roadmap_id}", headers=normal_user_headers)
+    assert res.status_code == 200
+    assert res.get_json() == {"success": True}
+
+    with app.app_context():
         assert db.session.get(ReadingRoadmap, roadmap_id) is None
         assert db.session.get(RoadmapItem, item_id) is None

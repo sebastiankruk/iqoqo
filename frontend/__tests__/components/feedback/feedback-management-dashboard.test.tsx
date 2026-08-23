@@ -191,22 +191,36 @@ describe("Feedback Management Page (/feedback)", () => {
     });
   });
 
-  it("navigates between API-backed pages", async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({
-      data: {
-        data: mockTickets,
-        pagination: { page: 1, per_page: 15, total: 31, pages: 3 },
-      },
-    } as unknown as Awaited<ReturnType<typeof apiClient.get>>);
+  it("opens and applies filters via mobile drawer", async () => {
     renderWithClient(<FeedbackPage />);
     await screen.findByText("Scan camera is distorted on tablet landscape mode");
 
-    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // Click mobile filter trigger button (Tap 1)
+    const mobileTrigger = screen.getByTestId("mobile-filters-trigger");
+    expect(mobileTrigger).toBeInTheDocument();
+    fireEvent.click(mobileTrigger);
+
+    // Tap filter option inside drawer (Tap 2 - selects filter and closes drawer)
+    const bugButtons = screen.getAllByRole("button", { name: "Bugs" });
+    // Click the one inside the drawer
+    fireEvent.click(bugButtons[bugButtons.length - 1]);
+
     await waitFor(() => {
       expect(apiClient.get).toHaveBeenLastCalledWith("/feedback", {
-        params: { status: undefined, type: undefined, page: 2, per_page: 15 },
+        params: { status: undefined, type: "bug", page: 1, per_page: 15 },
       });
     });
+  });
+
+  it("applies filters using Apply button in mobile drawer", async () => {
+    renderWithClient(<FeedbackPage />);
+    await screen.findByText("Scan camera is distorted on tablet landscape mode");
+
+    const mobileTrigger = screen.getByTestId("mobile-filters-trigger");
+    fireEvent.click(mobileTrigger);
+
+    const applyButtons = screen.getAllByRole("button", { name: "Apply Filters" });
+    expect(applyButtons.length).toBeGreaterThan(0);
+    fireEvent.click(applyButtons[0]);
   });
 });

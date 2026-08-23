@@ -2,19 +2,20 @@
 
 iQoQo stores data in a PostgreSQL database and local filesystem volumes (`app/static/covers/`, `app/static/gallery/`, `exports/`).
 
-Starting in **v0.7.14**, iQoQo supports a multi-tier `rclone` cloud topology to handle daily backups, long-term Glacier cold archives, and a shared cross-instance AI covers cache.
+Starting in **v0.7.14** and extended in **v0.7.16**, iQoQo supports a multi-tier `rclone` cloud topology to handle daily backups, long-term Glacier cold archives, a shared cross-instance AI covers cache, and remote persistence for feedback ticket screenshots.
 
 ---
 
 ## Architecture & Remotes
 
-Three separate `rclone` remotes are configured via environment variables in `.env`:
+Four separate `rclone` remotes can be configured via environment variables in `.env`:
 
 | Environment Variable | Default Remote Name | Purpose | Recommended Storage Class |
 | -------------------- | ------------------- | ------- | ------------------------- |
 | `RCLONE_REMOTE_FAST` | `iqoqo-backup` | Daily database dumps & asset backups | AWS S3 Standard / S3 Standard-IA / Dropbox |
 | `RCLONE_REMOTE_ARCHIVE` | `iqoqo-glacier` | Long-term cold storage archive | AWS S3 Glacier Flexible Retrieval / Deep Archive |
 | `RCLONE_COVERS_REMOTE` | `iqoqo-s3-cache` | Shared AI cover cache across instances | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| `RCLONE_FEEDBACK_REMOTE` | `remote:feedback` | Feedback screenshot attachment persistence | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
 
 ---
 
@@ -108,7 +109,31 @@ Introduced in **v0.7.14**, AI cover generation scripts (`generate_ai_covers.py` 
 
 ---
 
-## 4. Dropbox Setup (Alternative Daily Remote)
+## 4. Feedback Screenshot Remote (`RCLONE_FEEDBACK_REMOTE`)
+
+Introduced in **v0.7.16**, user feedback submissions with attached screenshot images can be uploaded to a dedicated rclone storage remote (`RCLONE_FEEDBACK_REMOTE`) via asynchronous Celery background tasks (`upload_feedback_screenshot_task`).
+
+### How Feedback Screenshot Sync Works
+
+1. When a user submits a bug report or feedback ticket with screenshot attachments, the file is temporarily accepted by the API.
+2. If `RCLONE_FEEDBACK_REMOTE` is configured in `.env`, a background task runs `rclone copyto --` to store the screenshot on the cloud remote.
+3. If `RCLONE_FEEDBACK_REMOTE` is unconfigured, iQoQo gracefully falls back to local volume storage at `./app/static/gallery/`.
+
+---
+
+## 5. Pre-Start Container Configuration Check
+
+Starting in **v0.7.16**, the container entrypoint (`deploy/docker-entrypoint.sh`) performs an automated pre-flight check:
+
+```bash
+mkdir -p "${HOME}/.config/rclone"
+```
+
+This ensures the user configuration directory always exists prior to process execution, preventing silent rclone job failures on fresh container deployments where host bind mounts are not present.
+
+---
+
+## 6. Dropbox Setup (Alternative Daily Remote)
 
 If using Dropbox for `RCLONE_REMOTE_FAST`:
 

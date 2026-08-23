@@ -52,6 +52,8 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Project-specific:
     'android/**',
+    'test-results/**',
+    'playwright-report/**',
   ]),
 ]);
 

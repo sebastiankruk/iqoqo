@@ -1282,7 +1282,29 @@ export function useCreateRoadmap() {
       qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
         if (!old) return [data];
         if (old.some(r => r.id === data.id)) return old;
-        return [...old, data];
+        return [data, ...old];
+      });
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to delete a reading roadmap.
+ *
+ * @returns Mutation result
+ */
+export function useDeleteRoadmap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (roadmapId: number) => {
+      const res = await apiClient.delete(`/v1/roadmaps/${roadmapId}`);
+      return res.data;
+    },
+    onSuccess: (_, roadmapId) => {
+      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+        if (!old) return old;
+        return old.filter(r => r.id !== roadmapId);
       });
       void qc.invalidateQueries({ queryKey: ["roadmaps"] });
     },

@@ -43,7 +43,11 @@ def get_roadmaps() -> Response | tuple[Response, int]:
         return jsonify({"error": "Authentication required", "code": 401}), 401
 
     try:
-        stmt = select(ReadingRoadmap).filter(ReadingRoadmap.user_id == user_id)
+        stmt = (
+            select(ReadingRoadmap)
+            .filter(ReadingRoadmap.user_id == user_id)
+            .order_by(ReadingRoadmap.created_at.desc(), ReadingRoadmap.id.desc())
+        )
         roadmaps = db.session.scalars(stmt).unique().all()
         return jsonify([r.to_dict() for r in roadmaps]), 200
     except SQLAlchemyError as e:
@@ -170,5 +174,28 @@ def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": True}), 200
     except SQLAlchemyError as e:
         logger.error("Error reordering roadmap item: %s", e)
+        db.session.rollback()
+        return jsonify({"error": "Database error", "code": 500}), 500
+
+
+@roadmap_bp.route("/<int:roadmap_id>", methods=["DELETE"])
+@require_auth
+def delete_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
+    """Deletes a roadmap pipeline and cascades to its items."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Authentication required", "code": 401}), 401
+
+    try:
+        stmt = select(ReadingRoadmap).filter(ReadingRoadmap.id == roadmap_id, ReadingRoadmap.user_id == user_id)
+        roadmap = db.session.scalars(stmt).first()
+        if not roadmap:
+            return jsonify({"error": "Roadmap not found", "code": 404}), 404
+
+        db.session.delete(roadmap)
+        db.session.commit()
+        return jsonify({"success": True}), 200
+    except SQLAlchemyError as e:
+        logger.error("Error deleting roadmap: %s", e)
         db.session.rollback()
         return jsonify({"error": "Database error", "code": 500}), 500

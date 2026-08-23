@@ -146,7 +146,7 @@ After installation, make sure the Docker daemon is running.
      - [upcitemdb.com](https://upcitemdb.com/) (Tier 1b high-quality data)
      - [Allegro Developer](https://apps.developer.allegro.pl/) (Tier 2 retail resolve & covers)
        > **Allegro Setup Note:** The Allegro Developer portal requires you to select _at least one_ permission, such as **`allegro:api:sale:offers:read`**. Set the **Redirect URI** to `http://localhost`.
-       > **⚠️ IMPORTANT:** Allegro requires "User Context" for search. After setting your `CLIENT_ID` and `CLIENT_SECRET` in `.env`, you **MUST** run the authentication script once:
+       > **⚠️ IMPORTANT:** Allegro requires "User Context" for search. After setting your `CLIENT_ID` and `CLIENT_SECRET` in `.env`, authenticate via the web UI device flow (`/allegro/device-flow` in Admin Settings) or run the authentication script once:
        >
        > ```bash
        > python scripts/allegro_auth.py

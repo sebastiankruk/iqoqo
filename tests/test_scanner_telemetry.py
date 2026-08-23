@@ -13,25 +13,140 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-"""Tests for scan telemetry recording and oversized barcode handling."""
+"""Tests for scan telemetry recording, oversized barcode handling, and policy/intent separation."""
+
+import uuid
+
+from flask import Flask
+from flask.testing import FlaskClient
 
 from app.api.scanner import _record_scan_telemetry
-from app.db.models import ScanTelemetry, db
+from app.db.models import Item, Manifestation, ScanTelemetry, UserWorkIntent, db
 
 
-def test_record_scan_telemetry_oversized_barcode(app) -> None:
+def test_record_scan_telemetry_oversized_barcode(app: Flask) -> None:
     """Verifies that an oversized barcode is truncated and recorded with status='rejected_oversized'."""
     long_barcode = "A" * 200
     with app.app_context():
         _record_scan_telemetry(
             barcode=long_barcode,
             format_hint="book",
-            provider="test_provider",
+            provider="test_provider_oversized",
             status="success",
         )
 
-        record = ScanTelemetry.query.filter_by(provider="test_provider", status="rejected_oversized").first()
+        record = ScanTelemetry.query.filter_by(provider="test_provider_oversized", status="rejected_oversized").first()
         assert record is not None
         assert record.status == "rejected_oversized"
         assert len(record.barcode) <= 128
         assert record.barcode == f"{'A' * 120}...(200)"
+
+
+def test_record_scan_telemetry_normal_barcode(app: Flask) -> None:
+    """Verifies that a normal-length barcode (<= 128 chars) preserves original status and full value."""
+    normal_barcode = "9780132350884"
+    with app.app_context():
+        _record_scan_telemetry(
+            barcode=normal_barcode,
+            format_hint="book",
+            provider="test_provider_normal",
+            status="success",
+        )
+
+        record = ScanTelemetry.query.filter_by(provider="test_provider_normal", barcode=normal_barcode).first()
+        assert record is not None
+        assert record.status == "success"
+        assert record.barcode == normal_barcode
+
+
+def test_scan_with_policy_inventory_only_creates_item(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning with policy='inventory' strictly mutates Item.collection_status and does not create UserWorkIntent."""
+    payload = {
+        "barcode": "9780131103627",
+        "format": "book",
+        "collection_status": "available",
+        "policy": "inventory",
+        "meta": {
+            "title": "The C Programming Language",
+            "author": "Brian W. Kernighan, Dennis M. Ritchie",
+            "format": "book",
+            "barcode": "9780131103627",
+            "cover_url": "https://example.com/c.jpg",
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 201
+    assert response.json is not None
+    data = response.json.get("data", {})
+    assert data.get("action") == "added_to_inventory"
+    item_id = data.get("item_id")
+    assert item_id is not None
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item is not None
+        assert item.collection_status == "available"
+
+        manifestation = db.session.get(Manifestation, item.manifestation_id)
+        assert manifestation is not None
+        work_id = manifestation.expression.work_id
+
+        # Verify no UserWorkIntent was created for this work
+        intent = UserWorkIntent.query.filter_by(work_id=work_id).first()
+        assert intent is None
+
+
+def test_scan_with_policy_catalog_no_item_or_intent(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning with policy='catalog' registers manifestation metadata without creating Item or UserWorkIntent."""
+    payload = {
+        "barcode": "9780201616224",
+        "format": "book",
+        "policy": "catalog",
+        "meta": {
+            "title": "The Pragmatic Programmer",
+            "author": "Andrew Hunt, David Thomas",
+            "format": "book",
+            "barcode": "9780201616224",
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 201
+    assert response.json is not None
+    data = response.json.get("data", {})
+    assert data.get("action") == "cataloged"
+    assert data.get("item_id") is None
+    assert data.get("intent_id") is None
+
+    manifestation_id = data.get("manifestation_id")
+    with app.app_context():
+        manifestation = db.session.get(Manifestation, manifestation_id)
+        assert manifestation is not None
+
+        items = Item.query.filter_by(manifestation_id=manifestation_id).all()
+        assert len(items) == 0
+
+        intents = UserWorkIntent.query.filter_by(work_id=manifestation.expression.work_id).all()
+        assert len(intents) == 0
+
+
+def test_scan_with_invalid_policy_fails(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning with an invalid policy string returns 400 validation error and makes no DB changes."""
+    unique_barcode = f"INV{uuid.uuid4().hex[:8]}"
+    payload = {
+        "barcode": unique_barcode,
+        "format": "book",
+        "policy": "invalid_policy_mode",
+        "meta": {
+            "title": "Invalid Policy Test",
+            "author": "Test Author",
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 400
+
+    with app.app_context():
+        manifestation = Manifestation.query.filter_by(barcode=unique_barcode).first()
+        assert manifestation is None

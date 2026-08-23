@@ -23,10 +23,56 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
+import enMessages from "@/messages/en.json";
+import plMessages from "@/messages/pl.json";
+
+const bottomSheetKeys = [
+  "barcodeTab",
+  "snapCoverTab",
+  "manualSearchTab",
+  "searchingCatalog",
+  "lookingUpBarcode",
+  "skipAndEnterManually",
+  "enterManually",
+  "startCamera",
+  "scanning",
+  "tapToStartCamera",
+  "uploadFromGallery",
+  "manualSearchPlaceholder",
+  "lookingUp",
+  "manualSearchHint",
+  "manualEntryForm",
+  "invalidBarcode",
+  "lookupTimedOut",
+  "lookupFailed",
+  "cameraUnavailable",
+] as const;
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, values?: { barcode?: string }) =>
+    ({
+      "bottomSheet.barcodeTab": "Barcode",
+      "bottomSheet.snapCoverTab": "Snap Cover",
+      "bottomSheet.manualSearchTab": "Manual Search",
+      "bottomSheet.searchingCatalog": "Searching catalog...",
+      "bottomSheet.lookingUpBarcode": `Looking up barcode ${values?.barcode ?? ""}`,
+      "bottomSheet.skipAndEnterManually": "Skip and enter manually",
+      "bottomSheet.enterManually": "Enter Manually",
+      "bottomSheet.startCamera": "Start camera",
+      "bottomSheet.scanning": "Scanning – point at barcode",
+      "bottomSheet.tapToStartCamera": "Tap to start camera",
+      "bottomSheet.snapCover": "Snap Cover",
+      "bottomSheet.uploadFromGallery": "Upload from Gallery",
+      "bottomSheet.manualSearchPlaceholder": "ISBN, UPC, Discogs ID, or Artist – Title…",
+      "bottomSheet.lookingUp": "Looking up…",
+      "bottomSheet.manualSearchHint": "Enter barcode, Discogs Release ID, or Artist – Title",
+      "bottomSheet.manualEntryForm": "Manual Entry Form",
+      "bottomSheet.invalidBarcode": "Please enter a valid barcode (8-13 characters).",
+      "bottomSheet.lookupTimedOut": "Lookup timed out. Switching to manual entry.",
+      "bottomSheet.lookupFailed": "Could not look up this item. Please try again.",
+      "bottomSheet.cameraUnavailable": "Camera unavailable",
+    })[key] ?? key,
 }));
 
 // Mock CameraCapture component
@@ -52,6 +98,13 @@ describe("BottomSheet", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     videoRef = { current: null };
+  });
+
+  it("has complete English and Polish bottom-sheet translations", () => {
+    for (const key of bottomSheetKeys) {
+      expect(enMessages.scanner.bottomSheet[key]).toBeTruthy();
+      expect(plMessages.scanner.bottomSheet[key]).toBeTruthy();
+    }
   });
 
   it("renders all three tabs: barcode, snap cover, manual search", () => {

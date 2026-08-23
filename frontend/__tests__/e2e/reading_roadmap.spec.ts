@@ -29,6 +29,20 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     });
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
+
+    // Clean up any existing roadmaps to ensure test idempotence across retries
+    const existingRoadmapsRes = await page.request.get(`${flaskApiUrl}/v1/roadmaps`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (existingRoadmapsRes.ok()) {
+      const roadmaps = await existingRoadmapsRes.json();
+      for (const r of roadmaps) {
+        await page.request.delete(`${flaskApiUrl}/v1/roadmaps/${r.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    }
+
     await page.goto(`/api/auth-exchange?token=${token}`);
     await page.waitForURL(/\/(collection)?$/);
   });
@@ -53,15 +67,21 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     // Inject items into the newly configured track instance
     // First Item: Ingesting a conceptual work node
     await page.click('[data-testid="add-to-roadmap-btn"]');
-    await page.fill('input[data-testid="item-search-input"]', "Designing Data-Intensive Applications");
-    await page.click('[data-testid="select-item-0"]');
+    const searchInput = page.locator('input[data-testid="item-search-input"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("Designing Data-Intensive Applications");
+    await page.locator('[data-testid="select-item-0"]').click();
     await page.click('[data-testid="confirm-add-item"]');
+    await expect(page.locator('[data-testid="roadmap-item-card"]')).toHaveCount(1);
+    await expect(searchInput).not.toBeVisible();
 
     // Second Item: Ingesting a sequential manifestation node
     await page.click('[data-testid="add-to-roadmap-btn"]');
-    await page.fill('input[data-testid="item-search-input"]', "Distributed Systems: Principles and Paradigms");
-    await page.click('[data-testid="select-item-0"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("Distributed Systems: Principles and Paradigms");
+    await page.locator('[data-testid="select-item-0"]').click();
     await page.click('[data-testid="confirm-add-item"]');
+    await expect(searchInput).not.toBeVisible();
 
     // Verify tracking sequence list layout hierarchy
     const roadmapItems = page.locator('[data-testid="roadmap-item-card"]');
@@ -70,9 +90,13 @@ test.describe("Reading Roadmap E2E Workflow", () => {
     await expect(roadmapItems.nth(1)).toContainText("Distributed Systems: Principles and Paradigms");
 
     // Trigger mutation sequence reordering to assert spatial repositioning arithmetic execution
+    const reorderResponsePromise = page.waitForResponse(
+      res => res.url().includes("/position") && res.request().method() === "PATCH"
+    );
     await roadmapItems.nth(1).hover();
     const moveUpButton = roadmapItems.nth(1).locator('[data-testid="move-up-btn"]');
     await moveUpButton.click();
+    await reorderResponsePromise;
 
     // Assert DOM restructuring mirrors successful transactional order shift mutation execution
     await expect(roadmapItems.nth(0)).toContainText("Distributed Systems: Principles and Paradigms");
@@ -80,6 +104,13 @@ test.describe("Reading Roadmap E2E Workflow", () => {
 
     // Persist verification through hard reload cycle bounds to ensure DB sync
     await page.reload();
-    await expect(roadmapItems.nth(0)).toContainText("Distributed Systems: Principles and Paradigms");
+    await expect(page.locator("h2", { hasText: "Distributed Systems Mastery 2026" })).toBeVisible();
+    await expect(page.locator('[data-testid="roadmap-item-card"]')).toHaveCount(2);
+    await expect(page.locator('[data-testid="roadmap-item-card"]').nth(0)).toContainText(
+      "Distributed Systems: Principles and Paradigms"
+    );
+    await expect(page.locator('[data-testid="roadmap-item-card"]').nth(1)).toContainText(
+      "Designing Data-Intensive Applications"
+    );
   });
 });
