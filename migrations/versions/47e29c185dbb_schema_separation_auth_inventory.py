@@ -60,7 +60,7 @@ def upgrade():
                     op.execute(f"ALTER TABLE public.{table} SET SCHEMA auth")
 
         # Move items table from catalog -> inventory
-        # Note: items was moved to catalog in 20260331_move_frbr_to_catalog_schema.py
+        # Note: items was moved to catalog in 20260331_frbr_catalog_schema.py
         res_items = conn.execute(
             sa.text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'inventory' AND table_name = 'items')")
         ).scalar()

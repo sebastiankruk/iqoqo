@@ -559,7 +559,7 @@ if [ "$MODE" == "dev" ]; then
         fi
     done
 
-    # Termination Helper
+    # Termination Helper (used by make stop, not by Ctrl+C in dev mode)
     cleanup() {
         echo -e "\n🛑 Stopping servers..."
         terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
@@ -568,7 +568,6 @@ if [ "$MODE" == "dev" ]; then
         rm -rf "$PID_DIR"
         exit 0
     }
-    trap cleanup INT TERM
 
     # 4. Install frontend dependencies if needed
     if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
@@ -649,10 +648,13 @@ if [ "$MODE" == "dev" ]; then
     else
         echo "  Local URL  → http://localhost:3000"
     fi
-    echo "  Press Ctrl+C to stop all servers"
+    echo "  Use 'make stop' to stop all servers"
     echo "════════════════════════════════════════════════"
     echo ""
-    wait
+
+    # Disown background jobs so they survive script exit and terminal close
+    disown -a 2>/dev/null || true
+    exit 0
 
 else
     # --- FULL DOCKER MODE ---

@@ -1,6 +1,6 @@
 """Add operation_type to llm_telemetry and update composite unique constraint
 
-Revision ID: 20260330_add_operation_type_to_llm_telemetry
+Revision ID: 20260330_llm_telemetry_op_type
 Revises: 46385ad9cce1
 Create Date: 2026-03-30 20:37:00.000000
 
@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "20260330_add_operation_type_to_llm_telemetry"
+revision = "20260330_llm_telemetry_op_type"
 down_revision = "46385ad9cce1"
 branch_labels = None
 depends_on = None

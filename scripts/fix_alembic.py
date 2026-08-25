@@ -54,16 +54,25 @@ def fix_alembic_version():
         # Check if table exists
         cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'alembic_version');")
         if not cur.fetchone()[0]:
-            print("  Table 'alembic_version' does not exist yet. Skipping fix.")
-            return
-
-        # Execute the fix
-        print("  Executing: ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
-        cur.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
+            print("  Table 'alembic_version' does not exist yet. Creating with varchar(255)...")
+            cur.execute(
+                "CREATE TABLE alembic_version ("
+                "  version_num VARCHAR(255) NOT NULL,"
+                "  CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)"
+                ");"
+            )
+            print("  Created 'alembic_version' with varchar(255).")
+        else:
+            # Execute the fix
+            print("  Executing: ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
+            cur.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
 
         # Reconcile renamed migration revision identifiers
         migration_rename_map = {
             "20260814_add_comments_column_to_feedback": "20260814_feedback_comments",
+            "20260330_add_operation_type_to_llm_telemetry": "20260330_llm_telemetry_op_type",
+            "20260331_merge_token_and_telemetry_branches": "20260331_merge_token_telemetry",
+            "20260331_move_frbr_to_catalog_schema": "20260331_frbr_catalog_schema",
         }
         for old_rev, new_rev in migration_rename_map.items():
             cur.execute(
