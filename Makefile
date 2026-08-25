@@ -209,7 +209,7 @@ stop:
 
 
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))))
+	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(filter dev,$(MAKECMDGOALS)),--stack dev,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),--stack $(MODE))))))
 
 # Linting targets
 lint-python: .venv/bin/activate
