@@ -99,3 +99,4 @@ graphify-out
 # mykg sessions (symlink to Dropbox, not committed)
 mykg_sessions
 .mykg_sessions
+.mykg_work
