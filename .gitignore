@@ -94,6 +94,7 @@ graphify-out
 
 # iqoqo-mykg runtime state (config file IS committed)
 .iqoqo-mykg/
+.tmp/
 
 # mykg sessions (symlink to Dropbox, not committed)
 mykg_sessions

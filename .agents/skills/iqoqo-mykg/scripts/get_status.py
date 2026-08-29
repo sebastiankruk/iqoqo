@@ -34,8 +34,12 @@ def get_latest_session(project_root: Path) -> tuple:
 
 def count_nodes_edges(session_path: Path) -> tuple:
     """Count nodes and edges from session output."""
-    nodes_file = session_path / "intermediate" / "nodes.jsonl"
-    edges_file = session_path / "intermediate" / "edges.jsonl"
+    nodes_file = session_path / "output" / "nodes.jsonl"
+    edges_file = session_path / "output" / "edges.jsonl"
+    if not nodes_file.exists():
+        nodes_file = session_path / "intermediate" / "nodes.jsonl"
+    if not edges_file.exists():
+        edges_file = session_path / "intermediate" / "edges.jsonl"
 
     node_count = 0
     edge_count = 0

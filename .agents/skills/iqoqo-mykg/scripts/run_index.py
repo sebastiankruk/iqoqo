@@ -29,7 +29,7 @@ def get_mykg_path() -> str:
 
 def run_extract(mykg_path: str, scope_path: str, session: str = None) -> str:
     """Run mykg extract-graph for a scope. Returns session ID."""
-    cmd = [mykg_path, "extract-graph", scope_path]
+    cmd = [mykg_path, "extract-graph", scope_path, "--profile", "agent-claude-code"]
 
     if session:
         cmd.extend(["--append", "--session", session])
@@ -85,13 +85,9 @@ def main():
         sys.exit(0)
 
     mykg_path = get_mykg_path()
-    session = manifest.get("latest_session")
-
-    if session:
-        print(f"Reusing latest session: {session}")
-        print("Note: For a truly fresh index, delete the session or run 'mykg extract-graph' directly.")
-    else:
-        print("No existing session. Will create new session with first scope.")
+    # Full index always creates a fresh session (rebuild, not append)
+    session = None
+    print("Full index mode: creating a fresh session.")
 
     print(f"\nIndexing {len(scopes)} scope(s)...")
     print(f"Scopes: {', '.join(scopes.keys())}")

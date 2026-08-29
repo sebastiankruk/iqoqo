@@ -53,7 +53,7 @@ def get_latest_session(project_root: Path) -> str:
 
 def run_extract(mykg_path: str, scope_path: str, session: str, grow_schema: bool = False) -> bool:
     """Run mykg extract-graph for a scope. Returns success."""
-    cmd = [mykg_path, "extract-graph", scope_path, "--append", "--session", session]
+    cmd = [mykg_path, "extract-graph", scope_path, "--append", "--session", session, "--profile", "agent-claude-code"]
 
     if grow_schema:
         cmd.append("--append-with-grow-schema")

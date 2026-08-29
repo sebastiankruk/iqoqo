@@ -23,6 +23,8 @@
       "environment": {}
     }
   },
+  "provider": {
+  },
   "permission": {
     "external_directory": {},
     "edit": {},
