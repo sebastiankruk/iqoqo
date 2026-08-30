@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status
 
 SHELL := /bin/bash
 
@@ -73,6 +73,19 @@ ifeq ($(USE_DOCKER),true)
 PYTHON_CMD = ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python
 else
 PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
+endif
+
+# AiOps / Terse mode flags and banner suppression
+ifdef IQOQO_AI_MODE
+RUFF_FLAGS    ?= --output-format=concise
+PYLINT_FLAGS  ?= --msg-template='{path}:{line}: {msg} ({symbol})'
+MYPY_FLAGS    ?= --no-error-summary
+AI_ECHO       := @:
+else
+RUFF_FLAGS    ?=
+PYLINT_FLAGS  ?=
+MYPY_FLAGS    ?=
+AI_ECHO       := @echo
 endif
 
 help:
@@ -145,6 +158,27 @@ generate-taxonomy: .venv/bin/activate
 	@echo "Generating taxonomies from YAML..."
 	@.venv/bin/python scripts/generate_taxonomy.py
 
+# Knowledge graph & MemPalace targets
+mempalace-scope: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/scan_scope.py
+
+mempalace-index: .venv/bin/activate
+	$(AI_ECHO) "Mining scoped codebase and notes into MemPalace..."
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py $(if $(ARGS),$(ARGS),)
+
+mempalace-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py
+
+# CodeGraph targets
+codegraph-sync:
+	@codegraph sync
+
+codegraph-index:
+	@codegraph index
+
+codegraph-status:
+	@codegraph status
+
 bump-version: .venv/bin/activate
 	@if [ -z "$(v)" ]; then \
 		echo "Usage: make bump-version v=major|minor|patch"; \
@@ -213,25 +247,25 @@ status: ## Show health status of all iQoQo services
 
 # Linting targets
 lint-python: .venv/bin/activate
-	@echo "Running ruff..."
-	.venv/bin/ruff check app/ tests/ scripts/
-	@echo "Running mypy..."
+	$(AI_ECHO) "Running ruff..."
+	.venv/bin/ruff check $(RUFF_FLAGS) app/ tests/ scripts/
+	$(AI_ECHO) "Running mypy..."
 	rm -rf .mypy_cache || true
-	.venv/bin/mypy app/ tests/
-	@echo "Running pylint..."
-	.venv/bin/pylint app/ tests/ scripts/
+	.venv/bin/mypy $(MYPY_FLAGS) app/ tests/
+	$(AI_ECHO) "Running pylint..."
+	.venv/bin/pylint $(PYLINT_FLAGS) app/ tests/ scripts/
 
 lint-format: .venv/bin/activate
-	@echo "Checking Python formatting..."
+	$(AI_ECHO) "Checking Python formatting..."
 	.venv/bin/black --check app/ tests/ scripts/
 	.venv/bin/isort --check-only app/ tests/ scripts/
 
 lint-js:
-	@echo "Running eslint..."
+	$(AI_ECHO) "Running eslint..."
 	@cd frontend && $(NPM) run lint
 
 lint-ts:
-	@echo "Running TypeScript type checks..."
+	$(AI_ECHO) "Running TypeScript type checks..."
 	@cd frontend && $(NPX) tsc --noEmit
 
 lint-frontend: lint-js lint-ts
@@ -241,24 +275,24 @@ build-frontend:
 	@cd frontend && npm run build
 
 lint-license:
-	@echo "Checking copyright headers..."
+	$(AI_ECHO) "Checking copyright headers..."
 	./scripts/check_license.sh
 
 lint-css:
-	@echo "Running stylelint..."
+	$(AI_ECHO) "Running stylelint..."
 	$(NPX) stylelint --allow-empty-input "frontend/app/**/*.css" "frontend/components/**/*.css"
 
 lint-markdown:
-	@echo "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#context" "#graphify-out"
+	$(AI_ECHO) "Running markdownlint..."
+	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.context" "#graphify-out" "#openspec"
 
 validate-yaml: .venv/bin/activate
-	@echo "Checking YAML configuration files..."
+	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license validate-yaml
-	@echo "All linting checks passed!"
+	$(AI_ECHO) "All linting checks passed!"
 
 # Formatting targets
 format-python: .venv/bin/activate
@@ -275,7 +309,7 @@ format: format-python format-js
 
 # Testing
 test-backend: .venv/bin/activate
-	@echo "Running backend tests..."
+	$(AI_ECHO) "Running backend tests..."
 	.venv/bin/pytest tests/
 
 test-backend-pg: .venv/bin/activate
@@ -295,11 +329,11 @@ test-backend-pg: .venv/bin/activate
 	.venv/bin/pytest tests/integration/db/ -v
 
 test-frontend:
-	@echo "Running frontend unit tests (Vitest)..."
+	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
 test-scripts-bash:
-	@echo "Running BATS script tests..."
+	$(AI_ECHO) "Running BATS script tests..."
 	@if command -v bats >/dev/null 2>&1; then \
 		bats tests/bash/; \
 	elif [ -f node_modules/.bin/bats ]; then \
@@ -310,7 +344,7 @@ test-scripts-bash:
 	fi
 
 test-scripts-python: .venv/bin/activate
-	@echo "Running Python script logic tests..."
+	$(AI_ECHO) "Running Python script logic tests..."
 	.venv/bin/pytest tests/test_scripts.py tests/test_script_utilities.py
 
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
@@ -385,7 +419,7 @@ _test-e2e-run:
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e
-	@echo "All tests completed!"
+	$(AI_ECHO) "All tests completed!"
 
 # Clean
 clean:

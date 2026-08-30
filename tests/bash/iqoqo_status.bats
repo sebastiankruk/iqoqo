@@ -36,7 +36,16 @@ teardown() {
 }
 
 @test "iqoqo-status.sh shows environment configuration audit" {
-  run bash scripts/iqoqo-status.sh
+  unset IQOQO_AI_MODE || true
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh
   [[ "$output" =~ "Environment Configuration" ]]
   [[ "$output" =~ "Configured" ]]
+}
+
+@test "iqoqo-status.sh suppresses ASCII banner in AI mode" {
+  export IQOQO_AI_MODE=1
+  run bash scripts/iqoqo-status.sh
+  [[ ! "$output" =~ "╔══════════════════════════════════════════════╗" ]]
+  [[ ! "$output" =~ "Environment Configuration" ]]
+  [[ "$output" =~ "STATUS:" ]]
 }

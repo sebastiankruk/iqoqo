@@ -152,6 +152,7 @@ find_container() {
 }
 
 header() {
+    [[ -n "${IQOQO_AI_MODE:-}" ]] && return 0
     local h="$1"
     printf '\n%s%s%s\n' "$BOLD" "$h" "$NC"
     local i=0; while [ "$i" -lt "${#h}" ]; do printf "─"; i=$((i+1)); done; echo
@@ -159,6 +160,14 @@ header() {
 
 check() {
     local label="$1" status="$2" detail="$3"
+    if [[ -n "${IQOQO_AI_MODE:-}" ]]; then
+        case "$status" in
+            pass|info) return 0 ;;
+            warn) printf '  %s %s  %s\n' "$WARN" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
+            fail) printf '  %s %s  %s\n' "$FAIL" "$label" "$detail"; ERRORS=$((ERRORS + 1)) ;;
+        esac
+        return 0
+    fi
     case "$status" in
         pass) printf '  %s %s  %s\n' "$PASS" "$label" "$detail" ;;
         warn) printf '  %s %s  %s\n' "$WARN" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
@@ -167,12 +176,14 @@ check() {
     esac
 }
 
-printf "\n"
-printf "╔══════════════════════════════════════════════╗\n"
-printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
-printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
-printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
-printf "╚══════════════════════════════════════════════╝\n"
+if [[ -z "${IQOQO_AI_MODE:-}" ]]; then
+    printf "\n"
+    printf "╔══════════════════════════════════════════════╗\n"
+    printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
+    printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
+    printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
+    printf "╚══════════════════════════════════════════════╝\n"
+fi
 
 header "Containers"
 for svc in "${SERVICES[@]}"; do

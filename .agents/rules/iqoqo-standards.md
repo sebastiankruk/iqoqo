@@ -11,13 +11,18 @@ Talk like caveman
   `mempalace search "<domain concept or entity>"`
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
-- **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation or notes to sync the persistent graph:
-  `mempalace mine .context/notes/` (or the specific file modified)
+- **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation, code, or notes to sync the persistent graph:
+  `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `/iqoqo-mempalace index` / `mempalace mine <specific file or dir> --wing iqoqo`).
+  Do NOT run un-scoped `mempalace mine .context/notes/` because `.context/notes` contains 23k+ session files.
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
 - **Pre-Refactor Tracing (OpenSpec Explore)**: During the OpenSpec `explore` phase or before modifying cross-cutting entities (e.g., SQLAlchemy ORM models, Flask scanner API routes, React hooks), run an on-demand CLI query to map symbol dependencies:
-  `codegraph impact <SymbolName>` (or `codegraph graph <path/to/file.py>`)
+  - Impact analysis: `codegraph impact <SymbolName>`
+  - Explore paths: `codegraph explore "<query>"`
+  - Inspect symbol / node: `codegraph node <SymbolName>`
+  - Call hierarchy: `codegraph callers <SymbolName>` / `codegraph callees <SymbolName>`
+  - Test blast radius: `codegraph affected <file_path>`
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 ### 🕸️ Graphify Knowledge Graph Directive
@@ -26,6 +31,10 @@ Talk like caveman
 - **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `/iqoqo-graphify index` to update the scope.
 - **Index Update**: RECOMMEND running `graphify update .` after code changes, or `/iqoqo-graphify index` after adding significant documentation.
 - **Integration**: Graphify complements mempalace (domain memory) and codegraph (symbol dependencies). Use graphify for "what connects to what", mempalace for "why did we decide this", codegraph for "what will break if I change X".
+
+### 🤖 AiOps Environment Mode Directive
+- **Universal Standard for AI**: ALWAYS set `IQOQO_AI_MODE=1` in your environment before running any commands (e.g. `IQOQO_AI_MODE=1 make lint`, `IQOQO_AI_MODE=1 make test`, `IQOQO_AI_MODE=1 make status`, `IQOQO_AI_MODE=1 pytest`, `IQOQO_AI_MODE=1 make codegraph-sync`).
+- **Behavior**: Enables terse, token-efficient output mode across pytest (quiet, short traceback, no header), Vitest (dot reporter), Makefile linters and test targets (concise format, no decorative echo banners), and the status check script (skips ASCII banners and passing checks).
 
 # iqoqo Global Project Rules
 
@@ -41,8 +50,8 @@ Talk like caveman
 
 ### 🔄 Post-Session Knowledge Sync
 - **Graphify**: After committing and pushing code changes, RECOMMEND running `graphify update .` to keep the graph current (AST-only, no API cost).
-- **Mempalace**: After committing and pushing, RECOMMEND running `mempalace mine .context/notes/` (or the specific file modified).
-- **CodeGraph**: After structural code changes, RECOMMEND running `codegraph index` to refresh symbol dependencies.
+- **Mempalace**: After committing and pushing, RECOMMEND running `make mempalace-index` or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or the specific file modified via `mempalace mine <file> --wing iqoqo`).
+- **CodeGraph**: After structural code changes, RECOMMEND running `make codegraph-sync` (or `codegraph sync` / `codegraph index`) to refresh symbol dependencies.
 - **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
@@ -51,7 +60,7 @@ Talk like caveman
 ## Agent Workflows & Execution
 
 - **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
-- **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `mempalace mine .context/notes/` (or the specific file modified).
+- **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `make mempalace-index` or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or the specific file modified via `mempalace mine <file> --wing iqoqo`).
 
 ## Python Backend (Flask)
 - **Engine:** Use Python 3.14+ exclusively.

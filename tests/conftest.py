@@ -34,6 +34,19 @@ if os.environ.get("ENABLE_FTS_TESTS") != "true":
 from app import create_app
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Configure pytest options for AI mode when IQOQO_AI_MODE is set."""
+    if os.environ.get("IQOQO_AI_MODE"):
+        config.option.verbose = -1
+        config.option.tbstyle = "short"
+        config.option.no_header = True
+        if hasattr(config.option, "plugins") and config.option.plugins is not None:
+            if "no:sugar" not in config.option.plugins:
+                config.option.plugins.append("no:sugar")
+        if hasattr(config, "pluginmanager"):
+            config.pluginmanager.set_blocked("sugar")
+
+
 @pytest.fixture
 def app():
     """Create and configure a new app instance for each test."""
