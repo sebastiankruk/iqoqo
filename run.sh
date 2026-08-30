@@ -559,16 +559,6 @@ if [ "$MODE" == "dev" ]; then
         fi
     done
 
-    # Termination Helper (used by make stop, not by Ctrl+C in dev mode)
-    cleanup() {
-        echo -e "\n🛑 Stopping servers..."
-        terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
-        terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
-        terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
-        rm -rf "$PID_DIR"
-        exit 0
-    }
-
     # 4. Install frontend dependencies if needed
     if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
         echo "📦 Installing frontend dependencies..."

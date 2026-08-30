@@ -7,7 +7,7 @@ Talk like caveman
 
 ### 🏰 MemPalace CLI Memory & Entity Alignment Directive
 - **Context Awareness**: Long-term episodic memory and architectural decisions are indexed locally via the standalone `mempalace` CLI utility. Do NOT look for MCP memory tools.
-- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt or implementing new domain features, you MUST execute a shell query in your terminal to retrieve historical engineering decisions:
+- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt or implementing new domain features, you RECOMMEND executing a shell query in your terminal to retrieve historical engineering decisions:
   `mempalace search "<domain concept or entity>"`
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
@@ -20,6 +20,13 @@ Talk like caveman
   `codegraph impact <SymbolName>` (or `codegraph graph <path/to/file.py>`)
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
+### 🕸️ Graphify Knowledge Graph Directive
+- **Primary Navigation Tool**: RECOMMEND consulting `graphify-out/graph.json` for codebase questions before grepping raw files. Use `graphify query "<question>"` for focused questions, `graphify path "<A>" "<B>"` for relationship tracing, and `graphify explain "<concept>"` for deep dives.
+- **Scoped Over Broad**: Prefer graphify query results (scoped subgraph) over reading `GRAPH_REPORT.md` (broad architecture review) or raw grep output.
+- **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `/iqoqo-graphify index` to update the scope.
+- **Index Update**: RECOMMEND running `graphify update .` after code changes, or `/iqoqo-graphify index` after adding significant documentation.
+- **Integration**: Graphify complements mempalace (domain memory) and codegraph (symbol dependencies). Use graphify for "what connects to what", mempalace for "why did we decide this", codegraph for "what will break if I change X".
+
 # iqoqo Global Project Rules
 
 ## Decision Making & Feature Preservation
@@ -30,14 +37,20 @@ Talk like caveman
 ## General Architectural Principles
 
 - **Domain First:** This is a "Library of Everything" built on the FRBR (Functional Requirements for Bibliographic Records) ontology. Always respect the Work -> Expression -> Manifestation -> Item hierarchy.
-- **Spec-Driven Development (OpenSpec):** Before proposing structural modifications or implementing new features, you MUST inspect the canonical specifications located in `openspec/specs/`. Always follow the **Explore -> Propose -> Apply -> Archive** workflow using the `openspec` CLI.
+- **Spec-Driven Development (OpenSpec):** Before proposing structural modifications or implementing new features, you SHOULD inspect the canonical specifications located in `openspec/specs/`. Always follow the **Explore -> Propose -> Apply -> Archive** workflow using the `openspec` CLI.
+
+### 🔄 Post-Session Knowledge Sync
+- **Graphify**: After committing and pushing code changes, RECOMMEND running `graphify update .` to keep the graph current (AST-only, no API cost).
+- **Mempalace**: After committing and pushing, RECOMMEND running `mempalace mine .context/notes/` (or the specific file modified).
+- **CodeGraph**: After structural code changes, RECOMMEND running `codegraph index` to refresh symbol dependencies.
+- **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
 - **Do Not Hallucinate Metadata:** If an external service (e.g., ISBN lookup) fails, fail gracefully. Do not generate fake book covers or ISBNs.
 
 ## Agent Workflows & Execution
 
-- **Plan + Pause:** All complex agent workflows MUST begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
+- **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
 - **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `mempalace mine .context/notes/` (or the specific file modified).
 
 ## Python Backend (Flask)

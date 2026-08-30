@@ -1,0 +1,92 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# iqoqo-mykg Scope Configuration
+# ================================
+# This file defines which folders and files are indexed into the mykg
+# knowledge graph. It is COMMITTED to git — share it across machines.
+#
+# To customize: edit scopes list below, then run:
+#   /iqoqo-mykg index     (full rebuild)
+#   /iqoqo-mykg grow      (append changed with schema expansion)
+#   /iqoqo-mykg update    (append changed with locked schema)
+#
+# Runtime state (manifests, caches) lives in .iqoqo-mykg/ which is gitignored.
+
+scopes:
+  # --- Documentation ---
+  - docs
+
+  # --- Operational Notes (.context/notes/* via symlink to Dropbox) ---
+  - .context/notes/sre
+  - .context/notes/bugs
+  - .context/notes/code
+  - .context/notes/design
+  - .context/notes/dev
+  - .context/notes/marketing
+  - .context/notes/openspec
+  - .context/notes/plan
+  - .context/notes/review
+  - .context/notes/security
+  - .context/notes/tests
+  - .context/notes/tools
+
+  # --- Versioned AI Memory (.context/ai-memory/<version> via symlink) ---
+  # Note: specify the version explicitly, or use auto-detection by omitting
+  #       (auto-detect reads version from package.json)
+  - .context/ai-memory/0.7.17
+
+  # --- Application Code ---
+  - app
+  - frontend
+  - migrations
+
+  # --- Infrastructure & Deployment ---
+  - deploy
+  - scripts
+  - docker-compose.yml
+  - docker-compose.*.yml
+  - Dockerfile*
+  - .dockerignore
+
+  # --- Build & Orchestration ---
+  - Makefile
+
+# Exclude patterns applied during file collection
+# (supplements built-in exclusions like __pycache__, node_modules)
+exclude:
+  - "**/__pycache__/**"
+  - "**/*.pyc"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/.next/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/.ruff_cache/**"
+  - "**/.coverage"
+  - "**/*.egg-info/**"
+  - "**/coverage/**"
+  - "**/.tox/**"
+  - "**/instance/**"
+  - "**/data/**"
+  - "**/.DS_Store"
+  - "**/Thumbs.db"
+  - "**/*.log"
+  - "**/graphify-out/**"
+  - "**/mykg_sessions/**"
+  - "**/.mykg_sessions/**"
