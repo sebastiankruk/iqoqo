@@ -23,7 +23,8 @@
 ## 2. Current Codebase Structure
 
 ### Top-level Layout
-```
+
+```text
 iqoqo/
 ├── app/                          # Python Flask backend
 │   ├── __init__.py               # Flask app factory (create_app)
@@ -161,9 +162,11 @@ iqoqo/
 ## 3. Configuration System
 
 ### Configuration File
+
 **Primary:** `/home/sebastiankruk/Development/iqoqo/opencode.json` (JSON)
 
 ### What's in the Config
+
 - **App name:** "iqoqo"
 - **Database:** SQLite at `/home/sebastiankruk/.local/share/iqoqo/iqoqo.db`
 - **Auth:** JWT with bcrypt passwords
@@ -176,6 +179,7 @@ iqoqo/
 - **Backup:** S3 + WebDAV targets
 
 ### Environment Variables
+
 - `IQOQO_DB_URL` — Database URL override
 - `IQOQO_JWT_SECRET_KEY` — JWT secret
 - `IQOQO_ENV` — Environment (dev/prod)
@@ -188,6 +192,7 @@ iqoqo/
 ## 4. External Integrations
 
 ### Active
+
 1. **OpenLibrary** — Book metadata (ISBN lookup)
 2. **Google Books** — Book metadata (ISBN lookup)
 3. **MusicBrainz** — Music metadata (barcode/ UPC lookup)
@@ -201,6 +206,7 @@ iqoqo/
 11. **OAuth** — Google and Facebook login
 
 ### Planned/Partially Built
+
 - **ComfyUI** — AI cover generation (Flux + SDXL models)
 - **Casdoor** — External identity provider integration
 
@@ -209,14 +215,15 @@ iqoqo/
 ## 5. User Roles & Access
 
 | Role | Can Do |
-|------|--------|
+| --- | --- |
 | **admin** | Full CRUD on all resources, manage users, view debug info, backup/restore, manage roles |
 | **user** | CRUD on own items/collections, search, view others' public items, export/import |
 | **guest** | Read-only access to public items |
 
 ### Key API Routes
+
 | Route | Purpose |
-|-------|---------|
+| --- | --- |
 | `POST /api/auth/login` | Get JWT token |
 | `POST /api/auth/register` | Create account |
 | `GET /api/health` | Health check (no auth) |
@@ -244,6 +251,7 @@ iqoqo/
 **Session:** `app/db/__init__.py` — `db` instance
 
 ### Tables
+
 - **users** — id, email, password_hash, is_active, role
 - **works** — id, title, abstract, entity_type, created_at, updated_at
 - **expressions** — id, work_id (FK→works), name, language, created_at, updated_at
@@ -255,6 +263,7 @@ iqoqo/
 - **cover_images** — id, item_id (FK→items), filename, original_filename, file_size, mime_type, width, height, created_at
 
 ### Key Relationships
+
 - Work → Expression → Manifestation → Item (FRBR chain)
 - User → Items (ownership)
 - User → Collections (ownership)
@@ -267,12 +276,14 @@ iqoqo/
 ## 7. Testing Infrastructure
 
 ### Backend (pytest)
+
 - **Framework:** pytest + pytest-asyncio + httpx
 - **Fixtures:** `tests/conftest.py` — `db_client`, `db_session`, `auth_headers`, `admin_headers`, `sample_item`, `sample_collection`
 - **Database:** Each test gets a fresh SQLite DB in `tmp_path` (schema + seed data)
 - **Run:** `make test` or `uv run python -m pytest`
 
 ### Frontend (vitest)
+
 - **Framework:** Vitest
 - **Location:** `frontend/__tests__/`
 - **Run:** `make frontend-test` or `cd frontend && npx vitest run`
@@ -282,7 +293,7 @@ iqoqo/
 ## 8. Common Development Commands
 
 | Command | Purpose |
-|---------|---------|
+| --- | --- |
 | `make dev` | Start dev server (auto-restarts on changes) |
 | `make test` | Run full pytest suite |
 | `make test-fast` | Run tests excluding slow ones |
@@ -304,6 +315,7 @@ iqoqo/
 ## 9. Current State
 
 ### What Works
+
 - ✅ Flask backend with full CRUD for items, collections, users, manifests
 - ✅ JWT authentication with refresh tokens and session management
 - ✅ RBAC with admin/user/guest roles
@@ -325,6 +337,7 @@ iqoqo/
 - ✅ PWA (Progressive Web App) support
 
 ### What's Not Working / Missing
+
 - ❌ Some Next.js pages may have minor issues (mostly cosmetic)
 - ❌ No WIP tracking system
 - ❌ No CI/CD for frontend changes
@@ -350,28 +363,33 @@ iqoqo/
 ## 11. Navigation Guide
 
 ### To modify a route
+
 1. Check `app/api/` — find the appropriate blueprint file
 2. Look at `app/api/__init__.py` to see how blueprints are registered
 3. Check `app/api/schemas.py` for request/response schemas
 4. Check `app/db/models.py` for ORM models
 
 ### To modify the database
+
 1. Check `app/db/models.py` for ORM definitions
 2. Check `migrations/versions/` for existing migrations
 3. Create new migration: `alembic revision --autogenerate -m "description"`
 4. Apply: `alembic upgrade head`
 
 ### To modify the frontend
+
 1. Check `frontend/app/` for pages (App Router)
 2. Check `frontend/components/` for reusable components
 3. Check `frontend/next.config.ts` for API proxy rewrites
 4. Check `frontend/lib/api/` for API client and hooks
 
 ### To modify external API integrations
+
 1. Check `app/api/scanner.py` — `barcode_lookup` and `_fetch_*` functions
 2. Check `app/strategies/lookup/` — Strategy pattern implementations
 
 ### To modify tests
+
 1. Backend: `tests/` directory with `conftest.py` for fixtures
 2. Frontend: `frontend/__tests__/` directory
 
@@ -380,12 +398,14 @@ iqoqo/
 ## 12. Docker Setup
 
 ### Services
+
 1. **iqoqo** — Main Flask app (port 8000)
 2. **frontend** — Next.js frontend (port 3000)
 3. **iqoqo-watchdog** — File monitoring daemon
 4. **iqoqo-ical** — iCal server (port 5001)
 
 ### Volumes
+
 - `iqoqo-data` — SQLite database
 - `iqoqo-watch` — Watchdog monitoring directory
 - `iqoqo-covers` — Cover images

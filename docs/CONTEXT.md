@@ -9,7 +9,7 @@
 ## Key Links
 
 | Resource | Location |
-|----------|----------|
+| --- | --- |
 | Python backend | `app/` |
 | Next.js 15 frontend | `frontend/` |
 | Database schema | `app/db/schema.py` |
@@ -27,7 +27,7 @@
 
 ## Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                       iqoqo System                           │
 ├──────────────────────────────────────────────────────────────┤
@@ -59,7 +59,7 @@
 ## Technology Stack
 
 | Layer | Technology |
-|-------|-----------|
+| --- | --- |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui, Zustand, React Query, Vitest |
 | Backend | Python 3.12+, Flask, SQLAlchemy (sync), Pydantic, Alembic |
 | Database | SQLite (default) or PostgreSQL |
@@ -72,7 +72,7 @@
 ## Key Files to Reference
 
 | File | Purpose |
-|------|---------|
+| --- | --- |
 | `app/__init__.py` | Flask app factory (create_app) |
 | `app/config.py` | Configuration loading from environment variables |
 | `app/db/__init__.py` | SQLAlchemy db instance |

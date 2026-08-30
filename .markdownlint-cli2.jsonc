@@ -4,6 +4,9 @@
     "**/node_modules/**",
     "**/.venv/**",
     "**/frontend/node_modules/**",
+    "**/frontend/.next/**",
+    "**/frontend/playwright-report/**",
+    "**/frontend/test-results/**",
     "**/build/**",
     "**/dist/**",
     "**/migrations/**",
@@ -12,8 +15,14 @@
     "**/.github/**",
     "**/.context/**",
     "**/.git/**",
-    ".agent/**",
-    ".gemini/**",
-    ".opencode/**"
-  ],
+    "**/.agent/**",
+    "**/.agents/**",
+    "**/.gemini/**",
+    "**/.opencode/**",
+    "**/.claude/**",
+    "**/mykg_sessions/**",
+    "**/.mykg_sessions/**",
+    "**/.mykg_work/**",
+    "**/graphify-out/**"
+  ]
 }
