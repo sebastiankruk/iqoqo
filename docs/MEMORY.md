@@ -163,12 +163,12 @@ iqoqo/
 
 ### Configuration File
 
-**Primary:** `/home/sebastiankruk/Development/iqoqo/opencode.json` (JSON)
+**Primary:** `opencode.json` (JSON)
 
 ### What's in the Config
 
 - **App name:** "iqoqo"
-- **Database:** SQLite at `/home/sebastiankruk/.local/share/iqoqo/iqoqo.db`
+- **Database:** SQLite at `~/.local/share/iqoqo/iqoqo.db` (or `IQOQO_DB_URL`)
 - **Auth:** JWT with bcrypt passwords
 - **RBAC:** Three roles: admin, user, guest
 - **External APIs:** OpenLibrary, Google Books, MusicBrainz, Discogs, BoardGameGeek, TMDB

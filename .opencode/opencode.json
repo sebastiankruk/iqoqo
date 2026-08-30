@@ -16,7 +16,7 @@
     "mykg": {
       "type": "local",
       "command": [
-        "/home/sebastiankruk/Development/iqoqo/.venv/bin/mykg",
+        ".venv/bin/mykg",
         "mcp-serve"
       ],
       "enabled": true,
