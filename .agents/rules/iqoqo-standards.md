@@ -27,6 +27,10 @@ Talk like caveman
 - **Index Update**: RECOMMEND running `graphify update .` after code changes, or `/iqoqo-graphify index` after adding significant documentation.
 - **Integration**: Graphify complements mempalace (domain memory) and codegraph (symbol dependencies). Use graphify for "what connects to what", mempalace for "why did we decide this", codegraph for "what will break if I change X".
 
+### 🤖 AiOps Environment Mode Directive
+- **Terse Token-Saving Output**: Set `IQOQO_AI_MODE=1` in your environment before running tests, lints, or status commands (e.g. `IQOQO_AI_MODE=1 make lint`, `IQOQO_AI_MODE=1 make test`, `IQOQO_AI_MODE=1 make status`, `IQOQO_AI_MODE=1 pytest`).
+- **Behavior**: Enables terse output mode across pytest (quiet, short traceback, no header), Vitest (dot reporter), Makefile linters (concise format, no decorative echo banners), and the status check script (skips ASCII banners and passing checks).
+
 # iqoqo Global Project Rules
 
 ## Decision Making & Feature Preservation

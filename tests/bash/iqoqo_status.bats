@@ -40,3 +40,11 @@ teardown() {
   [[ "$output" =~ "Environment Configuration" ]]
   [[ "$output" =~ "Configured" ]]
 }
+
+@test "iqoqo-status.sh suppresses ASCII banner in AI mode" {
+  export IQOQO_AI_MODE=1
+  run bash scripts/iqoqo-status.sh
+  [[ ! "$output" =~ "╔══════════════════════════════════════════════╗" ]]
+  [[ ! "$output" =~ "Environment Configuration" ]]
+  [[ "$output" =~ "STATUS:" ]]
+}
