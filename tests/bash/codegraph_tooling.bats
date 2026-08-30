@@ -14,13 +14,29 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-@test "Makefile codegraph-sync executes successfully" {
+@test "Makefile has codegraph targets" {
+  run make -n codegraph-sync
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"codegraph sync"* ]]
+
+  run make -n codegraph-status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"codegraph status"* ]]
+}
+
+@test "Makefile codegraph-sync executes successfully when CLI installed" {
+  if ! command -v codegraph >/dev/null 2>&1; then
+    skip "codegraph CLI not installed in environment"
+  fi
   run make codegraph-sync
   [ "$status" -eq 0 ]
   [[ "$output" == *"Syncing CodeGraph"* || "$output" == *"Already up to date"* ]]
 }
 
-@test "Makefile codegraph-status displays index statistics" {
+@test "Makefile codegraph-status displays index statistics when CLI installed" {
+  if ! command -v codegraph >/dev/null 2>&1; then
+    skip "codegraph CLI not installed in environment"
+  fi
   run make codegraph-status
   [ "$status" -eq 0 ]
   [[ "$output" == *"CodeGraph Status"* ]]

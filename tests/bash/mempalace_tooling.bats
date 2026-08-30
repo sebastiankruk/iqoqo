@@ -21,7 +21,16 @@
   [[ "$output" == *"Target Wing: iqoqo"* ]]
 }
 
-@test "Makefile mempalace-index dry-run runs correctly" {
+@test "Makefile has mempalace-index target" {
+  run make -n mempalace-index
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"run_mine.py"* ]]
+}
+
+@test "Makefile mempalace-index dry-run runs correctly when CLI installed" {
+  if ! command -v mempalace >/dev/null 2>&1 && [ ! -f .venv/bin/mempalace ]; then
+    skip "mempalace CLI not installed in environment"
+  fi
   run make mempalace-index ARGS="--dry-run"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Starting iQoQo Scoped MemPalace Mining"* ]]

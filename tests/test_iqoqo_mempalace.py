@@ -16,7 +16,6 @@
 """Unit tests for iqoqo-mempalace scoping and mining utilities."""
 
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -61,14 +60,12 @@ def test_should_exclude_ignores_sessions_and_covers(mempalace_scan_module):
     assert not mempalace_scan_module.should_exclude(".context/notes/sre/notes.md")
 
 
-def test_resolve_scopes_identifies_codebase_and_notes(mempalace_scan_module):
-    """Test resolve_scopes discovers codebase, notes, and convos scopes."""
+def test_resolve_scopes_identifies_codebase(mempalace_scan_module):
+    """Test resolve_scopes discovers codebase scopes in the active repo."""
     project_root = Path(__file__).parent.parent
-    project_scopes, convos_scopes, _ = mempalace_scan_module.resolve_scopes(project_root)
+    project_scopes, _, _ = mempalace_scan_module.resolve_scopes(project_root)
 
     assert len(project_scopes) > 0
-    assert len(convos_scopes) > 0
-
     project_paths = [s["path"] for s in project_scopes]
     assert "app" in project_paths
     assert "frontend" in project_paths
@@ -80,11 +77,28 @@ def test_resolve_scopes_identifies_codebase_and_notes(mempalace_scan_module):
             assert ".mykg_sessions" not in f
             assert "app/static/covers" not in f
 
-    # Verify conversation scopes
-    convos_paths = [s["path"] for s in convos_scopes]
-    assert any("ai-memory" in p for p in convos_paths)
-    for s in convos_scopes:
-        assert s["mode"] == "convos"
+
+def test_resolve_scopes_with_mock_vault(mempalace_scan_module, tmp_path):
+    """Test resolve_scopes discovers conversation and project scopes in a complete mock tree."""
+    # Setup mock package.json
+    (tmp_path / "package.json").write_text('{"version": "0.7.17"}', encoding="utf-8")
+
+    # Setup mock codebase
+    (tmp_path / "app").mkdir(parents=True)
+    (tmp_path / "app" / "main.py").write_text("print('hello')", encoding="utf-8")
+
+    # Setup mock ai-memory
+    ai_mem = tmp_path / ".context" / "ai-memory" / "0.7.17"
+    ai_mem.mkdir(parents=True)
+    (ai_mem / "session_1.md").write_text("# Session 1", encoding="utf-8")
+
+    project_scopes, convos_scopes, _ = mempalace_scan_module.resolve_scopes(tmp_path)
+
+    assert len(project_scopes) > 0
+    assert len(convos_scopes) == 1
+    assert convos_scopes[0]["mode"] == "convos"
+    assert convos_scopes[0]["version"] == "0.7.17"
+    assert convos_scopes[0]["count"] == 1
 
 
 def test_mine_scope_executes_mempalace_command(mempalace_mine_module):
