@@ -36,7 +36,8 @@ teardown() {
 }
 
 @test "iqoqo-status.sh shows environment configuration audit" {
-  run bash scripts/iqoqo-status.sh
+  unset IQOQO_AI_MODE || true
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh
   [[ "$output" =~ "Environment Configuration" ]]
   [[ "$output" =~ "Configured" ]]
 }

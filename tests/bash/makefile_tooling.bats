@@ -78,7 +78,7 @@
 }
 
 @test "Makefile lint-python in standard mode outputs echo commands" {
-  run make -n lint-python
+  run env -u IQOQO_AI_MODE make -n lint-python IQOQO_AI_MODE=
   [ "$status" -eq 0 ]
   [[ "$output" == *"echo \"Running ruff...\""* ]]
   [[ "$output" == *"echo \"Running mypy...\""* ]]
