@@ -20,12 +20,12 @@ The RELEASE_PROCESS.md SHALL document the tribal matrix review step where PRs un
 
 ### Requirement: Release process documents mempalace synchronization
 
-The RELEASE_PROCESS.md SHALL document the `mempalace mine .context/notes/` step that synchronizes release artifacts, architectural decisions, and implementation notes into the long-term memory graph after each release merge.
+The RELEASE_PROCESS.md SHALL document the `make mempalace-index` (or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py`) step that synchronizes release artifacts, architectural decisions, codebase, and implementation notes into the long-term memory graph after each release merge.
 
 #### Scenario: Release is merged to main
 
 - **WHEN** a release branch is merged to main
-- **THEN** the documented process SHALL include a step to run mempalace mine to persist documentation and architectural decisions
+- **THEN** the documented process SHALL include a step to run mempalace indexing to persist documentation, codebase, and architectural decisions
 
 ### Requirement: Release process includes pre-release checklist
 

@@ -40,7 +40,8 @@ Before branching a release, complete the following verification steps:
    After the release PR is merged into `main`, sync architectural decisions and release notes to the persistent memory graph:
 
    ```bash
-   mempalace mine .context/notes/ --mode convos --wing iqoqo
+   make mempalace-index
+   # or: python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py
    ```
 
 Upon PR merge to `main`, GitHub Actions automatically:

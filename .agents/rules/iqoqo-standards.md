@@ -11,8 +11,9 @@ Talk like caveman
   `mempalace search "<domain concept or entity>"`
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
-- **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation or notes to sync the persistent graph:
-  `mempalace mine .context/notes/` (or the specific file modified)
+- **Post-Task Ingestion Trigger (CLI)**: At the conclusion of a successful refactoring session, test pass, or implementation plan, run the CLI miner against modified project documentation, code, or notes to sync the persistent graph:
+  `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `/iqoqo-mempalace index` / `mempalace mine <specific file or dir> --wing iqoqo`).
+  Do NOT run un-scoped `mempalace mine .context/notes/` because `.context/notes` contains 23k+ session files.
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
@@ -45,7 +46,7 @@ Talk like caveman
 
 ### 🔄 Post-Session Knowledge Sync
 - **Graphify**: After committing and pushing code changes, RECOMMEND running `graphify update .` to keep the graph current (AST-only, no API cost).
-- **Mempalace**: After committing and pushing, RECOMMEND running `mempalace mine .context/notes/` (or the specific file modified).
+- **Mempalace**: After committing and pushing, RECOMMEND running `make mempalace-index` or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or the specific file modified via `mempalace mine <file> --wing iqoqo`).
 - **CodeGraph**: After structural code changes, RECOMMEND running `codegraph index` to refresh symbol dependencies.
 - **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
@@ -55,7 +56,7 @@ Talk like caveman
 ## Agent Workflows & Execution
 
 - **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
-- **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `mempalace mine .context/notes/` (or the specific file modified).
+- **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `make mempalace-index` or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or the specific file modified via `mempalace mine <file> --wing iqoqo`).
 
 ## Python Backend (Flask)
 - **Engine:** Use Python 3.14+ exclusively.

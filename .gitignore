@@ -92,8 +92,9 @@ entities.json
 # AI tools
 graphify-out
 
-# iqoqo-mykg runtime state (config file IS committed)
+# iqoqo-mykg & iqoqo-mempalace runtime state (config files ARE committed)
 .iqoqo-mykg/
+.iqoqo-mempalace/
 .tmp/
 
 # mykg sessions (symlink to Dropbox, not committed)

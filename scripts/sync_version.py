@@ -296,6 +296,7 @@ def main() -> None:
             "tests/test_infra_config.py",
             "docs/CHANGELOG.md",
             ".iqoqo-mykg-scope.yaml",
+            ".iqoqo-mempalace-scope.yaml",
             ".graphifyignore",
         ]
         existing_files = [f for f in git_add_files if (REPO_ROOT / f).exists()]
