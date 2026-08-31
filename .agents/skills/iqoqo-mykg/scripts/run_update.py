@@ -23,9 +23,12 @@ Supports --grow-schema to use --append-with-grow-schema.
 """
 
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 
 def get_mykg_path() -> str:
@@ -34,7 +37,7 @@ def get_mykg_path() -> str:
     if venv_path.exists():
         return str(venv_path)
 
-    result = subprocess.run(["which", "mykg"], capture_output=True, text=True)
+    result = subprocess.run(["which", "mykg"], capture_output=True, text=True, check=False)
     if result.returncode == 0:
         return result.stdout.strip()
 
@@ -42,10 +45,10 @@ def get_mykg_path() -> str:
     sys.exit(1)
 
 
-def get_latest_session(project_root: Path) -> str:
+def get_latest_session(project_root: Path) -> Optional[str]:
     """Find the most recent mykg session."""
     sessions_dir = project_root / "mykg_sessions"
-    if not sessions_dir.exists() or not sessions_dir.is_symlink():
+    if not sessions_dir.exists():
         sessions_dir = project_root / ".mykg_sessions"
 
     if not sessions_dir.exists():
@@ -64,6 +67,31 @@ def get_latest_session(project_root: Path) -> str:
 
     sessions.sort(key=lambda x: x[1], reverse=True)
     return sessions[0][0]
+
+
+def prepare_scope_path(paths: List[str]) -> Tuple[str, bool]:
+    """Ensure scope path is a directory. If paths are files, copy them to a temp dir.
+
+    Returns (path_to_extract, is_temporary).
+    """
+    if not paths:
+        return "", False
+
+    first_path = Path(paths[0])
+    if first_path.is_dir():
+        return str(first_path), False
+
+    temp_dir = tempfile.mkdtemp(prefix="iqoqo_mykg_scope_")
+    for file_str in paths:
+        src = Path(file_str)
+        if src.is_file():
+            dst = Path(temp_dir) / src.name
+            shutil.copy2(src, dst)
+        elif src.is_dir():
+            dst = Path(temp_dir) / src.name
+            shutil.copytree(src, dst)
+
+    return temp_dir, True
 
 
 def run_extract(mykg_path: str, scope_path: str, session: str, grow_schema: bool = False) -> bool:
@@ -125,15 +153,19 @@ def main():
             print(f"\nSkipping empty scope: {scope_name}")
             continue
 
-        scope_path = paths[0]
+        scope_path, is_temp = prepare_scope_path(paths)
         print(f"\n[{success_count+1}/{len(changed_scopes)}] Updating: {scope_name}")
-        print(f"  Path: {scope_path}")
+        print(f"  Path: {scope_path} {'(temporary directory)' if is_temp else ''}")
         print(f"  Mode: {mode}")
 
-        if run_extract(mykg_path, scope_path, session, grow_schema):
-            success_count += 1
-        else:
-            print(f"  Warning: Failed to update {scope_name}")
+        try:
+            if run_extract(mykg_path, scope_path, session, grow_schema):
+                success_count += 1
+            else:
+                print(f"  Warning: Failed to update {scope_name}")
+        finally:
+            if is_temp and Path(scope_path).exists():
+                shutil.rmtree(scope_path, ignore_errors=True)
 
     print(f"\n{'='*60}")
     print(f"Update complete: {success_count}/{len(changed_scopes)} scopes updated")

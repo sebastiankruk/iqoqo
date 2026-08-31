@@ -21,9 +21,12 @@ First scope creates a new session; subsequent scopes use --append.
 """
 
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 
 def get_mykg_path() -> str:
@@ -34,7 +37,7 @@ def get_mykg_path() -> str:
         return str(venv_path)
 
     # Check PATH
-    result = subprocess.run(["which", "mykg"], capture_output=True, text=True)
+    result = subprocess.run(["which", "mykg"], capture_output=True, text=True, check=False)
     if result.returncode == 0:
         return result.stdout.strip()
 
@@ -42,7 +45,32 @@ def get_mykg_path() -> str:
     sys.exit(1)
 
 
-def run_extract(mykg_path: str, scope_path: str, session: str = None) -> str:
+def prepare_scope_path(paths: List[str]) -> Tuple[str, bool]:
+    """Ensure scope path is a directory. If paths are files, copy them to a temp dir.
+
+    Returns (path_to_extract, is_temporary).
+    """
+    if not paths:
+        return "", False
+
+    first_path = Path(paths[0])
+    if first_path.is_dir():
+        return str(first_path), False
+
+    temp_dir = tempfile.mkdtemp(prefix="iqoqo_mykg_scope_")
+    for file_str in paths:
+        src = Path(file_str)
+        if src.is_file():
+            dst = Path(temp_dir) / src.name
+            shutil.copy2(src, dst)
+        elif src.is_dir():
+            dst = Path(temp_dir) / src.name
+            shutil.copytree(src, dst)
+
+    return temp_dir, True
+
+
+def run_extract(mykg_path: str, scope_path: str, session: Optional[str] = None) -> Optional[str]:
     """Run mykg extract-graph for a scope. Returns session ID."""
     cmd = [mykg_path, "extract-graph", scope_path, "--profile", "agent-claude-code"]
 
@@ -113,27 +141,30 @@ def main():
             print(f"\nSkipping empty scope: {scope_name}")
             continue
 
-        # Use first path for extraction
-        scope_path = paths[0]
+        scope_path, is_temp = prepare_scope_path(paths)
 
         print(f"\n[{i+1}/{len(scopes)}] Indexing: {scope_name}")
-        print(f"  Path: {scope_path}")
+        print(f"  Path: {scope_path} {'(temporary directory)' if is_temp else ''}")
 
-        if i == 0 and not session:
-            # First scope - create new session
-            print(f"  Mode: CREATE NEW SESSION")
-            session = run_extract(mykg_path, scope_path)
-            if session:
-                print(f"  Created session: {session}")
+        try:
+            if i == 0 and not session:
+                # First scope - create new session
+                print(f"  Mode: CREATE NEW SESSION")
+                session = run_extract(mykg_path, scope_path)
+                if session:
+                    print(f"  Created session: {session}")
+                else:
+                    print(f"  Warning: Could not detect session ID")
             else:
-                print(f"  Warning: Could not detect session ID")
-        else:
-            # Subsequent scope - append
-            if not session:
-                print(f"  Error: No session available for append. Skipping.")
-                continue
-            print(f"  Mode: APPEND to session {session}")
-            session = run_extract(mykg_path, scope_path, session)
+                # Subsequent scope - append
+                if not session:
+                    print(f"  Error: No session available for append. Skipping.")
+                    continue
+                print(f"  Mode: APPEND to session {session}")
+                session = run_extract(mykg_path, scope_path, session)
+        finally:
+            if is_temp and Path(scope_path).exists():
+                shutil.rmtree(scope_path, ignore_errors=True)
 
     # Save final session info
     if session:

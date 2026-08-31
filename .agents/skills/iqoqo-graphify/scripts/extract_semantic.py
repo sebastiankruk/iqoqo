@@ -31,7 +31,7 @@ from pathlib import Path
 
 def normalize_id(text: str) -> str:
     """Normalize text to lowercase [a-z0-9_] node ID."""
-    return re.sub(r'[^a-z0-9_]', '_', text.lower()).strip('_')
+    return re.sub(r"[^a-z0-9_]", "_", text.lower()).strip("_")
 
 
 def extract_entities_from_file(file_path: str) -> dict:
@@ -45,93 +45,107 @@ def extract_entities_from_file(file_path: str) -> dict:
     edges = []
 
     # Extract Step headings: ## Step X — ROLE (`ROLE_TYPE`) *[timestamp]*
-    step_pattern = r'##\s+Step\s+\d+\s*—\s*([^(`]+)\s*\(\`([^`]+)`\"\s*\*\[\s*[^\]]+\s*\]'
+    step_pattern = r"##\s+Step\s+\d+\s*—\s*([^(`]+)\s*\(\`([^`]+)`\"\s*\*\[\s*[^\]]+\s*\]"
     for match in re.finditer(step_pattern, text):
         step_label = match.group(1).strip()
         step_type = match.group(2) if match.group(2) else "step"
         node_id = normalize_id(f"{step_type}_{step_label}_{Path(file_path).name}")
-        nodes.append({
-            "id": node_id,
-            "label": step_label,
-            "type": step_type,
-            "source_file": file_path,
-        })
+        nodes.append(
+            {
+                "id": node_id,
+                "label": step_label,
+                "type": step_type,
+                "source_file": file_path,
+            }
+        )
 
     # Extract USER_REQUEST blocks
-    user_request_pattern = r'<USER_REQUEST>(.*?)</USER_REQUEST>'
+    user_request_pattern = r"<USER_REQUEST>(.*?)</USER_REQUEST>"
     for match in re.finditer(user_request_pattern, text, re.DOTALL):
         request_text = match.group(1).strip()
         # Extract task references like "Task 2.1", "Task 2.2", etc.
-        task_pattern = r'Task\s+(\d+\.\d+)'
+        task_pattern = r"Task\s+(\d+\.\d+)"
         for task_match in re.finditer(task_pattern, request_text):
             task_num = task_match.group(1)
             task_id = normalize_id(f"task_{task_num}_{Path(file_path).stem}")
-            nodes.append({
-                "id": task_id,
-                "label": f"Task {task_num}",
-                "type": "task",
-                "source_file": file_path,
-            })
-            # Link task to step if a step context exists
-            step_match = re.search(r'##\s+Step\s+\d+', text[:match.start()])
-            if step_match:
-                edges.append({
-                    "source": task_id,
-                    "target": normalize_id(f"step_{Path(file_path).stem}"),
-                    "relation": "part_of",
+            nodes.append(
+                {
+                    "id": task_id,
+                    "label": f"Task {task_num}",
+                    "type": "task",
                     "source_file": file_path,
-                })
+                }
+            )
+            # Link task to step if a step context exists
+            step_match = re.search(r"##\s+Step\s+\d+", text[: match.start()])
+            if step_match:
+                edges.append(
+                    {
+                        "source": task_id,
+                        "target": normalize_id(f"step_{Path(file_path).stem}"),
+                        "relation": "part_of",
+                        "source_file": file_path,
+                    }
+                )
 
     # Extract skill references from ADDITIONAL_METADATA
-    metadata_pattern = r'<ADDITIONAL_METADATA>(.*?)</ADDITIONAL_METADATA>'
+    metadata_pattern = r"<ADDITIONAL_METADATA>(.*?)</ADDITIONAL_METADATA>"
     for match in re.finditer(metadata_pattern, text, re.DOTALL):
         meta_text = match.group(1)
         # Extract skill names like "iqoqo-devops-sre-expert"
-        skill_pattern = r'Skill[:\s]+#?\s*([a-z][a-z0-9_-]*)'
+        skill_pattern = r"Skill[:\s]+#?\s*([a-z][a-z0-9_-]*)"
         for skill_match in re.finditer(skill_pattern, meta_text):
-            skill_name = skill_match.group(1).replace('-', '_')
+            skill_name = skill_match.group(1).replace("-", "_")
             skill_id = normalize_id(f"skill_{skill_name}")
-            nodes.append({
-                "id": skill_id,
-                "label": skill_name.replace('_', ' '),
-                "type": "skill",
-                "source_file": file_path,
-            })
-            edges.append({
-                "source": skill_id,
-                "target": normalize_id(f"step_0_{Path(file_path).stem}"),
-                "relation": "invoked_by",
-                "source_file": file_path,
-            })
+            nodes.append(
+                {
+                    "id": skill_id,
+                    "label": skill_name.replace("_", " "),
+                    "type": "skill",
+                    "source_file": file_path,
+                }
+            )
+            edges.append(
+                {
+                    "source": skill_id,
+                    "target": normalize_id(f"step_0_{Path(file_path).stem}"),
+                    "relation": "invoked_by",
+                    "source_file": file_path,
+                }
+            )
 
     # Extract file path references
     file_ref_pattern = r'/opt/pre\.iqoqo[^\s"]+'
     for match in re.finditer(file_ref_pattern, text):
         file_ref = match.group(0)
         # Extract a short label from the path
-        label = Path(file_ref).name.replace('.py', '').replace('.md', '')
+        label = Path(file_ref).name.replace(".py", "").replace(".md", "")
         node_id = normalize_id(f"file_{label}_{Path(file_path).stem}")
         # Avoid duplicate nodes for same file path
         already = any(n.get("id") == node_id for n in nodes)
         if not already:
-            nodes.append({
-                "id": node_id,
-                "label": label,
-                "type": "file",
-                "source_file": file_path,
-            })
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": label,
+                    "type": "file",
+                    "source_file": file_path,
+                }
+            )
 
     # Extract relation references (people, commands, etc.)
-    rel_pattern = r'@\[([^\]]+)\]'
+    rel_pattern = r"@\[([^\]]+)\]"
     for match in re.finditer(rel_pattern, text):
         rel_name = match.group(1)
         rel_id = normalize_id(f"entity_{rel_name}_{Path(file_path).stem}")
-        nodes.append({
-            "id": rel_id,
-            "label": rel_name,
-            "type": "entity",
-            "source_file": file_path,
-        })
+        nodes.append(
+            {
+                "id": rel_id,
+                "label": rel_name,
+                "type": "entity",
+                "source_file": file_path,
+            }
+        )
 
     return {"nodes": nodes, "edges": edges, "source_file": file_path}
 
@@ -142,7 +156,7 @@ def main():
     output_dir = project_root / "graphify-out"
 
     # Read chunk manifests
-    chunk_files = sorted(chunks_dir.glob('chunk_*.json'))
+    chunk_files = sorted(chunks_dir.glob("chunk_*.json"))
     if not chunk_files:
         print("No chunk manifests found. Run scan_context.py first.")
         sys.exit(1)

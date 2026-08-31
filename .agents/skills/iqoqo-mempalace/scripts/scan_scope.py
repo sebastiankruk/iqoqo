@@ -135,33 +135,36 @@ def resolve_scopes(
     config = load_scope_config(project_root) or {}
     version = get_version(project_root)
 
-    raw_project_scopes = config.get("scopes", [
-        "docs",
-        "openspec/specs",
-        ".context/notes/sre",
-        ".context/notes/bugs",
-        ".context/notes/code",
-        ".context/notes/design",
-        ".context/notes/dev",
-        ".context/notes/marketing",
-        ".context/notes/openspec",
-        ".context/notes/plan",
-        ".context/notes/review",
-        ".context/notes/security",
-        ".context/notes/tests",
-        ".context/notes/tools",
-        ".context/notes/notes",
-        "app",
-        "frontend",
-        "migrations",
-        "deploy",
-        "scripts",
-        "shared",
-        "tests",
-        "Makefile",
-        "docker-compose.yml",
-        "docker-compose.prod.yml",
-    ])
+    raw_project_scopes = config.get(
+        "scopes",
+        [
+            "docs",
+            "openspec/specs",
+            ".context/notes/sre",
+            ".context/notes/bugs",
+            ".context/notes/code",
+            ".context/notes/design",
+            ".context/notes/dev",
+            ".context/notes/marketing",
+            ".context/notes/openspec",
+            ".context/notes/plan",
+            ".context/notes/review",
+            ".context/notes/security",
+            ".context/notes/tests",
+            ".context/notes/tools",
+            ".context/notes/notes",
+            "app",
+            "frontend",
+            "migrations",
+            "deploy",
+            "scripts",
+            "shared",
+            "tests",
+            "Makefile",
+            "docker-compose.yml",
+            "docker-compose.prod.yml",
+        ],
+    )
 
     raw_convos_scopes = config.get("convos_scopes", [".context/ai-memory"])
     exclude_patterns = config.get("exclude", DEFAULT_EXCLUDES)
@@ -177,27 +180,44 @@ def resolve_scopes(
 
         if scope_path.is_file():
             if not should_exclude(str(scope_path), exclude_patterns):
-                project_scopes.append({
-                    "path": str(scope_path.relative_to(project_root)),
-                    "type": "file",
-                    "mode": "projects",
-                    "files": [str(scope_path.relative_to(project_root))],
-                })
+                project_scopes.append(
+                    {
+                        "path": str(scope_path.relative_to(project_root)),
+                        "type": "file",
+                        "mode": "projects",
+                        "files": [str(scope_path.relative_to(project_root))],
+                    }
+                )
         elif scope_path.is_dir():
             files = []
             for item in scope_path.rglob("*"):
                 if item.is_file() and not should_exclude(str(item), exclude_patterns):
                     # Skip common binary formats
-                    if item.suffix.lower() not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".svg", ".pyc", ".bin", ".tar", ".gz", ".zip"]:
+                    if item.suffix.lower() not in [
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".webp",
+                        ".gif",
+                        ".ico",
+                        ".svg",
+                        ".pyc",
+                        ".bin",
+                        ".tar",
+                        ".gz",
+                        ".zip",
+                    ]:
                         files.append(str(item.relative_to(project_root)))
             if files:
-                project_scopes.append({
-                    "path": str(scope_path.relative_to(project_root)),
-                    "type": "dir",
-                    "mode": "projects",
-                    "count": len(files),
-                    "files": files,
-                })
+                project_scopes.append(
+                    {
+                        "path": str(scope_path.relative_to(project_root)),
+                        "type": "dir",
+                        "mode": "projects",
+                        "count": len(files),
+                        "files": files,
+                    }
+                )
 
     # Resolve conversation scopes (version-scoped)
     for scope_str in raw_convos_scopes:
@@ -212,14 +232,16 @@ def resolve_scopes(
                 conv_files.append(str(item.relative_to(project_root)))
 
         if conv_files:
-            convos_scopes.append({
-                "path": str(target_path.relative_to(project_root)),
-                "type": "dir",
-                "mode": "convos",
-                "version": version,
-                "count": len(conv_files),
-                "files": conv_files,
-            })
+            convos_scopes.append(
+                {
+                    "path": str(target_path.relative_to(project_root)),
+                    "type": "dir",
+                    "mode": "convos",
+                    "version": version,
+                    "count": len(conv_files),
+                    "files": conv_files,
+                }
+            )
 
     return project_scopes, convos_scopes, exclude_patterns
 

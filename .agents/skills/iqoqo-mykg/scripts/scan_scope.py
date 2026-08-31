@@ -31,7 +31,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 DEFAULT_EXCLUDES = [
     "**/__pycache__/**",
     "**/*.pyc",
@@ -101,6 +100,7 @@ def load_scope_config(project_root: Path) -> dict:
     if config_file.exists():
         try:
             import yaml
+
             return yaml.safe_load(config_file.read_text())
         except ImportError:
             # Fallback: simple YAML-like parsing for scopes list
@@ -167,8 +167,17 @@ def auto_detect_scopes(project_root: Path) -> list:
     # Context notes (select subdirectories, excluding meta dirs)
     notes_dir = project_root / ".context" / "notes"
     excluded_note_dirs = {
-        ".mykg_sessions", "ai-memory", "bin", "images", "screenshots",
-        "setup", "archive", "antigravity", "gemini", "opencode", "agy"
+        ".mykg_sessions",
+        "ai-memory",
+        "bin",
+        "images",
+        "screenshots",
+        "setup",
+        "archive",
+        "antigravity",
+        "gemini",
+        "opencode",
+        "agy",
     }
     if notes_dir.exists() and notes_dir.is_dir():
         for subdir in sorted(notes_dir.iterdir()):
@@ -316,8 +325,7 @@ def check_changes(scope_paths: dict, manifest: dict) -> dict:
             if not prev_meta:
                 scope_changed = True
                 break
-            elif (current_meta["mtime"] != prev_meta["mtime"] or
-                  current_meta["size"] != prev_meta["size"]):
+            elif current_meta["mtime"] != prev_meta["mtime"] or current_meta["size"] != prev_meta["size"]:
                 scope_changed = True
                 break
 

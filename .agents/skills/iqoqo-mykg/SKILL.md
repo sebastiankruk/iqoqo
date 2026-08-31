@@ -29,137 +29,28 @@ Trigger this skill when the user types `/iqoqo-mykg <command>` or when they need
 
 | Command | Action |
 |---------|--------|
-| `/iqoqo-mykg index` | Full rebuild: all configured scopes into a fresh session |
-| `/iqoqo-mykg update` | Incremental: append only changed scopes to latest session |
-| `/iqoqo-mykg grow` | Grow schema: append with `--append-with-grow-schema` |
-| `/iqoqo-mykg status` | Show latest session stats, indexed scopes, node/edge counts |
+| `/iqoqo-mykg index` | Full rebuild: `IQOQO_AI_MODE=1 make mykg-index` |
+| `/iqoqo-mykg update` | Incremental update: `IQOQO_AI_MODE=1 make mykg-update` |
+| `/iqoqo-mykg grow` | Grow schema: `IQOQO_AI_MODE=1 make mykg-update ARGS="--grow-schema"` |
+| `/iqoqo-mykg status` | Show latest session stats: `make mykg-status` |
 | `/iqoqo-mykg query "<question>"` | Query the knowledge graph |
 
-## Workflow: Full Index (`/iqoqo-mykg index`)
+## Execution Architecture
 
-### Step 1 — Detect scopes
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-```
-- Reads `.iqoqo-mykg-scope.yaml` (or falls back to auto-detection)
-- Resolves wildcards like `docker*` → `docker-compose.yml`, `docker-compose.*.yml`, `Dockerfile*`, `.dockerignore`
-- Scans `.context/notes/` and `.context/ai-memory/<version>/`
-- Returns ordered list of scopes to index
+myKG uses the `agent-claude-code` profile to preserve data sovereignty (keeping all LLM operations within the local Antigravity opencode session without routing through untrusted APIs).
 
-### Step 2 — Run extraction per scope
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/run_index.py
-```
-For each scope:
-1. **First scope**: `mykg extract-graph <scope>` (creates new session)
-2. **Subsequent scopes**: `mykg extract-graph <scope> --append --session <session-id>`
-
-Scopes are processed in order:
-1. `docs/` (if exists) — high-level documentation
-2. `.context/notes/sre/` — SRE operational notes
-3. `.context/ai-memory/<version>/` — versioned ai-memory
-4. `app/` — backend code
-5. `frontend/` — frontend code
-6. `migrations/` — database migrations
-7. `docker/` (temp dir with docker files) — infrastructure
-
-### Step 3 — Report
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/get_status.py
-```
-Shows: session ID, indexed scopes, node/edge counts, artifact locations.
-
-## Workflow: Incremental Update (`/iqoqo-mykg update`)
-
-### Step 1 — Check scope changes
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-```
-Compares current files against last-known manifest:
-- `unchanged` → skip
-- `changed: N files in M scopes` → proceed to Step 2
-
-### Step 2 — Re-extract changed scopes
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/run_update.py
-```
-For each changed scope:
-```bash
-mykg extract-graph <scope> --append --session <latest-session>
-```
-
-## Workflow: Grow Schema (`/iqoqo-mykg grow`)
-
-Same as `update`, but uses `--append-with-grow-schema` to allow the schema to evolve:
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/run_update.py --grow-schema
-```
-
-## Workflow: Query (`/iqoqo-mykg query "<question>"`)
-
-```bash
-mykg query "<question>" --session <latest-session>
-```
-
-## Workflow: Status (`/iqoqo-mykg status`)
-
-```bash
-python3 .agents/skills/iqoqo-mykg/scripts/get_status.py
-```
-
-Shows:
-- Latest session ID and timestamp
-- Indexed scopes
-- Node and edge counts
-- Output artifact locations
-
-## Scope Configuration
-
-Create `.iqoqo-mykg-scope.yaml` in project root to customize:
-
-```yaml
-# .iqoqo-mykg-scope.yaml
-scopes:
-  - docs
-  - .context/notes/sre
-  - .context/ai-memory
-  - app
-  - frontend
-  - migrations
-  - docker-compose.yml
-  - docker-compose.*.yml
-  - Dockerfile*
-  - .dockerignore
-  - deploy/
-  - Makefile
-  - scripts/
-
-# Exclude patterns (applied after scope resolution)
-exclude:
-  - "**/__pycache__/**"
-  - "**/*.pyc"
-  - "**/node_modules/**"
-  - "**/.git/**"
-```
-
-**Git strategy:**
-- ✅ `.iqoqo-mykg-scope.yaml` — **COMMIT to git** (shared configuration)
-- ❌ `.iqoqo-mykg/` — **gitignored** (runtime state: manifests, caches)
-
-If `.iqoqo-mykg-scope.yaml` is missing, the skill auto-detects:
-- `docs/` or `docs` files
-- `.context/notes/*/` (selected subdirectories, excluding meta dirs)
-- `.context/ai-memory/<version>/`
-- `app/`, `frontend/`, `migrations/`
-- Docker files (`docker-compose*.yml`, `Dockerfile*`, `.dockerignore`)
-- `deploy/`, `scripts/`, `Makefile`
+To avoid UI prompt fatigue and preserve host security:
+- The task processing daemon (`agy_daemon.py`) runs in the background inside a strictly sandboxed Docker container (`python:3.11-slim`).
+- Only `mykg_sessions` is mounted read-write, while `.agents` is mounted read-only. The rest of the host workspace is isolated.
+- The `make mykg-update` and `make mykg-index` targets automatically start this daemon, run the scope extractions, and cleanly terminate the daemon upon completion.
 
 ## File Structure
 
 ```
-.opencode/skills/iqoqo-mykg/
+.agents/skills/iqoqo-mykg/
 ├── SKILL.md                          # This file
 └── scripts/
+    ├── agy_daemon.py                 # Sandboxed task processing daemon
     ├── scan_scope.py                 # Discover and resolve scopes
     ├── run_index.py                  # Full index across all scopes
     ├── run_update.py                 # Incremental update
@@ -170,6 +61,7 @@ If `.iqoqo-mykg-scope.yaml` is missing, the skill auto-detects:
 
 - `mykg` CLI (already installed in `.venv/bin/mykg`)
 - Python 3.14+
+- Docker (for sandboxed background task daemon)
 - `mykg_config.yaml` (already present in project root)
 
 ## Notes
