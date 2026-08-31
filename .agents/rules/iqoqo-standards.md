@@ -60,6 +60,7 @@ Talk like caveman
 ## Agent Workflows & Execution
 
 - **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
+- **Zero-Polling Background Execution:** NEVER poll `manage_task(Action='status')` or schedule repetitive short timers in a tight loop to check running tests, builds, or commands. The agent runtime is fully reactive and automatically delivers completion notifications. After launching an asynchronous command or task, stop calling tools and wait for the reactive system wakeup.
 - **Mempalace Updates:** At the end of every successful refactoring session, test pass, or implementation plan, run the CLI miner to update the memory graph: `make mempalace-index` or `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or the specific file modified via `mempalace mine <file> --wing iqoqo`).
 
 ## Python Backend (Flask)
