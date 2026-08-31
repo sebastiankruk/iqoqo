@@ -46,28 +46,34 @@ To avoid UI prompt fatigue and preserve host security:
 
 ### Model & Effort Configuration
 
-You can customize which model and reasoning effort level the sandbox daemon uses to extract graph entities:
+By default, the daemon uses the cheapest and most token-efficient configuration: **`gemini-3.7-flash-low`** with **`low`** reasoning effort.
+
+You can customize the model and reasoning effort level if deeper extraction reasoning is desired:
 
 1. **Via Makefile variables**:
    ```bash
+   # Default cheapest run (gemini-3.7-flash-low with low effort)
+   make mykg-update
+
+   # Custom run with higher capability model or higher reasoning effort
    make mykg-update MODEL=gemini-3.7-flash-high EFFORT=high
    make mykg-index MODEL=claude-sonnet-4-6 EFFORT=medium
    ```
 
 2. **Via Environment variables**:
    ```bash
-   export MYKG_MODEL="gemini-3.7-flash-high"
-   export MYKG_EFFORT="high" # low | medium | high
+   export MYKG_MODEL="gemini-3.7-flash-low"
+   export MYKG_EFFORT="low" # low | medium | high
    make mykg-update
    ```
 
 3. **Via CLI flags directly on `agy_daemon.py`**:
    ```bash
    python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
-       mykg_sessions/<session>/intermediate/agent_inbox \
-       mykg_sessions/<session>/intermediate/agent_outbox \
-       --model gemini-3.7-flash-high \
-       --effort high
+       mykg_sessions \
+       mykg_sessions \
+       --model gemini-3.7-flash-low \
+       --effort low
    ```
 
 Supported models can be inspected anytime via `agy models`. Supported effort tiers are `low`, `medium`, and `high`.

@@ -69,8 +69,8 @@ def process_task(
             "Do NOT include conversational text or markdown code fences."
         )
 
-        effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL")
-        effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT")
+        effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low"
+        effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT") or "low"
 
         cmd = ["agy", "--dangerously-skip-permissions", "-p", combined_prompt]
         if effective_model:
@@ -135,8 +135,8 @@ def run_daemon(
     active_futures: Dict[Future[bool], str] = {}
     submitted_tasks: Set[str] = set()
 
-    effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL")
-    effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT")
+    effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low"
+    effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT") or "low"
     config_desc = []
     if effective_model:
         config_desc.append(f"model={effective_model}")
@@ -199,15 +199,15 @@ def main() -> None:
     parser.add_argument(
         "--model",
         "-m",
-        default=os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL"),
-        help="Model to use for agy CLI (e.g. gemini-3.7-flash-high)",
+        default=os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low",
+        help="Model to use for agy CLI (default: gemini-3.7-flash-low)",
     )
     parser.add_argument(
         "--effort",
         "-e",
         choices=["low", "medium", "high"],
-        default=os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT"),
-        help="Reasoning effort for agy CLI (low|medium|high)",
+        default=os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT") or "low",
+        help="Reasoning effort for agy CLI (default: low)",
     )
 
     args = parser.parse_args()

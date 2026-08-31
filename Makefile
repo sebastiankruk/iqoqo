@@ -180,6 +180,9 @@ codegraph-status:
 	@codegraph status
 
 # myKG targets
+MYKG_DEFAULT_MODEL ?= gemini-3.7-flash-low
+MYKG_DEFAULT_EFFORT ?= low
+
 mykg-scope: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 
@@ -198,8 +201,8 @@ mykg-update: .venv/bin/activate
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
 				-e HOME="$(HOME)" \
-				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(MYKG_MODEL))" \
-				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(MYKG_EFFORT))" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
 				-u "$$(id -u):$$(id -g)" \
 				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
 				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
@@ -228,8 +231,8 @@ mykg-index: .venv/bin/activate
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
 				-e HOME="$(HOME)" \
-				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(MYKG_MODEL))" \
-				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(MYKG_EFFORT))" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
 				-u "$$(id -u):$$(id -g)" \
 				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
 				-v "$$(pwd)/.agents:/workspace/.agents:ro" \

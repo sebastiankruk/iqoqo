@@ -90,6 +90,10 @@ def test_process_task_success(agy_daemon_module, tmp_path):
         assert args[0] == "agy"
         assert "--dangerously-skip-permissions" in args
         assert "-p" in args
+        assert "--model" in args
+        assert args[args.index("--model") + 1] == "gemini-3.7-flash-low"
+        assert "--effort" in args
+        assert args[args.index("--effort") + 1] == "low"
 
         # Verify output files
         done_file = outbox / f"{task_id}.done"
