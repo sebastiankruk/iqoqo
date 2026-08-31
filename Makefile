@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status knowledge-sync
 
 SHELL := /bin/bash
 
@@ -178,6 +178,96 @@ codegraph-index:
 
 codegraph-status:
 	@codegraph status
+
+# myKG targets
+MYKG_DEFAULT_MODEL ?= gemini-3.7-flash-low
+MYKG_DEFAULT_EFFORT ?= low
+
+mykg-scope: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
+
+mykg-update: .venv/bin/activate
+	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
+	@SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
+		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
+		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
+		print(str(sessions[0])) if sessions else sys.exit(0)"); \
+	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
+		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
+		if [ -n "$$AGY_BIN" ]; then \
+			docker run --rm -d --name mykg-agy-daemon \
+				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
+				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
+				-e HOME="$(HOME)" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
+				-u "$$(id -u):$$(id -g)" \
+				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
+				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
+				-w /workspace \
+				python:3.11-slim \
+				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
+				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
+	EXIT_CODE=$$?; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker stop mykg-agy-daemon >/dev/null 2>&1 || true; \
+	fi; \
+	exit $$EXIT_CODE
+
+mykg-index: .venv/bin/activate
+	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		mkdir -p "mykg_sessions"; \
+		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
+		if [ -n "$$AGY_BIN" ]; then \
+			docker run --rm -d --name mykg-agy-daemon \
+				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
+				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
+				-e HOME="$(HOME)" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
+				-u "$$(id -u):$$(id -g)" \
+				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
+				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
+				-w /workspace \
+				python:3.11-slim \
+				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+				"mykg_sessions" \
+				"mykg_sessions" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
+	EXIT_CODE=$$?; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker stop mykg-agy-daemon >/dev/null 2>&1 || true; \
+	fi; \
+	exit $$EXIT_CODE
+
+mykg-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
+
+# Graphify targets
+graphify-update: .venv/bin/activate
+	$(AI_ECHO) "Running autonomous graphify update..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_update.py
+
+graphify-index: .venv/bin/activate
+	$(AI_ECHO) "Running full graphify index..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_index.py
+
+graphify-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/get_status.py
+
+knowledge-sync: codegraph-sync mempalace-index graphify-update mykg-update
+	$(AI_ECHO) "All knowledge engines synced."
+
 
 bump-version: .venv/bin/activate
 	@if [ -z "$(v)" ]; then \

@@ -25,7 +25,7 @@ def get_version(project_root: Path = None) -> str:
     """Read version from package.json or pyproject.toml."""
     if project_root is None:
         project_root = Path.cwd()
-    
+
     # Try package.json first
     package_json = project_root / "package.json"
     if package_json.exists():
@@ -36,7 +36,7 @@ def get_version(project_root: Path = None) -> str:
                 return version
         except (json.JSONDecodeError, KeyError):
             pass
-    
+
     # Fallback to pyproject.toml
     pyproject = project_root / "pyproject.toml"
     if pyproject.exists():
@@ -47,7 +47,7 @@ def get_version(project_root: Path = None) -> str:
                 return match.group(1)
         except (OSError, re.error):
             pass
-    
+
     return "unknown"
 
 

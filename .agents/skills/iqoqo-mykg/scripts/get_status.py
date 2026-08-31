@@ -49,23 +49,41 @@ def get_latest_session(project_root: Path) -> tuple:
 
 def count_nodes_edges(session_path: Path) -> tuple:
     """Count nodes and edges from session output."""
-    nodes_file = session_path / "output" / "nodes.jsonl"
-    edges_file = session_path / "output" / "edges.jsonl"
-    if not nodes_file.exists():
-        nodes_file = session_path / "intermediate" / "nodes.jsonl"
-    if not edges_file.exists():
-        edges_file = session_path / "intermediate" / "edges.jsonl"
+    kg_json = session_path / "output" / "networkx_output" / "knowledge_graph.json"
+    edges_txt = session_path / "output" / "networkx_output" / "edges_nx.txt"
 
     node_count = 0
     edge_count = 0
 
-    if nodes_file.exists():
-        with open(nodes_file) as f:
-            node_count = sum(1 for _ in f)
+    if kg_json.exists():
+        try:
+            data = json.loads(kg_json.read_text())
+            node_count = len(data.get("nodes", []))
+        except (OSError, json.JSONDecodeError):
+            pass
 
-    if edges_file.exists():
-        with open(edges_file) as f:
-            edge_count = sum(1 for _ in f)
+    if edges_txt.exists():
+        try:
+            with open(edges_txt) as f:
+                edge_count = sum(1 for _ in f)
+        except OSError:
+            pass
+
+    if node_count == 0 or edge_count == 0:
+        nodes_file = session_path / "output" / "nodes.jsonl"
+        edges_file = session_path / "output" / "edges.jsonl"
+        if not nodes_file.exists():
+            nodes_file = session_path / "intermediate" / "nodes.jsonl"
+        if not edges_file.exists():
+            edges_file = session_path / "intermediate" / "edges.jsonl"
+
+        if node_count == 0 and nodes_file.exists():
+            with open(nodes_file) as f:
+                node_count = sum(1 for _ in f)
+
+        if edge_count == 0 and edges_file.exists():
+            with open(edges_file) as f:
+                edge_count = sum(1 for _ in f)
 
     return node_count, edge_count
 
@@ -79,7 +97,7 @@ def get_session_outputs(session_path: Path) -> dict:
         for item in output_dir.iterdir():
             if item.is_dir():
                 outputs[item.name] = str(item)
-            elif item.suffix in ['.ttl', '.md', '.json']:
+            elif item.suffix in [".ttl", ".md", ".json"]:
                 outputs[item.name] = str(item)
 
     return outputs
