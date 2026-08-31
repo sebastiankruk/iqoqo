@@ -44,6 +44,34 @@ To avoid UI prompt fatigue and preserve host security:
 - Only `mykg_sessions` is mounted read-write, while `.agents` is mounted read-only. The rest of the host workspace is isolated.
 - The `make mykg-update` and `make mykg-index` targets automatically start this daemon, run the scope extractions, and cleanly terminate the daemon upon completion.
 
+### Model & Effort Configuration
+
+You can customize which model and reasoning effort level the sandbox daemon uses to extract graph entities:
+
+1. **Via Makefile variables**:
+   ```bash
+   make mykg-update MODEL=gemini-3.7-flash-high EFFORT=high
+   make mykg-index MODEL=claude-sonnet-4-6 EFFORT=medium
+   ```
+
+2. **Via Environment variables**:
+   ```bash
+   export MYKG_MODEL="gemini-3.7-flash-high"
+   export MYKG_EFFORT="high" # low | medium | high
+   make mykg-update
+   ```
+
+3. **Via CLI flags directly on `agy_daemon.py`**:
+   ```bash
+   python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+       mykg_sessions/<session>/intermediate/agent_inbox \
+       mykg_sessions/<session>/intermediate/agent_outbox \
+       --model gemini-3.7-flash-high \
+       --effort high
+   ```
+
+Supported models can be inspected anytime via `agy models`. Supported effort tiers are `low`, `medium`, and `high`.
+
 ## File Structure
 
 ```

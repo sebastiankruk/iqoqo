@@ -198,6 +198,8 @@ mykg-update: .venv/bin/activate
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
 				-e HOME="$(HOME)" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(MYKG_MODEL))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(MYKG_EFFORT))" \
 				-u "$$(id -u):$$(id -g)" \
 				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
 				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
@@ -218,7 +220,32 @@ mykg-update: .venv/bin/activate
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),)
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		mkdir -p "mykg_sessions"; \
+		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
+		if [ -n "$$AGY_BIN" ]; then \
+			docker run --rm -d --name mykg-agy-daemon \
+				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
+				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
+				-e HOME="$(HOME)" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(MYKG_MODEL))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(MYKG_EFFORT))" \
+				-u "$$(id -u):$$(id -g)" \
+				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
+				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
+				-w /workspace \
+				python:3.11-slim \
+				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+				"mykg_sessions" \
+				"mykg_sessions" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
+	EXIT_CODE=$$?; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker stop mykg-agy-daemon >/dev/null 2>&1 || true; \
+	fi; \
+	exit $$EXIT_CODE
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py

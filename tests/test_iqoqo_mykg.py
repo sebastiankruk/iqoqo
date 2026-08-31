@@ -102,6 +102,58 @@ def test_process_task_success(agy_daemon_module, tmp_path):
         assert answer_data["answer"] == '{"nodes": ["N1"]}'
 
 
+def test_process_task_with_model_and_effort(agy_daemon_module, tmp_path):
+    """Test process_task forwards model and effort flags to agy CLI."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "test_model_effort"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+        success = agy_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="gemini-3.7-flash-high",
+            effort="high",
+        )
+        assert success is True
+        args = mock_run.call_args[0][0]
+        assert "--model" in args
+        assert args[args.index("--model") + 1] == "gemini-3.7-flash-high"
+        assert "--effort" in args
+        assert args[args.index("--effort") + 1] == "high"
+
+
+def test_process_task_with_env_vars(agy_daemon_module, tmp_path, monkeypatch):
+    """Test process_task falls back to MYKG_MODEL and MYKG_EFFORT environment variables."""
+    monkeypatch.setenv("MYKG_MODEL", "claude-sonnet-4-6")
+    monkeypatch.setenv("MYKG_EFFORT", "medium")
+
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "test_env_vars"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is True
+        args = mock_run.call_args[0][0]
+        assert "--model" in args
+        assert args[args.index("--model") + 1] == "claude-sonnet-4-6"
+        assert "--effort" in args
+        assert args[args.index("--effort") + 1] == "medium"
+
+
 def test_process_task_already_done(agy_daemon_module, tmp_path):
     """Test process_task skips already finished tasks."""
     inbox = tmp_path / "inbox"

@@ -25,7 +25,7 @@ import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
 
 def clean_json_fences(raw_text: str) -> str:
@@ -40,7 +40,13 @@ def clean_json_fences(raw_text: str) -> str:
     return text.strip()
 
 
-def process_task(task_path: Path, outbox_dir: Path, timeout: int = 300) -> bool:
+def process_task(
+    task_path: Path,
+    outbox_dir: Path,
+    timeout: int = 300,
+    model: Optional[str] = None,
+    effort: Optional[str] = None,
+) -> bool:
     """Process a single task file by calling agy and writing the answer atomically."""
     task_id = task_path.stem.split(".")[0]
     done_file = outbox_dir / f"{task_id}.done"
@@ -63,8 +69,17 @@ def process_task(task_path: Path, outbox_dir: Path, timeout: int = 300) -> bool:
             "Do NOT include conversational text or markdown code fences."
         )
 
+        effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL")
+        effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT")
+
+        cmd = ["agy", "--dangerously-skip-permissions", "-p", combined_prompt]
+        if effective_model:
+            cmd.extend(["--model", effective_model])
+        if effective_effort:
+            cmd.extend(["--effort", effective_effort])
+
         proc = subprocess.run(
-            ["agy", "--dangerously-skip-permissions", "-p", combined_prompt],
+            cmd,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -95,7 +110,14 @@ def process_task(task_path: Path, outbox_dir: Path, timeout: int = 300) -> bool:
         return False
 
 
-def run_daemon(inbox_dir: Path, outbox_dir: Path, workers: int = 2, poll_interval: float = 2.0) -> None:
+def run_daemon(
+    inbox_dir: Path,
+    outbox_dir: Path,
+    workers: int = 2,
+    poll_interval: float = 2.0,
+    model: Optional[str] = None,
+    effort: Optional[str] = None,
+) -> None:
     """Watch inbox_dir and dispatch task processing in a thread pool."""
     inbox_dir.mkdir(parents=True, exist_ok=True)
     outbox_dir.mkdir(parents=True, exist_ok=True)
@@ -113,7 +135,16 @@ def run_daemon(inbox_dir: Path, outbox_dir: Path, workers: int = 2, poll_interva
     active_futures: Dict[Future[bool], str] = {}
     submitted_tasks: Set[str] = set()
 
-    print(f"[agy_daemon] Starting daemon watching {inbox_dir} (workers={workers})...")
+    effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL")
+    effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT")
+    config_desc = []
+    if effective_model:
+        config_desc.append(f"model={effective_model}")
+    if effective_effort:
+        config_desc.append(f"effort={effective_effort}")
+    config_str = f" ({', '.join(config_desc)})" if config_desc else ""
+
+    print(f"[agy_daemon] Starting daemon watching {inbox_dir} (workers={workers}){config_str}...")
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         while running:
@@ -126,16 +157,33 @@ def run_daemon(inbox_dir: Path, outbox_dir: Path, workers: int = 2, poll_interva
             # Discover new pending tasks
             try:
                 task_files = list(inbox_dir.glob("*.task.json"))
+                if not task_files and (inbox_dir / "intermediate" / "agent_inbox").exists():
+                    task_files = list((inbox_dir / "intermediate" / "agent_inbox").glob("*.task.json"))
+                if not task_files:
+                    task_files = list(inbox_dir.glob("*/intermediate/agent_inbox/*.task.json"))
             except OSError:
                 task_files = []
 
             for task_file in task_files:
                 task_id = task_file.stem.split(".")[0]
-                done_marker = outbox_dir / f"{task_id}.done"
+                # Determine associated outbox
+                if task_file.parent.name == "agent_inbox":
+                    target_outbox = task_file.parent.parent / "agent_outbox"
+                else:
+                    target_outbox = outbox_dir
+                target_outbox.mkdir(parents=True, exist_ok=True)
+                done_marker = target_outbox / f"{task_id}.done"
 
                 if not done_marker.exists() and task_id not in submitted_tasks:
                     submitted_tasks.add(task_id)
-                    fut = executor.submit(process_task, task_file, outbox_dir)
+                    fut = executor.submit(
+                        process_task,
+                        task_file,
+                        target_outbox,
+                        300,
+                        effective_model,
+                        effective_effort,
+                    )
                     active_futures[fut] = task_id
 
             time.sleep(poll_interval)
@@ -144,10 +192,23 @@ def run_daemon(inbox_dir: Path, outbox_dir: Path, workers: int = 2, poll_interva
 def main() -> None:
     """Parse CLI arguments and run daemon."""
     parser = argparse.ArgumentParser(description="Daemon for processing myKG tasks via Antigravity CLI.")
-    parser.add_argument("inbox_dir", type=Path, help="Path to agent_inbox directory")
-    parser.add_argument("outbox_dir", type=Path, help="Path to agent_outbox directory")
+    parser.add_argument("inbox_dir", type=Path, help="Path to agent_inbox directory or session root")
+    parser.add_argument("outbox_dir", type=Path, help="Path to agent_outbox directory or session root")
     parser.add_argument("--workers", type=int, default=2, help="Number of concurrent worker threads")
     parser.add_argument("--poll-interval", type=float, default=2.0, help="Polling interval in seconds")
+    parser.add_argument(
+        "--model",
+        "-m",
+        default=os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL"),
+        help="Model to use for agy CLI (e.g. gemini-3.7-flash-high)",
+    )
+    parser.add_argument(
+        "--effort",
+        "-e",
+        choices=["low", "medium", "high"],
+        default=os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT"),
+        help="Reasoning effort for agy CLI (low|medium|high)",
+    )
 
     args = parser.parse_args()
     run_daemon(
@@ -155,6 +216,8 @@ def main() -> None:
         outbox_dir=args.outbox_dir,
         workers=args.workers,
         poll_interval=args.poll_interval,
+        model=args.model,
+        effort=args.effort,
     )
 
 
