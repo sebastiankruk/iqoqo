@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status knowledge-sync
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status knowledge-sync
 
 SHELL := /bin/bash
 
@@ -253,7 +253,19 @@ mykg-index: .venv/bin/activate
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
 
-knowledge-sync: codegraph-sync mempalace-index mykg-update
+# Graphify targets
+graphify-update: .venv/bin/activate
+	$(AI_ECHO) "Running autonomous graphify update..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_update.py
+
+graphify-index: .venv/bin/activate
+	$(AI_ECHO) "Running full graphify index..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_index.py
+
+graphify-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/get_status.py
+
+knowledge-sync: codegraph-sync mempalace-index graphify-update mykg-update
 	$(AI_ECHO) "All knowledge engines synced."
 
 
