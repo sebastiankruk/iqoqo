@@ -106,4 +106,42 @@ describe("resolveMediaBadge", () => {
     const badge = resolveMediaBadge(" Music ", null, " Vinyl ");
     expect(composeMediaBadgeLabel(badge, t)).toBe("Music / Vinyl");
   });
+
+  it("disambiguates a Vinyl wishlist item with work_type and medium_type", () => {
+    const badge = resolveMediaBadge(null, null, null, "AudioWork", "Vinyl");
+    expect(badge.typeKey).toBe("music");
+    expect(badge.formatLabel).toBe("Vinyl");
+    expect(badge.isAudio).toBe(true);
+    expect(composeMediaBadgeLabel(badge, t)).toBe("Music / Vinyl");
+  });
+
+  it("disambiguates a Board Game wishlist item with GameWork work_type", () => {
+    const badge = resolveMediaBadge(null, null, null, "GameWork", null);
+    expect(badge.typeKey).toBe("game");
+    expect(badge.formatLabel).toBeUndefined();
+    expect(badge.isAudio).toBe(false);
+    expect(composeMediaBadgeLabel(badge, t)).toBe("Game");
+  });
+
+  it("disambiguates a Video wishlist item with VideoWork work_type", () => {
+    const badge = resolveMediaBadge(null, null, null, "VideoWork", "bluray");
+    expect(badge.typeKey).toBe("movie");
+    expect(badge.formatLabel).toBe("Blu-ray");
+    expect(composeMediaBadgeLabel(badge, t)).toBe("Movie / Blu-ray");
+  });
+
+  it("supports options object with work_type and medium_type", () => {
+    const badge = resolveMediaBadge({ work_type: "AudioWork", medium_type: "Vinyl" });
+    expect(badge.typeKey).toBe("music");
+    expect(badge.formatLabel).toBe("Vinyl");
+    expect(badge.isAudio).toBe(true);
+    expect(composeMediaBadgeLabel(badge, t)).toBe("Music / Vinyl");
+  });
+
+  it("supports options object for board games", () => {
+    const badge = resolveMediaBadge({ work_type: "GameWork", content_type: "board_game" });
+    expect(badge.typeKey).toBe("game");
+    expect(badge.isAudio).toBe(false);
+    expect(composeMediaBadgeLabel(badge, t)).toBe("Game");
+  });
 });

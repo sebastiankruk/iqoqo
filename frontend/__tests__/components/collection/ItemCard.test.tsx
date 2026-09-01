@@ -102,4 +102,49 @@ describe("ItemCard", () => {
 
     expect(screen.getByText("Processing...")).toBeInTheDocument();
   });
+
+  it("renders turntable / disc placeholder and aspect-square for Vinyl wishlist item", () => {
+    const vinylWishlistItem: Item = {
+      ...mockItem,
+      id: -101,
+      title: "Abbey Road",
+      authors: ["The Beatles"],
+      collection_status: "wish_list",
+      status: "want_to_listen",
+      work_type: "AudioWork",
+      medium_type: "Vinyl",
+      cover_url: null,
+      cover_status: null,
+    };
+
+    const { container } = render(<ItemCard item={vinylWishlistItem} />);
+
+    expect(screen.getByTestId("card-title")).toHaveTextContent("Abbey Road");
+    expect(screen.getByText("The Beatles")).toBeInTheDocument();
+    // Square aspect ratio for audio media
+    expect(container.querySelector(".aspect-square")).toBeInTheDocument();
+    // Disc / turntable icon in placeholder
+    expect(container.querySelector("svg.lucide-disc")).toBeInTheDocument();
+  });
+
+  it("renders board game placeholder and aspect-square for Board Game wishlist item", () => {
+    const gameWishlistItem: Item = {
+      ...mockItem,
+      id: -102,
+      title: "Catan",
+      authors: ["Klaus Teuber"],
+      collection_status: "wish_list",
+      status: "want_to_play",
+      work_type: "GameWork",
+      medium_type: "BoardGame",
+      cover_url: null,
+      cover_status: null,
+    };
+
+    const { container } = render(<ItemCard item={gameWishlistItem} />);
+
+    expect(screen.getByTestId("card-title")).toHaveTextContent("Catan");
+    expect(container.querySelector(".aspect-square")).toBeInTheDocument();
+    expect(container.querySelector("svg.lucide-dices")).toBeInTheDocument();
+  });
 });
