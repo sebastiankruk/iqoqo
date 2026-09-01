@@ -240,16 +240,27 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     if not is_barcode:
         candidates = []
         if category_hint == "music" or format_hint in (None, ""):
-            candidates.extend(fetch_discogs_candidates(query))
+            candidates.extend(fetch_discogs_candidates(query, max_results=10))
 
-        if category_hint == "book" or format_hint in (None, ""):
+        if category_hint in ("text", "book") or format_hint in ("book", "text", None, ""):
+            from app.utils.allegro import fetch_allegro_candidates
             from app.utils.isbn import fetch_google_books_candidates
 
-            candidates.extend(fetch_google_books_candidates(query))
+            gb_cands = fetch_google_books_candidates(query, max_results=10)
+            candidates.extend(gb_cands)
+            if len(candidates) < 10:
+                allegro_cands = fetch_allegro_candidates(query, max_results=10 - len(candidates))
+                candidates.extend(allegro_cands)
 
         if len(candidates) >= 1:
-            response_data = copy.deepcopy(candidates[0])
-            response_data["candidates"] = candidates
+            normalized_candidates = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates]
+            for cand in normalized_candidates:
+                if "already_in_collection" not in cand:
+                    cand["already_in_collection"] = False
+                if "item_id" not in cand:
+                    cand["item_id"] = None
+            response_data = copy.deepcopy(normalized_candidates[0])
+            response_data["candidates"] = normalized_candidates
             response_data["identifier"] = query
             response_data["already_in_collection"] = False
             response_data["item_id"] = None
@@ -266,7 +277,10 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         _record_scan_telemetry(barcode, format_hint, provider=format_hint or "unknown", status="failed")
         return jsonify({"success": False, "data": None, "error": f"No metadata found for barcode {barcode}"}), 404
 
+    candidates_list = meta.pop("candidates", None)
     meta = _normalize_preview_meta(meta, format_hint)
+    if candidates_list and isinstance(candidates_list, list):
+        meta["candidates"] = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates_list]
 
     # Add identifier to meta
     meta["identifier"] = query
