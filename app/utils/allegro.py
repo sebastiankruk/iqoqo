@@ -147,11 +147,70 @@ def get_allegro_token() -> str | None:
         return None
 
 
-def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
-    """Fetch product metadata using Allegro API based on EAN/UPC."""
+def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[str, Any]:
+    """Normalize a product item from Allegro Catalog API."""
+    desc_obj = item.get("description")
+    desc_text = None
+    if isinstance(desc_obj, dict) and "sections" in desc_obj:
+        texts = []
+        for section in desc_obj.get("sections", []):
+            for section_item in section.get("items", []):
+                if section_item.get("type") == "TEXT" and section_item.get("content"):
+                    texts.append(section_item.get("content"))
+        desc_text = "\n".join(texts) if texts else None
+    elif isinstance(desc_obj, str):
+        desc_text = desc_obj
+
+    barcode = query
+    for param in item.get("parameters", []):
+        if param.get("name") in ("EAN", "ISBN", "GTIN", "Kod producenta"):
+            values = param.get("values", [])
+            if values:
+                barcode = str(values[0])
+                break
+
+    pub_obj = item.get("publication")
+    publisher = pub_obj.get("publisher") if isinstance(pub_obj, dict) else None
+
+    return {
+        "title": item.get("name", "Unknown Media"),
+        "barcode": barcode,
+        "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
+        "description": desc_text,
+        "publisher": publisher,
+        "affiliate_url": f"https://allegro.pl/listing?string={barcode or query}",
+        "source": "Allegro Catalog",
+        "data_source": "allegro",
+        "raw_payload": item,
+    }
+
+
+def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str, Any]:
+    """Normalize an offer item from Allegro Listing API."""
+    return {
+        "title": offer.get("name", "Unknown Media"),
+        "barcode": query,
+        "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
+        "affiliate_url": f"https://allegro.pl/listing?string={query}",
+        "source": "Allegro Listing",
+        "data_source": "allegro",
+        "raw_payload": offer,
+    }
+
+
+def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str, Any]]:
+    """Search Allegro product catalog and marketplace listing for candidates matching query.
+
+    Args:
+        query: Free-text search term (e.g. title or barcode).
+        max_results: Maximum number of results to return (default 10).
+
+    Returns:
+        List of normalised metadata dicts, possibly empty.
+    """
     token = get_allegro_token()
     if not token:
-        return None
+        return []
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -159,11 +218,12 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
         "User-Agent": get_allegro_user_agent(),
     }
 
+    candidates: list[dict[str, Any]] = []
+
     try:
-        # Step 1: Try Product Catalog as User (Preferred for clean metadata)
-        # Use mode=GTIN only if barcode looks like a real EAN/UPC
-        is_numeric_barcode = barcode.isdigit() and len(barcode) in (8, 10, 12, 13, 14)
-        catalog_params = {"phrase": barcode}
+        # Step 1: Try Product Catalog
+        is_numeric_barcode = query.isdigit() and len(query) in (8, 10, 12, 13, 14)
+        catalog_params: dict[str, Any] = {"phrase": query}
         if is_numeric_barcode:
             catalog_params["mode"] = "GTIN"
 
@@ -174,39 +234,15 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
             if cat_resp.status_code == 200:
                 cat_data = cat_resp.json()
                 products = cat_data.get("products", [])
-                if products:
-                    item = products[0]
-                    desc_obj = item.get("description")
-                    desc_text = None
-                    if isinstance(desc_obj, dict) and "sections" in desc_obj:
-                        texts = []
-                        for section in desc_obj.get("sections", []):
-                            for section_item in section.get("items", []):
-                                if section_item.get("type") == "TEXT" and section_item.get("content"):
-                                    texts.append(section_item.get("content"))
-                        desc_text = "\n".join(texts) if texts else None
-                    elif isinstance(desc_obj, str):
-                        desc_text = desc_obj
-
-                    return {
-                        "title": item.get("name", "Unknown Media"),
-                        "barcode": barcode,
-                        "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
-                        "description": desc_text,
-                        "publisher": item.get("publication") and item.get("publication").get("publisher"),
-                        "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
-                        "source": "Allegro Catalog",
-                        "raw_payload": item,
-                    }
+                for product in products[:max_results]:
+                    candidates.append(_normalize_allegro_product(product, query))
         except requests.exceptions.RequestException:
             pass  # Fall back to Listing if Catalog fails
 
-        # Step 2: Use Listing API (Public Marketplace Search)
-        # ONLY if catalog found nothing and we are NOT getting 403s
-        # Note: listing API is often 403 for Client Credentials; we only try if we have a real token
-        if os.path.isfile(_TOKEN_FILE):
+        # Step 2: Use Listing API (Public Marketplace Search) ONLY if catalog found nothing
+        if not candidates and os.path.isfile(_TOKEN_FILE):
             listing_url = "https://api.allegro.pl/offers/listing"
-            listing_params = {"phrase": barcode}
+            listing_params = {"phrase": query}
             record_outbound_telemetry("Allegro", headers, url=listing_url)
             response = requests.get(listing_url, headers=headers, params=listing_params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
 
@@ -214,29 +250,32 @@ def fetch_allegro_metadata(barcode: str) -> dict[str, Any] | None:
                 data = response.json()
                 items = data.get("items", {})
                 offers = items.get("promoted", []) + items.get("regular", [])
-                if offers:
-                    offer = offers[0]
-                    return {
-                        "title": offer.get("name", "Unknown Media"),
-                        "barcode": barcode,
-                        "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
-                        "affiliate_url": f"https://allegro.pl/listing?string={barcode}",
-                        "source": "Allegro Listing",
-                        "raw_payload": offer,
-                    }
+                for offer in offers:
+                    if len(candidates) >= max_results:
+                        break
+                    candidates.append(_normalize_allegro_offer(offer, query))
             elif response.status_code == 403:
                 logger.debug("Allegro Listing API returned 403; skipping fallback.")
     except requests.exceptions.Timeout:
-        logger.warning("Allegro lookup timed out for barcode %s", barcode)
+        logger.warning("Allegro lookup timed out for query %s", query)
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 403:
             logger.error(
                 "Allegro API returned 403 Forbidden. Check if your Client ID/Secret are valid and if the Public Listing API is accessible for your app type."
             )
         else:
-            logger.warning("Allegro lookup HTTP error %s for barcode %s", e.response.status_code, barcode)
+            logger.warning("Allegro lookup HTTP error %s for query %s", e.response.status_code, query)
     except requests.exceptions.RequestException as e:
-        logger.warning("Allegro lookup network error for barcode %s: %s", barcode, e)
+        logger.warning("Allegro lookup network error for query %s: %s", query, e)
     except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError):
-        logger.exception("Allegro lookup unexpected error for barcode %s", barcode)
-    return None
+        logger.exception("Allegro lookup unexpected error for query %s", query)
+
+    return candidates[:max_results]
+
+
+def fetch_allegro_metadata(barcode: str, max_results: int = 10) -> dict[str, Any] | None:
+    """Fetch product metadata using Allegro API based on EAN/UPC or query."""
+    candidates = fetch_allegro_candidates(barcode, max_results=max_results)
+    if not candidates:
+        return None
+    return cast(dict[str, Any], candidates[0])
