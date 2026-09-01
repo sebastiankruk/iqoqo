@@ -709,7 +709,7 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
 
     user_id = getattr(g, "user_id", None)
 
-    if policy == "catalog":
+    if policy in ("catalog", "catalog_only"):
         _record_scan_telemetry(
             barcode or manifestation.title,
             format_hint,
