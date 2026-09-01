@@ -159,7 +159,7 @@ test.describe("Wishlist Media Disambiguation (Vinyl, Audio, Games)", () => {
 
     // Click Add to Wishlist
     await page.getByRole("button", { name: "Add to Wishlist" }).click();
-    await expect(page.getByText("Successfully added to your wishlist")).toBeVisible();
+    await expect(page.getByText(/"Abbey Road" added to your wishlist!/i)).toBeVisible();
 
     // 5. Navigate to collection wishlist view
     await page.goto("/collection?statuses=wish_list");
