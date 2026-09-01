@@ -527,7 +527,9 @@ if [ "$MODE" == "dev" ]; then
         port_pids=$(lsof -t -i:"$port" 2>/dev/null || ss -tulpn "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 || true)
         if [ -n "$port_pids" ]; then
             echo "⚠️  Port $port still occupied by PID(s) $port_pids. Killing..."
-            kill -9 $port_pids 2>/dev/null || true
+            for pid in $port_pids; do
+                kill -9 "$pid" 2>/dev/null || true
+            done
         fi
     done
 
