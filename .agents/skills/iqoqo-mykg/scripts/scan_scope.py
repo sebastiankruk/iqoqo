@@ -54,6 +54,16 @@ DEFAULT_EXCLUDES = [
     "**/instance/**",
     "**/data/**",  # Local data files
     "**/deploy/data/**",
+    "**/covers/**",
+    "**/static/covers/**",
+    "**/static/gallery/**",
+    "**/static/uploads/**",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.png",
+    "**/*.gif",
+    "**/*.webp",
+    "**/*.ico",
     "**/.DS_Store",
     "**/Thumbs.db",
 ]
@@ -306,7 +316,7 @@ def collect_files_in_scope(scope_path: str, exclude_patterns: list = None) -> li
     return files
 
 
-def check_changes(scope_paths: dict, manifest: dict) -> dict:
+def check_changes(scope_paths: dict, manifest: dict, exclude_patterns: list = None) -> dict:
     """Compare current scopes against manifest. Returns changed scopes."""
     changed_scopes = {}
 
@@ -314,7 +324,7 @@ def check_changes(scope_paths: dict, manifest: dict) -> dict:
         scope_changed = False
         current_files = []
         for path in paths:
-            current_files.extend(collect_files_in_scope(path))
+            current_files.extend(collect_files_in_scope(path, exclude_patterns))
 
         scope_manifest = manifest.get(scope_name, {})
 
@@ -376,8 +386,9 @@ def main():
     state_dir = project_root / ".iqoqo-mykg"
     state_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load or auto-detect scopes
+    # Load or auto-detect scopes and excludes
     config = load_scope_config(project_root)
+    exclude_patterns = config.get("exclude") if config else None
     if config and "scopes" in config:
         scopes = config["scopes"]
         print(f"Loaded {len(scopes)} scopes from .iqoqo-mykg-scope.yaml")
@@ -400,13 +411,13 @@ def main():
             for scope_name, paths in scope_paths.items():
                 scope_files = {}
                 for path in paths:
-                    for f in collect_files_in_scope(path):
+                    for f in collect_files_in_scope(path, exclude_patterns):
                         scope_files[f] = get_file_metadata(f)
                 new_manifest[scope_name] = scope_files
             save_manifest(project_root, new_manifest)
             sys.exit(0)
 
-        changed_scopes = check_changes(scope_paths, manifest)
+        changed_scopes = check_changes(scope_paths, manifest, exclude_patterns)
 
         if not changed_scopes:
             print("unchanged")
@@ -430,7 +441,7 @@ def main():
         for scope_name, paths in scope_paths.items():
             scope_files = {}
             for path in paths:
-                for f in collect_files_in_scope(path):
+                for f in collect_files_in_scope(path, exclude_patterns):
                     scope_files[f] = get_file_metadata(f)
             new_manifest[scope_name] = scope_files
         save_manifest(project_root, new_manifest)
@@ -445,7 +456,7 @@ def main():
     print(f"Latest session: {latest_session or 'none'}")
     print(f"Scopes to index: {len(scope_paths)}")
     for scope_name, paths in scope_paths.items():
-        file_count = sum(len(collect_files_in_scope(p)) for p in paths)
+        file_count = sum(len(collect_files_in_scope(p, exclude_patterns)) for p in paths)
         print(f"  {scope_name}: {file_count} files")
 
     # Write scope manifest
@@ -463,7 +474,7 @@ def main():
     for scope_name, paths in scope_paths.items():
         scope_files = {}
         for path in paths:
-            for f in collect_files_in_scope(path):
+            for f in collect_files_in_scope(path, exclude_patterns):
                 scope_files[f] = get_file_metadata(f)
         new_manifest[scope_name] = scope_files
     save_manifest(project_root, new_manifest)

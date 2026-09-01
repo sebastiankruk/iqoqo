@@ -1163,9 +1163,6 @@ profiles:
           - .doc
           - .pptx
           - .xlsx
-          - .png
-          - .jpg
-          - .jpeg
           - .html
           - .htm
           - .txt
