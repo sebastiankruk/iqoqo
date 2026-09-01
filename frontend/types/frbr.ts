@@ -159,6 +159,9 @@ export interface Item {
   genres?: string[];
   publisher?: string;
   manifestation_meta?: Record<string, unknown>;
+  content_type?: string | null;
+  work_type?: string | null;
+  medium_type?: string | null;
   expression?: Pick<Expression, "id" | "content_type" | "language" | "kind">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
 }

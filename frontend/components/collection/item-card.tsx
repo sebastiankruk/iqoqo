@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check, HeartOff } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp, classifyCoverType } from "@/lib/utils";
+import { resolveMediaBadge } from "@/lib/media-badge";
 import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -145,18 +146,71 @@ export function ItemCard({
   const isProcessing = coverStatus === "processing";
   const isGenerated = coverStatus === "ready" && !hasLegacyCoverUrl;
 
+  const itemObj = !isCatalog ? (item as Item) : undefined;
+  const catalogObj = isCatalog ? (item as CatalogEntry) : undefined;
+
+  const rawContentType = isCatalog
+    ? (catalogObj?.content_type ?? (catalogObj?.meta?.type as string | undefined))
+    : (itemObj?.content_type ??
+      itemObj?.expression?.content_type ??
+      (itemObj?.manifestation_meta?.type as string | undefined));
+
+  const rawKind = isCatalog ? catalogObj?.expression_kind : itemObj?.expression?.kind;
+
   const format = isCatalog
-    ? ((item as CatalogEntry).meta?.["format"] as string | undefined)
-    : (((item as Item).manifestation_meta?.["format"] as string | undefined) ??
-      ((item as Item).meta?.["format"] as string | undefined));
+    ? ((catalogObj?.meta?.["format"] as string | undefined) ?? (catalogObj?.meta?.Format as string | undefined))
+    : (((itemObj?.manifestation_meta?.["format"] as string | undefined) ??
+        (itemObj?.manifestation_meta?.Format as string | undefined) ??
+        (itemObj?.meta?.["format"] as string | undefined) ??
+        itemObj?.medium_type) as string | undefined);
 
-  const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
-  const isBoardGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
-  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
+  const rawWorkType = itemObj
+    ? (itemObj.work_type ?? (itemObj.work?.meta?.["work_type"] as string | undefined))
+    : undefined;
 
-  const MediaIcon = isAudio ? Disc : isVideo ? Film : isBoardGame ? Dices : isPuzzle ? Puzzle : BookOpen;
-  const mediaLabel = isAudio ? "Audio" : isVideo ? "Video" : isBoardGame ? "Board Game" : isPuzzle ? "Puzzle" : "Book";
+  const rawMediumType = itemObj
+    ? (itemObj.medium_type ?? (itemObj.manifestation_meta?.["medium_type"] as string | undefined))
+    : undefined;
+
+  const badge = resolveMediaBadge(rawContentType, rawKind, format, rawWorkType, rawMediumType);
+
+  const isAudio = badge.isAudio || isAudioMedia(format);
+  const isVideo =
+    badge.typeKey === "movie" || ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
+  const isBoardGame =
+    badge.typeKey === "game" ||
+    ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isPuzzle =
+    rawContentType === "puzzle" ||
+    format?.toLowerCase() === "puzzle" ||
+    ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
+
+  const MediaIcon = isAudio
+    ? Disc
+    : isVideo
+      ? Film
+      : isBoardGame
+        ? isPuzzle
+          ? Puzzle
+          : Dices
+        : isPuzzle
+          ? Puzzle
+          : BookOpen;
+  const mediaLabel = isAudio
+    ? badge.formatLabel
+      ? `Audio (${badge.formatLabel})`
+      : "Audio"
+    : isVideo
+      ? badge.formatLabel
+        ? `Video (${badge.formatLabel})`
+        : "Video"
+      : isBoardGame
+        ? isPuzzle
+          ? "Puzzle"
+          : "Board Game"
+        : isPuzzle
+          ? "Puzzle"
+          : "Book";
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";

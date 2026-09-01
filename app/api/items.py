@@ -18,6 +18,7 @@
 
 import logging
 import uuid
+from typing import Any
 
 from flask import Response, current_app, g, jsonify, request
 from pydantic import ValidationError
@@ -84,6 +85,82 @@ def log_initial_item_status(item_id: int, user_id: uuid.UUID, status: str, colle
     if collection_status:
         collection_log = ItemStatusLog(item_id=item_id, user_id=user_id, old_status=None, new_status=collection_status)
         db.session.add(collection_log)
+
+
+def _extract_intent_media_info(work: Any, primary_expr: Any, manifestation: Any) -> tuple[str | None, str | None]:
+    """Extract work_type and medium_type from FRBR hierarchy for virtual/physical items."""
+    # 1. work_type resolution
+    work_type = None
+    if work and work.meta:
+        work_type = work.meta.get("work_type")
+    if not work_type and work:
+        work_type = getattr(work, "work_type", None)
+    if not work_type and primary_expr and primary_expr.meta:
+        work_type = primary_expr.meta.get("work_type")
+    if not work_type and primary_expr:
+        work_type = getattr(primary_expr, "work_type", None)
+
+    # Inferred work_type from content_type or manifestation format if not explicitly set
+    if not work_type:
+        content_type = primary_expr.content_type.lower() if (primary_expr and primary_expr.content_type) else None
+        if content_type in ("music", "sound", "audio"):
+            work_type = "AudioWork"
+        elif content_type in ("board_game", "game", "puzzle", "boardgame"):
+            work_type = "GameWork"
+        elif content_type in ("movie", "video", "film", "moving image"):
+            work_type = "VideoWork"
+        elif content_type == "audiobook":
+            work_type = "AudioWork"
+        elif content_type in ("text", "book"):
+            work_type = "TextWork"
+        elif manifestation and manifestation.format:
+            fmt = manifestation.format.lower()
+            if fmt in (
+                "vinyl",
+                "cd",
+                "sacd",
+                "cassette",
+                "minidisc",
+                "audiobook_cd",
+                "audiobook_cassette",
+                "audiobook_digital",
+                "bluray_audio",
+            ):
+                work_type = "AudioWork"
+            elif fmt in (
+                "board_game",
+                "cards",
+                "rpg_manual",
+                "miniatures",
+                "jigsaw_puzzle",
+                "mechanical_puzzle",
+                "game",
+                "puzzle",
+            ):
+                work_type = "GameWork"
+            elif fmt in ("dvd", "bluray", "4k_uhd", "vcd", "vhs", "laserdisc"):
+                work_type = "VideoWork"
+            elif fmt in ("book", "graphic_novel", "comic_book", "magazine", "ebook"):
+                work_type = "TextWork"
+
+    # 2. medium_type resolution
+    medium_type = None
+    if primary_expr and primary_expr.meta:
+        medium_type = primary_expr.meta.get("medium_type") or primary_expr.meta.get("medium")
+    if not medium_type and primary_expr:
+        medium_type = getattr(primary_expr, "medium_type", None)
+    if not medium_type and manifestation and manifestation.meta:
+        medium_type = manifestation.meta.get("medium_type") or manifestation.meta.get("medium")
+    if not medium_type and manifestation:
+        medium_type = getattr(manifestation, "medium_type", None)
+    if not medium_type and manifestation and manifestation.format:
+        medium_type = manifestation.format
+    if not medium_type and primary_expr and primary_expr.meta:
+        medium_type = primary_expr.meta.get("format")
+    if not medium_type and work and work.meta:
+        medium_type = work.meta.get("medium_type") or work.meta.get("medium") or work.meta.get("format")
+
+    return work_type, medium_type
 
 
 def get_virtual_items(
@@ -177,12 +254,21 @@ def get_virtual_items(
     for intent in intents:
         work = intent.work
         manifestation = None
+        primary_expr = None
         for expr in work.expressions:
             if category_list and expr.content_type not in category_list:
                 continue
+            if primary_expr is None:
+                primary_expr = expr
             if expr.manifestations:
                 manifestation = expr.manifestations[0]
+                primary_expr = expr
                 break
+
+        if primary_expr is None and work.expressions:
+            primary_expr = work.expressions[0]
+
+        work_type, medium_type = _extract_intent_media_info(work, primary_expr, manifestation)
 
         if not manifestation:
             # Build virtual item from Work-level data only (B8 fix)
@@ -202,7 +288,9 @@ def get_virtual_items(
                     "cover_url": None,
                     "cover_status": None,
                     "authors": work.meta.get("authors", []) if work.meta else [],
-                    "content_type": None,
+                    "content_type": primary_expr.content_type if primary_expr else None,
+                    "work_type": work_type,
+                    "medium_type": medium_type,
                     "is_owner": True,
                     "is_borrowed": False,
                     "is_hidden": intent.is_hidden,
@@ -233,7 +321,13 @@ def get_virtual_items(
                 "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
                 "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
                 "authors": work.meta.get("authors", []) if work.meta else [],
-                "content_type": manifestation.expression.content_type if manifestation.expression else None,
+                "content_type": (
+                    manifestation.expression.content_type
+                    if manifestation.expression
+                    else (primary_expr.content_type if primary_expr else None)
+                ),
+                "work_type": work_type,
+                "medium_type": medium_type,
                 "is_owner": True,
                 "is_borrowed": False,
                 "is_hidden": intent.is_hidden,
@@ -449,15 +543,19 @@ def get_items():
             query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
 
         physical_items = query.all()
-
         for item in physical_items:
             manifestation = item.manifestation
             work_title = ""
             authors = []
+            work = None
+            phys_expr = None
             if manifestation and manifestation.expression and manifestation.expression.work:
                 work = manifestation.expression.work
+                phys_expr = manifestation.expression
                 work_title = work.title or ""
                 authors = work.meta.get("authors", []) if work.meta else []
+
+            phys_work_type, phys_medium_type = _extract_intent_media_info(work, phys_expr, manifestation)
 
             is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
             is_borrowed = bool(item.lent_to_user_id and str(item.lent_to_user_id) == str(g.user_id)) if hasattr(g, "user_id") else False
@@ -479,6 +577,8 @@ def get_items():
                     "manifestation_meta": manifestation.meta if manifestation else None,
                     "authors": authors,
                     "content_type": manifestation.expression.content_type if manifestation and manifestation.expression else None,
+                    "work_type": phys_work_type,
+                    "medium_type": phys_medium_type,
                     "is_owner": is_owner,
                     "is_borrowed": is_borrowed,
                     "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
@@ -518,6 +618,7 @@ def get_items():
 
         combined_items_data.sort(key=get_updated, reverse=True)
 
+    # Offset pagination
     total = len(combined_items_data)
     paginated_items = combined_items_data[offset : offset + limit]
 
@@ -556,10 +657,19 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     work = intent.work
     manifestation = None
+    primary_expr = None
     for expr in work.expressions:
+        if primary_expr is None:
+            primary_expr = expr
         if expr.manifestations:
             manifestation = expr.manifestations[0]
+            primary_expr = expr
             break
+
+    if primary_expr is None and work.expressions:
+        primary_expr = work.expressions[0]
+
+    work_type, medium_type = _extract_intent_media_info(work, primary_expr, manifestation)
 
     owner = db.session.get(User, intent.user_id)
     owner_name = (owner.display_name or owner.email) if owner else None
@@ -583,6 +693,9 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
             "manifestation_meta": None,
             "cover_url": None,
             "cover_status": None,
+            "content_type": primary_expr.content_type if primary_expr else None,
+            "work_type": work_type,
+            "medium_type": medium_type,
             "work": {
                 "id": work.id,
                 "title": work.title,
@@ -610,6 +723,11 @@ def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "manifestation_meta": manifestation.meta,
         "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
         "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
+        "content_type": (
+            manifestation.expression.content_type if manifestation.expression else (primary_expr.content_type if primary_expr else None)
+        ),
+        "work_type": work_type,
+        "medium_type": medium_type,
     }
 
     if manifestation.expression:

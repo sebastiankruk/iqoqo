@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Wishlist Media Disambiguation**: Added `work_type` and `medium_type` traversal and serialization to `UserWorkIntent` response payloads in `app/api/items.py` and dynamic polymorphic media type badges (Music, BoardGame, Movie, Book) with appropriate aspect ratios and icons (e.g., turntable/disc icon for vinyl) in `frontend/components/collection/item-card.tsx` and `frontend/lib/media-badge.ts`.
+- **Wishlist Media Disambiguation Tests**: Added comprehensive backend unit tests in `tests/test_wishlist_media.py`, frontend utility tests in `frontend/__tests__/lib/media-badge.test.ts`, item card tests in `frontend/__tests__/components/collection/ItemCard.test.tsx`, and E2E scenario in `frontend/__tests__/e2e/wishlist_media_types.spec.ts`.
+
 ### Changed
 
 ### Fixed

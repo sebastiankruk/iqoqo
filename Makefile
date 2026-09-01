@@ -374,7 +374,7 @@ lint-css:
 
 lint-markdown:
 	$(AI_ECHO) "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.context" "#graphify-out" "#openspec"
+	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.context" "#graphify-out" "#openspec/changes"
 
 validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
