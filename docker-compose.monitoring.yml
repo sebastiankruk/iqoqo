@@ -17,7 +17,7 @@
 #   OPENOBSERVE_HOST_PORT=5081 OTEL_GRPC_HOST_PORT=4319 OTEL_HTTP_HOST_PORT=4320 make monitoring-start
 #
 # Access:  http://localhost:${OPENOBSERVE_HOST_PORT:-5080}
-# Login:   ${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / ${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+# Login:   ${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local} / ${OPENOBSERVE_ROOT_PASSWORD:-SuperSecret!123}
 # SQL API: POST http://localhost:${OPENOBSERVE_HOST_PORT:-5080}/api/default/_search
 
 services:
@@ -31,7 +31,7 @@ services:
       - "127.0.0.1:${OPENOBSERVE_HOST_PORT:-5080}:5080"
     environment:
       - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
-      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:-supersecret}
+      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:-SuperSecret!123}
       - ZO_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
       - ZO_DATA_DIR=/data
     volumes:
@@ -59,7 +59,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_strong_password}
       - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
-      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}
+      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz}
       - FRONTEND_PORT=${FRONTEND_PORT:-3000}
     ports:
       # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.

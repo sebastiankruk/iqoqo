@@ -289,7 +289,7 @@ if [[ -n "$oo_cname" ]]; then
     oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
     oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
     oo_health=""
-    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz}"
     if python3 -c "
 import urllib.request, sys
 req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
