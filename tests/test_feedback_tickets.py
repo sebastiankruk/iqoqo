@@ -78,12 +78,23 @@ def feedback_setup(app):
         u_creator2.roles.append(r_user)
         db.session.add(u_creator2)
 
+        r_custodian = db.session.execute(db.select(Role).filter_by(name="custodian")).scalar_one_or_none()
+        if not r_custodian:
+            r_custodian = Role(name="custodian")
+            db.session.add(r_custodian)
+
+        u_custodian = User(email="custodian_fb@example.com", display_name="Custodian User", is_active=True)
+        u_custodian.set_password("CustodianPass123!")
+        u_custodian.roles.append(r_custodian)
+        db.session.add(u_custodian)
+
         db.session.commit()
 
         return {
             "admin_id": u_admin.id,
             "user1_id": u_creator1.id,
             "user2_id": u_creator2.id,
+            "custodian_id": u_custodian.id,
         }
 
 
@@ -562,11 +573,12 @@ def test_feedback_patch_schema_validation(client, feedback_setup, app):
 
 
 def test_feedback_screenshot_idor_protection(client, feedback_setup, app):
-    """Ensure users cannot access screenshots belonging to other users' tickets."""
+    """Ensure ticket author, custodian, and admin can access screenshots, while unauthorized users receive 403."""
     import io
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
     u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+    custodian_headers = _auth_headers(app, feedback_setup["custodian_id"])
     admin_headers = _auth_headers(app, feedback_setup["admin_id"])
 
     # User 1 submits a ticket with a screenshot
@@ -590,14 +602,88 @@ def test_feedback_screenshot_idor_protection(client, feedback_setup, app):
     attachment_url = ticket_data["attachments"][0]
     filename = attachment_url.split("/")[-1]
 
-    # 1. User 1 can access their own screenshot
+    # 1. Non-admin ticket author CAN access their own screenshot (Task 2.1)
     resp_u1 = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
     assert resp_u1.status_code == 200
 
-    # 2. User 2 CANNOT access User 1's screenshot (IDOR protection)
-    resp_u2 = client.get(f"/api/feedback/screenshots/{filename}", headers=u2_headers)
-    assert resp_u2.status_code in (403, 404)  # It returns 403 or 404 based on implementation
+    # 2. Custodian CAN access the screenshot (Task 2.2)
+    resp_custodian = client.get(f"/api/feedback/screenshots/{filename}", headers=custodian_headers)
+    assert resp_custodian.status_code == 200
 
-    # 3. Admin CAN access User 1's screenshot
+    # 3. Admin CAN access the screenshot
     resp_admin = client.get(f"/api/feedback/screenshots/{filename}", headers=admin_headers)
     assert resp_admin.status_code == 200
+
+    # 4. Unauthorized user CANNOT access the screenshot (Task 2.3: 403)
+    resp_u2 = client.get(f"/api/feedback/screenshots/{filename}", headers=u2_headers)
+    assert resp_u2.status_code == 403
+
+    # 5. Non-existent screenshot returns 404 (Task 2.3: 404)
+    resp_nonexistent = client.get("/api/feedback/screenshots/feedback-nonexistent.jpg", headers=u1_headers)
+    assert resp_nonexistent.status_code == 404
+
+
+def test_feedback_ticket_and_screenshot_custodian_access(client, feedback_setup, app):
+    """Ensure custodian role has full read access to tickets and attachments."""
+    import io
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    custodian_headers = _auth_headers(app, feedback_setup["custodian_id"])
+
+    png_bytes = _sample_png()
+    resp = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "description": "Custodian triage test",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "custodian_check.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+    ticket_id = resp.json["data"]["id"]
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    # Custodian reads ticket details
+    resp_ticket = client.get(f"/api/feedback/{ticket_id}", headers=custodian_headers)
+    assert resp_ticket.status_code == 200
+    assert resp_ticket.json["data"]["id"] == ticket_id
+
+    # Custodian reads attachment
+    resp_img = client.get(f"/api/feedback/screenshots/{filename}", headers=custodian_headers)
+    assert resp_img.status_code == 200
+
+
+def test_feedback_screenshot_unauthorized_direct_access_fails(client, feedback_setup, app):
+    """Ensure anonymous or unauthorized users receive 401 or 403/404."""
+    import io
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+
+    png_bytes = _sample_png()
+    resp = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "description": "Unauthorized direct access test",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "protected.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    # Anonymous user -> 401
+    resp_anon = client.get(f"/api/feedback/screenshots/{filename}")
+    assert resp_anon.status_code == 401
+
+    # Unauthorized user -> 403
+    resp_unauth = client.get(f"/api/feedback/screenshots/{filename}", headers=u2_headers)
+    assert resp_unauth.status_code == 403
+
+    # Direct access to random file not attached to any ticket -> 404
+    resp_missing = client.get("/api/feedback/screenshots/feedback-doesnotexist.jpg", headers=u2_headers)
+    assert resp_missing.status_code == 404
