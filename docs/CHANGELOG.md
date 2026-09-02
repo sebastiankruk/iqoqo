@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Feedback Screenshot Access Permissions**: Relaxed IDOR restrictions on `GET /api/feedback/screenshots/<filename>` to query the associated `FeedbackItem` and authorize access for ticket authors, assigned custodians (`custodian` role), and platform admins (`tickets:admin`), while rejecting unauthorized requests with 403 and non-existent attachments with 404.
 - **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
 
 ## [0.7.16] - 2026-08-23

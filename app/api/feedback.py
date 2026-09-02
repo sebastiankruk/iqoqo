@@ -53,6 +53,16 @@ def _can_create_tickets(user: User | None) -> bool:
     return bool(any(role.name in {"admin", "user"} for role in user.roles) or user.has_permission(PermissionName.TICKETS_CREATOR))
 
 
+def _can_read_ticket(user: User | None, item: FeedbackItem) -> bool:
+    if not user:
+        return False
+    if _can_admin_tickets(user):
+        return True
+    if any(role.name == "custodian" for role in user.roles):
+        return True
+    return bool(item.user_id == user.id)
+
+
 @api_bp.route("/feedback", methods=["POST"])
 @require_auth
 @limiter.limit("5 per hour", override_defaults=True)
@@ -107,11 +117,18 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 401
 
-    if not _can_admin_tickets(user):
-        stmt = select(FeedbackItem).where(FeedbackItem.user_id == g.user_id)
-        user_items = db.session.execute(stmt).scalars().all()
-        if not any(filename in (item.attachments or []) for item in user_items):
-            return jsonify({"success": False, "error": "Forbidden"}), 403
+    stmt = select(FeedbackItem).where(db.cast(FeedbackItem.attachments, db.String).contains(filename))
+    items = db.session.execute(stmt).scalars().all()
+    item = next(
+        (it for it in items if filename in (it.attachments or []) or any(att.endswith(filename) for att in (it.attachments or []))),
+        None,
+    )
+    if not item:
+        return jsonify({"success": False, "error": "Screenshot not found"}), 404
+
+    if not _can_read_ticket(user, item):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
     return None
 
 
@@ -209,8 +226,7 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     if not item:
         return jsonify({"success": False, "error": "Feedback item not found"}), 404
 
-    is_admin = _can_admin_tickets(user)
-    if not is_admin and item.user_id != g.user_id:
+    if not _can_read_ticket(user, item):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     return jsonify({"success": True, "data": _format_feedback_item(item)})
