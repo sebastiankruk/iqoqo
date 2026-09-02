@@ -133,6 +133,18 @@ def test_config(client):
     assert data["error"] is None
 
 
+def test_system_status(client):
+    """Test the system status endpoint returns expected envelope and fields."""
+    response = client.get("/api/system/status")
+    assert response.status_code == 200
+    data = response.json
+    assert data["success"] is True
+    assert "allegro_token_active" in data["data"]
+    assert "allegro" in data["data"]
+    assert "version" in data["data"]
+    assert data["error"] is None
+
+
 def test_lookup_isbn_with_meta_field(client, sample_book):
     """Test ISBN lookup when metadata exists in manifestation.meta."""
     response = client.get("/api/isbn/9780345391803")

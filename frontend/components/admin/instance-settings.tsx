@@ -458,22 +458,6 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
           description="Configure external API client credentials and integrations."
           saving={savingKey === "all_apis"}
           onSave={() => handleSaveKeys(allItems, "all_apis")}
-          extraFooterContent={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={startAllegroAuth}
-              disabled={isAuthorizingAllegro}
-            >
-              {isAuthorizingAllegro ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <ExternalLink className="h-4 w-4 mr-2" />
-              )}
-              Authorize Allegro Account
-            </Button>
-          }
         >
           <div className="flex flex-col gap-6">
             {API_SERVICE_GROUPS.map(group => {
@@ -486,32 +470,52 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                     <p className="text-sm text-muted-foreground">{group.description}</p>
                   </div>
                   <div className="flex flex-col gap-4">{group.items.map(s => renderInputField(s))}</div>
-                  {isAllegro && (allegroAuthStatus || allegroAuthUrl) && (
-                    <div className="mt-2 p-3 rounded-lg border border-border dark:border-white/10 bg-muted/30 text-sm flex flex-col gap-2">
-                      {allegroAuthStatus && (
-                        <div className="flex items-center gap-2 font-medium">
-                          {allegroAuthStatus.includes("Error") || allegroAuthStatus.includes("failed") ? (
-                            <AlertCircle className="h-4 w-4 text-destructive" />
-                          ) : allegroAuthStatus.includes("successfully") ? (
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  {isAllegro && (
+                    <div className="flex flex-col gap-3 pt-2">
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={startAllegroAuth}
+                          disabled={isAuthorizingAllegro}
+                        >
+                          {isAuthorizingAllegro ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <ExternalLink className="h-4 w-4 mr-2" />
                           )}
-                          <span>{allegroAuthStatus}</span>
+                          Authorize Allegro Account
+                        </Button>
+                      </div>
+                      {(allegroAuthStatus || allegroAuthUrl) && (
+                        <div className="p-3 rounded-lg border border-border dark:border-white/10 bg-muted/30 text-sm flex flex-col gap-2">
+                          {allegroAuthStatus && (
+                            <div className="flex items-center gap-2 font-medium">
+                              {allegroAuthStatus.includes("Error") || allegroAuthStatus.includes("failed") ? (
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                              ) : allegroAuthStatus.includes("successfully") ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                              )}
+                              <span>{allegroAuthStatus}</span>
+                            </div>
+                          )}
+                          {allegroAuthUrl && (
+                            <p className="text-xs text-muted-foreground">
+                              If browser window did not open automatically,{" "}
+                              <a
+                                href={allegroAuthUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline font-medium inline-flex items-center gap-1"
+                              >
+                                click here to authorize on Allegro <ExternalLink className="h-3 w-3 inline" />
+                              </a>
+                            </p>
+                          )}
                         </div>
-                      )}
-                      {allegroAuthUrl && (
-                        <p className="text-xs text-muted-foreground">
-                          If browser window did not open automatically,{" "}
-                          <a
-                            href={allegroAuthUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary underline font-medium inline-flex items-center gap-1"
-                          >
-                            click here to authorize on Allegro <ExternalLink className="h-3 w-3 inline" />
-                          </a>
-                        </p>
                       )}
                     </div>
                   )}

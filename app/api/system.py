@@ -142,6 +142,21 @@ def get_config():
     )
 
 
+@api_bp.route("/system/status", methods=["GET"])
+def get_system_status():
+    """Return system health and integration status (e.g., Allegro token freshness)."""
+    from app.utils.allegro import get_allegro_token_status
+
+    allegro_status = get_allegro_token_status()
+    payload = {
+        "status": "ok",
+        "version": Config.VERSION,
+        "allegro_token_active": allegro_status.get("allegro_token_active", False),
+        "allegro": allegro_status,
+    }
+    return jsonify({"success": True, "data": payload, "error": None}), 200
+
+
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():

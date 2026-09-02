@@ -263,7 +263,7 @@ if [[ "$STACK" == "dev" ]]; then
 
     if [[ -n "$next_pid" ]] && kill -0 "$next_pid" 2>/dev/null; then
         proc_cmd=$(tr '\0' ' ' < "/proc/$next_pid/cmdline" 2>/dev/null || echo "")
-        if [[ "$proc_cmd" =~ (node|next|npm) ]]; then
+        if [[ "$proc_cmd" =~ (node|next|npm|npx|run\.sh) ]]; then
             check "Next.js dev process" pass "PID ${next_pid} running"
         else
             check "Next.js dev process" warn "PID ${next_pid} alive but cmdline mismatch: ${proc_cmd:0:35}..."
@@ -664,38 +664,83 @@ fi
 header "Allegro API"
 client_id=$(load_env "ALLEGRO_CLIENT_ID")
 client_secret=$(load_env "ALLEGRO_CLIENT_SECRET")
-if [[ -z "$client_id" || -z "$client_secret" ]]; then
-    check "Status" info "not configured (missing credentials in .env)"
-elif [[ ! -f "$IQOQO_ROOT/.allegro_token.json" ]]; then
-    check "Status" warn "configured but not active (OAuth handshake pending)"
-else
-    token_age_hours=0
-    token_valid=false
-    if command -v python3 &>/dev/null; then
-        token_result=$(python3 -c "
-import json, os, time
+
+allegro_status_json=""
+if [[ "$STACK" == "dev" ]]; then
+    allegro_status_json=$(python3 -c "
+import urllib.request, json, os, sys
+for p in [${WEB_PORT}, 5000, 5001]:
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{p}/api/system/status')
+        r = urllib.request.urlopen(req, timeout=2)
+        res = json.loads(r.read().decode())
+        if res.get('success') and 'allegro' in res.get('data', {}):
+            print(json.dumps(res['data']['allegro']))
+            sys.exit(0)
+    except Exception:
+        pass
+
 try:
-    with open('$IQOQO_ROOT/.allegro_token.json') as f:
-        t = json.load(f)
-    if not t.get('access_token'):
-        print('EMPTY')
-    else:
-        age = time.time() - os.path.getmtime('$IQOQO_ROOT/.allegro_token.json')
-        print(int(age))
+    sys.path.insert(0, '$IQOQO_ROOT')
+    from app.utils.allegro import get_allegro_token_status
+    print(json.dumps(get_allegro_token_status()))
+except Exception as e:
+    cid = bool('$client_id')
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+" 2>/dev/null || echo "")
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        allegro_status_json=$(docker exec "$web_cname" python3 -c "
+import urllib.request, json, os, sys
+try:
+    req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
+    r = urllib.request.urlopen(req, timeout=2)
+    res = json.loads(r.read().decode())
+    if res.get('success') and 'allegro' in res.get('data', {}):
+        print(json.dumps(res['data']['allegro']))
+        sys.exit(0)
 except Exception:
-    print('ERROR')
-" 2>/dev/null || echo 'ERROR')
-        if [[ "$token_result" =~ ^[0-9]+$ ]]; then
-            token_valid=true
-            token_age_hours=$((token_result / 3600))
-        fi
+    pass
+
+try:
+    sys.path.insert(0, '/app')
+    from app.utils.allegro import get_allegro_token_status
+    print(json.dumps(get_allegro_token_status()))
+except Exception as e:
+    cid = bool('$client_id')
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+" 2>/dev/null || echo "")
     fi
-    if [[ "$token_valid" != true ]]; then
-        check "Status" warn "not active (placeholder or missing token, re-run: make allegro-auth <stack> USE_DOCKER=true)"
-    elif [[ "$token_age_hours" -gt 12 ]]; then
-        check "Status" warn "token expired (${token_age_hours}h old, re-run: make allegro-auth <stack> USE_DOCKER=true)"
+fi
+
+if [[ -z "$allegro_status_json" ]]; then
+    if [[ -z "$client_id" || -z "$client_secret" ]]; then
+        check "Status" info "not configured (missing credentials in .env)"
     else
-        check "Status" pass "active (token age: ${token_age_hours}h)"
+        check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
+    fi
+else
+    is_configured=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('configured', False))" 2>/dev/null || echo "False")
+    is_active=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('allegro_token_active', False))" 2>/dev/null || echo "False")
+    is_expired=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('is_expired', False))" 2>/dev/null || echo "False")
+    token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('token_age_hours') if d.get('token_age_hours') is not None else '')" 2>/dev/null || echo "")
+    reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null || echo "")
+
+    if [[ "$is_configured" != "True" ]]; then
+        check "Status" info "not configured (missing credentials in .env or Instance Settings)"
+    elif [[ "$is_active" == "True" ]]; then
+        if [[ -n "$token_age" ]]; then
+            check "Status" pass "active (token age: ${token_age}h)"
+        else
+            check "Status" pass "active"
+        fi
+    elif [[ "$is_expired" == "True" ]]; then
+        check "Status" warn "token expired (${token_age:-?}h old, re-authorize in Instance Settings)"
+    elif [[ "$reason" == "oauth_handshake_pending" ]]; then
+        check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
+    else
+        check "Status" warn "not active (OAuth handshake pending in Instance Settings)"
     fi
 fi
 
