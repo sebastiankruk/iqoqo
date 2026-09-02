@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status knowledge-sync
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status memory-presync knowledge-sync
 
 SHELL := /bin/bash
 
@@ -88,6 +88,10 @@ MYPY_FLAGS    ?=
 AI_ECHO       := @echo
 endif
 
+# Auto-detect project version from package.json (used by memory-presync for .context/ai-memory/)
+IQOQO_VERSION ?= $(shell python3 -c \
+  "import json; print(json.load(open('package.json')).get('version','unknown'))" 2>/dev/null)
+
 help:
 	@echo "Available targets:"
 	@echo ""
@@ -148,6 +152,10 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
+	@echo ""
+	@echo "Knowledge Sync:"
+	@echo "  knowledge-sync - Full memory sync: session + graphify/mykg/mempalace/codegraph (parallel)"
+	@echo "  memory-presync - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -265,7 +273,22 @@ graphify-index: .venv/bin/activate
 graphify-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/get_status.py
 
-knowledge-sync: codegraph-sync mempalace-index graphify-update mykg-update
+# Session sync: converts agy JSONL transcripts to Markdown before knowledge tools mine them.
+# Single-loop: scans brain dirs, filters to VERSION-matching sessions only, converts to MD.
+# Also auto-patches .iqoqo-mykg-scope.yaml so the ai-memory version pin stays current.
+# No external tools required — script lives in scripts/sync_agy_memory.sh.
+memory-presync:
+	$(AI_ECHO) "Syncing agy session transcripts → .context/ai-memory/$(IQOQO_VERSION)..."
+	@bash scripts/sync_agy_memory.sh $(IQOQO_VERSION)
+	$(AI_ECHO) "Patching .iqoqo-mykg-scope.yaml ai-memory version → $(IQOQO_VERSION)..."
+	@sed -i 's|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/$(IQOQO_VERSION)|g' .iqoqo-mykg-scope.yaml
+
+# Full knowledge sync: session presync followed by all 4 engines in parallel.
+# Replaces the manual: aimemsync + /iqoqo-graphify update + /iqoqo-mykg update
+#                    + /iqoqo-mempalace update + /iqoqo-codegraph update
+knowledge-sync: memory-presync
+	$(AI_ECHO) "Syncing all knowledge engines in parallel..."
+	@$(MAKE) -j4 codegraph-sync graphify-update mempalace-index mykg-update
 	$(AI_ECHO) "All knowledge engines synced."
 
 

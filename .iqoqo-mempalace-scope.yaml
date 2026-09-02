@@ -25,37 +25,13 @@
 #
 
 # Scopes mined under project mode (--mode projects --wing iqoqo)
+# Consolidated into high-level directory roots to avoid slow repeated process restarts.
 scopes:
-  # --- Documentation & Specs ---
-  - docs
-  - openspec/specs
+  # --- Project Code, Docs, Infrastructure (respects .gitignore) ---
+  - .
 
-  # --- Operational Notes (.context/notes/* via symlink to Dropbox) ---
-  - .context/notes/sre
-  - .context/notes/bugs
-  - .context/notes/code
-  - .context/notes/design
-  - .context/notes/dev
-  - .context/notes/marketing
-  - .context/notes/openspec
-  - .context/notes/plan
-  - .context/notes/review
-  - .context/notes/security
-  - .context/notes/tests
-  - .context/notes/tools
-  - .context/notes/notes
-
-  # --- Application Code & Infrastructure ---
-  - app
-  - frontend
-  - migrations
-  - deploy
-  - scripts
-  - shared
-  - tests
-  - Makefile
-  - docker-compose.yml
-  - docker-compose.prod.yml
+  # --- Operational Notes (.context/notes/*) ---
+  - .context/notes
 
 # Scopes mined under conversation mode (--mode convos --wing iqoqo)
 # Versioned AI memory subfolder auto-detected from package.json if left as .context/ai-memory

@@ -9,12 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **In-Repo AI Memory Presync**: Replaced external `~/.local/bin/` binaries with an in-repo `scripts/sync_agy_memory.sh` script featuring single-loop version-filtered transcript conversion, automated daemon/task exclusion, and automatic `.iqoqo-mykg-scope.yaml` version patching.
+- **AI Memory Sync BATS Test Suite**: Added 14 unit tests in `tests/bash/agy_memory_sync.bats` covering version filtering, myKG daemon prompt skipping, and scope YAML update idempotency.
 - **Wishlist Media Disambiguation**: Added `work_type` and `medium_type` traversal and serialization to `UserWorkIntent` response payloads in `app/api/items.py` and dynamic polymorphic media type badges (Music, BoardGame, Movie, Book) with appropriate aspect ratios and icons (e.g., turntable/disc icon for vinyl) in `frontend/components/collection/item-card.tsx` and `frontend/lib/media-badge.ts`.
 - **Wishlist Media Disambiguation Tests**: Added comprehensive backend unit tests in `tests/test_wishlist_media.py`, frontend utility tests in `frontend/__tests__/lib/media-badge.test.ts`, item card tests in `frontend/__tests__/components/collection/ItemCard.test.tsx`, and E2E scenario in `frontend/__tests__/e2e/wishlist_media_types.spec.ts`.
 
 ### Changed
 
+- **MemPalace Indexing Optimization**: Consolidated `.iqoqo-mempalace-scope.yaml` scopes from 24 fragmented subdirectories into high-level roots (`.` and `.context/notes`) and enhanced `scan_scope.py` with fast in-place directory pruning, reducing `make mempalace-index` execution time from ~50s down to ~4s (10x-15x speedup).
+- **Makefile Knowledge Synchronization**: Updated `make memory-presync` and `make knowledge-sync` targets for fully self-contained execution without external system dependencies.
+
 ### Fixed
+
+- **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
 
 ## [0.7.16] - 2026-08-23
 

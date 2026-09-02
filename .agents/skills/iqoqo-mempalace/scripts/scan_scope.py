@@ -190,28 +190,38 @@ def resolve_scopes(
                 )
         elif scope_path.is_dir():
             files = []
-            for item in scope_path.rglob("*"):
-                if item.is_file() and not should_exclude(str(item), exclude_patterns):
-                    # Skip common binary formats
-                    if item.suffix.lower() not in [
-                        ".png",
-                        ".jpg",
-                        ".jpeg",
-                        ".webp",
-                        ".gif",
-                        ".ico",
-                        ".svg",
-                        ".pyc",
-                        ".bin",
-                        ".tar",
-                        ".gz",
-                        ".zip",
-                    ]:
-                        files.append(str(item.relative_to(project_root)))
+            fast_prune_dirs = {
+                "node_modules", ".git", ".venv", ".next", "dist", "build",
+                "__pycache__", "mykg_sessions", ".mykg_sessions", "graphify-out",
+                ".pytest_cache", ".mypy_cache", ".ruff_cache", ".iqoqo-mempalace",
+                ".iqoqo-mykg", "instance", "data", "covers", "static/covers", "static/gallery"
+            }
+            skip_extensions = {
+                ".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".svg",
+                ".pyc", ".bin", ".tar", ".gz", ".zip"
+            }
+
+            for root, dirs, fnames in os.walk(scope_path):
+                dirs[:] = [
+                    d for d in dirs
+                    if d not in fast_prune_dirs
+                    and not should_exclude(str(Path(root) / d), exclude_patterns)
+                ]
+                for fn in fnames:
+                    item = Path(root) / fn
+                    if item.suffix.lower() in skip_extensions:
+                        continue
+                    if not should_exclude(str(item), exclude_patterns):
+                        try:
+                            files.append(str(item.relative_to(project_root)))
+                        except ValueError:
+                            files.append(str(item))
+
             if files:
+                display_path = "." if scope_path == project_root else str(scope_path.relative_to(project_root))
                 project_scopes.append(
                     {
-                        "path": str(scope_path.relative_to(project_root)),
+                        "path": display_path,
                         "type": "dir",
                         "mode": "projects",
                         "count": len(files),
@@ -227,9 +237,15 @@ def resolve_scopes(
             continue
 
         conv_files = []
-        for item in target_path.rglob("*.md"):
-            if item.is_file() and not should_exclude(str(item), exclude_patterns):
-                conv_files.append(str(item.relative_to(project_root)))
+        for root, _, fnames in os.walk(target_path):
+            for fn in fnames:
+                if fn.endswith(".md"):
+                    item = Path(root) / fn
+                    if not should_exclude(str(item), exclude_patterns):
+                        try:
+                            conv_files.append(str(item.relative_to(project_root)))
+                        except ValueError:
+                            conv_files.append(str(item))
 
         if conv_files:
             convos_scopes.append(
