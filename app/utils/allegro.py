@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT: int = 3
 _READ_TIMEOUT: int = 7
-_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "..", ".allegro_token.json")
 
 DEVICE_AUTH_URL = "https://allegro.pl/auth/oauth/device"
 TOKEN_URL = "https://allegro.pl/auth/oauth/token"
@@ -35,6 +34,108 @@ def get_allegro_user_agent() -> str:
     Format: ``{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)``
     """
     return f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
+
+
+def save_allegro_token(tokens: dict[str, Any]) -> None:
+    """Save Allegro OAuth token dictionary to cache and database."""
+    from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+    from app.core.cache import cache
+    from app.db.models import InstanceSettings
+
+    token_data = dict(tokens)
+    if "created_at" not in token_data:
+        token_data["created_at"] = time.time()
+
+    try:
+        cache.set("allegro_token_data", token_data, timeout=86400)
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to store Allegro token in cache: %s", e)
+
+    try:
+        InstanceSettings.set_value("ALLEGRO_TOKEN_DATA", token_data)
+    except (SQLAlchemyError, DBAPIError, RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to store Allegro token in InstanceSettings: %s", e)
+
+
+def load_allegro_token() -> dict[str, Any] | None:
+    """Load Allegro OAuth token dictionary from cache or database."""
+    from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+    from app.core.cache import cache
+    from app.db.models import InstanceSettings
+
+    try:
+        cached = cache.get("allegro_token_data")
+        if cached and isinstance(cached, dict) and cached.get("access_token"):
+            return cast(dict[str, Any], cached)
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to read Allegro token from cache: %s", e)
+
+    try:
+        db_token = InstanceSettings.get_value("ALLEGRO_TOKEN_DATA")
+        if db_token and isinstance(db_token, dict) and db_token.get("access_token"):
+            try:
+                cache.set("allegro_token_data", db_token, timeout=86400)
+            except (RuntimeError, KeyError, TypeError, ValueError, OSError):
+                pass
+            return cast(dict[str, Any], db_token)
+    except (SQLAlchemyError, DBAPIError, RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to read Allegro token from InstanceSettings: %s", e)
+
+    return None
+
+
+def has_allegro_user_token() -> bool:
+    """Return True if a User Context OAuth token is present in central store."""
+    tokens = load_allegro_token()
+    return bool(tokens and isinstance(tokens, dict) and tokens.get("access_token"))
+
+
+def get_allegro_token_status() -> dict[str, Any]:
+    """Check Allegro configuration and token freshness."""
+    from app.db.models import InstanceSettings
+
+    client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
+    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        return {
+            "configured": False,
+            "allegro_token_active": False,
+            "reason": "missing_credentials",
+            "token_age_hours": None,
+        }
+
+    tokens = load_allegro_token()
+    if not tokens or not isinstance(tokens, dict) or not tokens.get("access_token"):
+        return {
+            "configured": True,
+            "allegro_token_active": False,
+            "reason": "oauth_handshake_pending",
+            "token_age_hours": None,
+        }
+
+    created_at = tokens.get("created_at")
+    age_hours: float | None = None
+    if created_at:
+        try:
+            age_hours = round((time.time() - float(created_at)) / 3600.0, 1)
+        except (ValueError, TypeError):
+            age_hours = 0.0
+
+    expires_in = tokens.get("expires_in", 43200)
+    is_expired = (time.time() - float(created_at)) > float(expires_in) if created_at else False
+    is_active = not is_expired or bool(tokens.get("refresh_token"))
+
+    return {
+        "configured": True,
+        "allegro_token_active": is_active,
+        "is_expired": is_expired,
+        "token_age_hours": age_hours,
+        "has_refresh_token": bool(tokens.get("refresh_token")),
+        "reason": "active" if is_active else "token_expired",
+    }
 
 
 def initiate_device_flow(client_id: str, client_secret: str) -> dict[str, Any]:
@@ -68,8 +169,7 @@ def exchange_device_token(device_code: str, client_id: str, client_secret: str) 
 
     if response.ok:
         tokens = response.json()
-        with open(_TOKEN_FILE, "w", encoding="utf-8") as f:
-            json.dump(tokens, f)
+        save_allegro_token(tokens)
         return cast(dict[str, Any], tokens)
 
     # If not ok, it might be authorization_pending, slow_down, expired_token, etc.
@@ -93,18 +193,13 @@ def get_allegro_token() -> str | None:
 
     auth_headers = {"User-Agent": get_allegro_user_agent()}
 
-    # Check for User Context token from Authorization Code flow first
-    if os.path.isfile(_TOKEN_FILE):
+    # Check for User Context token from Authorization Code / Device flow first
+    tokens = load_allegro_token()
+    if tokens and isinstance(tokens, dict) and tokens.get("access_token"):
         try:
-            with open(_TOKEN_FILE, encoding="utf-8") as f:
-                tokens = json.load(f)
-
-            # Check if token needs refresh (if Allegro doesn't provide expires_at, assume 12h lifespan)
-            # Simplest approach: Always try to refresh if it fails, but here we can just return it
-            # and let the calling function handle 401 Unauthorized by triggering a refresh.
-            # To be safe, we'll try to refresh proactively if it's older than 11 hours.
-            file_mtime = os.path.getmtime(_TOKEN_FILE)
-            if time.time() - file_mtime > 11 * 3600:
+            created_at = tokens.get("created_at")
+            token_age = (time.time() - float(created_at)) if created_at else 0
+            if token_age > 11 * 3600 and tokens.get("refresh_token"):
                 auth_url = "https://allegro.pl/auth/oauth/token"
                 data = {"grant_type": "refresh_token", "refresh_token": tokens.get("refresh_token")}
                 record_outbound_telemetry("Allegro", auth_headers, url=auth_url)
@@ -117,15 +212,14 @@ def get_allegro_token() -> str | None:
                 )
                 response.raise_for_status()
                 new_tokens = response.json()
-                with open(_TOKEN_FILE, "w", encoding="utf-8") as wf:
-                    json.dump(new_tokens, wf)
+                save_allegro_token(new_tokens)
                 new_access_token = new_tokens.get("access_token")
                 return new_access_token if isinstance(new_access_token, str) else None
 
             access_token = tokens.get("access_token")
             return access_token if isinstance(access_token, str) else None
-        except (json.JSONDecodeError, OSError, KeyError) as e:
-            logger.warning("Failed to load or refresh User Context Allegro token from file: %s", e)
+        except (requests.RequestException, ValueError, KeyError, OSError) as e:
+            logger.warning("Failed to load or refresh User Context Allegro token from cache/DB: %s", e)
 
     # Fallback to Client Credentials
     try:
@@ -239,8 +333,8 @@ def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str
         except requests.exceptions.RequestException:
             pass  # Fall back to Listing if Catalog fails
 
-        # Step 2: Use Listing API (Public Marketplace Search) ONLY if catalog found nothing
-        if not candidates and os.path.isfile(_TOKEN_FILE):
+        # Step 2: Use Listing API (Public Marketplace Search) ONLY if catalog found nothing and user token is active
+        if not candidates and has_allegro_user_token():
             listing_url = "https://api.allegro.pl/offers/listing"
             listing_params = {"phrase": query}
             record_outbound_telemetry("Allegro", headers, url=listing_url)
