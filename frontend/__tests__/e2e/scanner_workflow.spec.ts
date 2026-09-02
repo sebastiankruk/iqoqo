@@ -190,4 +190,29 @@ test.describe("Scanner Workflow", () => {
     const identifierInput = page.locator("#manual-identifier");
     await expect(identifierInput).toHaveValue(timeoutBarcode);
   });
+
+  test("verifies policy mode selection and explanatory hints", async ({ page }) => {
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+
+    // Policy buttons
+    const shelfBtn = page.getByRole("button", { name: "Shelf", exact: true });
+    const wishlistBtn = page.getByRole("button", { name: "Wishlist", exact: true });
+    const catalogBtn = page.getByRole("button", { name: "Catalog Only", exact: true });
+
+    await expect(shelfBtn).toBeVisible();
+    await expect(wishlistBtn).toBeVisible();
+    await expect(catalogBtn).toBeVisible();
+
+    // Default policy is Shelf -> shows shelf hint
+    await expect(page.getByText("Adding directly to your personal shelf")).toBeVisible();
+
+    // Switch to Catalog Only
+    await catalogBtn.click();
+    await expect(page.getByText("Adding to shared catalog without adding to shelf")).toBeVisible();
+
+    // Switch to Wishlist
+    await wishlistBtn.click();
+    await expect(page.getByText("Adding to your wishlist")).toBeVisible();
+  });
 });

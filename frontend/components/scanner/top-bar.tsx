@@ -17,6 +17,7 @@
 
 import { ArrowLeft, Zap } from "lucide-react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
 import { MEDIA_REGISTRY } from "@/lib/media";
 
@@ -31,11 +32,13 @@ interface TopBarProps {
   onToggleFlash?: () => void;
 }
 
-const POLICY_OPTIONS = [
-  { value: "inventory", label: "Inventory" },
-  { value: "wishlist", label: "Wishlist" },
-  { value: "catalog", label: "Catalog" },
-] as const;
+const POLICY_KEYS: Record<"inventory" | "wishlist" | "catalog", { labelKey: string; hintKey: string }> = {
+  inventory: { labelKey: "topBar.policyShelf", hintKey: "topBar.policyShelfHint" },
+  wishlist: { labelKey: "topBar.policyWishlist", hintKey: "topBar.policyWishlistHint" },
+  catalog: { labelKey: "topBar.policyCatalog", hintKey: "topBar.policyCatalogHint" },
+};
+
+const POLICY_ORDER: readonly ("inventory" | "wishlist" | "catalog")[] = ["inventory", "wishlist", "catalog"];
 
 /**
  * Scanner page top overlay bar with format and policy selector.
@@ -46,28 +49,31 @@ const POLICY_OPTIONS = [
 export function TopBar({
   currentFormat,
   setFormat,
-  currentPolicy,
+  currentPolicy = "inventory",
   setPolicy,
   onCancel,
   hasFlash,
   isFlashOn,
   onToggleFlash,
 }: TopBarProps) {
+  const t = useTranslations("scanner");
+  const activePolicyConfig = POLICY_KEYS[currentPolicy] || POLICY_KEYS.inventory;
+
   return (
     <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
       <div className="flex items-center justify-between bg-black/40 px-4 py-4 backdrop-blur-sm">
         <Link
           href="/"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/20"
-          aria-label="Go back to library"
+          aria-label={t("topBar.backAria")}
           onClick={onCancel}
         >
           <ArrowLeft className="h-5 w-5 text-white" />
         </Link>
 
         <div className="flex flex-col items-center text-center">
-          <h1 className="text-base font-bold tracking-tight text-white sm:text-lg">Scan New Item</h1>
-          <span className="mt-0.5 text-[11px] text-white/50">Position barcode or cover within the frame</span>
+          <h1 className="text-base font-bold tracking-tight text-white sm:text-lg">{t("topBar.title")}</h1>
+          <span className="mt-0.5 text-[11px] text-white/50">{t("topBar.subtitle")}</span>
         </div>
 
         {hasFlash ? (
@@ -76,7 +82,7 @@ export function TopBar({
             className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
               isFlashOn ? "bg-primary text-primary-foreground" : "bg-white/10 text-white hover:bg-white/20"
             }`}
-            aria-label="Toggle flash"
+            aria-label={t("topBar.flashToggleAria")}
           >
             <Zap className={`h-5 w-5 ${isFlashOn ? "fill-current" : ""}`} />
           </button>
@@ -86,18 +92,20 @@ export function TopBar({
       </div>
 
       {(setFormat || currentPolicy || setPolicy) && (
-        <div className="flex flex-col bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5 gap-3">
+        <div className="flex flex-col bg-black/20 px-4 py-3 backdrop-blur-sm border-b border-white/5 gap-2.5">
           {setFormat && (
             <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar">
               {SCAN_FORMATS.map(f => {
                 const meta = MEDIA_REGISTRY[f];
+                if (!meta) return null;
                 const Icon = meta.icon;
+                const formatLabel = t.has?.(`formats.${f}`) ? t(`formats.${f}`) : meta.label;
                 return (
                   <button
                     key={f}
                     onClick={() => setFormat(f)}
-                    title={meta.label}
-                    aria-label={meta.label}
+                    title={formatLabel}
+                    aria-label={formatLabel}
                     className={`flex items-center justify-center p-3 sm:px-3 sm:py-1.5 sm:gap-2 rounded-full border transition-all ${
                       currentFormat === f
                         ? "bg-primary text-primary-foreground border-primary shadow-lg"
@@ -105,7 +113,7 @@ export function TopBar({
                     }`}
                   >
                     <Icon className="h-5 w-5 sm:h-3.5 sm:w-3.5" />
-                    <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{meta.label}</span>
+                    <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">{formatLabel}</span>
                   </button>
                 );
               })}
@@ -113,20 +121,31 @@ export function TopBar({
           )}
 
           {(currentPolicy || setPolicy) && (
-            <div className="flex justify-center items-center gap-1.5 border-t border-white/10 pt-2">
-              {POLICY_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setPolicy?.(opt.value)}
-                  className={`px-3 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
-                    (currentPolicy ?? "inventory") === opt.value
-                      ? "bg-white text-black border-white shadow-md"
-                      : "bg-white/10 text-white/70 border-white/10 hover:bg-white/20 hover:text-white"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="flex flex-col items-center gap-1.5 border-t border-white/10 pt-2">
+              <div className="flex justify-center items-center gap-1.5">
+                {POLICY_ORDER.map(policyValue => {
+                  const conf = POLICY_KEYS[policyValue];
+                  const label = t(conf.labelKey);
+                  const isSelected = currentPolicy === policyValue;
+                  return (
+                    <button
+                      key={policyValue}
+                      onClick={() => setPolicy?.(policyValue)}
+                      aria-pressed={isSelected}
+                      className={`px-3.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-full border transition-all ${
+                        isSelected
+                          ? "bg-white text-black border-white shadow-md font-extrabold"
+                          : "bg-white/10 text-white/70 border-white/10 hover:bg-white/20 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-[10px] text-white/60 text-center tracking-wide font-medium">
+                {t(activePolicyConfig.hintKey)}
+              </span>
             </div>
           )}
         </div>

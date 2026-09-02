@@ -98,15 +98,28 @@ describe("TopBar", () => {
     expect(screen.queryByLabelText("Toggle flash")).not.toBeInTheDocument();
   });
 
-  it("policy selector changes active policy", () => {
+  it("renders policy selector with Shelf, Wishlist, Catalog Only buttons and active hint", () => {
     const setPolicy = vi.fn();
     render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
 
-    const wishlistBtn = screen.getByText("Wishlist");
-    expect(wishlistBtn).toBeInTheDocument();
+    expect(screen.getByText("Shelf")).toBeInTheDocument();
+    expect(screen.getByText("Wishlist")).toBeInTheDocument();
+    expect(screen.getByText("Catalog Only")).toBeInTheDocument();
+    expect(screen.getByText("Adding directly to your personal shelf")).toBeInTheDocument();
 
+    const wishlistBtn = screen.getByText("Wishlist");
     fireEvent.click(wishlistBtn);
     expect(setPolicy).toHaveBeenCalledWith("wishlist");
+
+    const catalogBtn = screen.getByText("Catalog Only");
+    fireEvent.click(catalogBtn);
+    expect(setPolicy).toHaveBeenCalledWith("catalog");
+  });
+
+  it("displays catalog policy hint when policy is catalog", () => {
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="catalog" />);
+
+    expect(screen.getByText("Adding to shared catalog without adding to shelf")).toBeInTheDocument();
   });
 
   it("back-link invokes cancel callback", () => {

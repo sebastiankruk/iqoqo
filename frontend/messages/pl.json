@@ -386,6 +386,44 @@
     "skipAndEnterManually": "Pomiń i wprowadź ręcznie"
   },
   "scanner": {
+    "topBar": {
+      "title": "Zeskanuj nową pozycję",
+      "subtitle": "Umieść kod kreskowy lub okładkę w kadrze",
+      "backAria": "Wróć do biblioteki",
+      "flashToggleAria": "Przełącz latarkę",
+      "policyShelf": "Półka",
+      "policyWishlist": "Lista życzeń",
+      "policyCatalog": "Tylko katalog",
+      "policyShelfHint": "Dodawanie bezpośrednio na Twoją półkę",
+      "policyWishlistHint": "Dodawanie do listy życzeń",
+      "policyCatalogHint": "Dodawanie do wspólnego katalogu bez dodawania na półkę"
+    },
+    "formats": {
+      "book": "Książka",
+      "audiobook": "Audiobook",
+      "music": "Muzyka",
+      "movie": "Film",
+      "board_game": "Gra planszowa",
+      "puzzle": "Puzzle"
+    },
+    "disambiguation": {
+      "title": "O którą pozycję chodzi?",
+      "inCollection": "W kolekcji",
+      "footerHint": "Znaleziono kilka pasujących pozycji w bazie. Wybierz właściwą, aby kontynuować.",
+      "closeAria": "Zamknij"
+    },
+    "successCard": {
+      "found": "Pomyślnie znaleziono!",
+      "addToShelf": "Dodaj na półkę",
+      "addToWishlist": "Dodaj do listy życzeń",
+      "addToCatalog": "Dodaj do katalogu",
+      "adding": "Dodawanie...",
+      "scanAnother": "Skanuj kolejną",
+      "wrongItemEnterManually": "Niewłaściwa pozycja? Wprowadź ręcznie",
+      "addedToShelf": "„{title}” dodano do Twojej biblioteki!",
+      "addedToWishlist": "„{title}” dodano do listy życzeń!",
+      "addedToCatalog": "„{title}” dodano do katalogu!"
+    },
     "cameraCapture": {
       "snapCover": "Zrób zdjęcie okładki",
       "taskTimedOut": "Upłynął limit czasu. Spróbuj ponownie lub wprowadź dane ręcznie.",
