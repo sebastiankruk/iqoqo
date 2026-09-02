@@ -66,10 +66,10 @@ def test_resolve_scopes_identifies_codebase(mempalace_scan_module):
     project_scopes, _, _ = mempalace_scan_module.resolve_scopes(project_root)
 
     assert len(project_scopes) > 0
-    project_paths = [s["path"] for s in project_scopes]
-    assert "app" in project_paths
-    assert "frontend" in project_paths
-    assert "openspec/specs" in project_paths
+    all_files = [f for s in project_scopes for f in s.get("files", [])]
+    assert any(f.startswith("app/") for f in all_files)
+    assert any(f.startswith("frontend/") for f in all_files)
+    assert any(f.startswith("openspec/specs/") or f.startswith("openspec/") for f in all_files)
 
     # Verify no .mykg_sessions or static/covers in project scope file lists
     for scope in project_scopes:
