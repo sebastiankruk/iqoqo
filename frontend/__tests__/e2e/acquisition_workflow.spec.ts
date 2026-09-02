@@ -160,7 +160,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       await expect(page.getByText("Test Book")).toBeVisible();
 
       // 4. Add to Collection
-      await page.getByRole("button", { name: "Add to Library" }).click();
+      await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
 
       // Verify Success Route
       await expect(page).toHaveURL(/.*\/item\/123/);
