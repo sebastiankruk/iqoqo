@@ -117,7 +117,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("Tap to start camera")).toBeVisible();
 
     // 6. Select the Game format from the top pill menu
-    await page.getByRole("button", { name: "Game" }).click();
+    await page.getByRole("button", { name: /Board Game|Game/i }).click();
 
     // 7. Switch to the Manual Search tab
     await page.getByRole("button", { name: "Manual Search" }).click();
@@ -133,7 +133,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("Dice Rolling")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to Library" }).click();
+    await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Catan" added to your library!/i)).toBeVisible();
@@ -215,7 +215,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await page.goto("/scan");
 
     // 4. Select Game format
-    await page.getByRole("button", { name: "Game" }).click();
+    await page.getByRole("button", { name: /Board Game|Game/i }).click();
 
     // 5. Switch to Manual Search
     await page.getByRole("button", { name: "Manual Search" }).click();
@@ -230,7 +230,7 @@ test.describe("Board Game Ingestion Workflow", () => {
     await expect(page.getByText("2-5 players")).toBeVisible();
 
     // 8. Add to collection
-    await page.getByRole("button", { name: "Add to Library" }).click();
+    await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
 
     // 9. Verify success
     await expect(page.getByText(/"Carcassonne" added to your library!/i)).toBeVisible();
