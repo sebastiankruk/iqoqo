@@ -1,7 +1,9 @@
 # policy-scanning Specification
 
 ## Purpose
-TBD - created by archiving change scanner-ux-policy-scanning. Update Purpose after archive.
+
+Define scanner ingestion policies to dictate whether scanned items resolve into physical inventory, user wishlist intents, or purely global catalog metadata.
+
 ## Requirements
 ### Requirement: Policy-Based Scanner Resolution
 
