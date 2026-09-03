@@ -28,8 +28,12 @@ set -e
 # already exists, so this is safe to run on every container start.
 mkdir -p "${HOME}/.config/rclone" 2>/dev/null || true
 chmod 0700 "${HOME}/.config/rclone" 2>/dev/null || true
-if [ -f "${HOME}/.config/rclone/rclone.conf" ]; then
-  chmod 0600 "${HOME}/.config/rclone/rclone.conf" 2>/dev/null || true
+RCLONE_CONF="${HOME}/.config/rclone/rclone.conf"
+if [ -e "${RCLONE_CONF}" ]; then
+  chmod 0600 "${RCLONE_CONF}" 2>/dev/null || true
+  if [ ! -r "${RCLONE_CONF}" ]; then
+    echo "WARNING: ${RCLONE_CONF} exists but is not readable by UID $(id -u). Cloud backup and restore jobs may fail. Check host file permissions (recommend chmod 0640 or chown UID 10001)." >&2
+  fi
 fi
 
 exec "$@"

@@ -181,6 +181,51 @@ def exchange_device_token(device_code: str, client_id: str, client_secret: str) 
     return cast(dict[str, Any], err)
 
 
+def _refresh_user_token(tokens: dict[str, Any], client_id: str, client_secret: str, auth_headers: dict[str, str]) -> str | None:
+    """Refresh user context OAuth token under distributed lock."""
+    from app.core.cache import cache
+
+    with cache.lock("allegro_refresh_lock", timeout=30):
+        # Re-read token inside lock to verify another worker hasn't already refreshed it
+        fresh_tokens = load_allegro_token()
+        fresh_created_at = fresh_tokens.get("created_at") if isinstance(fresh_tokens, dict) else None
+        fresh_age = (time.time() - float(fresh_created_at)) if fresh_created_at else None
+        if (
+            fresh_tokens
+            and isinstance(fresh_tokens, dict)
+            and fresh_age is not None
+            and fresh_age <= 11 * 3600
+            and fresh_tokens.get("access_token")
+        ):
+            access_token = fresh_tokens.get("access_token")
+            return access_token if isinstance(access_token, str) else None
+
+        current_refresh_token = (
+            fresh_tokens.get("refresh_token")
+            if isinstance(fresh_tokens, dict) and fresh_tokens.get("refresh_token")
+            else tokens.get("refresh_token")
+        )
+        if not current_refresh_token:
+            fallback_token = (fresh_tokens or tokens).get("access_token") if isinstance(fresh_tokens or tokens, dict) else None
+            return fallback_token if isinstance(fallback_token, str) else None
+
+        auth_url = "https://allegro.pl/auth/oauth/token"
+        data = {"grant_type": "refresh_token", "refresh_token": current_refresh_token}
+        record_outbound_telemetry("Allegro", auth_headers, url=auth_url)
+        response = requests.post(
+            auth_url,
+            auth=(client_id, client_secret),
+            data=data,
+            headers=auth_headers,
+            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+        )
+        response.raise_for_status()
+        new_tokens = response.json()
+        save_allegro_token(new_tokens)
+        new_access_token = new_tokens.get("access_token")
+        return new_access_token if isinstance(new_access_token, str) else None
+
+
 def get_allegro_token() -> str | None:
     """Authenticate with Allegro using User Context (if available) or Client Credentials flow."""
     from app.db.models import InstanceSettings
@@ -200,21 +245,7 @@ def get_allegro_token() -> str | None:
             created_at = tokens.get("created_at")
             token_age = (time.time() - float(created_at)) if created_at else 0
             if token_age > 11 * 3600 and tokens.get("refresh_token"):
-                auth_url = "https://allegro.pl/auth/oauth/token"
-                data = {"grant_type": "refresh_token", "refresh_token": tokens.get("refresh_token")}
-                record_outbound_telemetry("Allegro", auth_headers, url=auth_url)
-                response = requests.post(
-                    auth_url,
-                    auth=(client_id, client_secret),
-                    data=data,
-                    headers=auth_headers,
-                    timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
-                )
-                response.raise_for_status()
-                new_tokens = response.json()
-                save_allegro_token(new_tokens)
-                new_access_token = new_tokens.get("access_token")
-                return new_access_token if isinstance(new_access_token, str) else None
+                return _refresh_user_token(tokens, client_id, client_secret, auth_headers)
 
             access_token = tokens.get("access_token")
             return access_token if isinstance(access_token, str) else None

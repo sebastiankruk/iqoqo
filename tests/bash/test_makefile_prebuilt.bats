@@ -73,7 +73,7 @@ teardown() {
 @test "make prod start prebuilt executes without host python or node" {
   run make prod start prebuilt
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "Deploying iqoqo-prod (prebuilt)..." ]]
+  [[ "$output" =~ "Deploying iqoqo (prebuilt)..." ]]
   [[ "$output" =~ "Project version:" ]]
   [[ "$output" =~ "Prebuilt tag: prod" ]]
 

@@ -66,3 +66,30 @@ teardown() {
   run bash "${ENTRYPOINT}" sh -c "exit 42"
   [ "${status}" -eq 42 ]
 }
+
+@test "entrypoint warns when rclone.conf is not readable" {
+  mkdir -p "${HOME}/.config/rclone"
+  touch "${HOME}/.config/rclone/rclone.conf"
+  chmod 0000 "${HOME}/.config/rclone/rclone.conf"
+
+  # Create mock chmod to prevent chmod 0600 from making the file readable
+  MOCK_BIN="${TEST_TEMP_DIR}/mock-bin"
+  mkdir -p "${MOCK_BIN}"
+  printf '#!/bin/sh\nexit 1\n' > "${MOCK_BIN}/chmod"
+  chmod +x "${MOCK_BIN}/chmod"
+
+  PATH="${MOCK_BIN}:${PATH}" run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "WARNING:" ]]
+  [[ "${output}" =~ "not readable" ]]
+}
+
+@test "entrypoint does not warn when rclone.conf is readable" {
+  mkdir -p "${HOME}/.config/rclone"
+  touch "${HOME}/.config/rclone/rclone.conf"
+  chmod 0600 "${HOME}/.config/rclone/rclone.conf"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ ! "${output}" =~ "WARNING:" ]]
+}

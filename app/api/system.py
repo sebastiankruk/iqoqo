@@ -143,6 +143,7 @@ def get_config():
 
 
 @api_bp.route("/system/status", methods=["GET"])
+@require_auth
 def get_system_status():
     """Return system health and integration status (e.g., Allegro token freshness)."""
     from app.utils.allegro import get_allegro_token_status

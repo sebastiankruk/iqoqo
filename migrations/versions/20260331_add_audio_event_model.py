@@ -16,7 +16,7 @@
 """Add audio event-based models to catalog schema
 
 Revision ID: 20260331_add_audio_event_model
-Revises: 20260331_frbr_catalog_schema
+Revises: 20260331_move_frbr_to_catalog_schema
 Create Date: 2026-03-31 12:00:00.000000
 
 Creates the following tables in the ``catalog`` schema:
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260331_add_audio_event_model"
-down_revision = "20260331_frbr_catalog_schema"
+down_revision = "20260331_move_frbr_to_catalog_schema"
 branch_labels = None
 depends_on = None
 
