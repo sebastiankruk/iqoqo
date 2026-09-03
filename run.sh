@@ -803,6 +803,12 @@ except Exception:
         printf '{}\n' > ".allegro_token.json"
     fi
 
+    # Ensure rclone.conf is a regular file before bind-mounting
+    if [ ! -f "$HOME/.config/rclone/rclone.conf" ]; then
+        mkdir -p "$HOME/.config/rclone"
+        touch "$HOME/.config/rclone/rclone.conf"
+    fi
+
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
     if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then
         echo "❌ Error: Failed to start full stack for $COMPOSE_PROJECT_NAME."
