@@ -13,18 +13,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# Override file: pull pre-built images from GitHub Container Registry
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up
+# Override file: pull pre-built images from GitHub Container Registry or local tags
+# Usage: docker compose -f docker-compose.prebuilt.yml up -d
 # Note: Requires Docker Compose v2.24+
+
+name: ${COMPOSE_PROJECT_NAME:-iqoqo}
+
+include:
+  - docker-compose.yml
+
 services:
   web:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-frontend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-frontend:${APP_VERSION:-preview}
     build: !reset null

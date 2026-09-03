@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status memory-presync knowledge-sync
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status memory-presync knowledge-sync version
 
 SHELL := /bin/bash
 
@@ -53,7 +53,7 @@ ifeq ($(MODE),preview)
   USE_DOCKER ?= true
 endif
 ifeq ($(MODE),prod)
-  COMPOSE_PROJECT  = iqoqo
+  COMPOSE_PROJECT  = iqoqo-prod
   ifneq ($(wildcard .env.prod),)
     COMPOSE_ENV_FILE = .env.prod
   else
@@ -88,9 +88,9 @@ MYPY_FLAGS    ?=
 AI_ECHO       := @echo
 endif
 
-# Auto-detect project version from package.json (used by memory-presync for .context/ai-memory/)
-IQOQO_VERSION ?= $(shell python3 -c \
-  "import json; print(json.load(open('package.json')).get('version','unknown'))" 2>/dev/null)
+# Auto-detect project version from package.json or pyproject.toml without requiring host python
+IQOQO_VERSION ?= $(shell (grep -m 1 '"version":' package.json 2>/dev/null | cut -d '"' -f 4) || (grep -m 1 'version = ' pyproject.toml 2>/dev/null | cut -d '"' -f 2) || echo "unknown")
+PREBUILT_TAG ?= $(if $(APP_VERSION),$(APP_VERSION),$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,latest)))
 
 help:
 	@echo "Available targets:"
@@ -341,10 +341,25 @@ clone:
 	fi
 	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
+ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
 start:
-	@mkdir -p $(HOME)/.config/rclone
+	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
+	@echo "Project version: $(IQOQO_VERSION)"
+	@echo "Prebuilt tag: $(PREBUILT_TAG)"
+	@docker image prune -f --filter "dangling=true"
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+else
+start:
+	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Starting $(MODE) environment..."
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
+endif
+
+version:
+	@echo "Project version: $(IQOQO_VERSION)"
+	@echo "Prebuilt tag: $(PREBUILT_TAG)"
 
 stop:
 	@echo "Stopping $(MODE) environment..."
