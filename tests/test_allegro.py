@@ -234,3 +234,28 @@ def test_get_allegro_token_status(mock_load):
             assert st["is_expired"] is False
             assert st["token_age_hours"] == 1.0
             assert st["reason"] == "active"
+
+
+@patch("app.utils.allegro.requests.post")
+@patch("app.utils.allegro.load_allegro_token")
+def test_get_allegro_token_refresh_concurrency_double_check(mock_load, mock_post):
+    """Test that if another worker refreshed token during lock acquisition, refresh call is bypassed."""
+    # First call to load_allegro_token returns old token, second call inside lock returns fresh token
+    old_token = {
+        "access_token": "old_token",
+        "refresh_token": "ref_old",
+        "created_at": 1000000000,
+    }
+    refreshed_by_other_worker = {
+        "access_token": "fresh_worker_token",
+        "refresh_token": "ref_fresh",
+        "created_at": 1000000000 + (12 * 3600),  # Just refreshed
+    }
+    mock_load.side_effect = [old_token, refreshed_by_other_worker]
+
+    with patch("time.time", return_value=1000000000 + (12 * 3600)):
+        with patch.dict("os.environ", {"ALLEGRO_CLIENT_ID": "test_id", "ALLEGRO_CLIENT_SECRET": "test_secret"}):
+            token = get_allegro_token()
+            assert token == "fresh_worker_token"
+            # Refresh HTTP request was bypassed!
+            mock_post.assert_not_called()

@@ -53,7 +53,7 @@ ifeq ($(MODE),preview)
   USE_DOCKER ?= true
 endif
 ifeq ($(MODE),prod)
-  COMPOSE_PROJECT  = iqoqo-prod
+  COMPOSE_PROJECT  = iqoqo
   ifneq ($(wildcard .env.prod),)
     COMPOSE_ENV_FILE = .env.prod
   else

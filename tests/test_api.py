@@ -133,9 +133,14 @@ def test_config(client):
     assert data["error"] is None
 
 
-def test_system_status(client):
-    """Test the system status endpoint returns expected envelope and fields."""
-    response = client.get("/api/system/status")
+def test_system_status(client, normal_user_headers):
+    """Test the system status endpoint requires authentication and returns expected envelope."""
+    # 1. Unauthenticated request must return 401 Unauthorized
+    unauth_response = client.get("/api/system/status")
+    assert unauth_response.status_code == 401
+
+    # 2. Authenticated request succeeds
+    response = client.get("/api/system/status", headers=normal_user_headers)
     assert response.status_code == 200
     data = response.json
     assert data["success"] is True
