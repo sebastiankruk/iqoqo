@@ -45,4 +45,16 @@ describe("auth-exchange route handler", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost:3000/");
   });
+
+  it("respects x-forwarded-host and x-forwarded-proto headers", async () => {
+    const req = new Request("http://internal-node:3000/api/auth-exchange?token=abc123", {
+      headers: {
+        "x-forwarded-host": "pre.iqoqo.cc:8000",
+        "x-forwarded-proto": "http",
+      },
+    });
+    const res = await GET(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://pre.iqoqo.cc:8000/");
+  });
 });

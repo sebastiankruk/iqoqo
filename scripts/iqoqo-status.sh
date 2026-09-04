@@ -436,7 +436,10 @@ else
     if [[ -n "$worker_cname" ]]; then
         if docker exec "$worker_cname" python3 -c "
 import os, redis
-r = redis.Redis.from_url(os.environ['REDIS_URL'])
+url = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+for h in ['localhost', '127.0.0.1']:
+    url = url.replace(f'@{h}:', '@redis:').replace(f'//{h}:', '//redis:')
+r = redis.Redis.from_url(url)
 r.ping()
 " 2>/dev/null; then
             check "Broker" pass "connected to Redis"

@@ -19,6 +19,23 @@ Before branching a release, complete the following verification steps:
 - [ ] **Spec Synchronization**: Ensure all active OpenSpec changes have synced their delta specs to `openspec/specs/`.
 - [ ] **CHANGELOG Finalization**: Finalize the version section in `docs/CHANGELOG.md` with the release date (`## [x.y.z] - YYYY-MM-DD`).
 - [ ] **Version Bumps**: Synchronize `version` strings in `pyproject.toml` and `frontend/package.json`.
+- [ ] **Pre-Release Docker Image Validation**: Build local container images and verify the prebuilt deployment in a test environment (e.g., `/opt/pre.iqoqo`) before merging to `main`:
+
+  ```bash
+  # 1. Build backend, frontend, and nginx images locally with preview tag:
+  make docker-build-preview
+  # (or: ./scripts/build_docker_images.sh --tag <version>)
+
+  # 2. Test launch in isolated preview directory:
+  cd /opt/pre.iqoqo
+  COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --env-file .env -f docker-compose.prebuilt.yml up -d
+
+  # 3. Clone production database and media assets if verifying production parity:
+  make clone src_host=user@remote-ip src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo dst_name=preview
+
+  # 4. Verify health:
+  make status STACK=preview
+  ```
 
 ## How to Create a New Release
 
@@ -48,5 +65,5 @@ Upon PR merge to `main`, GitHub Actions automatically:
 
 - Reads the version from `pyproject.toml`.
 - Extracts the release notes from `docs/CHANGELOG.md`.
-- Builds and pushes `iqoqo-backend` and `iqoqo-frontend` images to GHCR.
+- Builds and pushes `iqoqo-backend`, `iqoqo-frontend`, and `iqoqo-nginx` images to GHCR.
 - Creates the Git Tag (e.g., `v0.7.11`) and formal GitHub Release.

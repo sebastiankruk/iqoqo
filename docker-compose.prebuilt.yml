@@ -21,15 +21,35 @@ name: ${COMPOSE_PROJECT_NAME:-iqoqo}
 
 include:
   - docker-compose.yml
+  - docker-compose.monitoring.yml
 
 services:
   web:
     image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
+    volumes: !override
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+      - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
 
   worker:
     image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
+    volumes: !override
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+      - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
+
+  nginx:
+    image: ${IMAGE_PREFIX:-}iqoqo-nginx:${APP_VERSION:-preview}
+    build: !reset null
+    volumes: !override
+      - ./app/static/covers:/usr/share/nginx/html/covers:ro
+      - ./app/static/gallery:/usr/share/nginx/html/gallery:ro
 
   frontend:
     image: ${IMAGE_PREFIX:-}iqoqo-frontend:${APP_VERSION:-preview}

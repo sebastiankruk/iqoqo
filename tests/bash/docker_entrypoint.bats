@@ -93,3 +93,21 @@ teardown() {
   [ "${status}" -eq 0 ]
   [[ ! "${output}" =~ "WARNING:" ]]
 }
+
+@test "entrypoint rewrites localhost database and redis URLs to docker service names" {
+  DATABASE_URL="postgresql://iqoqo:pass@localhost:5432/iqoqo" \
+  REDIS_URL="redis://localhost:6379/0" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
+  [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
+}
+
+@test "entrypoint rewrites 127.0.0.1 database and redis URLs to docker service names" {
+  DATABASE_URL="postgresql://iqoqo:pass@127.0.0.1:5432/iqoqo" \
+  REDIS_URL="redis://127.0.0.1:6379/0" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
+  [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
+}

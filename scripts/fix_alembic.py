@@ -82,6 +82,11 @@ def fix_alembic_version():
             if cur.rowcount > 0:
                 print(f"  Reconciled legacy migration identifier: {old_rev} -> {new_rev}")
 
+        # Ensure inventory.items has collection_status column if the table exists
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'inventory' AND table_name = 'items');")
+        if cur.fetchone()[0]:
+            cur.execute("ALTER TABLE inventory.items ADD COLUMN IF NOT EXISTS collection_status VARCHAR(50);")
+
         print("✅ Fix applied successfully!")
 
         cur.close()
