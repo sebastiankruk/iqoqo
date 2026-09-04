@@ -107,6 +107,46 @@ describe("FeedbackModal", () => {
     expect(await screen.findByText("Upload failed")).toBeInTheDocument();
     expect(screen.getByText("Send feedback")).toBeInTheDocument();
   });
+
+  it("shows error when more than 5 screenshots are selected", () => {
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+    const files = Array.from({ length: 6 }, (_, i) => new File(["data"], `shot${i}.png`, { type: "image/png" }));
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files } });
+
+    expect(screen.getByText("Maximum 5 screenshots allowed per ticket.")).toBeInTheDocument();
+  });
+
+  it("shows error when an attached file exceeds 10MB", () => {
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+    const bigFile = new File(["dummy"], "large-screenshot.png", { type: "image/png" });
+    Object.defineProperty(bigFile, "size", { value: 11 * 1024 * 1024 });
+
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [bigFile] } });
+
+    expect(screen.getByText('"large-screenshot.png" exceeds the 10MB limit.')).toBeInTheDocument();
+  });
+
+  it("sends timeout of 120,000ms with feedback submission", async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } } as any);
+    render(<FeedbackModal open={true} onOpenChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Describe the issue or idea..."), {
+      target: { value: "Test timeout parameter" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/feedback",
+        expect.any(FormData),
+        expect.objectContaining({ timeout: 120_000 })
+      );
+    });
+  });
 });
 
 describe("FeedbackDetailModal", () => {
