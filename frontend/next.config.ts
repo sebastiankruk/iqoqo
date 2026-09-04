@@ -43,6 +43,12 @@ const nextConfig: NextConfig = {
 
   allowedDevOrigins: ["dev.iqoqo.cc", "*.iqoqo.cc"],
 
+  // Increase Next.js proxy body size and timeout for multi-attachment uploads
+  experimental: {
+    proxyClientMaxBodySize: "60mb",
+    proxyTimeout: 120_000,
+  },
+
   /**
    * Rewrites for API and other requests.
    *

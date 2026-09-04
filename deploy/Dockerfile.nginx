@@ -30,7 +30,8 @@ RUN mkdir -p /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # Override core nginx.conf to load the OTel module and configure telemetry.
-# The virtual host routing logic (deploy/nginx.conf) is mounted at runtime via
-# docker-compose.yml into /etc/nginx/conf.d/default.conf and included
-# automatically by the `include /etc/nginx/conf.d/*.conf` directive below.
 COPY deploy/nginx-main.conf /etc/nginx/nginx.conf
+
+# Copy default virtual host routing logic so the container is self-contained.
+# Can still be overridden at runtime via volume mount if custom routing is desired.
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf

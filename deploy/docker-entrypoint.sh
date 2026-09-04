@@ -36,4 +36,38 @@ if [ -e "${RCLONE_CONF}" ]; then
   fi
 fi
 
+# Auto-rewrite localhost database and redis URLs to docker service names
+if [ -n "$DATABASE_URL" ]; then
+  case "$DATABASE_URL" in
+    *@localhost:*)
+      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@localhost:/@db:/')
+      ;;
+    *@127.0.0.1:*)
+      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@127.0.0.1:/@db:/')
+      ;;
+    *//localhost:*)
+      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/\/\/localhost:/\/\/db:/')
+      ;;
+    *//127.0.0.1:*)
+      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/\/\/127.0.0.1:/\/\/db:/')
+      ;;
+  esac
+fi
+if [ -n "$REDIS_URL" ]; then
+  case "$REDIS_URL" in
+    *@localhost:*)
+      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@localhost:/@redis:/')
+      ;;
+    *@127.0.0.1:*)
+      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@127.0.0.1:/@redis:/')
+      ;;
+    *//localhost:*)
+      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/\/\/localhost:/\/\/redis:/')
+      ;;
+    *//127.0.0.1:*)
+      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/\/\/127.0.0.1:/\/\/redis:/')
+      ;;
+  esac
+fi
+
 exec "$@"

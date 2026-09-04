@@ -24,21 +24,27 @@ import { NextResponse } from "next/server";
  * @returns {Promise<NextResponse>} The Next.js response redirecting to the dashboard
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const url = new URL(request.url);
+  const { searchParams } = url;
   const token = searchParams.get("token");
 
-  // Use our explicit environment variable as the base URL, fallback to request.url just in case
-  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || request.url;
+  // Determine host and protocol dynamically from incoming reverse-proxy headers or request URL
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.host;
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto") || (url.protocol.startsWith("https") ? "https" : "http");
+  const isHttps = forwardedProto === "https";
+
+  const baseUrl = `${forwardedProto}://${forwardedHost}`;
 
   if (!token) {
     return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
   }
 
-  // Set the HttpOnly cookie
+  // Set the HttpOnly cookie (secure only when served over HTTPS)
   const cookieStore = await cookies();
   cookieStore.set("iqoqo_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days

@@ -121,6 +121,8 @@ help:
 	@echo "Deployment:"
 	@echo "  start          - Start development environment (DB, Flask API, Next.js frontend)"
 	@echo "  stop           - Stop all development servers and containers"
+	@echo "  docker-build   - Build backend, frontend, and nginx Docker images locally (TAG=...)"
+	@echo "  docker-build-preview - Build all images locally tagged for preview environment"
 	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
@@ -364,6 +366,13 @@ version:
 stop:
 	@echo "Stopping $(MODE) environment..."
 	@./run.sh $(MODE) --stop
+
+.PHONY: docker-build docker-build-preview
+docker-build: ## Build backend, frontend, and nginx Docker images locally (TAG defaults to pyproject.toml version)
+	@./scripts/build_docker_images.sh $(if $(TAG),--tag $(TAG),) $(if $(PREFIX),--prefix $(PREFIX),)
+
+docker-build-preview: ## Build all images locally tagged for preview environment (preview tag)
+	@./scripts/build_docker_images.sh --tag preview $(if $(PREFIX),--prefix $(PREFIX),)
 
 # monitoring-start and monitoring-stop removed — the monitoring stack is now
 # always composed together with the main stack via run.sh (line 751-754).

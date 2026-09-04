@@ -63,6 +63,13 @@ def upgrade():
     # 2. Migrate legacy manifestation-level virtual items to work-level intents
     bind = op.get_bind()
     is_pg = bind.dialect.name == "postgresql"
+    insp = sa.inspect(bind)
+    schema_name = "inventory" if is_pg else None
+    if not insp.has_table("items", schema=schema_name):
+        return
+    item_cols = {c["name"] for c in insp.get_columns("items", schema=schema_name)}
+    if "collection_status" not in item_cols:
+        return
 
     items_table = "inventory.items" if is_pg else "items"
     manifs_table = "catalog.manifestations" if is_pg else "manifestations"
