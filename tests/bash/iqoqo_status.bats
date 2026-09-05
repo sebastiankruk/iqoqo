@@ -51,9 +51,10 @@ teardown() {
 }
 
 @test "iqoqo-status.sh reports Allegro API configuration status" {
-  export IQOQO_AI_MODE=1
-  run bash scripts/iqoqo-status.sh
+  unset IQOQO_AI_MODE || true
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh
   [[ "$output" =~ "Instance Settings" || "$output" =~ "Allegro" ]]
 }
+
 
 

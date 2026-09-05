@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orphaned Compose Mount Cleanup**: Removed obsolete `.allegro_token.json` volume mounts across `web` and `worker` services in `docker-compose.yml`.
 - **Alembic Identifier PostgreSQL Truncation**: Shortened migration revision identifiers to 32 characters or fewer to prevent `StringDataRightTruncation` failures on PostgreSQL's `VARCHAR(32)` `alembic_version.version_num` column.
 - **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
+- **Allegro Status BATS Test in CI**: Unset `IQOQO_AI_MODE` during the Allegro status test in `tests/bash/iqoqo_status.bats` so the full status report is emitted reliably in headless CI environments without `.env`.
+- **Dependabot Security Vulnerabilities**: Resolved open Dependabot alerts across root and frontend lockfiles (`fast-uri`, `@humanfs/node`, `brace-expansion`, `browserslist`, `qs`).
 
 ## [0.7.16] - 2026-08-23
 
