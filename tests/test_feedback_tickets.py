@@ -654,6 +654,11 @@ def test_feedback_ticket_and_screenshot_custodian_access(client, feedback_setup,
     resp_img = client.get(f"/api/feedback/screenshots/{filename}", headers=custodian_headers)
     assert resp_img.status_code == 200
 
+    # Platform admin reads attachment
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+    resp_admin = client.get(f"/api/feedback/screenshots/{filename}", headers=admin_headers)
+    assert resp_admin.status_code == 200
+
 
 def test_feedback_screenshot_unauthorized_direct_access_fails(client, feedback_setup, app):
     """Ensure anonymous or unauthorized users receive 401 or 403/404."""

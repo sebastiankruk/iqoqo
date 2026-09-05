@@ -71,4 +71,17 @@ describe("auth-exchange route handler", () => {
     expect(res.headers.get("location")).not.toContain("evil.com");
     expect(res.headers.get("location")).toBe("https://localhost:3000/");
   });
+
+  it("prioritizes NEXT_PUBLIC_FRONTEND_URL environment variable over request host", async () => {
+    const originalEnv = process.env.NEXT_PUBLIC_FRONTEND_URL;
+    process.env.NEXT_PUBLIC_FRONTEND_URL = "https://custom.iqoqo.local:9000";
+    try {
+      const req = new Request("http://localhost:3000/api/auth-exchange?token=abc123");
+      const res = await GET(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe("https://custom.iqoqo.local:9000/");
+    } finally {
+      process.env.NEXT_PUBLIC_FRONTEND_URL = originalEnv;
+    }
+  });
 });

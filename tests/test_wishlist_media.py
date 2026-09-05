@@ -240,3 +240,97 @@ def test_wishlist_work_level_only_inferred_serialization(client, app):
     assert item is not None
     assert item["work_type"] == "AudioWork"
     assert item["medium_type"] == "Vinyl"
+
+
+def test_wishlist_video_serialization(client, app):
+    """Ensure Movie/Video UserWorkIntent returns work_type='VideoWork' and medium_type='DVD'."""
+    with app.app_context():
+        user = User(email="video_wishlist@iqoqo.local", display_name="Video Tester")
+        db.session.add(user)
+        db.session.flush()
+
+        video_work = Work(
+            title="The Matrix",
+            meta={"authors": ["The Wachowskis"], "work_type": "VideoWork"},
+        )
+        db.session.add(video_work)
+        db.session.flush()
+
+        video_expr = Expression(
+            work_id=video_work.id,
+            content_type="movie",
+            meta={"medium_type": "DVD"},
+        )
+        db.session.add(video_expr)
+        db.session.flush()
+
+        video_manif = Manifestation(
+            expression_id=video_expr.id,
+            format="dvd",
+            meta={"format": "dvd", "medium_type": "DVD"},
+        )
+        db.session.add(video_manif)
+        db.session.flush()
+
+        intent = UserWorkIntent(user_id=user.id, work_id=video_work.id, status="want_to_watch")
+        db.session.add(intent)
+        db.session.commit()
+
+        user_id = user.id
+        intent_id = intent.id
+
+    headers = get_headers(app, user_id)
+    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    assert response.status_code == 200
+    data = response.json["data"]
+    video_item = next((i for i in data if i["id"] == -intent_id), None)
+    assert video_item is not None
+    assert video_item["title"] == "The Matrix"
+    assert video_item["work_type"] == "VideoWork"
+    assert video_item["medium_type"] in ("DVD", "dvd")
+    assert video_item["content_type"] == "movie"
+
+    # Verify detail view
+    detail_resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    detail_data = detail_resp.json["data"]
+    assert detail_data["work_type"] == "VideoWork"
+    assert detail_data["medium_type"] in ("DVD", "dvd")
+
+
+def test_wishlist_empty_metadata_safe_fallback(client, app):
+    """Ensure Work-level intent with empty metadata and no expressions safely falls back without crash."""
+    with app.app_context():
+        user = User(email="empty_meta@iqoqo.local", display_name="Empty Meta Tester")
+        db.session.add(user)
+        db.session.flush()
+
+        empty_work = Work(
+            title="Book Without Meta",
+            meta={},
+        )
+        db.session.add(empty_work)
+        db.session.flush()
+
+        intent = UserWorkIntent(user_id=user.id, work_id=empty_work.id, status="want_to_read")
+        db.session.add(intent)
+        db.session.commit()
+
+        user_id = user.id
+        intent_id = intent.id
+
+    headers = get_headers(app, user_id)
+    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    assert response.status_code == 200
+    data = response.json["data"]
+    item = next((i for i in data if i["id"] == -intent_id), None)
+    assert item is not None
+    assert item["title"] == "Book Without Meta"
+    assert item["work_type"] is None
+    assert item["medium_type"] is None
+
+    detail_resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    assert detail_resp.status_code == 200
+    detail_data = detail_resp.json["data"]
+    assert detail_data["work_type"] is None
+    assert detail_data["medium_type"] is None

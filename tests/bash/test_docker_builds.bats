@@ -73,3 +73,9 @@ teardown() {
   [[ "$output" =~ "iqoqo-frontend:preview" ]]
   [[ "$output" =~ "iqoqo-nginx:preview" ]]
 }
+
+@test "deploy/Dockerfile never bakes rclone credentials into image layers" {
+  run grep -E "COPY.*rclone\.conf" "${BATS_TEST_DIRNAME}/../../deploy/Dockerfile"
+  [ "$status" -ne 0 ]
+}
+
