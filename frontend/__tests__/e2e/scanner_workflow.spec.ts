@@ -92,9 +92,15 @@ test.describe("Scanner Workflow", () => {
             cover_url: "https://covers.openlibrary.org/b/id/12345-L.jpg",
             candidates: [
               {
-                title: "The Divine Comedy",
+                title: "The Divine Comedy - Edition 1",
                 authors: ["Dante Alighieri"],
                 isbn13: testBarcode,
+                format: "book",
+              },
+              {
+                title: "The Divine Comedy - Illustrated",
+                authors: ["Dante Alighieri"],
+                isbn13: "9780140449137",
                 format: "book",
               },
             ],
@@ -137,7 +143,16 @@ test.describe("Scanner Workflow", () => {
 
       // Submit search
       await page.keyboard.press("Enter");
-      await page.waitForTimeout(1000);
+
+      // Verify disambiguation sheet appears with multiple candidates
+      await expect(page.getByText("Which one did you mean?")).toBeVisible();
+      const candidateChoice = page.getByRole("button", { name: /The Divine Comedy - Edition 1/i });
+      await expect(candidateChoice).toBeVisible();
+      await candidateChoice.click();
+
+      // Verify success card appears with selected metadata
+      await expect(page.getByText("Successfully Found!")).toBeVisible();
+      await expect(page.getByText("The Divine Comedy - Edition 1")).toBeVisible();
     }
   });
 

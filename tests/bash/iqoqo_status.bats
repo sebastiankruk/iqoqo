@@ -49,3 +49,11 @@ teardown() {
   [[ ! "$output" =~ "Environment Configuration" ]]
   [[ "$output" =~ "STATUS:" ]]
 }
+
+@test "iqoqo-status.sh reports Allegro API configuration status" {
+  export IQOQO_AI_MODE=1
+  run bash scripts/iqoqo-status.sh
+  [[ "$output" =~ "Instance Settings" || "$output" =~ "Allegro" ]]
+}
+
+

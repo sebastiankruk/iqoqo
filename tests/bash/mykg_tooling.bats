@@ -39,3 +39,26 @@
   [[ "$output" == *"run_mine.py"* ]] || [[ "$output" == *"mempalace-index"* ]]
   [[ "$output" == *"run_update.py"* ]] || [[ "$output" == *"mykg-update"* ]]
 }
+
+@test "docker-compose.ai_sandbox.yml enforces sandbox isolation and security hardening" {
+  compose_file="${BATS_TEST_DIRNAME}/../../docker-compose.ai_sandbox.yml"
+  [ -f "$compose_file" ]
+
+  run grep -E "user:\s*\"1000:1000\"" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  run grep -E "read_only:\s*true" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  run grep -E "cap_drop:" "$compose_file"
+  [ "$status" -eq 0 ]
+  run grep -E "\-\s*ALL" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  run grep -E "no-new-privileges:\s*true" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  run grep -E "antigravity-oauth-token:/run/secrets/antigravity-oauth-token:ro" "$compose_file"
+  [ "$status" -eq 0 ]
+}
+
