@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-version: '3.8'
 
 services:
   mykg-agy-daemon:
@@ -30,17 +29,17 @@ services:
         limits:
           cpus: '0.50'
           memory: 512M
-    # 3. Read-Only Filesystem with strict tmpfs
+    # 3. Read-Only Filesystem with strict ephemeral tmpfs
     read_only: true
     tmpfs:
       - /tmp
-      - /home/appuser/.gemini/antigravity-cli/brain # Ephemeral brain dump storage
+      - /home/appuser:uid=1000,gid=1000,mode=0700
     # 4. Strict, Minimal Volume Mounts
     volumes:
       - ./mykg_sessions:/workspace/mykg_sessions:rw  
       - ./.agents:/workspace/.agents:ro              
-      # SURGICAL CREDENTIAL MOUNT: We mount ONLY the credentials file.
-      - ~/.gemini/antigravity-cli/credentials.json:/home/appuser/.gemini/antigravity-cli/credentials.json:ro
+      # SURGICAL CREDENTIAL MOUNT: Mount ONLY the single OAuth token file into read-only secret path
+      - ~/.gemini/antigravity-cli/antigravity-oauth-token:/run/secrets/antigravity-oauth-token:ro
     environment:
       - HOME=/home/appuser
     working_dir: /workspace

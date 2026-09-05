@@ -144,6 +144,17 @@ def run_daemon(
         config_desc.append(f"effort={effective_effort}")
     config_str = f" ({', '.join(config_desc)})" if config_desc else ""
 
+    # Bootstrap OAuth token into user home if mounted from secret location
+    secret_token = Path("/run/secrets/antigravity-oauth-token")
+    target_token_dir = Path(os.environ.get("HOME", "/home/appuser")) / ".gemini" / "antigravity-cli"
+    if secret_token.is_file() and not (target_token_dir / "antigravity-oauth-token").exists():
+        try:
+            target_token_dir.mkdir(parents=True, exist_ok=True)
+            (target_token_dir / "antigravity-oauth-token").write_bytes(secret_token.read_bytes())
+            os.chmod(target_token_dir / "antigravity-oauth-token", 0o600)
+        except OSError as err:
+            print(f"[agy_daemon] Warning: failed to copy oauth token: {err}", file=sys.stderr)
+
     print(f"[agy_daemon] Starting daemon watching {inbox_dir} (workers={workers}){config_str}...")
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
