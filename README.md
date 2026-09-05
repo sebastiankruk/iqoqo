@@ -6,16 +6,20 @@
 
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA.svg?style=flat&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/sebastiankruk)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00.svg?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/iqoqo)
+[![Latest Release](https://img.shields.io/github/v/release/sebastiankruk/iqoqo?color=blue&label=version)](https://github.com/sebastiankruk/iqoqo/releases)
+[![CI Quality](https://github.com/sebastiankruk/iqoqo/actions/workflows/quality.yml/badge.svg)](https://github.com/sebastiankruk/iqoqo/actions/workflows/quality.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-red.svg)](LICENSE)
 
 [![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask Version](https://img.shields.io/badge/Flask-3.1-black.svg?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![Next.js Version](https://img.shields.io/badge/Next.js-16.2-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js Version](https://img.shields.io/badge/Next.js-16.3-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React Version](https://img.shields.io/badge/React-19.2-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
 [![Tailwind CSS Version](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![TypeScript Version](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript Version](https://img.shields.io/badge/TypeScript-5%2B-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-18-336791.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis Version](https://img.shields.io/badge/Redis-8-DC382D.svg?logo=redis&logoColor=white)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-red.svg)](LICENSE)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Enabled-742299.svg?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 
 </div>
 
@@ -35,8 +39,9 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 ## 🛠 Tech Stack
 
 - **Frontend:** React, Next.js (App Router), TypeScript, Tailwind CSS
-- **Backend:** Python 3.14+ / Flask
-- **Database:** PostgreSQL (with Full-Text Search and JSONB)
+- **Backend:** Python 3.14+ / Flask, Celery
+- **Database & Cache:** PostgreSQL (Full-Text Search & JSONB), Redis 8
+- **Observability:** OpenTelemetry & OpenObserve
 - **Ontology:** RDFLib / FRBR
 - **Computer Vision:** OpenCV / NumPy (Optional/Experimental)
 - **Deployment:** Docker & Docker Compose

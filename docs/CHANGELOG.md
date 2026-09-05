@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.17] - TBD
+## [0.7.17] - 2026-09-05
 
 ### Added
 
@@ -13,11 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Memory Sync BATS Test Suite**: Added 14 unit tests in `tests/bash/agy_memory_sync.bats` covering version filtering, myKG daemon prompt skipping, and scope YAML update idempotency.
 - **Wishlist Media Disambiguation**: Added `work_type` and `medium_type` traversal and serialization to `UserWorkIntent` response payloads in `app/api/items.py` and dynamic polymorphic media type badges (Music, BoardGame, Movie, Book) with appropriate aspect ratios and icons (e.g., turntable/disc icon for vinyl) in `frontend/components/collection/item-card.tsx` and `frontend/lib/media-badge.ts`.
 - **Wishlist Media Disambiguation Tests**: Added comprehensive backend unit tests in `tests/test_wishlist_media.py`, frontend utility tests in `frontend/__tests__/lib/media-badge.test.ts`, item card tests in `frontend/__tests__/components/collection/ItemCard.test.tsx`, and E2E scenario in `frontend/__tests__/e2e/wishlist_media_types.spec.ts`.
+- **Scanner Multi-Candidate Disambiguation**: Added candidate disambiguation array returns for ambiguous title searches across Google Books and Allegro in `app/api/scanner.py`, with frontend selection modal in `frontend/components/scanner/candidate-selector-dialog.tsx` and end-to-end browser test verification in `frontend/__tests__/e2e/scanner_workflow.spec.ts`.
+- **Scanner Scan Policies & Isolation**: Introduced explicit scan policies ("Add to Shelf", "Add to Wishlist", "Catalog Only") allowing cataloging works and manifestations without attaching them to personal shelves or user intents.
+- **Decoupled Standalone Docker Packaging**: Added `deploy/Dockerfile.nginx` for standalone reverse proxy packaging, GitHub Container Registry publication for `iqoqo-nginx`, and local image build script `scripts/build_docker_images.sh` with Makefile target `make docker-build-preview`.
+- **Allegro Token Centralization & Mutual Exclusion**: Reconciled Allegro OAuth token management with distributed Redis cache mutex locking to eliminate race conditions between worker and web instances.
+- **Autonomous myKG Sandbox**: Added `docker-compose.ai_sandbox.yml` with tmpfs OAuth token bootstrap, `cap_drop: ALL`, `no-new-privileges:true`, and read-only rootfs for autonomous extraction via `gemini-3.8-flash-low`.
+- **Universal AiOps Terse Mode**: Introduced `IQOQO_AI_MODE=1` environment standard across pytest, vitest, and Makefile targets for concise, token-efficient developer outputs.
+- **Release Regression Protections**: Added unit and script tests in `tests/test_migration.py` (Alembic 32-character limits and single-head lineage), `tests/test_wishlist_media.py` (non-book video intent serialization), `tests/test_feedback_tickets.py` (admin screenshot access), `tests/bash/test_docker_builds.bats` (docker layer secret exclusion), `tests/bash/mykg_tooling.bats` (ai sandbox capability drops), and `tests/bash/iqoqo_status.bats` (Allegro token checks).
 
 ### Changed
 
 - **MemPalace Indexing Optimization**: Consolidated `.iqoqo-mempalace-scope.yaml` scopes from 24 fragmented subdirectories into high-level roots (`.` and `.context/notes`) and enhanced `scan_scope.py` with fast in-place directory pruning, reducing `make mempalace-index` execution time from ~50s down to ~4s (10x-15x speedup).
 - **Makefile Knowledge Synchronization**: Updated `make memory-presync` and `make knowledge-sync` targets for fully self-contained execution without external system dependencies.
+- **Scanner Metadata Zero-Refetch Pipeline**: Refactored scanner form initialization to preserve rich metadata and external cover image URLs directly from scanner lookup responses without triggering secondary external fetches.
+- **Instance Settings Allegro Flow UX**: Moved the Allegro device flow button and configuration status indicator into the centralized Instance Settings panel.
 
 ### Fixed
 
@@ -26,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Host Header Poisoning & Open Redirect**: Added strict domain allowlisting (`isAllowedHost`) in `frontend/app/api/auth-exchange/route.ts` to neutralize unvalidated `X-Forwarded-Host` poisoning and prevent auth token leakage.
 - **Docker Image Layer Secret Excision**: Removed `COPY rclone.conf*` from `deploy/Dockerfile` to ensure cloud storage credentials and encryption keys are never baked into exported container image layers.
 - **Orphaned Compose Mount Cleanup**: Removed obsolete `.allegro_token.json` volume mounts across `web` and `worker` services in `docker-compose.yml`.
+- **Alembic Identifier PostgreSQL Truncation**: Shortened migration revision identifiers to 32 characters or fewer to prevent `StringDataRightTruncation` failures on PostgreSQL's `VARCHAR(32)` `alembic_version.version_num` column.
 - **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
 
 ## [0.7.16] - 2026-08-23

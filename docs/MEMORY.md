@@ -9,12 +9,12 @@
 
 **iqoqo** is a self-hosted, local-first personal media catalog for physical collections (books, board games, movies, music, etc.). Built on the FRBR (Functional Requirements for Bibliographic Records) ontology, it provides:
 
-- A Python **Flask** backend with JWT auth, RBAC, Alembic migrations, and SQLite/PostgreSQL support
-- A **Next.js 15** frontend with server-side rendering, shadcn/ui, Zustand state management
-- A **watchdog** daemon for background file monitoring
-- An **iCal server** for lending deadline calendar feeds
-- An **opencode** integration for AI-assisted catalog management
-- Docker-based deployment with one-click setup
+- A Python **Flask** backend with JWT auth, RBAC, Alembic migrations, and PostgreSQL 18 support
+- A **Next.js 16.2** frontend with App Router, shadcn/ui, and Tailwind CSS v4
+- A **Celery** background worker with Redis 8 task broker
+- An **OpenObserve** unified telemetry stack (traces, metrics, logs)
+- Multi-tier **Rclone** cloud backups (Daily sync, S3 Glacier cold archiving)
+- Docker-based deployment with prebuilt GHCR images (`backend`, `frontend`, `nginx`)
 
 **Owner/Context:** Sebastian Kruk, iqoqo project. Primary user is the developer building and using the system.
 
@@ -102,59 +102,41 @@ iqoqo/
 │   ├── next.config.ts            # Next.js config with rewrites proxy
 │   ├── proxy.ts                  # Middleware for auth routing
 │   └── package.json
-├── watchdog/                     # Background file monitoring daemon
-│   ├── __init__.py
-│   ├── __main__.py               # CLI entry point
-│   ├── monitor.py                # Watchdog file system observer
-│   ├── queue.py                  # Asyncio task queue
-│   ├── processors.py             # File change processors
-│   ├── state.py                  # Checkpoint persistence
-│   └── config.py                 # Watchdog-specific config
-├── ical_server/                  # iCal server for lending deadlines
-│   ├── __init__.py
-│   ├── __main__.py               # CLI entry point
-│   ├── app.py                    # Quart async Flask app
-│   ├── feed.py                   # ICS feed generation
-│   └── feed_storage.py           # SQLite feed storage
 ├── tests/                        # pytest test suite
-│   ├── conftest.py               # Fixtures (db_client, auth_headers, etc.)
+│   ├── conftest.py               # Fixtures (client, db_session, etc.)
 │   ├── test_auth.py
 │   ├── test_items.py
-│   ├── test_items_bulk.py
 │   ├── test_items_search.py
 │   ├── test_collections.py
-│   ├── test_health.py
-│   ├── test_manifest.py
-│   ├── test_debug.py
-│   ├── test_watchdog.py
-│   ├── test_ical_server.py
-│   └── test_password_reset.py
-├── frontend/__tests__/           # Frontend tests
-│   └── vitest.config.ts
+│   ├── test_migration.py
+│   ├── test_scanner.py
+│   ├── test_feedback_tickets.py
+│   └── test_wishlist_media.py
+├── frontend/__tests__/           # Frontend tests (Vitest + Playwright)
+│   ├── vitest.config.ts
+│   └── e2e/                      # Playwright E2E suites
 ├── migrations/                   # Alembic database migrations
-├── scripts/                      # Utility scripts
-│   ├── start_dev.py              # Dev server with auto-restart
-│   ├── launch.py                 # Dashboard launcher
-│   └── diagnose.py               # System diagnostics
-├── deploy/                       # Docker deployment
+├── scripts/                      # Utility and operational scripts
+│   ├── build_docker_images.sh    # Decoupled Docker image builder
+│   ├── sync_agy_memory.sh        # In-repo AI memory sync
+│   └── init_db.py                # Database seed initialization
+├── deploy/                       # Docker deployment configurations
 │   ├── Dockerfile                # Main app container
-│   ├── Dockerfile.watchdog       # Watchdog daemon container
-│   ├── docker-compose.yml        # Production compose (4 services)
-│   └── docker-compose.dev.yml    # Dev compose with hot reload
+│   ├── Dockerfile.nginx          # Standalone reverse proxy container
+│   ├── nginx.conf                # Gateway proxy rules
+│   └── migrate-postgres-16-to-18.sh
 ├── docs/                         # Documentation
-│   ├── MEMORY.md                 # This file — project context memory
-│   ├── CONTEXT.md                # Project overview and architecture
-│   ├── ADR/                      # Architecture Decision Records
-│   └── handover/                 # Handover documentation
+│   ├── ARCHITECTURE.md           # Canonical FRBR domain architecture
+│   ├── INSTALL.md                # System installation guide
+│   ├── CHANGELOG.md              # Versioned release notes
+│   ├── RELEASE_PROCESS.md        # Release lifecycle guide
+│   └── CONTEXT.md                # Quick architectural snapshot
 ├── shared/                       # Shared data files
 │   ├── taxonomy.yaml             # Media type taxonomy
-│   ├── prompt_spec.yaml          # AI cover generation prompts
 │   └── format_mappings.yaml      # Barcode format → media type mappings
-├── opencode.json                 # OpenCode config (agents, servers, MCP)
-├── pyproject.toml                # Python project config
-├── alembic.ini                   # Alembic migration config
-├── Makefile                      # Development commands
-└── shell.nix                     # Nix development environment
+├── pyproject.toml                # Python project configuration
+├── alembic.ini                   # Alembic migration configuration
+└── Makefile                      # Development and orchestration commands
 ```
 
 ---
@@ -163,29 +145,19 @@ iqoqo/
 
 ### Configuration File
 
-**Primary:** `opencode.json` (JSON)
+**Primary:** Environment variables defined in `.env` (template in `.env.example`).
 
 ### What's in the Config
 
-- **App name:** "iqoqo"
-- **Database:** SQLite at `~/.local/share/iqoqo/iqoqo.db` (or `IQOQO_DB_URL`)
-- **Auth:** JWT with bcrypt passwords
-- **RBAC:** Three roles: admin, user, guest
-- **External APIs:** OpenLibrary, Google Books, MusicBrainz, Discogs, BoardGameGeek, TMDB
-- **iCal Server:** localhost:5001
-- **Watchdog:** File monitoring with debounced queue
-- **Frontend:** Next.js 15 on port 3000
-- **AI Covers:** Flux + SDXL via ComfyUI (disabled by default)
-- **Backup:** S3 + WebDAV targets
-
-### Environment Variables
-
-- `IQOQO_DB_URL` — Database URL override
-- `IQOQO_JWT_SECRET_KEY` — JWT secret
-- `IQOQO_ENV` — Environment (dev/prod)
-- `OPENAI_API_KEY` — OpenAI key (for AI features)
-- `COMFYUI_URL` — ComfyUI server URL
-- `WEBDAV_URL`, `WEBDAV_USERNAME`, `WEBDAV_PASSWORD` — WebDAV backup
+- **Database:** PostgreSQL 18 connection URL (`DATABASE_URL`)
+- **Auth:** JWT secrets (`JWT_SECRET_KEY`, `AUTH_SECRET`), Admin credentials (`ADMIN_EMAIL`, `ADMIN_PASSWORD`)
+- **RBAC:** Roles: `admin`, `custodian`, `user`, `guest`
+- **External APIs:** OpenLibrary, Google Books, MusicBrainz, Discogs, BoardGameGeek, TMDB, Allegro
+- **Worker & Queue:** Redis 8 / Celery (`REDIS_URL`)
+- **Frontend URL:** `NEXT_PUBLIC_FRONTEND_URL` and `NEXT_PUBLIC_API_URL`
+- **AI Covers:** Local SD, Ollama, OpenAI, Gemini
+- **Backup:** Rclone remotes (`RCLONE_REMOTE_FAST`, `RCLONE_REMOTE_ARCHIVE`, `RCLONE_COVERS_REMOTE`)
+- **Observability:** OpenObserve (`OPENOBSERVE_HOST_PORT`, `OTEL_EXPORTER_OTLP_ENDPOINT`)
 
 ---
 
@@ -194,21 +166,15 @@ iqoqo/
 ### Active
 
 1. **OpenLibrary** — Book metadata (ISBN lookup)
-2. **Google Books** — Book metadata (ISBN lookup)
-3. **MusicBrainz** — Music metadata (barcode/ UPC lookup)
-4. **Discogs** — Music metadata (barcode/ UPC lookup)
-5. **BoardGameGeek** — Board game metadata (barcode lookup)
+2. **Google Books** — Book metadata (ISBN & title lookup with disambiguation)
+3. **MusicBrainz** — Music metadata (barcode / UPC lookup)
+4. **Discogs** — Music metadata (barcode / UPC lookup)
+5. **BoardGameGeek** — Board game metadata (barcode lookup & taxonomies)
 6. **TMDB** — Movie/TV metadata (barcode lookup)
-7. **OpenCode** — AI-assisted catalog management (MCP tools, custom agents)
-8. **S3 Backup** — AWS S3 bucket backup
-9. **WebDAV Backup** — Nextcloud/ownCloud backup
-10. **CalDAV Sync** — Contact and calendar synchronization
-11. **OAuth** — Google and Facebook login
-
-### Planned/Partially Built
-
-- **ComfyUI** — AI cover generation (Flux + SDXL models)
-- **Casdoor** — External identity provider integration
+7. **Allegro** — Retail item resolution & device flow OAuth integration
+8. **Rclone Backup** — Automated daily sync and AWS S3 Glacier archiving
+9. **OpenObserve** — Unified traces, metrics, and logs via OpenTelemetry
+10. **Google OAuth** — Social sign-in
 
 ---
 
@@ -271,22 +237,26 @@ iqoqo/
 - Item → CoverImages (one-to-many)
 - Item → LendingRecords (one-to-many)
 
----
-
 ## 7. Testing Infrastructure
 
 ### Backend (pytest)
 
-- **Framework:** pytest + pytest-asyncio + httpx
-- **Fixtures:** `tests/conftest.py` — `db_client`, `db_session`, `auth_headers`, `admin_headers`, `sample_item`, `sample_collection`
-- **Database:** Each test gets a fresh SQLite DB in `tmp_path` (schema + seed data)
-- **Run:** `make test` or `uv run python -m pytest`
+- **Framework:** pytest + pytest-asyncio
+- **Fixtures:** `tests/conftest.py` — `client`, `db_session`, `auth_headers`, `admin_headers`
+- **Database:** PostgreSQL test database (`DATABASE_URL_TEST`)
+- **Run:** `IQOQO_AI_MODE=1 make test-backend` or `pytest`
 
-### Frontend (vitest)
+### Frontend (Vitest & Playwright)
 
-- **Framework:** Vitest
+- **Framework:** Vitest (unit & integration) + Playwright (E2E)
 - **Location:** `frontend/__tests__/`
-- **Run:** `make frontend-test` or `cd frontend && npx vitest run`
+- **Run:** `IQOQO_AI_MODE=1 make test-frontend` and `make test-e2e`
+
+### Shell Scripts (BATS)
+
+- **Framework:** BATS (Bash Automated Testing System)
+- **Location:** `tests/bash/`
+- **Run:** `IQOQO_AI_MODE=1 make test-scripts`
 
 ---
 
@@ -294,125 +264,69 @@ iqoqo/
 
 | Command | Purpose |
 | --- | --- |
-| `make dev` | Start dev server (auto-restarts on changes) |
-| `make test` | Run full pytest suite |
-| `make test-fast` | Run tests excluding slow ones |
-| `make frontend-install` | Install frontend dependencies |
-| `make frontend-dev` | Start frontend dev server |
-| `make frontend-test` | Run frontend tests |
-| `make frontend-lint` | Lint frontend code |
-| `make frontend-typecheck` | Type-check frontend code |
-| `make frontend-build` | Build frontend for production |
-| `make build` | Build all Docker containers |
-| `make up` | Start production containers |
-| `make down` | Stop production containers |
-| `make backup` | Trigger backup (DB + optional S3/WebDAV) |
-| `make restore BACKUP=xxx` | Restore from backup |
-| `make backup-status` | Check backup status |
+| `make start` | Start full development environment |
+| `make test` | Run full test suite across backend, frontend, and scripts |
+| `make test-backend` | Run backend pytest suite |
+| `make test-frontend` | Run frontend Vitest suite |
+| `make test-e2e` | Run Playwright end-to-end tests |
+| `make lint` | Run all linters (ruff, mypy, pylint, eslint, markdownlint) |
+| `make format` | Format Python and TypeScript codebases |
+| `make status` | Check service health and database migrations |
+| `make docker-build-preview` | Build local container images for preview testing |
 
 ---
 
-## 9. Current State
+## 9. Current Architecture Highlights
 
-### What Works
-
-- ✅ Flask backend with full CRUD for items, collections, users, manifests
-- ✅ JWT authentication with refresh tokens and session management
-- ✅ RBAC with admin/user/guest roles
-- ✅ Next.js 15 frontend with full UI (items, collections, admin, import, dashboard, scanners)
-- ✅ API proxy: Next.js rewrites `/api/*` → Flask backend (next.config.ts rewrites)
-- ✅ External API integration: OpenLibrary, Google Books, MusicBrainz, Discogs, BoardGameGeek, TMDB
-- ✅ Barcode scanner integration (web + desktop)
-- ✅ Full-text search with FTS5 (SQLite) or GIN indexes (PostgreSQL)
-- ✅ Bulk import/export (JSON)
-- ✅ Watchdog file monitoring daemon
-- ✅ iCal server for lending deadlines
-- ✅ Docker deployment (multi-service with hot reload)
-- ✅ AI cover generation pipeline (ComfyUI + Flux/SDXL)
-- ✅ Backup system (S3 + WebDAV)
-- ✅ CI/CD pipeline (GitHub Actions)
-- ✅ Tests: backend (pytest) + frontend (vitest)
-- ✅ Authentication pages: login, signup, forgot-password, reset-password
-- ✅ Dark mode support
-- ✅ PWA (Progressive Web App) support
-
-### What's Not Working / Missing
-
-- ❌ Some Next.js pages may have minor issues (mostly cosmetic)
-- ❌ No WIP tracking system
-- ❌ No CI/CD for frontend changes
-- ❌ No backup verification/restore testing
+- ✅ FRBR four-tier bibliographic model (Work → Expression → Manifestation → Item)
+- ✅ Flask 3.1 REST API with Python 3.14+
+- ✅ Next.js 16.2 App Router with Tailwind CSS v4 and shadcn/ui
+- ✅ PostgreSQL 18 with GIN full-text search and JSONB metadata
+- ✅ Redis 8 + Celery background task processing
+- ✅ Nginx reverse proxy gateway routing
+- ✅ OpenObserve unified observability stack (traces, metrics, logs)
+- ✅ Multi-tier Rclone cloud backup (Daily fast sync + S3 Glacier cold archiving)
+- ✅ Scanner with multi-candidate title lookup and scan policy isolation
+- ✅ Polymorphic media badges for non-book wishlist items
+- ✅ Sandboxed autonomous myKG AI extraction daemon
 
 ---
 
-## 10. Known Gotchas
+## 10. Known Gotchas & Constraints
 
-1. **Proxy:** Frontend API calls go through Next.js rewrites in `frontend/next.config.ts` — all `/api/*` requests are proxied to the Flask backend.
-2. **No `/config/default.toml`:** The project uses `opencode.json` for configuration, not TOML files.
-3. **Database sessions:** Use Flask's application context pattern with `db.session`.
-4. **Auth tokens:** Include `Authorization: Bearer <token>` header for authenticated requests.
-5. **Bulk import:** Use `POST /api/items/bulk` for importing multiple items at once.
-6. **File uploads:** Cover images are stored in `~/.local/share/iqoqo/covers/{item_id}/`.
-7. **Config:** The `Config` class in `app/config.py` loads from environment variables and `opencode.json`.
-8. **Alembic migrations:** Run `alembic upgrade head` to apply database migrations.
-9. **Watchdog:** The watchdog daemon monitors `~/.local/share/iqoqo/watch/` for file changes.
-10. **iCal server:** Runs on port 5001, serves ICS feeds for lending deadlines.
+1. **FRBR Purity:** Strict four-tier hierarchy must be respected across API and database models.
+2. **PostgreSQL Alembic Limits:** Revision identifiers must be <= 32 characters (`len(revision) <= 32`) for `alembic_version.version_num` compatibility.
+3. **Pylint & SQLAlchemy:** Append `# pylint: disable=not-callable` on `func.count()`.
+4. **Proxy Routing:** External requests go through Nginx: `/api/*` proxies to Flask, other routes to Next.js.
+5. **No Heredoc Editing:** Do not author project files using shell heredocs; use designated file tools.
+6. **AiOps Terse Output:** Set `IQOQO_AI_MODE=1` for clean, token-efficient test execution.
 
 ---
 
-## 11. Navigation Guide
+## 11. Docker Architecture
 
-### To modify a route
+### Standard Services (`docker-compose.yml`)
 
-1. Check `app/api/` — find the appropriate blueprint file
-2. Look at `app/api/__init__.py` to see how blueprints are registered
-3. Check `app/api/schemas.py` for request/response schemas
-4. Check `app/db/models.py` for ORM models
+1. **db** — PostgreSQL 18 database (`5432`)
+2. **redis** — Redis 8 broker and cache (`6379`)
+3. **web** — Flask / Gunicorn REST API (`5000`)
+4. **worker** — Celery background task processor
+5. **frontend** — Next.js 16.2 App Router (`3000`)
+6. **nginx** — Reverse proxy gateway (`8000`)
 
-### To modify the database
+### Prebuilt Deployment (`docker-compose.prebuilt.yml`)
 
-1. Check `app/db/models.py` for ORM definitions
-2. Check `migrations/versions/` for existing migrations
-3. Create new migration: `alembic revision --autogenerate -m "description"`
-4. Apply: `alembic upgrade head`
+- Pulls tagged images from GHCR: `iqoqo-backend`, `iqoqo-frontend`, `iqoqo-nginx`.
 
-### To modify the frontend
+### AI Sandbox (`docker-compose.ai_sandbox.yml`)
 
-1. Check `frontend/app/` for pages (App Router)
-2. Check `frontend/components/` for reusable components
-3. Check `frontend/next.config.ts` for API proxy rewrites
-4. Check `frontend/lib/api/` for API client and hooks
-
-### To modify external API integrations
-
-1. Check `app/api/scanner.py` — `barcode_lookup` and `_fetch_*` functions
-2. Check `app/strategies/lookup/` — Strategy pattern implementations
-
-### To modify tests
-
-1. Backend: `tests/` directory with `conftest.py` for fixtures
-2. Frontend: `frontend/__tests__/` directory
+- Sandboxed autonomous myKG daemon with tmpfs OAuth token bootstrap, `cap_drop: ALL`, and read-only rootfs.
 
 ---
 
-## 12. Docker Setup
+## 12. Version & Release Context
 
-### Services
-
-1. **iqoqo** — Main Flask app (port 8000)
-2. **frontend** — Next.js frontend (port 3000)
-3. **iqoqo-watchdog** — File monitoring daemon
-4. **iqoqo-ical** — iCal server (port 5001)
-
-### Volumes
-
-- `iqoqo-data` — SQLite database
-- `iqoqo-watch` — Watchdog monitoring directory
-- `iqoqo-covers` — Cover images
-
----
-
-## 13. Git Branch
-
-- **Current:** `main`
-- **Recent activity:** Added reset-password endpoint, Next.js auth pages (login, signup, forgot-password, reset-password), added NPM_TOKEN to Dockerfile, added Vitest testing infrastructure, added badges to README, fixed npm cache bug, added PWA support
+- **Release Version:** `0.7.17`
+- **Release Branch:** `release/0.7.17`
+- **Release Date:** `2026-09-05`
+- **Changelog:** Documented in [CHANGELOG.md](CHANGELOG.md)

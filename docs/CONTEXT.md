@@ -1,6 +1,6 @@
 # CONTEXT — iqoqo
 
-> Last updated: 2026-08-28
+> Last updated: 2026-09-05
 
 ## Overview
 
@@ -11,19 +11,15 @@
 | Resource | Location |
 | --- | --- |
 | Python backend | `app/` |
-| Next.js 15 frontend | `frontend/` |
-| Database schema | `app/db/schema.py` |
+| Next.js frontend | `frontend/` |
 | ORM models | `app/db/models.py` |
 | API routes | `app/api/` |
+| Background tasks & Celery | `app/core/celery_app.py`, `app/core/tasks.py` |
 | Alembic migrations | `migrations/versions/` |
-| Watchdog daemon | `watchdog/` |
-| iCal server | `ical_server/` |
-| OpenCode integration | `opencode.json` |
 | Shared data files | `shared/` |
 | Tests | `tests/` + `frontend/__tests__/` |
-| Memory & context | `docs/MEMORY.md`, `docs/CONTEXT.md` |
-| Architecture decisions | `docs/ADR/` |
-| Deployment | `deploy/` |
+| OpenSpec specs | `openspec/specs/` |
+| Deployment & Docker | `deploy/`, `docker-compose.yml` |
 
 ## Architecture
 
@@ -33,26 +29,26 @@
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │   Frontend   │    │   Backend   │    │  Watchdog   │     │
-│  │  (Next.js)   │◄──►│  (Flask)    │◄──►│  (Daemon)   │     │
+│  │   Frontend   │    │   Backend   │    │   Worker    │     │
+│  │  (Next.js)   │◄──►│   (Flask)   │◄──►│  (Celery)   │     │
 │  │  Port 3000   │    │  Port 5000  │    │             │     │
 │  └─────────────┘    └─────────────┘    └─────────────┘     │
 │         │                  │                   │             │
 │         │                  │                   │             │
 │         ▼                  ▼                   ▼             │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │  Next.js    │    │   SQLite    │    │  Filesystem  │     │
-│  │  Rewrites   │    │  Database   │    │  Watch Dir   │     │
-│  │  (Proxy)    │    │             │    │             │     │
+│  │    Nginx    │    │ PostgreSQL  │    │    Redis    │     │
+│  │   Gateway   │    │     18      │    │      8      │     │
+│  │  Port 8000   │    │  Port 5432  │    │  Port 6379  │     │
 │  └─────────────┘    └─────────────┘    └─────────────┘     │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
 │                    External Integrations                      │
 ├──────────────────────────────────────────────────────────────┤
 │  OpenLibrary · Google Books · MusicBrainz · Discogs          │
-│  BoardGameGeek · TMDB · OAuth (Google/Facebook)              │
-│  S3 Backup · WebDAV Backup · CalDAV Sync                     │
-│  ComfyUI (AI Covers) · OpenCode (AI Agent)                  │
+│  BoardGameGeek · TMDB · Allegro (OAuth & Device Flow)         │
+│  Rclone Multi-Tier Backup (Daily Sync + S3 Glacier)          │
+│  OpenObserve Unified Telemetry (Traces, Metrics, Logs)       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,48 +56,40 @@
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui, Zustand, React Query, Vitest |
-| Backend | Python 3.12+, Flask, SQLAlchemy (sync), Pydantic, Alembic |
-| Database | SQLite (default) or PostgreSQL |
-| Auth | JWT (PyJWT + bcrypt), Google OAuth, Facebook OAuth |
-| File Monitoring | watchdog (Python) |
-| Calendar | Quart (async Flask) for iCal server |
-| AI Covers | ComfyUI + Flux/SDXL models |
-| Deployment | Docker Compose (multi-service), GitHub Actions CI/CD |
+| Frontend | Next.js 16.2 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Vitest |
+| Backend | Python 3.14+, Flask 3.1, SQLAlchemy 2.0, Alembic, Celery, Redis 8 |
+| Database | PostgreSQL 18 (Full-Text Search & JSONB) |
+| Auth | JWT (PyJWT + bcrypt), Google OAuth |
+| Observability | OpenTelemetry + OpenObserve (Traces, Metrics, Logs) |
+| Backups | Rclone (Fast daily sync + S3 Glacier cold archiving) |
+| AI Covers | Local SD, Ollama, OpenAI, Gemini |
+| Deployment | Docker Compose, Prebuilt GHCR images (`backend`, `frontend`, `nginx`) |
 
 ## Key Files to Reference
 
 | File | Purpose |
 | --- | --- |
-| `app/__init__.py` | Flask app factory (create_app) |
+| `app/__init__.py` | Flask app factory (`create_app`) |
 | `app/config.py` | Configuration loading from environment variables |
-| `app/db/__init__.py` | SQLAlchemy db instance |
 | `app/db/models.py` | ORM models: User, Work, Expression, Manifestation, Item, Collection |
-| `app/db/schema.py` | SQLite DDL creation + seed data |
 | `app/api/__init__.py` | Blueprint registration |
 | `app/api/items.py` | Items CRUD + bulk operations + external API lookups |
 | `app/api/auth.py` | JWT authentication, login/signup |
 | `app/api/collections.py` | Collections CRUD |
-| `app/api/scanner.py` | Barcode scanner + external API lookups |
-| `app/api/schemas.py` | Pydantic request/response schemas |
+| `app/api/scanner.py` | Barcode & title scanner with multi-candidate disambiguation |
+| `app/api/feedback.py` | In-app feedback tickets with attachments and RBAC |
+| `app/core/celery_app.py` | Celery asynchronous worker and task dispatch |
 | `frontend/next.config.ts` | Next.js rewrites (API proxy to Flask) |
-| `frontend/proxy.ts` | Middleware for auth routing |
-| `frontend/lib/api/client.ts` | Browser-side API client (axios) |
-| `frontend/lib/api/hooks.ts` | React Query hooks |
-| `frontend/components/auth/AuthContext.tsx` | React auth context with JWT management |
-| `watchdog/monitor.py` | File system observer |
-| `ical_server/app.py` | Quart async Flask app for iCal |
-| `opencode.json` | OpenCode configuration (agents, MCP, servers) |
+| `frontend/app/` | Next.js App Router pages |
+| `frontend/components/` | Reusable React components (shadcn/ui) |
 | `migrations/versions/` | Alembic database migrations |
-| `tests/conftest.py` | Pytest fixtures (db_client, auth_headers, etc.) |
+| `tests/conftest.py` | Pytest fixtures (`client`, `db_session`, `auth_headers`, etc.) |
 
 ## Important Notes
 
-- **Single Proxy:** The frontend uses Next.js rewrites in `next.config.ts` to proxy ALL `/api/*` requests to the Flask backend. There are no Next.js API routes for business logic.
-- **No TOML Config:** The project uses `opencode.json` for configuration, not TOML files.
-- **Sync Database:** Database operations are synchronous (Flask-SQLAlchemy).
-- **FRBR Ontology:** The data model follows FRBR: Work → Expression → Manifestation → Item.
-- **Authentication:** JWT tokens with refresh support. Include `Authorization: Bearer <token>` header for authenticated requests.
-- **Roles:** Three roles (admin, user, guest) with RBAC.
-- **Bulk Import:** Use `POST /api/items/bulk` for importing multiple items at once.
-- **Cover Images:** Stored in `~/.local/share/iqoqo/covers/{item_id}/`.
+- **Reverse Proxy:** Nginx routes external requests: `/api/*` to Flask backend and remaining routes to Next.js frontend.
+- **FRBR Ontology:** The data model strictly follows FRBR: Work → Expression → Manifestation → Item.
+- **Authentication:** JWT access and refresh tokens. Requests use `Authorization: Bearer <token>` header.
+- **PostgreSQL 18:** Uses PostgreSQL 18 with relational JSONB and GIN full-text search indexes.
+- **Background Tasks:** Asynchronous tasks (cover fetching, cloud backups) are dispatched via Celery with Redis broker.
+- **AiOps Standards:** Test runs and linters support terse AI output with `IQOQO_AI_MODE=1`.

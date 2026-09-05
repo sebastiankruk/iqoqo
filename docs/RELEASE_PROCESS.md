@@ -39,7 +39,7 @@ Before branching a release, complete the following verification steps:
 
 ## How to Create a New Release
 
-1. **Create a Release Branch**: Branch off from `main` (e.g., `git checkout -b release/0.7.11`).
+1. **Create a Release Branch**: Branch off from `main` (e.g., `git checkout -b release/0.7.17`).
 2. **Update Versions & Changelog**:
    - Update `pyproject.toml` and `frontend/package.json`.
    - Update `docs/CHANGELOG.md` date header.
@@ -51,8 +51,8 @@ Before branching a release, complete the following verification steps:
    - **Test Craftsman / QA**: Ensures unit, integration, and E2E coverage.
    - **TechComm Specialist**: Validates documentation currency, ATX markdown syntax, and code block tags.
    - **Code Quality / Linter**: Runs `make lint-python` and `make lint-js`.
-4. **Commit and Push**: `git commit -am "chore(release): prep release v0.7.11"` and push the branch.
-5. **Create & Merge Pull Request**: Open a PR from `release/0.7.11` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
+4. **Commit and Push**: `git commit -am "chore(release): prep release v0.7.17"` and push the branch.
+5. **Create & Merge Pull Request**: Open a PR from `release/0.7.17` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
 6. **Memory Graph Synchronization**:
    After the release PR is merged into `main`, sync architectural decisions and release notes to the persistent memory graph:
 
@@ -66,4 +66,4 @@ Upon PR merge to `main`, GitHub Actions automatically:
 - Reads the version from `pyproject.toml`.
 - Extracts the release notes from `docs/CHANGELOG.md`.
 - Builds and pushes `iqoqo-backend`, `iqoqo-frontend`, and `iqoqo-nginx` images to GHCR.
-- Creates the Git Tag (e.g., `v0.7.11`) and formal GitHub Release.
+- Creates the Git Tag (e.g., `v0.7.17`) and formal GitHub Release.
