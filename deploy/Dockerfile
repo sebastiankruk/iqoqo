@@ -58,12 +58,11 @@ COPY --chown=appuser:appuser scripts scripts/
 COPY --chown=appuser:appuser shared shared/
 COPY --chown=appuser:appuser run.py wsgi.py ./
 
-# Setup rclone config directory and copy rclone.conf if provided with 0600 permissions
+# Setup rclone config directory with restrictive permissions.
+# rclone.conf is mounted at runtime into this folder and NEVER copied into image layers.
 RUN mkdir -p /home/appuser/.config/rclone && \
     chown -R appuser:appuser /home/appuser/.config && \
     chmod 0700 /home/appuser/.config/rclone
-COPY --chown=appuser:appuser rclone.conf* /home/appuser/.config/rclone/
-RUN if [ -f /home/appuser/.config/rclone/rclone.conf ]; then chmod 0600 /home/appuser/.config/rclone/rclone.conf; fi
 
 # Copy the container entrypoint (pre-start checks, e.g. rclone config dir)
 COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

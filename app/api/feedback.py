@@ -117,16 +117,18 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 401
 
-    stmt = select(FeedbackItem).where(db.cast(FeedbackItem.attachments, db.String).contains(filename))
+    clean_filename = secure_filename(os.path.basename(filename))
+    if not clean_filename or clean_filename != filename:
+        return jsonify({"success": False, "error": "Invalid screenshot filename"}), 400
+
+    stmt = select(FeedbackItem).where(db.cast(FeedbackItem.attachments, db.String).contains(clean_filename))
     items = db.session.execute(stmt).scalars().all()
-    item = next(
-        (it for it in items if filename in (it.attachments or []) or any(att.endswith(filename) for att in (it.attachments or []))),
-        None,
-    )
-    if not item:
+
+    matching_tickets = [it for it in items if any(os.path.basename(att) == clean_filename for att in (it.attachments or []))]
+    if not matching_tickets:
         return jsonify({"success": False, "error": "Screenshot not found"}), 404
 
-    if not _can_read_ticket(user, item):
+    if not any(_can_read_ticket(user, it) for it in matching_tickets):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     return None
@@ -136,8 +138,8 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     """Retrieve a feedback screenshot from local storage or rclone remote."""
-    safe_name = secure_filename(filename)
-    if not safe_name:
+    safe_name = secure_filename(os.path.basename(filename))
+    if not safe_name or safe_name != filename:
         return jsonify({"success": False, "error": "Invalid filename"}), 400
 
     access_err = _validate_screenshot_access(safe_name)

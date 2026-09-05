@@ -57,4 +57,18 @@ describe("auth-exchange route handler", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://pre.iqoqo.cc:8000/");
   });
+
+  it("rejects poisoned x-forwarded-host header from unauthorized domains and falls back to request url host", async () => {
+    const req = new Request("http://localhost:3000/api/auth-exchange?token=abc123", {
+      headers: {
+        "x-forwarded-host": "evil.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    const res = await GET(req);
+    expect(res.status).toBe(307);
+    // Should NOT redirect to evil.com
+    expect(res.headers.get("location")).not.toContain("evil.com");
+    expect(res.headers.get("location")).toBe("https://localhost:3000/");
+  });
 });

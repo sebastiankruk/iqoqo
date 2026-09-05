@@ -687,3 +687,50 @@ def test_feedback_screenshot_unauthorized_direct_access_fails(client, feedback_s
     # Direct access to random file not attached to any ticket -> 404
     resp_missing = client.get("/api/feedback/screenshots/feedback-doesnotexist.jpg", headers=u2_headers)
     assert resp_missing.status_code == 404
+
+
+def test_feedback_screenshot_suffix_and_idor_collision(client, feedback_setup, app):
+    """Verify that suffix matching or cross-ticket filename collisions cannot bypass authorization."""
+    import io
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+
+    png_bytes = _sample_png()
+    resp1 = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "description": "User 1 private ticket",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "private1.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp1.status_code == 201
+    victim_file = resp1.json["data"]["attachments"][0].split("/")[-1]
+
+    # Attacker tries suffix collision by creating a ticket with a filename ending with victim_file
+    # e.g., 'attacker_' + victim_file
+    suffix_file = f"attacker_{victim_file}"
+    with app.app_context():
+        attacker_ticket = FeedbackItem(
+            user_id=feedback_setup["user2_id"],
+            feedback_type="bug",
+            description="Attacker spoof ticket",
+            attachments=[suffix_file],
+        )
+        db.session.add(attacker_ticket)
+        db.session.commit()
+
+    # Attacker tries to access victim's file; should receive 403 Forbidden
+    resp_attack = client.get(f"/api/feedback/screenshots/{victim_file}", headers=u2_headers)
+    assert resp_attack.status_code == 403
+
+    # Path traversal should be rejected with 400
+    resp_traversal = client.get(f"/api/feedback/screenshots/..%2F{victim_file}", headers=u1_headers)
+    assert resp_traversal.status_code in (400, 404)
+
+    # Legitimate owner can still read their file even when an attacker ticket has the suffix file
+    resp_owner = client.get(f"/api/feedback/screenshots/{victim_file}", headers=u1_headers)
+    assert resp_owner.status_code == 200

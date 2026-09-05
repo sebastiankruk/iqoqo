@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Feedback Screenshot Access Permissions**: Relaxed IDOR restrictions on `GET /api/feedback/screenshots/<filename>` to query the associated `FeedbackItem` and authorize access for ticket authors, assigned custodians (`custodian` role), and platform admins (`tickets:admin`), while rejecting unauthorized requests with 403 and non-existent attachments with 404.
+- **Feedback Screenshot Suffix & IDOR Collision**: Enforced strict `os.path.basename` matching, path traversal rejection, and verified ticket read authorization across all matching tickets in `app/api/feedback.py` to eliminate authorization bypass via suffix matching or filename collision.
+- **Host Header Poisoning & Open Redirect**: Added strict domain allowlisting (`isAllowedHost`) in `frontend/app/api/auth-exchange/route.ts` to neutralize unvalidated `X-Forwarded-Host` poisoning and prevent auth token leakage.
+- **Docker Image Layer Secret Excision**: Removed `COPY rclone.conf*` from `deploy/Dockerfile` to ensure cloud storage credentials and encryption keys are never baked into exported container image layers.
+- **Orphaned Compose Mount Cleanup**: Removed obsolete `.allegro_token.json` volume mounts across `web` and `worker` services in `docker-compose.yml`.
 - **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
 
 ## [0.7.16] - 2026-08-23

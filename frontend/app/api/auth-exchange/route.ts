@@ -18,6 +18,17 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 /**
+ * Validates whether a hostname belongs to an allowed deployment domain.
+ *
+ * @param hostWithPort - The hostname, optionally including a port
+ * @returns {boolean} True if the host is allowed, false otherwise
+ */
+function isAllowedHost(hostWithPort: string): boolean {
+  const host = hostWithPort.split(":")[0].toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "iqoqo.cc" || host.endsWith(".iqoqo.cc");
+}
+
+/**
  * Handle GET requests to exchange a short-lived token for a session cookie.
  *
  * @param request - The incoming Next.js request
@@ -28,14 +39,27 @@ export async function GET(request: Request) {
   const { searchParams } = url;
   const token = searchParams.get("token");
 
-  // Determine host and protocol dynamically from incoming reverse-proxy headers or request URL
-  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.host;
-  const forwardedProto =
-    request.headers.get("x-forwarded-proto") || (url.protocol.startsWith("https") ? "https" : "http");
-  const isHttps = forwardedProto === "https";
+  const rawForwardedHost = request.headers.get("x-forwarded-host");
+  const rawHostHeader = request.headers.get("host") || url.host;
 
-  // SECURE: Enforce configured domain to prevent X-Forwarded-Host injection
-  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${forwardedProto}://${forwardedHost}`;
+  // Enforce host validation to prevent arbitrary open redirects via poisoned headers
+  const effectiveHost =
+    rawForwardedHost && isAllowedHost(rawForwardedHost)
+      ? rawForwardedHost
+      : isAllowedHost(rawHostHeader)
+        ? rawHostHeader
+        : url.host;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const effectiveProto =
+    forwardedProto === "https" || forwardedProto === "http"
+      ? forwardedProto
+      : url.protocol.startsWith("https")
+        ? "https"
+        : "http";
+
+  const isHttps = effectiveProto === "https";
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${effectiveProto}://${effectiveHost}`;
 
   if (!token) {
     return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
