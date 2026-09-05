@@ -34,7 +34,8 @@ export async function GET(request: Request) {
     request.headers.get("x-forwarded-proto") || (url.protocol.startsWith("https") ? "https" : "http");
   const isHttps = forwardedProto === "https";
 
-  const baseUrl = `${forwardedProto}://${forwardedHost}`;
+  // SECURE: Enforce configured domain to prevent X-Forwarded-Host injection
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${forwardedProto}://${forwardedHost}`;
 
   if (!token) {
     return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));

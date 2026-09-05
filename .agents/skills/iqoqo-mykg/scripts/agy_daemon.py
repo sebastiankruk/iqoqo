@@ -69,7 +69,7 @@ def process_task(
             "Do NOT include conversational text or markdown code fences."
         )
 
-        effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low"
+        effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.8-flash-low"
         effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT") or "low"
 
         cmd = ["agy", "--dangerously-skip-permissions", "-p", combined_prompt]
@@ -135,7 +135,7 @@ def run_daemon(
     active_futures: Dict[Future[bool], str] = {}
     submitted_tasks: Set[str] = set()
 
-    effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low"
+    effective_model = model or os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.8-flash-low"
     effective_effort = effort or os.environ.get("MYKG_EFFORT") or os.environ.get("AGY_EFFORT") or "low"
     config_desc = []
     if effective_model:
@@ -199,8 +199,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         "-m",
-        default=os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.7-flash-low",
-        help="Model to use for agy CLI (default: gemini-3.7-flash-low)",
+        default=os.environ.get("MYKG_MODEL") or os.environ.get("AGY_MODEL") or "gemini-3.8-flash-low",
+        help="Model to use for agy CLI (default: gemini-3.8-flash-low)",
     )
     parser.add_argument(
         "--effort",

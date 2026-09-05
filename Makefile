@@ -190,7 +190,7 @@ codegraph-status:
 	@codegraph status
 
 # myKG targets
-MYKG_DEFAULT_MODEL ?= gemini-3.7-flash-low
+MYKG_DEFAULT_MODEL ?= gemini-3.8-flash-low
 MYKG_DEFAULT_EFFORT ?= low
 
 mykg-scope: .venv/bin/activate
@@ -207,17 +207,11 @@ mykg-update: .venv/bin/activate
 		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
-			docker run --rm -d --name mykg-agy-daemon \
+			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
-				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
-				-e HOME="$(HOME)" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
 				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
-				-u "$$(id -u):$$(id -g)" \
-				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
-				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
-				-w /workspace \
-				python:3.11-slim \
+				mykg-agy-daemon \
 				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
 				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
 				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
@@ -226,7 +220,7 @@ mykg-update: .venv/bin/activate
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker stop mykg-agy-daemon >/dev/null 2>&1 || true; \
+		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 	fi; \
 	exit $$EXIT_CODE
 
@@ -237,17 +231,11 @@ mykg-index: .venv/bin/activate
 		mkdir -p "mykg_sessions"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
-			docker run --rm -d --name mykg-agy-daemon \
+			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
-				-v "$(HOME)/.gemini:$(HOME)/.gemini" \
-				-e HOME="$(HOME)" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
 				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
-				-u "$$(id -u):$$(id -g)" \
-				-v "$$(pwd)/mykg_sessions:/workspace/mykg_sessions:rw" \
-				-v "$$(pwd)/.agents:/workspace/.agents:ro" \
-				-w /workspace \
-				python:3.11-slim \
+				mykg-agy-daemon \
 				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
 				"mykg_sessions" \
 				"mykg_sessions" >/dev/null 2>&1 || true; \
@@ -256,7 +244,7 @@ mykg-index: .venv/bin/activate
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker stop mykg-agy-daemon >/dev/null 2>&1 || true; \
+		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 	fi; \
 	exit $$EXIT_CODE
 
