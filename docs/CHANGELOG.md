@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.17] - 2026-09-06
+
+### Added
+
+- **In-Repo AI Memory Presync**: Replaced external `~/.local/bin/` binaries with an in-repo `scripts/sync_agy_memory.sh` script featuring single-loop version-filtered transcript conversion, automated daemon/task exclusion, and automatic `.iqoqo-mykg-scope.yaml` version patching.
+- **AI Memory Sync BATS Test Suite**: Added 14 unit tests in `tests/bash/agy_memory_sync.bats` covering version filtering, myKG daemon prompt skipping, and scope YAML update idempotency.
+- **Wishlist Media Disambiguation**: Added `work_type` and `medium_type` traversal and serialization to `UserWorkIntent` response payloads in `app/api/items.py` and dynamic polymorphic media type badges (Music, BoardGame, Movie, Book) with appropriate aspect ratios and icons (e.g., turntable/disc icon for vinyl) in `frontend/components/collection/item-card.tsx` and `frontend/lib/media-badge.ts`.
+- **Wishlist Media Disambiguation Tests**: Added comprehensive backend unit tests in `tests/test_wishlist_media.py`, frontend utility tests in `frontend/__tests__/lib/media-badge.test.ts`, item card tests in `frontend/__tests__/components/collection/ItemCard.test.tsx`, and E2E scenario in `frontend/__tests__/e2e/wishlist_media_types.spec.ts`.
+- **Scanner Multi-Candidate Disambiguation**: Added candidate disambiguation array returns for ambiguous title searches across Google Books and Allegro in `app/api/scanner.py`, with frontend selection modal in `frontend/components/scanner/candidate-selector-dialog.tsx` and end-to-end browser test verification in `frontend/__tests__/e2e/scanner_workflow.spec.ts`.
+- **Scanner Scan Policies & Isolation**: Introduced explicit scan policies ("Add to Shelf", "Add to Wishlist", "Catalog Only") allowing cataloging works and manifestations without attaching them to personal shelves or user intents.
+- **Decoupled Standalone Docker Packaging**: Added `deploy/Dockerfile.nginx` for standalone reverse proxy packaging, GitHub Container Registry publication for `iqoqo-nginx`, and local image build script `scripts/build_docker_images.sh` with Makefile target `make docker-build-preview`.
+- **Allegro Token Centralization & Mutual Exclusion**: Reconciled Allegro OAuth token management with distributed Redis cache mutex locking to eliminate race conditions between worker and web instances.
+- **Autonomous myKG Sandbox**: Added `docker-compose.ai_sandbox.yml` with tmpfs OAuth token bootstrap, `cap_drop: ALL`, `no-new-privileges:true`, and read-only rootfs for autonomous extraction via `gemini-3.8-flash-low`.
+- **AI Sandbox Network Egress Filtering**: Added dual-network isolation in `docker-compose.ai_sandbox.yml` with an internal-only bridge network (`internal: true`) for `mykg-agy-daemon` and a dedicated `sandbox-egress-proxy` sidecar. Restricts outbound egress strictly to Google Gemini, Google OAuth, and Antigravity verification domains on port 443 with automated Bats and pytest regression suites.
+- **Universal AiOps Terse Mode**: Introduced `IQOQO_AI_MODE=1` environment standard across pytest, vitest, and Makefile targets for concise, token-efficient developer outputs.
+- **Release Regression Protections**: Added unit and script tests in `tests/test_migration.py` (Alembic 32-character limits and single-head lineage), `tests/test_wishlist_media.py` (non-book video intent serialization), `tests/test_feedback_tickets.py` (admin screenshot access), `tests/bash/test_docker_builds.bats` (docker layer secret exclusion), `tests/bash/mykg_tooling.bats` (ai sandbox capability drops), and `tests/bash/iqoqo_status.bats` (Allegro token checks).
+
+### Changed
+
+- **MemPalace Indexing Optimization**: Consolidated `.iqoqo-mempalace-scope.yaml` scopes from 24 fragmented subdirectories into high-level roots (`.` and `.context/notes`) and enhanced `scan_scope.py` with fast in-place directory pruning, reducing `make mempalace-index` execution time from ~50s down to ~4s (10x-15x speedup).
+- **Makefile Knowledge Synchronization**: Updated `make memory-presync` and `make knowledge-sync` targets for fully self-contained execution without external system dependencies.
+- **Scanner Metadata Zero-Refetch Pipeline**: Refactored scanner form initialization to preserve rich metadata and external cover image URLs directly from scanner lookup responses without triggering secondary external fetches.
+- **Instance Settings Allegro Flow UX**: Moved the Allegro device flow button and configuration status indicator into the centralized Instance Settings panel.
+
+### Fixed
+
+- **Feedback Screenshot Access Permissions**: Relaxed IDOR restrictions on `GET /api/feedback/screenshots/<filename>` to query the associated `FeedbackItem` and authorize access for ticket authors, assigned custodians (`custodian` role), and platform admins (`tickets:admin`), while rejecting unauthorized requests with 403 and non-existent attachments with 404.
+- **Feedback Screenshot Suffix & IDOR Collision**: Enforced strict `os.path.basename` matching, path traversal rejection, and verified ticket read authorization across all matching tickets in `app/api/feedback.py` to eliminate authorization bypass via suffix matching or filename collision.
+- **Host Header Poisoning & Open Redirect**: Added strict domain allowlisting (`isAllowedHost`) in `frontend/app/api/auth-exchange/route.ts` to neutralize unvalidated `X-Forwarded-Host` poisoning and prevent auth token leakage.
+- **Docker Image Layer Secret Excision**: Removed `COPY rclone.conf*` from `deploy/Dockerfile` to ensure cloud storage credentials and encryption keys are never baked into exported container image layers.
+- **Orphaned Compose Mount Cleanup**: Removed obsolete `.allegro_token.json` volume mounts across `web` and `worker` services in `docker-compose.yml`.
+- **Alembic Identifier PostgreSQL Truncation**: Shortened migration revision identifiers to 32 characters or fewer to prevent `StringDataRightTruncation` failures on PostgreSQL's `VARCHAR(32)` `alembic_version.version_num` column.
+- **AI Memory & myKG Workspace Bloat**: Purged 379 intermediate `mykg` extraction task files and deleted the obsolete 125MB `.context/ai-memory/agy/` directory, preventing recursive self-indexing loops across Graphify, MemPalace, and myKG engines.
+- **AI Sandbox Egress Allowlist Hardening (Review 4 Finding SEC-01)**: Surgically scoped `deploy/sandbox_proxy/allowlist.conf` to exact Antigravity, CloudCode, Gemini, OAuth, and avatar endpoints, completely removing broad wildcard domains (`*.google.com`, `*.googleapis.com`, `*.googleusercontent.com`, `*.google`, `*.goog`) and eliminating unauthenticated exfiltration vectors (Google Forms, Google Apps Script, Google Cloud Storage buckets).
+- **Feedback Screenshot Collision IDOR Containment (Review 4 Finding SEC-02)**: Replaced `any()` with `all()` in `_validate_screenshot_access` in `app/api/feedback.py`, ensuring screenshot access is strictly forbidden if any ticket referencing the attachment filename is unauthorized to the requesting user.
+- **Host Header Poisoning & Open Redirect Fail-Closed Fallback (Review 4 Finding SEC-03)**: Replaced untrusted `url.host` fallback with secure fallback host (`NEXT_PUBLIC_FRONTEND_URL` or `"localhost:3000"`) in `frontend/app/api/auth-exchange/route.ts` so requests with invalid `Host` headers fail closed.
+- **Allegro Status BATS Test in CI**: Unset `IQOQO_AI_MODE` during the Allegro status test in `tests/bash/iqoqo_status.bats` so the full status report is emitted reliably in headless CI environments without `.env`.
+- **Clone Asset File Permissions for Non-Root Containers**: Updated `scripts/clone.sh` to ensure write permissions (`chmod -R a+rwX`) on destination static and export directories, preventing `PermissionError` when unprivileged containers (`appuser` UID `10001`) save user-submitted attachments, covers, or exported files.
+- **Dependabot Security Vulnerabilities**: Resolved open Dependabot alerts across root and frontend lockfiles (`fast-uri`, `@humanfs/node`, `brace-expansion`, `browserslist`, `qs`).
+
 ## [0.7.16] - 2026-08-23
 
 ### Added

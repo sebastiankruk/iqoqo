@@ -59,5 +59,14 @@ docker build \
 echo "✅ Frontend build successful!"
 echo ""
 
+# Build Nginx
+echo "🐳 Building iqoqo-nginx:v$VERSION..."
+docker build \
+  -t "iqoqo-nginx:v$VERSION" \
+  -t iqoqo-nginx:latest \
+  -f deploy/Dockerfile.nginx .
+echo "✅ Nginx build successful!"
+echo ""
+
 echo "🎉 All local builds completed successfully!"
 echo "You can check your images by running: docker images | grep iqoqo"

@@ -13,18 +13,44 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-# Override file: pull pre-built images from GitHub Container Registry
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up
+# Override file: pull pre-built images from GitHub Container Registry or local tags
+# Usage: docker compose -f docker-compose.prebuilt.yml up -d
 # Note: Requires Docker Compose v2.24+
+
+name: ${COMPOSE_PROJECT_NAME:-iqoqo}
+
+include:
+  - docker-compose.yml
+  - docker-compose.monitoring.yml
+
 services:
   web:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
+    volumes: !override
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+      - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
     build: !reset null
+    volumes: !override
+      - ./exports:/usr/src/app/exports
+      - ./app/static/covers:/usr/src/app/app/static/covers
+      - ./app/static/gallery:/usr/src/app/app/static/gallery
+      - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
+
+  nginx:
+    image: ${IMAGE_PREFIX:-}iqoqo-nginx:${APP_VERSION:-preview}
+    build: !reset null
+    volumes: !override
+      - ./app/static/covers:/usr/share/nginx/html/covers:ro
+      - ./app/static/gallery:/usr/share/nginx/html/gallery:ro
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sebastiankruk}/iqoqo-frontend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-}iqoqo-frontend:${APP_VERSION:-preview}
     build: !reset null

@@ -92,9 +92,15 @@ test.describe("Scanner Workflow", () => {
             cover_url: "https://covers.openlibrary.org/b/id/12345-L.jpg",
             candidates: [
               {
-                title: "The Divine Comedy",
+                title: "The Divine Comedy - Edition 1",
                 authors: ["Dante Alighieri"],
                 isbn13: testBarcode,
+                format: "book",
+              },
+              {
+                title: "The Divine Comedy - Illustrated",
+                authors: ["Dante Alighieri"],
+                isbn13: "9780140449137",
                 format: "book",
               },
             ],
@@ -137,7 +143,16 @@ test.describe("Scanner Workflow", () => {
 
       // Submit search
       await page.keyboard.press("Enter");
-      await page.waitForTimeout(1000);
+
+      // Verify disambiguation sheet appears with multiple candidates
+      await expect(page.getByText("Which one did you mean?")).toBeVisible();
+      const candidateChoice = page.getByRole("button", { name: /The Divine Comedy - Edition 1/i });
+      await expect(candidateChoice).toBeVisible();
+      await candidateChoice.click();
+
+      // Verify success card appears with selected metadata
+      await expect(page.getByText("Successfully Found!")).toBeVisible();
+      await expect(page.getByText("The Divine Comedy - Edition 1")).toBeVisible();
     }
   });
 
@@ -189,5 +204,30 @@ test.describe("Scanner Workflow", () => {
 
     const identifierInput = page.locator("#manual-identifier");
     await expect(identifierInput).toHaveValue(timeoutBarcode);
+  });
+
+  test("verifies policy mode selection and explanatory hints", async ({ page }) => {
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+
+    // Policy buttons
+    const shelfBtn = page.getByRole("button", { name: "Shelf", exact: true });
+    const wishlistBtn = page.getByRole("button", { name: "Wishlist", exact: true });
+    const catalogBtn = page.getByRole("button", { name: "Catalog Only", exact: true });
+
+    await expect(shelfBtn).toBeVisible();
+    await expect(wishlistBtn).toBeVisible();
+    await expect(catalogBtn).toBeVisible();
+
+    // Default policy is Shelf -> shows shelf hint
+    await expect(page.getByText("Adding directly to your personal shelf")).toBeVisible();
+
+    // Switch to Catalog Only
+    await catalogBtn.click();
+    await expect(page.getByText("Adding to shared catalog without adding to shelf")).toBeVisible();
+
+    // Switch to Wishlist
+    await wishlistBtn.click();
+    await expect(page.getByText("Adding to your wishlist")).toBeVisible();
   });
 });

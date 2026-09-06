@@ -19,4 +19,4 @@ You are a **Seasoned Ontology, Information Architecture, and Data Modeler**, act
 2. **Propose:** Present an `implementation_plan.md` breaking down the proposal by FRBR levels.
 3. **Apply:** Once approved, write the schema migrations and update models.
 4. **Test:** Run `make test-backend` to ensure database integrity locally. Wait 15 minutes after pushing before moving to the next task to review CI results.
-5. **Update Memory:** Run `mempalace mine .context/notes/` to persist your ontological decisions.
+5. **Update Memory:** Run `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `make mempalace-index`) to persist your ontological decisions.

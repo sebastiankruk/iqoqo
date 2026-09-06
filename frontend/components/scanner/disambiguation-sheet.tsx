@@ -17,6 +17,7 @@
 
 import Image from "next/image";
 import { X, ChevronRight, Disc, BookOpen, Film, Gamepad2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { IsbnMeta } from "@/types/frbr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,12 +40,20 @@ interface DisambiguationSheetProps {
  * @returns {JSX.Element} The component
  */
 export function DisambiguationSheet({ candidates, onSelect, onDismiss }: DisambiguationSheetProps) {
+  const t = useTranslations("scanner");
+
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 animate-[slide-up_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] p-4 sm:p-6 lg:p-8">
       <Card className="w-full max-w-xl mx-auto overflow-hidden shadow-2xl border-primary/30 bg-card/95 backdrop-blur-md">
         <div className="flex items-center justify-between border-b border-border bg-muted/50 px-6 py-4">
-          <h2 className="text-lg font-bold font-serif text-foreground">Which one did you mean?</h2>
-          <Button variant="ghost" size="icon" onClick={onDismiss} className="rounded-full">
+          <h2 className="text-lg font-bold font-serif text-foreground">{t("disambiguation.title")}</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onDismiss}
+            className="rounded-full"
+            aria-label={t("disambiguation.closeAria")}
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -107,7 +116,7 @@ export function DisambiguationSheet({ candidates, onSelect, onDismiss }: Disambi
                           variant="secondary"
                           className="text-[10px] h-4 bg-green-500/10 text-green-600 dark:text-green-400 border-none px-1"
                         >
-                          In Collection
+                          {t("disambiguation.inCollection")}
                         </Badge>
                       )}
                     </div>
@@ -123,9 +132,7 @@ export function DisambiguationSheet({ candidates, onSelect, onDismiss }: Disambi
         </CardContent>
 
         <div className="bg-muted/30 p-4 border-t border-border">
-          <p className="text-[10px] text-center text-muted-foreground">
-            Found multiple matches in your local database. Please pick one to continue.
-          </p>
+          <p className="text-[10px] text-center text-muted-foreground">{t("disambiguation.footerHint")}</p>
         </div>
       </Card>
     </div>

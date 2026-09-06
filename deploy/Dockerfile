@@ -33,8 +33,8 @@ RUN sed -i '/# Testing/,$d' requirements.txt && \
 # --- Runtime Stage ---
 FROM python:3.14-slim
 
-# Create a non-root user
-RUN useradd -m -s /bin/bash appuser
+# Create a non-root user with UID 10001
+RUN useradd -u 10001 -m -s /bin/bash appuser
 
 # Set the working directory in the container
 WORKDIR /usr/src/app
@@ -55,7 +55,14 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 COPY --chown=appuser:appuser app app/
 COPY --chown=appuser:appuser migrations migrations/
 COPY --chown=appuser:appuser scripts scripts/
+COPY --chown=appuser:appuser shared shared/
 COPY --chown=appuser:appuser run.py wsgi.py ./
+
+# Setup rclone config directory with restrictive permissions.
+# rclone.conf is mounted at runtime into this folder and NEVER copied into image layers.
+RUN mkdir -p /home/appuser/.config/rclone && \
+    chown -R appuser:appuser /home/appuser/.config && \
+    chmod 0700 /home/appuser/.config/rclone
 
 # Copy the container entrypoint (pre-start checks, e.g. rclone config dir)
 COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

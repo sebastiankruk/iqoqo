@@ -79,66 +79,126 @@ const TYPE_LIKE_VALUES = new Set([
 ]);
 
 /**
- * Maps a raw content type string to a badge type key.
+ * Maps a raw content type or work type string to a badge type key.
  *
- * @param contentType - Raw content type (e.g. "video", "music", "text")
+ * @param contentTypeOrWorkType - Raw content type (e.g. "video", "music", "text") or work type (e.g. "AudioWork", "GameWork")
  * @returns The badge type key
  */
-function toTypeKey(contentType: string): MediaBadgeType {
-  switch (contentType) {
+function toTypeKey(contentTypeOrWorkType: string): MediaBadgeType {
+  const normalized = contentTypeOrWorkType.toLowerCase().replace(/[-_\s]/g, "");
+  switch (normalized) {
     case "movie":
     case "video":
     case "film":
-    case "moving image":
+    case "movingimage":
+    case "videowork":
+    case "movingimagework":
       return "movie";
     case "music":
     case "audio":
     case "sound":
+    case "audiowork":
+    case "musicwork":
+    case "musicalwork":
       return "music";
     case "audiobook":
+    case "audiobookwork":
       return "audiobook";
-    case "board_game":
-    case "board game":
     case "boardgame":
     case "puzzle":
     case "game":
-    case "video game":
+    case "videogame":
     case "software":
+    case "gamework":
+    case "threedimensionalobject":
       return "game";
+    case "text":
+    case "book":
+    case "textwork":
+    case "standard":
+      return "book";
     default:
       return "book";
   }
+}
+
+/** Options or Item-like payload passed into resolveMediaBadge. */
+export interface ResolveMediaBadgeOptions {
+  contentType?: string | null;
+  content_type?: string | null;
+  kind?: string | null;
+  expression_kind?: string | null;
+  format?: string | null;
+  workType?: string | null;
+  work_type?: string | null;
+  mediumType?: string | null;
+  medium_type?: string | null;
 }
 
 /**
  * Resolves the segments of the media type badge pill from FRBR data.
  *
  * The pill is composed as ``Type[ / Kind][ / Format]``:
- * - Type comes from the Expression content type (falling back to the format's
- *   category when no content type is available).
+ * - Type comes from Expression content_type, Work work_type, or medium_type / format category.
  * - Kind reflects the Expression kind (e.g. ``live_performance`` → concert).
  * - Format is the canonical carrier label, shown only when it carries real
  *   information — type-like values (``video``, ``book``), ``unknown_*``
  *   placeholders and segments duplicating the type are suppressed.
  *
- * @param contentType - Expression content type (e.g. "music", "video")
- * @param kind - Expression kind (e.g. "live_performance")
- * @param format - Manifestation carrier format (e.g. "vinyl", "bluray")
+ * @param inputOrContentType - Options object or Expression content type (e.g. "music", "video")
+ * @param kindArg - Expression kind (e.g. "live_performance")
+ * @param formatArg - Manifestation carrier format (e.g. "vinyl", "bluray")
+ * @param workTypeArg - Work type discriminator (e.g. "AudioWork", "GameWork")
+ * @param mediumTypeArg - Medium type carrier (e.g. "Vinyl", "Audio")
  * @returns The resolved badge parts
  */
 export function resolveMediaBadge(
-  contentType?: string | null,
-  kind?: string | null,
-  format?: string | null
+  inputOrContentType?: string | null | ResolveMediaBadgeOptions,
+  kindArg?: string | null,
+  formatArg?: string | null,
+  workTypeArg?: string | null,
+  mediumTypeArg?: string | null
 ): MediaBadgeParts {
-  const ct = (contentType ?? "").trim().toLowerCase();
-  const f = (format ?? "").trim().toLowerCase();
+  let contentType: string | null | undefined;
+  let kind: string | null | undefined;
+  let format: string | null | undefined;
+  let workType: string | null | undefined;
+  let mediumType: string | null | undefined;
+
+  if (inputOrContentType && typeof inputOrContentType === "object") {
+    contentType = inputOrContentType.contentType ?? inputOrContentType.content_type;
+    kind = inputOrContentType.kind ?? inputOrContentType.expression_kind;
+    format = inputOrContentType.format;
+    workType = inputOrContentType.workType ?? inputOrContentType.work_type;
+    mediumType = inputOrContentType.mediumType ?? inputOrContentType.medium_type;
+  } else {
+    contentType = inputOrContentType;
+    kind = kindArg;
+    format = formatArg;
+    workType = workTypeArg;
+    mediumType = mediumTypeArg;
+  }
+
+  const ct = (contentType ?? "").trim();
+  const wt = (workType ?? "").trim();
+  const mt = (mediumType ?? "").trim();
+  const f = (format ?? "").trim().toLowerCase() || mt.toLowerCase();
 
   let typeKey: MediaBadgeType;
   if (ct) {
     typeKey = toTypeKey(ct);
+  } else if (wt) {
+    typeKey = toTypeKey(wt);
+  } else if (
+    mt &&
+    (FORMAT_CATEGORY[mt.toLowerCase()] ||
+      FORMAT_ALIAS_TO_CATEGORY[mt.toLowerCase()] ||
+      TYPE_LIKE_VALUES.has(mt.toLowerCase()))
+  ) {
+    const resolvedCat =
+      FORMAT_CATEGORY[mt.toLowerCase()] || FORMAT_ALIAS_TO_CATEGORY[mt.toLowerCase()] || mt.toLowerCase();
+    typeKey = toTypeKey(resolvedCat);
   } else if (f && (FORMAT_CATEGORY[f] || FORMAT_ALIAS_TO_CATEGORY[f] || TYPE_LIKE_VALUES.has(f))) {
-    // No content type — infer the type segment from the carrier's category, alias or type-like value.
     const resolvedCat = FORMAT_CATEGORY[f] || FORMAT_ALIAS_TO_CATEGORY[f] || f;
     typeKey = toTypeKey(resolvedCat);
   } else {
@@ -156,14 +216,14 @@ export function resolveMediaBadge(
 
   const isInformativeFormat =
     !!f &&
-    f !== ct &&
+    f !== ct.toLowerCase() &&
     !TYPE_LIKE_VALUES.has(f) &&
     !f.startsWith("unknown_") &&
     !f.startsWith(`${typeKey}_`) && // e.g. audiobook_cd next to "Audiobook"
-    !!FORMAT_LABELS[f];
+    !!(FORMAT_LABELS[f] || FORMAT_LABELS[mt.toLowerCase()]);
 
   if (isInformativeFormat) {
-    parts.formatLabel = FORMAT_LABELS[f];
+    parts.formatLabel = FORMAT_LABELS[f] || FORMAT_LABELS[mt.toLowerCase()];
   }
 
   return parts;

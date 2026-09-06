@@ -66,3 +66,48 @@ teardown() {
   run bash "${ENTRYPOINT}" sh -c "exit 42"
   [ "${status}" -eq 42 ]
 }
+
+@test "entrypoint warns when rclone.conf is not readable" {
+  mkdir -p "${HOME}/.config/rclone"
+  touch "${HOME}/.config/rclone/rclone.conf"
+  chmod 0000 "${HOME}/.config/rclone/rclone.conf"
+
+  # Create mock chmod to prevent chmod 0600 from making the file readable
+  MOCK_BIN="${TEST_TEMP_DIR}/mock-bin"
+  mkdir -p "${MOCK_BIN}"
+  printf '#!/bin/sh\nexit 1\n' > "${MOCK_BIN}/chmod"
+  chmod +x "${MOCK_BIN}/chmod"
+
+  PATH="${MOCK_BIN}:${PATH}" run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "WARNING:" ]]
+  [[ "${output}" =~ "not readable" ]]
+}
+
+@test "entrypoint does not warn when rclone.conf is readable" {
+  mkdir -p "${HOME}/.config/rclone"
+  touch "${HOME}/.config/rclone/rclone.conf"
+  chmod 0600 "${HOME}/.config/rclone/rclone.conf"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ ! "${output}" =~ "WARNING:" ]]
+}
+
+@test "entrypoint rewrites localhost database and redis URLs to docker service names" {
+  DATABASE_URL="postgresql://iqoqo:pass@localhost:5432/iqoqo" \
+  REDIS_URL="redis://localhost:6379/0" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
+  [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
+}
+
+@test "entrypoint rewrites 127.0.0.1 database and redis URLs to docker service names" {
+  DATABASE_URL="postgresql://iqoqo:pass@127.0.0.1:5432/iqoqo" \
+  REDIS_URL="redis://127.0.0.1:6379/0" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
+  [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
+}

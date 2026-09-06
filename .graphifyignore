@@ -1,0 +1,53 @@
+# iqoqo-specific graphify exclusions
+# Detected version from package.json controls which ai-memory/ subfolder is indexed
+
+# Directories already covered by AST extraction
+.context/notes/code/
+.context/notes/tests/
+.context/notes/bugs/
+.context/notes/review/
+.context/notes/.mykg_sessions/
+.context/notes/marketing/
+.context/notes/screenshots/
+.context/notes/notes/               # nested duplicate notes
+.context/notes/ai-memory/           # handled separately below
+.context/notes/sre/ai-memory/       # ops-specific ai memory (excluded per decision)
+
+# AI memory - archive and non-current versions
+# Current version is auto-detected from package.json at runtime
+# Non-current versions are excluded here; the skill updates this list
+.context/ai-memory/archive/
+.context/ai-memory/setup/
+.context/ai-memory/gemini/
+.context/ai-memory/opencode/
+.context/ai-memory/antigravity/
+.context/ai-memory/agy/
+.context/ai-memory/agents/
+.context/ai-memory/2026/
+.context/ai-memory/0.7.13/
+.context/ai-memory/0.7.14/
+.context/ai-memory/0.7.15/
+.context/ai-memory/0.7.16/
+
+# Standard exclusions
+.venv/
+node_modules/
+.next/
+.graphify-out/cache/
+
+# Build artifacts
+frontend/.next/
+frontend/.next-e2e/
+frontend/node_modules/
+
+# Sensitive files
+.env*
+!.env.example
+!.env.dev.example
+.npmrc
+
+# Temporary files
+*.tmp
+*.log
+.pytest_cache/
+__pycache__/

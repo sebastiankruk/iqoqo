@@ -24,11 +24,15 @@ import { defineConfig } from "vitest/config";
  * jsdom). Path alias "@/" mirrors the tsconfig.json paths so that the same
  * import style used in source files works inside test files too.
  */
+const isAiMode = Boolean(process.env.IQOQO_AI_MODE);
+
 export default defineConfig({
   plugins: [react()],
 
   test: {
     environment: "happy-dom",
+
+    ...(isAiMode ? { reporter: "dot" } : {}),
 
     // Inject vi, describe, it, expect etc. as globals (no need to import them).
     globals: true,

@@ -96,8 +96,8 @@ processors:
 
 exporters:
   # Export all 3 pillars (traces, metrics, logs) to OpenObserve's native OTLP endpoint.
-  # Authorization header = Basic base64("${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}:${OPENOBSERVE_ROOT_PASSWORD:-supersecret}")
-  # Default value: base64(admin@iqoqo.local:supersecret)
+  # Authorization header = Basic base64("${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}:${OPENOBSERVE_ROOT_PASSWORD:-SuperSecret!123}")
+  # Default value: base64(admin@iqoqo.local:SuperSecret!123)
   otlphttp/openobserve:
     endpoint: "http://openobserve:5080/api/default/"
     headers:

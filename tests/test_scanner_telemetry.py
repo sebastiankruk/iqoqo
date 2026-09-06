@@ -131,6 +131,41 @@ def test_scan_with_policy_catalog_no_item_or_intent(client: FlaskClient, normal_
         assert len(intents) == 0
 
 
+def test_scan_with_policy_catalog_only_no_item_or_intent(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning with policy='catalog_only' registers manifestation metadata without creating Item or UserWorkIntent."""
+    unique_barcode = f"CATONLY{uuid.uuid4().hex[:8]}"
+    payload = {
+        "barcode": unique_barcode,
+        "format": "book",
+        "policy": "catalog_only",
+        "meta": {
+            "title": "Catalog Only Test Book",
+            "author": "Catalog Author",
+            "format": "book",
+            "barcode": unique_barcode,
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 201
+    assert response.json is not None
+    data = response.json.get("data", {})
+    assert data.get("action") == "cataloged"
+    assert data.get("item_id") is None
+    assert data.get("intent_id") is None
+
+    manifestation_id = data.get("manifestation_id")
+    with app.app_context():
+        manifestation = db.session.get(Manifestation, manifestation_id)
+        assert manifestation is not None
+
+        items = Item.query.filter_by(manifestation_id=manifestation_id).all()
+        assert len(items) == 0
+
+        intents = UserWorkIntent.query.filter_by(work_id=manifestation.expression.work_id).all()
+        assert len(intents) == 0
+
+
 def test_scan_with_invalid_policy_fails(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
     """Verifies scanning with an invalid policy string returns 400 validation error and makes no DB changes."""
     unique_barcode = f"INV{uuid.uuid4().hex[:8]}"
@@ -150,3 +185,78 @@ def test_scan_with_invalid_policy_fails(client: FlaskClient, normal_user_headers
     with app.app_context():
         manifestation = Manifestation.query.filter_by(barcode=unique_barcode).first()
         assert manifestation is None
+
+
+def test_scan_with_policy_wishlist_only_creates_intent(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning with policy='wishlist' strictly creates UserWorkIntent and does not create Item."""
+    unique_barcode = f"WISH{uuid.uuid4().hex[:8]}"
+    payload = {
+        "barcode": unique_barcode,
+        "format": "book",
+        "collection_status": "available",
+        "policy": "wishlist",
+        "meta": {
+            "title": "Wishlist Only Test Book",
+            "author": "Wishlist Author",
+            "format": "book",
+            "barcode": unique_barcode,
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 201
+    assert response.json is not None
+    data = response.json.get("data", {})
+    assert data.get("action") == "added_to_wishlist"
+    assert data.get("item_id") is None
+    intent_id = data.get("intent_id")
+    assert intent_id is not None
+
+    manifestation_id = data.get("manifestation_id")
+    with app.app_context():
+        manifestation = db.session.get(Manifestation, manifestation_id)
+        assert manifestation is not None
+
+        items = Item.query.filter_by(manifestation_id=manifestation_id).all()
+        assert len(items) == 0
+
+        intent = db.session.get(UserWorkIntent, intent_id)
+        assert intent is not None
+        assert intent.work_id == manifestation.expression.work_id
+        assert intent.status.startswith("want_to_")
+
+
+def test_scan_omitted_policy_defaults_to_inventory(client: FlaskClient, normal_user_headers: dict[str, str], app: Flask) -> None:
+    """Verifies scanning without an explicit policy defaults to inventory item creation."""
+    unique_barcode = f"DEF{uuid.uuid4().hex[:8]}"
+    payload = {
+        "barcode": unique_barcode,
+        "format": "book",
+        "meta": {
+            "title": "Default Policy Test Book",
+            "author": "Default Author",
+            "format": "book",
+            "barcode": unique_barcode,
+        },
+    }
+
+    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
+    assert response.status_code == 201
+    assert response.json is not None
+    data = response.json.get("data", {})
+    assert data.get("action") == "added_to_inventory"
+    item_id = data.get("item_id")
+    assert item_id is not None
+
+    manifestation_id = data.get("manifestation_id")
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item is not None
+        assert item.collection_status == "available"
+
+        manifestation = db.session.get(Manifestation, manifestation_id)
+        assert manifestation is not None
+
+        # Verify no UserWorkIntent was created
+        intent = UserWorkIntent.query.filter_by(work_id=manifestation.expression.work_id).first()
+        assert intent is None

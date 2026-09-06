@@ -93,8 +93,34 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     @classmethod
     def get_value(cls, key: str, default: Any = None) -> Any:
         """Get a setting value by key with a fallback default."""
+        from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
         from . import db
 
-        stmt = db.select(cls).filter_by(key=key)
-        setting = db.session.execute(stmt).scalar_one_or_none()
-        return setting.value if setting else default
+        try:
+            stmt = db.select(cls).filter_by(key=key)
+            setting = db.session.execute(stmt).scalar_one_or_none()
+            return setting.value if setting else default
+        except (SQLAlchemyError, DBAPIError, RuntimeError, AttributeError):
+            return default
+
+    @classmethod
+    def set_value(cls, key: str, value: Any) -> None:
+        """Set or update a setting value by key."""
+        from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+        from . import db
+
+        try:
+            stmt = db.select(cls).filter_by(key=key)
+            setting = db.session.execute(stmt).scalar_one_or_none()
+            if setting:
+                setting.value = value
+                setting.updated_at = datetime.now(UTC)
+            else:
+                setting = cls(key=key, value=value)
+                db.session.add(setting)
+            db.session.commit()
+        except (SQLAlchemyError, DBAPIError, RuntimeError):
+            db.session.rollback()
+            raise

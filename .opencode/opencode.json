@@ -4,8 +4,27 @@
     "../.agents/rules/iqoqo-standards.md"
   ],
   "plugin": [
-    "opencode-ignore"
+    "opencode-ignore",
+    ".opencode/plugins/graphify.js"
   ],
+  "skills": {
+    "paths": [
+      ".agents/skills"
+    ]
+  },
+  "mcp": {
+    "mykg": {
+      "type": "local",
+      "command": [
+        ".venv/bin/mykg",
+        "mcp-serve"
+      ],
+      "enabled": true,
+      "environment": {}
+    }
+  },
+  "provider": {
+  },
   "permission": {
     "external_directory": {},
     "edit": {},

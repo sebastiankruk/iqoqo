@@ -53,6 +53,16 @@ def _can_create_tickets(user: User | None) -> bool:
     return bool(any(role.name in {"admin", "user"} for role in user.roles) or user.has_permission(PermissionName.TICKETS_CREATOR))
 
 
+def _can_read_ticket(user: User | None, item: FeedbackItem) -> bool:
+    if not user:
+        return False
+    if _can_admin_tickets(user):
+        return True
+    if any(role.name == "custodian" for role in user.roles):
+        return True
+    return bool(item.user_id == user.id)
+
+
 @api_bp.route("/feedback", methods=["POST"])
 @require_auth
 @limiter.limit("5 per hour", override_defaults=True)
@@ -107,11 +117,21 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 401
 
-    if not _can_admin_tickets(user):
-        stmt = select(FeedbackItem).where(FeedbackItem.user_id == g.user_id)
-        user_items = db.session.execute(stmt).scalars().all()
-        if not any(filename in (item.attachments or []) for item in user_items):
-            return jsonify({"success": False, "error": "Forbidden"}), 403
+    clean_filename = secure_filename(os.path.basename(filename))
+    if not clean_filename or clean_filename != filename:
+        return jsonify({"success": False, "error": "Invalid screenshot filename"}), 400
+
+    stmt = select(FeedbackItem).where(db.cast(FeedbackItem.attachments, db.String).contains(clean_filename))
+    items = db.session.execute(stmt).scalars().all()
+
+    matching_tickets = [it for it in items if any(os.path.basename(att) == clean_filename for att in (it.attachments or []))]
+    if not matching_tickets:
+        return jsonify({"success": False, "error": "Screenshot not found"}), 404
+
+    # Require read authorization for ALL tickets referencing this file to prevent collision IDOR
+    if not all(_can_read_ticket(user, it) for it in matching_tickets):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
     return None
 
 
@@ -119,8 +139,8 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     """Retrieve a feedback screenshot from local storage or rclone remote."""
-    safe_name = secure_filename(filename)
-    if not safe_name:
+    safe_name = secure_filename(os.path.basename(filename))
+    if not safe_name or safe_name != filename:
         return jsonify({"success": False, "error": "Invalid filename"}), 400
 
     access_err = _validate_screenshot_access(safe_name)
@@ -209,8 +229,7 @@ def get_feedback_item(feedback_id: int) -> tuple[Response, int] | Response:
     if not item:
         return jsonify({"success": False, "error": "Feedback item not found"}), 404
 
-    is_admin = _can_admin_tickets(user)
-    if not is_admin and item.user_id != g.user_id:
+    if not _can_read_ticket(user, item):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     return jsonify({"success": True, "data": _format_feedback_item(item)})

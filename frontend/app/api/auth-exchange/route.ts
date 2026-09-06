@@ -18,27 +18,63 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 /**
+ * Validates whether a hostname belongs to an allowed deployment domain.
+ *
+ * @param hostWithPort - The hostname, optionally including a port
+ * @returns {boolean} True if the host is allowed, false otherwise
+ */
+function isAllowedHost(hostWithPort: string): boolean {
+  const host = hostWithPort.split(":")[0].toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "iqoqo.cc" || host.endsWith(".iqoqo.cc");
+}
+
+/**
  * Handle GET requests to exchange a short-lived token for a session cookie.
  *
  * @param request - The incoming Next.js request
  * @returns {Promise<NextResponse>} The Next.js response redirecting to the dashboard
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const url = new URL(request.url);
+  const { searchParams } = url;
   const token = searchParams.get("token");
 
-  // Use our explicit environment variable as the base URL, fallback to request.url just in case
-  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || request.url;
+  const rawForwardedHost = request.headers.get("x-forwarded-host");
+  const rawHostHeader = request.headers.get("host") || "";
+
+  // Fail-closed fallback: never trust raw request host if validation fails
+  const fallbackHost = process.env.NEXT_PUBLIC_FRONTEND_URL
+    ? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).host
+    : "localhost:3000";
+
+  // Enforce host validation to prevent arbitrary open redirects via poisoned headers
+  const effectiveHost =
+    rawForwardedHost && isAllowedHost(rawForwardedHost)
+      ? rawForwardedHost
+      : rawHostHeader && isAllowedHost(rawHostHeader)
+        ? rawHostHeader
+        : fallbackHost;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const effectiveProto =
+    forwardedProto === "https" || forwardedProto === "http"
+      ? forwardedProto
+      : url.protocol.startsWith("https")
+        ? "https"
+        : "http";
+
+  const isHttps = effectiveProto === "https";
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${effectiveProto}://${effectiveHost}`;
 
   if (!token) {
     return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
   }
 
-  // Set the HttpOnly cookie
+  // Set the HttpOnly cookie (secure only when served over HTTPS)
   const cookieStore = await cookies();
   cookieStore.set("iqoqo_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days

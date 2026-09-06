@@ -38,12 +38,12 @@ WARNINGS=0
 
 usage() {
     cat <<EOF
-Usage: $0 [--stack preview|prod] [--help]
+Usage: $0 [--stack dev|preview|prod] [--help]
 
 Check health status of all iQoQo services.
 
 Options:
-  --stack STACK   Stack to check: preview or prod (default: auto-detect from .env)
+  --stack STACK   Stack to check: dev, preview, or prod (default: auto-detect from .env / mode)
   --help          Show this help
 
 Exit codes:
@@ -58,23 +58,30 @@ STACK=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --stack) STACK="$2"; shift 2 ;;
+        dev|preview|prod) STACK="$1"; shift ;;
         --help) usage ;;
         *) echo "Unknown option: $1"; usage ;;
     esac
 done
 
 if [[ -z "$STACK" ]]; then
-    if [[ -f "$IQOQO_ROOT/.env" ]]; then
-        ENV_FILE=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
-        if [[ "$ENV_FILE" == *".preview"* ]]; then
+    if [[ -n "${MODE:-}" ]]; then
+        STACK="$MODE"
+    elif [[ -f "$IQOQO_ROOT/.env" ]]; then
+        ENV_FILE_VAL=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
+        if [[ "$ENV_FILE_VAL" == *".preview"* ]]; then
             STACK="preview"
-        elif [[ "$ENV_FILE" == *".prod"* ]]; then
+        elif [[ "$ENV_FILE_VAL" == *".prod"* ]]; then
             STACK="prod"
+        elif [[ "$ENV_FILE_VAL" == *".dev"* ]]; then
+            STACK="dev"
+        elif [[ -d "$IQOQO_ROOT/.pids" ]]; then
+            STACK="dev"
         else
-            STACK="prod"
+            STACK="dev"
         fi
     else
-        STACK="prod"
+        STACK="dev"
     fi
 fi
 
@@ -82,13 +89,20 @@ if [[ "$STACK" == "preview" ]]; then
     PREFIX="iqoqo-preview"
     ENV_FILE="$IQOQO_ROOT/.env.preview"
     DOMAIN="pre.iqoqo.cc"
+    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
+elif [[ "$STACK" == "dev" ]]; then
+    PREFIX="iqoqo"
+    ENV_FILE="$IQOQO_ROOT/.env.dev"
+    [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
+    DOMAIN="localhost:3000"
+    SERVICES=("db" "redis")
 else
     PREFIX="iqoqo"
-    ENV_FILE="$IQOQO_ROOT/.env"
+    ENV_FILE="$IQOQO_ROOT/.env.prod"
+    [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
     DOMAIN="iqoqo.cc"
+    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
 fi
-
-SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
 
 if [[ ! -f "$ENV_FILE" ]]; then
     ENV_FILE="$IQOQO_ROOT/.env"
@@ -104,6 +118,8 @@ API_URL=$(load_env "NEXT_PUBLIC_APP_URL")
 DB_PORT=$(load_env "DB_PORT")
 REDIS_PORT=$(load_env "REDIS_PORT")
 NGINX_PORT=$(load_env "NGINX_PORT")
+WEB_PORT=$(load_env "WEB_PORT")
+WEB_PORT="${WEB_PORT:-5000}"
 
 if [[ "$STACK" == "preview" ]]; then
     FRONTEND_URL="${FRONTEND_URL:-https://pre.iqoqo.cc}"
@@ -111,6 +127,11 @@ if [[ "$STACK" == "preview" ]]; then
     NGINX_PORT="${NGINX_PORT:-8081}"
     DB_PORT="${DB_PORT:-5434}"
     REDIS_PORT="${REDIS_PORT:-6380}"
+elif [[ "$STACK" == "dev" ]]; then
+    FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}"
+    API_URL="${API_URL:-http://127.0.0.1:${WEB_PORT}}"
+    DB_PORT="${DB_PORT:-5432}"
+    REDIS_PORT="${REDIS_PORT:-6379}"
 else
     FRONTEND_URL="${FRONTEND_URL:-https://iqoqo.cc}"
     API_URL="${API_URL:-https://iqoqo.cc}"
@@ -119,8 +140,19 @@ else
     REDIS_PORT="${REDIS_PORT:-6379}"
 fi
 
+find_container() {
+    local svc="$1"
+    for cname_test in "${PREFIX}-${svc}-1" "${PREFIX}-${svc}" "iqoqo-${svc}-1" "iqoqo-${STACK}-${svc}-1" "${svc}-1" "${PREFIX}_${svc}_1" "${svc}"; do
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
+            echo "$cname_test"
+            return 0
+        fi
+    done
+    echo ""
+}
 
 header() {
+    [[ -n "${IQOQO_AI_MODE:-}" ]] && return 0
     local h="$1"
     printf '\n%s%s%s\n' "$BOLD" "$h" "$NC"
     local i=0; while [ "$i" -lt "${#h}" ]; do printf "─"; i=$((i+1)); done; echo
@@ -128,6 +160,14 @@ header() {
 
 check() {
     local label="$1" status="$2" detail="$3"
+    if [[ -n "${IQOQO_AI_MODE:-}" ]]; then
+        case "$status" in
+            pass|info) return 0 ;;
+            warn) printf '  %s %s  %s\n' "$WARN" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
+            fail) printf '  %s %s  %s\n' "$FAIL" "$label" "$detail"; ERRORS=$((ERRORS + 1)) ;;
+        esac
+        return 0
+    fi
     case "$status" in
         pass) printf '  %s %s  %s\n' "$PASS" "$label" "$detail" ;;
         warn) printf '  %s %s  %s\n' "$WARN" "$label" "$detail"; WARNINGS=$((WARNINGS + 1)) ;;
@@ -136,17 +176,19 @@ check() {
     esac
 }
 
-printf "\n"
-printf "╔══════════════════════════════════════════════╗\n"
-printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
-printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
-printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
-printf "╚══════════════════════════════════════════════╝\n"
+if [[ -z "${IQOQO_AI_MODE:-}" ]]; then
+    printf "\n"
+    printf "╔══════════════════════════════════════════════╗\n"
+    printf '║            %siQoQo Service Status%s              ║\n' "$BOLD" "$NC"
+    printf '║           %s               ║\n' "$(date '+%Y-%m-%d %H:%M UTC')"
+    printf '║           Stack: %s%s%s (%s)             ║\n' "$BOLD" "$STACK" "$NC" "$DOMAIN"
+    printf "╚══════════════════════════════════════════════╝\n"
+fi
 
 header "Containers"
 for svc in "${SERVICES[@]}"; do
-    cname="${PREFIX}-${svc}-1"
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname"; then
+    cname=$(find_container "$svc")
+    if [[ -n "$cname" ]]; then
         status_line=$(docker ps --filter "name=${cname}$" --format '{{.Status}}' 2>/dev/null)
         health=$(docker inspect "$cname" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' 2>/dev/null)
         detail="$status_line"
@@ -159,35 +201,95 @@ for svc in "${SERVICES[@]}"; do
         fi
         check "$cname" pass "$detail"
     else
-        check "$cname" fail "NOT RUNNING"
+        check "${PREFIX}-${svc}-1" fail "NOT RUNNING"
     fi
 done
 
-# Check optional containers (monitoring) & Observability Stack health
+# ─── Host Processes (Dev Mode) ──────────────────────────────────
+if [[ "$STACK" == "dev" ]]; then
+    header "Host Processes (Dev Mode)"
+
+    # 1. Flask API Process
+    flask_pid_file="$IQOQO_ROOT/.pids/flask.pid"
+    flask_pid=""
+    if [[ -f "$flask_pid_file" ]]; then
+        flask_pid=$(cat "$flask_pid_file" 2>/dev/null || echo "")
+    fi
+
+    if [[ -n "$flask_pid" ]] && kill -0 "$flask_pid" 2>/dev/null; then
+        proc_cmd=$(tr '\0' ' ' < "/proc/$flask_pid/cmdline" 2>/dev/null || echo "")
+        if [[ "$proc_cmd" =~ (python|flask|gunicorn) ]]; then
+            check "Flask API process" pass "PID ${flask_pid} running"
+        else
+            check "Flask API process" warn "PID ${flask_pid} alive but cmdline mismatch: ${proc_cmd:0:35}..."
+        fi
+    elif [[ -n "$flask_pid" ]]; then
+        check "Flask API process" fail "PID ${flask_pid} not running (stale .pids/flask.pid)"
+    else
+        found_port_pid=$(lsof -t -i:"${WEB_PORT}" 2>/dev/null | head -1 || echo "")
+        if [[ -n "$found_port_pid" ]]; then
+            check "Flask API process" warn "running on port ${WEB_PORT} (PID ${found_port_pid}, missing pidfile)"
+        else
+            check "Flask API process" fail "NOT RUNNING"
+        fi
+    fi
+
+    # 2. Celery Worker Process
+    celery_pid_file="$IQOQO_ROOT/.pids/celery.pid"
+    celery_pid=""
+    if [[ -f "$celery_pid_file" ]]; then
+        celery_pid=$(cat "$celery_pid_file" 2>/dev/null || echo "")
+    fi
+
+    if [[ -n "$celery_pid" ]] && kill -0 "$celery_pid" 2>/dev/null; then
+        proc_cmd=$(tr '\0' ' ' < "/proc/$celery_pid/cmdline" 2>/dev/null || echo "")
+        if [[ "$proc_cmd" =~ celery ]]; then
+            check "Celery worker process" pass "PID ${celery_pid} running"
+        else
+            check "Celery worker process" warn "PID ${celery_pid} alive but cmdline mismatch: ${proc_cmd:0:35}..."
+        fi
+    elif [[ -n "$celery_pid" ]]; then
+        check "Celery worker process" fail "PID ${celery_pid} not running (stale .pids/celery.pid)"
+    else
+        check "Celery worker process" fail "NOT RUNNING"
+    fi
+
+    # 3. Next.js Dev Server Process
+    next_pid_file="$IQOQO_ROOT/.pids/next.pid"
+    next_pid=""
+    if [[ -f "$next_pid_file" ]]; then
+        next_pid=$(cat "$next_pid_file" 2>/dev/null || echo "")
+    fi
+
+    if [[ -n "$next_pid" ]] && kill -0 "$next_pid" 2>/dev/null; then
+        proc_cmd=$(tr '\0' ' ' < "/proc/$next_pid/cmdline" 2>/dev/null || echo "")
+        if [[ "$proc_cmd" =~ (node|next|npm|npx|run\.sh) ]]; then
+            check "Next.js dev process" pass "PID ${next_pid} running"
+        else
+            check "Next.js dev process" warn "PID ${next_pid} alive but cmdline mismatch: ${proc_cmd:0:35}..."
+        fi
+    elif [[ -n "$next_pid" ]]; then
+        check "Next.js dev process" fail "PID ${next_pid} not running (stale .pids/next.pid)"
+    else
+        found_next_pid=$(lsof -t -i:3000 2>/dev/null | head -1 || echo "")
+        if [[ -n "$found_next_pid" ]]; then
+            check "Next.js dev process" warn "running on port 3000 (PID ${found_next_pid}, missing pidfile)"
+        else
+            check "Next.js dev process" fail "NOT RUNNING"
+        fi
+    fi
+fi
+
+# ─── Observability Stack ────────────────────────────────────────
 header "Observability Stack"
-oo_cname=""
-otel_cname=""
-
-for cname_test in "${PREFIX}-openobserve-1" "${PREFIX}-openobserve" "openobserve-1" "iqoqo-openobserve-1"; do
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
-        oo_cname="$cname_test"
-        break
-    fi
-done
-
-for cname_test in "${PREFIX}-otel-collector-1" "${PREFIX}-otel-collector" "otel-collector-1" "iqoqo-otel-collector-1"; do
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$cname_test"; then
-        otel_cname="$cname_test"
-        break
-    fi
-done
+oo_cname=$(find_container "openobserve")
+otel_cname=$(find_container "otel-collector")
 
 if [[ -n "$oo_cname" ]]; then
     oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
     oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
     oo_health=""
-    # Host-side health check with Basic auth (OpenObserve container has no shell/py/wget).
-    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=}"
+    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz}"
     if python3 -c "
 import urllib.request, sys
 req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
@@ -244,11 +346,10 @@ if [[ ${#active_exporters[@]} -gt 0 ]]; then
     fi
 fi
 
-
 # ─── Redis ──────────────────────────────────────────────────────
 header "Redis"
-redis_cname="${PREFIX}-redis-1"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$redis_cname"; then
+redis_cname=$(find_container "redis")
+if [[ -n "$redis_cname" ]]; then
     if ping_result=$(docker exec "$redis_cname" redis-cli ping 2>/dev/null); then
         if [[ "$ping_result" == "PONG" ]]; then
             check "Connectivity" pass "PONG"
@@ -274,8 +375,8 @@ fi
 
 # ─── PostgreSQL ─────────────────────────────────────────────────
 header "PostgreSQL"
-db_cname="${PREFIX}-db-1"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$db_cname"; then
+db_cname=$(find_container "db")
+if [[ -n "$db_cname" ]]; then
     db_user=$(load_env "POSTGRES_USER")
     db_name=$(load_env "POSTGRES_DB")
     db_user="${db_user:-iqoqo}"
@@ -287,7 +388,7 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$db_cname"; then
         check "Relations" pass "${schema_count} tables across all schemas"
         # Check for any stuck migrations
         migration_head=$(docker exec "$db_cname" psql -U "$db_user" -d "$db_name" -tAc \
-            "SELECT version_num FROM public.alembic_version" 2>/dev/null || echo "N/A")
+            "SELECT version_num FROM alembic_version LIMIT 1" 2>/dev/null || echo "N/A")
         check "Migration" pass "version: ${migration_head}"
     else
         check "pg_isready" fail "not accepting connections"
@@ -298,54 +399,114 @@ fi
 
 # ─── Celery Worker ──────────────────────────────────────────────
 header "Celery Worker"
-worker_cname="${PREFIX}-worker-1"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$worker_cname"; then
-    # Check if worker reported "Connected to redis"
-    if docker exec "$worker_cname" python3 -c "
-import os, redis
-r = redis.Redis.from_url(os.environ['REDIS_URL'])
+if [[ "$STACK" == "dev" ]]; then
+    celery_pid_file="$IQOQO_ROOT/.pids/celery.pid"
+    celery_alive=false
+    c_pid=""
+    if [[ -f "$celery_pid_file" ]]; then
+        c_pid=$(cat "$celery_pid_file" 2>/dev/null || echo "")
+        if [[ -n "$c_pid" ]] && kill -0 "$c_pid" 2>/dev/null; then
+            celery_alive=true
+        fi
+    fi
+
+    if [[ "$celery_alive" == "true" ]]; then
+        check "Worker process" pass "PID ${c_pid} active on host"
+        # Ping celery worker via redis / inspect ping
+        ping_pong=$(PYTHONPATH="$IQOQO_ROOT" "$IQOQO_ROOT/.venv/bin/celery" -A app.core.celery_app:celery inspect ping --timeout=2 2>/dev/null || true)
+        if echo "$ping_pong" | grep -qi "pong"; then
+            check "Broker & Ping" pass "connected to Redis (worker responded pong)"
+        else
+            # Fallback broker check
+            if python3 -c "
+import redis
+r = redis.Redis.from_url('redis://127.0.0.1:${REDIS_PORT:-6379}/0')
 r.ping()
 " 2>/dev/null; then
-        check "Broker" pass "connected to Redis"
-        # Check for recent reconnections (last 5 min)
-        recent_reconn=$(docker logs "$worker_cname" --since 5m 2>&1 | grep -c "Connected to redis" || true)
-        if [[ "$recent_reconn" -gt 2 ]]; then
-            check "Stability" warn "reconnected ${recent_reconn}x in last 5min (flapping?)"
-        else
-            check "Stability" pass "no recent reconnections"
+                check "Broker" pass "Redis broker reachable (host worker PID ${c_pid})"
+            else
+                check "Broker" fail "cannot reach Redis broker"
+            fi
         fi
-        # Check OTel errors in last 2 min (indicates collector down)
-        otel_errors=$(docker logs "$worker_cname" --since 2m 2>&1 | grep -c "StatusCode.UNAVAILABLE" || true)
-        if [[ "$otel_errors" -gt 10 ]]; then
-            check "OTel exporter" warn "${otel_errors} OTel export failures in 2min (collector may be down)"
-        else
-            check "OTel exporter" pass "no recent export failures"
-        fi
-        # Check for actual task processing
-        tasks_received=$(docker logs "$worker_cname" 2>&1 | grep -c "task received" || true)
-        tasks_succeeded=$(docker logs "$worker_cname" 2>&1 | grep -c "succeeded" || true)
-        tasks_failed=$(docker logs "$worker_cname" 2>&1 | grep -c "failed" || true)
-        check "Tasks" info "received: ~${tasks_received}, succeeded: ~${tasks_succeeded}, failed: ~${tasks_failed}"
     else
-        check "Broker" fail "NOT connected to Redis"
-    fi
-    # Check worker pool type and concurrency
-    cmdline=$(docker inspect "$worker_cname" --format '{{.Config.Cmd}}' 2>/dev/null | tr ',' ' ')
-    if echo "$cmdline" | grep -q "concurrency"; then
-        conc=$(echo "$cmdline" | grep -oP 'concurrency=\K[0-9]+')
-        pool=$(echo "$cmdline" | grep -oP 'pool=\K\w+')
-        check "Pool" info "--pool=${pool}  --concurrency=${conc}"
+        check "Worker" fail "host Celery worker not running"
     fi
 else
-    check "Container" fail "not running"
+    worker_cname=$(find_container "worker")
+    if [[ -n "$worker_cname" ]]; then
+        if docker exec "$worker_cname" python3 -c "
+import os, redis
+url = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+for h in ['localhost', '127.0.0.1']:
+    url = url.replace(f'@{h}:', '@redis:').replace(f'//{h}:', '//redis:')
+r = redis.Redis.from_url(url)
+r.ping()
+" 2>/dev/null; then
+            check "Broker" pass "connected to Redis"
+            recent_reconn=$(docker logs "$worker_cname" --since 5m 2>&1 | grep -c "Connected to redis" || true)
+            if [[ "$recent_reconn" -gt 2 ]]; then
+                check "Stability" warn "reconnected ${recent_reconn}x in last 5min (flapping?)"
+            else
+                check "Stability" pass "no recent reconnections"
+            fi
+            otel_errors=$(docker logs "$worker_cname" --since 2m 2>&1 | grep -c "StatusCode.UNAVAILABLE" || true)
+            if [[ "$otel_errors" -gt 10 ]]; then
+                check "OTel exporter" warn "${otel_errors} OTel export failures in 2min (collector may be down)"
+            else
+                check "OTel exporter" pass "no recent export failures"
+            fi
+            tasks_received=$(docker logs "$worker_cname" 2>&1 | grep -c "task received" || true)
+            tasks_succeeded=$(docker logs "$worker_cname" 2>&1 | grep -c "succeeded" || true)
+            tasks_failed=$(docker logs "$worker_cname" 2>&1 | grep -c "failed" || true)
+            check "Tasks" info "received: ~${tasks_received}, succeeded: ~${tasks_succeeded}, failed: ~${tasks_failed}"
+        else
+            check "Broker" fail "NOT connected to Redis"
+        fi
+        cmdline=$(docker inspect "$worker_cname" --format '{{.Config.Cmd}}' 2>/dev/null | tr ',' ' ')
+        if echo "$cmdline" | grep -q "concurrency"; then
+            conc=$(echo "$cmdline" | grep -oP 'concurrency=\K[0-9]+' || echo "?")
+            pool=$(echo "$cmdline" | grep -oP 'pool=\K\w+' || echo "?")
+            check "Pool" info "--pool=${pool}  --concurrency=${conc}"
+        fi
+    else
+        check "Container" fail "not running"
+    fi
 fi
 
 # ─── API Health ─────────────────────────────────────────────────
 header "API"
-web_cname="${PREFIX}-web-1"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$web_cname"; then
-    # Check Flask health endpoint via Python (containers may not have curl)
-    health_json=$(docker exec "$web_cname" python3 -c "
+if [[ "$STACK" == "dev" ]]; then
+    health_json=$(python3 -c "
+import urllib.request, json
+last_e = 'unreachable'
+for p in [${WEB_PORT}, 5000, 5001]:
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{p}/api/health')
+        r = urllib.request.urlopen(req, timeout=3)
+        print(json.dumps(json.loads(r.read())))
+        break
+    except Exception as e:
+        last_e = str(e)
+else:
+    print('ERROR:' + last_e)
+" 2>/dev/null || echo "ERROR:connection refused")
+
+    if echo "$health_json" | grep -qv "^ERROR:"; then
+        health_status=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
+        if [[ "$health_status" == "ok" ]]; then
+            version=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null || echo "?")
+            check "Health endpoint" pass "HTTP 200, status=ok, version=${version} (http://127.0.0.1:${WEB_PORT}/api/health)"
+        else
+            check "Health endpoint" fail "status=${health_status}"
+        fi
+    else
+        health_err="${health_json#ERROR:}"
+        check "Health endpoint" fail "http://127.0.0.1:${WEB_PORT}/api/health (${health_err})"
+    fi
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        health_json=$(docker exec "$web_cname" python3 -c "
 import urllib.request, json
 try:
     r = urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5)
@@ -353,20 +514,19 @@ try:
 except Exception as e:
     print('ERROR:' + str(e))
 " 2>/dev/null || true)
-    if echo "$health_json" | grep -qv "^ERROR:"; then
-        health_status=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
-        if [[ "$health_status" == "ok" ]]; then
-            version=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null || echo "?")
-            check "Health endpoint" pass "HTTP 200, status=ok, version=${version}"
+        if echo "$health_json" | grep -qv "^ERROR:"; then
+            health_status=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
+            if [[ "$health_status" == "ok" ]]; then
+                version=$(echo "$health_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null || echo "?")
+                check "Health endpoint" pass "HTTP 200, status=ok, version=${version}"
+            else
+                check "Health endpoint" fail "status=${health_status}"
+            fi
         else
-            check "Health endpoint" fail "status=${health_status}"
+            health_err="${health_json#ERROR:}"
+            check "Health endpoint" fail "${health_err}"
         fi
-    else
-        health_err="${health_json#ERROR:}"
-        check "Health endpoint" fail "${health_err}"
-    fi
-    # Check gunicorn worker count via /proc (containers may not have pgrep/ps)
-    gunicorn_workers=$(docker exec "$web_cname" python3 -c "
+        gunicorn_workers=$(docker exec "$web_cname" python3 -c "
 import os
 count = 0
 try:
@@ -383,56 +543,73 @@ except FileNotFoundError:
     pass
 print(count)
 " 2>/dev/null || echo "0")
-    if [[ ! "$gunicorn_workers" =~ ^[0-9]+$ ]]; then
-        gunicorn_workers=0
-    fi
-    if [[ "$gunicorn_workers" -ge 2 ]]; then
-        check "Gunicorn" pass "${gunicorn_workers} worker processes"
-    elif [[ "$gunicorn_workers" -eq 0 ]]; then
-        check "Gunicorn" pass "single-process mode"
+        if [[ ! "$gunicorn_workers" =~ ^[0-9]+$ ]]; then
+            gunicorn_workers=0
+        fi
+        if [[ "$gunicorn_workers" -ge 2 ]]; then
+            check "Gunicorn" pass "${gunicorn_workers} worker processes"
+        elif [[ "$gunicorn_workers" -eq 0 ]]; then
+            check "Gunicorn" pass "single-process mode"
+        else
+            check "Gunicorn" info "${gunicorn_workers} worker process(es)"
+        fi
     else
-        check "Gunicorn" info "${gunicorn_workers} worker process(es)"
+        check "Container" fail "not running"
     fi
-else
-    check "Container" fail "not running"
 fi
 
-# ─── Nginx ──────────────────────────────────────────────────────
-header "Nginx & Frontend"
-nginx_cname="${PREFIX}-nginx-1"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$nginx_cname"; then
-    # Try nginx -t for config syntax
-    if docker exec "$nginx_cname" nginx -t 2>&1 | grep -q "test is successful"; then
-        check "Config syntax" pass "valid"
+# ─── Nginx & Frontend ──────────────────────────────────────────
+if [[ "$STACK" == "dev" ]]; then
+    header "Frontend (Next.js Dev Server)"
+    check "Nginx" info "N/A (dev mode connects directly to Next.js)"
+    frontend_code=$(python3 -c "
+import urllib.request
+try:
+    r = urllib.request.urlopen('http://localhost:3000', timeout=4)
+    print(r.getcode())
+except urllib.error.HTTPError as e:
+    print(e.code)
+except Exception:
+    print('000')
+" 2>/dev/null || echo "000")
+    if [[ "$frontend_code" == "200" || "$frontend_code" == "302" || "$frontend_code" == "307" || "$frontend_code" == "308" ]]; then
+        check "Next.js dev server" pass "HTTP ${frontend_code} (http://localhost:3000)"
     else
-        check "Config syntax" fail "INVALID"
-    fi
-
-    # Try curl to frontend via nginx
-    frontend_code=$(docker exec "$nginx_cname" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ 2>/dev/null || echo "000")
-    if [[ "$frontend_code" == "200" ]] || [[ "$frontend_code" == "302" ]] || [[ "$frontend_code" == "301" ]]; then
-        check "Frontend (via nginx)" pass "HTTP ${frontend_code}"
-    else
-        check "Frontend (via nginx)" fail "HTTP ${frontend_code}"
-    fi
-
-    # Try /api/health through nginx proxy
-    api_code=$(docker exec "$nginx_cname" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/health 2>/dev/null || echo "000")
-    if [[ "$api_code" == "200" ]]; then
-        check "API proxy (via nginx)" pass "HTTP ${api_code}"
-    else
-        check "API proxy (via nginx)" fail "HTTP ${api_code}"
-    fi
-
-    # Check for recent 5xx errors in nginx logs
-    recent_5xx=$(docker logs "$nginx_cname" --since 15m 2>&1 | grep -c '" 5[0-9][0-9] ' || true)
-    if [[ "$recent_5xx" -gt 10 ]]; then
-        check "Recent 5xx errors" warn "${recent_5xx} in last 15min"
-    else
-        check "Recent 5xx errors" pass "${recent_5xx} in last 15min"
+        check "Next.js dev server" fail "HTTP ${frontend_code} (unreachable on http://localhost:3000)"
     fi
 else
-    check "Container" fail "not running"
+    header "Nginx & Frontend"
+    nginx_cname=$(find_container "nginx")
+    if [[ -n "$nginx_cname" ]]; then
+        if docker exec "$nginx_cname" nginx -t 2>&1 | grep -q "test is successful"; then
+            check "Config syntax" pass "valid"
+        else
+            check "Config syntax" fail "INVALID"
+        fi
+
+        frontend_code=$(docker exec "$nginx_cname" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ 2>/dev/null || echo "000")
+        if [[ "$frontend_code" == "200" ]] || [[ "$frontend_code" == "302" ]] || [[ "$frontend_code" == "301" ]]; then
+            check "Frontend (via nginx)" pass "HTTP ${frontend_code}"
+        else
+            check "Frontend (via nginx)" fail "HTTP ${frontend_code}"
+        fi
+
+        api_code=$(docker exec "$nginx_cname" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/health 2>/dev/null || echo "000")
+        if [[ "$api_code" == "200" ]]; then
+            check "API proxy (via nginx)" pass "HTTP ${api_code}"
+        else
+            check "API proxy (via nginx)" fail "HTTP ${api_code}"
+        fi
+
+        recent_5xx=$(docker logs "$nginx_cname" --since 15m 2>&1 | grep -c '" 5[0-9][0-9] ' || true)
+        if [[ "$recent_5xx" -gt 10 ]]; then
+            check "Recent 5xx errors" warn "${recent_5xx} in last 15min"
+        else
+            check "Recent 5xx errors" pass "${recent_5xx} in last 15min"
+        fi
+    else
+        check "Container" fail "not running"
+    fi
 fi
 
 # ─── Covers Directory ──────────────────────────────────────────
@@ -441,7 +618,6 @@ covers_dir="$IQOQO_ROOT/app/static/covers"
 if [[ -d "$covers_dir" ]]; then
     cover_count=$(find "$covers_dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
     cover_size=$(du -sh "$covers_dir" 2>/dev/null | cut -f1)
-    # Check for covers created in last hour
     recent_covers=$(find "$covers_dir" -maxdepth 1 -type f -newer "$covers_dir" -mmin -60 2>/dev/null | wc -l)
     check "Directory" pass "${cover_count} files, ${cover_size}"
     if [[ "$recent_covers" -gt 0 ]]; then
@@ -449,19 +625,20 @@ if [[ -d "$covers_dir" ]]; then
     else
         check "Recent activity" info "no new files in last hour"
     fi
-    # Check for broken/empty files
     empty_covers=$(find "$covers_dir" -maxdepth 1 -type f -size -1k 2>/dev/null | wc -l)
     if [[ "$empty_covers" -gt 0 ]]; then
         check "Empty files" warn "${empty_covers} files < 1KB (possibly broken)"
     fi
     # Check database cover pipeline status
-    db_cname="${PREFIX}-db-1"
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$db_cname"; then
+    db_cname=$(find_container "db")
+    if [[ -n "$db_cname" ]]; then
         db_user=$(load_env "POSTGRES_USER")
         db_name=$(load_env "POSTGRES_DB")
         db_user="${db_user:-iqoqo}"
         db_name="${db_name:-iqoqo}"
         cover_status_data=$(docker exec "$db_cname" psql -U "$db_user" -d "$db_name" -tAc \
+            "SELECT COALESCE(meta->>'cover_status', 'not_started'), count(*) FROM catalog.manifestations GROUP BY 1;" 2>/dev/null || \
+            docker exec "$db_cname" psql -U "$db_user" -d "$db_name" -tAc \
             "SELECT COALESCE(meta->>'cover_status', 'not_started'), count(*) FROM manifestations GROUP BY 1;" 2>/dev/null || echo "")
         if [[ -n "$cover_status_data" ]]; then
             ready_cnt=$(echo "$cover_status_data" | grep "^ready" | cut -f2 -d'|' || echo "0")
@@ -490,45 +667,89 @@ fi
 header "Allegro API"
 client_id=$(load_env "ALLEGRO_CLIENT_ID")
 client_secret=$(load_env "ALLEGRO_CLIENT_SECRET")
-if [[ -z "$client_id" || -z "$client_secret" ]]; then
-    check "Status" info "not configured (missing credentials in .env)"
-elif [[ ! -f "$IQOQO_ROOT/.allegro_token.json" ]]; then
-    check "Status" warn "configured but not active (OAuth handshake pending)"
-else
-    token_age_hours=0
-    token_valid=false
-    if command -v python3 &>/dev/null; then
-        token_result=$(python3 -c "
-import json, os, time
+
+allegro_status_json=""
+if [[ "$STACK" == "dev" ]]; then
+    allegro_status_json=$(python3 -c "
+import urllib.request, json, os, sys
+for p in [${WEB_PORT}, 5000, 5001]:
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{p}/api/system/status')
+        r = urllib.request.urlopen(req, timeout=2)
+        res = json.loads(r.read().decode())
+        if res.get('success') and 'allegro' in res.get('data', {}):
+            print(json.dumps(res['data']['allegro']))
+            sys.exit(0)
+    except Exception:
+        pass
+
 try:
-    with open('$IQOQO_ROOT/.allegro_token.json') as f:
-        t = json.load(f)
-    if not t.get('access_token'):
-        print('EMPTY')
-    else:
-        age = time.time() - os.path.getmtime('$IQOQO_ROOT/.allegro_token.json')
-        print(int(age))
+    sys.path.insert(0, '$IQOQO_ROOT')
+    from app.utils.allegro import get_allegro_token_status
+    print(json.dumps(get_allegro_token_status()))
+except Exception as e:
+    cid = bool('$client_id')
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+" 2>/dev/null || echo "")
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        allegro_status_json=$(docker exec "$web_cname" python3 -c "
+import urllib.request, json, os, sys
+try:
+    req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
+    r = urllib.request.urlopen(req, timeout=2)
+    res = json.loads(r.read().decode())
+    if res.get('success') and 'allegro' in res.get('data', {}):
+        print(json.dumps(res['data']['allegro']))
+        sys.exit(0)
 except Exception:
-    print('ERROR')
-" 2>/dev/null || echo 'ERROR')
-        if [[ "$token_result" =~ ^[0-9]+$ ]]; then
-            token_valid=true
-            token_age_hours=$((token_result / 3600))
-        fi
+    pass
+
+try:
+    sys.path.insert(0, '/app')
+    from app.utils.allegro import get_allegro_token_status
+    print(json.dumps(get_allegro_token_status()))
+except Exception as e:
+    cid = bool('$client_id')
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+" 2>/dev/null || echo "")
     fi
-    if [[ "$token_valid" != true ]]; then
-        check "Status" warn "not active (placeholder or missing token, re-run: make allegro-auth <stack> USE_DOCKER=true)"
-    elif [[ "$token_age_hours" -gt 12 ]]; then
-        check "Status" warn "token expired (${token_age_hours}h old, re-run: make allegro-auth <stack> USE_DOCKER=true)"
+fi
+
+if [[ -z "$allegro_status_json" ]]; then
+    if [[ -z "$client_id" || -z "$client_secret" ]]; then
+        check "Status" info "not configured (missing credentials in .env)"
     else
-        check "Status" pass "active (token age: ${token_age_hours}h)"
+        check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
+    fi
+else
+    is_configured=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('configured', False))" 2>/dev/null || echo "False")
+    is_active=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('allegro_token_active', False))" 2>/dev/null || echo "False")
+    is_expired=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('is_expired', False))" 2>/dev/null || echo "False")
+    token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('token_age_hours') if d.get('token_age_hours') is not None else '')" 2>/dev/null || echo "")
+    reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null || echo "")
+
+    if [[ "$is_configured" != "True" ]]; then
+        check "Status" info "not configured (missing credentials in .env or Instance Settings)"
+    elif [[ "$is_active" == "True" ]]; then
+        if [[ -n "$token_age" ]]; then
+            check "Status" pass "active (token age: ${token_age}h)"
+        else
+            check "Status" pass "active"
+        fi
+    elif [[ "$is_expired" == "True" ]]; then
+        check "Status" warn "token expired (${token_age:-?}h old, re-authorize in Instance Settings)"
+    elif [[ "$reason" == "oauth_handshake_pending" ]]; then
+        check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
+    else
+        check "Status" warn "not active (OAuth handshake pending in Instance Settings)"
     fi
 fi
 
 # ─── Environment Configuration ──────────────────────────────────
 header "Environment Configuration"
 
-# Read expected keys from .env.example
 EXAMPLE_FILE="$IQOQO_ROOT/.env.example"
 if [[ -f "$EXAMPLE_FILE" ]]; then
     expected_keys=()
@@ -615,7 +836,7 @@ if [[ -d "$docker_root" ]]; then
         check "Docker root ($docker_root)" pass "${disk_usage}% used"
     fi
 fi
-# Check project root disk
+
 root_usage=$(df -h "$IQOQO_ROOT" 2>/dev/null | awk 'NR==2{print $5}' | tr -d '%' || echo "0")
 if [[ "$root_usage" -gt 90 ]]; then
     check "Project root ($IQOQO_ROOT)" fail "${root_usage}% used"
@@ -635,7 +856,7 @@ else
         check "Warning" warn "$line"
     done
 fi
-# Running containers count
+
 total_containers=$(docker ps -q 2>/dev/null | wc -l)
 check "Containers" info "${total_containers} total running"
 

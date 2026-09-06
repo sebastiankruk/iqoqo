@@ -39,6 +39,11 @@ EOF
   else
     touch "${TEST_TEMP_DIR}/deploy/Dockerfile"
   fi
+  if [ -f deploy/Dockerfile.nginx ]; then
+    cp deploy/Dockerfile.nginx "${TEST_TEMP_DIR}/deploy/"
+  else
+    touch "${TEST_TEMP_DIR}/deploy/Dockerfile.nginx"
+  fi
   mkdir -p "${TEST_TEMP_DIR}/frontend"
   touch "${TEST_TEMP_DIR}/frontend/Dockerfile.prod"
 }
@@ -55,4 +60,22 @@ teardown() {
   [[ "$output" =~ "Extracting version from pyproject.toml" ]]
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-backend:" ]]
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-frontend:" ]]
+  [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-nginx:" ]]
 }
+
+@test "build_docker_images.sh builds backend, frontend, and nginx with custom tag" {
+  cd "${TEST_TEMP_DIR}"
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Primary Tag: preview" ]]
+  [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build" ]]
+  [[ "$output" =~ "iqoqo-backend:preview" ]]
+  [[ "$output" =~ "iqoqo-frontend:preview" ]]
+  [[ "$output" =~ "iqoqo-nginx:preview" ]]
+}
+
+@test "deploy/Dockerfile never bakes rclone credentials into image layers" {
+  run grep -E "COPY.*rclone\.conf" "${BATS_TEST_DIRNAME}/../../deploy/Dockerfile"
+  [ "$status" -ne 0 ]
+}
+

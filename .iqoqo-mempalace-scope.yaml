@@ -1,0 +1,69 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# iqoqo-mempalace Scope Configuration
+# ====================================
+# This file defines which folders and files are indexed into the MemPalace
+# knowledge graph. It is COMMITTED to git — share it across machines.
+#
+# To customize: edit scopes list below, then run:
+#   /iqoqo-mempalace index     (full rebuild / multi-scope mine)
+#   /iqoqo-mempalace update    (mine changed scopes / specific files)
+#   /iqoqo-mempalace status    (check palace status)
+#
+
+# Scopes mined under project mode (--mode projects --wing iqoqo)
+# Consolidated into high-level directory roots to avoid slow repeated process restarts.
+scopes:
+  # --- Project Code, Docs, Infrastructure (respects .gitignore) ---
+  - .
+
+  # --- Operational Notes (.context/notes/*) ---
+  - .context/notes
+
+# Scopes mined under conversation mode (--mode convos --wing iqoqo)
+# Versioned AI memory subfolder auto-detected from package.json if left as .context/ai-memory
+convos_scopes:
+  - .context/ai-memory
+
+# Exclude patterns applied during file collection and mining
+exclude:
+  - "**/__pycache__/**"
+  - "**/*.pyc"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/.next/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/.ruff_cache/**"
+  - "**/.coverage"
+  - "**/*.egg-info/**"
+  - "**/coverage/**"
+  - "**/.tox/**"
+  - "**/instance/**"
+  - "**/data/**"
+  - "**/app/static/covers/**"
+  - "**/app/static/gallery/**"
+  - "**/mykg_sessions/**"
+  - "**/.mykg_sessions/**"
+  - "**/screenshots/**"
+  - "**/images/**"
+  - "**/graphify-out/**"
+  - "**/.DS_Store"
+  - "**/Thumbs.db"
+  - "**/*.log"

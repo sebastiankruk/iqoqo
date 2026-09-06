@@ -140,16 +140,36 @@ def create_app(config_class=Config, config_override=None):
 
     init_celery(app)
 
-    # Initialize Limiter
-    # Initialize Cache
+    # Initialize Limiter and Cache with resilient Redis fallback
     from app.core.cache import cache
     from app.core.limiter import limiter
 
     redis_url = app.config.get("REDIS_URL")
     if redis_url:
-        app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
-        app.config.setdefault("CACHE_TYPE", "RedisCache")
-        app.config.setdefault("CACHE_REDIS_URL", redis_url)
+        redis_available = False
+        try:
+            import redis
+
+            redis_client = redis.Redis.from_url(redis_url, socket_connect_timeout=1)
+            redis_client.ping()
+            redis_available = True
+        except (redis.exceptions.RedisError, OSError, ValueError, RuntimeError) as exc:
+            app.logger.warning(
+                "Redis connection failed during startup (%s). Falling back to in-memory caching and rate limiting.",
+                exc,
+            )
+
+        if redis_available:
+            app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
+            app.config.setdefault("CACHE_TYPE", "RedisCache")
+            app.config.setdefault("CACHE_REDIS_URL", redis_url)
+        else:
+            app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+            app.config["CACHE_TYPE"] = "SimpleCache"
+    else:
+        app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
+        app.config.setdefault("CACHE_TYPE", "SimpleCache")
+
     limiter.init_app(app)
     cache.init_app(app)
 
