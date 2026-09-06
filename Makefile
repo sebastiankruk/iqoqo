@@ -220,6 +220,7 @@ mykg-update: .venv/bin/activate
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
 		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 	fi; \
 	exit $$EXIT_CODE
@@ -244,6 +245,7 @@ mykg-index: .venv/bin/activate
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
 		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 	fi; \
 	exit $$EXIT_CODE

@@ -15,6 +15,33 @@
 #
 
 services:
+  sandbox-egress-proxy:
+    image: python:3.11-slim
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: ["python3", "/workspace/deploy/sandbox_proxy/proxy.py"]
+    volumes:
+      - ./deploy/sandbox_proxy:/workspace/deploy/sandbox_proxy:ro
+    networks:
+      - sandbox-internal
+      - sandbox-egress
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 3128), timeout=1); s.close()"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+
   mykg-agy-daemon:
     image: python:3.11-slim
     # 1. Drop Root Privileges & Capabilities
@@ -42,4 +69,22 @@ services:
       - ~/.gemini/antigravity-cli/antigravity-oauth-token:/run/secrets/antigravity-oauth-token:ro
     environment:
       - HOME=/home/appuser
+      - HTTP_PROXY=http://sandbox-egress-proxy:3128
+      - HTTPS_PROXY=http://sandbox-egress-proxy:3128
+      - http_proxy=http://sandbox-egress-proxy:3128
+      - https_proxy=http://sandbox-egress-proxy:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+    networks:
+      - sandbox-internal
+    depends_on:
+      sandbox-egress-proxy:
+        condition: service_healthy
     working_dir: /workspace
+
+networks:
+  sandbox-internal:
+    internal: true
+  sandbox-egress:
+    driver: bridge
+

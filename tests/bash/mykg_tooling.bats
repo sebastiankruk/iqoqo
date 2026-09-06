@@ -62,3 +62,45 @@
   [ "$status" -eq 0 ]
 }
 
+@test "docker-compose.ai_sandbox.yml enforces egress isolation and proxy configuration" {
+  compose_file="${BATS_TEST_DIRNAME}/../../docker-compose.ai_sandbox.yml"
+  [ -f "$compose_file" ]
+
+  # Verify sandbox-internal network has internal: true
+  run grep -E "sandbox-internal:" "$compose_file"
+  [ "$status" -eq 0 ]
+  run grep -E "internal:\s*true" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  # Verify proxy service and healthcheck
+  run grep -E "sandbox-egress-proxy:" "$compose_file"
+  [ "$status" -eq 0 ]
+  run grep -E "deploy/sandbox_proxy" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  # Verify proxy env variables in mykg-agy-daemon
+  run grep -E "HTTP_PROXY=http://sandbox-egress-proxy:3128" "$compose_file"
+  [ "$status" -eq 0 ]
+  run grep -E "HTTPS_PROXY=http://sandbox-egress-proxy:3128" "$compose_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "deploy/sandbox_proxy restricts egress to Google Gemini and OAuth endpoints" {
+  allowlist_file="${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy/allowlist.conf"
+  [ -f "$allowlist_file" ]
+
+  run grep -E "generativelanguage\.googleapis\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "accounts\.google\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "\*\.googleapis\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "\*\.googleusercontent\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+
+  # Verify no wildcard open egress rule exists
+  run grep -E "^\s*\*\s*$" "$allowlist_file"
+  [ "$status" -ne 0 ]
+}
+
+
