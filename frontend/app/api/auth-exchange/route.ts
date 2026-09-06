@@ -40,15 +40,20 @@ export async function GET(request: Request) {
   const token = searchParams.get("token");
 
   const rawForwardedHost = request.headers.get("x-forwarded-host");
-  const rawHostHeader = request.headers.get("host") || url.host;
+  const rawHostHeader = request.headers.get("host") || "";
+
+  // Fail-closed fallback: never trust raw request host if validation fails
+  const fallbackHost = process.env.NEXT_PUBLIC_FRONTEND_URL
+    ? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).host
+    : "localhost:3000";
 
   // Enforce host validation to prevent arbitrary open redirects via poisoned headers
   const effectiveHost =
     rawForwardedHost && isAllowedHost(rawForwardedHost)
       ? rawForwardedHost
-      : isAllowedHost(rawHostHeader)
+      : rawHostHeader && isAllowedHost(rawHostHeader)
         ? rawHostHeader
-        : url.host;
+        : fallbackHost;
 
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const effectiveProto =

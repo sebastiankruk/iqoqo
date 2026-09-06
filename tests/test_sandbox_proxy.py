@@ -36,17 +36,30 @@ def test_allowlist_conf_allows_gemini_oauth_and_avatars() -> None:
     assert is_destination_allowed("generativelanguage.googleapis.com", 443, rules)
     assert is_destination_allowed("accounts.google.com", 443, rules)
     assert is_destination_allowed("oauth2.googleapis.com", 443, rules)
-    assert is_destination_allowed("storage.googleapis.com", 443, rules)
-    assert is_destination_allowed("googleapis.com", 443, rules)
+    assert is_destination_allowed("cloudcode-pa.googleapis.com", 443, rules)
+    assert is_destination_allowed("daily-cloudcode-pa.googleapis.com", 443, rules)
+    assert is_destination_allowed("autopush-cloudcode-pa.sandbox.googleapis.com", 443, rules)
+    assert is_destination_allowed("www.googleapis.com", 443, rules)
+    assert is_destination_allowed("play.googleapis.com", 443, rules)
     assert is_destination_allowed("lh3.googleusercontent.com", 443, rules)
     assert is_destination_allowed("antigravity-unleash.goog", 443, rules)
     assert is_destination_allowed("antigravity.google", 443, rules)
-    assert is_destination_allowed("antigravity.google.com", 443, rules)
+    assert is_destination_allowed("fonts.gstatic.com", 443, rules)
 
 
 def test_allowlist_blocks_unauthorized_destinations() -> None:
-    """Verify allowlist blocks unauthorized external hosts and ports."""
+    """Verify allowlist blocks unauthorized external hosts, ports, and wildcard storage/forms."""
     rules = load_allowlist(ALLOWLIST_PATH)
+
+    # Exfiltration vectors blocked (unauthenticated storage, forms, webhooks)
+    assert not is_destination_allowed("storage.googleapis.com", 443, rules)
+    assert not is_destination_allowed("docs.google.com", 443, rules)
+    assert not is_destination_allowed("script.google.com", 443, rules)
+    assert not is_destination_allowed("drive.google.com", 443, rules)
+    assert not is_destination_allowed("googleapis.com", 443, rules)
+    assert not is_destination_allowed("google.com", 443, rules)
+    assert not is_destination_allowed("antigravity.google.com", 443, rules)
+    assert not is_destination_allowed("other.googleusercontent.com", 443, rules)
 
     # Unauthorized domains
     assert not is_destination_allowed("evil.com", 443, rules)

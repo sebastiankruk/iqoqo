@@ -84,4 +84,22 @@ describe("auth-exchange route handler", () => {
       process.env.NEXT_PUBLIC_FRONTEND_URL = originalEnv;
     }
   });
+
+  it("rejects poisoned host header and falls back securely to localhost:3000", async () => {
+    const originalEnv = process.env.NEXT_PUBLIC_FRONTEND_URL;
+    delete process.env.NEXT_PUBLIC_FRONTEND_URL;
+    try {
+      const req = new Request("http://evil.com/api/auth-exchange?token=abc123", {
+        headers: {
+          host: "evil.com",
+        },
+      });
+      const res = await GET(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).not.toContain("evil.com");
+      expect(res.headers.get("location")).toBe("http://localhost:3000/");
+    } finally {
+      process.env.NEXT_PUBLIC_FRONTEND_URL = originalEnv;
+    }
+  });
 });

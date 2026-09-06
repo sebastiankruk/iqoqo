@@ -739,3 +739,46 @@ def test_feedback_screenshot_suffix_and_idor_collision(client, feedback_setup, a
     # Legitimate owner can still read their file even when an attacker ticket has the suffix file
     resp_owner = client.get(f"/api/feedback/screenshots/{victim_file}", headers=u1_headers)
     assert resp_owner.status_code == 200
+
+
+def test_feedback_screenshot_exact_collision_idor_blocked(client, feedback_setup, app):
+    """Verify that an attacker creating a ticket referencing an existing victim screenshot cannot access it."""
+    import io
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    u2_headers = _auth_headers(app, feedback_setup["user2_id"])
+
+    png_bytes = _sample_png()
+    resp1 = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "description": "User 1 private ticket with secret screenshot",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "secret_victim.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp1.status_code == 201
+    victim_file = resp1.json["data"]["attachments"][0].split("/")[-1]
+
+    # Attacker discovers the filename and crafts a ticket referencing the exact same victim filename
+    with app.app_context():
+        attacker_ticket = FeedbackItem(
+            user_id=feedback_setup["user2_id"],
+            feedback_type="bug",
+            description="Attacker ticket referencing victim file",
+            attachments=[victim_file],
+        )
+        db.session.add(attacker_ticket)
+        db.session.commit()
+
+    # Attacker tries to access the file; because matching_tickets contains User 1's ticket (which User 2 cannot read),
+    # all() check fails and attacker gets 403 Forbidden
+    resp_attacker = client.get(f"/api/feedback/screenshots/{victim_file}", headers=u2_headers)
+    assert resp_attacker.status_code == 403
+
+    # An admin who has access to both tickets CAN access it
+    admin_headers = _auth_headers(app, feedback_setup["admin_id"])
+    resp_admin = client.get(f"/api/feedback/screenshots/{victim_file}", headers=admin_headers)
+    assert resp_admin.status_code == 200

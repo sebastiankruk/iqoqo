@@ -93,12 +93,16 @@
   [ "$status" -eq 0 ]
   run grep -E "accounts\.google\.com:443" "$allowlist_file"
   [ "$status" -eq 0 ]
-  run grep -E "\*\.googleapis\.com:443" "$allowlist_file"
+  run grep -E "cloudcode-pa\.googleapis\.com:443" "$allowlist_file"
   [ "$status" -eq 0 ]
-  run grep -E "\*\.googleusercontent\.com:443" "$allowlist_file"
+  run grep -E "lh3\.googleusercontent\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "antigravity-unleash\.goog:443" "$allowlist_file"
   [ "$status" -eq 0 ]
 
-  # Verify no wildcard open egress rule exists
+  # Verify no wildcard Google domains or wildcard open egress rules exist
+  run grep -E "^\s*\*(\.googleapis|\.google|\.googleusercontent)" "$allowlist_file"
+  [ "$status" -ne 0 ]
   run grep -E "^\s*\*\s*$" "$allowlist_file"
   [ "$status" -ne 0 ]
 }
