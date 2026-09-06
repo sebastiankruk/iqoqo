@@ -21,42 +21,48 @@ from pathlib import Path
 import pytest
 
 from deploy.sandbox_proxy.proxy import (
-    DEFAULT_ALLOWED_PATTERNS,
     is_destination_allowed,
     load_allowlist,
 )
 
-
-def test_default_rules_allow_gemini_and_oauth() -> None:
-    """Verify built-in default rules cover Gemini and Google OAuth endpoints."""
-    assert is_destination_allowed("generativelanguage.googleapis.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("accounts.google.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("oauth2.googleapis.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("storage.googleapis.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("googleapis.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("lh3.googleusercontent.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("antigravity-unleash.goog", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("antigravity.google", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert is_destination_allowed("antigravity.google.com", 443, DEFAULT_ALLOWED_PATTERNS)
+ALLOWLIST_PATH = Path(__file__).resolve().parent.parent / "deploy" / "sandbox_proxy" / "allowlist.conf"
 
 
-def test_default_rules_block_unauthorized_destinations() -> None:
-    """Verify built-in default rules block unauthorized external hosts and ports."""
+def test_allowlist_conf_allows_gemini_oauth_and_avatars() -> None:
+    """Verify production allowlist covers Gemini, OAuth, Antigravity, and profile avatars."""
+    rules = load_allowlist(ALLOWLIST_PATH)
+    assert len(rules) > 0
+
+    assert is_destination_allowed("generativelanguage.googleapis.com", 443, rules)
+    assert is_destination_allowed("accounts.google.com", 443, rules)
+    assert is_destination_allowed("oauth2.googleapis.com", 443, rules)
+    assert is_destination_allowed("storage.googleapis.com", 443, rules)
+    assert is_destination_allowed("googleapis.com", 443, rules)
+    assert is_destination_allowed("lh3.googleusercontent.com", 443, rules)
+    assert is_destination_allowed("antigravity-unleash.goog", 443, rules)
+    assert is_destination_allowed("antigravity.google", 443, rules)
+    assert is_destination_allowed("antigravity.google.com", 443, rules)
+
+
+def test_allowlist_blocks_unauthorized_destinations() -> None:
+    """Verify allowlist blocks unauthorized external hosts and ports."""
+    rules = load_allowlist(ALLOWLIST_PATH)
+
     # Unauthorized domains
-    assert not is_destination_allowed("evil.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("webhook.site", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("api.openai.com", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("github.com", 443, DEFAULT_ALLOWED_PATTERNS)
+    assert not is_destination_allowed("evil.com", 443, rules)
+    assert not is_destination_allowed("webhook.site", 443, rules)
+    assert not is_destination_allowed("api.openai.com", 443, rules)
+    assert not is_destination_allowed("github.com", 443, rules)
 
     # Unauthorized ports (even on allowed hosts)
-    assert not is_destination_allowed("generativelanguage.googleapis.com", 80, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("accounts.google.com", 8080, DEFAULT_ALLOWED_PATTERNS)
+    assert not is_destination_allowed("generativelanguage.googleapis.com", 80, rules)
+    assert not is_destination_allowed("accounts.google.com", 8080, rules)
 
     # Internal / RFC1918 addresses
-    assert not is_destination_allowed("127.0.0.1", 5000, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("192.168.1.1", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("10.0.0.1", 443, DEFAULT_ALLOWED_PATTERNS)
-    assert not is_destination_allowed("localhost", 5432, DEFAULT_ALLOWED_PATTERNS)
+    assert not is_destination_allowed("127.0.0.1", 5000, rules)
+    assert not is_destination_allowed("192.168.1.1", 443, rules)
+    assert not is_destination_allowed("10.0.0.1", 443, rules)
+    assert not is_destination_allowed("localhost", 5432, rules)
 
 
 def test_load_allowlist_parses_file(tmp_path: Path) -> None:
@@ -77,19 +83,24 @@ def test_load_allowlist_parses_file(tmp_path: Path) -> None:
     assert not is_destination_allowed("other.domain.com", 443, rules)
 
 
-def test_load_allowlist_missing_file() -> None:
-    """Verify load_allowlist falls back to defaults if file is missing."""
+def test_load_allowlist_missing_file_fails_closed() -> None:
+    """Verify load_allowlist fails closed (returns empty list) if file is missing."""
     rules = load_allowlist(Path("/nonexistent/path/to/allowlist.conf"))
-    assert rules == DEFAULT_ALLOWED_PATTERNS
+    assert not rules
+    # Everything should be blocked when rules list is empty
+    assert not is_destination_allowed("generativelanguage.googleapis.com", 443, rules)
+    assert not is_destination_allowed("accounts.google.com", 443, rules)
 
 
 def test_proxy_blocks_unauthorized_connect_request() -> None:
     """Verify proxy actively returns 403 Forbidden for unauthorized destinations over socket."""
     from deploy.sandbox_proxy.proxy import handle_client
 
+    rules = load_allowlist(ALLOWLIST_PATH)
+
     async def _runner() -> None:
         server = await asyncio.start_server(
-            lambda r, w: handle_client(r, w, DEFAULT_ALLOWED_PATTERNS),
+            lambda r, w: handle_client(r, w, rules),
             host="127.0.0.1",
             port=0,
         )

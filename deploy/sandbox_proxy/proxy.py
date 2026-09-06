@@ -20,6 +20,7 @@ import asyncio
 import fnmatch
 import logging
 import os
+import re
 import signal
 import sys
 from pathlib import Path
@@ -30,38 +31,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sandbox-egress-proxy")
 
-DEFAULT_ALLOWED_PATTERNS: list[tuple[str, int]] = [
-    ("generativelanguage.googleapis.com", 443),
-    ("*.googleapis.com", 443),
-    ("googleapis.com", 443),
-    ("accounts.google.com", 443),
-    ("oauth2.googleapis.com", 443),
-    ("*.google.com", 443),
-    ("google.com", 443),
-    ("*.googleusercontent.com", 443),
-    ("googleusercontent.com", 443),
-    ("*.goog", 443),
-    ("*.google", 443),
-    ("*.gstatic.com", 443),
-]
-
+CONNECT_PATTERN = re.compile(r"^CONNECT\s+([a-zA-Z0-9.-]+):(\d+)\s+HTTP/1\.[01]$", re.IGNORECASE)
+UPSTREAM_CONNECT_TIMEOUT = 10.0
 
 
 def load_allowlist(config_path: Path | None = None) -> list[tuple[str, int]]:
     """Load allowed host patterns and ports from an allowlist configuration file.
 
-    Lines can be in format:
-        hostname:port
-        *.domain.com:port
-        hostname (defaults to port 443)
+    Fails closed (returns empty list) if the file is missing, unreadable, or empty.
+    Single Source of Truth: deploy/sandbox_proxy/allowlist.conf.
     """
     if config_path is None:
-        default_loc = Path(__file__).resolve().parent / "allowlist.conf"
-        config_path = default_loc if default_loc.exists() else None
+        config_path = Path(__file__).resolve().parent / "allowlist.conf"
 
-    if not config_path or not config_path.is_file():
-        logger.info("No allowlist.conf found; using default Google/Gemini allowlist.")
-        return list(DEFAULT_ALLOWED_PATTERNS)
+    if not config_path.is_file():
+        logger.error("Allowlist file not found at %s. FAILING CLOSED (all egress blocked).", config_path)
+        return []
 
     rules: list[tuple[str, int]] = []
     try:
@@ -79,12 +64,15 @@ def load_allowlist(config_path: Path | None = None) -> list[tuple[str, int]]:
             else:
                 host_part, port = line, 443
             rules.append((host_part.lower(), port))
+        if not rules:
+            logger.error("Allowlist at %s contains no active rules. FAILING CLOSED.", config_path)
+            return []
         logger.info("Loaded %d egress allowlist rules from %s", len(rules), config_path)
     except OSError as err:
-        logger.warning("Failed to read allowlist file %s: %s; using defaults.", config_path, err)
-        return list(DEFAULT_ALLOWED_PATTERNS)
+        logger.error("Failed to read allowlist file %s: %s. FAILING CLOSED.", config_path, err)
+        return []
 
-    return rules if rules else list(DEFAULT_ALLOWED_PATTERNS)
+    return rules
 
 
 def is_destination_allowed(host: str, port: int, rules: list[tuple[str, int]]) -> bool:
@@ -123,6 +111,129 @@ async def pipe_streams(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
             pass
 
 
+async def _handle_connect(
+    client_reader: asyncio.StreamReader,
+    client_writer: asyncio.StreamWriter,
+    target_host: str,
+    target_port: int,
+    rules: list[tuple[str, int]],
+    peer_name: object,
+) -> None:
+    """Handle CONNECT method tunneling to authorized destinations."""
+    if not is_destination_allowed(target_host, target_port, rules):
+        logger.warning("BLOCKED CONNECT attempt to %s:%d from %s", target_host, target_port, peer_name)
+        deny_response = (
+            b"HTTP/1.1 403 Forbidden\r\n"
+            b"Content-Type: text/plain\r\n"
+            b"Connection: close\r\n\r\n"
+            b"403 Forbidden: Destination not permitted by AI sandbox egress policy\r\n"
+        )
+        client_writer.write(deny_response)
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+
+    logger.info("ALLOWED CONNECT tunnel to %s:%d from %s", target_host, target_port, peer_name)
+    try:
+        remote_reader, remote_writer = await asyncio.wait_for(
+            asyncio.open_connection(target_host, target_port),
+            timeout=UPSTREAM_CONNECT_TIMEOUT,
+        )
+    except (TimeoutError, asyncio.TimeoutError):
+        logger.error("Timeout connecting to upstream %s:%d", target_host, target_port)
+        client_writer.write(b"HTTP/1.1 504 Gateway Timeout\r\nConnection: close\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+    except OSError as err:
+        logger.error("Failed to connect to %s:%d: %s", target_host, target_port, err)
+        client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+
+    client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+    await client_writer.drain()
+
+    pipe1 = asyncio.create_task(pipe_streams(client_reader, remote_writer))
+    pipe2 = asyncio.create_task(pipe_streams(remote_reader, client_writer))
+    await asyncio.gather(pipe1, pipe2, return_exceptions=True)
+
+
+async def _handle_http(
+    client_reader: asyncio.StreamReader,
+    client_writer: asyncio.StreamWriter,
+    method: str,
+    target: str,
+    headers: list[str],
+    rules: list[tuple[str, int]],
+    peer_name: object,
+) -> None:
+    """Handle standard HTTP methods (GET, POST) to authorized destinations."""
+    host_header = ""
+    for h in headers:
+        if h.lower().startswith("host:"):
+            host_header = h.split(":", 1)[1].strip()
+            break
+
+    host_to_check = host_header or target
+    port_to_check = 80
+    if ":" in host_to_check:
+        host_to_check, port_str = host_to_check.rsplit(":", 1)
+        try:
+            port_to_check = int(port_str)
+        except ValueError:
+            port_to_check = 80
+
+    if not is_destination_allowed(host_to_check, port_to_check, rules):
+        logger.warning("BLOCKED HTTP %s request to %s:%d from %s", method, host_to_check, port_to_check, peer_name)
+        deny_response = (
+            b"HTTP/1.1 403 Forbidden\r\n"
+            b"Content-Type: text/plain\r\n"
+            b"Connection: close\r\n\r\n"
+            b"403 Forbidden: Host not permitted by AI sandbox egress policy\r\n"
+        )
+        client_writer.write(deny_response)
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+
+    logger.info("ALLOWED HTTP %s request to %s:%d from %s", method, host_to_check, port_to_check, peer_name)
+    try:
+        remote_reader, remote_writer = await asyncio.wait_for(
+            asyncio.open_connection(host_to_check, port_to_check),
+            timeout=UPSTREAM_CONNECT_TIMEOUT,
+        )
+    except (TimeoutError, asyncio.TimeoutError):
+        logger.error("Timeout connecting to upstream HTTP %s:%d", host_to_check, port_to_check)
+        client_writer.write(b"HTTP/1.1 504 Gateway Timeout\r\nConnection: close\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+    except OSError as err:
+        logger.error("Failed to connect to %s:%d: %s", host_to_check, port_to_check, err)
+        client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        await client_writer.wait_closed()
+        return
+
+    remote_writer.write(f"{method} {target} HTTP/1.1\r\n".encode())
+    for h in headers:
+        remote_writer.write(f"{h}\r\n".encode())
+    remote_writer.write(b"\r\n")
+    await remote_writer.drain()
+
+    pipe1 = asyncio.create_task(pipe_streams(client_reader, remote_writer))
+    pipe2 = asyncio.create_task(pipe_streams(remote_reader, client_writer))
+    await asyncio.gather(pipe1, pipe2, return_exceptions=True)
+
+
 async def handle_client(
     client_reader: asyncio.StreamReader,
     client_writer: asyncio.StreamWriter,
@@ -138,121 +249,29 @@ async def handle_client(
             return
 
         request_line = request_line_bytes.decode("utf-8", errors="replace").strip()
-        parts = request_line.split()
-        if len(parts) < 2:
-            client_writer.close()
-            await client_writer.wait_closed()
-            return
+        connect_match = CONNECT_PATTERN.match(request_line)
 
-        method, target = parts[0].upper(), parts[1]
-
-        # Read remaining headers until empty line
         headers: list[str] = []
         while True:
             header_line = await client_reader.readline()
-            if not header_line or header_line == b"\r\n" or header_line == b"\n":
+            if not header_line or header_line in (b"\r\n", b"\n"):
                 break
             headers.append(header_line.decode("utf-8", errors="replace").strip())
 
-        if method == "CONNECT":
-            # CONNECT host:port HTTP/1.1
-            if ":" in target:
-                target_host, target_port_str = target.rsplit(":", 1)
-                try:
-                    target_port = int(target_port_str)
-                except ValueError:
-                    target_port = 443
-            else:
-                target_host, target_port = target, 443
-
-            if not is_destination_allowed(target_host, target_port, rules):
-                logger.warning("BLOCKED CONNECT attempt to %s:%d from %s", target_host, target_port, peer_name)
-                deny_response = (
-                    b"HTTP/1.1 403 Forbidden\r\n"
-                    b"Content-Type: text/plain\r\n"
-                    b"Connection: close\r\n\r\n"
-                    b"403 Forbidden: Destination not permitted by AI sandbox egress policy\r\n"
-                )
-                client_writer.write(deny_response)
-                await client_writer.drain()
-                client_writer.close()
-                await client_writer.wait_closed()
-                return
-
-            logger.info("ALLOWED CONNECT tunnel to %s:%d from %s", target_host, target_port, peer_name)
+        if connect_match:
+            target_host = connect_match.group(1).lower()
             try:
-                remote_reader, remote_writer = await asyncio.open_connection(target_host, target_port)
-            except OSError as err:
-                logger.error("Failed to connect to %s:%d: %s", target_host, target_port, err)
-                error_resp = b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"
-                client_writer.write(error_resp)
-                await client_writer.drain()
-                client_writer.close()
-                await client_writer.wait_closed()
-                return
-
-            # Acknowledge connection established
-            client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            await client_writer.drain()
-
-            # Bidirectional pipe
-            pipe1 = asyncio.create_task(pipe_streams(client_reader, remote_writer))
-            pipe2 = asyncio.create_task(pipe_streams(remote_reader, client_writer))
-            await asyncio.gather(pipe1, pipe2, return_exceptions=True)
-
+                target_port = int(connect_match.group(2))
+            except ValueError:
+                target_port = 0
+            await _handle_connect(client_reader, client_writer, target_host, target_port, rules, peer_name)
         else:
-            # Standard HTTP request (GET / POST)
-            # Determine target host from Host header or absolute URI
-            host_header = ""
-            for h in headers:
-                if h.lower().startswith("host:"):
-                    host_header = h.split(":", 1)[1].strip()
-                    break
-
-            host_to_check = host_header or target
-            port_to_check = 80
-            if ":" in host_to_check:
-                host_to_check, port_str = host_to_check.rsplit(":", 1)
-                try:
-                    port_to_check = int(port_str)
-                except ValueError:
-                    port_to_check = 80
-
-            if not is_destination_allowed(host_to_check, port_to_check, rules):
-                logger.warning("BLOCKED HTTP %s request to %s:%d from %s", method, host_to_check, port_to_check, peer_name)
-                deny_response = (
-                    b"HTTP/1.1 403 Forbidden\r\n"
-                    b"Content-Type: text/plain\r\n"
-                    b"Connection: close\r\n\r\n"
-                    b"403 Forbidden: Host not permitted by AI sandbox egress policy\r\n"
-                )
-                client_writer.write(deny_response)
-                await client_writer.drain()
+            parts = request_line.split()
+            if len(parts) < 2:
                 client_writer.close()
                 await client_writer.wait_closed()
                 return
-
-            logger.info("ALLOWED HTTP %s request to %s:%d from %s", method, host_to_check, port_to_check, peer_name)
-            try:
-                remote_reader, remote_writer = await asyncio.open_connection(host_to_check, port_to_check)
-            except OSError as err:
-                logger.error("Failed to connect to %s:%d: %s", host_to_check, port_to_check, err)
-                client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
-                await client_writer.drain()
-                client_writer.close()
-                await client_writer.wait_closed()
-                return
-
-            # Reconstruct request line & headers
-            remote_writer.write(f"{method} {target} HTTP/1.1\r\n".encode())
-            for h in headers:
-                remote_writer.write(f"{h}\r\n".encode())
-            remote_writer.write(b"\r\n")
-            await remote_writer.drain()
-
-            pipe1 = asyncio.create_task(pipe_streams(client_reader, remote_writer))
-            pipe2 = asyncio.create_task(pipe_streams(remote_reader, client_writer))
-            await asyncio.gather(pipe1, pipe2, return_exceptions=True)
+            await _handle_http(client_reader, client_writer, parts[0].upper(), parts[1], headers, rules, peer_name)
 
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("Exception handling client connection: %s", exc)
