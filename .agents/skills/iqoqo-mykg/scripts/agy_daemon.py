@@ -36,7 +36,11 @@ REDACTED_PATTERNS = [
     # Domain / hostname references targeting googleapis.com or exfiltration services
     (re.compile(r"\b(?:[a-zA-Z0-9_-]+\.)*googleapis\.com\b", re.IGNORECASE), "[REDACTED_GOOGLEAPIS_DOMAIN]"),
     (re.compile(r"\b(?:docs|drive|script|forms)\.google\.com\b", re.IGNORECASE), "[REDACTED_GOOGLE_DOMAIN]"),
+    # Base64 data URIs and long unbroken base64/binary payloads (e.g. zip/images in logs)
+    (re.compile(r"data:[^;]+;base64,[a-zA-Z0-9+/=]{100,}", re.IGNORECASE), "[REDACTED_DATA_URI_BLOB]"),
+    (re.compile(r"[a-zA-Z0-9+/=]{500,}"), "[REDACTED_BINARY_BLOB]"),
 ]
+
 
 SECURITY_GUARDRAIL = (
     "SECURITY POLICY: You are operating inside a restricted sandbox environment. "

@@ -248,6 +248,15 @@ def test_sanitize_task_payload_redacts_exfiltration_targets(agy_daemon_module):
     assert "script.google.com" not in sanitize(script_input)
     assert "[REDACTED_GOOGLE_DOMAIN]" in sanitize(script_input)
 
+    # Base64 data URI and unbroken binary blob
+    data_uri = "Report: data:application/zip;base64," + ("A" * 150) + " end"
+    assert "data:application/zip" not in sanitize(data_uri)
+    assert "[REDACTED_DATA_URI_BLOB]" in sanitize(data_uri)
+
+    binary_blob = "Blob: " + ("B" * 600) + " end"
+    assert ("B" * 500) not in sanitize(binary_blob)
+    assert "[REDACTED_BINARY_BLOB]" in sanitize(binary_blob)
+
 
 def test_process_task_sanitizes_prompt_and_injects_guardrail(agy_daemon_module, tmp_path):
     """Test process_task injects security guardrail and sanitizes prompt inputs."""
