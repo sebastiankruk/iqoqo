@@ -99,6 +99,12 @@
   [ "$status" -eq 0 ]
   run grep -E "antigravity-unleash\.goog:443" "$allowlist_file"
   [ "$status" -eq 0 ]
+  run grep -E "www\.googleapis\.com:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+
+  # Verify play.googleapis.com is not permitted
+  run grep -E "play\.googleapis\.com" "$allowlist_file"
+  [ "$status" -ne 0 ]
 
   # Verify no wildcard Google domains or wildcard open egress rules exist
   run grep -E "^\s*\*(\.googleapis|\.google|\.googleusercontent)" "$allowlist_file"
@@ -106,5 +112,6 @@
   run grep -E "^\s*\*\s*$" "$allowlist_file"
   [ "$status" -ne 0 ]
 }
+
 
 
