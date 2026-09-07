@@ -20,6 +20,7 @@
 # =============================================================================
 set -e
 
+PREFIX_PASSED=false
 TAG=""
 PREFIX=""
 VERSION=""
@@ -33,6 +34,7 @@ while [ $# -gt 0 ]; do
         --prefix|-p)
             shift
             PREFIX="$1"
+            PREFIX_PASSED=true
             ;;
         --version|-v)
             shift
@@ -75,24 +77,47 @@ except Exception:
 " 2>/dev/null || echo "0.0.0")
 fi
 
+# Determine default registry prefix if not explicitly set
+REG_PREFIX=""
+if [ "$PREFIX_PASSED" = true ]; then
+    REG_PREFIX="$PREFIX"
+else
+    REG_PREFIX="${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}"
+fi
+
+# Ensure trailing slash if non-empty
+if [ -n "$REG_PREFIX" ] && [[ "$REG_PREFIX" != */ ]]; then
+    REG_PREFIX="${REG_PREFIX}/"
+fi
+
 # Default tag to version if not specified
 if [ -z "$TAG" ]; then
     TAG="$VERSION"
-    TAG_ARGS=(-t "${PREFIX}iqoqo-backend:${TAG}" -t "${PREFIX}iqoqo-backend:latest")
-    FE_TAG_ARGS=(-t "${PREFIX}iqoqo-frontend:${TAG}" -t "${PREFIX}iqoqo-frontend:latest")
-    NGINX_TAG_ARGS=(-t "${PREFIX}iqoqo-nginx:${TAG}" -t "${PREFIX}iqoqo-nginx:latest")
+    TAG_ARGS=(-t "iqoqo-backend:${TAG}" -t "iqoqo-backend:latest")
+    FE_TAG_ARGS=(-t "iqoqo-frontend:${TAG}" -t "iqoqo-frontend:latest")
+    NGINX_TAG_ARGS=(-t "iqoqo-nginx:${TAG}" -t "iqoqo-nginx:latest")
+    if [ -n "$REG_PREFIX" ]; then
+        TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-backend:${TAG}" -t "${REG_PREFIX}iqoqo-backend:latest")
+        FE_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-frontend:${TAG}" -t "${REG_PREFIX}iqoqo-frontend:latest")
+        NGINX_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-nginx:${TAG}" -t "${REG_PREFIX}iqoqo-nginx:latest")
+    fi
 else
-    TAG_ARGS=(-t "${PREFIX}iqoqo-backend:${TAG}")
-    FE_TAG_ARGS=(-t "${PREFIX}iqoqo-frontend:${TAG}")
-    NGINX_TAG_ARGS=(-t "${PREFIX}iqoqo-nginx:${TAG}")
+    TAG_ARGS=(-t "iqoqo-backend:${TAG}")
+    FE_TAG_ARGS=(-t "iqoqo-frontend:${TAG}")
+    NGINX_TAG_ARGS=(-t "iqoqo-nginx:${TAG}")
+    if [ -n "$REG_PREFIX" ]; then
+        TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-backend:${TAG}")
+        FE_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-frontend:${TAG}")
+        NGINX_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-nginx:${TAG}")
+    fi
 fi
 
 echo "🔨 Building iqoqo multi-image Docker suite"
 echo "------------------------------------------"
 echo "📦 Version: $VERSION"
 echo "🏷️  Primary Tag: $TAG"
-if [ -n "$PREFIX" ]; then
-    echo "🏷️  Prefix: $PREFIX"
+if [ -n "$REG_PREFIX" ]; then
+    echo "🏷️  Prefix: $REG_PREFIX"
 fi
 echo ""
 

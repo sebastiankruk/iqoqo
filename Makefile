@@ -90,7 +90,8 @@ endif
 
 # Auto-detect project version from package.json or pyproject.toml without requiring host python
 IQOQO_VERSION ?= $(shell (grep -m 1 '"version":' package.json 2>/dev/null | cut -d '"' -f 4) || (grep -m 1 'version = ' pyproject.toml 2>/dev/null | cut -d '"' -f 2) || echo "unknown")
-PREBUILT_TAG ?= $(if $(APP_VERSION),$(APP_VERSION),$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,latest)))
+PREBUILT_TAG ?= $(if $(APP_VERSION),$(APP_VERSION),$(if $(filter-out unknown,$(IQOQO_VERSION)),$(IQOQO_VERSION),latest))
+IMAGE_PREFIX ?= ghcr.io/sebastiankruk/
 
 help:
 	@echo "Available targets:"
@@ -340,8 +341,10 @@ start:
 	@echo "Project version: $(IQOQO_VERSION)"
 	@echo "Prebuilt tag: $(PREBUILT_TAG)"
 	@docker image prune -f --filter "dangling=true"
-	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull
-	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+	@if [ -n "$(IMAGE_PREFIX)" ]; then \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
+	fi
+	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
 else
 start:
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf

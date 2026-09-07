@@ -63,15 +63,27 @@ teardown() {
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-nginx:" ]]
 }
 
-@test "build_docker_images.sh builds backend, frontend, and nginx with custom tag" {
+@test "build_docker_images.sh builds backend, frontend, and nginx with custom tag and dual-tags registry prefix" {
   cd "${TEST_TEMP_DIR}"
   run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Primary Tag: preview" ]]
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build" ]]
   [[ "$output" =~ "iqoqo-backend:preview" ]]
+  [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-backend:preview" ]]
   [[ "$output" =~ "iqoqo-frontend:preview" ]]
+  [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-frontend:preview" ]]
   [[ "$output" =~ "iqoqo-nginx:preview" ]]
+  [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-nginx:preview" ]]
+}
+
+@test "build_docker_images.sh respects explicit empty prefix" {
+  cd "${TEST_TEMP_DIR}"
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview --prefix ""
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Primary Tag: preview" ]]
+  [[ "$output" =~ "iqoqo-backend:preview" ]]
+  [[ ! "$output" =~ "ghcr.io/sebastiankruk/iqoqo-backend:preview" ]]
 }
 
 @test "deploy/Dockerfile never bakes rclone credentials into image layers" {
