@@ -200,7 +200,17 @@ mykg-scope: .venv/bin/activate
 mykg-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-	@SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
+	@cleanup() { \
+		EXIT_CODE=$$?; \
+		trap - EXIT INT TERM; \
+		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+		fi; \
+		exit $$EXIT_CODE; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
 		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
 		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
 		print(str(sessions[0])) if sessions else sys.exit(0)"); \
@@ -208,6 +218,7 @@ mykg-update: .venv/bin/activate
 		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
@@ -220,19 +231,26 @@ mykg-update: .venv/bin/activate
 	fi; \
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-	fi; \
 	exit $$EXIT_CODE
 
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+	@cleanup() { \
+		EXIT_CODE=$$?; \
+		trap - EXIT INT TERM; \
+		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+		fi; \
+		exit $$EXIT_CODE; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		mkdir -p "mykg_sessions"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
@@ -245,10 +263,6 @@ mykg-index: .venv/bin/activate
 	fi; \
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-	fi; \
 	exit $$EXIT_CODE
 
 mykg-status: .venv/bin/activate

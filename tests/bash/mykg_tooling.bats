@@ -112,5 +112,69 @@
   [ "$status" -ne 0 ]
 }
 
+@test "Makefile mykg targets define pre-flight cleanup and signal trap handlers" {
+  run make -n mykg-update
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"docker rm -f mykg-agy-daemon"* ]]
+  [[ "$output" == *"trap cleanup EXIT INT TERM"* ]]
 
+  run make -n mykg-index
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"docker rm -f mykg-agy-daemon"* ]]
+  [[ "$output" == *"trap cleanup EXIT INT TERM"* ]]
+}
 
+@test "mykg recipe trap handler cleans up daemon container on SIGINT" {
+  test_temp_dir="$(mktemp -d)"
+  docker_log="${test_temp_dir}/docker.log"
+
+  mkdir -p "${test_temp_dir}/bin"
+  printf '#!/bin/bash\necho "DOCKER: $*" >> "%s"\nexit 0\n' "${docker_log}" > "${test_temp_dir}/bin/docker"
+  chmod +x "${test_temp_dir}/bin/docker"
+
+  PATH="${test_temp_dir}/bin:${PATH}" run bash -c '
+    cleanup() {
+      EXIT_CODE=$?
+      trap - EXIT INT TERM
+      if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true
+        docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true
+      fi
+      exit $EXIT_CODE
+    }
+    trap cleanup EXIT INT TERM
+    kill -s INT $$
+    sleep 1
+  '
+
+  [ -f "${docker_log}" ]
+  run cat "${docker_log}"
+  [[ "$output" == *"compose -f docker-compose.ai_sandbox.yml down"* ]]
+  [[ "$output" == *"rm -f mykg-agy-daemon"* ]]
+
+  rm -rf "${test_temp_dir}"
+}
+
+@test "pre-flight container cleanup prevents collision before container creation" {
+  test_temp_dir="$(mktemp -d)"
+  docker_log="${test_temp_dir}/docker.log"
+
+  mkdir -p "${test_temp_dir}/bin"
+  printf '#!/bin/bash\necho "DOCKER: $*" >> "%s"\nexit 0\n' "${docker_log}" > "${test_temp_dir}/bin/docker"
+  chmod +x "${test_temp_dir}/bin/docker"
+
+  PATH="${test_temp_dir}/bin:${PATH}" run bash -c '
+    docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true
+    docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon test
+  '
+
+  [ "$status" -eq 0 ]
+  run cat "${docker_log}"
+  rm_line=$(grep -n "rm -f mykg-agy-daemon" "${docker_log}" | cut -d: -f1 | head -n1)
+  run_line=$(grep -n "run --rm -d --name mykg-agy-daemon" "${docker_log}" | cut -d: -f1 | head -n1)
+  [ -n "$rm_line" ]
+  [ -n "$run_line" ]
+  [ "$rm_line" -lt "$run_line" ]
+
+  rm -rf "${test_temp_dir}"
+}

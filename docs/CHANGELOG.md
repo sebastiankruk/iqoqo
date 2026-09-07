@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **myKG Daemon SIGINT Teardown & Name Collision Prevention**: Added POSIX shell signal traps (`trap ... EXIT INT TERM`) and pre-flight container removal (`docker rm -f mykg-agy-daemon`) in `Makefile` targets `mykg-update` and `mykg-index`. Ensures `mykg-agy-daemon` and `sandbox-egress-proxy` are cleanly torn down on process interruption or termination, preventing Docker container name collisions on subsequent runs.
+
 ## [0.7.17] - 2026-09-07
 
 ### Added
