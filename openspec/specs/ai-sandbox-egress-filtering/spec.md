@@ -36,12 +36,12 @@ The test suite SHALL include automated regression tests verifying that the sandb
 - **THEN** the test suite verifies that network isolation and egress restrictions are defined and reject unauthorized outbound destinations
 
 ### Requirement: Inbound Daemon Prompt Sanitization and Egress Guardrails
-The `mykg-agy-daemon` SHALL sanitize incoming task payloads and inject explicit egress guardrail instructions to prevent prompt-injection driven data exfiltration.
+The `mykg-agy-daemon` SHALL sanitize incoming task payloads and inject explicit egress guardrail instructions to prevent prompt-injection driven data exfiltration and buffer stall.
 
 #### Scenario: Incoming task containing googleapis.com or exfiltration URLs is sanitized
 
-- **WHEN** a task prompt delivered to the daemon contains URLs or domains pointing to `googleapis.com`, Google Drive, Google Docs, or cloud storage endpoints
-- **THEN** the daemon SHALL redact or neutralize the domains prior to executing the `agy` CLI process
+- **WHEN** a task prompt delivered to the daemon contains URLs pointing to `googleapis.com`, Google Drive, Google Docs, cloud storage endpoints, or unbroken base64 data URIs/binary blobs
+- **THEN** the daemon SHALL redact or neutralize the domains and binary blobs prior to executing the `agy` CLI process
 
 #### Scenario: Prompt execution includes security policy guardrail
 
