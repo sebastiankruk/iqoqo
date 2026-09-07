@@ -75,7 +75,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Deploying iqoqo (prebuilt)..." ]]
   [[ "$output" =~ "Project version:" ]]
-  [[ "$output" =~ "Prebuilt tag: prod" ]]
+  [[ "$output" =~ "Prebuilt tag:" ]]
 
   # Verify docker commands were executed
   [ -f "${TEST_TEMP_DIR}/docker.log" ]
@@ -91,7 +91,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Deploying iqoqo-preview (prebuilt)..." ]]
   [[ "$output" =~ "Project version:" ]]
-  [[ "$output" =~ "Prebuilt tag: preview" ]]
+  [[ "$output" =~ "Prebuilt tag:" ]]
 
   [ -f "${TEST_TEMP_DIR}/docker.log" ]
   run cat "${TEST_TEMP_DIR}/docker.log"

@@ -25,7 +25,7 @@ include:
 
 services:
   web:
-    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
     volumes: !override
       - ./exports:/usr/src/app/exports
@@ -35,7 +35,7 @@ services:
       - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
 
   worker:
-    image: ${IMAGE_PREFIX:-}iqoqo-backend:${APP_VERSION:-preview}
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
     volumes: !override
       - ./exports:/usr/src/app/exports
@@ -45,12 +45,12 @@ services:
       - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
 
   nginx:
-    image: ${IMAGE_PREFIX:-}iqoqo-nginx:${APP_VERSION:-preview}
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-nginx:${APP_VERSION:-latest}
     build: !reset null
     volumes: !override
       - ./app/static/covers:/usr/share/nginx/html/covers:ro
       - ./app/static/gallery:/usr/share/nginx/html/gallery:ro
 
   frontend:
-    image: ${IMAGE_PREFIX:-}iqoqo-frontend:${APP_VERSION:-preview}
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-latest}
     build: !reset null
